@@ -1,0 +1,79 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<ModularSynthPreset version="1">
+  <modules>
+    <module logicalId="1" type="sample loader">
+      <params>
+        <SampleLoaderParameters samplePath="H:\0000_CODE\01_collider_pyo\audio\samples\effects\KSHMR_Animals_23_Flying_Squirrel.wav">
+          <PARAM id="engine" value="1.0"/>
+          <PARAM id="gate_mod" value="1.0"/>
+          <PARAM id="loop" value="0.0"/>
+          <PARAM id="pitch" value="0.0"/>
+          <PARAM id="pitch_mod" value="0.0"/>
+          <PARAM id="rangeEnd" value="1.0"/>
+          <PARAM id="rangeEnd_mod" value="1.0"/>
+          <PARAM id="rangeStart" value="0.0"/>
+          <PARAM id="rangeStart_mod" value="0.0"/>
+          <PARAM id="rbPhaseInd" value="1.0"/>
+          <PARAM id="rbWindowShort" value="1.0"/>
+          <PARAM id="speed" value="1.0"/>
+          <PARAM id="speed_mod" value="1.0"/>
+          <PARAM id="trigger_mod" value="0.0"/>
+          <PARAM id="volume" value="0.7999999523162842"/>
+        </SampleLoaderParameters>
+      </params>
+    </module>
+    <module logicalId="2" type="Random">
+      <params>
+        <RandomParams>
+          <PARAM id="cvMax" value="1.0"/>
+          <PARAM id="cvMin" value="0.0"/>
+          <PARAM id="max" value="40.99996948242188"/>
+          <PARAM id="min" value="-5.0"/>
+          <PARAM id="rate" value="7.249999523162842"/>
+          <PARAM id="rate_mod" value="0.0"/>
+          <PARAM id="slew" value="0.0"/>
+          <PARAM id="slew_mod" value="0.0"/>
+        </RandomParams>
+      </params>
+    </module>
+    <module logicalId="4" type="Comparator">
+      <params>
+        <ComparatorParams>
+          <PARAM id="threshold" value="0.5"/>
+        </ComparatorParams>
+      </params>
+    </module>
+    <module logicalId="5" type="Random">
+      <params>
+        <RandomParams>
+          <PARAM id="cvMax" value="1.0"/>
+          <PARAM id="cvMin" value="0.0"/>
+          <PARAM id="max" value="61.89300537109375"/>
+          <PARAM id="min" value="19.82099151611328"/>
+          <PARAM id="rate" value="7.699999809265137"/>
+          <PARAM id="rate_mod" value="0.0"/>
+          <PARAM id="slew" value="0.0"/>
+          <PARAM id="slew_mod" value="0.0"/>
+        </RandomParams>
+      </params>
+    </module>
+  </modules>
+  <connections>
+    <connection srcId="1" srcChan="0" dstId="output" dstChan="1"/>
+    <connection srcId="2" srcChan="0" dstId="1" dstChan="0"/>
+    <connection srcId="2" srcChan="0" dstId="1" dstChan="1"/>
+    <connection srcId="2" srcChan="0" dstId="1" dstChan="2"/>
+    <connection srcId="2" srcChan="0" dstId="1" dstChan="4"/>
+    <connection srcId="2" srcChan="2" dstId="1" dstChan="6"/>
+    <connection srcId="2" srcChan="0" dstId="4" dstChan="0"/>
+    <connection srcId="4" srcChan="0" dstId="1" dstChan="3"/>
+    <connection srcId="5" srcChan="0" dstId="1" dstChan="5"/>
+  </connections>
+  <NodeEditorUI>
+    <node id="1" x="-186.0" y="130.0"/>
+    <node id="2" x="-622.0" y="58.0"/>
+    <node id="4" x="-882.2674560546875" y="475.8385009765625"/>
+    <node id="5" x="-695.0" y="488.0"/>
+  </NodeEditorUI>
+</ModularSynthPreset>

@@ -1,0 +1,248 @@
+#pragma once
+
+#include <juce_gui_extra/juce_gui_extra.h>
+#include <juce_opengl/juce_opengl.h>
+#include <unordered_map>
+#include <tuple>
+#include <deque>
+#include <imgui.h>
+#include "../audio/modules/ModuleProcessor.h"
+
+// Forward declarations from Dear ImGui / imnodes
+struct ImGuiContext; struct ImGuiIO; struct ImNodesContext;
+class ModularSynthProcessor;
+class MIDIPlayerModuleProcessor;
+
+// Global pin database (defined in ImGuiNodeEditorComponent.cpp)
+
+
+struct AudioPin
+{
+    juce::String name;
+    int channel;
+    PinDataType type;
+    
+    AudioPin(const juce::String& n, int ch, PinDataType t) : name(n), channel(ch), type(t) {}
+};
+struct ModPin
+{
+    juce::String name;
+    juce::String paramId;
+    PinDataType type;
+    
+    ModPin(const juce::String& n, const juce::String& p, PinDataType t) : name(n), paramId(p), type(t) {}
+};
+
+extern std::map<juce::String, ModulePinInfo> modulePinDatabase;
+
+class ImGuiNodeEditorComponent : public juce::Component,
+                                 private juce::OpenGLRenderer
+{
+public:
+    ImGuiNodeEditorComponent();
+    ~ImGuiNodeEditorComponent() override;
+
+    void paint (juce::Graphics&) override;
+    void resized() override;
+    // Input is handled by imgui_juce backend; no JUCE overrides needed
+
+    void setModel (ModularSynthProcessor* model) { synth = model; undoStack.clear(); redoStack.clear(); if (synth != nullptr) pushSnapshot(); }
+    // UI state roundtrip
+    juce::ValueTree getUiValueTree();
+    // Thread-safe: queues UI state to be applied on next render frame
+    void applyUiValueTree (const juce::ValueTree& uiState);
+
+private:
+    // OpenGLRenderer
+    void newOpenGLContextCreated() override;
+    void renderOpenGL() override;
+    void openGLContextClosing() override;
+    
+    void handleRandomizePatch(); // Add this line
+    void handleRandomizeConnections(); // Add this line
+    void handleMidiPlayerAutoConnect(MIDIPlayerModuleProcessor* midiPlayer, juce::uint32 midiPlayerLid);
+    void handleMidiPlayerAutoConnectVCO(MIDIPlayerModuleProcessor* midiPlayer, juce::uint32 midiPlayerLid);
+    void handleMidiPlayerAutoConnectHybrid(MIDIPlayerModuleProcessor* midiPlayer, juce::uint32 midiPlayerLid);
+    void insertNodeBetween(const juce::String& nodeType);
+    void insertNodeBetween(const juce::String& nodeType, const PinID& srcPin, const PinID& dstPin);
+    void drawInsertNodeOnLinkPopup();
+
+    void renderImGui();
+    void handleDeletion();
+    void bypassDeleteSelectedNodes();
+    void bypassDeleteNode(juce::uint32 logicalId);
+    void startSaveDialog();
+    void startLoadDialog();
+    public: void applyUiValueTreeNow (const juce::ValueTree& uiState);
+    // deprecated: parameters are now drawn inside nodes
+    juce::String getTypeForLogical (juce::uint32 logicalId) const;
+    void drawPendingModPopup();
+
+    // --- New Bitmask-based Pin ID System ---
+    struct PinID
+    {
+        juce::uint32 logicalId = 0;
+        int channel = 0;
+        bool isInput = false;
+        bool isMod = false;
+        juce::String paramId = "";
+    };
+
+    // Define how the 32 bits of an integer are allocated
+    constexpr static int LOGICAL_ID_BITS = 16;
+    // Use wider channel space so high parameter indices (for mod pins) don't collide
+    constexpr static int CHANNEL_BITS = 12; // supports up to 4096 distinct channels/param-indices
+    constexpr static int IS_INPUT_BITS = 1;
+    constexpr static int IS_MOD_BITS = 1;
+
+    constexpr static int LOGICAL_ID_SHIFT = 0;
+    constexpr static int CHANNEL_SHIFT = LOGICAL_ID_SHIFT + LOGICAL_ID_BITS;
+    constexpr static int IS_INPUT_SHIFT = CHANNEL_SHIFT + CHANNEL_BITS;
+    constexpr static int IS_MOD_SHIFT = IS_INPUT_SHIFT + IS_INPUT_BITS;
+
+    // Stable attribute registry (avoids collisions and survives frame order)
+    struct AttrKey { juce::uint32 logicalId; int channel; bool isInput; bool isMod; };
+    struct AttrKeyHash { size_t operator()(const AttrKey& k) const noexcept { return ((size_t)k.logicalId << 20) ^ ((size_t)k.channel << 4) ^ ((k.isInput?1:0)<<2) ^ (k.isMod?1:0); } };
+    struct AttrKeyEq { bool operator()(const AttrKey& a, const AttrKey& b) const noexcept { return a.logicalId==b.logicalId && a.channel==b.channel && a.isInput==b.isInput && a.isMod==b.isMod; } };
+
+    int getAttrId(juce::uint32 logicalId, int channel, bool isInput, bool isMod)
+    {
+        AttrKey key{ logicalId, channel, isInput, isMod };
+        auto it = pinToAttr.find(key);
+        if (it != pinToAttr.end()) return it->second;
+        const int id = nextAttrId++;
+        pinToAttr.emplace(key, id);
+        attrToPin.emplace(id, key);
+        return id;
+    }
+    PinID decodeAttr(int attr) const
+    {
+        PinID out{};
+        if (auto it = attrToPin.find(attr); it != attrToPin.end())
+        {
+            out.logicalId = it->second.logicalId;
+            out.channel   = it->second.channel;
+            out.isInput   = it->second.isInput;
+            out.isMod     = it->second.isMod;
+        }
+        return out;
+    }
+
+
+    juce::OpenGLContext glContext;
+    ImGuiContext* imguiContext { nullptr };
+    ImGuiIO* imguiIO { nullptr };
+    ImNodesContext* editorContext { nullptr };
+    double lastTime { 0.0 };
+
+    ModularSynthProcessor* synth { nullptr };
+    juce::ValueTree uiPending; // applied at next render before drawing nodes
+    std::atomic<bool> graphNeedsRebuild { false };
+
+    // Selection state
+    int selectedLogicalId { 0 };
+
+    std::unique_ptr<juce::FileChooser> saveChooser, loadChooser;
+
+    // Map of linkId -> (srcAttr, dstAttr) populated each frame
+    std::unordered_map<int, std::pair<int,int>> linkIdToAttrs;
+    // Stable attr registry
+    std::unordered_map<AttrKey, int, AttrKeyHash, AttrKeyEq> pinToAttr;
+    std::unordered_map<int, AttrKey> attrToPin;
+    int nextAttrId { 1 };
+
+    // Stable link registry to avoid hash collisions
+    struct LinkKey { int srcAttr; int dstAttr; };
+    struct LinkKeyHash { size_t operator()(const LinkKey& k) const noexcept { return ((size_t)k.srcAttr << 32) ^ (size_t)k.dstAttr; } };
+    struct LinkKeyEq { bool operator()(const LinkKey& a, const LinkKey& b) const noexcept { return a.srcAttr==b.srcAttr && a.dstAttr==b.dstAttr; } };
+    std::unordered_map<LinkKey, int, LinkKeyHash, LinkKeyEq> linkToId;
+    int nextLinkId { 1000 };
+    int getLinkId(int srcAttr, int dstAttr)
+    {
+        LinkKey k{ srcAttr, dstAttr };
+        auto it = linkToId.find(k);
+        if (it != linkToId.end()) return it->second;
+        const int id = nextLinkId++;
+        linkToId.emplace(k, id);
+        return id;
+    }
+
+    // Cable inspector highlight state (updated once per frame after EndNodeEditor)
+    juce::uint32 hoveredLinkSrcId { 0 };
+    juce::uint32 hoveredLinkDstId { 0 };
+    static constexpr juce::uint32 kOutputHighlightId = 0xFFFFFFFFu; // sentinel for main output node highlight
+    int lastHoveredLinkId { -1 }; // cache inside-editor hovered link id for post-editor use
+
+    // Positions to apply for specific node IDs on the next render (grid space)
+    std::unordered_map<int, ImVec2> pendingNodePositions;
+    // Screen-space positions queued for just-created nodes (converted after draw)
+    std::unordered_map<int, ImVec2> pendingNodeScreenPositions;
+    // Modulation link id mapping to (srcLogicalId, srcChan, dstLogicalId, paramId)
+    std::unordered_map<int, std::tuple<int,int,int, juce::String>> modLinkIdToRoute;
+    // Map of mod input attribute id -> (dstLogicalId, paramId)
+    std::unordered_map<int, std::pair<int, juce::String>> modAttrToParam;
+
+    // Cable inspector rolling stats (last N seconds) for quick visual validation
+    struct ChannelHistory { std::deque<std::pair<double,float>> samples; };
+    std::map<std::pair<juce::uint32,int>, ChannelHistory> inspectorHistory; // key: (logicalId, channel)
+    float inspectorWindowSeconds { 5.0f };
+
+    struct PendingMod
+    {
+        bool open { false };
+        int srcLogicalId { 0 };
+        int srcChan { 0 };
+        int dstLogicalId { 0 };
+        int paramIndex { 0 };
+        float depth { 50.0f };
+        juce::StringArray params; // ids in order
+    } pendingMod;
+
+    // UI state / hover
+    int lastHoveredNodeId { -1 };
+    bool isDraggingNode { false };
+    bool snapshotAfterEditor { false }; // arm when action requires node to exist (add/duplicate)
+    // zoom/pan disabled
+
+    // --- Undo/Redo (module ops) ---
+    struct Snapshot
+    {
+        juce::MemoryBlock synthState;
+        juce::ValueTree   uiState;
+    };
+    std::vector<Snapshot> undoStack;
+    std::vector<Snapshot> redoStack;
+    void pushSnapshot();
+    void restoreSnapshot (const Snapshot& s);
+    
+    // SampleLoader texture management (use JUCE OpenGLTexture to avoid raw GL includes)
+    std::unordered_map<int, std::unique_ptr<juce::OpenGLTexture>> sampleLoaderTextureIds;
+
+    // Shortcut debounce
+    bool mixerShortcutCooldown { false };
+    bool insertNodeShortcutCooldown { false };
+    bool showInsertNodePopup { false };
+    int pendingInsertLinkId { -1 };
+    
+    // Insert node on link state
+    struct LinkInfo
+    {
+        int linkId = -1;
+        bool isMod = false;
+        // For Audio links:
+        PinID srcPin;
+        PinID dstPin;
+        // For Mod links:
+        juce::uint32 srcLogicalId;
+        int srcChan;
+        juce::uint32 dstLogicalId;
+        juce::String paramId;
+    };
+    LinkInfo linkToInsertOn;
+    
+    // Helper functions
+    juce::File findPresetsDirectory();
+};
+
+
+

@@ -1,0 +1,72 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<ModularSynthPreset version="1">
+  <modules>
+    <module logicalId="1" type="audio input">
+      <params>
+        <AudioInputParams>
+          <PARAM id="channelMap0" value="0.0"/>
+          <PARAM id="channelMap1" value="1.0"/>
+          <PARAM id="channelMap10" value="10.0"/>
+          <PARAM id="channelMap11" value="11.0"/>
+          <PARAM id="channelMap12" value="12.0"/>
+          <PARAM id="channelMap13" value="13.0"/>
+          <PARAM id="channelMap14" value="14.0"/>
+          <PARAM id="channelMap15" value="15.0"/>
+          <PARAM id="channelMap2" value="2.0"/>
+          <PARAM id="channelMap3" value="3.0"/>
+          <PARAM id="channelMap4" value="4.0"/>
+          <PARAM id="channelMap5" value="5.0"/>
+          <PARAM id="channelMap6" value="6.0"/>
+          <PARAM id="channelMap7" value="7.0"/>
+          <PARAM id="channelMap8" value="8.0"/>
+          <PARAM id="channelMap9" value="9.0"/>
+          <PARAM id="gateThreshold" value="0.1599999964237213"/>
+          <PARAM id="numChannels" value="2.0"/>
+          <PARAM id="triggerThreshold" value="0.04999999701976776"/>
+        </AudioInputParams>
+      </params>
+      <extra>
+        <AudioInputState deviceName="">
+          <AudioInputParams>
+            <PARAM id="channelMap0" value="0.0"/>
+            <PARAM id="channelMap1" value="1.0"/>
+            <PARAM id="channelMap10" value="10.0"/>
+            <PARAM id="channelMap11" value="11.0"/>
+            <PARAM id="channelMap12" value="12.0"/>
+            <PARAM id="channelMap13" value="13.0"/>
+            <PARAM id="channelMap14" value="14.0"/>
+            <PARAM id="channelMap15" value="15.0"/>
+            <PARAM id="channelMap2" value="2.0"/>
+            <PARAM id="channelMap3" value="3.0"/>
+            <PARAM id="channelMap4" value="4.0"/>
+            <PARAM id="channelMap5" value="5.0"/>
+            <PARAM id="channelMap6" value="6.0"/>
+            <PARAM id="channelMap7" value="7.0"/>
+            <PARAM id="channelMap8" value="8.0"/>
+            <PARAM id="channelMap9" value="9.0"/>
+            <PARAM id="gateThreshold" value="0.1599999964237213"/>
+            <PARAM id="numChannels" value="2.0"/>
+            <PARAM id="triggerThreshold" value="0.04999999701976776"/>
+          </AudioInputParams>
+        </AudioInputState>
+      </extra>
+    </module>
+    <module logicalId="2" type="debug">
+      <params>
+        <DebugParams/>
+      </params>
+    </module>
+  </modules>
+  <connections>
+    <connection srcId="1" srcChan="0" dstId="2" dstChan="0"/>
+    <connection srcId="1" srcChan="1" dstId="2" dstChan="1"/>
+    <connection srcId="1" srcChan="16" dstId="2" dstChan="2"/>
+    <connection srcId="1" srcChan="17" dstId="2" dstChan="3"/>
+    <connection srcId="1" srcChan="18" dstId="2" dstChan="4"/>
+  </connections>
+  <NodeEditorUI>
+    <node id="1" x="-162.0" y="206.0"/>
+    <node id="2" x="464.0" y="23.0"/>
+  </NodeEditorUI>
+</ModularSynthPreset>

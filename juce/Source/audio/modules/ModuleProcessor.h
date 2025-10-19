@@ -1,0 +1,379 @@
+#pragma once
+
+#include <juce_audio_processors/juce_audio_processors.h>
+#include <functional> // Required for std::function
+#include <vector>
+#include <map>
+#include <unordered_map>
+#include <atomic>
+
+#if defined(PRESET_CREATOR_UI)
+#include <imgui.h>
+#include <cmath>
+#endif
+
+// <<< ALL PIN-RELATED DEFINITIONS ARE NOW CENTRALIZED HERE >>>
+
+// Defines the data type of a modulation or audio signal
+enum class PinDataType { CV, Audio, Gate, Raw };
+
+// Describes a single audio/CV input or output pin
+struct AudioPin
+{
+    juce::String name;
+    int channel;
+    PinDataType type;
+    
+    AudioPin(const juce::String& n, int ch, PinDataType t) : name(n), channel(ch), type(t) {}
+};
+
+// Describes a single modulation input pin targeting a parameter
+struct ModPin
+{
+    juce::String name;
+    juce::String paramId;
+    PinDataType type;
+    
+    ModPin(const juce::String& n, const juce::String& p, PinDataType t) : name(n), paramId(p), type(t) {}
+};
+
+// A collection of all pins for a given module type
+struct ModulePinInfo
+{
+    std::vector<AudioPin> audioIns;
+    std::vector<AudioPin> audioOuts;
+    std::vector<ModPin> modIns;
+    ModulePinInfo() = default;
+    ModulePinInfo(std::initializer_list<AudioPin> ins,
+                  std::initializer_list<AudioPin> outs,
+                  std::initializer_list<ModPin> mods)
+        : audioIns(ins), audioOuts(outs), modIns(mods) {}
+};
+
+// Helper struct passed to modules for drawing their pins
+struct NodePinHelpers
+{
+    std::function<void(const char* label, int channel)> drawAudioInputPin;
+    std::function<void(const char* label, int channel)> drawAudioOutputPin;
+    std::function<void(const char* inLabel, int inChannel, const char* outLabel, int outChannel)> drawParallelPins;
+};
+
+class ModularSynthProcessor; // forward declaration
+
+/**
+    An abstract base class for all modular synthesizer components.
+
+    This class enforces a common interface for modules, ensuring they can be
+    managed by the ModularSynthProcessor. The key requirement is providing access
+    to the module's own parameter state via getAPVTS().
+*/
+class ModuleProcessor : public juce::AudioProcessor
+{
+public:
+    ModuleProcessor(const BusesProperties& ioLayouts) : juce::AudioProcessor(ioLayouts) {}
+    ~ModuleProcessor() override = default;
+
+    // Parent container link (set by ModularSynthProcessor when node is created)
+    void setParent(ModularSynthProcessor* parent) { parentSynth = parent; }
+    ModularSynthProcessor* getParent() const { return parentSynth; }
+
+    // Pure virtual method that all concrete modules MUST implement.
+    // This is crucial for the parameter proxy system.
+    virtual juce::AudioProcessorValueTreeState& getAPVTS() = 0;
+
+    // Optional UI hook for drawing parameters inside nodes (used by Preset Creator)
+    virtual void drawParametersInNode (float itemWidth, const std::function<bool(const juce::String& paramId)>& isParamModulated, const std::function<void()>& onModificationEnded)
+    {
+        juce::ignoreUnused(itemWidth, isParamModulated, onModificationEnded);
+    }
+
+    // Optional UI hook for drawing IO pins inside nodes
+    virtual void drawIoPins(const NodePinHelpers& /*helpers*/) {}
+
+
+    // ADD THIS NEW VIRTUAL METHOD
+    virtual float getOutputChannelValue(int channel) const
+    {
+        if (juce::isPositiveAndBelow(channel, (int)lastOutputValues.size()) && lastOutputValues[channel])
+            return lastOutputValues[channel]->load();
+        return 0.0f;
+    }
+
+    // Standardized labels for module audio I/O channels (override per module if needed)
+    virtual juce::String getAudioInputLabel(int channel) const
+    {
+        return juce::String("In ") + juce::String(channel + 1);
+    }
+
+    virtual juce::String getAudioOutputLabel(int channel) const
+    {
+        return juce::String("Out ") + juce::String(channel + 1);
+    }
+
+    // Stable logical ID assigned by ModularSynthProcessor upon node creation.
+    void setLogicalId(juce::uint32 id) { storedLogicalId = id; }
+    juce::uint32 getLogicalId() const { return storedLogicalId; }
+
+    // === COMPREHENSIVE DIAGNOSTICS SYSTEM ===
+    
+    // Get detailed connection information for debugging
+    virtual juce::String getConnectionDiagnostics() const
+    {
+        juce::String result = "=== CONNECTION DIAGNOSTICS ===\n";
+        
+        // Bus layout info
+        result += "Input Buses: " + juce::String(getBusCount(true)) + "\n";
+        result += "Output Buses: " + juce::String(getBusCount(false)) + "\n";
+        
+        for (int bus = 0; bus < getBusCount(true); ++bus)
+        {
+            auto busName = getBus(true, bus)->getName();
+            auto numChannels = getBus(true, bus)->getNumberOfChannels();
+            result += "  Input Bus " + juce::String(bus) + ": \"" + busName + "\" (" + juce::String(numChannels) + " channels)\n";
+        }
+        
+        for (int bus = 0; bus < getBusCount(false); ++bus)
+        {
+            auto busName = getBus(false, bus)->getName();
+            auto numChannels = getBus(false, bus)->getNumberOfChannels();
+            result += "  Output Bus " + juce::String(bus) + ": \"" + busName + "\" (" + juce::String(numChannels) + " channels)\n";
+        }
+        
+        return result;
+    }
+    
+    // Get parameter routing diagnostics
+    virtual juce::String getParameterRoutingDiagnostics() const
+    {
+        juce::String result = "=== PARAMETER ROUTING DIAGNOSTICS ===\n";
+        
+        // Note: This method is const, so we can't access getAPVTS() directly
+        // We'll return a placeholder for now
+        result += "Parameter routing diagnostics require non-const access.\n";
+        result += "Use getModuleDiagnostics() from ModularSynthProcessor instead.\n";
+        
+        return result;
+    }
+    
+    // Get live parameter values for debugging
+    virtual juce::String getLiveParameterDiagnostics() const
+    {
+        juce::String result = "=== LIVE PARAMETER VALUES ===\n";
+        
+        for (const auto& pair : paramLiveValues)
+        {
+            result += "  " + pair.first + ": " + juce::String(pair.second.load(), 4) + "\n";
+        }
+        
+        return result;
+    }
+    
+    // Get comprehensive module diagnostics
+    virtual juce::String getAllDiagnostics() const
+    {
+        juce::String result = "=== MODULE DIAGNOSTICS ===\n";
+        result += "Module Type: " + getName() + "\n\n";
+        result += getConnectionDiagnostics() + "\n";
+        result += getParameterRoutingDiagnostics() + "\n";
+        result += getLiveParameterDiagnostics();
+        return result;
+    }
+
+
+    /**
+        Resolves a parameter's string ID to its modulation bus and channel.
+
+        This is a virtual function that each module must override to declare which of its
+        parameters can be modulated by an external signal. The function maps parameter IDs
+        to their corresponding input bus and channel indices within that bus.
+
+        @param paramId              The string ID of the parameter to query (e.g., "cutoff", "frequency").
+        @param outBusIndex          Receives the index of the input bus used for modulation.
+        @param outChannelIndexInBus Receives the channel index within that bus.
+        @returns                    True if the parameter supports modulation, false otherwise.
+        
+        @see isParamInputConnected
+    */
+    virtual bool getParamRouting(const juce::String& paramId, int& outBusIndex, int& outChannelIndexInBus) const;
+
+    /**
+        Checks if a parameter's modulation input is connected in the synth graph.
+
+        This is the single, reliable method for a module's audio thread to determine
+        if it should use an incoming CV signal instead of its internal parameter value.
+        The function internally uses getParamRouting() to resolve the parameter to its
+        bus/channel location, then queries the parent synth's connection graph.
+
+        @param paramId The string ID of the parameter to check (e.g., "cutoff", "frequency").
+        @returns       True if a cable is connected to this parameter's modulation input.
+        
+        @see getParamRouting
+    */
+    bool isParamInputConnected(const juce::String& paramId) const;
+
+    // --- Live telemetry for UI (thread-safe, lock-free) ---
+    void setLiveParamValue(const juce::String& paramId, float value)
+    {
+        auto result = paramLiveValues.try_emplace(paramId, value);
+        if (!result.second)
+            result.first->second.store(value, std::memory_order_relaxed);
+    }
+
+    float getLiveParamValue(const juce::String& paramId, float fallback) const
+    {
+        // FIX: Only return the "live" (modulated) value if the corresponding
+        // modulation input is actually connected. Otherwise, always return the
+        // fallback, which is the base parameter's real value.
+        if (isParamInputConnected(paramId))
+        {
+            if (auto it = paramLiveValues.find(paramId); it != paramLiveValues.end())
+                return it->second.load(std::memory_order_relaxed);
+        }
+        return fallback;
+    }
+
+    // New helper: decouple the connectivity check (modParamId) from the live value key (liveKey).
+    // This allows UI code to ask "is X_mod connected?" while reading the corresponding
+    // live telemetry stored under a different key like "X_live".
+    float getLiveParamValueFor(const juce::String& modParamId,
+                               const juce::String& liveKey,
+                               float fallback) const
+    {
+        if (isParamInputConnected(modParamId))
+        {
+            if (auto it = paramLiveValues.find(liveKey); it != paramLiveValues.end())
+                return it->second.load(std::memory_order_relaxed);
+        }
+        return fallback;
+    }
+
+    // Optional extra state hooks for modules that need to persist non-parameter data
+    // Default: return invalid tree / ignore.
+    virtual juce::ValueTree getExtraStateTree() const { return {}; }
+    virtual void setExtraStateTree(const juce::ValueTree&) {}
+
+public:
+    // OPTION 9: Make public for TTS debugging
+    // Live, modulated parameter values for UI feedback
+    std::unordered_map<juce::String, std::atomic<float>> paramLiveValues;
+
+protected:
+    // Thread-safe storage for last known output values (for tooltips)
+    std::vector<std::unique_ptr<std::atomic<float>>> lastOutputValues;
+
+#if defined(PRESET_CREATOR_UI)
+
+    static void adjustParamOnWheel (juce::RangedAudioParameter* parameter,
+                                    const juce::String& idOrName,
+                                    float displayedValue)
+    {
+        if (parameter == nullptr) return;
+        if (! ImGui::IsItemHovered()) return;
+        const float wheel = ImGui::GetIO().MouseWheel;
+        if (wheel == 0.0f) return;
+
+        if (auto* pf = dynamic_cast<juce::AudioParameterFloat*>(parameter))
+        {
+            // No right-click editing here; modules can add InputFloat next to sliders
+
+            const auto& range = pf->range;
+            const float span = range.end - range.start;
+            const juce::String id = idOrName.toLowerCase();
+
+            float step = span / 200.0f; // default ~0.5% of range
+            if (span <= 1.0f) step = 0.01f;
+            // Custom: fine tune for sequencer steps
+            if (id.contains ("step"))
+            {
+                step = 0.05f;
+            }
+            if (id.contains ("hz") || id.contains ("freq") || id.contains ("cutoff") || id.contains ("rate"))
+            {
+                const float v = std::max (1.0f, std::abs (displayedValue));
+                step = std::max (1.0f, std::pow (10.0f, std::floor (std::log10 (v)) - 1.0f));
+            }
+            else if (id.contains ("ms") || id.contains ("time"))
+            {
+                const float v = std::max (1.0f, std::abs (displayedValue));
+                step = std::max (0.1f, std::pow (10.0f, std::floor (std::log10 (v)) - 1.0f));
+            }
+            else if (id.contains ("db") || id.contains ("gain"))
+            {
+                step = 0.5f;
+            }
+            else if (id.contains ("mix") || id.contains ("depth") || id.contains ("amount") || id.contains ("resonance") || id.contains ("q") || id.contains ("size") || id.contains ("damp") || id.contains ("pan") || id.contains ("threshold"))
+            {
+                step = 0.01f;
+            }
+
+            float newVal = pf->get() + (wheel > 0 ? step : -step);
+            newVal = juce::jlimit (range.start, range.end, newVal);
+            *pf = newVal;
+        }
+        else if (auto* pc = dynamic_cast<juce::AudioParameterChoice*>(parameter))
+        {
+            int idx = pc->getIndex();
+            idx += (ImGui::GetIO().MouseWheel > 0 ? 1 : -1);
+            idx = juce::jlimit (0, pc->choices.size() - 1, idx);
+            *pc = idx;
+        }
+        else if (auto* pi = dynamic_cast<juce::AudioParameterInt*>(parameter))
+        {
+            int currentVal = pi->get();
+            int newVal = currentVal + (wheel > 0 ? 1 : -1);
+            const auto& range = pi->getNormalisableRange();
+            newVal = juce::jlimit((int)range.start, (int)range.end, newVal);
+            *pi = newVal;
+        }
+        else if (auto* pb = dynamic_cast<juce::AudioParameterBool*>(parameter))
+        {
+            // Optional: toggle on strong scroll
+            juce::ignoreUnused (pb);
+        }
+    }
+
+#endif
+
+public:
+    //==============================================================================
+    // Helper function to convert bus index and channel-in-bus to absolute channel index
+    //==============================================================================
+    int getChannelIndexInProcessBlockBuffer(bool isInput, int busIndex, int channelIndexInBus) const
+    {
+        int absoluteChannel = channelIndexInBus;
+        if (busIndex > 0)
+        {
+            int sum = 0;
+            const int numBuses = getBusCount(isInput);
+            for (int b = 0; b < numBuses && b < busIndex; ++b)
+                sum += getChannelCountOfBus(isInput, b);
+            absoluteChannel = sum + channelIndexInBus;
+        }
+        return absoluteChannel;
+    }
+
+    //==============================================================================
+    // Provide default implementations for the pure virtuals to reduce boilerplate
+    // in concrete module classes.
+    //==============================================================================
+    const juce::String getName() const override { return "Module"; }
+    bool acceptsMidi() const override { return false; }
+    bool producesMidi() const override { return false; }
+    double getTailLengthSeconds() const override { return 0.0; }
+    juce::AudioProcessorEditor* createEditor() override { return nullptr; }
+    bool hasEditor() const override { return false; }
+    int getNumPrograms() override { return 1; }
+    int getCurrentProgram() override { return 0; }
+    void setCurrentProgram (int) override {}
+    const juce::String getProgramName (int) override { return {}; }
+    void changeProgramName (int, const juce::String&) override {}
+    void getStateInformation (juce::MemoryBlock&) override {}
+    void setStateInformation (const void*, int) override {}
+
+private:
+    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (ModuleProcessor)
+
+protected:
+    ModularSynthProcessor* parentSynth { nullptr };
+    juce::uint32 storedLogicalId { 0 };
+};

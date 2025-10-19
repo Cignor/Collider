@@ -1,0 +1,167 @@
+#include "WaveshaperModuleProcessor.h"
+#include <cmath> // For std::tanh
+
+juce::AudioProcessorValueTreeState::ParameterLayout WaveshaperModuleProcessor::createParameterLayout()
+{
+    std::vector<std::unique_ptr<juce::RangedAudioParameter>> p;
+    p.push_back(std::make_unique<juce::AudioParameterFloat>("drive", "Drive", 
+        juce::NormalisableRange<float>(1.0f, 100.0f, 0.01f, 0.3f), 1.0f));
+    p.push_back(std::make_unique<juce::AudioParameterChoice>("type", "Type",
+        juce::StringArray{ "Soft Clip (tanh)", "Hard Clip", "Foldback" }, 0));
+    return { p.begin(), p.end() };
+}
+
+WaveshaperModuleProcessor::WaveshaperModuleProcessor()
+    : ModuleProcessor(BusesProperties()
+                        .withInput("In", juce::AudioChannelSet::stereo(), true)
+                        .withInput("Drive Mod", juce::AudioChannelSet::mono(), true)
+                        .withInput("Type Mod", juce::AudioChannelSet::mono(), true)
+                        .withOutput("Out", juce::AudioChannelSet::stereo(), true)),
+      apvts(*this, nullptr, "WaveshaperParams", createParameterLayout())
+{
+    driveParam = dynamic_cast<juce::AudioParameterFloat*>(apvts.getParameter("drive"));
+    typeParam = dynamic_cast<juce::AudioParameterChoice*>(apvts.getParameter("type"));
+    
+    // Initialize output value tracking for tooltips
+    lastOutputValues.push_back(std::make_unique<std::atomic<float>>(0.0f)); // For Out L
+    lastOutputValues.push_back(std::make_unique<std::atomic<float>>(0.0f)); // For Out R
+}
+
+void WaveshaperModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midi)
+{
+    juce::ignoreUnused(midi);
+    
+    // PER-SAMPLE FIX: Get pointers to modulation CV inputs, if they are connected
+    const bool isDriveMod = isParamInputConnected("drive");
+    const bool isTypeMod = isParamInputConnected("type");
+    const float* driveCV = isDriveMod ? getBusBuffer(buffer, true, 1).getReadPointer(0) : nullptr;
+    const float* typeCV = isTypeMod ? getBusBuffer(buffer, true, 2).getReadPointer(0) : nullptr;
+
+    // Get base parameter values ONCE
+    const float baseDrive = driveParam != nullptr ? driveParam->get() : 1.0f;
+    const int baseType = typeParam != nullptr ? typeParam->getIndex() : 0;
+    
+    for (int ch = 0; ch < buffer.getNumChannels(); ++ch)
+    {
+        float* data = buffer.getWritePointer(ch);
+        for (int i = 0; i < buffer.getNumSamples(); ++i)
+        {
+            // PER-SAMPLE FIX: Calculate effective drive FOR THIS SAMPLE
+            float drive = baseDrive;
+            if (isDriveMod && driveCV != nullptr) {
+                const float cv = juce::jlimit(0.0f, 1.0f, driveCV[i]);
+                // ADDITIVE MODULATION FIX: Add CV offset to base drive value
+                const float octaveRange = 3.0f; // CV can modulate drive by +/- 3 octaves
+                const float octaveOffset = (cv - 0.5f) * octaveRange; // Center around 0, range [-1.5, +1.5] octaves
+                drive = baseDrive * std::pow(2.0f, octaveOffset);
+                drive = juce::jlimit(1.0f, 100.0f, drive);
+            }
+            
+            // PER-SAMPLE FIX: Calculate effective type FOR THIS SAMPLE
+            int type = baseType;
+            if (isTypeMod && typeCV != nullptr) {
+                const float cv = juce::jlimit(0.0f, 1.0f, typeCV[i]);
+                // Map CV [0,1] to type [0,2] with wrapping
+                type = static_cast<int>(cv * 3.0f) % 3;
+            }
+            
+            float s = data[i] * drive;
+            
+            switch (type)
+            {
+                case 0: // Soft Clip (tanh)
+                    data[i] = std::tanh(s);
+                    break;
+                case 1: // Hard Clip
+                    data[i] = juce::jlimit(-1.0f, 1.0f, s);
+                    break;
+                case 2: // Foldback
+                    data[i] = std::abs(std::abs(std::fmod(s - 1.0f, 4.0f)) - 2.0f) - 1.0f;
+                    break;
+            }
+        }
+    }
+    
+    // Store live modulated values for UI display (use last sample's values)
+    float finalDrive = baseDrive;
+    if (isDriveMod && driveCV != nullptr) {
+        const float cv = juce::jlimit(0.0f, 1.0f, driveCV[buffer.getNumSamples() - 1]);
+        const float octaveRange = 3.0f;
+        const float octaveOffset = (cv - 0.5f) * octaveRange;
+        finalDrive = baseDrive * std::pow(2.0f, octaveOffset);
+        finalDrive = juce::jlimit(1.0f, 100.0f, finalDrive);
+    }
+    setLiveParamValue("drive_live", finalDrive);
+    
+    int finalType = baseType;
+    if (isTypeMod && typeCV != nullptr) {
+        const float cv = juce::jlimit(0.0f, 1.0f, typeCV[buffer.getNumSamples() - 1]);
+        finalType = static_cast<int>(cv * 3.0f) % 3;
+    }
+    setLiveParamValue("type_live", static_cast<float>(finalType));
+
+    // Update output values for tooltips
+    if (lastOutputValues.size() >= 2)
+    {
+        if (lastOutputValues[0]) lastOutputValues[0]->store(buffer.getSample(0, buffer.getNumSamples() - 1));
+        if (lastOutputValues[1]) lastOutputValues[1]->store(buffer.getSample(1, buffer.getNumSamples() - 1));
+    }
+}
+
+#if defined(PRESET_CREATOR_UI)
+void WaveshaperModuleProcessor::drawParametersInNode(float itemWidth, const std::function<bool(const juce::String& paramId)>& isParamModulated, const std::function<void()>& onModificationEnded)
+{
+    auto& ap = getAPVTS();
+    float drive = 1.0f; if (auto* p = dynamic_cast<juce::AudioParameterFloat*>(ap.getParameter("drive"))) drive = *p;
+    int type = 0; if (auto* p = dynamic_cast<juce::AudioParameterChoice*>(ap.getParameter("type"))) type = p->getIndex();
+
+    ImGui::PushItemWidth(itemWidth);
+
+    // Drive
+    bool isDriveModulated = isParamModulated("drive");
+    if (isDriveModulated) {
+        drive = getLiveParamValueFor("drive", "drive_live", drive);
+        ImGui::BeginDisabled();
+    }
+    if (ImGui::SliderFloat("Drive", &drive, 1.0f, 100.0f, "%.2f", ImGuiSliderFlags_Logarithmic)) if (!isDriveModulated) if (auto* p = dynamic_cast<juce::AudioParameterFloat*>(ap.getParameter("drive"))) *p = drive;
+    if (!isDriveModulated) adjustParamOnWheel(ap.getParameter("drive"), "drive", drive);
+    if (ImGui::IsItemDeactivatedAfterEdit()) { onModificationEnded(); }
+    if (isDriveModulated) { ImGui::EndDisabled(); ImGui::SameLine(); ImGui::TextUnformatted("(mod)"); }
+
+    // Type
+    bool isTypeModulated = isParamModulated("type");
+    if (isTypeModulated) {
+        type = static_cast<int>(getLiveParamValueFor("type", "type_live", static_cast<float>(type)));
+        ImGui::BeginDisabled();
+    }
+    if (ImGui::Combo("Type", &type, "Soft Clip\0Hard Clip\0Foldback\0\0")) if (!isTypeModulated) if (auto* p = dynamic_cast<juce::AudioParameterChoice*>(ap.getParameter("type"))) *p = type;
+    if (ImGui::IsItemDeactivatedAfterEdit()) { onModificationEnded(); }
+    if (isTypeModulated) { ImGui::EndDisabled(); ImGui::SameLine(); ImGui::TextUnformatted("(mod)"); }
+
+    ImGui::PopItemWidth();
+}
+
+void WaveshaperModuleProcessor::drawIoPins(const NodePinHelpers& helpers)
+{
+    helpers.drawAudioInputPin("In L", 0);
+    helpers.drawAudioInputPin("In R", 1);
+
+    // CORRECTED MODULATION PINS - Use absolute channel index
+    int busIdx, chanInBus;
+    if (getParamRouting("drive", busIdx, chanInBus))
+        helpers.drawAudioInputPin("Drive Mod", getChannelIndexInProcessBlockBuffer(true, busIdx, chanInBus));
+    if (getParamRouting("type", busIdx, chanInBus))
+        helpers.drawAudioInputPin("Type Mod", getChannelIndexInProcessBlockBuffer(true, busIdx, chanInBus));
+
+    helpers.drawAudioOutputPin("Out L", 0);
+    helpers.drawAudioOutputPin("Out R", 1);
+}
+#endif
+
+// Parameter bus contract implementation
+bool WaveshaperModuleProcessor::getParamRouting(const juce::String& paramId, int& outBusIndex, int& outChannelIndexInBus) const
+{
+    if (paramId == "drive") { outBusIndex = 1; outChannelIndexInBus = 0; return true; }
+    if (paramId == "type") { outBusIndex = 2; outChannelIndexInBus = 0; return true; }
+    return false;
+}

@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<ModularSynthPreset version="1">
+  <modules>
+    <module logicalId="1" type="sample loader">
+      <params>
+        <SampleLoaderParameters samplePath="H:\0000_CODE\01_collider_pyo\audio\samples\melodic\KSHMR_Instrumental_Fill_02_097_Saxophone_F#m.wav">
+          <PARAM id="engine" value="1.0"/>
+          <PARAM id="gate_mod" value="1.0"/>
+          <PARAM id="loop" value="1.0"/>
+          <PARAM id="pitch" value="-2.100000381469727"/>
+          <PARAM id="pitch_mod" value="0.0"/>
+          <PARAM id="rangeEnd" value="1.0"/>
+          <PARAM id="rangeEnd_mod" value="0.7699999809265137"/>
+          <PARAM id="rangeStart" value="0.0"/>
+          <PARAM id="rangeStart_mod" value="0.85999995470047"/>
+          <PARAM id="rbPhaseInd" value="1.0"/>
+          <PARAM id="rbWindowShort" value="1.0"/>
+          <PARAM id="speed" value="1.740000009536743"/>
+          <PARAM id="speed_mod" value="1.0"/>
+          <PARAM id="trigger_mod" value="0.0"/>
+          <PARAM id="volume" value="0.5299999713897705"/>
+        </SampleLoaderParameters>
+      </params>
+    </module>
+    <module logicalId="2" type="Random">
+      <params>
+        <RandomParams>
+          <PARAM id="max" value="9.999992370605469"/>
+          <PARAM id="min" value="0.0"/>
+          <PARAM id="rate" value="1.0"/>
+          <PARAM id="rate_mod" value="0.0"/>
+          <PARAM id="slew" value="0.0"/>
+          <PARAM id="slew_mod" value="0.0"/>
+        </RandomParams>
+      </params>
+    </module>
+    <module logicalId="3" type="Random">
+      <params>
+        <RandomParams>
+          <PARAM id="max" value="9.999992370605469"/>
+          <PARAM id="min" value="0.0"/>
+          <PARAM id="rate" value="1.0"/>
+          <PARAM id="rate_mod" value="0.0"/>
+          <PARAM id="slew" value="0.0"/>
+          <PARAM id="slew_mod" value="0.0"/>
+        </RandomParams>
+      </params>
+    </module>
+  </modules>
+  <connections>
+    <connection srcId="1" srcChan="0" dstId="output" dstChan="0"/>
+    <connection srcId="1" srcChan="0" dstId="output" dstChan="1"/>
+  </connections>
+  <modRoutes>
+    <modRoute srcId="2" srcChan="0" dstId="1" param="rangeStart_mod" depth="1.0"/>
+    <modRoute srcId="3" srcChan="0" dstId="1" param="rangeEnd_mod" depth="1.0"/>
+  </modRoutes>
+  <NodeEditorUI>
+    <node id="1" x="-256.0" y="99.0"/>
+    <node id="2" x="-731.0" y="279.0"/>
+    <node id="3" x="-729.0" y="520.0"/>
+  </NodeEditorUI>
+</ModularSynthPreset>

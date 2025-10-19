@@ -1,0 +1,95 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<ModularSynthPreset version="1">
+  <modules>
+    <module logicalId="1" type="harmonic shaper">
+      <params>
+        <HarmonicShaperParams>
+          <PARAM id="detune_1" value="-33.02999877929688"/>
+          <PARAM id="detune_2" value="5.360000610351562"/>
+          <PARAM id="detune_3" value="-47.31999969482422"/>
+          <PARAM id="detune_4" value="-29.45999908447266"/>
+          <PARAM id="detune_5" value="-18.75"/>
+          <PARAM id="detune_6" value="0.0"/>
+          <PARAM id="detune_7" value="18.75"/>
+          <PARAM id="detune_8" value="46.42999267578125"/>
+          <PARAM id="drive_1" value="0.5"/>
+          <PARAM id="drive_2" value="0.75"/>
+          <PARAM id="drive_3" value="0.2699999809265137"/>
+          <PARAM id="drive_4" value="1.0"/>
+          <PARAM id="drive_5" value="0.5"/>
+          <PARAM id="drive_6" value="0.5"/>
+          <PARAM id="drive_7" value="0.6699999570846558"/>
+          <PARAM id="drive_8" value="0.0"/>
+          <PARAM id="level_1" value="1.0"/>
+          <PARAM id="level_2" value="1.0"/>
+          <PARAM id="level_3" value="1.0"/>
+          <PARAM id="level_4" value="1.0"/>
+          <PARAM id="level_5" value="1.0"/>
+          <PARAM id="level_6" value="0.0"/>
+          <PARAM id="level_7" value="0.0"/>
+          <PARAM id="level_8" value="0.0"/>
+          <PARAM id="masterDrive" value="0.0"/>
+          <PARAM id="masterFrequency" value="2275.0"/>
+          <PARAM id="outputGain" value="0.7500000596046448"/>
+          <PARAM id="ratio_1" value="0.4390000104904175"/>
+          <PARAM id="ratio_2" value="5.781000137329102"/>
+          <PARAM id="ratio_3" value="0.6770000457763672"/>
+          <PARAM id="ratio_4" value="0.1850000023841858"/>
+          <PARAM id="ratio_5" value="1.269000053405762"/>
+          <PARAM id="ratio_6" value="7.497000217437744"/>
+          <PARAM id="ratio_7" value="4.269000053405762"/>
+          <PARAM id="ratio_8" value="5.657000064849854"/>
+          <PARAM id="waveform_1" value="0.0"/>
+          <PARAM id="waveform_2" value="0.0"/>
+          <PARAM id="waveform_3" value="0.0"/>
+          <PARAM id="waveform_4" value="3.0"/>
+          <PARAM id="waveform_5" value="1.0"/>
+          <PARAM id="waveform_6" value="0.0"/>
+          <PARAM id="waveform_7" value="0.0"/>
+          <PARAM id="waveform_8" value="1.0"/>
+        </HarmonicShaperParams>
+      </params>
+    </module>
+    <module logicalId="3" type="Random">
+      <params>
+        <RandomParams>
+          <PARAM id="boolThreshold" value="0.5"/>
+          <PARAM id="cvMax" value="0.1299999952316284"/>
+          <PARAM id="cvMin" value="0.3499999940395355"/>
+          <PARAM id="max" value="1.0"/>
+          <PARAM id="min" value="0.0"/>
+          <PARAM id="normMax" value="0.25"/>
+          <PARAM id="normMin" value="0.1099999994039536"/>
+          <PARAM id="rate" value="15.59000015258789"/>
+          <PARAM id="slew" value="0.0"/>
+        </RandomParams>
+      </params>
+    </module>
+    <module logicalId="4" type="TTS Performer">
+      <params>
+        <TTSPerformerParams>
+          <PARAM id="engine" value="1.0"/>
+          <PARAM id="gate" value="1.0"/>
+          <PARAM id="pitch" value="-19.5"/>
+          <PARAM id="rate" value="1.259999990463257"/>
+          <PARAM id="speed" value="0.3700000047683716"/>
+          <PARAM id="trimEnd" value="1.0"/>
+          <PARAM id="trimStart" value="0.0"/>
+          <PARAM id="volume" value="1.0"/>
+        </TTSPerformerParams>
+      </params>
+    </module>
+  </modules>
+  <connections>
+    <connection srcId="1" srcChan="0" dstId="output" dstChan="0"/>
+    <connection srcId="1" srcChan="1" dstId="output" dstChan="1"/>
+    <connection srcId="4" srcChan="0" dstId="1" dstChan="0"/>
+    <connection srcId="4" srcChan="0" dstId="1" dstChan="1"/>
+  </connections>
+  <NodeEditorUI>
+    <node id="1" x="463.0" y="813.9999389648438"/>
+    <node id="3" x="-248.484375" y="1206.410400390625"/>
+    <node id="4" x="-340.484375" y="885.4104614257812"/>
+  </NodeEditorUI>
+</ModularSynthPreset>

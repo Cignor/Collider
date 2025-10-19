@@ -1,0 +1,125 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<ModularSynthPreset version="1">
+  <modules>
+    <module logicalId="1" type="ClockDivider">
+      <params>
+        <ClockDivParams/>
+      </params>
+    </module>
+    <module logicalId="2" type="Noise">
+      <params>
+        <NoiseParams>
+          <PARAM id="colour" value="0.0"/>
+          <PARAM id="colour_mod" value="0.0"/>
+          <PARAM id="level" value="-60.0"/>
+        </NoiseParams>
+      </params>
+    </module>
+    <module logicalId="3" type="Math">
+      <params>
+        <MathParams>
+          <PARAM id="operation" value="0.0"/>
+          <PARAM id="valueB" value="0.0"/>
+        </MathParams>
+      </params>
+    </module>
+    <module logicalId="4" type="S&amp;H">
+      <params>
+        <SAndHParams>
+          <PARAM id="edge" value="0.0"/>
+          <PARAM id="edge_mod" value="0.0"/>
+          <PARAM id="slewMs" value="0.0"/>
+          <PARAM id="slewMs_mod" value="0.0"/>
+          <PARAM id="threshold" value="0.5"/>
+          <PARAM id="threshold_mod" value="0.0"/>
+        </SAndHParams>
+      </params>
+    </module>
+    <module logicalId="5" type="VCO">
+      <params>
+        <VCOParams>
+          <PARAM id="frequency" value="3289.0"/>
+          <PARAM id="waveform" value="0.0"/>
+          <PARAM id="waveform_mod" value="0.0"/>
+        </VCOParams>
+      </params>
+    </module>
+    <module logicalId="6" type="Waveshaper">
+      <params>
+        <WaveshaperParams>
+          <PARAM id="drive" value="1.0"/>
+          <PARAM id="type" value="0.0"/>
+        </WaveshaperParams>
+      </params>
+    </module>
+    <module logicalId="7" type="Quantizer">
+      <params>
+        <QuantizerParams>
+          <PARAM id="rootNote" value="0.0"/>
+          <PARAM id="root_mod" value="0.0"/>
+          <PARAM id="scale" value="0.0"/>
+          <PARAM id="scale_mod" value="0.0"/>
+        </QuantizerParams>
+      </params>
+    </module>
+    <module logicalId="8" type="LFO">
+      <params>
+        <LFOParams>
+          <PARAM id="bipolar" value="1.0"/>
+          <PARAM id="depth" value="0.5"/>
+          <PARAM id="depth_mod" value="0.6399999856948853"/>
+          <PARAM id="rate" value="1.0"/>
+          <PARAM id="rate_mod" value="0.0"/>
+          <PARAM id="wave" value="0.0"/>
+          <PARAM id="wave_mod" value="0.0"/>
+        </LFOParams>
+      </params>
+    </module>
+    <module logicalId="9" type="Mixer">
+      <params>
+        <MixerParams>
+          <PARAM id="gain" value="0.0"/>
+          <PARAM id="pan" value="0.0"/>
+        </MixerParams>
+      </params>
+    </module>
+    <module logicalId="10" type="Scope">
+      <params>
+        <ScopeParams/>
+      </params>
+    </module>
+  </modules>
+  <connections>
+    <connection srcId="5" srcChan="1" dstId="9" dstChan="0"/>
+    <connection srcId="8" srcChan="0" dstId="9" dstChan="1"/>
+    <connection srcId="9" srcChan="0" dstId="10" dstChan="0"/>
+    <connection srcId="10" srcChan="0" dstId="output" dstChan="0"/>
+  </connections>
+  <modRoutes>
+    <modRoute srcId="5" srcChan="1" dstId="8" param="wave_mod" depth="1.0"/>
+    <modRoute srcId="8" srcChan="0" dstId="8" param="depth_mod" depth="1.0"/>
+    <modRoute srcId="2" srcChan="0" dstId="8" param="rate_mod" depth="1.0"/>
+    <modRoute srcId="2" srcChan="0" dstId="2" param="colour_mod" depth="1.0"/>
+    <modRoute srcId="8" srcChan="1" dstId="8" param="rate_mod" depth="1.0"/>
+    <modRoute srcId="8" srcChan="0" dstId="5" param="frequency" depth="1.0"/>
+    <modRoute srcId="2" srcChan="1" dstId="2" param="level" depth="1.0"/>
+    <modRoute srcId="5" srcChan="1" dstId="5" param="frequency" depth="1.0"/>
+    <modRoute srcId="8" srcChan="0" dstId="2" param="level" depth="1.0"/>
+    <modRoute srcId="2" srcChan="0" dstId="8" param="wave_mod" depth="1.0"/>
+    <modRoute srcId="8" srcChan="0" dstId="2" param="level" depth="1.0"/>
+    <modRoute srcId="5" srcChan="0" dstId="8" param="depth_mod" depth="1.0"/>
+  </modRoutes>
+  <NodeEditorUI>
+    <node id="1" x="50.0" y="50.0"/>
+    <node id="2" x="350.0" y="50.0"/>
+    <node id="3" x="650.0" y="50.0"/>
+    <node id="4" x="950.0" y="50.0"/>
+    <node id="5" x="50.0" y="450.0"/>
+    <node id="6" x="350.0" y="450.0"/>
+    <node id="7" x="650.0" y="450.0"/>
+    <node id="8" x="950.0" y="450.0"/>
+    <node id="9" x="1250.0" y="50.0"/>
+    <node id="10" x="1250.0" y="450.0"/>
+  </NodeEditorUI>
+</ModularSynthPreset>

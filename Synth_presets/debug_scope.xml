@@ -1,0 +1,128 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<ModularSynthPreset version="1">
+  <modules>
+    <module logicalId="3" type="Scope">
+      <params>
+        <ScopeParams>
+          <PARAM id="monitorSeconds" value="1.800000071525574"/>
+        </ScopeParams>
+      </params>
+    </module>
+    <module logicalId="9" type="Sequencer">
+      <params>
+        <SeqParams>
+          <PARAM id="gateLength" value="0.5"/>
+          <PARAM id="gateLength_mod" value="0.5"/>
+          <PARAM id="gateThreshold" value="0.5"/>
+          <PARAM id="numSteps" value="8.0"/>
+          <PARAM id="numSteps_max" value="16.0"/>
+          <PARAM id="numSteps_mod" value="0.5"/>
+          <PARAM id="rate" value="17.0"/>
+          <PARAM id="rate_mod" value="0.0"/>
+          <PARAM id="step1" value="0.449999988079071"/>
+          <PARAM id="step10" value="0.5"/>
+          <PARAM id="step10_mod" value="0.5"/>
+          <PARAM id="step10_trig" value="0.0"/>
+          <PARAM id="step10_trig_mod" value="0.5"/>
+          <PARAM id="step11" value="0.5"/>
+          <PARAM id="step11_mod" value="0.5"/>
+          <PARAM id="step11_trig" value="0.0"/>
+          <PARAM id="step11_trig_mod" value="0.5"/>
+          <PARAM id="step12" value="0.5"/>
+          <PARAM id="step12_mod" value="0.5"/>
+          <PARAM id="step12_trig" value="0.0"/>
+          <PARAM id="step12_trig_mod" value="0.5"/>
+          <PARAM id="step13" value="0.5"/>
+          <PARAM id="step13_mod" value="0.5"/>
+          <PARAM id="step13_trig" value="0.0"/>
+          <PARAM id="step13_trig_mod" value="0.5"/>
+          <PARAM id="step14" value="0.5"/>
+          <PARAM id="step14_mod" value="0.5"/>
+          <PARAM id="step14_trig" value="0.0"/>
+          <PARAM id="step14_trig_mod" value="0.5"/>
+          <PARAM id="step15" value="0.5"/>
+          <PARAM id="step15_mod" value="0.5"/>
+          <PARAM id="step15_trig" value="0.0"/>
+          <PARAM id="step15_trig_mod" value="0.5"/>
+          <PARAM id="step16" value="0.5"/>
+          <PARAM id="step16_mod" value="0.5"/>
+          <PARAM id="step16_trig" value="0.0"/>
+          <PARAM id="step16_trig_mod" value="0.5"/>
+          <PARAM id="step1_mod" value="0.5"/>
+          <PARAM id="step1_trig" value="0.0"/>
+          <PARAM id="step1_trig_mod" value="0.5"/>
+          <PARAM id="step2" value="0.7000000476837158"/>
+          <PARAM id="step2_mod" value="0.5"/>
+          <PARAM id="step2_trig" value="1.0"/>
+          <PARAM id="step2_trig_mod" value="0.5"/>
+          <PARAM id="step3" value="0.0"/>
+          <PARAM id="step3_mod" value="0.5"/>
+          <PARAM id="step3_trig" value="0.0"/>
+          <PARAM id="step3_trig_mod" value="0.5"/>
+          <PARAM id="step4" value="0.0"/>
+          <PARAM id="step4_mod" value="0.5"/>
+          <PARAM id="step4_trig" value="0.0"/>
+          <PARAM id="step4_trig_mod" value="0.5"/>
+          <PARAM id="step5" value="0.6500000357627869"/>
+          <PARAM id="step5_mod" value="0.5"/>
+          <PARAM id="step5_trig" value="0.0"/>
+          <PARAM id="step5_trig_mod" value="0.5"/>
+          <PARAM id="step6" value="1.0"/>
+          <PARAM id="step6_mod" value="0.5"/>
+          <PARAM id="step6_trig" value="1.0"/>
+          <PARAM id="step6_trig_mod" value="0.5"/>
+          <PARAM id="step7" value="0.0"/>
+          <PARAM id="step7_mod" value="0.5"/>
+          <PARAM id="step7_trig" value="1.0"/>
+          <PARAM id="step7_trig_mod" value="0.5"/>
+          <PARAM id="step8" value="0.8000000715255737"/>
+          <PARAM id="step8_mod" value="0.5"/>
+          <PARAM id="step8_trig" value="0.0"/>
+          <PARAM id="step8_trig_mod" value="0.5"/>
+          <PARAM id="step9" value="0.5"/>
+          <PARAM id="step9_mod" value="0.5"/>
+          <PARAM id="step9_trig" value="0.0"/>
+          <PARAM id="step9_trig_mod" value="0.5"/>
+        </SeqParams>
+      </params>
+    </module>
+    <module logicalId="10" type="Scope">
+      <params>
+        <ScopeParams>
+          <PARAM id="monitorSeconds" value="2.0"/>
+        </ScopeParams>
+      </params>
+    </module>
+    <module logicalId="11" type="input debug">
+      <params>
+        <InputDebugParams/>
+      </params>
+    </module>
+    <module logicalId="12" type="debug">
+      <params>
+        <DebugParams/>
+      </params>
+    </module>
+  </modules>
+  <connections>
+    <connection srcId="3" srcChan="0" dstId="11" dstChan="0"/>
+    <connection srcId="9" srcChan="1" dstId="3" dstChan="0"/>
+    <connection srcId="9" srcChan="4" dstId="10" dstChan="0"/>
+    <connection srcId="9" srcChan="1" dstId="12" dstChan="1"/>
+    <connection srcId="9" srcChan="4" dstId="12" dstChan="6"/>
+    <connection srcId="10" srcChan="0" dstId="11" dstChan="7"/>
+    <connection srcId="11" srcChan="0" dstId="12" dstChan="0"/>
+    <connection srcId="11" srcChan="7" dstId="12" dstChan="7"/>
+  </connections>
+  <modRoutes>
+    <modRoute srcId="0" srcChan="0" dstId="1" param="frequency" depth="1.0"/>
+  </modRoutes>
+  <NodeEditorUI>
+    <node id="3" x="514.0" y="107.0"/>
+    <node id="9" x="106.0" y="-253.0"/>
+    <node id="10" x="511.0" y="316.0"/>
+    <node id="11" x="1076.0" y="102.0"/>
+    <node id="12" x="1667.0" y="-28.0"/>
+  </NodeEditorUI>
+</ModularSynthPreset>

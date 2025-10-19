@@ -1,0 +1,352 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<ModularSynthPreset version="1">
+  <modules>
+    <module logicalId="1" type="trackmixer">
+      <params>
+        <TrackMixerParams>
+          <PARAM id="numTracks" value="4.0"/>
+          <PARAM id="numTracks_mod" value="0.3400000035762787"/>
+          <PARAM id="track_gain_1" value="1.285999298095703"/>
+          <PARAM id="track_gain_10" value="0.0"/>
+          <PARAM id="track_gain_10_mod" value="0.0"/>
+          <PARAM id="track_gain_11" value="0.0"/>
+          <PARAM id="track_gain_11_mod" value="0.0"/>
+          <PARAM id="track_gain_12" value="0.0"/>
+          <PARAM id="track_gain_12_mod" value="0.0"/>
+          <PARAM id="track_gain_13" value="0.0"/>
+          <PARAM id="track_gain_13_mod" value="0.0"/>
+          <PARAM id="track_gain_14" value="0.0"/>
+          <PARAM id="track_gain_14_mod" value="0.0"/>
+          <PARAM id="track_gain_15" value="0.0"/>
+          <PARAM id="track_gain_15_mod" value="0.0"/>
+          <PARAM id="track_gain_16" value="0.0"/>
+          <PARAM id="track_gain_16_mod" value="0.0"/>
+          <PARAM id="track_gain_17" value="0.0"/>
+          <PARAM id="track_gain_17_mod" value="0.0"/>
+          <PARAM id="track_gain_18" value="0.0"/>
+          <PARAM id="track_gain_18_mod" value="0.0"/>
+          <PARAM id="track_gain_19" value="0.0"/>
+          <PARAM id="track_gain_19_mod" value="0.0"/>
+          <PARAM id="track_gain_1_mod" value="0.4250037968158722"/>
+          <PARAM id="track_gain_2" value="0.0"/>
+          <PARAM id="track_gain_20" value="0.0"/>
+          <PARAM id="track_gain_20_mod" value="0.0"/>
+          <PARAM id="track_gain_21" value="0.0"/>
+          <PARAM id="track_gain_21_mod" value="0.0"/>
+          <PARAM id="track_gain_22" value="0.0"/>
+          <PARAM id="track_gain_22_mod" value="0.0"/>
+          <PARAM id="track_gain_23" value="0.0"/>
+          <PARAM id="track_gain_23_mod" value="0.0"/>
+          <PARAM id="track_gain_24" value="0.0"/>
+          <PARAM id="track_gain_24_mod" value="0.0"/>
+          <PARAM id="track_gain_25" value="0.0"/>
+          <PARAM id="track_gain_25_mod" value="0.0"/>
+          <PARAM id="track_gain_26" value="0.0"/>
+          <PARAM id="track_gain_26_mod" value="0.0"/>
+          <PARAM id="track_gain_27" value="0.0"/>
+          <PARAM id="track_gain_27_mod" value="0.0"/>
+          <PARAM id="track_gain_28" value="0.0"/>
+          <PARAM id="track_gain_28_mod" value="0.0"/>
+          <PARAM id="track_gain_29" value="0.0"/>
+          <PARAM id="track_gain_29_mod" value="0.0"/>
+          <PARAM id="track_gain_2_mod" value="0.4250037968158722"/>
+          <PARAM id="track_gain_3" value="0.0"/>
+          <PARAM id="track_gain_30" value="0.0"/>
+          <PARAM id="track_gain_30_mod" value="0.0"/>
+          <PARAM id="track_gain_31" value="0.0"/>
+          <PARAM id="track_gain_31_mod" value="0.0"/>
+          <PARAM id="track_gain_32" value="0.0"/>
+          <PARAM id="track_gain_32_mod" value="0.0"/>
+          <PARAM id="track_gain_33" value="0.0"/>
+          <PARAM id="track_gain_33_mod" value="0.0"/>
+          <PARAM id="track_gain_34" value="0.0"/>
+          <PARAM id="track_gain_34_mod" value="0.0"/>
+          <PARAM id="track_gain_35" value="0.0"/>
+          <PARAM id="track_gain_35_mod" value="0.0"/>
+          <PARAM id="track_gain_36" value="0.0"/>
+          <PARAM id="track_gain_36_mod" value="0.0"/>
+          <PARAM id="track_gain_37" value="0.0"/>
+          <PARAM id="track_gain_37_mod" value="0.0"/>
+          <PARAM id="track_gain_38" value="0.0"/>
+          <PARAM id="track_gain_38_mod" value="0.0"/>
+          <PARAM id="track_gain_39" value="0.0"/>
+          <PARAM id="track_gain_39_mod" value="0.0"/>
+          <PARAM id="track_gain_3_mod" value="0.0"/>
+          <PARAM id="track_gain_4" value="0.0"/>
+          <PARAM id="track_gain_40" value="0.0"/>
+          <PARAM id="track_gain_40_mod" value="0.0"/>
+          <PARAM id="track_gain_41" value="0.0"/>
+          <PARAM id="track_gain_41_mod" value="0.0"/>
+          <PARAM id="track_gain_42" value="0.0"/>
+          <PARAM id="track_gain_42_mod" value="0.0"/>
+          <PARAM id="track_gain_43" value="0.0"/>
+          <PARAM id="track_gain_43_mod" value="0.0"/>
+          <PARAM id="track_gain_44" value="0.0"/>
+          <PARAM id="track_gain_44_mod" value="0.0"/>
+          <PARAM id="track_gain_45" value="0.0"/>
+          <PARAM id="track_gain_45_mod" value="0.0"/>
+          <PARAM id="track_gain_46" value="0.0"/>
+          <PARAM id="track_gain_46_mod" value="0.0"/>
+          <PARAM id="track_gain_47" value="0.0"/>
+          <PARAM id="track_gain_47_mod" value="0.0"/>
+          <PARAM id="track_gain_48" value="0.0"/>
+          <PARAM id="track_gain_48_mod" value="0.0"/>
+          <PARAM id="track_gain_49" value="0.0"/>
+          <PARAM id="track_gain_49_mod" value="0.0"/>
+          <PARAM id="track_gain_4_mod" value="0.0"/>
+          <PARAM id="track_gain_5" value="0.0"/>
+          <PARAM id="track_gain_50" value="0.0"/>
+          <PARAM id="track_gain_50_mod" value="0.0"/>
+          <PARAM id="track_gain_51" value="0.0"/>
+          <PARAM id="track_gain_51_mod" value="0.0"/>
+          <PARAM id="track_gain_52" value="0.0"/>
+          <PARAM id="track_gain_52_mod" value="0.0"/>
+          <PARAM id="track_gain_53" value="0.0"/>
+          <PARAM id="track_gain_53_mod" value="0.0"/>
+          <PARAM id="track_gain_54" value="0.0"/>
+          <PARAM id="track_gain_54_mod" value="0.0"/>
+          <PARAM id="track_gain_55" value="0.0"/>
+          <PARAM id="track_gain_55_mod" value="0.0"/>
+          <PARAM id="track_gain_56" value="0.0"/>
+          <PARAM id="track_gain_56_mod" value="0.0"/>
+          <PARAM id="track_gain_57" value="0.0"/>
+          <PARAM id="track_gain_57_mod" value="0.0"/>
+          <PARAM id="track_gain_58" value="0.0"/>
+          <PARAM id="track_gain_58_mod" value="0.0"/>
+          <PARAM id="track_gain_59" value="0.0"/>
+          <PARAM id="track_gain_59_mod" value="0.0"/>
+          <PARAM id="track_gain_5_mod" value="0.0"/>
+          <PARAM id="track_gain_6" value="0.0"/>
+          <PARAM id="track_gain_60" value="0.0"/>
+          <PARAM id="track_gain_60_mod" value="0.0"/>
+          <PARAM id="track_gain_61" value="0.0"/>
+          <PARAM id="track_gain_61_mod" value="0.0"/>
+          <PARAM id="track_gain_62" value="0.0"/>
+          <PARAM id="track_gain_62_mod" value="0.0"/>
+          <PARAM id="track_gain_63" value="0.0"/>
+          <PARAM id="track_gain_63_mod" value="0.0"/>
+          <PARAM id="track_gain_64" value="0.0"/>
+          <PARAM id="track_gain_64_mod" value="0.0"/>
+          <PARAM id="track_gain_6_mod" value="0.0"/>
+          <PARAM id="track_gain_7" value="0.0"/>
+          <PARAM id="track_gain_7_mod" value="0.0"/>
+          <PARAM id="track_gain_8" value="0.0"/>
+          <PARAM id="track_gain_8_mod" value="0.0"/>
+          <PARAM id="track_gain_9" value="0.0"/>
+          <PARAM id="track_gain_9_mod" value="0.0"/>
+          <PARAM id="track_pan_1" value="-0.2680000066757202"/>
+          <PARAM id="track_pan_10" value="0.0"/>
+          <PARAM id="track_pan_10_mod" value="0.0"/>
+          <PARAM id="track_pan_11" value="0.0"/>
+          <PARAM id="track_pan_11_mod" value="0.0"/>
+          <PARAM id="track_pan_12" value="0.0"/>
+          <PARAM id="track_pan_12_mod" value="0.0"/>
+          <PARAM id="track_pan_13" value="0.0"/>
+          <PARAM id="track_pan_13_mod" value="0.0"/>
+          <PARAM id="track_pan_14" value="0.0"/>
+          <PARAM id="track_pan_14_mod" value="0.0"/>
+          <PARAM id="track_pan_15" value="0.0"/>
+          <PARAM id="track_pan_15_mod" value="0.0"/>
+          <PARAM id="track_pan_16" value="0.0"/>
+          <PARAM id="track_pan_16_mod" value="0.0"/>
+          <PARAM id="track_pan_17" value="0.0"/>
+          <PARAM id="track_pan_17_mod" value="0.0"/>
+          <PARAM id="track_pan_18" value="0.0"/>
+          <PARAM id="track_pan_18_mod" value="0.0"/>
+          <PARAM id="track_pan_19" value="0.0"/>
+          <PARAM id="track_pan_19_mod" value="0.0"/>
+          <PARAM id="track_pan_1_mod" value="0.4250037968158722"/>
+          <PARAM id="track_pan_2" value="0.375"/>
+          <PARAM id="track_pan_20" value="0.0"/>
+          <PARAM id="track_pan_20_mod" value="0.0"/>
+          <PARAM id="track_pan_21" value="0.0"/>
+          <PARAM id="track_pan_21_mod" value="0.0"/>
+          <PARAM id="track_pan_22" value="0.0"/>
+          <PARAM id="track_pan_22_mod" value="0.0"/>
+          <PARAM id="track_pan_23" value="0.0"/>
+          <PARAM id="track_pan_23_mod" value="0.0"/>
+          <PARAM id="track_pan_24" value="0.0"/>
+          <PARAM id="track_pan_24_mod" value="0.0"/>
+          <PARAM id="track_pan_25" value="0.0"/>
+          <PARAM id="track_pan_25_mod" value="0.0"/>
+          <PARAM id="track_pan_26" value="0.0"/>
+          <PARAM id="track_pan_26_mod" value="0.0"/>
+          <PARAM id="track_pan_27" value="0.0"/>
+          <PARAM id="track_pan_27_mod" value="0.0"/>
+          <PARAM id="track_pan_28" value="0.0"/>
+          <PARAM id="track_pan_28_mod" value="0.0"/>
+          <PARAM id="track_pan_29" value="0.0"/>
+          <PARAM id="track_pan_29_mod" value="0.0"/>
+          <PARAM id="track_pan_2_mod" value="0.4250037968158722"/>
+          <PARAM id="track_pan_3" value="0.0"/>
+          <PARAM id="track_pan_30" value="0.0"/>
+          <PARAM id="track_pan_30_mod" value="0.0"/>
+          <PARAM id="track_pan_31" value="0.0"/>
+          <PARAM id="track_pan_31_mod" value="0.0"/>
+          <PARAM id="track_pan_32" value="0.0"/>
+          <PARAM id="track_pan_32_mod" value="0.0"/>
+          <PARAM id="track_pan_33" value="0.0"/>
+          <PARAM id="track_pan_33_mod" value="0.0"/>
+          <PARAM id="track_pan_34" value="0.0"/>
+          <PARAM id="track_pan_34_mod" value="0.0"/>
+          <PARAM id="track_pan_35" value="0.0"/>
+          <PARAM id="track_pan_35_mod" value="0.0"/>
+          <PARAM id="track_pan_36" value="0.0"/>
+          <PARAM id="track_pan_36_mod" value="0.0"/>
+          <PARAM id="track_pan_37" value="0.0"/>
+          <PARAM id="track_pan_37_mod" value="0.0"/>
+          <PARAM id="track_pan_38" value="0.0"/>
+          <PARAM id="track_pan_38_mod" value="0.0"/>
+          <PARAM id="track_pan_39" value="0.0"/>
+          <PARAM id="track_pan_39_mod" value="0.0"/>
+          <PARAM id="track_pan_3_mod" value="0.0"/>
+          <PARAM id="track_pan_4" value="0.0"/>
+          <PARAM id="track_pan_40" value="0.0"/>
+          <PARAM id="track_pan_40_mod" value="0.0"/>
+          <PARAM id="track_pan_41" value="0.0"/>
+          <PARAM id="track_pan_41_mod" value="0.0"/>
+          <PARAM id="track_pan_42" value="0.0"/>
+          <PARAM id="track_pan_42_mod" value="0.0"/>
+          <PARAM id="track_pan_43" value="0.0"/>
+          <PARAM id="track_pan_43_mod" value="0.0"/>
+          <PARAM id="track_pan_44" value="0.0"/>
+          <PARAM id="track_pan_44_mod" value="0.0"/>
+          <PARAM id="track_pan_45" value="0.0"/>
+          <PARAM id="track_pan_45_mod" value="0.0"/>
+          <PARAM id="track_pan_46" value="0.0"/>
+          <PARAM id="track_pan_46_mod" value="0.0"/>
+          <PARAM id="track_pan_47" value="0.0"/>
+          <PARAM id="track_pan_47_mod" value="0.0"/>
+          <PARAM id="track_pan_48" value="0.0"/>
+          <PARAM id="track_pan_48_mod" value="0.0"/>
+          <PARAM id="track_pan_49" value="0.0"/>
+          <PARAM id="track_pan_49_mod" value="0.0"/>
+          <PARAM id="track_pan_4_mod" value="0.0"/>
+          <PARAM id="track_pan_5" value="0.0"/>
+          <PARAM id="track_pan_50" value="0.0"/>
+          <PARAM id="track_pan_50_mod" value="0.0"/>
+          <PARAM id="track_pan_51" value="0.0"/>
+          <PARAM id="track_pan_51_mod" value="0.0"/>
+          <PARAM id="track_pan_52" value="0.0"/>
+          <PARAM id="track_pan_52_mod" value="0.0"/>
+          <PARAM id="track_pan_53" value="0.0"/>
+          <PARAM id="track_pan_53_mod" value="0.0"/>
+          <PARAM id="track_pan_54" value="0.0"/>
+          <PARAM id="track_pan_54_mod" value="0.0"/>
+          <PARAM id="track_pan_55" value="0.0"/>
+          <PARAM id="track_pan_55_mod" value="0.0"/>
+          <PARAM id="track_pan_56" value="0.0"/>
+          <PARAM id="track_pan_56_mod" value="0.0"/>
+          <PARAM id="track_pan_57" value="0.0"/>
+          <PARAM id="track_pan_57_mod" value="0.0"/>
+          <PARAM id="track_pan_58" value="0.0"/>
+          <PARAM id="track_pan_58_mod" value="0.0"/>
+          <PARAM id="track_pan_59" value="0.0"/>
+          <PARAM id="track_pan_59_mod" value="0.0"/>
+          <PARAM id="track_pan_5_mod" value="0.0"/>
+          <PARAM id="track_pan_6" value="0.0"/>
+          <PARAM id="track_pan_60" value="0.0"/>
+          <PARAM id="track_pan_60_mod" value="0.0"/>
+          <PARAM id="track_pan_61" value="0.0"/>
+          <PARAM id="track_pan_61_mod" value="0.0"/>
+          <PARAM id="track_pan_62" value="0.0"/>
+          <PARAM id="track_pan_62_mod" value="0.0"/>
+          <PARAM id="track_pan_63" value="0.0"/>
+          <PARAM id="track_pan_63_mod" value="0.0"/>
+          <PARAM id="track_pan_64" value="0.0"/>
+          <PARAM id="track_pan_64_mod" value="0.0"/>
+          <PARAM id="track_pan_6_mod" value="0.0"/>
+          <PARAM id="track_pan_7" value="0.0"/>
+          <PARAM id="track_pan_7_mod" value="0.0"/>
+          <PARAM id="track_pan_8" value="0.0"/>
+          <PARAM id="track_pan_8_mod" value="0.0"/>
+          <PARAM id="track_pan_9" value="0.0"/>
+          <PARAM id="track_pan_9_mod" value="0.0"/>
+        </TrackMixerParams>
+      </params>
+    </module>
+    <module logicalId="6" type="VCO">
+      <params>
+        <VCOParams>
+          <PARAM id="frequency" value="440.0"/>
+          <PARAM id="waveform" value="0.0"/>
+          <PARAM id="waveform_mod" value="0.0"/>
+        </VCOParams>
+      </params>
+    </module>
+    <module logicalId="7" type="VCO">
+      <params>
+        <VCOParams>
+          <PARAM id="frequency" value="109.0"/>
+          <PARAM id="waveform" value="0.0"/>
+          <PARAM id="waveform_mod" value="0.0"/>
+        </VCOParams>
+      </params>
+    </module>
+    <module logicalId="8" type="debug">
+      <params>
+        <DebugParams/>
+      </params>
+    </module>
+    <module logicalId="9" type="input debug">
+      <params>
+        <InputDebugParams/>
+      </params>
+    </module>
+    <module logicalId="10" type="Random">
+      <params>
+        <RandomParams>
+          <PARAM id="max" value="50.99996948242188"/>
+          <PARAM id="min" value="0.0"/>
+          <PARAM id="rate" value="1.0"/>
+          <PARAM id="rate_mod" value="0.0"/>
+          <PARAM id="slew" value="0.0"/>
+          <PARAM id="slew_mod" value="0.0"/>
+        </RandomParams>
+      </params>
+    </module>
+    <module logicalId="11" type="Random">
+      <params>
+        <RandomParams>
+          <PARAM id="max" value="50.99996948242188"/>
+          <PARAM id="min" value="0.0"/>
+          <PARAM id="rate" value="1.0"/>
+          <PARAM id="rate_mod" value="0.0"/>
+          <PARAM id="slew" value="0.0"/>
+          <PARAM id="slew_mod" value="0.0"/>
+        </RandomParams>
+      </params>
+    </module>
+  </modules>
+  <connections>
+    <connection srcId="1" srcChan="0" dstId="output" dstChan="0"/>
+    <connection srcId="1" srcChan="1" dstId="output" dstChan="1"/>
+    <connection srcId="1" srcChan="0" dstId="8" dstChan="0"/>
+    <connection srcId="1" srcChan="1" dstId="8" dstChan="1"/>
+    <connection srcId="6" srcChan="1" dstId="9" dstChan="0"/>
+    <connection srcId="7" srcChan="0" dstId="9" dstChan="1"/>
+    <connection srcId="9" srcChan="0" dstId="1" dstChan="0"/>
+    <connection srcId="9" srcChan="1" dstId="1" dstChan="1"/>
+    <connection srcId="10" srcChan="0" dstId="9" dstChan="2"/>
+    <connection srcId="11" srcChan="0" dstId="9" dstChan="3"/>
+  </connections>
+  <modRoutes>
+    <modRoute srcId="0" srcChan="1" dstId="1" param="numTracks_mod" depth="1.0"/>
+    <modRoute srcId="0" srcChan="1" dstId="1" param="numTracks_mod" depth="1.0"/>
+    <modRoute srcId="9" srcChan="2" dstId="1" param="track_gain_1_mod" depth="1.0"/>
+    <modRoute srcId="9" srcChan="2" dstId="1" param="track_pan_1_mod" depth="1.0"/>
+    <modRoute srcId="9" srcChan="2" dstId="1" param="track_gain_2_mod" depth="1.0"/>
+    <modRoute srcId="9" srcChan="2" dstId="1" param="track_pan_2_mod" depth="1.0"/>
+    <modRoute srcId="9" srcChan="3" dstId="1" param="numTracks_mod" depth="1.0"/>
+  </modRoutes>
+  <NodeEditorUI>
+    <node id="1" x="-561.0" y="-1.0"/>
+    <node id="6" x="-1539.0" y="46.0"/>
+    <node id="7" x="-1537.0" y="248.0"/>
+    <node id="8" x="-48.0" y="164.0"/>
+    <node id="9" x="-991.0" y="208.0"/>
+    <node id="10" x="-1575.0" y="478.0"/>
+    <node id="11" x="-1568.0" y="721.0"/>
+  </NodeEditorUI>
+</ModularSynthPreset>

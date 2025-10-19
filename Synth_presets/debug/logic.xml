@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<ModularSynthPreset version="1">
+  <modules>
+    <module logicalId="1" type="Random">
+      <params>
+        <RandomParams>
+          <PARAM id="cvMax" value="1.0"/>
+          <PARAM id="cvMin" value="0.0"/>
+          <PARAM id="max" value="1.0"/>
+          <PARAM id="min" value="0.0"/>
+          <PARAM id="rate" value="1.00000011920929"/>
+          <PARAM id="slew" value="0.0"/>
+        </RandomParams>
+      </params>
+    </module>
+    <module logicalId="2" type="Logic">
+      <params>
+        <LogicParams>
+          <PARAM id="operation" value="0.0"/>
+        </LogicParams>
+      </params>
+    </module>
+    <module logicalId="3" type="Random">
+      <params>
+        <RandomParams>
+          <PARAM id="cvMax" value="1.0"/>
+          <PARAM id="cvMin" value="0.0"/>
+          <PARAM id="max" value="1.0"/>
+          <PARAM id="min" value="0.0"/>
+          <PARAM id="rate" value="1.00000011920929"/>
+          <PARAM id="slew" value="0.0"/>
+        </RandomParams>
+      </params>
+    </module>
+  </modules>
+  <connections>
+    <connection srcId="1" srcChan="2" dstId="2" dstChan="0"/>
+    <connection srcId="3" srcChan="2" dstId="2" dstChan="1"/>
+  </connections>
+  <NodeEditorUI>
+    <node id="1" x="65.0" y="224.0"/>
+    <node id="2" x="566.0" y="219.0"/>
+    <node id="3" x="72.0" y="528.0"/>
+  </NodeEditorUI>
+</ModularSynthPreset>

@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<ModularSynthPreset version="1">
+  <modules>
+    <module logicalId="1" type="TTS Performer">
+      <params>
+        <TTSPerformerParams>
+          <PARAM id="engine" value="1.0"/>
+          <PARAM id="gate" value="0.7999999523162842"/>
+          <PARAM id="gate_mod" value="0.0"/>
+          <PARAM id="pitch" value="0.0"/>
+          <PARAM id="pitch_mod" value="0.0"/>
+          <PARAM id="rate" value="2.0"/>
+          <PARAM id="rate_mod" value="0.0"/>
+          <PARAM id="reset_mod" value="0.0"/>
+          <PARAM id="speed" value="1.0"/>
+          <PARAM id="speed_mod" value="0.0"/>
+          <PARAM id="trigger_mod" value="0.0"/>
+          <PARAM id="trimEnd" value="1.0"/>
+          <PARAM id="trimEnd_mod" value="0.0"/>
+          <PARAM id="trimStart" value="0.0"/>
+          <PARAM id="trimStart_mod" value="0.0"/>
+          <PARAM id="volume" value="0.7999999523162842"/>
+        </TTSPerformerParams>
+      </params>
+    </module>
+    <module logicalId="2" type="Random">
+      <params>
+        <RandomParams>
+          <PARAM id="boolThreshold" value="0.5"/>
+          <PARAM id="cvMax" value="1.0"/>
+          <PARAM id="cvMin" value="0.0"/>
+          <PARAM id="max" value="1.0"/>
+          <PARAM id="min" value="0.0"/>
+          <PARAM id="rate" value="1.00000011920929"/>
+          <PARAM id="slew" value="0.0"/>
+        </RandomParams>
+      </params>
+    </module>
+    <module logicalId="4" type="Comparator">
+      <params>
+        <ComparatorParams>
+          <PARAM id="threshold" value="0.5"/>
+        </ComparatorParams>
+      </params>
+    </module>
+  </modules>
+  <connections>
+    <connection srcId="1" srcChan="0" dstId="output" dstChan="0"/>
+    <connection srcId="2" srcChan="0" dstId="1" dstChan="1"/>
+    <connection srcId="2" srcChan="0" dstId="1" dstChan="2"/>
+    <connection srcId="2" srcChan="0" dstId="1" dstChan="3"/>
+    <connection srcId="2" srcChan="0" dstId="1" dstChan="4"/>
+    <connection srcId="2" srcChan="0" dstId="1" dstChan="5"/>
+    <connection srcId="2" srcChan="0" dstId="1" dstChan="6"/>
+    <connection srcId="2" srcChan="0" dstId="1" dstChan="7"/>
+    <connection srcId="2" srcChan="0" dstId="4" dstChan="0"/>
+    <connection srcId="4" srcChan="0" dstId="1" dstChan="0"/>
+  </connections>
+  <NodeEditorUI>
+    <node id="1" x="-181.0" y="205.0"/>
+    <node id="2" x="-719.0" y="514.0"/>
+    <node id="4" x="-896.525146484375" y="1101.234741210938"/>
+  </NodeEditorUI>
+</ModularSynthPreset>

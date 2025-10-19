@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<ModularSynthPreset version="1">
+  <modules>
+    <module logicalId="2" type="VCO">
+      <params>
+        <VCOParams>
+          <PARAM id="frequency" value="153.0"/>
+          <PARAM id="waveform" value="0.0"/>
+          <PARAM id="waveform_mod" value="0.0"/>
+        </VCOParams>
+      </params>
+    </module>
+    <module logicalId="3" type="Delay">
+      <params>
+        <DelayParams>
+          <PARAM id="feedback" value="0.2129999995231628"/>
+          <PARAM id="mix" value="0.2689999938011169"/>
+          <PARAM id="timeMs" value="277.6999816894531"/>
+        </DelayParams>
+      </params>
+    </module>
+  </modules>
+  <connections>
+    <connection srcId="2" srcChan="0" dstId="3" dstChan="0"/>
+    <connection srcId="2" srcChan="1" dstId="3" dstChan="1"/>
+    <connection srcId="3" srcChan="0" dstId="output" dstChan="0"/>
+    <connection srcId="3" srcChan="1" dstId="output" dstChan="1"/>
+  </connections>
+  <modRoutes/>
+  <NodeEditorUI>
+    <node id="2" x="-558.0" y="165.0"/>
+    <node id="3" x="-97.0" y="157.0"/>
+  </NodeEditorUI>
+</ModularSynthPreset>

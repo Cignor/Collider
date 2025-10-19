@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<ModularSynthPreset version="1">
+  <modules>
+    <module logicalId="1" type="TTS Performer">
+      <params>
+        <TTSPerformerParams>
+          <PARAM id="engine" value="1.0"/>
+          <PARAM id="gate" value="1.0"/>
+          <PARAM id="pitch" value="0.0"/>
+          <PARAM id="rate" value="1.0"/>
+          <PARAM id="speed" value="1.0"/>
+          <PARAM id="trimEnd" value="1.0"/>
+          <PARAM id="trimStart" value="0.0"/>
+          <PARAM id="volume" value="1.0"/>
+        </TTSPerformerParams>
+      </params>
+    </module>
+  </modules>
+  <connections>
+    <connection srcId="1" srcChan="0" dstId="output" dstChan="0"/>
+    <connection srcId="1" srcChan="0" dstId="output" dstChan="1"/>
+  </connections>
+  <NodeEditorUI>
+    <node id="1" x="-1042.0" y="-285.0"/>
+  </NodeEditorUI>
+</ModularSynthPreset>

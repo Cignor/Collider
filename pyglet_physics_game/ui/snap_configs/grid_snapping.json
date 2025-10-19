@@ -1,0 +1,29 @@
+{
+  "name": "Grid Intersection Snapping",
+  "description": "Snap zones for grid intersections and precise object placement",
+  "zones": {
+    "design_grid": {
+      "type": "grid_intersection",
+      "name": "design_grid",
+      "grid_spacing": 100,
+      "snap_distance": 15,
+      "priority": 3,
+      "active": true,
+      "visual_feedback": true
+    },
+    "micro_grid": {
+      "type": "grid_intersection", 
+      "name": "micro_grid",
+      "grid_spacing": 8,
+      "snap_distance": 8,
+      "priority": 2,
+      "active": true,
+      "visual_feedback": true
+    }
+  },
+  "settings": {
+    "snap_animation_duration": 0.15,
+    "grid_highlight_opacity": 0.6,
+    "intersection_highlight": true
+  }
+}

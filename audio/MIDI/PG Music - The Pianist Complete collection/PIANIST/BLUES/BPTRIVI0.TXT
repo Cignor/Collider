@@ -1,0 +1,796 @@
+@001 What was B.B. Kings first hit?
+\*Sweet Little Angel
+\You  Know I Love You
+\The Thrill is Gone
+\3 O'clock Blues
+^Although all of the above were hits for B.B. King this was the first recorded at Sam Phillips Recording Service in Memphis TN in 1951.
+<2
+
+@002 What was the song that launched B.B. King to international stardom in 1970?
+\Lucielle
+\*The Thrill Is Gone
+\You Know I Love You
+\Everyday I Have  The Blues
+^The Thrill Is Gone is the song which got B.B. King recognized on the international market.
+<2
+
+@003 Who is called 'The Blues Man of the Nineties?'
+\*Buddy Guy
+\Dr. John
+\B.B. King
+\John Lee Hooker
+^With several albums (most recently ' Damn Right I Got The Blues') and relentless touring, Buddy Guy has earned this name.
+<1
+
+@004 Whose recording career started when he was recorded by Alan Lomax for the Library of Congress?
+\*Muddy Waters
+\John Lee Hooker
+\Pinetop Perkins
+\Son House
+^Muddy Waters recording career started when folklorist Alan Lomax recorded him for the Library Of Congress. He recorded there in 1942.
+<3
+
+@005 Who was considered the pioneer of electric blues?
+\B.B. King
+\*Muddy Waters
+\John Lee Hooker
+\Leon Redbone
+^In 1943 Muddy made a name for himself as a pioneer of the electric blues.
+<1
+
+@006 Who was McKinley Morganfield better know as?
+\Buddy Guy
+\B.B. King
+\Dr. John
+\*Muddy Waters
+^Muddy was born in Rolling Folk Mississippi in 1915.
+<1
+
+@007 How did Bessie Smith Die?
+\Flu virus
+\*Automobile  accident
+\She was murdered
+\Drug overdose
+^She was killed in 1935 in an automobile accident in Clarksdale Mississippi. It has been suggested that she was refused treatment in an all white hospital.
+<3
+
+@008 How old was Robert Johnson when he died?
+\*27 yr.
+\47 yr.
+\77 yr.
+\97 yr.
+^Born in Hazelton, Mississippi in 1911 he died under rather strange circumstances in Greenwood Mississippi in 1938. Some say he was either stabbed, shot, or poisoned.
+<3
+
+@009 What caused Willie Dixon to be unique from other Black Blues men of that time?
+\He had formal education
+\He could compose and arrange music
+\He could read music notation
+\*All of the above
+^Willie Dixon was able to read, write, compose, and arrange music which was not common with the early blues men.
+<1
+
+@010 What was the reason Willie Dixon ended up in Chicago?
+\To seek a recording contract.
+\To be a session musician.
+\*To follow a boxing career.
+\His family moved there.
+^Willie came to Chicago as a boxer and sparred with Joe Louis.
+<2
+
+@011 Who was Chester Arthur Burnett better Known as?
+\*Howlin' Wolf
+\Sonny Boy Williamson
+\Arthur 'Big Boy' Crudup
+\Guitar Slim
+^Howlin' Wolf was born near West Point Mississippi in 1910.
+<1
+
+@012 What do B.B. King and Albert King have in common?
+\They are cousins.
+\*They were born in the same town.
+\Inducted into the Blues Hall of Fame at the same time.
+\All of the above.
+^Both were born in Indianola, Mississippi -population 2000. Albert King was born in 1923 and B.B. in 1925. They are not related.
+<2
+
+@013 Who wrote 'The Sky is Crying'?
+\Stevie Ray Vaughn
+\*Albert King
+\Elmore James
+\Joe Callicott
+^In 1952 Albert King found his greatest success with this song recorded at NY Fire Records. Later it was recorded by Stevie Ray Vaughn.
+<1
+
+@014 What famous Blues guitarist played with the St. Louis Symphony?
+\John Lee Hooker
+\Lightnin' Hopkins
+\*Albert King
+\Pinetop Perkins
+^Albert King played with the St. Louis Symphony in 1969.
+<2
+
+@015 What is the W.C. Handy award?
+\A scholarship give to aspiring Blues musicians.
+\*An award for Blues players.
+\Awards given to players inducted into the Blues Hall Of Fame.
+\none of the above.
+^This award is considered "The Grammy" in Blues circles.
+<1
+
+@016 What Blues great was convicted of murder and attempted murder but served no time?
+\Son House
+\Charley Patton
+\*Leadbelly
+\None of the above
+^ Leadbelly was convicted of murder in 1917, and of attempted murder in 1930. The sentences were commuted.
+<2
+
+@017 Where was Leadbelly 'discovered'?
+\At a train station
+\*In prison
+\In a church service
+\Playing in a bar in New Orleans
+^Leadbelly was discovered while serving time at Louisiana's Angola Prison Farm.
+<1
+
+@018 Who was Huddie Ledbetter better known as?
+\*Leadbelly
+\Eddie James Jr.
+\Booker T Washington
+\Son House
+^Leadbelly was born in Shiloh, Louisiana in 1888 and died in NYC in 1949.
+<1
+
+@019 Who was considered to be the first electric blues guitar man? 
+\*T-Bone Walker
+\Booker T Washington
+\Leadbelly
+\Blind Lemon Jefferson
+^T-Bone Walker born Aaron Thibeaux Walker was apparently using the electric guitar as early as 1935.
+<2
+
+@020 Who was Eddie James Jr. is better known as?
+\Bukka White
+\*Son House
+\Sonny Boy Williamson
+\Dr. John
+^Son House was born Eddie James Jr. in Riverton Mississippi in 1902. He was a minister before becoming a blues performer.
+<3
+
+@021 What early Delta blues great made money by prize fighting and playing professional baseball?
+\Leadbelly
+\Son House
+\*Booker T Washington
+\'T-Bone' Walker
+^Booker T first recorded for the Victor label in the late '20s. He played ball and fought to earn extra money.
+<3
+
+@022 What blues great recorded the folk song 'Good Night Irene?'
+\Robert Johnson
+\*Leadbelly
+\Booker T Washington
+\'Bukka' White
+^Though known as a blues legend, Leadbelly was also well known as a folk singer.
+<3
+
+@023 Who was Aaron Thibeaux better know as?
+\Booker T Washington
+\Tommy Johnson
+\*T-Bone Walker
+\Blind Boy Fuller
+^Aaron Thibeaux Walker, 'T-Bone', was born  in 1910 in Linden, Texas.
+<2
+
+@024 What record label that was started by two brothers in the '40s paved the way for Muddy Waters, Willie Dixon and Little Arthur in the '60s?
+\Artistic
+\Regal
+\Delmark
+\*Chess
+^Leonard and Phil Chess opened Chess records and blazed a trail throughout the '40s to the '60s that people from Sonny Boy Williamson to Eric Clapton followed.
+<2
+
+@025 How did Elmore James die and how old was he?
+\Auto accident, 53 yr. old
+\Shot in a tavern fight, 28 yr. old
+\*Heart problems, 44 yr. old
+\None of the above
+^Elmore James died from a long standing heart aliment on May 23, 1963. He was 44.
+<2
+
+@026 Sonny Boy Williamson was actually?
+\A female
+\*An alias used by two different performers
+\A record producer
+\A moonshiner who played the blues
+^Sonny Boy Williamson #1 (Rice Miller)was killed in the winter of 1947, it has been rumored with an ice pick. Sonny Boy Williamson #2 (Alec Ford) used the name and recorded some of blues best songs.
+<2
+
+@027 The music of Louis Jordan was featured in what Broadway musical?
+\Hair
+\*Five Guys Named Moe
+\Jesus Christ Superstar
+\Cats
+^The musical is still running in NYC (05\96)
+<3
+
+@028 How did T-Bone Walker die?
+\*Pneumonia
+\Auto accident
+\Overdose
+\Suicide
+^T Bone, born in Linden, Texas in 1910, died of pneumonia in Los Angeles in 1975.
+<2
+
+@029 Who was known as the Texas Cannonball?
+\Stevie Ray Vaughn
+\*Freddie King
+\Blind Willie Johnson
+\Albert Collins
+^Freddie King mixed the Chicago and Texas blues guitar styles into his own well known riffs.
+<2
+
+@030 Who was Otis Hicks better known as?
+\Lazy Lester
+\Howlin' Wolf
+\*Lightnin' Slim
+\Skip James
+^Born Otis Hicks in March 13, 1913 he was a major contributor to the swamp blues style. He died July 27, 1974.
+<2
+@031 Who was Henry Roeland Byrd better known as?
+\Lightin' Slim
+\*Professor Longhair
+\Dr. John
+\James Booker
+^Born December 19, 1918, Fess was known as one of the premiere players of the blues and New Orleans style of piano music. He influenced many other players such as Dr. John.
+
+@032 Blues guitarist Peter Green was one of the founding members of what band?
+\*Fleetwood Mac
+\The Village People
+\The Powder Blues
+\The Blues Hall Of Fame
+^Peter Green born in Bethnal Green, London on 10\29\1946, played with John Mayall, and in fact took over for Eric Clapton. He then went on to form the first Fleetwood Mac, which subsequently went through many personnel changes.
+<3
+
+@033 Where did the roots of the blues come from?
+\Song sung from the slaves in the field.
+\Black folk music with its roots in Africa.
+\Gospel taught in the churches during slavery.
+\*All of the above
+^With no link to Western music the blues came from Black folk songs sung in the field to ease the fatigue of the hard work.
+<1
+
+@034 What blues great helped the young Robert Cray Band get on its way?
+\*Muddy Waters
+\B.B. King
+\John Lee Hooker
+\Willie Dixon
+^Though The Robert Cray Band played with John Lee and Willie Dixon on their first national tour with the 'Kings of the Boogie', it was Muddy who took them under his wing and had them as his opening act.
+<3
+
+@035 Who founded the Blues Haven Foundation?
+\B.B. King
+\Muddy Waters
+\John Lee Hooker
+\*Willie Dixon
+^This non-profit origination founded by Willie Dixon in 1981 provides help for blues musicians on copyrights, scholarships, instruments for school and other aids to help the spread of blues music to everyone.
+<2
+
+@036 Who was Marion Walter Jacob better known as?
+\Sonny Boy Williamson
+\*Little Walter
+\Z.Z. Hill
+\Willie Brown
+^Little Walter, born May 1, 1930 in Marksville, LA., was a major influence in what is called the Chicago blues harp (harmonica).
+<1
+
+@037 Who recorded the first vocal blues song, 'Crazy Blues', in 1920?
+\Willie Dixon
+\Ma Railey
+\W.C. Handy
+\*Mamie Smith
+^Though there were blues recording as early as 1913 the first vocal recording was with Mammie Smith .
+<3
+
+@038 When Americans brought the blues home with them after the First World War, where did the influence come from?
+\Europeans allies
+\*Southern White Soldiers
+\Black Soldiers
+\Slaves in the European market.
+^Though the outfits during the war were still segregated, the Southern white soldiers learned about the music through the Black soldiers of the time.
+<2
+
+@039 Who has the middle alias Gatemouth?
+\Eddie Duran
+\Charlie Christian
+\*Clarence Brown
+\Henry Byrd
+^Born April 18, 1924, Clarence Brown (AKA Gatemouth), and T-Bone Walker were the first of the blues men to show how far one could go with a electric guitar.
+<1
+
+@040 How did Samuel Maghett (AKA Magic Sam) die?
+\Heroin overdose
+\*Heart attack
+\Gun shot wounds
+\Auto accident
+^Born in Grenada, Mississippi on Feb. 14, 1937, he died of a heart attack at the young age of 32 (Dec. 1 1969 in Chicago IL.) With his blazing guitar style he was a major influence on other musicians including Robert Cray.
+<2
+
+@041 How many songs did Robert Johnson record?
+\*41
+\none
+\5
+\over 800
+^Robert Johnson had his first recording session in 1936 and in two sessions he recorded 41 recordings of 29 different songs. One earlier song, Kind Hearted Woman, was recorded at a music store.
+<3
+
+@042 Why did John Lee Hooker get kicked out of the Army?
+\He was smoking pot
+\*He was too young
+\He failed the medical
+\He fainted at the sight of blood
+^John Lee joined the army at the age of fourteen, only to be kicked out 4 months later when they found out how old he was.
+<2
+
+@043 Who replaced Little Walter in Muddy Water's band in 1952 at the age of 19 ?
+\*Junior Wells
+\Buddy Guy
+\B.B. King
+\Dr. John
+^By the age of 14 Junior Wells was already performing at clubs around the Chicago area, giving him five years of experience.
+<2
+
+@044 Billie Holiday had a famous rendition of 'Summertime.' Who wrote 'Summertime'?
+\Robert Johnson
+\Blind Lemon Jefferson
+\*George Gershwin
+\Slim Jones
+^Even  though being made famous as a blues song the original person who penned this song was George Gershwin for his musical Porgy and Bess.
+<1
+
+@045 Who is credited with being one of the fathers of 'The Delta Blues Sound'?
+\Lead Belly
+\Blind Lemon Jefferson
+\Willie Brown
+\*Charley Patton
+^Charley Patton was noted as one of the primary influences for people such as Robert Johnson, Willie Brown, and Howlin' Wolf.
+<2
+
+@046 Guitar legend Eric Clapton was a member of which group?
+\John Mayall's Blues Breakers
+\Cream
+\Derek and The Dominos
+\*All of the above
+^As well as these bands, Eric has played as a session and backup on many other albums for various artists.
+<1
+
+@047 The Blues Haven Foundation is?
+\The name of a band
+\A recording company
+\*A non profit organization for the furthering of the blues
+\A hostel for homeless musicians
+^Founded by Willie Dixon in 1981, the foundation was set up to help with the promotion of blues and blues musicians.
+<1
+
+@048 Who was the performer who was said to have 'sold his soul to the Devil at the Crossroads'?
+\Willie Brown
+\*Robert Johnson
+\Blind Lemon Jefferson
+\Jimi Hendrix
+^Robert Johnson was said to 'have gone to the Crossroads and sold his soul to the Devil' for the opportunity of being famous. He died at the age of 27. Good deal?
+<1
+
+@049 During the time of share cropping what was the main image of freedom for the early slaves and blues players?
+\Singing in the fields
+\Escaping to Canada
+\*The train
+\Playing the blues good enough to become a performer
+^The train was the main means of travel at that time, and the blues performers and the slaves both saw it as an image of freedom to escape the  area they were in.
+<2
+
+@050 What area was known as the Mecca of the blues in the early 50's?
+\Chicago IL.
+\Los Angles CA
+\New Orleans LA
+\*Memphis TN
+^During the 50's everyone from James Cotton, Howlin' Wolf, Junior Parker, and other 'greats' were in the area because it was such a hotbed of blues.
+<1
+
+@051 In the mid 20's to the 30's, what else did Gladys Bently do besides play piano at the Cotton Club?
+\She was a singer
+\She was a male impersonator
+\She was an actor in stage plays
+\*All of the above
+^Gladys was known as a large dark masculine woman with an amazing exhibition of musical energy. She was born in 1906 and died in Los Angeles on Jan 18 1960. 
+<2
+
+@052 With many black performers in the 50's and 60's what was the term Tomming referred to?
+\A white performer playing in black clubs.
+\*A black performer acting different in white and black clubs.
+\A blues performer working outside the blues genre.
+\Playing slave songs to remember the roots of  the blues.
+^Tomming was referred to the term 'Uncle Tom' which was a racial slur when referring to blacks in the 40's and 50's.
+<2
+
+@053 What was the reason that James Booker had trouble keeping players in bands?
+\His drug habit
+\He used to come on to the guys in the band
+\*Both of the above
+\Neither of the above
+^James Booker was a homosexual and had a lot of troubles with other band members because he would 'hit on them.' Also he was a cocaine addict and would spend the band's money on drugs. In the end he died of 
+a cocaine overdose.
+<2
+
+@054 Who is Malcolm Rebennack better known as?
+\Pinetop Perkins
+\Professor Longhair
+\*Dr. John
+\Jonnie Winter
+^Malcolm Rebennack - better know as Dr. John or The Night Tripper -has been playing his form of blues piano since the fifties.
+<1
+
+@055 Who gave up his seat on the helicopter to Stevie Ray Vaughn just before the fatal flight?
+\*Eric Clapton
+\Buddy Guy
+\Dr. John
+\Eddie Van Halen
+^Since both were playing on the same tour at the time Eric thought he would stay at the site where they just played, and finish his tea. The helicopter crashed into a side of a mountain in heavy fog.
+<1
+
+@056 Which of the following notes in NOT considered a 'bluenote' when flatted?
+\3rd
+\5th
+\*6th
+\7th
+^When playing blues, the most frequently 'bent' notes are the 3rd 5th & 7th of the scale.
+<3
+
+@057 Who is Lucielle to B.B. King?
+\His mother
+\*His guitar
+\His sister
+\His dog
+^B.B. King calls his guitar Lucielle.
+<1
+
+@058 In the song by Cab Calloway who 'had a heart as big as a whale'?
+\Mustang Sally
+\*Minnie the Moocher
+\Johnnie B Good
+\Lucielle
+^The song 'Minnie the Moocher' was featured in the movie 'The Blues Brothers' told a story about a poor lady who dreamed on day of being rich.
+<2
+
+@059 Which of the following blues greats was NOT in the movie 'The Blues Brothers?'
+\Aretha Franklin
+\*Dr. John
+\Ray Charles
+\John Lee Hooker
+^While this movie was loaded with great musicians, Dr. John was not in the movie.
+<2
+
+@60 What character did Ray Charles portray in the Blues Brothers Movie?
+\A down and out street musician
+\A corrupt record producer
+\*A music store owner
+\A pimp
+^In the movie Ray Charles played an owner who sold the Blues Brothers some musical equipment.
+<1
+
+@061 What do James Booker, John Lee Hooker and James Cotton have in common?
+\There all from Atlanta
+\They all played the New Orleans circuit in the 40's
+\*All their fathers were 'men of the cloth'
+\They were all inducted into the Blues Hall of Fame in the same year
+^All these performers (as well as many others) got their blues roots from gospel taught to them in the  church.
+<2
+
+@062 What artist did James Booker sometimes fill in piano tracks for?
+\*Fats Domino
+\Liberace
+\Ray Charles
+\Chuck Berry
+^When Fats would go out of town Booker would fill in piano tracks for him and when he got back Fats would fill in the vocals.
+<2
+
+@063 How did pianist James Booker lose his eye?
+\In a barroom fight
+\From a malignant cyst
+\He fell down drunk
+\*From a dirty syringe
+^Booker had a heavy drug problem his whole life though he had many stories on how he lost his eye, he admitted to friends that it was through a dirty syringe.
+<3
+
+@064 How did James Booker die?
+\*Cocaine overdose
+\Auto accident
+\Heart attack
+\Shot in the back
+^James Booker who had a long time relationship with hard drugs and drinking died of an overdose  November 8th 1983 - he was almost 44 .
+<2
+
+@065 Who introduced the 'triplet chord figure' which he made famous on the song 'Every night about this time'?
+\Little Willie Littlefield
+\James Booker
+\Dr. John
+\*Fats Domino
+^On this recording (his fifth release) he introduced this chord he got from Little Willie Littlefield. 
+<3
+
+@066 Between 1950 and 1956 who soared up the charts with 14 out of 25 singles released getting into the top ten?
+\*Fats Domino
+\B.B. King
+\John Lee Hooker
+\Professor Longhair
+^Fats Domino -'The Fat Man' - released a lot of songs in those few years and had more that 50% of them got into the top ten.
+<1
+
+@067 In May 1955 Fats Domino broke the Billboard 100 to get up to number 10 with what song?
+\Blue Berry Hill
+\I'm the Fat Man
+\*Ain't That a Shame
+\I'm in Love Again
+^All above being hits for Fats Domino, 'Ain't That a Shame' was the first song by a black New Orleans Blues artist to break into the white pop charts.
+<2
+
+@068 What white singer had a successful cover version of Fats Domino's 'Ain't That a Shame'? 
+\Elvis Presley
+\Buddy Holly
+\Doris Day
+\*Pat Boone
+^Just after Fats made number 10 on the Billboard charts with the first song in the top 100 by a black blues artist, Pat Boone redid the same song and made it all to way to number 1. Ain't THAT a Shame !
+<2
+@069 Whose 'Rockin' Pneumonia and the Boogie-Woogie Flu' got to # 10 on the R&B and #52 on the pop charts?
+\Fats Domino
+\Eubie Blake
+\Professor Longhair
+\*Huey Smith
+^Huey Smith and his band 'The Clowns' were known for bizarre antics in the stage show which were very popular at the time.
+<3
+
+@070 What great piano player from New Orleans had posed for 'Ivory Soap' advertising as a child?
+\*Dr. John
+\Fats Domino
+\Tuts Washington
+\Eubie Blake
+^Born in 1941 Dr. John (AKA Malcolm Rebennack) was a poster child for local advertising of Ivory's 
+Soap.
+<2
+
+@071 Who started their career by playing piano for the silent movies?
+\Fats Domino
+\B.B. King
+\*Tuts Washington
+\Professor Longhair
+^Tuts started out playing at the movie house and at parties. He got paid a few dollars and a good meal.
+<3
+
+@072 What blues piano player died while performing at the New Orleans' World's Fair in August 1994?
+\Alan Toussaint
+\*Tuts Washington
+\James Booker
+\Fats Domino
+^Tuts Washington released his first recording in March 1983 entitled 'New Orleans's Piano Professor.' He died while performing at the New Orleans' World's Fair in 1994.
+<2
+
+@073 If blues had a vital influence on jazz which became very popular in the 20's what did jazz do for blues?
+\*Made it possible for blues to be absorbed into both the jazz and pop markets.
+\Put blues on the 'back burner' and held it up by years
+\Opened doors for Blues players to get into clubs by playing jazz
+\None of the above
+^Jazz was started earlier in its origins with blues roots but soon became very popular with the white audience. This helped to get blues into the mainstream market.
+<1
+
+@074 What was considered the main reason that the blues became popular with white audiences in the 1960's?
+\The influence on the jazz market
+\A nostalgia movement by listeners unhappy with "psychedelic era" music
+\*Young white American and European bands
+\All of the above
+^Bands such as the Rolling Stones, Cream and John Mayall's Blues Breakers were instrumental in bringing the blues to young white audiences - something the black blues artists were unable to do.
+<2
+
+@075 Who are two blues performers who have done commercials for 'Pepsi.'
+\Buddy Guy and Robert Cray
+\The Blues Brothers
+\Hank and Aaron Nevell
+\*John Lee Hooker and Ray Charles
+^John Lee did the commercial for Pepsi, while Ray Charles did his for 'Diet Pepsi.'
+<1
+
+@076 In the Willie Dixon song 'Back Door Man' - who was he referring to?
+\*The lover who would come in while the man of the house of the man was out.
+\The drug dealer
+\The guy who would throw you out the back door of some Chicago clubs
+\A back alley abortionist
+^The basic meaning is that if your old man isn't giving you what you need  the 'back door man' will.
+<1
+
+@077 What exactly is a Mojo?
+\A sticky candy
+\A term for a black player playing in a white club
+\*An amulet, good luck charm, or conjuring object
+\A pick with a slide for your guitar built in.
+^A Mojo is a term used for an amulet or charm used by lovers or gamblers.
+<2
+
+@078 In the Willie Dixon song 'Hoochie Coochie Man' who is this person?
+\*One who preached voodoo
+\A blues man from the south
+\A blues man from Chicago
+\Another term for a back door man
+^A Hoochie Coochie Man refers to a use of Voodoo and the practice of that religion.
+<2
+
+@079 What blues performer within a year won a Grammy, had a tribute to him in New York City and was inducted into The Rock and Roll Hall of Fame?
+\Buddy Guy
+\B.B. King
+\Dr. John
+\*John Lee Hooker
+^John Lee Hooker had an album out called 'Mr. Lucky,' but he had certainly "paid his dues" for these awards.
+<2
+
+@080 Which 1940's band did Professor Longhair play with?
+/The Shuffling Hungarians
+/The Four Hairs Combo
+/Four Bald Guys
+/*All of the above
+^Fess played with a large number of bands in the forties and fifties as well as doing other work outside of music, such as a circus stunt man.
+<1
+
+@081 What city served as a launching pad for the electrifying of the rural blues?
+/Memphis
+/Los Angles
+/*Chicago
+/New Orleans
+^While all of these cities being starting places for all kinds of blues, Chicago was the hot bed of electric blues with the introduction of the electric guitar.
+<1
+
+@082 Who played the piano before switching to guitar and then gaining success?
+/*Ike Turner
+/B.B. King
+/Dr. John
+/Little Richard
+^Ike Turner was a blues piano player and when he switched to the electric guitar he gained the success he was looking for.
+<2
+
+@083 Which blues guitarist is not a slide player?
+/Robert Johnson
+/*B.B. King
+/Son House
+/Bukka White
+^B.B. King was more known for his picking technique while the others were known for being slide players.
+<3
+
+@084 What is the place at the corner of Highway 61 and Highway 49?
+/The Cotton Club
+/Johnny B. Goode's log cabin
+/*The Crossroads
+/The Blues Hall of Fame
+^The famed Crossroads where Robert Johnson sold his soul to the devil for fame is located in Mississippi at the intersection of these Highways.
+<2
+
+@085 While playing with Huey Smith, Dr. John and the rest of the band sometimes played behind a curtain. Why?
+/Some places were too small and they were in another room
+/*They were a mixed race group
+/The acoustics in some places were better that way
+/Huey Smith was very arrogant and didn't want the rest of the band seen
+^Because of the race issue in Mississippi, the band would sometimes play behind a curtain so the audience and the police didn't know it was a mixed race band.
+<1
+
+@086 Before Little Richard played the guitar, what was his instrument of choice?
+/*Piano
+/Clarinet
+/Harmonica
+/Saxophone
+^Little Richard who had great hits with his rockin' style of R&B and rock mixture played piano before he took up the guitar.
+<1
+
+@087 Where is the Delta Blues Museum located?
+/Memphis TN
+/Dallas TX
+/New Orleans LA
+/*Clarksdale Mississippi
+^Right in the heart of the Mississippi Delta, you'll find the Museum where they collect and preserve information and other memories relevant to the history of the blues. Visit them at www.clarksdale.com/blusmuse.htm.
+<2
+
+@088 Etta James had a top-ten hit in 1959 with what Eddie Bo song?
+/Minnie the Moocher
+/Under the Boardwalk
+/*Dearest Darlin'
+/RESPECT
+^Etta James recorded this song in 1959 and it stayed on the R&B Charts for 7 weeks. 
+<2
+
+@089 Before the piano, what instrument did Dr. John play?
+/Harmonica
+/He only has played the piano
+/*Guitar
+/Drums
+^Dr. John played the guitar until he was shot in the left index finger by a hotel manager in Jacksonville Florida on Christmas Eve 1961.
+<1
+
+@090 What Dr. John song released in 1973 got him to the top ten of Billboard?
+/*Right Place Wrong Time
+/The Night Tripper
+/Dangerous Curves
+/Big Chief
+^When Dr. John brought out this tune he struck it big and television and tours followed. He had more that 50 of his compositions recorded between 1956 and 63 with little notoriety. He recorded this tune with Allen Toussaint.
+<2
+
+@091 Where did Tuts Washington, Dr. John and Bo Eddie get their first influence for the blues?
+/*Outside bars looking in the windows
+/In the local church
+/All by their great grandfathers
+/At jazz festivals
+^All of the above being very young at the time, had to look into bars to see people like Professor Longhair.
+<2
+
+@092 What did Dave 'Fat Man' Williams do when he was 54 that he never did before?
+/He started to learn the guitar
+/*He recorded a record
+/He learned to read music
+/He lost a lot of weight
+^In 1974 he put out his album 'I Ate it Up The Apple Tree'. He had songs but he lived off his playing .This was his only recording. He died March 12 1982.
+<3
+
+@093 How did guitarist Stevie Ray Vaughn die?
+/Drug overdose
+/Choking on his own vomit
+/*Helicopter accident
+/Car accident
+^After playing a concert with Eric Clapton he took off in a helicopter and it smashed into the side of a mountain in heavy fog.
+<1
+
+@094 What blues man taught his nephew 'B.B. King' at an early age after B.B hitchhiked to Memphis Tennessee?
+/Son House
+/*Bukka White
+/Albert King
+/Freddie King
+^Bukka White, a well know blues player of the time, was B.B.'s uncle and teacher.
+<3
+
+@095 Where is the 'Sweet Home' of the blues players?
+/Mississippi
+/*Chicago
+/Tennessee
+/Los Angles
+^According to the song, Chicago is know as 'Sweet Home Chicago'.
+<1
+
+@096 What blues piano player had his 'Thrill' sung on the TV show Happy Days?
+/*Fats Domino
+/B.B. King
+/Little Richard
+/None of the above
+^When Richie Cunningham was going on a date he would sing Fat's song Blueberry Hill which started out with the words 'I found my Thrill'.
+<1
+
+@097 What movie is NOT based on the blues in some way?
+/Crossroads
+/The Blues Brother's
+/*Blue Steel
+/Lady Sings the Blues
+^There have been several movies about blues and the early era. However 'Blue Steel' was a movie about police officers starring Jamie Lee Curtis
+<1
+@098 Sam 'Lightin' Hopkins learned to play guitar early in life. What was different about his first guitar?
+/It was one of the first electric ones in the USA
+/It was made out of metal
+/*It was made out of on old cigar box.
+/It had hemp strings.
+^Born in Centerville TX. In 1912 his father was a farmer and probably didn't have the money for a guitar. He also played the organ at church until he met Blind lemon Jefferson at a picnic when he was a child.
+<2
+@099 What role does Arethia Franklin play in the movie the Blues Brothers?
+/*An waitress in a fried chicken restaurant
+/A hooker
+/A nun
+/A deranged house wife
+^In the movie she was married to Mad Guitar Murphy and they ran a restaurant together. 
+<1
+@100 What has the word 'blue' meant since the Elizabethan era?
+/a form of music meant to relax you.
+/feeling of longing for home.
+/pain and suffering
+/*It has been associated with melancholia or depression.
+^The word 'blue' has always invoke a feeling of depression or melancholia which is the feeling you may find listing to the blues along with an uplifting feeling at the same time.
+<1
+@

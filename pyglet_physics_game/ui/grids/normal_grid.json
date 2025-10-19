@@ -1,0 +1,38 @@
+{
+  "name": "Normal Grid",
+  "description": "Standard UI design grid with macro and micro levels",
+  "type": "ui_design",
+  "version": "1.0",
+  "resolution_agnostic": true,
+  
+  "elements": {
+    "macro_grid": {
+      "enabled": true,
+      "spacing": 100,
+      "spacing_percentage": 0.052,
+      "color": "grid_primary",
+      "opacity": 80,
+      "thickness": 1
+    },
+    
+    "micro_grid": {
+      "enabled": true,
+      "spacing": 8,
+      "spacing_percentage": 0.004,
+      "color": "grid_secondary", 
+      "opacity": 40,
+      "thickness": 1
+    }
+  },
+  
+  "performance": {
+    "caching_enabled": true,
+    "batch_rendering": true,
+    "update_frequency": "on_resolution_change"
+  },
+  
+  "colors": {
+    "grid_primary": "grid_primary",
+    "grid_secondary": "grid_secondary"
+  }
+}

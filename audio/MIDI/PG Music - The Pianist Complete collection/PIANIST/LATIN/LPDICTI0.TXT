@@ -1,0 +1,148 @@
+
+@001 Salsa Glossary\This Salsa glossary is excerpted with permission from the 'Salsa Guidebook for Piano and Ensemble' ((c)1993, Sher Music Co., PO Box 445, Petaluma CA 94953) by Rebeca Mauleón. Used with permission of the author.
+
+@002 afro\ - an adaptation of sacred, African batá drum rhythms into secular music, primarily played by charanga ensembles, often used in the interpretation of lullabies.  The afro style was very popular during the 1940s in Cuba.
+
+@003 baqueteo\ - the rhythmic pattern played by the timbales in the Cuban style known as danzón.
+
+@004 batá (drums)\ - the sacred, two-headed drums of the Yoruba people of Nigeria.
+
+@005 bolero\ - a slow, lyrical ballad.
+
+@006 bomba\ - 1. A barrel-shaped drum of Afro-Puerto Rican origin, similar to the Cuban tumbadora (conga drum), although shorter; 2. A style of Afro-Puerto Rican music and dance which is also commonly found in salsa repertoires.
+
+@007 bombo\ - 1. The "and" of the second beat of a measure; 2. The Spanish term for bass drum. Bombo criollo is an adaptation of the European military bass drum, used in Cuba for carnaval in styles such as the conga.
+
+@008 bongos\ - two small drums attached by a thick piece of wood, played while held between the knees.  The bongos were developed from African predecessors in Cuba's Oriente province.  Originally, the bongo's drum heads (skins)were tacked-on, but later a system of tunable hardware was attached.  Bongos today are made of fiberglass as well as wood.
+
+@009 botija\ - a ceramic jug originally used to import Spanish olive oil, used to provide a bass accompaniment in the son style. 
+
+@010 cajón(es)\ - wooden box(es) used in early interpretations of rumba, and still popular today.
+
+@011 carnaval\ - "carnival."
+
+@012 cáscara\ - 1. The shell or sides of the timbales; 2. The pattern played on the shell or sides of the timbales.
+
+@013 cencerro\ - a cowbell (with the clapper removed), struck with a wooden stick.
+
+@014 cha-cha-chá\ - a rhythmic style derived from the early Cuban danzón-mambo, created by violinist Enrique Jorrín (who named the style upon hearing the scraping sounds of dancers' feet).  The cha-cha-chá eventually became a separate musical style from the danzón.
+
+@015 charanga\ - a specific style of instrumentation, consisting of rhythm section (contrabass, timbales, and güiro), strings (from two to four violins, or any number of violins with a cello), and one wood flute.  The piano and conga drum were added in the 1940s.  This term (and style of instrumentation) evolved from the charanga francesa, developed in the early twentieth century.
+
+@016 charanga francesa\ - the original term for what is now known as the charanga instrumentation (see above).
+
+@017 charanga vallenata\ - a style of instrumentation combining elements of the Cuban charanga and conjunto styles with the Colombian vallenato style, featuring the accordion.
+
+@018 cierre\ - term used to refer to a percussion break, as well as a break which may be played by the entire ensemble.
+
+@019 cinquillo\ - a five-note pattern or cell derived from the Cuban contradanza, which is part of the rhythmic figure known as the baqueteo in the danzón style.
+
+@020 clave\ - a five-note, bi-measure pattern which serves as the foundation for all of the rhythmic styles in salsa music.  The clave consists of a "strong" measure containing three notes (also called the tresillo), and a "weak" measure containing two notes, resulting in patterns beginning with either measure, referred to as "three-two" or "two-three".  There are two types of clave patterns associated with popular music: son clave and rumba clave.  In the peasant music of Cuba (called música campesina) there exist several types of clave patterns (clave campesina), in both 2/4 as well as 6/8.  Another type of clave -6/8 clave-originated in several styles of West African sacred music.
+
+@021 claves\ - two round, polished sticks which are used to play the clave patterns.
+
+@022 columbia\ - a rural style of Cuban rumba containing many African elements in its lyrics, polyrhythmic structure and dance style.
+
+@023 combo\ - an adaptation of the North American jazz combo instrumentation in Cuba during the late 1950s, generally consisting of bass, drums, piano, sax, trumpet, Cuban percussion and electric guitar.
+
+@024 comparsa, conga de\ - the specific style of instrumentation used in Cuban carnaval music, which plays the conga rhythm.  The instruments include conga drums, bombo, cencerros, sartenes (frying pans) and trumpets, or originally, the trompeta china ("Chinese trumpet").
+
+@025 conga (drum)\ - a Cuban drum derived from several African predecessors-also known as the tumbadora-originating as a solid, hollowed log with a nailed-on skin.  Eventually, tunable hardware was added, and today, conga drums are made out of fiberglass as well as wood.
+
+@026 conga habanera\ - the style of the Cuban carnaval rhythm called conga, which is played in Havana.
+
+@027 conga santiaguera\ - the style of the Cuban carnaval rhythm called conga, which is played in Santiago.
+
+@028 conjunto\ - a specific style of instrumentation developed around 1940, derived from the septeto ensemble, consisting of guitar, tres, contrabass, bongos, three vocalists (who play hand percussion such as maracas and claves), and two to four trumpets.  The piano and the tumbadora were added by legendary tres player Arsenio Rodríguez.
+
+@029 contradanza criolla\ - an eighteenth-century style derived from the European court and country dances, and a predecessor to the Cuban danzón, containing many Creole musical elements in its instrumentation and interpretation.
+
+@030 coro\ - "chorus."
+
+@031 coro/pregón\ - the call-and-response relationship between the lead vocal soloist, or pregonero, and the fixed choral response, or coro.  In salsa song form, this takes place during the open vamp section called the montuno.
+
+@032 cuá\ - the principal, five-note pattern in the Puerto Rican form (and rhythm) known as bomba.
+
+@033 cuatro\ - a Puerto Rican stringed instrument (similar to the Cuban tres), derived from the guitar.
+
+@034 cumbia\ - a typical Colombian folkloric style which has emerged as one of South America's most popular rhythms, and is often interpreted by large ensembles. 
+
+@035 danza\ - a nineteenth-century musical and dance form which serves as a precursor to the Cuban danzón.
+
+@036 danzón\ - a Cuban musical and dance form developed in the late 19th century, which is derived from the European Court and Country dances, as well as the contradanza and the danza.  The instrumenta-tion which generally interprets this style is known as the charanga orchestra, featuring strings and flute with a rhythm section.  The danzón form consists of: an introduction called the paseo (A), the principal flute melody (B), a repeat of the introduction (A), and the violin trio (C).  Innovations by several composers lead to the addition of a fourth section (D) called nuevo ritmo, later known as mambo.  This section added elements of the Cuban son, and established an open vamp over which the flute, violin or piano would improvise.
+
+@037 danzonette\ - a style developed from the danzón, which added lyrics and a refrain to a simplified version of the original form.
+
+@038 descarga\ - "unloading" (lit.); a jam session, as well as an improvised tune.
+
+@039 décima\ - a ten-line, octosyllabic verse, typically found in the lyric form of the Cuban son, and in some styles of rumba.
+
+@040 estribillo\ - refrain or chorus.
+
+@041 guaguancó\ - one of three styles of Cuban rumba, featuring a heightened polyrhythmic structure, and danced by male-female couples (in its traditional folkloric setting).  The typical instrumenta-tion (used by all styles) includes: tumbadoras (congas) or cajones (boxes), palitos (sticks) or cucharas (spoons), claves, and marugas (shakers).
+
+@042 guajeo\ - the repeated figure played by the string instruments in a particular ensemble, such as the tres' vamp in a conjunto instrumentation, or the violin vamp in a charanga instrumentation.  Also used to refer to repeated horn lines, such as in a layered mambo section.
+
+@043 guajira\ - an arpeggiated and floral song form, derived from the Cuban son with elements of the canción form.
+
+@044 guaracha\ - traditionally a form of música campesina (peasant or country music) which developed as a form of street music, originally featuring satirical lyrics.  Now generally associated with Salsa tunes of moderate tempo.
+
+@045 güiro (6/8 rhythm)\ - a rhythmic style, so-named because of its interpretation on the beaded gourds known (at first) as güiros, and later, chékeres.  In addition to the chékeres, a bell and a tumbadora may be added.
+
+@046 habanera\ - a precursor to the Cuban danzón, derived from the contradanza and danza, and one of Cuba's most influential styles through the latter half of the nineteenth century.
+
+@047 mambo (rhythm)\ - 1. The section added to the danzón form (in the 1940s) which featured an open vamp and instrumental improvisation.  2. An up-tempo dance style, developed through the 40s and 50s, which blended several elements of North American instrumentation and harmony with elements of the Cuban son.
+
+@048 mambo (section)\ - the section of an arrangement which features new material, including layered horn lines called moñas.
+
+@049 maracas\ - hand-held rattles or shakers, made from gourds, coconuts, wood or rawhide and filled with beans.  Found throughout the Americas as well as Africa.
+
+@050 merengue\ - a rhythmic style from the Dominican Republic, which is a fast two-step, and is traditionally played on tambora, güira and accordion.
+
+@051 montuno (piano)\ - the repeated, syncopated vamp played by the piano in an ensemble.
+
+@052 montuno (section)\ - the open vamp section of a song, which features the coro/pregón (call-and-response singing) and instrumental solos.
+
+@053 mozambique\ - a rhythmic style created in the 1960s by Pedro Izquierdo-also known as Pello el Afrokán-which is a style of Cuban carnaval music,  traditionally played only on percussion instruments.  The mozambique was popularized in North American salsa music by Eddie Palmieri, and was adapted into ensemble interpretations.
+
+@054 música campesina\ - "country" or "peasant music," containing many elements of regional Spanish troubador styles, which greatly shaped the popular music throughout Latin America.
+
+@055 nuevo ritmo\ - "new rhythm" (lit.), referring to the added section of the danzón form in the 1940s by Orestes and Israel "Cachao" López.  This section later became known as mambo.
+
+@056 orquesta típica\ - an instrumentation used in the interpretation of the Creole contradanza, consisting of woodwinds, brass, strings, güiro and tympani.  By the late nineteenth century, the tympani were replaced by the Cuban pailas or timbales, and the horn section diminished.
+
+@057 pailas\ - a term for a smaller version of the Cuban timbales.
+
+@058 palitos\ - "sticks" (lit.); specifically, the sticks and pattern played by the sticks in the genre of Cuban rumba.
+
+@059 plena\ - an Afro-Puerto Rican rhythm, traditionally played on panderetas, which is an important form of popular music.  The plena often serves as a vehicle for the expression of social and politically relevant themes.
+
+@060 pregón\ - the lead, improvised vocal which alternates with the fixed choral response, or coro.
+
+@061 rumba\ - a Cuban folkloric secular form, consisting of drumming, dancing and call-and-response singing which contains both African and Spanish roots.  There are three styles of rumba: the yambú, guaguancó and columbia.
+
+@062 rumba flamenca\ - the style of rumba from Southern Spain, also called rumba gitana (gypsy rumba), which influenced the Cuban rumba form.
+
+@063 septeto\ - a style of instrumentation formed around 1927 by the Septeto Nacional, which consisted of the addition of the trumpet to the sexteto.
+
+@064 sexteto\ - a style of instrumentation founded in 1920 by the Sexteto Habanero, consisting of the tres, guitar, contrabass, bongos, maracas, and claves.
+
+@065 son\ - a style of popular dance music of the peasant or working-class, combining several Spanish and African elements.  The son began to take shape in the latter half of the nineteenth century in Cuba's Oriente province, and gave birth to several hybrids, including the afro-son, guajira-son, son-pregón, and son-montuno.  The son is perhaps the most important form at the root of today's popular salsa music.
+
+@066 songo\ - a contemporary, eclectic rhythm which blends several styles, including rumba, son, conga and other Cuban secular as well as sacred styles, with elements of North American jazz and funk.
+
+@067 timbales\ - a set of two, tunable drums created in Cuba-derived from the European tympani-mounted on a tripod and played with sticks. The set has been added onto with several accessory items such as cowbells, cymbal and woodblocks.
+
+@068 tres\ - a Cuban stringed instrument derived from the Spanish guitar, consisting of three double strings and played with a pick.  The tres is the signature instrument of the Cuban son.
+
+@069 tresillo\ - 1. The term which refers to the three-side of the son clave pattern; 2. "Triplet."
+
+@070 trío\ - a style of instrumentation developed during the 1920's, consisting of three singers, with either two guitars and maracas, or three guitars, used in the interpretation of trova (troubador) styles. 
+
+@071 trova\ - a term referring to the style known as canción, stemming from the troubador style of singing, featuring such styles as the bolero, guaracha and the son.
+
+@072 tumbadora\ - a Cuban version of an African drum, consisting (originally) of a hollowed, barrel-shaped log or hand-carved trunk of wood with a  tacked-on rawhide head.  Later, a system of tunable hardware was added.  The tumbadora is also referred to as the conga drum, and its predecessors include the tambores de conga, used in early comparsas, as well as the makuta drums of Yoruba origin.
+
+@073 tumbao (bass)\ - the repeated pattern played by the bass, often accenting beats 2+ and 4.  The pattern is a mixture of influences from the styles of the contradanza and the son.
+
+@074 tumbao (congas)\ - the repeated pattern played by the tumbadoras (conga drums), also referred to as marcha (march), emphasizing the fourth beat of the measure, as well as beat 

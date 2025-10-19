@@ -1,0 +1,36 @@
+{
+  "name": "UI Element Snapping",
+  "description": "Snap zones for UI elements like sliders, buttons, and menu items",
+  "zones": {
+    "audio_selection_menu": {
+      "type": "menu_snapping",
+      "name": "audio_selection_menu",
+      "snap_distance": 15,
+      "scroll_tolerance": 30,
+      "priority": 5,
+      "active": true,
+      "elements": {
+        "sliders": {
+          "snap_distance": 15,
+          "active_distance": 25,
+          "scroll_tolerance": 30,
+          "visual_feedback": "highlight"
+        },
+        "menu_tiles": {
+          "snap_distance": 12,
+          "jump_threshold": 8,
+          "visual_feedback": "outline"
+        },
+        "column_boundaries": {
+          "snap_distance": 20,
+          "visual_feedback": "fade"
+        }
+      }
+    }
+  },
+  "settings": {
+    "snap_animation_speed": 0.3,
+    "scroll_lock_duration": 0.5,
+    "drift_tolerance": 20
+  }
+}

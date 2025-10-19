@@ -1,0 +1,337 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<ModularSynthPreset version="1">
+  <modules>
+    <module logicalId="1" type="midi player">
+      <params>
+        <MIDIPlayerParameters>
+          <PARAM id="loop" value="1.0"/>
+          <PARAM id="pitch" value="12.89999771118164"/>
+          <PARAM id="pitch_mod" value="0.5"/>
+          <PARAM id="speed" value="1.0"/>
+          <PARAM id="speed_mod" value="0.5"/>
+          <PARAM id="tempo" value="168.0"/>
+          <PARAM id="track" value="1.0"/>
+          <PARAM id="velocity_mod" value="0.5"/>
+        </MIDIPlayerParameters>
+      </params>
+      <extra>
+        <MIDIPlayerExtra fileName="Star_wars.mid" filePath="H:\0000_CODE\01_collider_pyo\audio\MIDI\Star_wars.mid"
+                         track="1"/>
+      </extra>
+    </module>
+    <module logicalId="2" type="debug">
+      <params>
+        <DebugParams/>
+      </params>
+    </module>
+    <module logicalId="5" type="VCO">
+      <params>
+        <VCOParams>
+          <PARAM id="frequency" value="5746.0"/>
+          <PARAM id="waveform" value="1.0"/>
+          <PARAM id="waveform_mod" value="0.0"/>
+        </VCOParams>
+      </params>
+    </module>
+    <module logicalId="9" type="sample loader">
+      <params>
+        <SampleLoaderParameters samplePath="H:\0000_CODE\01_collider_pyo\audio\samples\effects\KSHMR_Psy_FX_23_140_F.wav">
+          <PARAM id="engine" value="1.0"/>
+          <PARAM id="gate_mod" value="0.0"/>
+          <PARAM id="loop" value="0.0"/>
+          <PARAM id="pitch" value="0.0"/>
+          <PARAM id="pitch_mod" value="-13.68000030517578"/>
+          <PARAM id="rangeEnd" value="0.4458333253860474"/>
+          <PARAM id="rangeEnd_mod" value="1.0"/>
+          <PARAM id="rangeStart" value="0.2083333283662796"/>
+          <PARAM id="rangeStart_mod" value="0.0"/>
+          <PARAM id="rbPhaseInd" value="1.0"/>
+          <PARAM id="rbWindowShort" value="1.0"/>
+          <PARAM id="speed" value="2.629999876022339"/>
+          <PARAM id="speed_mod" value="0.25"/>
+          <PARAM id="trigger_mod" value="0.0"/>
+          <PARAM id="volume" value="1.0"/>
+        </SampleLoaderParameters>
+      </params>
+    </module>
+    <module logicalId="10" type="Mixer">
+      <params>
+        <MixerParams>
+          <PARAM id="crossfade" value="0.8919999599456787"/>
+          <PARAM id="gain" value="6.0"/>
+          <PARAM id="pan" value="0.0"/>
+        </MixerParams>
+      </params>
+    </module>
+    <module logicalId="16" type="Mixer">
+      <params>
+        <MixerParams>
+          <PARAM id="crossfade" value="0.0"/>
+          <PARAM id="gain" value="0.0"/>
+          <PARAM id="pan" value="0.0"/>
+        </MixerParams>
+      </params>
+    </module>
+    <module logicalId="17" type="sample loader">
+      <params>
+        <SampleLoaderParameters samplePath="H:\0000_CODE\01_collider_pyo\audio\samples\effects\KSHMR_Psy_FX_19_140_E.wav">
+          <PARAM id="engine" value="1.0"/>
+          <PARAM id="gate_mod" value="1.0"/>
+          <PARAM id="loop" value="0.0"/>
+          <PARAM id="pitch" value="0.0"/>
+          <PARAM id="pitch_mod" value="11.11999893188477"/>
+          <PARAM id="rangeEnd" value="0.2541666626930237"/>
+          <PARAM id="rangeEnd_mod" value="1.0"/>
+          <PARAM id="rangeStart" value="0.1041666641831398"/>
+          <PARAM id="rangeStart_mod" value="0.0"/>
+          <PARAM id="rbPhaseInd" value="1.0"/>
+          <PARAM id="rbWindowShort" value="1.0"/>
+          <PARAM id="speed" value="2.629999876022339"/>
+          <PARAM id="speed_mod" value="3.699999809265137"/>
+          <PARAM id="trigger_mod" value="1.0"/>
+          <PARAM id="volume" value="1.0"/>
+        </SampleLoaderParameters>
+      </params>
+    </module>
+    <module logicalId="18" type="Mixer">
+      <params>
+        <MixerParams>
+          <PARAM id="crossfade" value="0.0"/>
+          <PARAM id="gain" value="0.0"/>
+          <PARAM id="pan" value="0.0"/>
+        </MixerParams>
+      </params>
+    </module>
+    <module logicalId="19" type="sample loader">
+      <params>
+        <SampleLoaderParameters samplePath="H:\0000_CODE\01_collider_pyo\audio\samples\ambient\KSHMR_Joombush_03_One_Shot_G.wav">
+          <PARAM id="engine" value="1.0"/>
+          <PARAM id="gate_mod" value="1.0"/>
+          <PARAM id="loop" value="0.0"/>
+          <PARAM id="pitch" value="0.0"/>
+          <PARAM id="pitch_mod" value="11.11999893188477"/>
+          <PARAM id="rangeEnd" value="1.0"/>
+          <PARAM id="rangeEnd_mod" value="1.0"/>
+          <PARAM id="rangeStart" value="0.0"/>
+          <PARAM id="rangeStart_mod" value="0.0"/>
+          <PARAM id="rbPhaseInd" value="1.0"/>
+          <PARAM id="rbWindowShort" value="1.0"/>
+          <PARAM id="speed" value="2.629999876022339"/>
+          <PARAM id="speed_mod" value="3.699999809265137"/>
+          <PARAM id="trigger_mod" value="0.0"/>
+          <PARAM id="volume" value="1.0"/>
+        </SampleLoaderParameters>
+      </params>
+    </module>
+    <module logicalId="20" type="Mixer">
+      <params>
+        <MixerParams>
+          <PARAM id="crossfade" value="0.0"/>
+          <PARAM id="gain" value="0.0"/>
+          <PARAM id="pan" value="0.0"/>
+        </MixerParams>
+      </params>
+    </module>
+    <module logicalId="21" type="sample loader">
+      <params>
+        <SampleLoaderParameters samplePath="H:\0000_CODE\01_collider_pyo\audio\samples\effects\KSHMR_Animals_15_Elephant_A#.wav">
+          <PARAM id="engine" value="1.0"/>
+          <PARAM id="gate_mod" value="1.0"/>
+          <PARAM id="loop" value="0.0"/>
+          <PARAM id="pitch" value="0.0"/>
+          <PARAM id="pitch_mod" value="-8.079999923706055"/>
+          <PARAM id="rangeEnd" value="1.0"/>
+          <PARAM id="rangeEnd_mod" value="1.0"/>
+          <PARAM id="rangeStart" value="0.0"/>
+          <PARAM id="rangeStart_mod" value="0.0"/>
+          <PARAM id="rbPhaseInd" value="1.0"/>
+          <PARAM id="rbWindowShort" value="1.0"/>
+          <PARAM id="speed" value="2.629999876022339"/>
+          <PARAM id="speed_mod" value="2.970000028610229"/>
+          <PARAM id="trigger_mod" value="0.0"/>
+          <PARAM id="volume" value="1.0"/>
+        </SampleLoaderParameters>
+      </params>
+    </module>
+    <module logicalId="22" type="Mixer">
+      <params>
+        <MixerParams>
+          <PARAM id="crossfade" value="0.0"/>
+          <PARAM id="gain" value="0.0"/>
+          <PARAM id="pan" value="0.0"/>
+        </MixerParams>
+      </params>
+    </module>
+    <module logicalId="23" type="sample loader">
+      <params>
+        <SampleLoaderParameters samplePath="H:\0000_CODE\01_collider_pyo\audio\samples\percussion\KSHMR_Acoustic_Kick_08_Clean.wav">
+          <PARAM id="engine" value="1.0"/>
+          <PARAM id="gate_mod" value="0.0"/>
+          <PARAM id="loop" value="0.0"/>
+          <PARAM id="pitch" value="0.0"/>
+          <PARAM id="pitch_mod" value="-13.68000030517578"/>
+          <PARAM id="rangeEnd" value="1.0"/>
+          <PARAM id="rangeEnd_mod" value="1.0"/>
+          <PARAM id="rangeStart" value="0.0"/>
+          <PARAM id="rangeStart_mod" value="0.0"/>
+          <PARAM id="rbPhaseInd" value="1.0"/>
+          <PARAM id="rbWindowShort" value="1.0"/>
+          <PARAM id="speed" value="2.629999876022339"/>
+          <PARAM id="speed_mod" value="0.25"/>
+          <PARAM id="trigger_mod" value="0.0"/>
+          <PARAM id="volume" value="1.0"/>
+        </SampleLoaderParameters>
+      </params>
+    </module>
+    <module logicalId="37" type="Mixer">
+      <params>
+        <MixerParams>
+          <PARAM id="crossfade" value="0.0"/>
+          <PARAM id="gain" value="0.0"/>
+          <PARAM id="pan" value="0.0"/>
+        </MixerParams>
+      </params>
+    </module>
+    <module logicalId="38" type="sample loader">
+      <params>
+        <SampleLoaderParameters samplePath="H:\0000_CODE\01_collider_pyo\audio\samples\effects\KSHMR_Animals_23_Flying_Squirrel.wav">
+          <PARAM id="engine" value="1.0"/>
+          <PARAM id="gate_mod" value="0.0"/>
+          <PARAM id="loop" value="0.0"/>
+          <PARAM id="pitch" value="0.0"/>
+          <PARAM id="pitch_mod" value="-13.68000030517578"/>
+          <PARAM id="rangeEnd" value="1.0"/>
+          <PARAM id="rangeEnd_mod" value="1.0"/>
+          <PARAM id="rangeStart" value="0.0"/>
+          <PARAM id="rangeStart_mod" value="0.0"/>
+          <PARAM id="rbPhaseInd" value="1.0"/>
+          <PARAM id="rbWindowShort" value="1.0"/>
+          <PARAM id="speed" value="2.629999876022339"/>
+          <PARAM id="speed_mod" value="0.25"/>
+          <PARAM id="trigger_mod" value="0.0"/>
+          <PARAM id="volume" value="1.0"/>
+        </SampleLoaderParameters>
+      </params>
+    </module>
+    <module logicalId="39" type="sample loader">
+      <params>
+        <SampleLoaderParameters samplePath="H:\0000_CODE\01_collider_pyo\audio\samples\effects\KSHMR_Animals_15_Elephant_A#.wav">
+          <PARAM id="engine" value="1.0"/>
+          <PARAM id="gate_mod" value="0.0"/>
+          <PARAM id="loop" value="0.0"/>
+          <PARAM id="pitch" value="0.0"/>
+          <PARAM id="pitch_mod" value="-13.68000030517578"/>
+          <PARAM id="rangeEnd" value="1.0"/>
+          <PARAM id="rangeEnd_mod" value="1.0"/>
+          <PARAM id="rangeStart" value="0.0"/>
+          <PARAM id="rangeStart_mod" value="0.0"/>
+          <PARAM id="rbPhaseInd" value="1.0"/>
+          <PARAM id="rbWindowShort" value="1.0"/>
+          <PARAM id="speed" value="2.629999876022339"/>
+          <PARAM id="speed_mod" value="0.25"/>
+          <PARAM id="trigger_mod" value="0.0"/>
+          <PARAM id="volume" value="1.0"/>
+        </SampleLoaderParameters>
+      </params>
+    </module>
+    <module logicalId="40" type="Mixer">
+      <params>
+        <MixerParams>
+          <PARAM id="crossfade" value="0.0"/>
+          <PARAM id="gain" value="0.0"/>
+          <PARAM id="pan" value="0.0"/>
+        </MixerParams>
+      </params>
+    </module>
+  </modules>
+  <connections>
+    <connection srcId="5" srcChan="0" dstId="10" dstChan="0"/>
+    <connection srcId="5" srcChan="1" dstId="10" dstChan="1"/>
+    <connection srcId="9" srcChan="0" dstId="16" dstChan="0"/>
+    <connection srcId="9" srcChan="0" dstId="16" dstChan="1"/>
+    <connection srcId="9" srcChan="1" dstId="16" dstChan="1"/>
+    <connection srcId="10" srcChan="0" dstId="output" dstChan="0"/>
+    <connection srcId="10" srcChan="1" dstId="output" dstChan="1"/>
+    <connection srcId="16" srcChan="0" dstId="10" dstChan="2"/>
+    <connection srcId="16" srcChan="0" dstId="10" dstChan="3"/>
+    <connection srcId="17" srcChan="0" dstId="18" dstChan="0"/>
+    <connection srcId="17" srcChan="0" dstId="18" dstChan="1"/>
+    <connection srcId="17" srcChan="1" dstId="18" dstChan="1"/>
+    <connection srcId="18" srcChan="0" dstId="16" dstChan="2"/>
+    <connection srcId="18" srcChan="0" dstId="16" dstChan="3"/>
+    <connection srcId="19" srcChan="0" dstId="20" dstChan="0"/>
+    <connection srcId="19" srcChan="0" dstId="20" dstChan="1"/>
+    <connection srcId="19" srcChan="1" dstId="20" dstChan="1"/>
+    <connection srcId="20" srcChan="0" dstId="18" dstChan="2"/>
+    <connection srcId="20" srcChan="0" dstId="18" dstChan="3"/>
+    <connection srcId="21" srcChan="0" dstId="22" dstChan="0"/>
+    <connection srcId="21" srcChan="0" dstId="22" dstChan="1"/>
+    <connection srcId="21" srcChan="1" dstId="22" dstChan="1"/>
+    <connection srcId="22" srcChan="0" dstId="20" dstChan="2"/>
+    <connection srcId="22" srcChan="0" dstId="20" dstChan="3"/>
+    <connection srcId="23" srcChan="0" dstId="37" dstChan="0"/>
+    <connection srcId="23" srcChan="0" dstId="37" dstChan="1"/>
+    <connection srcId="23" srcChan="1" dstId="37" dstChan="1"/>
+    <connection srcId="37" srcChan="0" dstId="22" dstChan="2"/>
+    <connection srcId="37" srcChan="0" dstId="22" dstChan="3"/>
+    <connection srcId="38" srcChan="0" dstId="40" dstChan="0"/>
+    <connection srcId="38" srcChan="0" dstId="40" dstChan="1"/>
+    <connection srcId="38" srcChan="1" dstId="40" dstChan="1"/>
+    <connection srcId="39" srcChan="0" dstId="40" dstChan="2"/>
+    <connection srcId="39" srcChan="0" dstId="40" dstChan="3"/>
+    <connection srcId="40" srcChan="0" dstId="37" dstChan="2"/>
+    <connection srcId="40" srcChan="0" dstId="37" dstChan="3"/>
+  </connections>
+  <modRoutes>
+    <modRoute srcId="1" srcChan="4" dstId="9" param="pitch_mod" depth="1.0"/>
+    <modRoute srcId="1" srcChan="5" dstId="9" param="gate_mod" depth="1.0"/>
+    <modRoute srcId="1" srcChan="6" dstId="9" param="speed_mod" depth="1.0"/>
+    <modRoute srcId="1" srcChan="7" dstId="9" param="trigger_mod" depth="1.0"/>
+    <modRoute srcId="1" srcChan="8" dstId="17" param="pitch_mod" depth="1.0"/>
+    <modRoute srcId="1" srcChan="9" dstId="17" param="gate_mod" depth="1.0"/>
+    <modRoute srcId="1" srcChan="10" dstId="17" param="speed_mod" depth="1.0"/>
+    <modRoute srcId="1" srcChan="11" dstId="17" param="trigger_mod" depth="1.0"/>
+    <modRoute srcId="1" srcChan="12" dstId="19" param="pitch_mod" depth="1.0"/>
+    <modRoute srcId="1" srcChan="13" dstId="19" param="gate_mod" depth="1.0"/>
+    <modRoute srcId="1" srcChan="14" dstId="19" param="speed_mod" depth="1.0"/>
+    <modRoute srcId="1" srcChan="15" dstId="19" param="trigger_mod" depth="1.0"/>
+    <modRoute srcId="1" srcChan="16" dstId="21" param="pitch_mod" depth="1.0"/>
+    <modRoute srcId="1" srcChan="17" dstId="21" param="gate_mod" depth="1.0"/>
+    <modRoute srcId="1" srcChan="18" dstId="21" param="speed_mod" depth="1.0"/>
+    <modRoute srcId="1" srcChan="19" dstId="21" param="trigger_mod" depth="1.0"/>
+    <modRoute srcId="1" srcChan="20" dstId="23" param="pitch_mod" depth="1.0"/>
+    <modRoute srcId="1" srcChan="21" dstId="23" param="gate_mod" depth="1.0"/>
+    <modRoute srcId="1" srcChan="22" dstId="23" param="speed_mod" depth="1.0"/>
+    <modRoute srcId="1" srcChan="23" dstId="23" param="trigger_mod" depth="1.0"/>
+    <modRoute srcId="1" srcChan="24" dstId="38" param="pitch_mod" depth="1.0"/>
+    <modRoute srcId="1" srcChan="25" dstId="38" param="gate_mod" depth="1.0"/>
+    <modRoute srcId="1" srcChan="26" dstId="38" param="speed_mod" depth="1.0"/>
+    <modRoute srcId="1" srcChan="27" dstId="38" param="trigger_mod" depth="1.0"/>
+    <modRoute srcId="1" srcChan="28" dstId="39" param="pitch_mod" depth="1.0"/>
+    <modRoute srcId="1" srcChan="29" dstId="39" param="gate_mod" depth="1.0"/>
+    <modRoute srcId="1" srcChan="30" dstId="39" param="speed_mod" depth="1.0"/>
+    <modRoute srcId="1" srcChan="31" dstId="39" param="trigger_mod" depth="1.0"/>
+    <modRoute srcId="1" srcChan="4" dstId="5" param="frequency" depth="1.0"/>
+    <modRoute srcId="1" srcChan="8" dstId="5" param="frequency" depth="1.0"/>
+  </modRoutes>
+  <NodeEditorUI>
+    <node id="1" x="-1267.151245117188" y="4.108619689941406"/>
+    <node id="2" x="1774.0" y="281.0"/>
+    <node id="5" x="-647.0" y="-141.0"/>
+    <node id="9" x="-470.0" y="83.0"/>
+    <node id="10" x="1293.0" y="61.0"/>
+    <node id="16" x="1013.0" y="461.0"/>
+    <node id="17" x="-469.0" y="500.0"/>
+    <node id="18" x="681.0" y="887.0"/>
+    <node id="19" x="-464.0" y="912.0"/>
+    <node id="20" x="364.0" y="1201.0"/>
+    <node id="21" x="-458.0" y="1324.0"/>
+    <node id="22" x="0.0" y="1522.0"/>
+    <node id="23" x="-500.0" y="1761.0"/>
+    <node id="37" x="-46.0" y="2015.0"/>
+    <node id="38" x="-464.0" y="2198.0"/>
+    <node id="39" x="-464.0" y="2614.0"/>
+    <node id="40" x="-50.0" y="2396.0"/>
+  </NodeEditorUI>
+</ModularSynthPreset>

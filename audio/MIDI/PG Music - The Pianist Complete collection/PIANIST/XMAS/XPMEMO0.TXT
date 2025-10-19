@@ -1,0 +1,103 @@
+@001 Adeste, Fideles,  is one of the oldest and most universally loved of the Christmas hymns.  Although the composer's name is unknown, we do know that it was written in the 1740's and was published in  an anonymous "Essay on the Church Plain Chant" in 1782.  This of course is the original Latin version.  The English translation is equally well known as "O Come All Ye Faithful".  The key is F major.
+
+@002 All Through the Night.  The music is from an old Welsh traditional melody and the words were written by Sir Harry Boulton.  This is a lullaby in which the singer wishes peace and safety to a sleeping loved one .  The key is G with a modulation to Ab.  Remember, if the tune is too high or too low for your singing range , the key can easily be changed with the "KEY" up or down button. 
+
+@003 Angels We Have Heard On High,  is a translation of the old traditional French carol, "Les Anges Dans Nos Campagnes".  This carol tells of hearing the angels singing for joy as Christ is born.  It is played in the key of F major. 
+
+@004 Angels, from the Realms of Glory.   The words for this carol were written by James Montgomery (1771 - 1854).  Although  at least three different melodies have been written, the most well known in the US is this one which was composed by Henry Smart (1813 - 79).  The key is F major.
+
+@005 As With Gladness Men Of Old,  was written by William Dix and Conrad Kocher.  This carol tells of the Three Wise Men following the star to Bethlehem to offer homage and gifts.  It is played here in the key of A major. Feel free to change the key to suit your range. 
+
+@006 Auld Lang Syne.  This familiar tune, of traditional Scotish origin, is played and sung by every band at the stroke of midnight on New Year's Eve.  The melody and lyrics are known and loved the world over.  It is played here in the key of F major.  The last chorus  modulates to G major for the rousing finale. 
+
+@007 Ave Maria (Gounod, Bach).   Bach's Prelude #1 in C major, the first piece in  "The Well Tempered Clavier",  is a piece in which the harmony is outlined in arpeggio fashion.  Many years later, Gounod wrote a melody using Bach's Prelude as an accompaniment.  For his text he chose  the Latin words for the Hail Mary.  It is played in the key of C major.
+
+@008 Ave Maria (Schubert).  Many of the great composers have set well known prayers to music.  In fact many (such as Bach and Mozart) have written complete Masses and Requiems.  This version of Ave Maria (Hail Mary) is one of the most beautiful and beloved of all the religious songs.  It is played in 12/8 time in the key of F major.
+
+@009 Away in a Manger,  is one of the most simple and universally loved Christmas carol.  It is sometimes attributed to Martin Luther but was in fact written much later, probably in the late 1800's. Speculation traces it to dramatic celebrations for Martin Luther's 400th anniversary in 1883.  The key is D major.
+
+@010 The Boar's Head Carol,  was originally published in 1521.  This English carol (one of the oldest ever published ) accompanied the bringing in of the Boar's Head which was the 16th and 17th century's version of turkey at Christmas dinner.  The ceremony has been described as follows: the Boar's Head, highly decorated with bay,  holly,  rosemary etc.,  in a large pewter dish, is slowly borne into the hall by two strong servants, who hold it up as high as they can so that it may be seen by all.  The key is C major.
+
+@011 Bring a Torch, Janette, Isabella!  is a translation of the traditional Provincal carol,  "Un Flambeau, Jeannette, Isabelle!".  The French lyric was first translated from the Provencal by Emile Blemont in 1901. In the  Provincal tradition, torches were a big part of the Christmas celebrations.  The key is F major.
+
+@012 The Coventry Carol,  is an old traditional English melody (which means it's been handed down from generation to generation and the composer is unknown).  Years later, Robert Croo added the words to this lullaby to a baby child.  The key is G minor.
+
+@013 Deck the Hall,  is an old traditional Welsh carol which encourages us to spruce up the old house with holly, light up the Yule log and get jolly, regardless of the weather.  The word 'holly' comes from the old English word, 'holen'.  As far back as the days of the Druids, it's always been associated with luck, prosperity and keeping evil spirits away.  The key is F major.
+
+@014 Ding! Dong! Merrily on High.   The music was written in 1588 by a French cleric, Jehan Tabourot who used the anagram "Thoinot Arbeau" for some strange reason and is also known  for having published a treatise on dancing.  A couple of centuries later,  G. R. Woodward penned these words.  This happy sounding carol begins with a bell motif in the intro.  The key is G major.
+
+@015 The First Noel,  a traditional English carol, was first published in William Sandy's collection,  "Christmas Carols Ancient and Modern"  in 1833.   "Noel" is the French word for Christmas.   The key is D major.
+
+@016 Good Christian Men, Rejoice.   The music comes from an old traditional German carol.  The English words were written by John Mason Peale.  This carol encourages us to rejoice, with heart and soul and voice.  The key is F major.
+
+@017 Go Tell It On the Mountain,  a Negro spiritual, was written anonymously some time in the 1800's.   The music and lyric were first published in "Religious Songs of the Negro as Sung on the Plantations", by Thomas Fenner in 1909.  It is given a bluesey jazz-swing treatment here.  The key is F major.
+
+@018 God Rest You Merry, Gentlemen,  is a traditional English carol which was first published in William Sandy's collection,  "Christmas Carols Ancient and Modern"  in 1833.  It is speculated that this very old carol probably came to England from France.  The key is E minor.
+
+@019 Good King Wenceslas Looked Out.    Wenceslas is the German name for Vaclav the Good who reigned in Bohemia from 922 to 929.  Vaclav later became the Czech patron saint.  The feast of Stephen is traditionally a day for giving to the poor and is celebrated on the day after Christmas, Boxing Day, December 26.  The tune was written in 1582 and the words were penned by J. M. Neale (1818 - 66).  The key is G major.
+
+@020 Hallelujah Chorus (from Messiah).   This of course was written by the great composer, George Frederic Handel.  It was premiered in Dublin, Ireland in 1742.  Messiah is Handel's masterpiece and is also one of the greatest works in music.  The key is D major.
+
+@021 Hark! The Herald Angels Sing.  The great composer,  Felix Mendelsohn, wrote the music in 1840 to words by the Methodist clergyman,  Charles Wesley (1707 - 88).  This has always been the most popular of Wesley's hymns.  Mendlesohn was commissioned to write it for the 400th anniversary of Johann Gutenberg's invention of printing.  The key is G major.
+
+@022 Here We Come a Caroling,  is also known as "Here We Come a Wassailing" or  "The Wassail Song".   The text of this old anonymous English carol  was first published in  W. H. Husk's "Songs of the Nativity"  in 1864.  The key is D major.
+
+@023 I Saw Three Ships Come Sailing In,   is an English traditional carol which was first published in William Sandy's collection "Christmas Carols Ancient and Modern" in 1833 although the earliest printed text is dated at 1666.  This carol is the story of the journey made by the magi, the three wise Kings.  The key is G major.
+
+@024 I Wonder As I Wander,  is a carol in which the singer is pondering the events in the birth and death of Jesus as he wanders under the open sky.  This plaintiff tune is played in G minor.
+
+@025 It Came Upon a Midnight Clear.   The music for this carol was written by Richard Storrs Willis (1819 - 1900).  The words were written by Edmond Sears (1810 - 76), a Unitarian clergyman.  The key is Eb major.
+
+@026 Jesu, Joy of Man's Desiring,  is one of many of Bach's many religious compositions.  Like so much of Bach's music, this melody is  instantly recognizable by all.  The melody, in 9/8 rhythm, is based on an old traditional German hymn tune.  The key is G major. 
+
+@027 Jingle Bells,  was written by J. Pierpont.  This is surely one of the happiest and spirited of all the Christmas tunes.  It conjures up images of sleighs, bells and laughter.  The key is G major.
+
+@028 Jolly Old Saint Nicholas,  is a traditional American carol in which a child is tactfully reminding Saint Nicholas (Santa Claus) that Christmas is getting near and that he might want to be thinking of a present.   Saint Nicholas died on Dec. 6, in the year 343.   The most beloved of all the saints associated with Christmas, he was born to a wealthy family and became bishop of the town of Myra in what is now Turkey.   Over the years,  'Saint Nicholas'  became  'Santa Claus'.  The key is G major.
+ 
+@029 Joy To the World!   The words (based on Psalm 98) were written by Isaac Watts (1674 - 1748).  The music first appeared as an English psalm tune in the 1830's.  The words and music were paired together in 1836.  It is not certain who wrote the music although it is attributed to Handel because of a similarity to  "Lift Up Your Heads"  from the Messiah.   The key is D major.
+
+@030 Mary Had a Baby,  is a traditional West Indian spiritual.   It is played in a Jamaican Gospel rhythm.   The key is E major.  Remember, you can change the key and the tempo by pressing the KEY and TEMPO arrow  buttons.
+
+@031 Masters In This Hall,  is a traditional old English carol. It is performed in 3/4 time and the lyric majestically proclaims the birth of Christ to the Masters of the Hall.  The key is D minor.
+
+@032 Now the Holy Child is Born,   (also known as 'He is Born, the Holy Child'),   is a translation of the traditional French carol,  'Il Est Ne, Le Divin Enfant'.   The word 'hautbois' is the French for 'oboe'.   The Key is F major.
+
+@033 O Come All Ye Faithful,  is the English translation of the old Latin hymn,  'Adeste, Fideles'.   The lyric asks the listening faithful to come to Bethlehem to adore Him.   One of the most instantly recognizable of all the Christmas carols,  it is performed here in the key of G major.
+
+@034 O Holy Night,  is a translation of the French carol,  'Cantique De Noel',  which was written by Cappeau de Roquemaure with music by Adolph Adam. This carol reflects the joyous mood of Christmas Eve and the expectation of the birth of Christ.  The translation was done by D. S. Dwight.  The key is C major.
+
+@035 O Christmas Tree,  is the English version of  the German carol,  "O Tannenbaum".   It was first published in 1799.  The tradition of the Christmas tree evolved in the medieval period in the Rhineland.  The life force of the evergreen tree, even at the height of winter, was seen as a fertile symbol of the renewal of life at Christ's birth.  The key is F major.
+
+@036 O Come, O Come Emanuel,  is a traditional Latin carol.  Emanuel is another name for Christ.  Originally performed in Plain Chant, that is, without harmonic or chordal backing, it is performed here with chords in the key of E minor.
+
+@037 O Thou Joyful Day,  is a song of praise for the day of Christ's birth.   It is performed here in the key is C major.   Remember, you can change the key and the tempo by pressing their respective arrow buttons.
+
+@038 O Little Town of Bethlehem.   The words were written by Phillip Brooks, an Episcopalian priest, on Christmas Eve 1865.   It was inspired by a visit to Bethlehem, to the field where the annunciation to the shepherds is said to have occurred.   On Christmas day 1868, so the story goes,  Brooks's organist wrote the music after awakening from a deep sleep.   The key is F major.
+
+@039 Once, In Royal David's City.   The poem was written in 1848 by Cecil Frances Alexander who was inspired upon hearing her godchildren complaining about the dreariness of catechism.   In 1849, Henry John Gauntlett composed the music which was published in his "Hymns Ancient and Modern".   The key is F major.
+
+@040 One Wish For Christmas,  was written by Patty Hervey.   This is a pop-country-swing Christmas tune in the style of Willie Nelson.  The piano is played in the stride style of Floyd Cramer.  The message is simple  -  that each day would be Christmas Day.  The key is C major.
+
+@041 Silent Night,  is also known by its original German title,  Stille Nacht! Heilige Nacht!   This beautiful and most well known of carols was written by Franz Xaver Gruber (1787 - 1863),  an organist for the town of Oberndorf in Lower Austria (now Bavaria).   The words were written by Joseph Mohr (1792 - 1849).  It was first performed at Christmas Night mass in 1818.  Gruber played the guitar apparently because the organ was not working.  The words " Silent night, Holy night, all is calm, all is bright "  have captivated Christmas listeners ever since.   The key is Bb  major.
+
+@042 Dance of the Sugar Plum Fairy,  was written by Peter Illyich Tchaikovsky as part of his "Nutcracker Suite" in 1892.   This work has proved to be Tchaikovsky's most consistently popular nonsymphonic orchestral piece.   The key is E minor.
+
+@043 The Holly and the Ivy.   The text and music are of unknown origin.  One of the oldest of the traditional English carols, it goes back to at least 1710 when it appeared in a Birmingham publication.   The key is F major.
+
+@044 The Twelve Days of Christmas,  is derived from an 18th century Twelfth-Night forfeits game in which each player had to recite a list of items named by the previous person and add one more.  This anonymous English traditional carol evolved over the years to its present form which was published in 1909.  The key is F major.
+
+@045 Up on the Housetop,  was written by B. R. Handy.   This light hearted carol tells the story of Santa Claus jumping out of his reindeer-sleigh which has paused on the roof.   He jumps down the chimney with presents for all.   This is played with a Jamaican Latin rhythm in the key of Eb major.
+
+@046 We Three Kings of Orient Are,  was written by John Henry Hopkins.  A resident of Pennsylvania, he published a collection of "Carols, Hymns and Songs"  in 1865.   This is his only carol that is still well known.  The key is E minor.
+
+@047 We Wish You a Merry Christmas,   is an old anonymous traditional English carol.  It is a favorite of doorstep carolers.  The key is G major.
+
+@048 What Child is This?   Everyone will recognize that this tune is based on the very old traditional tune,  "Greensleeves"   which dates back to at least the 1600's.   This carol was written in about 1865.   It was included in an 1871 publication by John Stainer called  "Christmas Carols New and Old".   The key is C minor.
+
+@049 While Shepherds Watched Their Flocks By Night.   The music for this old carol was written by the great composer,  George F. Handel.   The words are by Nahum Tate.   It is performed in the key of D major.
+
+@050 Christmas is Coming,   is an old English traditional carol.   It's a happy, light-hearted tune which begins here in the key of C major and later modulates to Db, D and Eb. 
+
+@051 Christmas Lullaby,  is a beautiful lullaby for all seasons which expresses gentle thoughts like,  'angels guarding baby's slumber'  etc.   It is performed here in the key of F major.   Remember, if the key is too high or too low for singing, it can be instantly transposed with the click of a button.   This is also true for the tempo. 
+
+@052 Christmas Sound,   was written by Joe Gannon and expresses the feeling of being  'homeward bound'  during the Christmas season.  This tune is full of the imagery of Christmas time:  'parcels, cards and greetings';  'tiny tots, in their cots';  'mistletoe in hidden places'  etc.  It is played here in with bouncy-swing feel in the key of Eb major.

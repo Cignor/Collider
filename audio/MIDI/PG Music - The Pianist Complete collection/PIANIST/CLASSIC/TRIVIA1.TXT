@@ -1,0 +1,2811 @@
+@219 Which popular song was based on Toselli's Serenade?
+
+\Stairway to the Stars
+\Don't Count the Stars
+\Moonlight and Roses
+\*Years and Years Ago
+^Enrico Toselli (1883-1926) was a fine pianist. The piece was originally 
+composed for a string quartet. The music became the theme for the radio show 
+The Goldbergs.
+<2
+@220 Who wrote a piano concerto for left hand alone for a friend who had 
+lost his right hand in World War I?  
+
+\Hindemith
+\Debussy
+\*Ravel
+\Dvorak
+
+^It is was composed for the Austrian pianist Paul Wittgenstein (1887-1961). 
+Wittgenstein also commissioned left hand only concertos or similar 
+compositions from Richard Strauss, Prokofiev, Schmidt and Britten.
+<1
+@221 Who envisioned a work for 2000 performers combining music, poetry, 
+dancing, colours and perfumes?
+
+\Rachmaninov
+\Belaiev
+\Chopin
+\*Scriabin
+^Alexander Scriabin (1872-1915) was a Russian pianist and composer. He 
+hoped to unite mankind in a search for a future of beauty, joy and religious 
+contentment through this work. He died before it could be completed.
+<1
+@222 What composer, when not awarded the Grand Prix, forced the 
+resignation of 
+the head of the Paris Conservatory?  
+
+\Satie
+\Gounod
+\Milhaud
+\*Ravel
+
+^Maurice Ravel left the prestigious conservatory in 1905. He had actually 
+competed for this Prix de Rome three times, and unsuccessfully in each case. 
+He was actually declared ineligible to try a fourth time, and hence the 
+controversy.
+<2
+@223 What composer adapted Edgar Allan Poe's Fall of the House of Usher 
+for an operatic libretto?
+
+\Caplet
+\Mendelssohn
+\*Debussy
+\Mozart
+
+^The opera was never written.
+<1
+@224 Which love inspired Wagner's libretto for Tristan und Isolde?
+
+\Minna
+\*Mathilde
+\Gertrude
+\Cosima
+
+^In 1857, Wagner and his wife Minna went to live on the estate of Otto 
+Wesenclonck, a wealthy silk merchant in Zurich. Wagner fell in love with his 
+host's wife, Mathilde. He wrote the libretto for Tristan und Isolde. He also 
+wrote five songs in the Tristan style to poems written by Mathilde.
+<2
+@225 What composition did Ravel call "17 minutes of orchestra without any 
+music"?
+
+\La Valse
+\*Bolero
+\Piano Concerto in G major
+\Jeux d'eau
+
+^In 1928, Ravel completed his most famous work - the Bolero for orchestra. It 
+was commissioned by the French dancer Ida Rubenstein and is based on a 
+Spanish dance rhythm. Ravel chose an eight measure theme which is repeated 
+over and over, always with different orchestral colours, reaching a huge, 
+convulsive climax. He was always annoyed by its popularity.
+<1
+@226 Who was infatuated with Liszt's daughter and the wife of one of his 
+best friends?
+
+\Chopin
+\*Wagner
+\Debussy
+\Schumann
+
+^Richard Wagner's attentions were for Cosima von Bulow, the daughter of 
+Liszt and the wife of Hans von Bulow, a famous pianist and 
+conductor.
+<2
+@227 Who was refused admission to the Paris Conservatory at age 12 
+because the director disliked child prodigies?
+
+\Chopin
+\Schumann
+\Mozart
+\*Liszt
+
+^Despite this refusal, Liszt went on to a stellar pianistic and composing 
+career. Among his accomplishments, he became President of the newly 
+founded Hungarian Academy of Music in Budapest in 1875.
+<1
+@228 What director of the Paris Conservatory refused admission to Liszt?  
+\Seraphim
+\*Cherubini
+\Berlioz
+\Cellini
+^Luigi Cherubini (1760-1842) is remembered mainly for his church music. He 
+was director of the Paris Conservatory from 1822-42.
+<3
+@229 Who was the founder of French Grand Opera?  
+
+\Rossini
+\Bach
+\*Lully
+\Handel
+
+^Jean Baptiste Lully (1632-1687) became a friend of Louis XIV and in 1672, 
+the king gave him a monopoly on producing operas in France.
+<1
+@230 Which two composers died within one and a half years of each other?
+
+\Brahms and Schumann
+\Liszt and Wagner
+\*Beethoven and Schubert
+\Mozart and Salieri
+
+^Beethoven and Schubert both lived in the same city but apparently never met 
+- Schubert because he was to shy to force his attention on his great idol 
+Beethoven, and Beethoven because he was to preoccupied to think of 
+arranging to meet Schubert who was younger. Schubert asked to be buried 
+near his idol and in 1863, the remains of both were re-buried side by side.
+<2
+@231 Who wrote The Trout (Die Forelle)?
+\Beethoven
+\Rossini
+\Liszt
+\*Schubert
+
+^Franz Peter Schubert (1797-1828) wrote the famous Trout Quintet for violin, 
+viola, piano, cello and double bass, the result of a request from wealthy cellist 
+Johann Vogl. Vogl held musical evenings in his home and asked Schubert to 
+contribute a new work.
+<1
+@232 Who paid Scriabin an annual fee for composing and took him on an 
+orchestral 
+tour down the Volga by boat?  
+
+\Novello
+\Mahler
+\Milhaud
+\*Koussenitzky
+
+^Serge Koussevitsky (1874-1951) was a Russian-born conductor and 
+publisher.
+<2
+@233 Who became intrigued by mechanical player pianos and wrote an Etude 
+for Pianola?
+
+\*Stravinsky
+\Scriabin
+\Ravel
+\Gounod
+
+^The player piano was invented in 1860 and by 1919, more than half of the 
+pianos made in the United States were of this kind.
+<2
+@234 What violinist was said to have sold his soul to the devil?
+
+\Berlioz
+\Toscanini
+\*Paganini
+\Ricci
+
+^Niccolo Paganini (1782-1840) was one of the greatest violinists of all time. 
+His brilliant playing and Mephistophelean appearance led many people to 
+think he had made a special deal to obtain his talents.
+<1
+@235 Who was known as the "twelve tone man"?
+
+\Stravinsky
+\Webern
+\Adler
+\*Schoenberg
+
+^Arnold Schoenberg (1874-1951) devised his 12-tone technique of 
+composition and in 1921, gave a lecture on his new musical theory calling it a 
+"method of composing with twelve tones". Today, this method is considered 
+mainstream, although very few mainstream audience members would admit to 
+actually liking Schoenberg.
+<1
+@236 For whom did Berlioz write his viola concerto Harold in Italy?
+
+\Scarlatti
+\*Paganini
+\Kreisler
+\Viotti
+
+^Paganini asked Berlioz to compose a work that would feature an exceptional 
+viola that he had acquired. The result was Harold in Italy, Opus 16, a 
+programme symphony composed in 1834.
+<2
+@237 What composer became so depressed, he needed hypnotism before he 
+could write again?  
+
+\*Rachmaninov
+\Siloti
+\Zverev
+\Hindemith
+
+^In his late 20's, the great pianist/composer Serge Rachmaninov (1873-1943) 
+suffered severe depression, but after a series of daily sessions with Dr. 
+Nikolai Dahl, a psychologist who was experimenting in hypnotic therapy, he 
+was cured.
+<2
+@238 Who achieved fame as an organist and a tester of church organs?
+\Haydn
+\Handel
+\Brahms
+\*Bach
+^Beside giving J.S. Bach (1685-1750) extra income, it gave him genuine 
+pleasure to inspect new organs.
+<1
+@239 What did the ladies of Dublin agree to do so more people could attend 
+Handel's Messiah?
+
+\Go hatless
+\Not wear furs
+\Leave off their capes
+\*Go without their hoops
+
+^ Going without wearing the skirt hoops would obviously make more room for 
+others.
+<1
+@240 To whom did Mozart refer when he said "Pay attention to him. He will 
+make a noise in the world some day or other"?
+
+\Bach
+\Mendelssohn
+\Chopin
+\*Beethoven
+
+^Beethoven visited Mozart in Vienna in 1787 and played the piano brilliantly. 
+Then Beethoven asked Mozart to give him a theme and let him make 
+variations on it. He was so full of admiration for the seventeen year old 
+Beethoven that he tip-toed from the room and made the quote to friends in the 
+next room.
+<1
+@241 What is considered to be the first true Italian opera?
+
+\*Eurydice
+\Dafne
+\Mimi
+\Magic Flute
+
+^The story of Orpheus and his love for his wife Eurydice has been used for 
+the plot of more than 30 operas. Two of these, both entitled Eurydice, were 
+written in 1600 by two of the founders of opera, Peri and Caccini.
+<2
+@242 What was Beethoven's only opera?
+
+\Faust
+\Die Fledermaus
+\Rigoletto
+\*Fidelio
+
+^Beethoven's only opera was first produced in 1805. It was not a success and 
+Beethoven revised it for a production in 1806. Although it seemed a success 
+then, the opera was shelved after five performances. In 1814, he revised it and 
+presented it yet again.
+<1
+@243 What instrument did Queen Elizabeth I of England play?  
+
+\Clavichord
+\Harpsichord
+\*Virginal
+\Spinet
+
+^In England, the virginal was a type of harpsichord.
+<2
+@244 What composer was called the "Red Priest"?
+
+\Bach
+\Handel
+\*Vivaldi
+\Weber
+^Antonio Vivaldi (1678-1741) was ordained as a priest but served only for a 
+short time in the church. He had flaming red hair.
+<1
+@245 What was known as Paganini's widow?
+
+\His wife
+\His favorite mandolin
+\His favorite medal
+\*His favorite violin
+
+^The violin was made by Guarneri. It was loaned to Paganini by its owner, a 
+wealthy French music lover. After hearing Paganini play it, the owner gave it 
+to him because he thought no one else should ever play it.
+<1
+@246 Composers Rimsky-Korsakov, Borodin, Balakirev, Cui and 
+Mussorgsky belonged to what group?
+
+\Russia's Greatest
+\*The Five
+\Volga Boatmen
+\The Performers
+^They were also known as The Russian Five or The Mighty Five. The original 
+name, coined in a newspaper article by Stasov in 1867 was "Moguchaya 
+Kuchka" which meant The Mighty Handful.
+<1
+
+@247 Who wrote the Russian historical opera A Life For The Tzar?
+
+\Pushkin
+\Gogol
+\Stravinsky
+\*Glinka
+^Mikhail Ivanovitch Glinka (1804-1857) created this first popular opera in the 
+Russian language. It was performed in 1836. It is also known as A Life for the 
+Czar, and also, Ivan Susanin.
+<2
+@248 Who was the first musician to become a member of the Austrian House 
+of
+Lords?
+\*Dvorak
+\Wagner
+\Bach
+\Hoffman
+^ Antonin Dvorak lived from 1841-1904. After returning from the United 
+States to his native country, he bacame director of the Prague Conservatory.
+<2
+
+@249 Who founded the American Society of Composers, Authors and 
+Publishers (ASCAP) in 1914?
+
+\Hindemith
+\Bernstein
+\Ravel
+\*Herbert
+^Victor Herbert (1859-1924) was disturbed by the plight of composers who 
+were receiving no royalties for the performance of their music. As a result, 
+ASCAP was formed. Herbert was vice-president of this organization from the 
+time of its founding until his death.
+<2
+@250 Who wrote the ballet Harlequin's Millions?
+
+\Tchaikovsky
+\Grieg
+\Paderewski
+\*Drigo
+
+^Riccardo Drigo lived from 1846-1930. This ballet was first danced in St. 
+Petersburg.
+<2
+@251 Of what composition did Tchaikovsky say "a piece from the heart. I 
+can't wait 
+for to be played"?
+
+\1812 Overture
+\None But The Lonely Heart
+\Melodie
+\*Waltz from Serenade for Strings
+
+^This waltz was composed by Tchaikovsky in 1880.
+<1
+@252 Who composed Rhapsody on a Theme by Paganini?
+
+\Paganini
+\Benny
+\*Rachmaninov
+\Hoffman
+
+^Rachmaninov was inspired by Paganini's work as were other artists such as 
+Liszt, Schumann and Brahms. Brahms wrote two books of variations on a 
+single caprice, which was the same one used by Rachmaninov.
+<1
+
+@253 Humoresque was published in 1890 and has remained a favorite. Who 
+wrote it?
+
+\Foster
+\Herbert
+\Sibelius
+\*Dvorak
+
+^Dvorak's Humoresque, Opus 101, No. 7, appeared in the 1890's. It, 
+curiously, can be played and sung simultaneously with Way Down Upon the 
+Swanee River by Stephen Foster.
+<1
+@254 What composition was used as the theme of the Lone Ranger TV 
+series?
+
+\Pomp and Circumstance
+\1812 Overture
+\Battle Hymn of the Republic
+\*William Tell Overture
+
+^William Tell was Rossini's last opera. Just listening to the galloping rhythm 
+makes it easy to see why it became the Lone Ranger's theme.
+<1
+@255 Who wrote the Can Can?
+
+\*Offenbach
+\Bach
+\Dvorak
+\Chopin
+
+^Jacques Offenbach (1819-1880) composed Orpheus in the Underworld, from 
+which this famous Can Can comes. It is a naughty French 
+dance.
+<1
+@256 Approximately how many waltzes did Johann Strauss Jr. compose?
+
+\100
+\300
+\*Over 500
+\350
+
+^No wonder Strauss Jr. (1825-1899) was known as the Waltz King!
+<1
+@257 The song Tonight We Love was taken from the opening theme of which 
+concerto?
+
+\Brandenburg Concerto
+\*Tchaikovsky's Piano Concerto
+\Rachmaninov's 2nd Piano Concerto
+\None of the above.
+
+^The concerto was written in 1874 and first performed by the pianist Hans 
+von Bulow in Boston.
+<1
+@258 In 1970, 100 cellists played Sardana in tribute to what composer?
+
+\Menuhin
+\Rubinoff
+\Rubenstein
+\*Casals
+
+^Pablo Casals (1876-1973) was renowned not only as a cellist but as a 
+conductor and composer. He founded the famous Marlboro Summer Music 
+Festival in the United States. Casals conducted this special tribute 
+performance at age 94.
+<1
+@259 Who wrote the Skater's Waltz?
+
+\Strauss
+\Brahms
+\Tchaikovsky
+\*Waldtoufel
+^Emil Waldteufel (1837-1915) was appointed director of Court Balls in 1865 
+in France. At a time when society was not only wild about waltzing but also 
+ice-skating, the Skater's Waltz became a great favorite.
+<2
+@260 Domenico Scarlatti's works are often identified with "L" and a number. 
+What
+does "L" stand for?
+
+\Lima
+\Lipschitz
+\*Longo
+\Lamont
+
+^Alessandro Longo (1864-1945) is the pianist and composer who organized 
+and numbered Scarlatti's output for easier identification.
+<2
+@261 Who wrote most of Mozart's Symphony No. 37, K. 444?
+\Salieri
+\*Michael Haydn
+\Samartini
+\None of the above
+^Mozart only wrote the introduction to the first movement of this work. 
+Michael Haydn (1737-1806) was the brother of Joseph Haydn.
+<2
+@262 Although Mussorgsky wrote Pictures at an Exhibition, whose 
+orchestration of it is usually heard?
+\Rimsky-Korsakov
+\Richard Strauss
+\*Ravel
+\Schoenberg
+^Maurice Ravel (1875-1937) was considered a brilliant orchestrator, as is 
+evident in such works as Daphnis et Chloe and Bolero.
+<2
+@263 What is the only left handed instrument in the orchestra?
+
+\Cello
+\Flute
+\Triangle
+\*French horn
+
+^The French horn is the only brass instrument in the orchestra where the left 
+hand operates the valves. The right hand is positioned in the bell and remains 
+essentially motionless.
+<1
+@264 As a choir boy, Haydn was considered a practical joker. On one 
+occasion, he...
+
+\*Cut off the pigtails of another singer
+\Dumped a water bucket on Empress Maria Theresa
+\Put thumb tacks on his teacher's chair
+\Stuck pages of the choir director's music together
+
+^When his voice changed, Haydn was removed from St. Stephen's Church 
+choir in Vienna. Some say the joke got him kicked out.
+<1
+@265 Haydn's wife was not exactly a music lover. Her insensitivity really 
+showed when she...
+
+\Sold his piano
+\*Used Haydn's manuscript for hair curlers
+\Told Haydn to take a job as a shoe maker
+\Gossiped out loud at formal court concerts
+
+^Women used to use paper for hair curlers!
+<1
+@266 Who was Chopin's lover?
+
+\*George Sand
+\George Chuvalo
+\George Elliot
+\George Bush
+
+^George Sand, a female French novelist, lived with Chopin from 1838-47. 
+She was actually the Baroness Dudevant (writing under a pseudonym).
+<1
+@267 Which of the following is not a recognized classification for opera 
+singers?
+
+\Tenor extremo
+\Basso profundo
+\Tenore robusto
+\Coloratura soprano
+
+^The other classifications refer to the character and timbre of the voice.
+<1
+@268 Who did Beethoven have lessons with?
+
+\G. Neefe
+\F.J. Haydn
+\Albrechtsberger
+\*All of the above.
+
+^He also had lessons from Schenk Salieri (and perhaps even Mozart).
+<1
+@269 In his Dance of the Sugar Plum Fairies (1892), Tchaikovsky made use 
+of what newly invented instrument?
+
+\English horn
+\Banjo
+\*Celesta
+\Saxophone
+
+^The celeste was invented in 1886 by the French instrument maker Auguste 
+Mustel. It looks like a small piano but it sounds like a set of bells. Its special 
+design produces purity of tone.
+<1
+@270 What is a Double Stop?
+
+\*2 tones sounding simultaneously on stringed instruments
+\2 orchestral sections simultaneously remaining silent
+\Special piano technique for crisp staccatos
+\None of the above as there is no such term
+
+^Triple (3 note) and quadruple (4 note) stops are also possible.
+<1
+@271 Haydn's works are often identified by an "H" and a number. What does 
+the "H" stand for?  
+
+\*Hoboken
+\Harvey
+\Michael Haydn
+\Hanova
+
+^Anthony van Hoboken (1887-1983) was a Dutch musicologist. He compiled 
+a definitive catalogue of Haydn's works, the first volume of 
+which appeared in 1957. Such numbering eliminates confusion when referring 
+to certain works.
+<2
+@272 The works of Mozart are usually identified by "K" and a number. What 
+does "K" stand for?
+
+\Klinger
+\Klephorn
+\*Kochel
+\Kaiser
+
+^Ludwig von Kochel (1800-1877) was an Austrian botonist and mineralogist 
+with great admiration for Mozart. He compiled a chronological catalogue of 
+all of the composer's works, giving each a "Kochel" or "K" number. The 
+system is now used universally.
+<1
+@273 The works of Schubert are usually identified by "D" and a number. 
+What does "D" stand for?
+
+\Duckworth
+\Diptmonc
+\Dumas
+\*Deutsch
+
+^Viennese music scholar and art critic Otto Erich Deutsch (1883-1967) not 
+only compiled vast amounts of information on Schubert, but also a thematic 
+catalogue (1951) which organized all of the composer's works with "D" 
+numbers.
+<1
+@274 Each movement of Vaughan William's Sinfonia Antarctica contains 
+quotes from the journals of which explorer?
+
+\Byrd
+\*Scott
+\Amunsden
+\Perry
+
+^Ralph Vaughan Williams also produced a film score for "Scott of the 
+Antarctic" in 1948. As one might guess, this provided the impetus to write his 
+Antarctic Symphony (No. 7) which appeared in 1952.
+<2
+@275 Who did Herbert Von Karajan replace as conductor of the Berlin 
+Philharmonic?
+
+\George Szell
+\Karl Bohm
+\Stokowski
+\*Furtwangler
+
+^Wilhelm Furtwangler (1886-1954), along with Arturo Toscanini (1867-
+1957), are widely regarded as the two most influential conductors of the first 
+half of the 20th century.
+<2
+@276 What is the Heiligenstadt Testament?
+
+\Bach's treatise on playing the clavichord
+\Handel's observations on choral technique
+\Brahms' theories of orchestration
+\*Beethoven's letter of personal despair
+
+^In 1802, Beethoven described his state of mind after being told by doctors 
+that his deafness was incurable. This has become known as the Heiligenstadt 
+Testament.
+<2
+@277 Mozart, Haydn and Beethoven are sometimes collectively refered to 
+as...
+
+\Three muskateers of music
+\*Composers of the First Viennese School
+\Moguls of Mannheim
+\All of the above
+
+^This compositional style period is also sometimes referred to as the period of 
+common practice. The Second Viennese School (early 20th century) includes 
+Schoenberg, Berg and Webern. The latter gentlemen saw a direct connection 
+between what they were doing, and the work of the First School.
+<1
+@278 Who wrote the Devil's Trill Sonata?
+
+\Corelli
+\*Tartini
+\Vivaldi
+\Rigotoni
+
+^Giuseppe Tartini (1692-1770) said his inspiration came from a dream. He 
+had made a bargain with the devil for his soul. He handed his violin to the 
+devil who played with "consummate skill". When he awoke, Tartini tried in 
+vain to copy what he had heard.
+<1
+@279 How long did it take Brahms to complete his first symphony?
+
+\1 year
+\5 years
+\10 years
+\*20 years
+
+^Brahms probably started around 1855, his first attempts ending up as the D 
+minor Piano Concerto and part of the German Requiem amongst other things. 
+The First Symphony premiered in 1876.
+<2
+@280 What group was Mozart a member of?
+
+\Jehovah's Witnesses
+\*Freemasons
+\Group of Five
+\None of the above
+^The freemasons are a secret order or fraternity professing principles of 
+brotherly love, charity and mutual aid.
+<1
+@281 Which work does not belong in this group?
+
+\*Der Freischutz
+\Don Giovanni
+\Cossi Van Tutte
+\Die Zauberflote
+
+^Although all the above are operas, the first is by Weber. The others are by 
+Mozart.
+<2
+@282 
+Which of the following was not written by Puccini?
+
+\Tosca
+\Madame Butterfly
+\*Salome
+\La Boheme
+
+^Salome was written by Richard Strauss (1864-1949).
+<1
+@283 What composer, at a performance of Handel's Hallelujah chorus, 
+exclaimed "He is the master of us all"?
+
+\Mozart
+\*F.J. Haydn
+\Beethoven
+\Brahms
+
+^He made the remark in 1791 at a performance of Messiah at Westminster 
+Abbey. Haydn's own work was influenced by this exposure to Handel's 
+oratorio while in London. This is apparent in Haydn's oratorio The Creation 
+and The Seasons, amongst other choral works.
+<2
+@284 Although he breezed through the Paris Conservatory's entrance exams, 
+who was refused admission because he was age 7?
+
+\Mozart
+\*Albeniz
+\Liszt
+\Brahms
+
+^Isaac Albeniz (1860-1909), a very precocious youngster, is said to have 
+learned the piano almost instinctively, improvising a public concert at age 4.
+<1
+@285 Grieg's Peer Gynt was originally incidental music to a play of the same 
+name. Who wrote the play?
+
+\Edgar Allan Poe
+\*Henrik Ibsen
+\Bjornson
+\Edna Ferber
+
+^The first performance, with Ibsen's drama revised in a version for the stage, 
+occurred Feb. 24, 1876. This was the same year that Wagner's Ring Cycle was 
+premiered at Bayreuth.
+<2
+@286 In the music of J.S. Bach, one can find evidence of...  
+
+\*Numerology
+\Astrology
+\Golden Section
+\None of the above
+
+^Letters of the alphabet are given a numerical equivalent (eg. A=1, B=2, C=3, 
+H=8). The letters of the name BACH add up to 14. J.S. Bach sometimes 
+constructed themes so that the number of notes would total 14!
+<2
+@287 In 1705, J.S. Bach was exposed to a composer who influenced him 
+greatly. Who was he?
+\Palestrina
+\Scarlatti
+\*Buxtehude
+\Vivaldi
+
+^Dietrich Buxtehude (1637-1707) was the most famous composer of his time 
+in North Germany. He was active as an organist at Lubeck, where Bach heard 
+him perform.
+<1
+@288 Leonard Bernstein is known as a...
+
+\Conductor
+\Composer and writer
+\Concert pianist
+\*All of the above
+
+^Leonard Bernstein, a true "wunderkind", achieved outstanding success in all 
+these fields. He was, of course, conductor of the New York Philharmonic for 
+many years. As a composer, he achieved popular success for the music of 
+West Side Story.
+<1
+@289 Leonard Bernstein's last minute conducting debut with the N.Y. 
+Philharmonic in 1943 launched his career. Who was he filling in for?
+
+\Artur Rodzinski
+\Serge Koussevitzky
+\*Bruno Walter
+\Arturo Toscanini
+
+^Walter had taken suddenly ill.
+<2
+@290 Where is the story behind Wagner's Der Ring Des Nibelungen is drawn 
+from?
+
+\Greek mythology
+\*Norse mythology
+\Russian folklore
+\None of the above
+
+^Richard Wagner (1813-1883) used these myths as they offered excellent 
+opportunities for theatrical manipulation. They also raised philosophical 
+issues that were of interest to Wagner.
+<1
+@291 Which work does not belong in the following list?
+
+\Tod und Verklarung
+\*Das Rheingold
+\Till Eulenspiegels Lustige Streiche
+\Ein Heldenleben
+
+^It is an opera from Wagner's Ring Cycle. the others are symphonic poems by 
+Richard Strauss.
+<2
+@292 Which of the following is not a symphonic poem by Franz Liszt?
+
+\Mazeppa
+\Les Preludes
+\Die Ideale
+\*Tannhauser
+
+^Tannhauser is an opera by Wagner.
+
+@293 Who was Wagner's great patron?
+
+\Queen Victoria of England
+\*Ludwig II of Bavaria
+\Archduke Ferdinand of Austria
+\None of the above.
+
+^Ludwig II, who spent the lands riches on the arts and on building castles, 
+was nicknamed the "dream king".
+<1
+@294 What instrument did Adolphe Sax invent?
+
+\Saxotromba
+\Saxophone
+\Saxtuba
+\*All of the above
+
+^Adolphe Sax (1814-94) of Brussels obviously experimented and worked on 
+a great many instruments, both brass and woodwind.
+<1
+@295 The striking innovation of Beethoven's 9th Symphony is the use of 
+chorus and solo voices. Who's text did Beethoven use?
+\*Friedrich Von Schiller
+\Goethe
+\Walpole
+\Heine
+^Beethoven selected the stanzas that emphasized the universal brotherhood of
+man through joy and love of an eternal heavenly Father.
+<1
+@296 Which of the following pairs of composers are not believed to have 
+met?
+
+\Mozart and Beethoven
+\*Handel and Bach
+\Scarlatti and Handel
+\Liszt and Chopin
+
+^They did make several attempts to do so. In 1719, Bach went to Halle 
+specifically to meet Handel, but the latter had already left for England.
+<1
+@297 How did French pianist and composer Charles Alkan meet his death?
+
+\Heart failure while performing at age 74
+\*Crushed to death by a falling bookcase
+\Fell from a train en route to a performance in Russia
+\Drowned while on vacation
+
+^Alkan (1813-1888) was apparently reaching for a copy of the Talmud and 
+toppled the bookcase. Alkan's real name was actually Charles Henri Valentin 
+Morhange. He was said to be the only pianist Liszt was embarassed to 
+perform in front of.
+<2
+@298 What or who is the Diabolus in  Musica (the devil in music)?
+
+\Franz Liszt
+\*Late medieval name for the Tritone interval
+\Niccolo Paganini
+\None of the above
+
+^The tritone (interval of the augmented fourth) has long been considered as an 
+awkward interval.
+<2
+@299 Which of the following first initials do not belong to a real Bach?
+
+\W.F.
+\P.E.
+\*P.D.Q.
+\J.S.
+
+^P.D.Q. Bach is actually a very elaborate satire created by Prof. Peter 
+Schickele (last reported to be at the University of Southern North Dakota at 
+Hoople!).
+<1
+@300 How many operas make up Wagner's Der Ring Des Nibelungen (Ring 
+of the Nibelung)?
+
+\*4
+\6
+\8
+\12
+
+^The four music dramas are: Das Rheingold (The Rhine Gold), Die Walkure 
+(The Valkyrie), Siegfried, and Gotterdammerung (Twilight of the Gods).
+<1
+@301 Who composed Finlandia?
+\Newmarch
+\Downes
+\*Sibelius
+\Elgar
+
+^Jean Sibelius (1865-1957) composed this orchestral work for the Press 
+Celebrations of 1899. It is interesting to note that in 1900 the Russian Zsar 
+ordered that Finlandia not be performed during the political crises because of 
+its strong association with the Finnish independence movement.
+<1
+@302 Who wrote a rondo over the loss of a penny?
+
+\Mozart
+\Schubert
+\*Beethoven
+\Schumann
+
+^It is called Rage for a Lost Penny and was once used on a television 
+commercial for Heintzmann pianos (remember the piano tuner in an empty 
+hall being applauded by the cleaning lady?).
+<2
+
+@303 What composer conducted a mammoth performance of 20,000 
+musicians and singers during a visit to the United States?
+
+\Puccini
+\Tchaikovsky
+\Debussy
+\*Strauss
+
+^Johann Strauss Jr., the Waltz King, visited the U.S. in 1872. The incredible 
+performance of his own works was arranged for the Boston Peace Jubilee.
+<2
+@304 What popular song was based on Chopin's Polonaise, Opus 53?
+
+\As Time Goes By
+\Night and Day
+\Forever and Ever
+\*Till the End of Time
+
+^D. is correct.
+<1
+
+@305 The Opera Don Giovanni was based on what character?
+\Casa Nova
+\*Don Juan
+\Don Quixote
+\Romeo (Shakespeare ) 
+^This famous opera by Mozart is based upon the character of the flamboyant 
+lover "Don Juan".
+<2
+@306 In 1723, J.S. Bach left Cothen to take up a new job in which city?
+
+\Vienna 
+\Munich
+\*Leipzig
+\London
+
+^Bach stayed there until his death in 1750.
+<2
+
+@307 When Gershwin's Rhapsody in Blue was premiered in 1924, whose 
+orchestra accompanied?
+
+\Duke Ellington's
+\Ferde Grofe's
+\Guy Lombardo's
+\*Paul Whiteman's
+
+^Whiteman commissioned the Rhapsody. Gershwin's famous Rhapsody in 
+Blue was originally scored for jazz band and piano, and later arranged for full 
+orchestra by Ferde Grofe (1892-1972). The first performance as was on Feb. 
+12, 1924, with Gershwin at the piano.
+
+<2
+
+@308 Which of the following co-founded a successful insurance company in 
+1906?
+
+\Claude Debussy
+\Percy Grainger
+\*Charles Ives
+\Scott Joplin
+
+^Charles Ives (1874-1954) became one of the most innovative American 
+composers. The son of a bandmaster, he was trained as an organist and even 
+studied music at Yale before getting into the insurance business.
+
+<2
+
+@309 By what first name was the French composer Berlioz known?
+
+\Jean
+\*Hector
+\Frank
+\Claude
+
+^Hector Berlioz (1803-1869) was a French composer, conductor and music 
+critic.
+
+<1
+
+@310 In what country was Mikhail Glinka born in 1804?
+
+\*Russia
+\Poland
+\Hungary
+\Czechoslovakia
+
+^Glinka is often thought of as the father of Russian music.
+
+<1
+
+@311 Who wrote the perennial children's opera Hansel und Gretel?
+
+\Mel Torme
+\J.S. Bach
+\Robert Schumann
+\*Engelbert Humperdinck
+
+^Engelbert Humperdinck (1854-1921) based this opera on the story by the 
+brothers Grimm. It was first produced in Weimar in 1893 (with Richard 
+Strauss conducting).
+
+<1
+
+@312 What was Anton Bruckner's principal instrument?
+
+\Bassoon
+\*Organ
+\Tuba
+\Violin
+
+^For most of his adult life, Bruckner (1824-96) had a greater reputation as an 
+organist than as a composer.
+
+<2
+
+@313 Who wrote the score for the ballet Coppelia of 1870?
+
+\*Delibes
+\Handel
+\Ravel
+\Scriabin
+
+^Leo Deibes (1836-1891). Copelia, or The Girl with Enamel Eyes, was 
+produced in Paris in 1870.
+
+<2
+
+@314 Which of the following was written by Johann Strauss Jr.?
+
+\*The Gypsy Baron
+\Merrie England
+\The Merry Widow
+\Song of Norway
+
+^Strauss, the Waltz King, lived in Vienna from 1825-99.
+ 
+<1
+
+@315 Two popular one-act operas are often paired together to form an 
+evening's bill: I Pagliacci by Leoncavallo and Cavalleria Rusticana by whom?
+
+\Delibes
+\Mozart
+\*Mascagni
+\Scarlatti
+
+^Italian composer Pietro Mascagni lived from 1863-1945. In 1890, he won 
+first prize in a competition sponsored by the publisher Sonzogno with the 
+one-act opera Cavalleria Rusticana.
+
+<1
+@316 Alexander Glazounov (1865-1936) was which of the following?
+
+\Ballet dancer
+\*Composer
+\Publisher
+\Talent agent
+
+^Hardly ever played now, he was highly regarded and much in demand a 
+century ago.
+
+<1
+
+@317 To whom was Rossini referring in the phrase "The Mozart of the 
+Champs-Elysees"?
+
+\Ravel
+\*Offenbach
+\Franck
+\Debussy
+
+^Jacques Offenbach (1819-80), the operetta composer, was also a conductor 
+and cellist. He is famous for his sole grand opera, Tales of Hoffman.
+
+<2
+@318 For which British monarch's water party did Handel write his Water 
+Music?
+
+\Elizabeth I
+\Edward VII
+\*George I
+\Victoria
+
+^George I, formerly the Elector of Hanover, was Handel's employer.
+
+<2
+
+@319 Who wrote the famous string quartet known as Death and the Maiden?
+
+\Chopin
+\Chaminade
+\Elgar
+\*Schubert
+
+^The title derives from his use in the quartet of the melody of his song Death 
+and the Maiden. The quartet, no. 14 in D minor, D.810, was written in 1826.
+
+<1
+
+@320 What was the family relationship between Richard and Johann Strauss?
+
+\Brothers
+\Father and son
+\Uncle and nephew
+\*None of the above
+
+^They were not related.
+
+<1
+
+@321 Who was called "Il Prete Russo" (The Red Priest)?
+
+\*Vivaldi
+\Rachmaninov
+\Liszt
+\Gounod
+
+^Antonio Vivaldi (1678-1741) was an ordained Priest, but he was no leftist. 
+He had red hair.
+
+<1
+@322 In what city did the barcarolle originate?
+
+\Florence
+\London
+\Oslo
+\*Venice
+
+^It was a boat song sung by the gondoliers there.
+
+<1
+
+@323 How many Pomp and Circumstance marches did Edward Elgar write?
+
+\2
+\7
+\5
+\1
+
+^Sir Edward Elgar (1857-1934) premiered no. 1 & 2 in 1901, no. 3 in 1904, 
+no. 4 in 1907 and no. 5 in 1930. They were scored for full orchestra.
+
+<2
+
+@324 For whom was an arrest warrant issued in Dresden in 1849?
+
+\Beethoven
+\Wagner
+\*Verdi
+\Schumann
+
+^Something about ordering grenades and exhorting the public to take part in a 
+revolution.
+
+<3
+@325 Who wrote the operetta Orpheus in the Underworld?
+
+\Gershwin
+\*Lehar
+\Offenbach
+\Sullivan
+
+^Can-can and all. It was written in 1858 (revised it in 1874).
+
+<1
+
+@326 In 1923, Arthur Honegger wrote Pacific 231. What inspired it?
+
+\Ocean surf
+\A phone number
+\A Swiss clock
+\*A train engine
+
+^A train engine, of a heavy type built for speed. The numbers refer to wheel 
+ratio (like Dvorak, Honegger was a train fancier).
+
+<2
+
+@327 For which of his operas did Rimsky-Korsakov write The Flight of the 
+Bumblebee?
+
+\*Tsar Saltan
+\Sadko
+\Mozart and Salieri
+\Le Coq d'or
+
+^To use its full title: "The Fairy Tale of the Tsar Saltan, his son, the 
+Renowned and Mighty Paladin, the Prince Gvidon Saltanovich, and the 
+beautiful Tsarevna Lebed."
+
+<2
+@328 After what river did Robert Schumann entitle a symphony?
+
+\The Mississippi
+\The Moldau
+\*The Rhine
+\The Seine
+
+^It was his Symphony No. 3 in E-flat, Op. 97 (the "Rhenish").
+
+<2
+
+@329 What characterizes John Cage's piano piece Four Minutes and Thirty-
+Three Seconds?
+
+\It consists of two notes
+\*The pianist doesn't pIay
+\It's in 12 keys
+\It's in 11/4 time
+
+^The pianist doesn't play. He just sits there for four minutes and 33 seconds. 
+Stravinsky said he looked forward to major works by the same composer.
+
+<2
+
+@330 When Liszt played his Piano Sonata to Brahms in 1853, what did 
+Brahms do?
+
+\Broke three tea cups
+\Flirted with a blond
+\Made faces
+\*Fell asleep
+
+^That's according to American Pianist William Mason, who was there.
+
+<2
+
+@331 In what city did Chopin die in 1849?
+
+\Edinburgh
+\*Paris
+\Vancouver
+\Warsaw
+
+^Paris, was his home for 18 years. Chopin was born in Zelazowa Wola, 
+Poland, in 1810.
+
+<3
+@332 On what opera was Puccini working when he died in 1924?
+
+\*Turandot
+\Fidelio
+\La Boheme
+\The Barber of Seville
+
+^He died of cancer before finishing the climax of the opera. Franco Alfano 
+(1876-1954) completed the work, which has remained popular.
+
+<2
+
+@333 Which of the following did its composer leave unfinished?
+
+\Mahler: Symphony No. 5
+\Brahms: Piano Concerto No. 2
+\Bellini: Norma
+\*Schubert: Symphony No. 8
+
+^Schubert's Symphony No. 8 in B minor is known, naturally, as the 
+"Unfinished."
+
+<1
+
+@334 Beethoven wrote one opera. How many overtures to it did he write?
+
+\None
+\1
+\3
+\*4
+^The three Leonore Overtures, plus the Fidelio (which is what the opera was 
+eventually called.)
+
+<2
+
+@335 Vivaldi's Four Seasons concertos feature which solo instrument?
+
+\Piano
+\Clarinet
+\*Violin
+\Trumpet
+
+^The set of four concertos named after each season was published in 1725.
+
+<1
+@336 The work of which artist inspired Mussorssky's Pictures at an 
+Exhibition?
+
+\Norman Rockwell
+\Francisco GoYa
+\Harmenszoon Rembrandt
+\*Victor Hartmann
+
+^Mussorgsky saw Hartman's pictures at a memorial exhibition of his works in 
+St. Petersburg.
+
+<2
+
+
+@337 What is the nickname of Beethoven's Piano Concerto No. 5?
+
+\*Emperor
+\Eroica
+\Archduke
+\Waldstein
+
+^Of the others, Eroica applies to Beethoven's Symphony No. 3 in E-flat, 
+Archduke to the Piano Trio No. 6 in B-flat and Waldstein to the Piano Sonata 
+No. 21 in C minor.
+
+<1
+@338 What was Sir George Grove's contribution to music?
+
+\Seven-hour symphony
+\*Musical dictionary
+\Publishing house
+\Panharmonicon
+
+^Grove was the founder of the celebrated Grove's Dictionary of Music and 
+Musicians.
+
+<1
+
+@339 In what work did Tchaikovsky employ a celesta?
+
+\Marche Slav
+\*The Nutcracker
+\Piano Concerto
+\Symphony No. 3
+
+^In the Dance of the Sugarplum Fairy.
+
+<1
+
+@340 Who celebrated a birthday every four years?
+
+\Frederick Chopin
+\Artur Schnabel
+\*Gioacchino Rossini
+\Muzio Clementi
+
+^Rossini was born on February 29, 1792.
+
+<3
+
+@341 Who of the following was a piano manufacturer?
+
+\Andrea Amati
+\*Muzio Clementi
+\Pietro Giovanni Guarneri
+\Francesco Stradavari
+
+^Clementi was also a virtuoso on the instrument. The rest were fiddle makers.
+
+<1
+
+@342 Which of the following best defines "cadenza"?
+
+\Piece of furniture
+\Obsolete instrument
+\Mistake
+\*Solo passage
+
+^A passage for the solo instrument, usually found in a concerto.
+
+<1
+@343 Arturo Toscanini (1867-1957) was best known as what?
+
+\*Conductor
+\Pianist
+\Librettist
+\Composer
+
+^Toscanini was considered one of the greatest conductors in the early part of 
+this century. He was equally well known for his operatic and symphonic 
+performances. His daughter Wanda, incidentally, married pianist Vladimir 
+Horowitz.
+
+In what city is the famous opera house La Scala?
+
+\Venice
+\Paris
+\New Orleans
+\*Milan
+
+^La Scala, of course, is the Mecca of opera.
+
+<1
+
+@344 Who wrote piano pieces entitled Dessicated Embryos, and Three 
+Pieces in the Shape of a Pear?
+
+\Bach
+\Chopin
+\*Satie
+\Stravinsky
+
+^Erik Satie (1866-1925) had his little eccentricities. It is alleged that Satie 
+wrote his "pear-shaped" pieces in response to Debussy's complaint that his 
+music lacked form.
+
+<1
+
+@345 Tchaikovsky's Sleeping Beauty,Op. 66, is which of the following?
+
+\*Ballet
+\Pera
+\Piano suite
+\Symphonic poem
+
+^The second of Tchaikovsky's three ballet scores.
+
+<1
+@346 For whom did Mozart write the Requiem in D minor, K.626?
+
+\Haydn
+\Himself
+\Emperor Josef II
+\*Walsegg-Stuppach
+
+^Count Franz Walsegg-Stuppach commissioned it secretly so he could pass it 
+off as in own composition and perform it in memory of his late wife.
+
+<2
+
+@347 How old was Mendelssohn when he wrote the Overture to A 
+Midsummer Night's Dream?
+
+\8
+\*17
+\39
+\82
+
+^It was completed in 1843.
+
+<2
+
+@348 How many symphonies did Tchaikovsky write?
+
+\3
+\9
+\*6
+\10
+
+^He did make a few sketches for a No. 7, most of which he ended up using in 
+the Piano Concerto No. 3.
+
+<1
+@349 In what key is Grieg's only piano concerto?
+
+\G major
+\*A minor
+\E-flat major
+\D minor
+
+^Grieg's compositions were admired by Liszt, and when the two met in Rome 
+in 1870, Liszt played the concerto from manuscript at sight.
+
+<2
+
+@350 Who was Gerard Hoffnung?
+
+\*British musical humorist
+\Beethoven's first teacher
+\Mozart's son
+\Gustav Holst
+
+^He was a British musical humourist, and founder of the notorious Hoffnung 
+concerts. Books of his musical cartoons are widely available.
+
+<2
+@351 Who was a teacher of Beethoven in Vienna?
+
+\Johann Georg Albrechtsberger
+\Joseph Haydn
+\Antonio Salieri
+\*All of the above
+
+^All of them had a go at it.
+
+<1
+@352 Which pianist-composer was the first to publish Nocturnes for solo 
+piano?
+
+\Claude Debussy
+\Frederick Chopin
+\*John Field
+\George Gershwin
+
+^He published the first three of his Nocturnes in 1814 when Chopin was four 
+years old.
+
+<2
+
+@353 What's a Fermata?
+
+\*A long pause.
+\Odd rhythm
+\Deep bass line
+\Verdi's favourite food
+
+^More accurately, the symbol in music notation for a long pause. It sometimes 
+tempts soloists into a cadenza.
+
+<1
+@354 Who wrote the Hammerklavier Piano Sonata in B-flat, Op. 106?
+
+\*Beethoven
+\Liszt
+\Bach
+\None of the above
+
+^This monumental piano sonata was composed around 1817-18. At the time, 
+it was considered too technically difficult to be played although it is today in 
+the standard repertoire of many concert pianists.
+
+<1
+@355 Which author inspired Liszt's Mephisto Waltz No. 1?
+
+\William Shakespeare
+\Johann Goethe
+\Truman Capote
+\*Nikolaus Lenau
+
+^The Mephisto Waltz No. 1 was the first of Liszt's Two Episodes from 
+Lenau's Faust.
+
+<2
+
+@356 Mendelssohn, Chopin, Liszt and Thalberg were all born within the 
+same short period. Which span was it?
+
+\1791-94
+\1894-97
+\*1809-12
+\1840-43
+
+^Mendelssohn in 1809, Chopin in 1810, Liszt in 1811 and Thalberg in 1812.
+
+<3
+@357 Who was the violinist when Beethoven's Kreutzer Sonata for Violin 
+and Piano had its first public performance?
+
+\Itzhak Perlman
+\Niccolo Paganini
+\Rudolph Kreutzer
+\*George Bridgetower
+
+^Bridgetower, on May 4, 1803, with Beethoven at the piano. Kreutzer, to 
+whom it was eventually dedicated, never played it. He said it was 
+"outrageously unintelligible."
+
+<2
+
+@358 What role did Michael Puchberg play in Mozart's life?
+
+\Father-in-law
+\*Creditor
+\Opera librettist
+\Wig-maker
+
+^He lent Mozart money. Lots of it.
+<3
+
+@359 Who was Louis Moreau Gottschalk?  
+
+\Impressario at La Scala
+\Beethoven's publisher
+\*American-born Pianist
+\Paderewski's manager
+
+^The first native U.S. pianist of note, he was born in New Orleans in 1829.
+
+<3
+
+@360 In what city was Tchaikovsky's Piano Concerto No. 1 in B-flat minor 
+given its world premiere?
+
+\*Boston
+\Madrid
+\Paris
+\Toronto
+
+^Boston, in 1875. Hans von Bulow was the soloist.
+
+<2
+@361 Which composer's wife was a professional piano virtuoso?
+
+\Bach's
+\*Schumann's
+\Dvorak's
+\Tchaikovsky's
+
+^Wife Clara's celebrity as a pianist exceeded that of her husband as a 
+composer.
+
+<1
+@362 Who wrote the 1829 opera William Tell?
+
+\Cherubini
+\Bellini
+\Puccini
+\*Rossini
+
+^After which he called it quits, operatically, though he had another almost 40 
+years left to him.
+
+<1
+
+@363 A feature of Franz Schubert's life was the Schubertiad. What was it?
+
+
+\*Musical party
+\Famous hotel
+\Gazebo
+\Musical instrument
+
+^A Schubertiad was a musical gathering of Schubert's friends, with lots of 
+music by Schubert, of course.
+
+<2
+@364 For what two solo instruments did Brahms write his Double Concerto 
+in A minor, Op. 102?
+
+\Two pianos
+\Flute and cello
+\*Violin and cello
+\Two violins
+
+^The concerto was first performed in Cologne on Oct. 15, 1887 with violinist 
+Joachim, cellist Hausmann and Brahms at the podium.
+
+<2
+@365 Which pianist served as Prime Minister of Poland?
+
+\Chopin
+\Liszt
+\*Paderewski
+\Rachmaninov
+
+^For a brief time after World War I.
+
+<1
+
+@366 Which monarch performed, composed and published flute concertos 
+and sonatas?
+
+\Alexander I of Russia
+\*Frederick the Great of Prussia
+\George VI of Great Britain
+\Napoleon I of France
+
+^C.P.E. Bach was his house harpsichordist.
+
+<2
+@367 Who helped inaugurate New York's Carnegie Hall in 1891?
+
+\Balakirev
+\Mussorgsky
+\Rachmaninov
+\*Tchaikovsky
+
+^The legendary Carnegie Hall opened in1898 and was originally called the 
+Music Hall. In 1898, it was renamed in honour of industrialist Andrew 
+Carnegie (1835-1919) who had paid most of the construction bills. It was 
+recently restored to its original splendour, after almost being demolished. 
+Violinist Isaac Stern led the campaign to save Carnegie Hall.
+
+<1
+@368 Conductor Sir Thomas Beecham once said: "There are two golden rules 
+for an orchestra: start together and... (what?)"
+
+
+\"Play the notes."
+\"Stay in tune."
+\"Suffer the consequences.
+\*"Finish together."
+
+^To which the redoubtable Sir Thomas added: "The public doesn't give a 
+damn what goes on in between."
+
+<1
+
+@369 Eduard Hanslick (1825-1904) was famous in what capacity?
+
+\Director at the Met
+\Eccentric conductor
+\Piano tuner
+\*Music critic
+
+^He was high on Brahms and very down on Wagner, who parodied him in the 
+character of Beckmesser (originally to be called Hans Lick) in Die 
+Meistersinger.
+
+<1
+
+@370 Who wrote Porgy and Bess?
+
+\Percy Grainger
+\*George Gershwin
+\Scott Joplin
+\Leonard Bernstein
+
+^
+
+<1
+@371 The music of which composer was banned in Nazi Germany?
+
+\*Mendelssohn
+\Wagner
+\Lehar
+\Beethoven
+
+^Felix Mendelssohn (1809-1847) was Jewish by birth.
+
+<2
+@372 Who was rumoured to have poisoned Mozart?
+
+\Beethoven
+\Cimarosa
+\Haydn
+\*Salieri
+
+^But he didn't do it. Honest.
+
+<1
+
+@373 What noted author wrote: "George died on July 11, 1937, but I don't 
+have to believe that if I don't want to" ?
+
+\Geoffrey Chaucer
+\Ernest Heminsway
+\*John O'Hara
+\Walter Scott
+
+^Quoted in Newsweek Magazine, July 15, 1937.
+
+<3
+@374 Whose Ninth Symphony is universally known as the New World?
+
+\Beethoven's
+\*Dvorak's
+\Mahler's
+\Schubert's
+
+^The Symphony in E minor, Op. 95.
+
+Which team wrote H.M.S. Pinafore?
+
+\*Gilbert and Sullivan
+\Lerner and Loewe
+\Mozart and Da Ponte
+\Rodgers and Hammerstein
+
+^ Sir William Schwenk Gilbert (1836-1911) and Sir Arthur Seymour Sullivan 
+(1842-1900) produced the operetta H.M.S. Pinafore in 1878.
+
+<1
+@375 Which Beethoven symphony bears the opus number 125?
+
+\No. 12 in C minor
+\No. 6 in F
+\*No. 9 in D minor
+\No. 5 in C minor
+
+^The dear old "Choral" Symphony, and the last one that Beethoven wrote. 
+(No. 5 is Op. 67, No. 6 is Op. 68, and there never was a No. 12.)
+
+<1
+
+@376 Who penned this line in a 1956 song: "Roll over Beethoven, and tell
+Tchaikovsky the news"?
+
+\Barry Manilow
+\*Chuck Berry
+\Elvis Presley
+\Little Richard
+
+^This Chuck Berry song was also re-recorded by the Beatles in the 1960's.
+
+<2
+
+@377 Who wrote the most violin concertos?
+
+\Beethoven
+\Elgar
+\Sibelius
+\*Viotti
+
+^Viotti wrote 29 of them. The other composers wrote one violin concerto 
+each.
+
+<2
+@378 Upon what instrument was Pablo Casals a virtuoso?
+
+\Guitar
+\Harp
+\*Cello
+\Piano
+
+^Casals (1876-1973), one of the great musicians of the 20th century, was 
+internationally renowned as a cellist (known especially for his Bach 
+performances) and later as a conductor.
+
+<1
+@379 For which trio of solo instruments did Beethoven write his Triple 
+Concerto in C?
+
+\Two violins and viola
+\*Piano, violin and cello
+\Flute, harp and oboe
+\Three pianos
+
+^The Triple concerto was composed in 1804 and first performed in 1808.
+
+<2
+
+@380 What does the indication Da Capo mean?
+
+\Stop playing
+\Take a break
+\Use a mute
+\*Repeat
+
+^It is an indication that the performer should go back to the beginning of a 
+work or a section and play it.
+
+<1
+
+@381 Beethoven's Sonata in F for Violin and Piano, Op. 24 bears which 
+seasonal nickname?
+
+\Winter
+\*Spring
+\Autumn
+\Summer
+
+^The Spring Sonata was composed 1800-1.
+
+<1
+@382 Two composers who concentrated on writing opera were both born in 
+1813. Who were they?
+
+\Rossini and Lehar
+\*Verdi and Wagner
+\Offenbach and Sullivan
+\Bizet and Donizetti
+
+^Wagner was born on May 27 and Verdi on October 10.
+
+<2
+@383 Who wrote the Rage Over a Lost Penny?
+
+\*Beethoven
+\Schumann
+\Berlioz
+\Vaughan Williams
+
+^But the title wasn't his idea. He called it Rondo a Capriccio.
+
+<2
+
+@384 What does piano really mean in Italian?
+
+\Practice
+\Pedal
+\*Soft
+\Sustained
+
+^Piano means "soft" in Italian.
+
+<1
+@385 Who wrote the most piano sonatas?
+
+\Beethoven
+\*Haydn
+\Mozart
+\Schubert
+
+^Haydn who wrote more than 50 of the things.
+
+<2
+
+@386 Who came up with the nickname "Moonlight" for Beethoven's piano 
+Sonata No. 14 in C-sharp minor, Op. 27, No. 2?
+
+\Hans von Bulow
+\Beethoven
+\Ferdinand Ries
+\*Ludwig Rellstab
+
+^The critic Rellstab said the first movement reminded him of moonlight on the 
+waters of Lake Lucerne.
+
+<1
+@387 Who first wrote music for "prepared" piano?
+
+\Pierre Boulez
+\*John Cage
+\Olivier Messiaen
+\Scott Joplin
+
+\^The others enjoyed their pianos raw.
+
+<2
+@388 Which composer died at the age of 91?
+
+\Mozart
+\*Sibelius
+\Schubert
+\Chopin
+
+^All the rest were under 40 when they died.
+
+
+<1
+
+@389 Who did Liszt's daughter Cosima marry?
+
+\Richard Wagner
+\Hans von Bulow
+\Neither
+\*Both
+
+^Not simultaneously, of course.
+
+<2
+
+@390 After whom was Grieg's "Holberg" Suite named?
+
+\German philosopher
+\Russian nobleman
+\*Danish playwright
+\Polish organist
+
+^Danish playwright Ludwig Holberg, on the occasion of the bicentennial of 
+his birth.
+
+<2
+
+@391 Whose father was a professional musician?
+
+\Sibelius'
+\Gershwin's
+\*Brahms'
+\Mendelssohn's
+
+^His dad was a doublebass player, though of no great distinction. Sibelius' 
+father was a doctor doctor, Gershwin's a store-keeper (mostly) and 
+Mendelssohn's a banker/businessman.
+<2
+
+@392 What was Jean Sibelius' real first name?  
+
+\Ole
+\Giuseppe
+\Frank
+\*Johan
+
+^He was christened Johan Julius Christian. As a boy, he discovered some 
+calling cards discarded by his Uncle Jean, and decided to use them. So he 
+called himself Jean.
+
+<2
+
+@393 Who wrote a set of piano pieces, each named for a month of the year?
+
+\*Tchaikovsky
+\Joplin
+\Mozart
+\Elgar
+
+^He wrote them over the period of a year for a monthy music magazine.
+
+<2
+
+@394 Which of the following was a baroque composer?
+
+\Anton Rubinstein
+\Ludwig Beethoven
+\*J.S. Bach
+\Christian Sinding
+
+^Bach is the most well known of the Baroque composers.
+
+
+<1
+@395 Which was an alumnus of the Vienna Boys' Choir?
+
+\Edvard Grieg
+\Scott Joplin
+\Michael Jackson
+\*Franz Schubert
+^Franz Schubert was in the Vienna Boys' Choir.
+
+<1
+@396 Whose father was not a professional musician?
+
+\Bach's
+\Elgar's
+\*Haydn's
+\Mozart's
+
+^His dad was a wheelwright.
+
+<2
+
+@397 In what German city was Handel born?
+
+\Eisenach
+\*Halle
+\Zwickau
+\Bonn
+
+^Halle is also the town which Handel later honoured in the famous Hallelujah 
+Chorus. Eisenbach, Zwickau and Bonn were the birthplaces of J.S. Bach, 
+Schumann and Beethoven respectively.
+
+<2
+
+@398 Which of the following names is not associated with piano 
+manufacturing?
+
+\Broadwood
+\Steinway
+\*Stradella
+\Pleyel
+
+^Stradella was a 17th century Italian vocal and operatic composer.
+
+<2
+
+@399 How many piano sonatas did Debussy write?
+
+\32
+\*None
+\2
+\9
+
+^Debussy was not into old-fashioned forms like sonatas.
+
+<1
+@400 Why is the celebrated Chopin waltz nicknamed "Minute"?
+
+\*It's very small.
+\It's based on a minuet
+\Chopin was secretary at a meeting
+\It takes a minute to play
+
+^It's very small, or my-nyoot.
+
+<1
+@401 Which composer wrote a concerto for three pianos and orchestra?
+
+\Liszt
+\Tchaikovsky
+\*Mozart
+\All of the above
+
+^It's in F major, K. 242.
+
+<2
+
+@402 In listings of Mozart's works, the title is often followed by a "K" and a 
+number. What's the "K" stand for?
+
+\*Koechel
+\Klavier
+\Kleine
+\Kyrie
+
+^Ludwig Ritter von Koechel (1800-77). A botanist and mineralogist, he 
+published a numbered list of Mozart's works in chronological order. The list 
+has several times been revised, but the "K" remains.
+
+<1
+
+@403 Who first published the admonition "Please do not shoot the pianist. 
+He is doing his best"?
+
+\Tennyson
+\Neil Simon
+\Toscanini
+\*Oscar Wilde
+
+^Wilde claimed in "Impressions of America" (1883) to have seen this sign 
+posted in a saloon.
+
+<2
+@404 What was the first name of Joplin, composer of "The Entertainer" and 
+other rags?
+
+\Janis
+\Mark
+\*Scott
+\Thelonius
+
+^Scott Joplin's rags are featured in the movie "The Sting" and are played by 
+Marvin Hamlisch.
+
+<1
+@405 What was Albert Ketelbey's real name?
+
+\Edward Elgar
+\Vladislav Novicki
+\Beephlat Major
+\*Albert Ketelbey
+
+^Just plain Albert Ketelbey.
+
+<1
+
+@406 Of these four great pianist-composers, which was the only one to write 
+operas?
+
+\Brahms
+\Chopin
+\Grieg
+\*Mozart
+
+^Only Mozart wrote operas.
+
+<1
+@407 Which composer was Norwegian?
+
+\*Grieg
+\Sibelius
+\Prokofiev
+\Mendelssohn
+
+^He was born in Bergen.
+
+<1
+
+@408 Who employed Josef Haydn?
+
+\*Prince Esterhazy
+\Cardinal Ottoboni
+\The Duke of Plaza-Toro
+\Czar Alexander I
+
+^Prince Nicholas "The Magnificent" Esterhazy.
+
+<1
+@409 In what year was Brahms born?
+
+\1865
+\1898
+\1756
+\*1833
+
+^But A, B and C were the birth years of, respectively, Sibelius, Gershwin and 
+Mozart.
+
+<2
+
+@410 Who coined the phrase "The Three Great B's" in reference to Bach, 
+Beethoven and Brahms?
+
+\Leonard Bernstein
+\Victor Borge
+\*Hans von Bulow
+\Burt Bacharach
+
+^Hans von Bulow, the great 19th century pianist and conductor.
+
+<1
+@411 Who transcribed all nine of Beethoven's symphonies for solo piano?
+
+
+\Chopin
+\Paderewski
+\*Liszt
+\Gottschalk
+
+^The others were busy.
+
+<1
+
+@412 Which of the following virtuosi was called "Old Arpeggio"?
+
+\Nicholas Rubinstein
+\Artur Rubinstein
+\*Sigismund Thalsberg
+\Anton Rubinstein
+
+^The arpeggio was something of a specialty for him.
+
+<3
+
+@413 Which of the following made a reputation as a one-armed pianist?
+
+
+\Casella
+\Albeniz
+\d'Albert
+\*Wittgenstein
+
+^Paul Wittgenstein, for whom Ravel, Richard Strauss and Erich Korngold 
+among others wrote music.
+
+<2
+@414 Who was the best man at Brahms' wedding?
+
+\Elgar
+\Schumann
+\Bismark
+\*None of the above
+
+^Brahms remained a bachelor all his life.
+
+<1
+
+@415 In what school did J.S. Bach teach?
+
+\Ecole Niedermeyer
+\St. Trithian's
+\*St. Thomas School
+\Leipzig Conservatory
+
+^St. Thomas School in Leipzig (the Conservatory didn't exist yet).
+
+<2
+
+@416 How many times did J.S. Bach marry?
+
+\4
+\0
+\*2
+\7
+
+^His first wife, Maria Barbara, died in 1720. The following year, he married 
+Anna Magdalena.
+
+<1
+
+@417 Which of the following was not a member of the "Russian Five"?
+
+\*Tchaikovsky
+\Balakirev
+\Rimsky-Korsakov
+\Cui
+
+^Tchaikovsky was not in sympathy with the Five's ideals and naturalism and 
+nationalism.
+
+<1
+@418 Who wrote the 1812 Overture?
+
+\Stravinsky
+\Napoleon
+\Pachelbel
+\*Tchaikovsky
+
+^Though he wasn't very proud of it.
+
+<1
+@419 Who of the following had a special significance in the life of Chopin?
+
+\Cecile Chaminade
+\Nannerl Mozart
+\George Gershwin
+\*George Sand
+
+^George Sand's real name was Aurore Dupin, baronne Dudevant. A 
+masculine-attired, cigar-smoking novelist, she had many lovers, including 
+Chopin.
+
+<1
+@420 What's a mazurka?
+
+\Ukrainian aria
+\*Polish dance
+\Italian fugue
+\Yiddish hymn
+
+^Chopin, a pole, was its chief practitioner in music.
+
+<1
+@421 When he wrote the Children's Corner, Debussy had a specific child in 
+mind. Who was she?
+
+\Gigi
+\Frou-Frou
+\Brigette
+\*Chou-Chou
+
+^Chou-Chou was Debussy's pet name for his daughter Claude Emma.
+
+<2
+
+@422 A major life-style problem contributed to Mussorgsky's early demise. 
+What was it?
+
+\Gambling
+\*Alcoholism
+\Gluttony
+\Smoking
+
+^Vodka, champagne, anything. So long as it was booze.
+
+<1
+@423 Which of the following was a member of the French group of 
+composers known as "Les six"?
+
+\Debussy
+\Faure
+\*Poulenc
+\Satie
+
+^Poulenc's colleagues in the group were Auric, Durey, Honegger, Milhaud 
+and Tailleferre.
+
+<2
+@424 Which of the following was female?
+
+\*Chaminade
+\Ketelbey
+\MacDowell
+\Sinding
+
+^Cecile Chaminade. Albert, Edward and Christian were males.
+
+<2
+@425 Not all composers are "long-hairs". Who shaved his head bald when the 
+first sign of grey appeared?
+
+\Liszt
+\*Sibelius
+\Mendelssohn
+\Grieg
+
+^Jean Sibelius, a composer hero in Finland, looked a bit like a boxer.
+
+<1
+@426 In what country was Albeniz born?
+
+\Ireland
+\*Spain
+\France
+\Albania
+
+^He was born in Camprodon, Catalonia.
+
+<1
+
+@427 Who wrote the "pathetique" piano sonata?
+
+\*Beethoven
+\Ravel
+\Tchaikovsky
+\Scarlatti
+
+^The nickname applies to his Sonata No. 8 in C minor, Op. 13.
+
+<1
+@428 By what first name was Schumann known?
+
+\*Robert
+\Sandy
+\Richard
+\Winston
+
+^A. is correct.
+
+<1
+
+@429 Who was the Director of the Paris Conservatory from 1905-20?
+
+
+\Mendelssohn
+\Debussy
+\Gershwin
+\*Faure
+
+^Faure, despite his deafness.
+
+<2
+@430 What is a Gavotte?
+
+\Obsolete instrument
+\Five-movement sonata
+\Mistake
+\*Baroque dance form
+
+^Much favoured by Bach and other baroque composers.
+
+<1
+
+@431 Who was awarded an honorary Doctorate at Oxford University in 
+1791?
+
+\*Haydn
+\MacDowell
+\Grainger
+\Elgar
+
+^The others weren't even twinkles in the eye in 1791.
+
+<1
+@432 Which composer did not go deaf?
+
+\Smetana
+\Beethoven
+\*Bach
+\Faure
+
+^He died in 1750 at the age of 65 of a stroke - but his hearing was fine till the 
+end.
+
+<1
+@433 What is a clavier?
+
+\*Keyboard instrument
+\Collar-bone
+\Set of foot pedals
+\Military horseman
+
+^Clavier means Keyboard Instrument, in German. And Bach's was well-
+tempered.
+
+<1
+@434 Mily Balakirev was born in which year?
+
+\1660
+\1756
+\*1837
+\1902
+
+^
+
+<1
+@435 Who wrote the Heiligenstadt Testament?
+
+\Tchaikovsky
+\*Beethoven
+\Mahler
+\Howard Hughes
+
+^Written in 1802 in Heiligenstadt outside Vienna, this document was 
+intended for the composer's brothers, but was never sent. In it, Beethoven 
+lamented his incipient deafness.
+
+<1
+@436 Which composer never married?
+
+\Grieg
+\Tchaikovsky
+\Bach
+\*Gershwin
+
+^He said he was just too busy.
+
+<1
+@437 How many children did Mozart have at the time of his death?
+
+\20
+\6
+\None
+\*2
+
+^Karl, seven years old when his dad died and Franz, five months. Four other 
+children had died in infancy.
+
+<2
+@438 Elgar's pomp and Circumstance Marches were entitled after a phrase by 
+which author?
+
+\*Shakespeare
+\Chaucer
+\Agatha Christie
+\Da ponte
+
+^Othello, Act III: "...all quality pride, pomp and
+circumstance of glorious war."
+
+Which composer was charged with "formalistic deviations and anti-democratic 
+musical tendencies" in 1948?
+
+\*Prokofiev
+\Beethoven
+\Joplin
+\Grainger
+
+^Prokofiev was one of several composers thus charged by the Central 
+Committee of the USSR.
+
+<1
+
+@439 About whom did Robert Schumann write: "Hats off, gentlemen! A 
+genius!"?
+
+\Tchaikovsky
+\*Chopin
+\Himself
+\Rachmaninov
+
+^Schumann was reviewing his Variations on Mozart's "La ci darem la mano."
+
+<1
+@440 Schubert's "Trout" Quintet was written for which combination of 
+instruments?
+
+\Brass quintet
+\*Piano and strings
+\Piano and four harps
+\Piano and woodwinds
+
+^Piano with violin, viola, cello and doublebass.
+
+<1
+
+@441 Mozart was born in which city?
+
+\Vienna
+\Venusberg
+\*Salzburg
+\Linz
+
+^
+
+<1
+@442 Who took minor religious orders in the Roman Catholic church?
+
+\Rachmaninov
+\Schumann
+\Bach
+\*Liszt
+
+^Of all people!
+
+<2
+
+@443 Who served in the military?
+
+\Mussorgsky
+\Ravel
+\Rimsky-Korsakov
+\*All of the above
+
+^Mussorgsky in the Preobrajensky Regiment of Russia, Ravel in the French 
+army and Rimsky-Korsakov in the Russian navy.
+
+<2
+
+@444 The princess Carolyne Sayn-Wittgenstein was the mistress of which 
+composer?
+
+\Bach
+\*Liszt
+\Schumann
+\Mendelssohn
+
+^They were an item from 1847 on.
+
+<1
+
+@445 MacDowell's To a Wild Rose is from which piano suite?
+
+\*Woodland Sketches
+\Irish Fancies
+\Pictures at an Exhibition
+\Nutcracker Suite
+
+^Woodland Sketches, Op. 51.
+
+<1
+@446 What relation was Fanny Mendelssohn to composer Felix?
+
+\Wife
+\*Sister
+\Cousin
+\Aunt
+
+^And a composer herself.
+
+<1
+@447 Enrique Granados died in which year?
+
+\1989
+\*1916
+\1893
+\He's not dead yet
+
+^He drowned when the ship on which he was a passenger was torpedoed.
+
+<2
+
+@448 Who visited Niagara Falls?
+
+\Brahms
+\*Tchaikovsky
+\Debussy
+\All of the above
+
+^He even went down the tunnel. He thought it was "very interesting... but 
+somewhat frightening."
+
+<2
+
+@449 In music, what is a bagatelle?
+
+\Drumstick
+\Italian bagpipe
+\*Short, unpretentious piece
+\None of the above
+
+^A mere bagatelle is just that.
+
+<1
+
+@450 Who wrote Boccherini's famous Minuet?
+
+\Michael Haydn
+\Charles Ives
+\*Luigi Boccherini
+\Leopold Mozart
+
+^It really was Boccherini, who wrote it for his String Quintet in E major, Op. 
+13, No. 5.
+
+<1
+@451 In what year did Brahm's die?
+
+\1797
+\*1897
+\1914
+\1820
+
+^Brahms was born in 1833 and died in 1897 at age of 65.
+<2
+
+@452 Who was the Countess Marie d'Agoult?
+
+\Pop singer
+\Chopin's copyist
+\*Liszt's mistress
+\Debussy's daughter
+
+^She had three children by Liszt, even.
+
+<1
+
+@453 Who invented the Piano Nocturne?
+
+\*John Field
+\Frederic Chopin
+\Gabriel Faure
+\Erik Nocturne
+
+^John Field, a contemporary of Chopin, published the first piano nocturne in 
+1814. "Mood" pieces for voices and/or instruments were popular in the later 
+half of the 18th century (eg. Mozart's "Serenata Notturna"). Field was 
+basically creating a piano version of an existing musical concept. Chopin, of 
+course, composed many beautiful nocturnes for the piano. A nocturne can be 
+defined as a short romantic work suggesting the evening.
+
+<1
+
+@454 Where is the oldest preserved harpsichord located and when was it 
+built?
+\The Smithsonian Institute, Washington D.C., U.S. (1604)
+\*The Victoria and Albert Museum, London, England (1521)
+\The Bach museum in Leipzig, Germany (1650)
+\The Louvre, Paris, France (1410)
+^It was built by Hieronymus of Bologna, Italy, and is the oldest preserved 
+harpsichord with a verified date.
+<3
+
+@455 What was J.S. Bach's favorite keyboard instrument?
+
+\Organ
+\Piano
+\*Clavichord
+\Harpsichord
+
+^Although Bach was a church organist for much of his career, and a master 
+harpsichordist, the small and delicate sounding clavichord was said to be his 
+personal favorite. This was because of its ability to play different gradations 
+of loudness according to the player's touch. Its sound was so small that it was 
+suitable only for playing in small rooms. The harpsichord was used for 
+concerts.
+
+<2
+
+@456 When did the first printed music for piano appear?
+\1785
+\1650
+\1800
+\*1732
+
+^It was the "Sonate da Cimbalo di piano, e forte dello volgarmente di 
+martelletti" by Lodovico Giustini (Florence, 1732).
+
+<3
+
+@457 Where was the first known public concert appearance of the piano?
+\Leipzig, Germany
+\New York, U.S.A.
+\*London, England
+\Florence, Italy
+
+^At Covent Garden Theatre in London, Charles Diblin accompanied Miss 
+Bickler in a "favourite song from the oratorio Judith (1764) by Thomas Arne, 
+the leading British composer of his time. The performance took place on May 
+16, 1767.
+
+<3
+
+@458 Where was the first known public piano solo performed?  
+\London, England
+\Bonn, Germany
+\*Dublin, Ireland
+\Vienna, Austria
+
+^Henry Walsh performed in Dublin on May 18, 1768. Two weeks later, J.C. 
+Bach performed on the instrument in London, England.
+
+<3
+
+@459 Where did the piano get its name?
+
+\After its inventor, Christoph Pianorri
+\Because it could be played softly
+\*Because it could be played softly and loudly
+\After the small Italian village of Piano where it was invented
+
+^The original name "fortepiano" (and later "pianoforte") corresponded to the 
+Italian musical terms of "forte" meaning loud, and "piano" meaning soft. In 
+contrast to the popular harpsichord with a mechanism which "plucked" 
+uniformly loud regardless of the player's touch, the new fortepiano used a 
+levered hammer system which could deliver harder or softer blows to the 
+instrument's strings.
+
+<1
+
+@460 When was the first true piano constructed?
+\*1709
+\1690
+\1801
+\1595
+
+^It was constructed by Bartolomeo Cristofori of
+Florence, Italy. He called it a "gravicembalo col piano e forte" meaning a 
+'harpsichord with loudness and softness'. The Cristofori instruments had a 
+range of 4 to 4-1/2 octaves.
+<2
+
+@461 What does a "prepared piano" mean in modern music terminology?
+
+\*Inserting objects between the strings to alter the sound
+\Tuning the strings in quarter tones
+\Adding microphones and amplified speakers to the soundboard
+\Baking in a large oven for two hours at 200 degrees
+
+^20th century composers such as American John Cage have managed to 
+produce music which calls for the performer to modify the sound of a piano 
+by inserting anything from rubber mutes and strips of roof shingles to nuts 
+and bolts between the strings, generally at specified locations and always to 
+the horror of the piano technician. This tinkering gives a single pianist the 
+ability to produce music that sounds like an exotic percussion ensemble.
+
+<1
+
+@462 How much does the lightest grand piano ever made weigh?
+\852 lbs.
+\975 lbs.
+\50 lbs.
+\*379 lbs.
+
+^The Bluthner Piano Company constructed a 379 lb. (172 kg.) baby grand 
+piano made largely of aluminum for use in the legendary and doomed German 
+zeppelin Hindenburg.
+
+<2
+@463 What was Wagner's last work?
+\*Parisfal
+\Flying Dutchman
+\Die Meistersing von Nurnbuerg
+\Gotterdammerung
+^Parsifal is an opera in three acts, first produced at Bayreuth in 1882, a year 
+before Wagner died. The setting is Spain in the Middle Ages.
+<1
+@   
+

@@ -1,0 +1,2176 @@
+
+
+@001 Who wrote the Scheherazade suite?
+\Tchaikovsky
+\Rachmaninoff
+\*Rimsky-Korsakov
+\Mussorgsky
+^This work was written in 1887 during Rimsky-Korsakov's most fruitful 
+period.
+<1
+
+@002 Who was credited with completing  Mozart's last work, The Requiem?
+\His father
+\Salieri 
+\His wife
+\*His pupil
+^Contrary to the belief that this work was finished by Salieri, it was in fact 
+completed by Sussmayer, a student of Mozart's.
+<1
+
+@003 What city was Mozart was born in?
+\*Salzburg
+\Hamburg
+\Vienna
+\Dresden
+^Mozart was born in Salzburg, Austria in 1756.  He died in 1791.
+<1
+
+@004 Which of the following is not a Spanish dance?
+\*Tarantella
+\Fandango
+\Habanera
+\Folia
+^The Tarantella is a Neopolitan dance in rapid 6/8 meter, probably named 
+after the town of Taranto in southern Italy.
+<2
+
+@005 Who composed the opera Aida?
+\Saint-Saens
+\Scarlatti
+\*Verdi
+\Mozart
+^Aida was written in 1871, the last opera in the richly productive, second 
+period of Verdi's career.
+<1
+
+@006 What is the highest female voice?
+\Mezzo-soprano
+\Contralto
+\Sotto voce
+\*Soprano
+^Soprano soloists are classified as Dramatic, Lyric, or Coloratura according to 
+tone quality and range.
+<1
+
+@007 Composer Heitor Villa-Lobos was born in which country?
+\Italy
+\*Brazil
+\Spain
+\Portugal
+^"More than any other musical representative of Brazil, he seems to be 
+actuated by the interior flame of his race." (Irving Schwerke).
+<1
+
+@008 Which work was not written by Richard Wagner?
+\*Die Fledermaus
+\Tannhauser
+\Lohengrin
+\Die Meistersinger
+^Die Fledermaus was written by Richard Strauss.
+<1
+
+@009 Which of the following is not a Russian composer?
+\Igor Stravinsky
+\*Boris Godunov
+\Peter Ilitch Tchaikovsky
+\Serge Prokofiev
+^Boris Godunov is an opera by Modest Mussorgsky, based on the text of 
+"Czar Boris".
+<1
+
+@010 Ravel's Bolero is approximately how long when played?
+\*17 minutes
+\45 minutes
+\7 minutes
+\30 minutes
+^Maurice Ravel was born in Cibouri, France in 1875. He died 
+in 1937.
+<2
+
+@011 What virtuoso pianist turned to just composing after injuring his hand 
+while trying to strengthen fingers with a self-invented apparatus ?
+\Franz Liszt
+\Richard Wagner
+\*Robert Schumann
+\Richard Strauss
+^The apparatus was a rope and pulley device hung from the ceiling and 
+attached to the third and fourth fingers. The resulting injury, which ruined his 
+concert career, was probably tendonitis (this is a popular story in childen's 
+history books; the real cause was mercury treatment for syphillis).
+<2
+
+@012 Which well-known composer was confined to an insane asylum in 
+Bonn near the end of his life?
+\Franz Lizst
+\*Robert Schumann
+\Ludwig Von Beethoven
+\Johannes Brahms
+^"In his own field, Schumann is lonely, incomparable. No composer has 
+whispered such secrets of subtle and ravishing beauty to a receptive listener." 
+(Philip Hale)
+<3
+
+@013 Name the composer who tried to commit suicide by jumping in the 
+Rhine.
+\Hector Berlioz
+\Franz Schubert
+\*Robert Schumann
+\Joseph Haydn
+^Schumann was in a deep state of depression towards the end of his life. He 
+heard voices and musical sounds that tormented him endlessly. He would say 
+that the dead masters visited him to dictate melodies to him.
+<3
+
+@014 What composer was famous for his Polonaises?
+\Franz Liszt
+\*Frederic Chopin
+\Bela Bartok
+\Ludwig Von Beethoven
+^Chopin wrote eleven Polonaises.
+<1
+
+@015 Which century did Johann Sebastian Bach die in?
+\19th
+\17th
+\20th
+\*18th
+^Johann Sebastian Bach was born in Eisenach, Thuringia in 1685.  He died in 
+Leipzig, Germany in 1750.
+<2
+
+@016 What does the term "equal temperament" describe?
+\a perfectly tuned piano
+\a smooth rapport between teacher and student
+\playing in another key to compensate for out-of-tune piano
+\*an octave divided into 12 equal notes
+^An extreme difficulty in the 18th century was modulation between keys. 
+Keyboards were tuned in specific keys, and when you modulated to far, the 
+tuning sounded horrible. A theorist, Andreas Werckmeister, hit on the idea of 
+dividing the octave into 12 equal notes. Music on a keyboard would sound 
+fine in any key.
+<2
+
+@017 How many symphonies did Beethoven write?
+\twelve
+\*nine
+\four
+\one
+^Although many composers (eg. Bruckner, Dvorak, Haydn and Mozart) have 
+written as many as nine symphonies, the most celebrated is Beethoven's last 
+symphony, 
+also known as the choral symphony.
+<1
+
+@018 Which composer sent a lock of goat's hair to an ardent admirer?
+\Haydn
+\Mozart
+\*Beethoven
+\Chopin
+^Karl Holz persuaded Beethoven to send the wife of Halm, the 
+pianist/composer, some hair from the beard of a goat. Beethoven, realizing 
+that his prank had been taken as an insult, apologized and sent a lock of his 
+own hair.
+<3
+
+@019 What does the term appoggiatura mean?
+\vocal range of a boy who's voice has just changed
+\musical passage freely performed
+\*replacement of a note by its upper or lower note
+\the playing of a chord with notes sounded in succession 
+^The appoggiatura, which is a musical ornament, is sometimes indicated by a 
+special sign or by a grace note.
+<3
+
+@020 What is the meaning of fermata?
+\to hit a note sharply
+\*to pause
+\a four beat rest
+\a slow tempo
+^A fermata is a pause commonly found at the end of a phrase.
+<1
+
+@021 A style of vocal music from the fifteenth century of Italian origin is:
+\Coloratura
+\Baguette
+\*Madrigal
+\Rococo
+^A madrigal is based on love lyrics and has no set form.
+<1
+
+@022 A "IV-I" chord progression is called a:
+\deceptive cadence
+\authentic cadence
+\imperfect cadence
+\*plagal cadence
+^A plagal cadence is sometimes referred to as a "church cadence" (eg. 
+"Amen").
+<2
+
+@023 A cadenza is:
+\a pause near the end of a composition
+\*a passage in the style of brilliant improvisation 
+\a musical passage played in the rubato mode
+\approaching a note from above or below
+^Originally cadenzas were not written by the composer but were improvised 
+by the player. Present day performers use cadenzas written by such artists as 
+Hummel, Moscheles and Joachim, etc. 
+<2
+
+@024 Name the composer who wrote a an Opus to specifically demonstrate 
+equal temperament.
+\*Bach
+\Palestrina
+\Hindemith
+\Telemann
+^The Well-Tempered Clavier was written by Bach to show that with the equal 
+temperament method of tuning keyboards, music could be 
+played and modulated to all twelve keys while sounding equally fine.
+<2
+
+@025 Sonata No. 8 in C minor, Opus13 by Beethoven is referred to as:
+\Moonlight Sonata
+\*Sonata Pathetique
+\Hammerklavier Sonata
+\Waldstein
+^The Pathetique Sonata is one of the first of the great Beethoven Sonatas. The 
+entire work is beautifully connected thematically.
+<3
+
+@026 The first four notes (of the melody) of Beethoven's Sonata Pathetique 
+in C minor are:
+\*C, C, D, Eb
+\C, Bb, Eb, Db
+\G, Eb, D, G
+\G, G, G, Eb
+^The thematic material is closely linked between the four movements. 
+<3
+
+@027 The first four notes of the first main theme of  Chopin's Grande Valse 
+Brilliante in Eb major are:
+\Bb, Bb, Bb,C
+\*Bb, D, Eb, F
+\G, Eb, D, G
+\G, Ab, C, Bb
+^No other composer was so influential in developing modern piano technique 
+and style as Chopin.
+<3
+
+@028 The first four notes of the first main melody in Chopin's "Minute 
+Waltz" in Db are:
+\Bb, Db, Eb, F
+\F, F, F, Db
+\Ab, C, Db, Eb
+\*G, Ab, C, Bb
+^This is not a sixty second waltz but a "small" waltz after the French word 
+"minute".
+<3
+
+@029 The first three notes of the main theme of the second movement in 
+Beethoven's Pathetique Sonata are:
+\*C, Bb, Eb
+\G, G, G,
+\G, Bb, Bb, 
+\G, Eb, D
+^This is one of Beethoven's most beautiful melodies.
+<3
+
+@030 Which composer had the "house-gig" for 25 years as Kapellmeister at 
+the Court of Prince Esterhazy?
+\Bach
+\Salieri
+\*Haydn
+\Mozart
+^Franz Josef Haydn composed  all of the music for the two concerts per week 
+for which he was responsible.
+<3
+
+@031 The national anthem of Austria has been referred to as musically the 
+finest national anthem ever written. Who composed this work?
+\Richard Wagner
+\Christoph Gluck
+\An unknown composer
+\*Josef Haydn
+^Haydn surpassed his ambition to compose an Anthem equaling "God Save 
+the King". This is the well known melody of "Deutschland uber Alles", the 
+German national anthem.
+<3
+
+@032 Who, after a performance of Messiah, was heard to sob, "Handel is the 
+master of us all?"
+\Beethoven
+\*Haydn
+ \Chopin
+\Brahms
+^Haydn heard this masterpiece while on a trip to London in 1797. 
+<3
+
+@033 The Creation was composed by:
+\Handel
+\*Haydn
+\Berlioz
+\Gluck
+^Haydn was very moved upon hearing Handel's Messiah and when given a 
+sacred text originally conceived for Handel (based on Genesis and "Paradise 
+Lost"), 
+he set to work. After 18 months, the masterpiece was completed.
+<3
+
+@034 Who composed the "Clock" Symphony?
+\Franz Schubert
+\Hector Berlioz
+\*Josef Haydn
+\Joahnnes Brahms
+^The second movement of the work has a persistent rhythm, hence the name. 
+Josef Haydn was born in Rohrau, Lower Austria in 1732. He died in Vienna 
+in 1809.
+<3
+
+@035 Who wrote the "Toy" Symphony?
+\*Haydn
+\Beethoven
+\Brahms
+\Mozart
+^This is named after the fact that many toy-like instruments such as: penny 
+trumpet, quail call, rattle, cuckoo, screech-owl whistle and a triangle are 
+featured heavily.
+<3
+
+@036 In the slow movement of Haydn's Symphony in G (No.94), a loud chord 
+for full orchestra suddenly bursts forth. What is this symphony better known 
+as?
+\The Hammerclavier Symphony
+\*The Surprise Symphony                                  
+\The Emperor Symphony
+\The Cloudburst Symphony
+^There is speculation that Haydn's purpose was to wake up drowsy audiences.
+<3
+
+@037 Most present day composers would consider 4 or 5 symphonies to be a 
+good lifetime output. What composer wrote 102 symphonies?
+\Bach
+\*Haydn
+\Mendelssohn
+\Mozart
+^At one stage of his 25 year appointment at the Court of Esterhazy, Haydn 
+was composing one Symphony per week. This is an amazing feat when one 
+considers that a symphony can take from 6 months to years to complete.
+<3
+
+@038 Who was Mozart referring to when he said "He alone has the secret of 
+making me smile and touching me to the bottom of my soul?" 
+\Bach
+\*Haydn
+\Salieri
+\Beethoven
+^Haydn and Mozart (who was 24 years younger) had great respect and 
+admiration for one another's genius. Haydn looked upon Mozart as a teacher 
+would look on a pupil of greater genius.
+<3
+
+@039 The Symphony form owes its development to:
+\*Sonata form
+\Symphonia form
+\Rondo a la Turk form
+\Rococo form
+^The symphony and sonata form are usually made up of four movements.
+<3
+
+@040 The Symphony form usually consists of:
+\One symphonic movement
+\*Four movements
+\Three movements
+\No specific structure
+^The symphony form owes its development in large part to Josef Haydn. 
+<3
+
+@041 The second movement of a Symphony is usually:
+\Allegro
+\Presto
+\*Slow
+\Con Vivaldi
+^The symphony is basically a sonata for orchestra.
+<3
+
+@042 A Polish court dance in triple rhythm, moderately fast is a:
+\Rondo
+\*Polonaise
+\Mazurka
+\Polka
+^The polonaise was a favored form of Chopin.
+<3
+
+@043 Who wrote 11 great polonaises for solo piano?
+\Bartok
+\*Chopin
+\Mozart
+\Debussy
+^The polonaise is a moderately fast Polish court dance in triple rhythm.
+<3
+ 
+@044 Near the end of this symphony, the players gradually leave the stage 
+until at the end there are only 2 violins left. The composer was:
+\John Cage
+\Stockhausen
+\*Haydn
+\Bartok
+^The name commonly given to this work is the "Surprise" symphony.
+<3
+
+@045 Chopin's "Minute" waltz is given its name because: 
+\Good players can play it in one minute or less
+\*"Minute" is the French word for small (eg. small waltz)
+\It is in the key of D
+\It is actually in 4/4 time
+^Chopin wrote 15 waltzes. This one in Db is one of the most well known.
+<2
+
+@046 How many symphonies did Chopin write?
+\One
+\Three
+\Two
+\*None
+^Chopin in fact wrote very little orchestral music. His real forte was the piano.
+<1
+
+@047 With which composer would you link the following musical forms: 
+nocturnes, etudes, waltzes, polonaises, mazurkas & impromptus?
+\Bach
+\Mozart
+\*Chopin
+\Beethoven
+^Chopin wrote 169 works, most of which were for piano.
+<2
+
+@048 With which composer would you link the following musical forms: 
+fugues, preludes, passions, partitas & organ works?
+\Palestrina 
+\Vivaldi
+\*Bach
+\Haydn
+^With twenty children and all of his other duties (church musical director, 
+etc.), it is truly amazing that Bach had time to get any work done at all.
+<1
+
+@049 Who was Wagner referring to when he said "The most stupendous 
+miracle in all music"?
+\Beethoven
+\Mozart
+\Himself
+\*Bach
+^It would take a present day copyist 75 years to copy all the parts for Bach's 
+compositions. He not only wrote and copied all this music, but was also 
+organist, conductor, musical director and father of 20 children.
+<3
+
+@050 With which composer would you link the following musical forms: 
+symphonies, overtures, choral music, piano sonatas, concertos & string 
+quartets?
+\Bach
+\Chopin
+\*Beethoven
+\Liszt
+^Beethoven's 16 string quartets are as monumental an achievement as his 9 
+symphonies and 32 piano sonatas.
+<2
+
+@051 Who was Wagner talking about when he said "He was a Titan, 
+wrestling with the Gods"?
+\Mozart
+\Bach
+\*Beethoven
+\Handel
+^It's amazing to consider what it must be like to write a piece of music when 
+you cannot hear. Even more amazing is the level of great lasting music that 
+Beethoven produced in the latter part of his life when he was totally deaf.
+<3
+
+@052 How many string quartets did Beethoven write?
+\4
+\7
+\*16
+\none
+^"Beethoven's string quartets embody his most intimate thoughts, his most 
+personal confidences and his purist writing." (Milton Cross)
+<2
+
+@053 Which of Beethoven's symphonies is named the Eroica?
+\2nd
+\*3rd
+\5th
+\9th
+^Beethoven erased the name of "Bonaparte" (to whom he had originally 
+dedicated the 3rd symphony) when Napoleon proclaimed himself Emperor. 
+Instead, he wrote the words "Eroica" and dedicated it to the "memory of a 
+great man".
+<2
+
+@054 To whom or what had Beethoven originally dedicated his 3rd (Eroica) 
+symphony to?
+\Freedom
+\*Napoleon
+\Leonore
+\Schiller
+^Beethoven erased the name of  "Bonaparte" (to whom he had originally 
+dedicated the 3rd symphony) when Napoleon proclaimed himself Emperor. 
+Instead he wrote the words "Eroica" and dedicated it to the "memory of a great 
+man".
+<3
+
+@055 Beethoven incorporated a poem by Schiller into what opus?
+\Missa Solemnis
+\Leonore Overture
+\*Symphony no. 9
+\Egmont Overture
+^Schiller's poem "Ode to Joy" is brilliantly incorporated in the last movement 
+of his 9th symphony.
+<3
+
+@056 A common name for a canon so devised that it can be repeated 
+indefinitely is:
+\Fugue
+\*Round
+\Chaconne
+\Passacaglia
+^"Three Blind Mice" and "Row, Row, Row Your Boat" are popular examples 
+of a Round.
+<2
+
+@057 "A musical joke" refers to:
+\Deceptive cadence
+\Appoggiatura
+\Tiny Tim
+\*A Sextet by Mozart
+^Mozart makes fun at the incompetent musicians of his day by using faulty 
+musical devices such as paralell fifths, etc. in this 1787 divertimento.
+<3
+
+@058 What is a Motive or Motif?
+\Reason or motive for a composition
+\*Brief melodic fragment too short to be called a theme
+\Storyline for an opera
+\19th century French dance form
+^Used in composition as a melodic or rhythmic idea which is to be developed.
+<3
+
+@059 What are the Goldberg Variations?
+\Goldberg's treatise on musical composition
+\Rules for thematic development
+\Goldberg's book on piano fingerings
+\*30 variations by Bach on theme of his own
+^This work was named after a pupil of Bach's, Johann Goldberg.
+<2
+
+@060 Gaspard de la Nuit refers to:
+\French violinist known for for his late night carousing
+\Tone poem by Debussy about the tragic figure Gaspard
+\Belgian piano virtuoso of the same name
+\*Set of three piano pieces by Ravel
+^Composed in 1908, these piano pieces by Ravel were inspired by the 
+collected poems of Bertrand.
+<3
+
+@061 The "Ghost Trio" refers to:
+\String trio headed by the great Cello virtuoso, Josef Ghost.
+\Composition by Liszt - Mephisto Waltz.
+\Opus by Bach thought to induce ghostly apparitions 
+\*Trio by Beethoven.
+^Beethoven's Piano Trio in D, Op.70, No.1 is so named because the slow 
+movement has a ghost-like feeling .
+<3
+
+@062 What is a Gigue?
+\*Lively dance in 6/8 meter
+\Musical engagement
+\French percussion instrument
+\Type of French Madrigal
+^Developed from the Irish and Scottish Jig.
+<3
+
+@063 "Sonata quasi una Fantasia" (a name given by the composer) is also 
+known as:
+\Afternoon of a Faun
+\Fantasy Impromptu
+\Stranger in Paradise
+\*Moonlight Sonata
+^"Moonlight Sonata" in C sharp minor, (Op. 27, No.2)
+<1
+
+@064 Who dedicated his first three piano sonatas to Josef Haydn?
+\Mozart
+\Salieri
+\Mahler
+\*Beethoven
+^Beethoven was paying homage to Haydn who was not only a teacher to him, 
+but who had also 
+contributed so much to the sonata form.
+<3
+
+@065 The Classical Sonata form usually has:
+\*Four movements
+\Three movements
+\Presto 2nd movement
+\No specific form
+^Haydn had much to do with the development of the Sonata/Symphony form.
+<2
+
+@066 Gluck, Haydn, Mozart and Beethoven were:
+\Composers of the Romantic period
+\Composers of the Baroque period
+\*Exponents of the classic Sonata
+\All bachelors
+^The classical sonata is typified by its four movement form.
+<2
+
+@067 The second movement of the Sonata form is usually:
+\Presto
+\*Slow
+\Tedious
+\Gavotte
+^The second movement is usually "slow" (eg. Adagio, Andante, Largo or 
+Lento)
+<2
+
+@068 The first movement of a Sonata is usually:
+\Andante
+\Minuet or scherzo
+\*Sonata form allegro
+\Allegro in rondo form
+^Usually dramatic and exciting.
+<3
+
+@069 Vivaldi, Purcell, Handel and Bach were composers of what period?
+\*Baroque
+\ Classic
+\Pre-Romantic
+\Renaissance
+^The Baroque period was approximately 1600-1750.
+<3
+
+@070 Schubert, Mendelssohn, Chopin and Verdi were composers of what 
+period?
+\Baroque
+\*Romantic
+\Classic
+\Modern
+^The Romantic period was from approximately 1820-1890. The late Romantic 
+period was from about 1890-1920
+<3
+
+@071 Richard Strauss, Claude Debussy, Serge Rachmaninov & Bela Bartok 
+were all composers of the:
+\Classic period
+\Post-Classic period
+\Romantic period
+\*Modern period
+^The Modern Period is 1890-the present.
+<3
+
+@072 What does Adagio refers to?
+\Group of Italian street dancers
+\Upsweep motion of a conducter's baton
+\Music without accompaniment
+\*Tempo indication meaning very slow
+^As in the second movement of a sonata.
+<3
+
+@073 What is the musical term for a fast tempo?
+\Andante
+\Allemande
+\*Allegro
+\Adagio
+^As in the first movement of a sonata.
+<3
+
+
+@074 The literal imitation of one melody, instrumental or vocal, by another at 
+a specific time interval is:
+\Fugue
+\Obligato
+\Cyclic form
+\*Canon
+^Beethoven used the canon device in the last movement of his 5th Symphony.
+<3
+
+@075 What is a Canzone?
+\*Transcribed madrigal or chanson
+\Italian form of the canon
+\Principal tenor in an opera
+\Very cheeky Italian wine
+^The Canzone is usually found in the Renaissance.
+<3
+
+@076 Several independent voices, each entering separately with the subject or 
+answer, are identifying characteristics of:
+\*Fugue
+\Canon
+\Passacaglia
+\Divertimento
+^The greatest exponent of the fugue was, of course, Bach. 
+<3
+
+@077 Which composer was so fastidious in his preparation of coffee that he 
+would actually count the number of beans per cup?
+\Stravinsky
+\Brahms
+\Bartok
+\*Beethoven
+^Beethoven estimated 60 beans per cup!
+<2
+
+@078 Which composer is known for a lullaby which bears his name?
+\Beethoven
+\Chopin
+\Verdi
+\*Brahms
+^The piece in question is "Brahms' Lullaby".
+<1
+
+@079 Which composer wrote the  piano work Microkosmos to teach children 
+the modern idiom?
+\Zoltan Kodaly
+\Paul Hindemith
+\Erik Satie
+\*Bela Bartok
+^Microkosmos means "little world". This six volume, 153 piece work features 
+polytonal harmony and polyrhythms.
+<2
+
+@080 Who wrote the Concerto for Orchestra?
+\Berlioz
+\Mahler
+\Stravinsky
+\*Bartok
+^Even though tonally tame in comparison to Bartok's other works, this is one 
+of his most famous.
+<2
+
+@081 This European composer spent the last years of his life living in 
+appalling poverty in New York City. Near the end, he was commissioned  to 
+write a piece for the Boston Symphony Orchestra. His name:
+\Mahler
+\Stravinsky
+\Berg
+\*Bartok
+^Serge Koussevizky, the noted bass virtuoso and conductor of the Boston 
+Symphony Orchestra, knowing of Bela Bartok's condition of poverty and lack 
+of musical recognition, commissioned him to write an orchestral work. 
+Concerto for Orchestra inspired one of the few ovations his music had ever 
+received.
+<3
+
+@082 To which opus was Robert Schauffler referring when he said; "It is as 
+long as a symphony, as brilliant and as difficult as a  concerto."?
+\Chopin's Fantasy Impromptu
+\Liszt's Hungarian Rhapsody No. 2
+\*Beethoven's Hammerklavier Sonata
+\Beethoven's Grosse Fugue
+^Of monumental design, the Hammerklavier Sonata in B-flat was written in 
+1818.
+<3
+
+@083 What was Beethoven's life span?
+\*1770 - 1827
+\1685 -1750
+\1756 - 1791
+\1810 - 1849
+^Beethoven was born in Bonn, Germany, December 16, 1770. He died in 
+Vienna, March 26, 1827.
+<3
+
+@084 What was Chopin's life span?
+\1770 - 1827
+\*1810 - 1849
+\1811 - 1886
+\1840 - 1893
+^He died in Vienna. The whole city mourned.
+<3
+
+@085 Chopin & George Sand hoped to have an idyllic holiday on this island 
+paradise. Instead, it turned into a nightmare. Name the island.
+\Elba
+\Capri
+\Crete
+\*Majorca
+^Chopin became so ill that he had to be carried aboard a freighter for his 
+return to France. While on Majorca, however, Chopin composed most of his 
+wonderful Preludes.
+<1
+
+@086 An American popular song composer based this hit song on Chopin's 
+Fantasie-Impromptu. This tune is:
+\Autumn Leaves
+\Stranger in Paradise
+\Feelings
+\*I'm Always chasing Rainbows
+^Barry Manilow also borrowed from Chopin in his hit tune "I Write the 
+Songs", as did the composer of "Til the End of Time".
+<2
+
+@087 Who wrote the "Unfinished Symphony" (in B minor)?
+\Mozart
+\Schumann
+\Tchaikovsky
+ \*Schubert
+^The "Unfinished Symphony" was first performed 50 years after it was written 
+by Schubert.
+<3
+
+@088 80 years after his death, Bach was all but forgotten by the general 
+public. Which composer is credited with reviving interest in Bach after his 
+death?
+\Gustav Mahler
+\Richard Strauss
+\Franz Schubert
+\*Felix Mendelssohn
+^One of Mendelssohn's greatest contributions to music. He revived interest in 
+Bach by organizing the first performance of the 
+"St. Mathew Passion" since Bach's death.
+
+<3
+
+@089 Who composed Clair de Lune?
+\Franz Liszt
+\Maurice Ravel
+\*Claude Debussy
+\Erik Satie
+^Debussy wrote and dedicated this beautiful song  to Madame Vasnier, a 
+singing student whom he worshipped and occasionally accompanied. 
+<1
+
+@090 Who composed the piano piece Liebestraum?
+\Mendelssohn
+\Chopin
+\Debussy
+\*Liszt
+^Franz Liszt wrote three Liebestraume (Love Songs). The one which is so 
+popular is in fact No. 3. It was originally written as a song and later adapted it 
+for solo piano.
+<1
+
+@091 Which composer is credited with having first developed the twelve tone 
+technique?
+\Richard Strauss
+\*Arnold Schoenberg
+\Igor Stravinsky
+\Bela Bartok
+^Schoenberg's method used 12 arbitrary, non-repeated tones arranged in a 
+definite order, each of equal importance.
+<3
+
+@092 Who composed the musical piece "Silence" for solo piano?
+\*John Cage
+\Karl Stockhausen
+\Igor Stravinsky
+\Darius Milhaud
+^"Silence" is a  work in which the pianist opens the lid of the piano, sits in  
+silence for about three minutes, and then closes the lid of the piano once 
+more. It is one of John Cage's most famous pieces.
+<3
+
+@093 Which composer used Prelude No. 1 in C from Bach's Well-Tempered 
+Clavier as an accompaniment for a beautiful & famous religious melody?
+\Barry Manilow
+\Claude Debussy
+\Franz Liszt
+\*Charles Gounod
+^The piece in question is Gounod's Ave Maria, composed in 1854. Franz 
+Schubert also wrote a wonderful version of Ave Maria.
+<3
+
+@094 Who wrote "Dance of the Sugarplum Fairy"?
+\Mozart
+\*Tchaikovsky
+\Verdi
+\Stravinsky
+^This is, of course, from the famous Nutcracker Suite. At its premiere in 
+1892, this work was not received very well and just narrowly escaped being 
+hissed by the audience.
+<1
+
+@095 Who wrote the well-known Wedding March?
+\Mozart
+\*Mendelssohn
+\Schubert
+\Wagner
+^Felix Mendelssohn, who was born in Hamburg, 1809 and died in Leipzig, 
+1847.
+<3
+
+@096 Which one of the following works was penned by Gustav Holst?
+\The Seasons
+\ The Snow Maiden
+\Concerto for Orchestra
+\*The Planets
+^This breathtaking tone poem by Holst has a movement for each of the 
+Planets. This is part of the dream world musical repertory brilliantly 
+orchestrated.
+<2
+
+@097 At the beginning of his career, pianist Glenn Gould recorded a work 
+which he recorded again shortly before he died. What was it?
+\Preludes and Fugues
+\*Goldberg Variations
+\32 Beethoven Sonatas
+\Art of the Fugue
+^It is well worth listening to these two recordings to hear the difference that 
+time can bring to an interpretation.
+<3
+
+@098 Who composed a Night on Bald Mountain?
+\Vaughan Williams
+\*Moussorgsky
+\Grieg
+\Stravinsky
+^This is an example of picturesque tone-painting.
+<3
+
+@099 Who wrote the Peer Gynt Suite?
+\Moussorgsky
+\*Grieg
+\Stravinsky
+\Honegger
+^Henrik Ibsen asked Grieg to write the incidental music to his work, Peer 
+Gynt. It became Grieg's most popular work.
+<3
+
+@100 The Rakoczy March is named for the leader of what country's campaign 
+against Austria?
+\ Italy
+\ Poland
+\ Bohemia
+\*Hungary
+^ Prince Francis Rakoczy led Hungary's revolt against Austria between 1703 
+and 1711. Liszt's renditions of this march were highly popular in his 
+homeland.
+<1
+@101 What composer wrote a piece which became the national anthem of two 
+different countries?
+\Mozart
+\Verdi
+\*Haydn
+\Saint-Saens
+^Haydn's Emperor's Hymn became the Austrian national anthem in 1797. The 
+original words,"Gott erhalte Franz den Kaiser..." were rewritten in 1841 by H. 
+von Fallersleben as "Deutschland, Deutschland uber alles...".
+<2
+
+@102 The opening line of which song asks, "My God, Why hast Thou 
+forsaken me?"
+\Kyrie Eleison
+\Kol Nidre
+\*Eli, Eli
+\Carmina Burana
+^This Hebrew lament was first published in 1906,"author unknown". Jacob 
+Sandler sued for the rights in 1925, claiming he had written it for the play 
+Brocha, starring Sophie Karp, which played on the Bowery in 1896. Although 
+Sandler's claim to authorship was believed, the judge ruled that the passage of 
+time had caused the song to lapse into the public domain.
+<2
+
+@103 What composer was born in Rohfrau, Lower Austria in 1732 and died 
+in Vienna in 1809?
+\*Haydn
+\Brahms
+\J. Strauss
+\Handel
+^The son of a farmer, Haydn's genius was recognized at an early age.
+He was put in the care of a local schoolmaster until the age of 8, when he 
+went to join St. Stephen's choir in Vienna. At 17, his voice changed and 
+Haydn was forced to make his way in the world.
+<2
+
+@104 Schubert's The Earl King sets to music the work of what great poet?
+\*Goethe
+\Sir Walter Scott
+\Schiller
+\Heinrich Heine
+^Goethe was born in Frankfurt in 1749 and died in Weimar in 1832. In this 
+chilling song, a father races deperately through the forest on horseback to save 
+his son from the "Erlkonig", a mythical evil spirit.
+<3
+
+@105 Which composer was born in 1860 in Bohemia and died in 1911 in 
+Vienna?
+\Dvorak
+\*Mahler
+\Smetana
+\Schoenberg
+^In 1909 Mahler became conductor of the New York Philharmonic. His song-
+symphony Das Lied von der Erde (Song of the Earth) was 
+published after his death in 1911.
+<3
+
+@106 Between 1791 and 1795, which continental composer spent most of his 
+time writing symphonies in London?
+\*Haydn
+\Clementi
+\Schubert
+\Handel
+^Haydn returned to Vienna once during this period, between 1792-94. During 
+this time, the young Beethoven became his student. The relationship between 
+the two was an uncomfortable one, in contrast to Haydn's warm friendship 
+with Mozart.
+<2
+
+@107 "Who is Sylvia?" was set to music by Schubert. Who wrote the poem?
+\*Shakespeare
+\Sir Walter Scott
+\Heinrich Heine
+\Wordsworth
+^Sylvia, based on Shakespeare's sonnet, was published in 1826,two years 
+before Schubert's untimely death at the age of 31.
+<2
+
+@108 Walter Scott's The Lady of the Lake provided the words for which 
+Schubert song?
+\Horch, Horch, die Lerch (Hark, Hark, the Lark)
+\To a Nightingale
+\Mockingbird Hill
+\*Ave Maria
+^Scott was born in Edinburgh in 1771 and died at Abbotsford in 1832. The 
+words bear no relation to the Roman Catholic prayer.
+<3
+
+@109 Handel's Messiah is best remembered for which excerpt which comes at 
+the end of the second section?
+\Ave Maria
+\Ein Feste Burg ist unsere Gott
+\*Hallelujah Chorus
+\Gloria in Excelsis
+^In 1743 in London, King George II led the audience to its feet as the 
+Hallelujah Chorus began. Audiences in England emulate this tradition to the 
+present day.
+<1
+
+@110 Who wrote Funeral March of a Marionette?
+\*Gounod
+\Debussy
+\Chopin
+\Grieg
+^This piano composition was published in 1872, while Gounod was living in 
+England.
+<3
+
+@111 In 1853, Gounod published "Meditation sur le premiere Prelude de S. 
+Bach". You may know it better as:
+\Requiem
+\*Ave Maria
+\Air on a G string
+\Desiderata
+^Not to be confused with Schubert's "Ave Maria". Gounod superimposed his 
+melody over the C major prelude from Bach's Well-Tempered Clavichord". In 
+1859, the words to the Roman 
+Catholic prayer were fitted to Gounod's melody.
+<2
+
+@112 Who wrote Golliwog's Cakewalk?
+\*Debussy
+\"Fats" Waller
+\Saint-Saens
+\Kabalevsky
+^This piano piece was published in 1908 as part of Debussy's Children's 
+Corner suite.
+<2
+
+@113 Who wrote a collection of 24 compositions, comprising one in each of 
+the major and minor keys, to demonstrate the benefits of the equal 
+temperament system?
+\*J.S.Bach
+\Schoenberg
+\Czerny
+\none of the above
+^"Equal Temperament" refers to the system whereby the harmonic relationship 
+between adjacent semitones is defined by the numerical 
+ratio equal to the twelfth root of two. Bach's "Das Wohltemperirte Klavier" 
+first appeared in 1722. 
+<3
+
+@114 In Pythagorean tuning, the relationship of one whole tone to the next is 
+given by what numerical ratio?
+\9:8
+\10:9
+\256:225
+\*all of the above
+^Using ratios based on simple numbers, it is not possible to divide the 
+musical scale into equal pitch intervals. 
+<3
+
+@115 Bach's "Die Hohe Messe" (High Mass), written during his stay in 
+Leipzig, is known by what key signature?
+\A minor
+\*B minor
+\C minor
+\None of the above
+^The usage of the time was for the letter B to designate what we would call B-
+flat, hence the German title,"Die Hohe Messe in H-moll". It was later observed 
+that the letters in Bach's name themselves constituted a chromatic melody.
+<3
+
+@116 Who wrote the words to "Der Ring des Nibelungen"?
+\Goethe
+\Faust
+\Schiller
+\*None of the above
+^Wagner wrote his own words to this cycle of four operas, based on the Norse 
+saga of the Nibelungs.
+<3
+
+@117 Which son of J.S. Bach composed such works as The Israelites in the 
+Wilderness, Passion Cantata & Solfeggio in C minor?
+\Johann Christian
+\Johann Ambrosius
+\Friedrich Antiochus
+\*Carl Phillip Emmanuel
+^C.P.E. Bach was the 5th child and the 3rd son of J.S.Bach, and the grandson 
+of Johann Ambrosius Bach. Upon his father's death in 
+1750, he unsuccessfully applied for the newly vacant position of Cantor in 
+Leipzig. 
+<3
+
+@118 Which Russian pianist & composer endured the German siege of 
+Leningrad?
+\Prokofiev
+\Rimsky-Korsakov
+\*Shostakovich
+\None of the above
+^Dmitri Shostakovich (1906-1975), although personally committed to 
+socialism, was alternately in and out of favor with his government until the 
+liberalization that came in the 1960's with Khruschev.
+<3
+
+@119 You can form a pentatonic scale by removing which two notes from C 
+major scale?
+\F and B
+\E and B
+\C and F
+\*all of the above
+^An easy way to find a pentatonic scale is to use only the black notes. Some 
+popular songs whose melody follows the pentatonic scale are "Yellow 
+Submarine" and Neil Sedaka's "Laughter in the Rain" (up to the key change).
+<2
+
+@120 The 11th and youngest son of J.S. Bach studied in Italy before moving 
+to which country where his musical career flourished?
+\*England
+\France
+\Austria
+\Russia
+^Johann Christian Bach (b. 1735) enjoyed an illustrious career in England, 
+including a memorable performance with the 8-year old Mozart in 1764. He 
+nevertheless died in poverty and was buried in a mass grave at St. Pancras 
+churchyard in 1778.
+<2
+
+@121 Which melody first appeared in 1765 to the words "Ah, vous diraije, 
+maman"? (In German it goes "Ist das nicht ein Schnitzel-
+bank?") 
+\Twinkle twinkle little star
+\The ABC song
+\Baa baa black sheep
+\*All of the above
+^Mozart wrote 12 variations on the melody for piano in 1778.
+<1
+
+@122 Which ballet was first performed in 1892 in St. Petersburg?
+\Swan Lake
+\*The Nutcracker
+\The Rites of Spring
+\Boris Godunov
+^Tchaikowsky's Nutcracker, or"Caisse-Noisette", is based on a fairy tale by 
+E.A.Hoffman. It includes the popular Dance of the Sugar Plum Fairies.
+<3
+
+@123 Fuer Elise was written in 1810 as a short piano piece by which 
+composer?
+\Chopin
+\Schubert
+\Mozart
+\*Beethoven
+^Not discovered until 1867, the title is thought to be a publisher's misreading 
+of Beethoven's scrawled "Therese". Amateur pianists sometimes mis-play this 
+piece by counting four beats to the measure.
+<1
+
+@124 The song Stranger in Paradise (1953) was taken from what 19th 
+century Russian composition?
+\Rimsky-Korsakoff's Polovetsian Dances
+\*Borodin's Polovetsian Dances
+\Borodin's Scheherezade
+\Rimsky-Korsakoff's "Scheherezade
+^Borodin wrote his Polovetsian Dances in 1879. After his death in 1887, it 
+was adapted for opera by Rimsky-Korsakoff and Glazunov.
+<2
+
+@125 Name the Ibsen play for which Edward Grieg composed incidental 
+music.
+\*Peer Gynt
+\A Doll's House
+\Olaf Trygvason
+\The Brothers Karamazov
+^Peer Gynt was first performed in 1876 at Kristiana (Oslo).
+<2
+
+@126 Debussy's Claire de Lune is taken from what collection of piano 
+pieces?
+\Images
+\Preludes
+\Children's Corner
+\*Suite Bergamasque
+^The reference to Bergamasca, an Italian dance idiom, is obscure. Verlaine's 
+poem "Claire de Lune" begins: " Votre ame est un paysage choisi. Que vont 
+charmant masques et bergamasques...."
+<3
+
+@127 In what key is the Moonlight Sonata?
+\G minor
+\Ab
+\*C# minor
+\None of the above
+^Published in 1802, the name "moonlight" was conferred on Beethoven's 
+Sonata in C sharp minor by music critic Ludwig Rellstab around 1850.
+<2
+
+@128 Which composer's Slavonic Dances were originally written for four 
+hands on the piano, but are today better known in their orchestral version?
+\Tchaikowsky
+\Smetana
+\Brahms
+\*Dvorak
+^Antonin Dvorak's music was influenced by the folk idioms of his Bohemian 
+homeland. In addition he drew on his travels, composing 
+his New World Symphony while in America in the early 1890's.
+<3
+@129 The Rakoczy March is named for the leader of what country's campaign 
+against Austria?
+\Italy
+\Poland
+\Bohemia
+\*Hungary
+^Prince Francis Rakoczy led Hungary's revolt against Austria from 1703-11. 
+Liszt's renditions of this march were highly popular in his homeland.
+<2
+@130 Who wrote Flight of the Bumblebee?
+\Tchaikovsky
+\Borodin
+\Mussorgsky
+\*None of the above
+^Rimsky-Korsakov wrote it as and orchestral interlude in The Legend of Tsar 
+Saltan. As the story goes, a prince gets back at his evil relatives by turning 
+into a bee and stinging them. 
+<2
+
+@131 In 1829, Mendelssohn conducted  the St. Matthew's Passion in the 
+Berlin opera house. This event marked the revival of which famous composer's 
+neglected works?
+\Vivaldi
+\Handel
+\*Bach
+\None of the above
+^Stimulated by Mendelssohn's tireless efforts, systematic publication of 
+Bach's works was begun in 1850 by the Bach Gesellschaft, 100 years after the 
+death of the master.
+<3
+
+@132 Which of the following is not from Debussy's Children's Corner for 
+piano?
+\Doll's Serenade
+\Jumbo's Lullaby
+\Golliwog's Cakewalk
+\*Teddy Bear's Picnic
+^For an excellent version of Teddy Bear's Picnic, check out Anne Murray's 
+"There's a Hippo in my Bathtub" album.
+<2
+
+@133 In 1867, Paul Dukas published which piece based on a story by 
+Goethe?
+\*The Sorceror's Apprentice
+\The Valkyre
+\Peter and the Wolf
+\The Ugly Duckling
+^The Sorceror's Apprentice was solidly embedded into the public 
+consciousness by its use in Disney's Fantasia.
+<3
+
+@134 Which of the following composers was not of the same generation as 
+the others?
+\Bach
+\*Buxtehude
+\Rameau
+\Handel
+^Rameau was born in 1683, Bach and Handel two years later. Dietrich 
+Buxtehude (1637-1707) was a Danish  organists famed  throughout Europe. A 
+20 year old Bach is said to have walked 200 miles to hear Buxtehude play.
+<3
+
+@135 In 1834, which composer published Songs without Words, a book of 
+piano selections?
+\*Mendelssohn
+\Schubert
+\Schumann
+\Liszt
+^Felix Mendelssohn (1809-1847) was the grandson of philosopher Moses 
+Mendelssohn and son of banker Abraham Mendelssohn. 
+<3
+
+@136 Which of the following was not written by J.S. Bach?
+\Brandenburg Concerto
+\*The Seasons
+\Jesu Joy of Man's Desiring
+\Air on a G String
+^Vivaldi (1678-1741) published The Seasons in 1725.
+<1
+
+@137 Mozart borrowed the opening theme for The Magic Flute from the B-
+flat Sonata of which Italian-British composer?
+\*Clementi
+\Scarlatti
+\Vivaldi
+\Boccherini
+^Muzio Clementi (1752-1832) was a founder of the London firm Clementi & 
+Co. which manufactured the newly-invented pianoforte. After the composer's 
+death, the firm continued to operate under the name of Collard & Collard.
+<3
+
+@138 John Field first to use this title for a short piano piece in a romantic 
+mood. Chopin achieved great success in developing this form.
+\Barcarolle
+\Ballade
+\*Nocturne
+\Berceuse
+^The Irish pianist John Field (1782-1837) studied music under Clementi. He 
+settled in St. Petersburg at the age of 21, becoming well-known throughout 
+Europe as a teacher and concert pianist.
+<1
+
+@139 The "G-string" in Bach's well-known Air refers to a string on what 
+instrument?
+\*Violin
+\Viola
+\Cello
+\Bass
+^Violin virtuoso August Willhelmj transposed Bach's Orchestral Suite in D 
+into the key of C to take advantage of the rich tones of the lowest string on his 
+instrument.
+<2
+
+@140 Tchaikovsky's Marche Slave is based on a folk-song of what national 
+origin?
+\Bohemian
+\Moldavian
+\Hungarian
+\*Serbian
+^The Serbian words to the song begin,"Sunce zarko ne" (the sun does not 
+shine). The melody is distinguished by its sharp 4th in the minor scale (E 
+natural in B-flat minor) giving it a decidedly oriental caste.
+<3
+
+@141 Which pianist/composer permanently injured his hand by wearing a 
+home-made contraption designed to immobilize the fourth 
+finger while practising?
+\Mussorgsky
+\Liszt
+\Kabalevsky
+\*none of the above
+^Robert Schumann(1810-1856) led a troubled life, jumping into the Rhine 
+River in 1854 in an attempt at suicide. One of the most prolific of all the 
+Romantic composers, he is remembered for well remembered for his beautiful 
+songs. His wife Clara outlived him by 40 years.
+<3
+
+@142 French writer George Sand is remembered for her affair with which 
+composer?
+\*Chopin
+\Liszt
+\Schumann
+\all of the above
+^Frederic Chopin (1810-1849) lived with Sand in Majorca (1838-39) and in 
+Paris until 1846.
+<2
+
+@143 Bach's Goldberg Variations are best known today through the 
+recording by which Canadian pianist?
+\*Glenn Gould
+\Leona Boyd
+\Oscar Peterson
+\Frank Mills
+^Goldberg, a student of Bach, was hired by Count Kayserling to play soothing 
+music to ease Kayserling's insomnia. The Goldberg 
+Variations, lasting almost an hour, have worked as well on subsequent 
+listeners as they did on the Count.
+<2
+
+
+@144 What composition was structured on a single theme repeated over and 
+over?
+\Moonlight Sonata
+\Die Fliedermaus
+\Pictures at an Exhibition
+\*none of the above
+^Ravel's Bolero was first performed in 1902 in Paris as a ballet.
+<1
+
+@145 Which famous astronomer was the son of a composer?
+\Kepler
+\*Gallileo
+\Sir William Herschel
+\Carl Sagan
+^Vincenzo Gallilei (1520-1591) published 2 books of madrigals and a treatise 
+on music theory, "Dialogo della musica antica e della moderna".
+<3
+
+@146 What poem by Goethe inspired music by Wagner, Schumann, Gounod 
+and Liszt?
+\*Faust
+\Tannhauser
+\Die Lorelei
+\William Tell
+^The aged scholar Faust is restored to his youth by the evil spirit 
+Mephistopheles. Aided by the mischievous intervention of Mephistopheles, 
+Faust becomes amorously entangled with the lovely Marguerite, leading to 
+disaster for all.
+<2
+
+@147 Which composer born in 1875 is of Basque origin?
+\Faure
+\Saint-Saens
+\Debussy
+\*Ravel
+^Born in the Pyrennes region of France, Ravel went to Paris at the age of 12, 
+studying under Beriot and Faure.
+<2
+@148 Who wrote Mephisto Waltz?
+\Brahms
+\Wagner
+\Strauss
+\*Liszt
+^One of Liszt's most difficult pieces, the Mephisto Waltz is based on an 
+episode from Lenau's version of Faust, in which the evil Mephistopheles 
+displays his magical prowess on the violin.
+<3
+
+@149 Who wrote Peter and the Wolf?
+\Stravinsky
+\*Prokofiev
+\Tchaikovsky
+\Grieg
+^Sergei Prokofiev (1891-1953) went to America in 1918 but returned to his 
+native Russia in 1934. Peter and the Wolf was published shortly thereafter.
+<3
+
+@150 Whose piano sonatas include the "Waldstein" and "Pastorale"?
+\Mozart
+\Haydn
+\*Beethoven
+\Schubert
+^Beethoven's 32 piano sonatas, written between 1796 and 1821, also include 
+the "Moonlight" and the "Pathetique".
+<1
+
+@151 The terms "Exposition - Development - Recapitulation" describe which 
+classical structural form?
+\*Sonata
+\Concerto
+\Symphony
+\Oratorio
+^The exposition introduces a first subject in the tonic key and the second 
+subject in a different key, usually the dominant. These themes are expanded 
+on in the development. In the recapitulation, we hear both subjects again, with 
+the second subject now in the same 
+key as the first.
+<3
+
+@152 The composer is said to have written this piece upon learning of the 
+capture of Warsaw by the Russians:
+\Sonata Pathetique
+\*Etude in C minor
+\Polonaise Militaire
+\Fantasie-Impromptu
+^Chopin's Etude in C minor, also called the "Revolutionary Etude", was 
+written in 1831 while the 21-year-old composer was living in Stuttgart.
+<3
+
+@153 Which Russian composer is responsible for the stirring Prelude in C 
+sharp minor?
+\Rimsky-Korsakov
+\*Rachmaninov
+\Tchaikovsky
+\None of the above
+^Rachmaninov (1873-1943) wrote Prelude in C sharp minor when he was 19. 
+Unlike Prokofiev, who returned to Russia after the war, and 
+Shostakovich, who never really left, Rachmanninov lived in America from 
+1917 until his death.
+<3
+
+@154 What was the connection between Alessandro and Domenico Scarlatti?
+\Domenico was Alessandro's father
+\*Vice versa
+\They were brothers
+\None of the above
+^Domenico Scarlatti was born in the same year as Bach and Handel (1685). 
+His father Alessandro was considered a founder of the Neapolitan school of 
+opera.
+<3
+
+@155 Which of the following selections does not come from the Peer Gynt 
+Suite?
+\Solveig's Song
+\Morning Mood
+\Anitra's Dance
+\*Sigurd Jorsalfar
+^Sigurd the Crusader was a play by Bjornson for which Grieg wrote 
+incidental music. Peer Gynt was, of course, by Henrik Ibsen.
+<3
+
+@156 Chopin's Polonaise in A-flat, Op. 53 was adapted for what popular 
+song?
+\*Till the End of Time
+\Love is a Many Splendored Thing
+\September Song
+\The Unicorn
+^Chopin (1810-1849) wrote the A-flat Polonaise in 1843
+<2
+
+@157 Walt Disney's Fantasia included a performance of which composer's 
+Toccata and Fugue in D minor?
+\Palchelbel
+\*Bach
+\Buxtehude
+\None of the above
+^Fantasia featured the music of Bach, Beethoven, Ponchielli, Dukas, 
+Stravinsky, Mussorgsky and Schubert, conducted by Leopold Stokowski.
+<2
+
+@158 Who introduced the idea of composition based on "tone-rows"?
+\*Schoenberg
+\Stravinsky
+\Webern
+\Copland
+^Schoenberg's "tone-row" theory calls on the composer to employ all twelve 
+notes of the chromatic scale in a particular order.
+<3
+
+@159 Mussorgsky's Night on Bald Mountain was adapted for use in which of 
+the following movies?
+\Gone with the Wind
+\A Song to Remember
+\On the Waterfront
+\*Saturday Night Fever
+^In this 1970's dance music film, Mussorgsky's piece was redone under the 
+title "Night on Disco Mountain.
+<2
+
+@160 Which pianist gave his first public performance in 1892 and his last in 
+1976?
+\Liberace
+\*Rubinstein
+\Horowitz
+\Paderewski
+^Arthur Rubinstein was born in Lodz, Poland in 1887 and died in Geneva in 
+1982. Not to be confused with the Rubinstein brothers  Nikolai and Anton, 
+who were famous virtuosi of the 19th century.
+<2
+
+@161 The sketches of Victor Hartmann were immortalized in the form of 
+musical impressions in which of the following works?
+\*Mussorgsky's Pictures at an Exhibition
+\Debussy's Images
+\Grieg's Albumblaetter
+\Satie's Gymnopedies
+^Modeste Mussorgsky (1831-1881) lived a life of constant poverty. His 
+"Pictures", composed for the piano, were orchestrated by Ravel after 
+Mussorgky's death.
+<3
+
+@162 Which of the following is the first line of Elgar's Pomp and 
+Circumstance?
+\He is an Englishman...
+\Men of Harlech, lie ye dreaming...
+\*Land of hope and glory, mother of the free...
+\Mine eyes have seen the glory...
+^The phrase "...pride, pomp, and circumstance..." comes from Othello. Elgar 
+(1857-1934) wrote Pomp and Circumstance in 
+1901.
+<1
+
+@163 In what key did Franz Liszt write the beautiful Liebestraum No. 3?
+\*A-flat
+\B-flat
+\C-flat
+\D-flat
+^The theme is played first in A-flat, then in B. The climax is in E, after which 
+it returns to A-flat once more.
+<3
+
+@164 Which composer wrote Finlandia?
+\*Sibelius
+\Grieg
+\Bartok
+\Smetana
+^Sibelius (1865-1957) wrote most of his nationalistic works in the 1890's.
+<2
+
+@165 Saint-Saens composed which of the following pieces?
+\Mephisto Waltz
+\*Danse Macabre
+\Funeral March of a Marionette
+\Funiculi-Funicula
+^Camille Saint-Saens was a prolific composer for most of his 86 years. He 
+died in Algiers in 1921.
+<3
+
+@166 In what Austrian city is an annual Mozart festival held?
+\Vienna
+\Graz
+\*Salzburg
+\Bayreuth
+^Mozart was born in Salzburg in 1756. The Salzburg Festival was first held in 
+1877.
+<2
+
+@167 Which of the following songs was the first piece of Schubert's music to 
+appear in print?
+\The Nightingale
+\The Gondolier
+\Tristan and Isolde
+\*The Earl King
+^He was born in Vienna in 1797 and died there only 31 years later. In 1815 
+alone, Schubert is said to have written 145 songs.
+<3
+
+@168 Alexander Scriabin (1872-1915), whose works include the symphonic 
+poem Prometheus, was known in his time for his:
+\Communism
+\Existentialism
+\*Mysticism
+\Anarchism
+^From 1905 on, Scriabin was under the influence of the famous psychic Mme. 
+Blavatsky. He spent the following years in preparation for a "final cataclysm".
+<3
+
+@169 Who wrote the Water Music?
+\*Handel
+\Debussy
+\Mozart
+\Grieg
+^Handel's Water Music was composed for royal boat parties held on the 
+Thames around 1717.
+<1
+
+@170 Mussorgsky's Boris Godunov was to political for the Russia of the 
+czars. Who revised in to make it more acceptable?
+\Borodin
+\*Rimsky-Korsakov
+\Rachmaninov
+\Manilow
+^Even today, Boris Godunov continues to be performed in its sanitized 
+version. Rimsky-Korsakov is also responsible for the fine orchestral 
+arrangement of Night on Bald Mountain.
+<3
+
+@171 Tchaikovsky made use of what newly invented instrument in Dance of 
+the Sugar Plum Fairies?
+\*Celesta
+\Saxophone
+\Glockenspiel
+\Clavinova
+^Similar to a glockenspiel, the celesta was invented by August Mustel in 
+1886. Steel plates hung over wooden resonators are struck by hammers.
+<3
+
+@172 Which composer died in Paris from cancer of the rectum while the city 
+was being shelled by the German Army in 1918?
+\Chopin
+\Stravinsky
+\Saint-Saens
+\*Debussy
+^The Kaiser's "Big Bertha" could hit Paris from over forty miles away.
+<3
+ 
+@173 Puccini's finest opera was completed after his death by his friend 
+Franco Alfano. It is a fairy tale about a cruel but beautiful Chinese princess.
+\Madame Butterfly
+\Nabucco
+\*Turandot
+\Aida
+^Turandot was first performed at La Scala in 1926. Near the end of the 
+performance, Toscannini laid down his baton, and choking back tears, 
+informed the audience, "Here ends the master's work".
+<3
+
+@174 Tchaikovsky's Piano Concerto in A-flat minor was rejected as 
+"unplayable" by which 19th century virtuoso for whom it was written?
+\Pagannini
+\*Rubinstein
+\Czerny
+\Paderewski
+^Nicholas Rubinstein, brother of pianist/composer Anton, was a founder of 
+the Moscow Conservatory. Tchaikovsky was employed by him for 12 years as 
+a professor of music.
+<3
+
+@175  A performance by which folk-orchestra at the Paris Exposition is said 
+to have made a marked impression on Debussy?
+\a Jamaican steel drum band
+\a Polish klezmer troupe
+\*Javanese gamelan
+\Zulu mtsoko
+^The gamelan, which includes strings and woodwind instruments, is 
+dominated by the percussive sounds of chimes, gongs and marimbas.
+<3
+
+@176 Bach wrote a charming collection of easy piano pieces for his second 
+wife:
+\Elise
+\Marguerita
+\Maria Barbara
+\*Anna Magdalena
+^Anna Magdalena bore her husband 13 children. She is also responsible for 
+the transcription for posterity of much of her husband's prolific output.
+<2
+
+@177 Debussy is noted for his use of what non-traditional scale?
+\*Whole tone
+\Phrygian
+\Chromatic
+\Lydian
+^There are only two distinct whole tone scales, one beginning on C and the 
+other on C-sharp. All others are merely permutations of these two.
+<3
+
+@178 Which composer, once accused of drawing on Beethoven for musical 
+ideas, replied "Das weisst jeder Esel" (any ass knows 
+that)?
+\Schubert
+\Wagner
+\*Brahms
+\Strauss
+^Johannes Brahms (1833-1897) was a traditionalist who went against the 
+prevailing trends in German music as exemplified by Wagner.
+<3
+
+@179 After being left an orphan at the age of 10, who was taken care of by 
+his older brother Johann Cristoph?
+\Haydn
+\Beethoven
+\*Bach
+\None of the above
+^Bach's older brother had a valuable collection of works by Buxtehude, 
+Palchelbel and others, which Johann Sebastian was not  allowed to look at. 
+The boy snuck out at night to copy it by moonlight, but had the misfortune to 
+be caught by his brother in the act. His punishment was to have his work 
+confiscated.
+<1
+
+@180 Which composer travelled extensively in Eastern Europe to research 
+the elements of Magyar folk-music?
+\Smetana
+\*Bartok
+\Dvorak
+\None of the above
+^Bela Bartok (1881-1945) was influenced early in his career by Richard 
+Strauss's Also Sprach Zarathustra. Only after 1905 did he take an active 
+interest in folk idioms.
+<3
+
+@181 With whom did Clara Schumann fall in love during her husband's 
+period of mental illness?
+\*Brahms
+\Liszt
+\Garibaldi
+\Victor Hugo
+^Beginning shortly before Robert Schumann's death, the relationship between 
+Clara Schumann and Brahms lasted forty years. There is no clear evidence as 
+to whether their intimacy went beyond friendship.
+<3
+
+@182 Despite the aid of friends in having his songs published, which hugely 
+prolific composer died in poverty at the age of 31?
+\Mozart
+\*Schubert
+\Chopin
+\Berlioz
+^Schubert died in 1828 of typhus fever. Even late in life, he was selling some 
+of his best songs for twenty cents apiece.
+<2
+
+@183 Which of the following was a student of Antonio Salieri?
+\Beethoven
+\Schubert
+\Liszt
+\*All of the above
+^This rival of Mozart who lived from 1750 to 1825 was highly regarded by his 
+contemporaries.
+<3
+
+@184 Which of Leipzig's leading piano teachers had a daughter who fell in 
+love with then student Robert Schumann?
+\Johann Schenk
+\Anton Rubinstein
+\Hans von Bulow
+\*Frederick Wieck
+^Clara Wieck, an outstanding pianist in her own right, was 16 when she and 
+Schumann fell in love in 1835. Her father blocked their marriage, considering 
+musicians to be in general unreliable. Schumann forced the issue in 1840 by 
+taking Wieck to court. 
+<3
+
+@185 In 1835 Chopin had a traumatic experience, sharing the stage with a 
+more dazzling pianist. Chopin attracted only a fraction of the applause 
+garnered by which rival?
+\Beethoven
+\Wagner
+\Mendelssohn
+\*None of the above
+^Chopin's friendship with Liszt never recovered. From then on, Chopin rarely 
+performed on stage, preferring to be heard in private salons where his intimate 
+style was more appreciated.
+<3
+
+@186 In 1853, which virtuoso had to transpose Beethoven's C minor 
+symphony  into C-sharp minor?
+\Liszt
+\Rubinstein
+\*Brahms
+\Schumann
+^While on tour with the violinist Remenyi, Brahms arrived at a hall to find the 
+piano out of pitch by a full semitone. Since the violinist refused to tune his 
+strings down, Brahms simply played from memory in the higher key.
+<3
+
+@187 What small town in Upper Franconia is synonymous with the music of 
+Wagner?
+\Gottingen
+\Chemnitz
+\*Bayreuth
+\Salzburg
+^The Bayreuth opera house opened its doors for the first time in 1876 with a 
+four day performance of Ring of the Niebelung. The next year, Salzburg 
+responded its first annual Mozart festival.
+<2
+
+@188 Which composer's better-remembered lovers were the Comtesse 
+D'Agoult and Princess Sayn-Wittgenstein?
+\Chopin
+\*Liszt
+\Verdi
+\Rossini
+^Liszt was a prodigy who acheived rapid success after going on tour at age 17. 
+His power to attract the opposite sex was only slightly diminished when he 
+died in 1886 at the age of 75.
+<2
+
+@189 In which year did Beethoven move to Vienna, hoping to study under 
+Mozart, only to find himself under Haydn, who he considered out of date?
+\1772
+\1782
+\*1792
+\1802
+^Mozart had died in 1791, upsetting Beethoven's plans. The older Haydn 
+lived until 1809. As for Beethoven, he lived until 1827.
+<3
+
+@190 One of Brahm's most difficult pieces is based on a theme by this 
+composer who lived from 1782 to 1840.
+\*Paganini
+\Busoni
+\Clementi
+\Rossini
+^Paganini is widely regarded as the greatest of all violin virtuosos. Other 
+composers who wrote "Paganini Variations" include Rachmanninov, 
+Schumann and Liszt.
+<3
+
+@191 Which Chopin etude calls for extended chromatic runs executed by the 
+last three fingers of the right hand?
+\*Opus 10, No. 2 in A minor
+\Opus 10, No. 12 in C minor
+\Opus 25, No. 2 in F minor
+\Black Key Etude                                                   ^Chopin's 24 etudes include 
+such popular hits as "Revolutionary" (Opus 10, No. 12 in C minor) and 
+"Butterfly" (Opus 25, No. 9 in G-flat).
+<3
+
+@192 Beethoven's piano sonatas were influenced by those of which earlier 
+composer whose B-flat major sonata was the subject of a 
+competition with Mozart?
+\Handel
+\*Clementi
+\Haydn
+\Salieri
+^Muzio Clementi (1752-1832)  was born four years before Mozart and died 
+five years after Beethoven. He lived most of his life in England. It was 
+common in those days for the great players to match skills in head-to-head 
+competition.
+<3
+
+@193 In his G minor sonata, which composer instructs the player to begin "as 
+fast as possible"?
+\Brahms
+\Mozart
+\*Schumann
+\Bartok
+^Subsequently, Schumann requests tempos of "schneller" and "noch 
+schneller" (faster and faster yet).
+<3
+
+@194 What constitutes the surprise in Haydn's "Surprise Symphony"?
+\*Loud drumbeat
+\First movement leads directly into the third movement
+\Cannon shot
+\Final movement ends on a dominant chord.
+^Haydn's "Symphony mit dem Paukenschlag" is so-called because of a loud 
+drumbeat in the slow movement.
+<3
+
+@195 Domenico Scarlatti acquired novel ideas on the use of rhythm and 
+harmony during his sojourn in what country?
+\Ireland
+\*Spain
+\America
+\All of the above
+^Scarlatti (1685-1757) accompanied his student Princess Maria Barbara of 
+Lisbon to Spain on her marriage in 1729 and remained there for the rest of his 
+life. (The Princess is not to be confused with Bach's first wife, also named 
+Maria Barbara.)
+<3
+
+@196 His publishers referred to which composer as the "Finnish Chopin"?
+\Grieg
+\Sibelius
+\*Palmgren
+\Telemann
+^Selim Palmgren (1878-1951) is remembered for some short piano pieces 
+including A Night in May, The Swan, and The Sea. 
+<3
+
+@197 Which composer's Opus 117, No. 1 in E-flat is remembered as the 
+beautiful "Cradle Song"? 
+\*Brahms
+\Mendelssohn
+\Schumann
+\Chopin
+^Brahms found himself increasingly out of touch with the musical currents of 
+his time. Yet many of his works have proven themselves by their lasting 
+appeal.
+<2
+
+@198 Mendelssohn's Wedding March begins on which type of unusual 
+chord?
+\Augmented
+\*Diminished
+\Thirteenth
+\None of the above
+^Not to be confused with "Here Comes the Bride".
+<2
+
+@199 When an independent Poland was carved out from Russian, German 
+and Austrian territory after WWI, which pianist became its 
+first prime minister?
+\Liberace
+\Pilsudski
+\Rackoczy
+\*Paderewski
+^Ignacy Jan Paderewski (b. 1860) resigned after a year in office to return to 
+music. He died in New York City in 1941.
+<2
+
+@200 Which of the following is not a Handel Oratorio?
+\Messiah
+\Israel in Egypt
+\Judas Maccabeus
+\*Elijah
+^Elijah was composed by Mendelssohn in 1846.
+<3
+
+@201 Which Russian composer is known for his children's piano pieces?
+\Prokofiev
+\*Kabalevsky
+\Shostakovich
+\Glazunov
+^Kabalevsky's post-war works conformed to the dictates of "Soviet Realism".
+<3
+
+@202 Haydn was taken in by this noble patron in 1761 and remained in the 
+service of his family for the next 30 years.
+\*Prince Paul von Esterhazy
+\Frederick the Great
+\the Elector of Hanover
+\Count Wittgenstein
+^Haydn's many responsibilities as Kappelmeister at Esterhaz included 
+managing the Prince's private orchestra. For a time he became entangled with 
+the young wife of one of his violinists. Mme. Polizelli eventually grew tired of 
+waiting for Haydn's wife to die, and 
+she married someone else.
+<3
+@203 Richard Wagner's second wife Cosima was the illegitimate daughter of 
+what famous virtuoso?
+\Chopin
+\Paganini
+\*Liszt
+\Richard Strauss
+^Between 1834 and 1844, Liszt had 3 children with the Comtesse d'Agoult. 
+Cosima had earlier been married to conductor Hans von Bulow.
+<3
+@204 The formalized solo song used in the opera is:
+\A capella
+\Cantata
+\Chorale
+\*Aria
+^Arias are vocal parts of considerable complexity and virtuosity.
+<2
+
+@205 Which piano virtuoso spent his earlier years pursuing sensual pleasures 
+and many love affairs, but his last years in prayer and contemplation as an 
+Abbe?
+\Nicolo Paganini
+\*Franz Liszt
+\Richard Wagner
+\Felix Mendelssohn
+^Franz Liszt was born in Raiding, Hungary, 1812 and died in Bayreuth, 
+Bavaria, 1886.
+<3
+
+@206 For what instrument did Girolamo Frescobaldi become one of the first 
+great composers of music?  
+
+\Flute
+\Harpsichord
+\Violin
+\*Organ
+
+^Frescobaldi was a composer of fantasias, ricercars, canzones and toccatas.
+<2
+
+@207 What composition can be sung forward & backward, then turned 
+upside down & sung forward & backward again?  
+
+\Voices of Spring
+\Thy Voice, Oh Harmony
+\*Oh Sing Unto The Lord
+\Holy, Holy, Holy
+
+^Thy Voice Oh Harmony was written by Joseph Haydn. He wrote a great 
+variety of vocal works such as operas, oratorios, cantatas and 
+songs.
+<1
+@208 Who never wrote an opera, symphony, choral piece or produce a string 
+quartet, but was very influential in the history of piano music?  
+\Mozart
+\Liszt
+\*Chopin
+\Debussy
+^It should be noted that he did produce two piano concertos, as well as other 
+works for piano with orchestra.
+<2
+
+@209 Did Johannes Brahms...  
+\Marry twice
+\Marry once and have ten children
+\*Remain a bachelor
+\Marry four times
+
+^Brahms did fall in love with Clara Schumann, the widow of Robert. This 
+occurred when he rushed to the Schumann family's aid when Robert became 
+mentally ill. Brahms and Clara remained life long friends.
+<1 
+@210 What composer at age 44 became tragically insane and was confined to 
+an asylum?
+
+\Mozart
+\Chopin
+\*Schumann
+\Liszt
+
+^ Robert Schumann contracted syphillis as a young man, eventually becoming 
+insane from the disease. There have been stories about him injuring his finger, 
+forcing the abandonment of his career as a concert pianist. This finger ailment 
+is now thought to have been due to mercury treatments given to him for 
+treatment of his syphilis. Mercury, which causes problems with the nervous 
+system, affected the extremities (such as the fingers) first.
+<1
+@211 What composer had a daughter named Chouchou to whom he dedicated 
+the Children's Corner suite?  
+
+\*Debussy
+\Brahms
+\Caplet
+\Schumann
+
+^This suite is a set of six pieces composed from 1906-08. Golliwog's 
+Cakewalk is perhaps the best known (it contains a quote of the opening of 
+Wagner's Tristan und Isolde). Chouchou's real name was Claude-Emma.
+<1
+@212 Who said "a master of the art is gone, a greater arises in Brahms"?
+
+\Wieck
+\Joachim
+\*Marxsen
+\Wagner
+^In 1843, Eduard Marxsen was a teacher of Brahms. Marxsen based his 
+teaching on the work of Beethoven and Bach.
+<2
+@213 Who studied under and married the daughter of Friedrich Wieck?
+\Wagner
+\Brahms
+\Strauss
+\*Schumann
+^Schumann met his well-known piano teacher in Leipzig.
+Daughter Clara was gifted and already famous as a pianist. The father 
+objected so Schumann took to the matter to court and after of year of waiting, 
+the court in 1840 ruled in Robert's favour. Among the witnesses for 
+Schumann was none other than Franz Liszt, who remained a friend to the 
+newly married Schumann's.
+<2
+@214 What instrument did Johannes Brahms' father play?  
+\French horn
+\Piano
+\*Double bass
+\Violin
+
+^Johannes was the second child born to Jakob and Johann Brahms.
+<2
+
+@215 What popular song was based on Chopin's Fantasie Impromptu, Opus 
+66?
+\Over the Rainbow
+\Blue Skies
+\Look for the Silver Lining
+\*I'm Always Chasing Rainbows
+
+^D. is correct.
+<1
+@216 How many children did Robert and Clara Schumann have?  
+
+\13
+\None
+\*8
+\5
+
+^In spite of this, Clara Schumann kept up her piano performances and the 
+family managed to travel and tour, even as far as Russia.
+<2
+@217 What classical composition was the popular song Full Moon And 
+Empty Arms derived from?  
+
+\Beethoven's Moonlight Sonata
+\Brahms' Lullaby
+\*Rachmaninov's Piano Concerto No. 2
+\Victor Herbert's Thine Alone
+
+^The melody is taken from the third movement of Rachmaninov's Piano 
+Concerto No. 2, Opus 18.
+<2
+@218 What did Tzar Alexander I of Russia give to Chopin after a 
+performance?
+
+\Snuff box
+\*Diamond ring
+\Gold cuff links
+\Diamond tie pin
+
+^The gift was presented to Chopin in 1825 after he was invited to play for the 
+Tzar. Chopin was only age 15.
+<1
+
+@

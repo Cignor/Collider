@@ -1,0 +1,228 @@
+<!DOCTYPE HTML PUBLIC "-//IETF//DTD HTML//EN">
+<html>
+
+<head>
+<meta http-equiv="Content-Type"
+content="text/html; charset=iso-8859-1">
+<meta name="GENERATOR" content="Microsoft FrontPage 3.0">
+<title>index.html</title>
+</head>
+
+<body background="planets.jpg" bgcolor="#FFFFFF">
+<!-- following code added by server. PLEASE REMOVE -->
+<!-- preceding code added by server. PLEASE REMOVE -->
+
+<p align="center"><em><strong><img src="aniwelcome.gif"
+width="200" height="50"><br><font color="Red" size="6"
+face="Brush Script MT"><em><strong>My World</strong></em></font></p>
+
+<p align="center">
+<img src="star.gif" width="50" height="50">
+<img src="star.gif" width="50" height="50">
+<img src="star.gif" width="50" height="50">
+<img src="star.gif" width="50" height="50">
+<img src="star.gif" width="50" height="50">
+</p>
+
+<p align="center"><OBJECT ID="MediaPlayer1" CLASSID="CLSID:22d6f312-b0f6-11d0-94ab-0080c74c7e95"
+CODEBASE="http://activex.microsoft.com/activex/controls/mplayer/en/nsmp2inf.cab# Version=5,1,52,701" STANDBY="Loading Microsoft Windows® Media Player components..." TYPE="application/x-oleobject" width="280" height="46">
+<param name="fileName" value="baikhongtenso4.mid">
+<param name="animationatStart" value="true">
+<param name="transparentatStart" value="true">
+<param name="autoStart" value="true">
+<param name="loop" value="true">
+<param name="showControls" value="true">
+<param name="Volume" value="-300">
+<embed type="application/x-mplayer2" pluginspage="http://www.microsoft.com/Windows/MediaPlayer/" src="baikhongtenso4.mid" name="MediaPlayer1" width=280 height=46 autostart=1 loop=1
+showcontrols=1 volume=-300>
+</OBJECT> 
+
+<p><BODY><FONT COLOR="Red">
+
+<SCRIPT LANGUAGE="JavaScript">
+
+<!-- Begin
+var months=new Array(13);
+months[1]="January";
+months[2]="February";
+months[3]="March";
+months[4]="April";
+months[5]="May";
+months[6]="June";
+months[7]="July";
+months[8]="August";
+months[9]="September";
+months[10]="October";
+months[11]="November";
+months[12]="December";
+var time=new Date();
+var lmonth=months[time.getMonth() + 1];
+var date=time.getDate();
+var year=time.getYear();
+if (year<100) year="19" + time.getYear();
+else year=time.getYear();
+document.write("<center>" + lmonth + " ");
+document.write(date + ", " + year + "</center>");
+// End -->
+</SCRIPT>
+</CENTER></p>
+
+<p><BODY><CENTER>
+
+<SCRIPT LANGUAGE="JavaScript">
+
+<!-- Begin
+day = new Date();
+miVisit = day.getTime();
+function clock() {
+dayTwo = new Date();
+hrNow = dayTwo.getHours();
+mnNow = dayTwo.getMinutes();	
+scNow = dayTwo.getSeconds();
+miNow = dayTwo.getTime();
+if (hrNow == 0) {
+hour = 12;
+ap = " AM";
+} else if(hrNow <= 11) {
+ap = " AM";
+hour = hrNow;
+} else if(hrNow == 12) {
+ap = " PM";
+hour = 12;
+} else if (hrNow >= 13) {
+hour = (hrNow - 12);
+ap = " PM";
+}
+if (hrNow >= 13) {
+hour = hrNow - 12;
+}
+if (mnNow <= 9) {
+min = "0" + mnNow;
+}
+else (min = mnNow)
+if (scNow <= 9) {
+secs = "0" + scNow;
+} else {
+secs = scNow;
+}
+time = hour + ":" + min + ":" + secs + ap;
+document.form.button.value = time;
+self.status = time;
+setTimeout('clock()', 1000);
+}
+function timeInfo() {
+milliSince = miNow;
+milliNow = miNow - miVisit;
+secsVisit = Math.round(milliNow / 1000);
+minsVisit = Math.round((milliNow / 1000) / 60);
+alert("There have been " + milliSince + " milliseconds since midnight, January 1, 1970.  "
++ "You have spent " + milliNow + " of those milliseconds on this page.  "
++ ".... About " + minsVisit + " minutes, and "
++ secsVisit + " seconds.");
+}
+document.write("<form name=\"form\">"
++ "<input type=button value=\"Click for info!\""
++ " name=button onClick=\"timeInfo()\"></form>");
+onError = null;
+clock();
+// End -->
+</SCRIPT></p>
+
+<p><div align="center"><center>
+<table border="1" bgcolor="#336699" cellpadding="2">
+<tr>
+
+<td><p align="center"><a href="http://www.geocities.com/Baja/Canyon/7906/myself.html"><img
+src="blinkbull.gif" border="0" width="15" height="15"></a></p></td>
+
+<td><p align="center"><a href="http://www.geocities.com/Baja/Canyon/7906/myself.html">
+<font color="Yellow" size="4" face="Brush Script MT">About Me</font></p></td>
+
+<td><p align="center"><a href="http://www.geocities.com/Baja/Canyon/7906/image.html"><img
+src="blinkbull.gif" border="0" width="15" height="15"></a></p></td>
+
+<td><p align="center"><a href="http://www.geocities.com/Baja/Canyon/7906/image.html">
+<font color="Yellow" size="4" face="Brush Script MT">My Pictures</font></p></td>
+
+</tr><tr>
+<td><p align="center"><a href="http://www.geocities.com/Baja/Canyon/7906/essays.html"><img
+src="blinkbull.gif" border="0" width="15" height="15"></a></p></td>
+
+<td><p align="center"><a href="http://www.geocities.com/Baja/Canyon/7906/essays.html">
+<font color="Yellow" size="4" face="Brush Script MT">My Essays</font></p></td>
+
+<td><p align="center"><a href="http://www.geocities.com/Baja/Canyon/7906/girls.html"><img
+src="blinkbull.gif" border="0" width="15" height="15"></a></p></td>
+
+<td><p align="center"><a href="http://www.geocities.com/Baja/Canyon/7906/girls.html">
+<font color="Yellow" size="4" face="Brush Script MT">VietGirls' Picture Gallery</font></p>
+</td>
+
+</tr><tr>
+<td><p align="center"><a href="http://www.geocities.com/Baja/Canyon/7906/music.html"><img
+src="blinkbull.gif" border="0" width="15" height="15"></a></p></td>
+
+<td><p align="center"><a href="http://www.geocities.com/Baja/Canyon/7906/music.html">
+<font color="Yellow" size="4" face="Brush Script MT">My Music Collections</font></p></td>
+
+<td><p align="center"><a href="http://www.eng.uab.edu">
+<img src="blinkbull.gif" border="0" width="15" height="15"></a></p></td>
+
+<td><p align="center"><a href="http://www.eng.uab.edu">
+<font color="Yellow" size="4" face="Brush Script MT">My School</a></font></p>
+</td>
+
+</tr>
+</table>
+
+</div align="center"></center>
+</p>
+
+<p>
+<center><a href="http://www.uts.com"></center><img src="utsbanner.gif" border="0" width="450" height="80"></a></p>
+
+<p align="center"><a href="http://www.geocities.com/Baja/Canyon/7906/enmidi.html"><img
+src="back12.gif" border="0" width="150" height="45"></a>
+<a href="http://www.geocities.com/Baja/Canyon/7906/myself.html"><img
+src="forward12.gif" border="0" width="150" height="45"></a></p>
+
+<p><center><img src="http://visit.geocities.com/counter.gif"></center></p>
+
+<center><a href="mailto:huynht98@yahoo.com"><img
+src="email9c.gif" border="0" width="60" height="40"></a><p>
+
+<Center><img src="turnbook.gif" border="0" width="25" height="25"><font
+color="Red" size="4" face="Matura MT Script Capitals">Don't Forget To Sign My GuestBook!!!</font><img src="turnbook.gif" border="0" width="25" height="25"></a></Center>
+
+<p align="center"><img src="aplane.gif" width="400" height="200"></p></center>
+
+
+<center>
+<a href="/cgi-bin/geoplus_apps/ans_entry">Sign Guestbook</a><img src="ygeo.gif" border="0" width="150" height="35">
+<a href="geobook.html">View Guestbook</a></p></center>
+
+<p>
+
+<a href="http://jupiter.guestworld.tripod.lycos.com/wgb/wgbsign.dbm?owner=triminhhuynh">Sign My Guestbook</a>
+<a href="http://htmlgear.lycos.com/specs/book.html"><img src="http://htmlgear.lycos.com/book/img/guestbut.gif" ismap width="87" height="31" border="0" align="absmiddle" alt="Get your own FREE Guestbook from htmlGEAR"></a>
+ <a href="http://jupiter.guestworld.tripod.lycos.com/wgb/wgbview.dbm?owner=triminhhuynh">View My Guestbook</a>
+
+<p>
+<!-- start of guestGEAR code by http://htmlGEAR.com -->
+<a href="http://titan.guestworld.com/wgb/wgbsign.dbm?owner=huynht98_1">Sign My Guestbook</a>
+<a href="http://htmlgear.lycos.com/specs/book.html"><img src="http://htmlgear.lycos.com/book/img/guestbut.gif" ismap width="87" height="31" border="0" align="absmiddle" alt="Get your own FREE Guestbook from htmlGEAR"></a>
+ <a href="http://titan.guestworld.com/wgb/wgbview.dbm?owner=huynht98_1">View My Guestbook</a>
+<!-- end of guestGEAR code by http://htmlGEAR.com -->
+
+<CENTER><P><FONT COLOR="Yellow"Size="2">This page hosted by<A  HREF="http://www.geocities.com/">          
+<IMG SRC="/pictures/gc_icon.gif" BORDER=0 HEIGHT=31 WIDTH=87 ALIGN=CENTER></A><BR>
+<p>
+Get your own<FONT COLOR="Yellow" Size="2"><A HREF="http://www.geocities.com/">
+<FONT COLOR="Red" Size="2">       Free Home Page</A><B> </B></FONT></P></CENTER>
+</body>
+</html>
+<!-- text below generated by server. PLEASE REMOVE --></object></layer></div></span></style></noscript></table></script></applet>
+<script language="JavaScript">var PUpage="76001067"; var PUprop="geocities"; </script><script language="JavaScript" src="http://www.geocities.com/js_source/pu4geo.js"></script><script language="JavaScript" src="http://www.geocities.com/js_source/ygIELib9.js?v3"></script><script language="JavaScript">var yviContents='http://us.toto.geo.yahoo.com/toto?s=76001067&l=NE&b=1&t=1021335711';yviR='us';yfiEA(0);</script><script language="JavaScript" src="http://us.i1.yimg.com/us.yimg.com/i/mc/mc.js"></script><script language="JavaScript" src="http://us.geocities.com/js_source/geov2.js"></script><script language="javascript">geovisit();</script><noscript><img src="http://visit.geocities.com/visit.gif?1021335711" border=0 width=1 height=1></noscript>
+<IMG SRC="http://geo.yahoo.com/serv?s=76001067&t=1021335711" ALT=1 WIDTH=1 HEIGHT=1>
+<!-- text below generated by server. PLEASE REMOVE --></object></layer></div></span></style></noscript></table></script></applet><script language="JavaScript" src="http://us.i1.yimg.com/us.yimg.com/i/mc/mc.js"></script><script language="JavaScript" src="http://us.js2.yimg.com/us.js.yimg.com/lib/smb/js/hosting/cp/js_source/geov2_001.js"></script><script language="javascript">geovisit();</script><noscript><img src="http://visit.geocities.yahoo.com/visit.gif?us1240798006" alt="setstats" border="0" width="1" height="1"></noscript>
+<IMG SRC="http://geo.yahoo.com/serv?s=76001067&t=1240798006&f=us-w3" ALT=1 WIDTH=1 HEIGHT=1>

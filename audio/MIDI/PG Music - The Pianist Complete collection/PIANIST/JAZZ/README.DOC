@@ -1,0 +1,29 @@
+
+
+     ( Close this Window to proceed )
+
+     Welcome to the Jazz Pianist Volume 2.
+
+You should install these disks to the same directory as your
+existing Jazz Pianist Volume 1 files. This is usually c:\JAZZPIAN.
+If installing both Volumes at the same time, Volume 2 should be installed
+AFTER Volume 1.
+
+     There is lots of on-line Help available 
+        ( press F1 at any time in the program to access HELP )
+
+Note: There are 2 features that are not documented in the manual. 
+1. You can advance the piece in step time a chord at a time by 
+using the Ins and Del keys on the Numeric Keypad. 
+Ins moves back a chord, Del moves ahead by a chord
+2. There is a notation button on the screen. Pressing it will 
+display the notation - see the Notation Window for more 
+documentation on this feature.
+
+
+If for some reason the installation program doesn't work from Windows,
+you can install the files from DOS instead. In this case, install
+the program using INSTDOS.BAT which uses the utility program DUNPACK.EXE
+to manually decompress the files.
+     Have Fun !
+     PG Music Inc.

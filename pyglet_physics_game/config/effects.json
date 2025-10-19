@@ -1,0 +1,80 @@
+{
+  "effects": {
+    "svf": {
+      "params": {
+        "mode": { "type": "choice", "choices": ["lp", "hp", "bp", "notch"], "default": "lp" },
+        "cutoffHz": { "type": "float", "min": 20, "max": 20000, "default": 1200 },
+        "q": { "type": "float", "min": 0.1, "max": 20, "default": 0.707 }
+      }
+    },
+    "delay": {
+      "params": {
+        "timeMs": { "type": "float", "min": 1, "max": 2000, "default": 350 },
+        "feedback": { "type": "float", "min": 0, "max": 0.98, "default": 0.35 },
+        "mix": { "type": "float", "min": 0, "max": 1, "default": 0.3 }
+      }
+    },
+    "reverb": {
+      "params": {
+        "roomSize": { "type": "float", "min": 0, "max": 1, "default": 0.7 },
+        "damping": { "type": "float", "min": 0, "max": 1, "default": 0.5 },
+        "wet": { "type": "float", "min": 0, "max": 1, "default": 0.25 }
+      }
+    },
+    "chorus": {
+      "params": {
+        "rateHz": { "type": "float", "min": 0.01, "max": 10, "default": 1.2 },
+        "depth": { "type": "float", "min": 0, "max": 1, "default": 0.3 },
+        "centreMs": { "type": "float", "min": 1, "max": 30, "default": 7 },
+        "feedback": { "type": "float", "min": -0.95, "max": 0.95, "default": 0 },
+        "mix": { "type": "float", "min": 0, "max": 1, "default": 0.5 }
+      }
+    },
+    "phaser": {
+      "params": {
+        "rateHz": { "type": "float", "min": 0.01, "max": 10, "default": 0.5 },
+        "depth": { "type": "float", "min": 0, "max": 1, "default": 0.7 },
+        "centreHz": { "type": "float", "min": 20, "max": 5000, "default": 700 },
+        "feedback": { "type": "float", "min": -0.95, "max": 0.95, "default": 0 },
+        "mix": { "type": "float", "min": 0, "max": 1, "default": 0.5 }
+      }
+    },
+    "waveshaper": {
+      "params": {
+        "type": { "type": "choice", "choices": ["tanh", "hardclip", "softclip"], "default": "tanh" },
+        "driveDb": { "type": "float", "min": 0, "max": 36, "default": 12 }
+      }
+    },
+    "compressor": {
+      "params": {
+        "thresholdDb": { "type": "float", "min": -60, "max": 0, "default": -18 },
+        "ratio": { "type": "float", "min": 1, "max": 20, "default": 3 },
+        "attackMs": { "type": "float", "min": 0.1, "max": 200, "default": 10 },
+        "releaseMs": { "type": "float", "min": 5, "max": 1000, "default": 120 },
+        "makeupDb": { "type": "float", "min": -12, "max": 24, "default": 0 }
+      }
+    },
+    "limiter": {
+      "params": {
+        "ceilingDb": { "type": "float", "min": -12, "max": 0, "default": -0.1 },
+        "releaseMs": { "type": "float", "min": 1, "max": 500, "default": 50 }
+      }
+    },
+    "tremolo": {
+      "params": {
+        "rateHz": { "type": "float", "min": 0.1, "max": 20, "default": 4 },
+        "depth": { "type": "float", "min": 0, "max": 1, "default": 0.6 },
+        "shape": { "type": "choice", "choices": ["sine", "triangle", "square"], "default": "sine" }
+      }
+    },
+    "autopan": {
+      "params": {
+        "rateHz": { "type": "float", "min": 0.05, "max": 15, "default": 0.5 },
+        "depth": { "type": "float", "min": 0, "max": 1, "default": 1 },
+        "shape": { "type": "choice", "choices": ["sine", "triangle", "square"], "default": "sine" }
+      }
+    }
+  }
+}
+
+

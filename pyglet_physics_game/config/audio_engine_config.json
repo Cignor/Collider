@@ -1,0 +1,12 @@
+{
+  "sample_rate": 48000,
+  "buffer_size": 512,
+  "use_native_mixer": true,
+  "native_dsp_enable": true,
+  "native_output_only": true,
+  "prefer_native_when_neutral": true,
+  "listener": {
+    "radius_px": 378.0,
+    "near_ratio": 0.12
+  }
+}

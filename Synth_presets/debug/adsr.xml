@@ -1,0 +1,99 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<ModularSynthPreset version="1">
+  <modules>
+    <module logicalId="1" type="ADSR">
+      <params>
+        <ADSRParams>
+          <PARAM id="attack" value="0.01099999994039536"/>
+          <PARAM id="attack_mod" value="0.0"/>
+          <PARAM id="decay" value="0.1009999960660934"/>
+          <PARAM id="decay_mod" value="0.0"/>
+          <PARAM id="release" value="0.200999990105629"/>
+          <PARAM id="release_mod" value="0.0"/>
+          <PARAM id="sustain" value="0.699999988079071"/>
+          <PARAM id="sustain_mod" value="0.0"/>
+        </ADSRParams>
+      </params>
+    </module>
+    <module logicalId="2" type="VCO">
+      <params>
+        <VCOParams>
+          <PARAM id="frequency" value="440.0"/>
+          <PARAM id="waveform" value="0.0"/>
+        </VCOParams>
+      </params>
+    </module>
+    <module logicalId="4" type="midi player">
+      <params>
+        <MIDIPlayerParameters>
+          <PARAM id="loop" value="1.0"/>
+          <PARAM id="pitch" value="0.0"/>
+          <PARAM id="pitch_mod" value="0.5"/>
+          <PARAM id="speed" value="3.149999856948853"/>
+          <PARAM id="speed_mod" value="0.5"/>
+          <PARAM id="tempo" value="120.0"/>
+          <PARAM id="track" value="0.0"/>
+          <PARAM id="velocity_mod" value="0.5"/>
+        </MIDIPlayerParameters>
+      </params>
+      <extra>
+        <MIDIPlayerExtra fileName="Movie_Themes_-_20th_Century_Fox.mid" filePath="H:\0000_CODE\01_collider_pyo\audio\MIDI\Movie_Themes_-_20th_Century_Fox.mid"
+                         track="0"/>
+      </extra>
+    </module>
+    <module logicalId="5" type="MapRange">
+      <params>
+        <MapRangeParams>
+          <PARAM id="cvMax" value="1.0"/>
+          <PARAM id="cvMin" value="0.0"/>
+          <PARAM id="inMax" value="1.0"/>
+          <PARAM id="inMin" value="0.0"/>
+          <PARAM id="outMax" value="1.0"/>
+          <PARAM id="outMin" value="0.0"/>
+        </MapRangeParams>
+      </params>
+    </module>
+    <module logicalId="6" type="MapRange">
+      <params>
+        <MapRangeParams>
+          <PARAM id="cvMax" value="1.0"/>
+          <PARAM id="cvMin" value="0.0"/>
+          <PARAM id="inMax" value="1.0"/>
+          <PARAM id="inMin" value="0.0"/>
+          <PARAM id="outMax" value="1.0"/>
+          <PARAM id="outMin" value="0.0"/>
+        </MapRangeParams>
+      </params>
+    </module>
+    <module logicalId="7" type="MapRange">
+      <params>
+        <MapRangeParams>
+          <PARAM id="cvMax" value="1.0"/>
+          <PARAM id="cvMin" value="0.0"/>
+          <PARAM id="inMax" value="1.0"/>
+          <PARAM id="inMin" value="0.0"/>
+          <PARAM id="outMax" value="1.0"/>
+          <PARAM id="outMin" value="0.0"/>
+        </MapRangeParams>
+      </params>
+    </module>
+  </modules>
+  <connections>
+    <connection srcId="1" srcChan="0" dstId="2" dstChan="0"/>
+    <connection srcId="2" srcChan="0" dstId="output" dstChan="0"/>
+    <connection srcId="4" srcChan="0" dstId="5" dstChan="0"/>
+    <connection srcId="4" srcChan="3" dstId="6" dstChan="0"/>
+    <connection srcId="4" srcChan="1" dstId="7" dstChan="0"/>
+    <connection srcId="6" srcChan="0" dstId="1" dstChan="1"/>
+    <connection srcId="7" srcChan="0" dstId="1" dstChan="0"/>
+  </connections>
+  <NodeEditorUI>
+    <node id="1" x="271.0" y="228.0"/>
+    <node id="2" x="443.0" y="47.0"/>
+    <node id="4" x="-249.0" y="256.0"/>
+    <node id="5" x="196.0" y="564.0"/>
+    <node id="6" x="194.0" y="597.0"/>
+    <node id="7" x="152.0" y="634.0"/>
+  </NodeEditorUI>
+</ModularSynthPreset>

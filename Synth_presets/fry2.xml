@@ -1,0 +1,199 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<ModularSynthPreset version="1">
+  <modules>
+    <module logicalId="1" type="ADSR">
+      <params>
+        <ADSRParams>
+          <PARAM id="attack" value="1.221000075340271"/>
+          <PARAM id="attack_mod" value="0.8499999642372131"/>
+          <PARAM id="decay" value="2.040999889373779"/>
+          <PARAM id="decay_mod" value="0.8100000023841858"/>
+          <PARAM id="release" value="0.01099999994039536"/>
+          <PARAM id="release_mod" value="1.0"/>
+          <PARAM id="sustain" value="0.9279999732971191"/>
+          <PARAM id="sustain_mod" value="0.0"/>
+        </ADSRParams>
+      </params>
+    </module>
+    <module logicalId="2" type="ClockDivider">
+      <params>
+        <ClockDivParams/>
+      </params>
+    </module>
+    <module logicalId="3" type="Random">
+      <params>
+        <RandomParams>
+          <PARAM id="max" value="64.4639892578125"/>
+          <PARAM id="min" value="-72.17900085449219"/>
+          <PARAM id="rate" value="1.0"/>
+          <PARAM id="rate_mod" value="0.5"/>
+          <PARAM id="slew" value="0.03099999949336052"/>
+        </RandomParams>
+      </params>
+    </module>
+    <module logicalId="4" type="Noise">
+      <params>
+        <NoiseParams>
+          <PARAM id="colour" value="1.0"/>
+          <PARAM id="colour_mod" value="0.0"/>
+          <PARAM id="level" value="-37.63999938964844"/>
+        </NoiseParams>
+      </params>
+    </module>
+    <module logicalId="5" type="Waveshaper">
+      <params>
+        <WaveshaperParams>
+          <PARAM id="drive" value="6.480000019073486"/>
+          <PARAM id="type" value="0.0"/>
+        </WaveshaperParams>
+      </params>
+    </module>
+    <module logicalId="6" type="S&amp;H">
+      <params>
+        <SAndHParams>
+          <PARAM id="edge" value="0.0"/>
+          <PARAM id="edge_mod" value="0.0"/>
+          <PARAM id="slewMs" value="0.0"/>
+          <PARAM id="slewMs_mod" value="0.0"/>
+          <PARAM id="threshold" value="0.5699999332427979"/>
+          <PARAM id="threshold_mod" value="0.0"/>
+        </SAndHParams>
+      </params>
+    </module>
+    <module logicalId="7" type="LFO">
+      <params>
+        <LFOParams>
+          <PARAM id="bipolar" value="1.0"/>
+          <PARAM id="depth" value="0.1469999998807907"/>
+          <PARAM id="depth_mod" value="0.0"/>
+          <PARAM id="rate" value="3.789999961853027"/>
+          <PARAM id="rate_mod" value="0.0"/>
+          <PARAM id="wave" value="1.0"/>
+          <PARAM id="wave_mod" value="0.5"/>
+        </LFOParams>
+      </params>
+    </module>
+    <module logicalId="8" type="VCO">
+      <params>
+        <VCOParams>
+          <PARAM id="frequency" value="20000.0"/>
+          <PARAM id="waveform" value="1.0"/>
+          <PARAM id="waveform_mod" value="0.5"/>
+        </VCOParams>
+      </params>
+    </module>
+    <module logicalId="9" type="Delay">
+      <params>
+        <DelayParams>
+          <PARAM id="feedback" value="0.949999988079071"/>
+          <PARAM id="mix" value="0.0"/>
+          <PARAM id="timeMs" value="1.0"/>
+        </DelayParams>
+      </params>
+    </module>
+    <module logicalId="10" type="Sequencer">
+      <params>
+        <SeqParams>
+          <PARAM id="gateLength" value="0.5889999866485596"/>
+          <PARAM id="gateLength_mod" value="0.0"/>
+          <PARAM id="numSteps" value="8.0"/>
+          <PARAM id="numSteps_max" value="16.0"/>
+          <PARAM id="numSteps_mod" value="0.0"/>
+          <PARAM id="rate" value="1.799999952316284"/>
+          <PARAM id="rate_mod" value="0.0"/>
+          <PARAM id="step1" value="0.5"/>
+          <PARAM id="step10" value="0.5"/>
+          <PARAM id="step10_mod" value="0.5"/>
+          <PARAM id="step11" value="0.5"/>
+          <PARAM id="step11_mod" value="0.5"/>
+          <PARAM id="step12" value="0.5"/>
+          <PARAM id="step12_mod" value="0.5"/>
+          <PARAM id="step13" value="0.5"/>
+          <PARAM id="step13_mod" value="0.5"/>
+          <PARAM id="step14" value="0.5"/>
+          <PARAM id="step14_mod" value="0.5"/>
+          <PARAM id="step15" value="0.5"/>
+          <PARAM id="step15_mod" value="0.5"/>
+          <PARAM id="step16" value="0.5"/>
+          <PARAM id="step16_mod" value="0.5"/>
+          <PARAM id="step1_mod" value="0.5"/>
+          <PARAM id="step2" value="0.5"/>
+          <PARAM id="step2_mod" value="0.5"/>
+          <PARAM id="step3" value="0.5"/>
+          <PARAM id="step3_mod" value="0.5"/>
+          <PARAM id="step4" value="0.5"/>
+          <PARAM id="step4_mod" value="0.5"/>
+          <PARAM id="step5" value="0.5"/>
+          <PARAM id="step5_mod" value="0.5"/>
+          <PARAM id="step6" value="0.5"/>
+          <PARAM id="step6_mod" value="0.5"/>
+          <PARAM id="step7" value="0.5"/>
+          <PARAM id="step7_mod" value="0.5"/>
+          <PARAM id="step8" value="0.5"/>
+          <PARAM id="step8_mod" value="0.5"/>
+          <PARAM id="step9" value="0.5"/>
+          <PARAM id="step9_mod" value="0.5"/>
+        </SeqParams>
+      </params>
+    </module>
+    <module logicalId="11" type="Mixer">
+      <params>
+        <MixerParams>
+          <PARAM id="gain" value="1.770000457763672"/>
+          <PARAM id="pan" value="0.01800000667572021"/>
+        </MixerParams>
+      </params>
+    </module>
+    <module logicalId="12" type="Scope">
+      <params>
+        <ScopeParams/>
+      </params>
+    </module>
+  </modules>
+  <connections>
+    <connection srcId="1" srcChan="0" dstId="3" dstChan="0"/>
+    <connection srcId="1" srcChan="1" dstId="9" dstChan="1"/>
+    <connection srcId="3" srcChan="1" dstId="9" dstChan="0"/>
+    <connection srcId="3" srcChan="0" dstId="11" dstChan="0"/>
+    <connection srcId="4" srcChan="1" dstId="1" dstChan="0"/>
+    <connection srcId="7" srcChan="1" dstId="3" dstChan="0"/>
+    <connection srcId="9" srcChan="0" dstId="11" dstChan="1"/>
+    <connection srcId="10" srcChan="0" dstId="9" dstChan="0"/>
+    <connection srcId="10" srcChan="3" dstId="9" dstChan="1"/>
+    <connection srcId="11" srcChan="0" dstId="12" dstChan="0"/>
+    <connection srcId="11" srcChan="1" dstId="12" dstChan="1"/>
+    <connection srcId="12" srcChan="0" dstId="output" dstChan="0"/>
+    <connection srcId="12" srcChan="1" dstId="output" dstChan="1"/>
+  </connections>
+  <modRoutes>
+    <modRoute srcId="8" srcChan="0" dstId="4" param="colour_mod" depth="1.0"/>
+    <modRoute srcId="3" srcChan="0" dstId="8" param="frequency" depth="1.0"/>
+    <modRoute srcId="10" srcChan="0" dstId="1" param="sustain_mod" depth="1.0"/>
+    <modRoute srcId="9" srcChan="0" dstId="8" param="frequency" depth="1.0"/>
+    <modRoute srcId="3" srcChan="0" dstId="1" param="decay_mod" depth="1.0"/>
+    <modRoute srcId="10" srcChan="1" dstId="9" param="feedback" depth="1.0"/>
+    <modRoute srcId="10" srcChan="0" dstId="10" param="rate_mod" depth="1.0"/>
+    <modRoute srcId="1" srcChan="1" dstId="10" param="gateLength_mod" depth="1.0"/>
+    <modRoute srcId="8" srcChan="1" dstId="7" param="rate_mod" depth="1.0"/>
+    <modRoute srcId="1" srcChan="2" dstId="1" param="sustain_mod" depth="1.0"/>
+    <modRoute srcId="1" srcChan="0" dstId="10" param="rate_mod" depth="1.0"/>
+    <modRoute srcId="10" srcChan="0" dstId="7" param="wave_mod" depth="1.0"/>
+    <modRoute srcId="9" srcChan="1" dstId="9" param="timeMs" depth="1.0"/>
+    <modRoute srcId="3" srcChan="1" dstId="1" param="release_mod" depth="1.0"/>
+  </modRoutes>
+  <NodeEditorUI>
+    <node id="1" x="-163.0" y="39.0"/>
+    <node id="2" x="283.0" y="-34.0"/>
+    <node id="3" x="531.0" y="43.0"/>
+    <node id="4" x="888.0" y="31.0"/>
+    <node id="5" x="-233.0" y="474.0"/>
+    <node id="6" x="-367.0" y="587.0"/>
+    <node id="7" x="286.0" y="419.0"/>
+    <node id="8" x="819.0" y="496.0"/>
+    <node id="9" x="50.0" y="850.0"/>
+    <node id="10" x="350.0" y="850.0"/>
+    <node id="11" x="1273.0" y="41.0"/>
+    <node id="12" x="1250.0" y="450.0"/>
+  </NodeEditorUI>
+</ModularSynthPreset>

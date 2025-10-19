@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<ModularSynthPreset version="1">
+  <modules>
+    <module logicalId="1" type="granulator">
+      <params>
+        <GranulatorParams>
+          <PARAM id="density" value="20.0"/>
+          <PARAM id="grainSizeMs" value="99.99999237060547"/>
+          <PARAM id="panRandom" value="0.0"/>
+          <PARAM id="pitch" value="0.0"/>
+          <PARAM id="pitchRandom" value="0.0"/>
+          <PARAM id="position" value="0.5"/>
+          <PARAM id="spread" value="0.09999999403953552"/>
+        </GranulatorParams>
+      </params>
+    </module>
+    <module logicalId="2" type="TTS Performer">
+      <params>
+        <TTSPerformerParams>
+          <PARAM id="engine" value="1.0"/>
+          <PARAM id="gate" value="0.7999999523162842"/>
+          <PARAM id="pitch" value="0.0"/>
+          <PARAM id="rate" value="2.0"/>
+          <PARAM id="speed" value="1.0"/>
+          <PARAM id="trimEnd" value="1.0"/>
+          <PARAM id="trimStart" value="0.0"/>
+          <PARAM id="volume" value="0.7999999523162842"/>
+        </TTSPerformerParams>
+      </params>
+    </module>
+  </modules>
+  <connections>
+    <connection srcId="1" srcChan="0" dstId="output" dstChan="0"/>
+    <connection srcId="1" srcChan="1" dstId="output" dstChan="1"/>
+    <connection srcId="2" srcChan="0" dstId="1" dstChan="0"/>
+    <connection srcId="2" srcChan="0" dstId="1" dstChan="1"/>
+  </connections>
+  <NodeEditorUI>
+    <node id="1" x="-198.0" y="494.0"/>
+    <node id="2" x="-1123.0" y="297.0"/>
+  </NodeEditorUI>
+</ModularSynthPreset>

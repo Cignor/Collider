@@ -1,0 +1,74 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<ModularSynthPreset version="1">
+  <modules>
+    <module logicalId="1" type="TTS Performer">
+      <params>
+        <TTSPerformerParams>
+          <PARAM id="engine" value="1.0"/>
+          <PARAM id="gate" value="1.0"/>
+          <PARAM id="gate_mod" value="1.0"/>
+          <PARAM id="pitch" value="-18.89999961853027"/>
+          <PARAM id="pitch_mod" value="0.0"/>
+          <PARAM id="rate" value="3.639999866485596"/>
+          <PARAM id="rate_mod" value="2.0"/>
+          <PARAM id="reset_mod" value="0.0"/>
+          <PARAM id="speed" value="0.5199999809265137"/>
+          <PARAM id="speed_mod" value="1.0"/>
+          <PARAM id="trigger_mod" value="0.0"/>
+          <PARAM id="trimEnd" value="1.0"/>
+          <PARAM id="trimEnd_mod" value="1.0"/>
+          <PARAM id="trimStart" value="0.0"/>
+          <PARAM id="trimStart_mod" value="0.0"/>
+          <PARAM id="volume" value="1.0"/>
+        </TTSPerformerParams>
+      </params>
+    </module>
+    <module logicalId="2" type="debug">
+      <params>
+        <DebugParams/>
+      </params>
+    </module>
+    <module logicalId="3" type="VCO">
+      <params>
+        <VCOParams>
+          <PARAM id="frequency" value="59.0"/>
+          <PARAM id="waveform" value="0.0"/>
+        </VCOParams>
+      </params>
+    </module>
+    <module logicalId="4" type="Mixer">
+      <params>
+        <MixerParams>
+          <PARAM id="crossfade" value="0.04499995708465576"/>
+          <PARAM id="gain" value="0.0"/>
+          <PARAM id="pan" value="0.0"/>
+        </MixerParams>
+      </params>
+    </module>
+    <module logicalId="5" type="Scope">
+      <params>
+        <ScopeParams>
+          <PARAM id="monitorSeconds" value="5.0"/>
+        </ScopeParams>
+      </params>
+    </module>
+  </modules>
+  <connections>
+    <connection srcId="1" srcChan="5" dstId="3" dstChan="2"/>
+    <connection srcId="1" srcChan="8" dstId="3" dstChan="2"/>
+    <connection srcId="1" srcChan="0" dstId="4" dstChan="0"/>
+    <connection srcId="3" srcChan="0" dstId="4" dstChan="1"/>
+    <connection srcId="3" srcChan="0" dstId="4" dstChan="2"/>
+    <connection srcId="3" srcChan="1" dstId="4" dstChan="3"/>
+    <connection srcId="4" srcChan="0" dstId="output" dstChan="0"/>
+    <connection srcId="4" srcChan="1" dstId="output" dstChan="1"/>
+  </connections>
+  <NodeEditorUI>
+    <node id="1" x="-152.0" y="216.0"/>
+    <node id="2" x="704.0" y="1182.0"/>
+    <node id="3" x="652.0" y="582.0"/>
+    <node id="4" x="1148.0" y="736.0"/>
+    <node id="5" x="1155.0" y="339.0"/>
+  </NodeEditorUI>
+</ModularSynthPreset>

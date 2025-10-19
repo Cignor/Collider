@@ -1,0 +1,159 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<ModularSynthPreset version="1">
+  <modules>
+    <module logicalId="1" type="sample loader">
+      <params>
+        <SampleLoaderParameters samplePath="H:\0000_CODE\01_collider_pyo\audio\samples\percussion\KSHMR_Acoustic_Kick_01_Big - Copy.wav">
+          <PARAM id="pitch" value="-0.1000003814697266"/>
+          <PARAM id="speed" value="1.039999961853027"/>
+          <PARAM id="volume" value="0.7999999523162842"/>
+          <PARAM id="engine" value="1.0"/>
+          <PARAM id="loop" value="0.0"/>
+          <PARAM id="rbPhaseInd" value="0.0"/>
+          <PARAM id="rbWindowShort" value="0.0"/>
+          <PARAM id="gate_mod" value="1.0"/>
+          <PARAM id="pitch_mod" value="0.0"/>
+          <PARAM id="speed_mod" value="4.0"/>
+          <PARAM id="trigger_mod" value="0.0"/>
+        </SampleLoaderParameters>
+      </params>
+    </module>
+    <module logicalId="6" type="Sequencer">
+      <params>
+        <SeqParams>
+          <PARAM id="gateLength" value="0.2600000500679016"/>
+          <PARAM id="gateLength_mod" value="0.0"/>
+          <PARAM id="gateThreshold" value="0.5"/>
+          <PARAM id="numSteps" value="15.0"/>
+          <PARAM id="numSteps_max" value="16.0"/>
+          <PARAM id="numSteps_mod" value="0.5"/>
+          <PARAM id="rate" value="5.0"/>
+          <PARAM id="rate_mod" value="0.0"/>
+          <PARAM id="step1" value="0.4999998807907104"/>
+          <PARAM id="step10" value="0.7500000596046448"/>
+          <PARAM id="step10_mod" value="0.5"/>
+          <PARAM id="step11" value="0.550000011920929"/>
+          <PARAM id="step11_mod" value="0.5"/>
+          <PARAM id="step12" value="0.1999999582767487"/>
+          <PARAM id="step12_mod" value="0.5"/>
+          <PARAM id="step13" value="0.8500000834465027"/>
+          <PARAM id="step13_mod" value="0.5"/>
+          <PARAM id="step14" value="0.6500000357627869"/>
+          <PARAM id="step14_mod" value="0.5"/>
+          <PARAM id="step15" value="0.04999996349215508"/>
+          <PARAM id="step15_mod" value="0.5"/>
+          <PARAM id="step16" value="0.5"/>
+          <PARAM id="step16_mod" value="0.5"/>
+          <PARAM id="step1_mod" value="0.5"/>
+          <PARAM id="step2" value="0.7999999523162842"/>
+          <PARAM id="step2_mod" value="0.5"/>
+          <PARAM id="step3" value="0.5499998927116394"/>
+          <PARAM id="step3_mod" value="0.4199999868869781"/>
+          <PARAM id="step4" value="0.0"/>
+          <PARAM id="step4_mod" value="0.5"/>
+          <PARAM id="step5" value="0.7000001072883606"/>
+          <PARAM id="step5_mod" value="0.4199999868869781"/>
+          <PARAM id="step6" value="0.0"/>
+          <PARAM id="step6_mod" value="0.5"/>
+          <PARAM id="step7" value="0.4000000357627869"/>
+          <PARAM id="step7_mod" value="0.5"/>
+          <PARAM id="step8" value="1.0"/>
+          <PARAM id="step8_mod" value="0.7400000095367432"/>
+          <PARAM id="step9" value="0.5"/>
+          <PARAM id="step9_mod" value="0.5"/>
+          <PARAM id="step10_trig"/>
+          <PARAM id="step10_trig_mod"/>
+          <PARAM id="step11_trig" value="1.0"/>
+          <PARAM id="step11_trig_mod"/>
+          <PARAM id="step12_trig"/>
+          <PARAM id="step12_trig_mod"/>
+          <PARAM id="step13_trig"/>
+          <PARAM id="step13_trig_mod"/>
+          <PARAM id="step14_trig" value="1.0"/>
+          <PARAM id="step14_trig_mod"/>
+          <PARAM id="step15_trig" value="1.0"/>
+          <PARAM id="step15_trig_mod"/>
+          <PARAM id="step16_trig"/>
+          <PARAM id="step16_trig_mod"/>
+          <PARAM id="step1_trig" value="1.0"/>
+          <PARAM id="step1_trig_mod" value="1.0"/>
+          <PARAM id="step2_trig" value="0.0"/>
+          <PARAM id="step2_trig_mod" value="1.0"/>
+          <PARAM id="step3_trig" value="1.0"/>
+          <PARAM id="step3_trig_mod" value="0.9799999594688416"/>
+          <PARAM id="step4_trig"/>
+          <PARAM id="step4_trig_mod"/>
+          <PARAM id="step5_trig" value="1.0"/>
+          <PARAM id="step5_trig_mod" value="1.0"/>
+          <PARAM id="step6_trig" value="0.0"/>
+          <PARAM id="step6_trig_mod"/>
+          <PARAM id="step7_trig" value="0.0"/>
+          <PARAM id="step7_trig_mod"/>
+          <PARAM id="step8_trig" value="1.0"/>
+          <PARAM id="step8_trig_mod" value="1.0"/>
+          <PARAM id="step9_trig"/>
+          <PARAM id="step9_trig_mod"/>
+        </SeqParams>
+      </params>
+    </module>
+    <module logicalId="9" type="debug">
+      <params>
+        <DebugParams/>
+      </params>
+    </module>
+    <module logicalId="10" type="input debug">
+      <params>
+        <InputDebugParams/>
+      </params>
+    </module>
+    <module logicalId="11" type="Random">
+      <params>
+        <RandomParams>
+          <PARAM id="max" value="4.142997741699219"/>
+          <PARAM id="min" value="0.464996337890625"/>
+          <PARAM id="rate" value="36.99999618530273"/>
+          <PARAM id="rate_mod" value="0.7359626293182373"/>
+          <PARAM id="slew" value="0.2999999821186066"/>
+          <PARAM id="slew_mod" value="0.7359626293182373"/>
+        </RandomParams>
+      </params>
+    </module>
+    <module logicalId="12" type="Random">
+      <params>
+        <RandomParams>
+          <PARAM id="max" value="12.14299011230469"/>
+          <PARAM id="min" value="0.464996337890625"/>
+          <PARAM id="rate" value="36.99999618530273"/>
+          <PARAM id="rate_mod" value="0.0"/>
+          <PARAM id="slew" value="0.2999999821186066"/>
+          <PARAM id="slew_mod" value="0.0"/>
+        </RandomParams>
+      </params>
+    </module>
+  </modules>
+  <connections>
+    <connection srcId="1" srcChan="0" dstId="output" dstChan="0"/>
+    <connection srcId="1" srcChan="0" dstId="output" dstChan="1"/>
+    <connection srcId="6" srcChan="4" dstId="9" dstChan="0"/>
+    <connection srcId="6" srcChan="0" dstId="10" dstChan="1"/>
+    <connection srcId="6" srcChan="4" dstId="10" dstChan="0"/>
+  </connections>
+  <modRoutes>
+    <modRoute srcId="10" srcChan="0" dstId="1" param="trigger_mod" depth="1.0"/>
+    <modRoute srcId="6" srcChan="0" dstId="1" param="pitch_mod" depth="1.0"/>
+    <modRoute srcId="12" srcChan="0" dstId="6" param="step8_mod" depth="1.0"/>
+    <modRoute srcId="6" srcChan="1" dstId="1" param="gate_mod" depth="1.0"/>
+    <modRoute srcId="12" srcChan="0" dstId="11" param="slew_mod" depth="1.0"/>
+    <modRoute srcId="12" srcChan="0" dstId="11" param="rate_mod" depth="1.0"/>
+    <modRoute srcId="11" srcChan="1" dstId="1" param="speed_mod" depth="1.0"/>
+  </modRoutes>
+  <NodeEditorUI>
+    <node id="1" x="-316.0" y="106.0"/>
+    <node id="6" x="-1315.0" y="-9.0"/>
+    <node id="9" x="-350.75146484375" y="418.430419921875"/>
+    <node id="10" x="-854.0" y="153.0"/>
+    <node id="11" x="-1279.36083984375" y="666.39453125"/>
+    <node id="12" x="-1924.36083984375" y="257.39453125"/>
+  </NodeEditorUI>
+</ModularSynthPreset>

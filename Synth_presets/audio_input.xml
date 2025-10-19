@@ -1,0 +1,103 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<ModularSynthPreset version="1">
+  <modules>
+    <module logicalId="1" type="audio input">
+      <params>
+        <AudioInputParams>
+          <PARAM id="channelMap0" value="0.0"/>
+          <PARAM id="channelMap1" value="1.0"/>
+          <PARAM id="channelMap10" value="10.0"/>
+          <PARAM id="channelMap11" value="11.0"/>
+          <PARAM id="channelMap12" value="12.0"/>
+          <PARAM id="channelMap13" value="13.0"/>
+          <PARAM id="channelMap14" value="14.0"/>
+          <PARAM id="channelMap15" value="15.0"/>
+          <PARAM id="channelMap2" value="2.0"/>
+          <PARAM id="channelMap3" value="3.0"/>
+          <PARAM id="channelMap4" value="4.0"/>
+          <PARAM id="channelMap5" value="5.0"/>
+          <PARAM id="channelMap6" value="6.0"/>
+          <PARAM id="channelMap7" value="7.0"/>
+          <PARAM id="channelMap8" value="8.0"/>
+          <PARAM id="channelMap9" value="9.0"/>
+          <PARAM id="numChannels" value="1.0"/>
+        </AudioInputParams>
+      </params>
+      <extra>
+        <AudioInputState deviceName="">
+          <AudioInputParams>
+            <PARAM id="channelMap0" value="0.0"/>
+            <PARAM id="channelMap1" value="1.0"/>
+            <PARAM id="channelMap10" value="10.0"/>
+            <PARAM id="channelMap11" value="11.0"/>
+            <PARAM id="channelMap12" value="12.0"/>
+            <PARAM id="channelMap13" value="13.0"/>
+            <PARAM id="channelMap14" value="14.0"/>
+            <PARAM id="channelMap15" value="15.0"/>
+            <PARAM id="channelMap2" value="2.0"/>
+            <PARAM id="channelMap3" value="3.0"/>
+            <PARAM id="channelMap4" value="4.0"/>
+            <PARAM id="channelMap5" value="5.0"/>
+            <PARAM id="channelMap6" value="6.0"/>
+            <PARAM id="channelMap7" value="7.0"/>
+            <PARAM id="channelMap8" value="8.0"/>
+            <PARAM id="channelMap9" value="9.0"/>
+            <PARAM id="numChannels" value="1.0"/>
+          </AudioInputParams>
+        </AudioInputState>
+      </extra>
+    </module>
+    <module logicalId="2" type="Scope">
+      <params>
+        <ScopeParams>
+          <PARAM id="monitorSeconds" value="5.0"/>
+        </ScopeParams>
+      </params>
+    </module>
+    <module logicalId="3" type="chorus">
+      <params>
+        <ChorusParams>
+          <PARAM id="depth" value="0.4399999976158142"/>
+          <PARAM id="mix" value="1.0"/>
+          <PARAM id="rate" value="3.029999971389771"/>
+        </ChorusParams>
+      </params>
+    </module>
+    <module logicalId="5" type="Reverb">
+      <params>
+        <ReverbParams>
+          <PARAM id="damp" value="0.6069999933242798"/>
+          <PARAM id="mix" value="0.8619999885559082"/>
+          <PARAM id="size" value="0.781000018119812"/>
+        </ReverbParams>
+      </params>
+    </module>
+    <module logicalId="7" type="drive">
+      <params>
+        <DriveParams>
+          <PARAM id="drive" value="0.7599999904632568"/>
+          <PARAM id="mix" value="1.0"/>
+        </DriveParams>
+      </params>
+    </module>
+  </modules>
+  <connections>
+    <connection srcId="1" srcChan="0" dstId="2" dstChan="0"/>
+    <connection srcId="1" srcChan="0" dstId="7" dstChan="0"/>
+    <connection srcId="1" srcChan="0" dstId="7" dstChan="1"/>
+    <connection srcId="3" srcChan="0" dstId="5" dstChan="0"/>
+    <connection srcId="3" srcChan="0" dstId="5" dstChan="1"/>
+    <connection srcId="5" srcChan="0" dstId="output" dstChan="0"/>
+    <connection srcId="5" srcChan="1" dstId="output" dstChan="1"/>
+    <connection srcId="7" srcChan="0" dstId="3" dstChan="0"/>
+    <connection srcId="7" srcChan="0" dstId="3" dstChan="1"/>
+  </connections>
+  <NodeEditorUI>
+    <node id="1" x="-657.0" y="82.0"/>
+    <node id="2" x="5.0" y="264.0"/>
+    <node id="3" x="199.0" y="-55.0"/>
+    <node id="5" x="553.0" y="156.0"/>
+    <node id="7" x="-227.0" y="-74.0"/>
+  </NodeEditorUI>
+</ModularSynthPreset>

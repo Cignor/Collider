@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<ModularSynthPreset version="1">
+  <modules>
+    <module logicalId="1" type="sample loader">
+      <params>
+        <SampleLoaderParameters>
+          <PARAM id="pitch" value="0.0"/>
+          <PARAM id="speed" value="1.0"/>
+          <PARAM id="volume" value="0.7999999523162842"/>
+        </SampleLoaderParameters>
+      </params>
+    </module>
+  </modules>
+  <connections>
+    <connection srcId="1" srcChan="0" dstId="output" dstChan="0"/>
+    <connection srcId="1" srcChan="0" dstId="output" dstChan="1"/>
+  </connections>
+  <modRoutes/>
+  <NodeEditorUI>
+    <node id="1" x="-175.0" y="96.0"/>
+  </NodeEditorUI>
+</ModularSynthPreset>

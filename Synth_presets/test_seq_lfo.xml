@@ -1,0 +1,78 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<ModularSynthPreset version="1">
+  <modules>
+    <module logicalId="1" type="VCO">
+      <params>
+        <VCOParams>
+          <PARAM id="frequency" value="20.0"/>
+          <PARAM id="waveform" value="0.0"/>
+        </VCOParams>
+      </params>
+    </module>
+    <module logicalId="2" type="Sequencer">
+      <params>
+        <SeqParams>
+          <PARAM id="gateLength" value="0.5"/>
+          <PARAM id="numSteps" value="8.0"/>
+          <PARAM id="rate" value="2.0"/>
+          <PARAM id="step1" value="0.5"/>
+          <PARAM id="step10" value="0.5"/>
+          <PARAM id="step10_mod" value="0.0"/>
+          <PARAM id="step11" value="0.5"/>
+          <PARAM id="step11_mod" value="0.0"/>
+          <PARAM id="step12" value="0.5"/>
+          <PARAM id="step12_mod" value="0.0"/>
+          <PARAM id="step13" value="0.5"/>
+          <PARAM id="step13_mod" value="0.0"/>
+          <PARAM id="step14" value="0.5"/>
+          <PARAM id="step14_mod" value="0.0"/>
+          <PARAM id="step15" value="0.5"/>
+          <PARAM id="step15_mod" value="0.0"/>
+          <PARAM id="step16" value="0.5"/>
+          <PARAM id="step16_mod" value="0.0"/>
+          <PARAM id="step1_mod" value="0.3100000023841858"/>
+          <PARAM id="step2" value="0.5"/>
+          <PARAM id="step2_mod" value="0.0"/>
+          <PARAM id="step3" value="0.5"/>
+          <PARAM id="step3_mod" value="0.0"/>
+          <PARAM id="step4" value="0.5"/>
+          <PARAM id="step4_mod" value="0.0"/>
+          <PARAM id="step5" value="0.5"/>
+          <PARAM id="step5_mod" value="0.0"/>
+          <PARAM id="step6" value="0.5"/>
+          <PARAM id="step6_mod" value="0.0"/>
+          <PARAM id="step7" value="0.5"/>
+          <PARAM id="step7_mod" value="0.0"/>
+          <PARAM id="step8" value="0.5"/>
+          <PARAM id="step8_mod" value="0.0"/>
+          <PARAM id="step9" value="0.5"/>
+          <PARAM id="step9_mod" value="0.0"/>
+        </SeqParams>
+      </params>
+    </module>
+    <module logicalId="3" type="LFO">
+      <params>
+        <LFOParams>
+          <PARAM id="bipolar" value="1.0"/>
+          <PARAM id="depth" value="0.5"/>
+          <PARAM id="rate" value="1.0"/>
+          <PARAM id="wave" value="0.0"/>
+        </LFOParams>
+      </params>
+    </module>
+  </modules>
+  <connections>
+    <connection srcId="1" srcChan="0" dstId="output" dstChan="0"/>
+    <connection srcId="1" srcChan="1" dstId="output" dstChan="1"/>
+  </connections>
+  <modRoutes>
+    <modRoute srcId="2" srcChan="0" dstId="1" param="frequency" depth="50.0"/>
+    <modRoute srcId="3" srcChan="0" dstId="2" param="step1_mod" depth="50.0"/>
+  </modRoutes>
+  <NodeEditorUI>
+    <node id="1" x="58.0" y="65.0"/>
+    <node id="2" x="-295.0" y="140.0"/>
+    <node id="3" x="-748.0" y="66.0"/>
+  </NodeEditorUI>
+</ModularSynthPreset>

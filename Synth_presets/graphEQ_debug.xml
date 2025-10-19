@@ -1,0 +1,71 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<ModularSynthPreset version="1">
+  <modules>
+    <module logicalId="1" type="VCO">
+      <params>
+        <VCOParams>
+          <PARAM id="frequency" value="440.0"/>
+          <PARAM id="waveform" value="0.0"/>
+        </VCOParams>
+      </params>
+    </module>
+    <module logicalId="2" type="phaser">
+      <params>
+        <PhaserParams>
+          <PARAM id="centreHz" value="1000.0"/>
+          <PARAM id="depth" value="0.5"/>
+          <PARAM id="feedback" value="0.0"/>
+          <PARAM id="mix" value="0.5"/>
+          <PARAM id="rate" value="6.300000190734863"/>
+        </PhaserParams>
+      </params>
+    </module>
+    <module logicalId="3" type="Random">
+      <params>
+        <RandomParams>
+          <PARAM id="cvMax" value="1.0"/>
+          <PARAM id="cvMin" value="0.9899999499320984"/>
+          <PARAM id="max" value="1.0"/>
+          <PARAM id="min" value="0.0"/>
+          <PARAM id="normMax" value="1.0"/>
+          <PARAM id="normMin" value="0.0"/>
+          <PARAM id="rate" value="7.369999885559082"/>
+          <PARAM id="slew" value="0.4960000216960907"/>
+          <PARAM id="trigThreshold" value="0.5"/>
+        </RandomParams>
+      </params>
+    </module>
+    <module logicalId="4" type="graphic eq">
+      <params>
+        <GraphicEQParams>
+          <PARAM id="gainBand1" value="0.0"/>
+          <PARAM id="gainBand2" value="0.0"/>
+          <PARAM id="gainBand3" value="0.0"/>
+          <PARAM id="gainBand4" value="0.0"/>
+          <PARAM id="gainBand5" value="0.0"/>
+          <PARAM id="gainBand6" value="0.0"/>
+          <PARAM id="gainBand7" value="0.0"/>
+          <PARAM id="gainBand8" value="0.0"/>
+          <PARAM id="outputLevel" value="0.0"/>
+        </GraphicEQParams>
+      </params>
+    </module>
+  </modules>
+  <connections>
+    <connection srcId="1" srcChan="0" dstId="2" dstChan="0"/>
+    <connection srcId="2" srcChan="0" dstId="4" dstChan="0"/>
+    <connection srcId="2" srcChan="1" dstId="4" dstChan="1"/>
+    <connection srcId="3" srcChan="1" dstId="2" dstChan="1"/>
+    <connection srcId="3" srcChan="1" dstId="2" dstChan="3"/>
+    <connection srcId="3" srcChan="1" dstId="2" dstChan="4"/>
+    <connection srcId="4" srcChan="0" dstId="output" dstChan="0"/>
+    <connection srcId="4" srcChan="1" dstId="output" dstChan="1"/>
+  </connections>
+  <NodeEditorUI>
+    <node id="1" x="-292.0" y="205.0"/>
+    <node id="2" x="136.0" y="317.0"/>
+    <node id="3" x="-385.0" y="440.0"/>
+    <node id="4" x="549.0" y="254.0"/>
+  </NodeEditorUI>
+</ModularSynthPreset>

@@ -1,0 +1,57 @@
+{
+  "name": "Physics Grid",
+  "description": "Special grid for physics control mode - center lines and gradient circle",
+  "type": "physics_control",
+  "version": "1.0",
+  "resolution_agnostic": true,
+  
+  "elements": {
+    "center_lines": {
+      "enabled": true,
+      "vertical_line": {
+        "position": "center_x",
+        "color": "accent_cyan",
+        "opacity": 80,
+        "thickness": 2
+      },
+      "horizontal_line": {
+        "position": "center_y", 
+        "color": "accent_cyan",
+        "opacity": 80,
+        "thickness": 2
+      }
+    },
+    
+    "center_circle": {
+      "enabled": true,
+      "position": "screen_center",
+      "radius": 50,
+      "radius_percentage": 0.05,
+      "gradient": {
+        "enabled": true,
+        "center_color": "material_energy",
+        "edge_color": "material_energy", 
+        "center_opacity": 100,
+        "edge_opacity": 0,
+        "gradient_steps": 20
+      },
+      "outline": {
+        "enabled": true,
+        "color": "accent_cyan",
+        "opacity": 60,
+        "thickness": 1
+      }
+    }
+  },
+  
+  "performance": {
+    "caching_enabled": true,
+    "batch_rendering": true,
+    "update_frequency": "on_resolution_change"
+  },
+  
+  "colors": {
+    "accent_cyan": "accent_cyan",
+    "material_energy": "material_energy"
+  }
+}

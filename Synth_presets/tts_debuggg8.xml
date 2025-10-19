@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<ModularSynthPreset version="1">
+  <modules>
+    <module logicalId="1" type="TTS Performer">
+      <params>
+        <TTSPerformerParams>
+          <PARAM id="engine" value="1.0"/>
+          <PARAM id="gate" value="0.7999999523162842"/>
+          <PARAM id="pitch" value="0.0"/>
+          <PARAM id="rate" value="2.0"/>
+          <PARAM id="speed" value="1.0"/>
+          <PARAM id="trimEnd" value="1.0"/>
+          <PARAM id="trimStart" value="0.0"/>
+          <PARAM id="volume" value="0.7999999523162842"/>
+        </TTSPerformerParams>
+      </params>
+    </module>
+    <module logicalId="2" type="Random">
+      <params>
+        <RandomParams>
+          <PARAM id="boolThreshold" value="0.5"/>
+          <PARAM id="cvMax" value="1.0"/>
+          <PARAM id="cvMin" value="0.0"/>
+          <PARAM id="max" value="1.0"/>
+          <PARAM id="min" value="0.0"/>
+          <PARAM id="rate" value="2.789999961853027"/>
+          <PARAM id="slew" value="0.0"/>
+        </RandomParams>
+      </params>
+    </module>
+    <module logicalId="3" type="Scope">
+      <params>
+        <ScopeParams>
+          <PARAM id="monitorSeconds" value="5.0"/>
+        </ScopeParams>
+      </params>
+    </module>
+    <module logicalId="4" type="debug">
+      <params>
+        <DebugParams/>
+      </params>
+    </module>
+  </modules>
+  <connections>
+    <connection srcId="1" srcChan="0" dstId="output" dstChan="0"/>
+    <connection srcId="2" srcChan="0" dstId="1" dstChan="7"/>
+  </connections>
+  <NodeEditorUI>
+    <node id="1" x="-726.0" y="151.0"/>
+    <node id="2" x="-1221.0" y="408.0"/>
+    <node id="3" x="-186.0" y="719.0"/>
+    <node id="4" x="-182.0" y="203.0"/>
+  </NodeEditorUI>
+</ModularSynthPreset>

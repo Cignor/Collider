@@ -1,0 +1,62 @@
+{
+  "background": {
+    "main_game": [200, 200, 200],
+    "ui_panel": [25, 30, 40],
+    "ui_panel_opacity": 220
+  },
+  "text": {
+    "primary": [220, 230, 240],
+    "secondary": [180, 190, 200],
+    "accent": [0, 255, 255]
+  },
+  "outlines": {
+    "default": [80, 100, 120],
+    "opacity": 80
+  },
+  "categories": {
+    "audio_effects": [0, 200, 255],
+    "physics_effects": [255, 140, 0],
+    "melody": [180, 100, 255],
+    "tools": [255, 100, 200],
+    "unknown": [255, 100, 200],
+    "default": [0, 255, 255]
+  },
+  "presets": {
+    "active": [0, 255, 255],
+    "inactive": [40, 50, 65],
+    "active_text": [20, 25, 35],
+    "inactive_text": [180, 190, 200]
+  },
+  "grids": {
+    "design": {
+      "primary": [100, 100, 100],
+      "secondary": [120, 120, 120],
+      "spacing": 8,
+      "opacity": 150
+    },
+    "game": {
+      "primary": [30, 30, 30],
+      "secondary": [50, 50, 50],
+      "spacing": 100,
+      "opacity": 100
+    },
+    "golden": {
+      "primary": [180, 140, 100],
+      "secondary": [220, 180, 140],
+      "spacing": 21,
+      "opacity": 40
+    },
+    "neon": {
+      "primary": [0, 255, 200],
+      "secondary": [100, 0, 255],
+      "spacing": 16,
+      "opacity": 60
+    },
+    "minimal": {
+      "primary": [60, 60, 60],
+      "secondary": [80, 80, 80],
+      "spacing": 24,
+      "opacity": 10
+    }
+  }
+}

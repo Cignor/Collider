@@ -1,0 +1,11 @@
+{
+  "name": "Default Natural Minor",
+  "description": "12-TET natural minor grid rooted at C. Used to quantize bullet pitch when pitch_on_grid is on.",
+  "base_key": "C",
+  "degrees_semitones": [0, 2, 3, 5, 7, 8, 10],
+  "octave_range": [-2, 2],
+  "quantize_mode": "nearest",
+  "transpose_semitones": 0
+}
+
+

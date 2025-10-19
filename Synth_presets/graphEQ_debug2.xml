@@ -1,0 +1,148 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<ModularSynthPreset version="1">
+  <modules>
+    <module logicalId="1" type="VCO">
+      <params>
+        <VCOParams>
+          <PARAM id="frequency" value="144.0"/>
+          <PARAM id="waveform" value="0.0"/>
+        </VCOParams>
+      </params>
+    </module>
+    <module logicalId="2" type="graphic eq">
+      <params>
+        <GraphicEQParams>
+          <PARAM id="gainBand1" value="-23.13999938964844"/>
+          <PARAM id="gainBand2" value="-37.70999908447266"/>
+          <PARAM id="gainBand3" value="-18.86000061035156"/>
+          <PARAM id="gainBand4" value="0.0"/>
+          <PARAM id="gainBand5" value="-22.29000091552734"/>
+          <PARAM id="gainBand6" value="-20.56999969482422"/>
+          <PARAM id="gainBand7" value="-34.29000091552734"/>
+          <PARAM id="gainBand8" value="-15.43000030517578"/>
+          <PARAM id="gateThreshold" value="-30.0"/>
+          <PARAM id="outputLevel" value="0.0"/>
+          <PARAM id="triggerThreshold" value="-6.0"/>
+        </GraphicEQParams>
+      </params>
+    </module>
+    <module logicalId="3" type="Scope">
+      <params>
+        <ScopeParams>
+          <PARAM id="monitorSeconds" value="5.0"/>
+        </ScopeParams>
+      </params>
+    </module>
+    <module logicalId="4" type="Random">
+      <params>
+        <RandomParams>
+          <PARAM id="cvMax" value="1.0"/>
+          <PARAM id="cvMin" value="0.0"/>
+          <PARAM id="max" value="1.0"/>
+          <PARAM id="min" value="0.0"/>
+          <PARAM id="normMax" value="1.0"/>
+          <PARAM id="normMin" value="0.0"/>
+          <PARAM id="rate" value="1.00000011920929"/>
+          <PARAM id="slew" value="0.0"/>
+          <PARAM id="trigThreshold" value="0.5"/>
+        </RandomParams>
+      </params>
+    </module>
+    <module logicalId="6" type="Scope">
+      <params>
+        <ScopeParams>
+          <PARAM id="monitorSeconds" value="5.0"/>
+        </ScopeParams>
+      </params>
+    </module>
+    <module logicalId="7" type="Scope">
+      <params>
+        <ScopeParams>
+          <PARAM id="monitorSeconds" value="5.0"/>
+        </ScopeParams>
+      </params>
+    </module>
+    <module logicalId="15" type="Frequency Graph">
+      <params>
+        <FreqGraphParams>
+          <PARAM id="bassThreshold" value="-59.20000076293945"/>
+          <PARAM id="decay"/>
+          <PARAM id="highThreshold" value="-36.0"/>
+          <PARAM id="midThreshold" value="-48.0"/>
+          <PARAM id="subThreshold"/>
+        </FreqGraphParams>
+      </params>
+    </module>
+    <module logicalId="24" type="sample loader">
+      <params>
+        <SampleLoaderParameters samplePath="H:\0000_CODE\01_collider_pyo\audio\samples\melodic\KSHMR_Instrumental_Fill_14_128_Koto_Gm.wav">
+          <PARAM id="engine" value="1.0"/>
+          <PARAM id="gate" value="1.0"/>
+          <PARAM id="gate_mod" value="1.0"/>
+          <PARAM id="loop" value="1.0"/>
+          <PARAM id="pitch" value="0.0"/>
+          <PARAM id="pitch_mod" value="0.0"/>
+          <PARAM id="rangeEnd" value="1.0"/>
+          <PARAM id="rangeEnd_mod" value="1.0"/>
+          <PARAM id="rangeStart" value="0.0"/>
+          <PARAM id="rangeStart_mod" value="0.0"/>
+          <PARAM id="rbPhaseInd" value="1.0"/>
+          <PARAM id="rbWindowShort" value="1.0"/>
+          <PARAM id="speed" value="2.289999961853027"/>
+          <PARAM id="speed_mod" value="1.0"/>
+          <PARAM id="trigger_mod" value="0.0"/>
+        </SampleLoaderParameters>
+      </params>
+    </module>
+    <module logicalId="25" type="drive">
+      <params>
+        <DriveParams>
+          <PARAM id="drive" value="1.289999961853027"/>
+          <PARAM id="mix" value="1.0"/>
+        </DriveParams>
+      </params>
+    </module>
+    <module logicalId="26" type="drive">
+      <params>
+        <DriveParams>
+          <PARAM id="drive" value="1.019999980926514"/>
+          <PARAM id="mix" value="1.0"/>
+        </DriveParams>
+      </params>
+    </module>
+    <module logicalId="37" type="Scope">
+      <params>
+        <ScopeParams>
+          <PARAM id="monitorSeconds" value="12.40000057220459"/>
+        </ScopeParams>
+      </params>
+    </module>
+  </modules>
+  <connections>
+    <connection srcId="2" srcChan="0" dstId="output" dstChan="0"/>
+    <connection srcId="2" srcChan="1" dstId="output" dstChan="1"/>
+    <connection srcId="2" srcChan="0" dstId="3" dstChan="0"/>
+    <connection srcId="2" srcChan="2" dstId="6" dstChan="0"/>
+    <connection srcId="2" srcChan="3" dstId="7" dstChan="0"/>
+    <connection srcId="2" srcChan="0" dstId="15" dstChan="0"/>
+    <connection srcId="15" srcChan="4" dstId="37" dstChan="0"/>
+    <connection srcId="24" srcChan="0" dstId="25" dstChan="0"/>
+    <connection srcId="24" srcChan="0" dstId="26" dstChan="0"/>
+    <connection srcId="25" srcChan="1" dstId="2" dstChan="1"/>
+    <connection srcId="26" srcChan="0" dstId="2" dstChan="0"/>
+  </connections>
+  <NodeEditorUI>
+    <node id="1" x="-226.0" y="-139.0"/>
+    <node id="2" x="288.0" y="99.0"/>
+    <node id="3" x="800.0" y="25.0"/>
+    <node id="4" x="-67.0" y="520.0"/>
+    <node id="6" x="800.0" y="257.0"/>
+    <node id="7" x="886.0" y="477.0"/>
+    <node id="15" x="1216.9150390625" y="597.860595703125"/>
+    <node id="24" x="-530.0" y="-50.0"/>
+    <node id="25" x="-66.0" y="325.0"/>
+    <node id="26" x="-39.0" y="152.0"/>
+    <node id="37" x="1861.0" y="820.0"/>
+  </NodeEditorUI>
+</ModularSynthPreset>

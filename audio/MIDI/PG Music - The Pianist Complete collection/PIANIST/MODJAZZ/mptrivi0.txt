@@ -1,0 +1,455 @@
+                                                             
+@001 Ray Bryant's sister has the proud honor of being:
+\Lead soloist with the Dallas Gospel Ensemble  
+\The first female jazz pianist to play at Carnegie Hall
+\Married to Lalo Schifrin
+\*Kenny Barron's first piano teacher
+^Kenny Barron began studying the piano at the age of 12 with Ray Bryant's sister in Philadelphia. 
+<3
+
+@002 Charlie Rouse and Kenny Barron: 
+\Were both members of the Jazz Messengers. 
+\*Co-founded the band Sphere.
+\Are famous jazz pianists.
+\Both studied music at Harvard University. 
+^Kenny Barron and Charlie Rouse joined forces to form the band Sphere in 1989 with Buster Williams and Ben Riley
+<1
+
+@003 Since 1973, Kenny Barron has been:
+\Composer in residence at Harvard University.
+\A spokesperson for the NAACP.
+\*An instructor at Rutgers University. 
+\A member of the Count Basie Big Band.
+^In 1973, Kenny Barron began teaching theory and piano at Rutgers University.
+<2
+
+
+@004 During the 1980s, Chick Corea and Bobby McFerrin joined forces to record: 
+\A tribute to Miles Davis.
+\Works by Scriabin.
+\*The 'The Mozart Sessions' 
+\A double-LP devoted to Latin music. 
+^ Chick Corea and Bobby McFerrin recorded the now famous 'Mozart Sessions' with the Saint Paul Chamber Orchestra. Corea also recorded Mozart's concerto for two pianos in 1984.
+<2
+
+
+@005 What was the name of Chick Corea's popular band of the late 80s and early 90s featuring John Patitucci, Dave Weckl, and later Frank Gambale and Eric Marienthal?
+\Crystal Silence
+\Return to Forever
+\Bitches Brew
+\*The Chick Corea Electric Band
+^ The Chick Corea Electric drew international acclaim for such ground breaking albums as 'Eye of the Beholder' and the self-titled debut album.
+<1
+
+
+
+@006 Herbie Hancock holds a degree in music composition from Grinnel College, however he originally began his studies in:
+\Computational Linguistics
+\Sociology
+\*Electrical Engineering
+\American History
+^With his seminal work in electronic music and synthesizers, it's not surprising that Herbie Hancock originally studied electrical engineering before moving on to music composition. 
+<3
+
+@007 What tune did Herbie Hancock co-write in the 1980s that engendered an award-winning music video and the best selling album Future Shock?
+\*Rockit
+\Iceman
+\Screen Dance
+\Neuro Hip-Hop
+^Herbie Hancock co-wrote the tune 'Rockit' with the pop group Material during the 1980s. 
+<1
+
+@008 This hit single from Herbie Hancock's Headhunters album has been covered and transformed by countless bands since it was first recorded in 1973. 
+\Riot
+\Cantaloupe Island
+\Speak Like A Child
+\*Chameleon
+^The tune 'Chameleon' from the Headhunters album became a hit single after its release and quickly entered the jazz repertoire of the 1970s. 
+<2
+
+
+@009 Bill Evans was honored with: 
+\An honorary degree from the University of Washington.
+\*Five Grammy awards.
+\The key to the city of Boston. 
+\A bronze statue in Plainfield, New Jersey.  
+^Throughout his career, Bill Evans received no less than five Grammy awards for his music.
+<2
+ 
+@010 Miles Davis originally took top billing for the tune 'Blue in Green' from his album 'Kind of Blue.' However, word eventually spread that it was actually written by this pianist. 
+\Wynton Kelly
+\Thelonius Monk
+\*Bill Evans
+\Fred Elizalde
+^Although Miles Davis received composer credits on the record, Bill Evans actually wrote the now famous tune 'Blue in Green.' 
+<3
+
+@011 Which legendary pianist took the Islamic name Sulaimon Saud when he was a teenager in Philadelphia.
+\*McCoy Tyner
+\Carl Perkins
+\Jay McShann
+\Stan Greig
+^McCoy Tyner, a devout Muslim, took the Islamic name Sulaimon Saud while he was a teenager playing in Philadelphia. It was in Philadelphia that Tyner met John Coltrane, whose quartet he later joined in 1960. 
+<3
+
+
+@012 McCoy Tyner once worked with this 'rolling' duo during the late 1960s.
+\Sonny and Cher
+\*Ike and Tina Turner
+\Jan and Dean
+\Simon and Garfunkel
+^McCoy Tyner worked with Ike and Tina Turner during the late 1960s after leaving John Coltrane's band. 
+<2
+
+
+@013 Keith Jarrett recorded the Shostakovich Preludes and Fugues in 1992 and then later recorded this famous cyclical work by cool-headed Johann Sebastion Bach.
+\The Goldberg Variations
+\A Poet's Love
+\Kindertotenlieder
+\*The Well Tempered Clavier
+^In addition to recording the Shostakovich Preludes and Fugues, Keith Jarrett has also recorded Books I&II of Bach's Well Tempered Clavier.
+<2
+
+
+@014 Bobby Timmons is best remembered for:
+\*The jazz-soul tunes 'Dat Dere' and 'Moanin.'
+\His work with Miles Davis.
+\Inventing the synthesizer.
+\His unique chord voicings on the vibraphone. 
+^Although he was an accomplished pianist and vibraphonist, Bobby Timmons, who played with Art Blakey in the late 1950s and early 1960s, is famous for his classic tunes "Dat Dere" and "Moanin."
+<1
+
+
+@015 While Brad Mehldau was studying music at the School for Social Research in Manhattan, this rising young pianist played in Cobb's Mob, a quartet headed by:
+\Vibraphonist Gary Burton. 
+\Pianist James Cobble.
+\*Legendary percussionist Jimmy Cobb.
+\Saxophonist Wayne Shorter. 
+^Brad Mehldau played with percussionist Jimmy Cobb while he studied music at the School for Social Research in Manhattan. 
+<1
+
+
+@016 Kenny Kirkland, who is known throughout the jazz community for his work with Wynton Marsalis, was busy as a bee working with this pop superstar in the mid-1980s. 
+\Peter Gabriel
+\*Sting
+\David Bowie
+\Boy George
+^As a member of Sting's all-star band, Kenny Kirkland played on the best-selling Dream of the Blue Turtles album and performed before capacity crowds world-wide. 
+<2
+
+
+@017 This king of swing received his BA from Harvard University, and his music has been recorded by such artists as Billy Pierce and Billy Drummond 
+\Russ Freeman
+\Benny Green 
+\Jan Hammer
+\*Johnny King
+^Johnny King, along with fellow alumnus Joshua Redman, was educated at Harvard University.
+<2
+
+
+@018 While he was living in Boston, James Williams spent his nights backing visiting soloists such as Woody Shaw, Joe Henderson, and Art Farmer.  What did he do during the day?
+\Drove a cab.
+\Recorded jingles for radio.
+\*Taught at the Berklee School of Music.
+\Went to school.
+^During the mid-1970s, pianist and composer James Williams spent his days teaching music at the Berklee School of Music.
+<2
+
+
+
+@019 Besides being outstanding pianists, what else do Donald Brown and Geoff Keezer have in common?
+\They are both from Los Angeles.
+\*Both were proteges of James Williams.
+\They both studied at Texas State University.
+\They were both in the military.
+^Always eager to assist aspiring artists, James Williams helped foster the musical growth of both Donald Brown and Geoff Keezer.
+<3
+
+@020 George Cables toured with these two drummers in the 1960s and then recorded with them in the 1970s.
+\*Art Blakey and Max Roach
+\Philly Joe Jones and Clifford Jarvis
+\Billy Higgins and Louis Hayes
+\Danny Gottlieb and Eddie Prevost
+^Art Blakey and Max Roach each employed the talents of George Cables on the road in the 1960s and in the studio in the 1970s. 
+<3
+
+@021 In 1983, Oscar Peterson chose Benny Green as:
+\His Official biographer.
+\An honorary Canadian citizen. 
+\*His choice for the Glen Gould International Protégé Prize. 
+\The recipient of the Oscar Peterson Award for Excellence. 
+^In 1993 Oscar Peterson won the Glen Gould award, and he subsequently named Benny Green as his choice for the Glen Gould International Protégé Prize in Music and Communication.
+<2
+
+
+@022 In 1987 Benny Green was admitted to this traditional training ground for rising jazz musicians.
+\New York State University
+\Boston School of Jazz and Contemporary Music
+\The Avant-Garde Symposium in Chicago
+\*Art Blakey's Jazz Messengers
+^Benny Green joined Art Blakey's Jazz Messengers in 1987 and received fame and recognition from fans world-wide.
+<3
+
+@023 Pianist Elmo Hope is best known for:
+\His tune 'Luv's no Conviction,' recorded by Duke Ellington. 
+\*His work with Sonny Rollins and Clifford Brown.
+\His imprisonment for drug offences.
+\The use of polyrhythms in his solos. 
+^Although Elmo Hope did have intermittent problems with drugs, he is best known for his playing as a sideman with Sonny Rollins and Clifford Brown during the 1950s.
+<1
+
+
+@024 Jacky Terrasson won this prestigious competition in 1993.
+\*The Thelonious Monk Competition
+\Berklee School of Music's Best Pianist of the Year Award
+\The Glen Gould Award
+\Down Beat's Best New Pianist Award
+^Jacky Terrasson won the Thelonious Monk Competition in 1993, and he began playing with Betty Carter the very next day. 
+<1
+
+
+@025 Betty Carter once said of this pianist: "You can hear his way of phrasing, his way of attacking the piano...." Who was she referring to?
+\*John Hicks
+\Eddie Heywood
+\Keith Jarrett
+\Benny Green
+^Betty Carter was referring to none other than John Hicks. 
+<1
+
+@026 This pianist has been an associate professor at City University of New York, formed the organization Collective Black Artists Inc., and was a member of the Heath Brothers Band from 1974-83.
+\Tete Montoliu
+\Ben Sidran
+\*Stanley Cowell
+\Donald Brown
+^As an educator, performer, composer, and an active member of the community, pianist Stanley Cowell is a dynamic personality whose interests and influence are boundless.  
+<2
+
+@027 Pianist and composer Donald Brown grew up in Memphis with his five sisters, who all had this in common. 
+\They were all members of the community choir.
+\They all became teachers.
+\*They were all accomplished pianists.
+\They all played in the Memphis Youth Orchestra.
+^Donald Brown and his five sisters were all pianists.
+<2
+
+@028 'Portrait in Jazz,' 'Waltz for Debby,' and 'Conversations with Myself' are all recordings that feature this legendary pianist.
+\Oscar Peterson
+\Mel Powell
+\Wynton Kelly
+\*Bill Evans
+^Bill Evans, whose playing has influenced aspiring pianists for generations, was the creative force behind these three albums. 
+<3
+
+
+@029 This young pianist is often compared to Bill Evans for his hypnotic and trance-like demeanor.
+\*Brad Mehldau
+\Richie Beirach
+\Benny Green
+\Stephen Scott
+^Brad Mehldau's introspective approach to music has generated many comparison to the late Bill Evans. 
+<3
+
+
+@030 What is 'Free Jazz'?
+\The baroque tradition of free counterpoint.
+\Literally, music that is performed free of charge.
+\*Improvisation without a predetermined harmonic or form
+\A general term for jazz music from the sixties. 
+^Free Jazz refers to improvisation that is 'free' of the conventional musical structures in harmony, form, and time.    
+<1
+
+@031 What are 'Blue Notes'?
+\Musicians who record under the Blue Note label.
+\The 'A' section of a blues tune.
+\*The flat third and seventh tones in any given key.
+\New York longshoremen's union cards during the late 1950s. 
+^Blue notes are generally thought of as the flat third and seventh tones in a particular key.  
+<1
+
+
+@032 Which of following statements about pianist Jason Rebello is not true?
+\*He is a graduate of the Berklee School of Music.
+\He entered a Buddist monastery in 1995.
+\Was voted Most Promising Newcomer by The Wire magazine in '88
+\Has played with Art Blakey, Wynton Marsalis, and Gary Burton.
+^Born in the United Kingdom in 1969, Jason Rebello received his formal musical training at the London Guidhall School of Music. 
+<2
+
+
+
+@033 Pianist Tete Montoliu is:
+\A native of Bensonhurst, New York.
+\*Blind.
+\A part-time instructor at McGill University.
+\Well known as a singer as well as a pianist.
+^A formidable musician with an international reputation, pianist Tete Montoliu was born blind in Barcelona, Spain. 
+<2
+
+
+@034 Which of the following statements about Ellis Marsalis, father of Wynton and Branford Marsalis, is false.
+\Director of Jazz Studies at the University of New Orleans.
+\He played the clarinet in his high-school marching band. 
+\*He also plays the trumpet.
+\ He is with the International Association of Jazz Educators. 
+^As versatile a musician as Ellis Marsalis is, he does not play the trumpet. 
+<3
+
+
+@035 Geoff Keezer's parents were:
+\School Teachers in Minnesota.
+\*Piano Teachers in Wisconsin.
+\Genetic Engineers in California.
+\Classically trained singers in Nevada.
+^Geoff Keezer's parents were both piano teachers in his home state of Wisconsin. 
+<3
+
+
+
+@036 Geoff Keezer has the notable distinction of being:
+\*The last pianist to perform with the Jazz Messengers.
+\McCoy Tyner's protégé.
+\Wynton Marsalis' second cousin.
+\Married to Duke Ellington's grand daughter.
+^In 1988 Geoff Keezer started playing with Art Blakey's Jazz Messengers when he was only 17, and he continued with the ensemble until it disbanded in 1990. 
+<2
+
+
+
+@037 When New Zealand-born pianist Dave MacRae came to the USA in 1969, what was his first gig?
+\Hosting a late-night radio show on jazz in Seattle.
+\*Playing with the Buddy Rich band.
+\Recording with Miles Davis.
+\Teaching private piano lessons in Dallas.
+^Playing piano with the Buddy Rich band was Dave MacRae's first gig in the USA. 
+<2
+
+
+@038 Which Miles Davis album did Herbie Hancock not perform on?
+\My Funny Valentine
+\Miles Smiles
+\*Kind of Blue
+\Bitches Brew
+^During his five year tenure with Miles Davis, Herbie Hancock played on many of Davis' albums, but he didn't play on the classic album Kind of Blue.
+<1
+
+
+@039 Where did Dave Burrell grow up?
+\Puerto Rico
+\The Philippines
+\*Hawaii
+\Sri Lanka
+^Although he was born in Middleton, Ohio, pianist Dave Burrel spent his childhood on the sandy beaches of Hawaii. 
+<1
+
+
+@040 What event took place two weeks after Keith Jarrett recorded the double-LP 'Expectations'?
+\He was married in Europe.
+\*His contract with CBS was terminated.
+\He collapsed on-stage in Chicago from exhaustion.
+\He began a two month tour of the Soviet Union.
+^Two weeks after Keith Jarrett recorded the double-LP 'Expectations,' his contract with CBS was terminated abruptly. 
+<3
+
+
+
+
+@041 The Chick Corea album 'Now He Sings, Now He Sobs' was:
+\a trio album with Dave Holland and Barry Altschul.
+\His first recording using synthesizers.
+\*His debut album as a leader.
+\Recorded in Montreal.
+^The superlative recording 'Now He Sings, Now He Sobs' featuring Miroslav Vitous and Roy Haynes, was Chick Corea's first album under his own name. 
+<1
+
+
+@042 What significant event in Thelonious Monk's life took place in 1951?
+\The album 'Brilliant Corners' was released.
+\His son, T.S. Monk, was born.
+\He joined Dizzy Gillespie's big band.
+\*He was falsely imprisoned for possession of drugs.
+^Tragically, in 1951 Thelonious Monk was wrongly incarcerated for drug possession and barred from working in New York for six years. 
+<2
+
+
+
+@043 Who played drums for Thelonious Monk during the early 1970s?
+\Joe Hayes
+\Jo Jones
+\*His son, T.S. Monk
+\Eddie Prevost
+^Although the other personnel in his quartet changed from time to time, his son T.S. Monk remained with his father's band throughout the early 1970s.
+<2
+
+
+@044 Moe was:
+\Dave Brubeck's wife.
+\The nickname of Miles Davis' tour bus.
+\A term used to describe someone who plays out of tune.
+\*Bill Evans' nickname.
+^While Bill Evans' was playing with Miles Davis, he acquired the nickname Moe. 
+<3
+
+
+@045 Marcus Roberts was:
+\The first American awarded the Tchaikovsky Prize.
+\First employed by Art Blakey's Jazz Messengers.
+\McCoy Tyner's protégé.
+\*Musical director of the Lincoln Center Jazz Orchestra.
+^In 1993, pianist Marcus Roberts embarked on a thirty city tour as musical director of the Lincoln Center Jazz Orchestra.
+<1
+
+
+@046 E. Dankworth is:
+\*A pseudonym for Wynton Marsalis.
+\Brad Mehldau's manager.
+\A tune by Herbie Hancock.
+\Mulgrew Miller's real name.
+^E. Dankworth is the pseudonym Wynton Marsalis used on the album "Deep in the Shed" with Marcus Roberts.
+<3
+
+
+@047 Ronnie Mathews:
+\has been blind since the age of five.
+\*is the pianist with the T.S. Monk Sextet.
+\is an alumnus of City University in New York.
+\is an instructor at the Berklee School of Music.
+^Ronnie Mathews played extensively with Art Blakey's Jazz Messengers before his current gig as the pianist for the T.S. Monk Sextet. 
+<2
+
+
+@048 Chico O'Farrill was once employed as:
+\A bus driver in Boston.
+\Producer for Peter Gabriel.
+\Pianist for Miles Davis.
+\*Staff writer for the Count Basie Orchestra.
+^Pianist Chico O'Farrill is a prolific composer who wrote charts for Benny Goodman, Dizzy Gillespie, and Stan Kenton, and was once employed as the staff writer for the Count Basie Orchestra.
+<3
+
+
+
+@049 Kenny Barron:
+\Played duet concerts with Thelonious Monk.
+\Founded the Jazz Department at Texas State University.
+\*Played with the Ron Carter Quartet for four years.
+\Recorded several albums with Steve Coleman.
+^In 1976, Kenny Barron began playing with the Ron Carter quartet and remained there until 1980.
+<2
+
+
+@050 Donald Brown is noted for:
+\*His recordings with Buddy Collette
+\Tunes "Affair D'Amour," "New York," and "The Insane Asylum."
+\His tenure with Dizzy Gillespie.
+\His contributions to jazz education.
+^Donald Brown's compositions "Affair D'Amour," "New York," and "The Insane Asylum" have been recorded by Art Blakey, Wynton Marsalis, Art Farmer, and T.S. Monk.
+<1
+
+
+@051 The album 'The Real McCoy' was recorded by:
+\Michael Brecker
+\Chick Corea
+\*McCoy Tyner
+\Ellis Marsalis
+^After leaving the John Coltrane quartet, McCoy Tyner released the album 'The Real McCoy in 1967.
+<1
+@

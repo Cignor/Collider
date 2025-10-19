@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<ModularSynthPreset version="1">
+  <modules>
+    <module logicalId="1" type="VCO">
+      <params>
+        <VCOParams>
+          <PARAM id="frequency" value="440.0"/>
+          <PARAM id="waveform" value="0.0"/>
+        </VCOParams>
+      </params>
+    </module>
+    <module logicalId="2" type="LFO">
+      <params>
+        <LFOParams>
+          <PARAM id="bipolar" value="1.0"/>
+          <PARAM id="depth" value="0.5"/>
+          <PARAM id="depth_mod" value="0.0"/>
+          <PARAM id="rate" value="1.0"/>
+          <PARAM id="rate_mod" value="0.0"/>
+          <PARAM id="wave" value="1.0"/>
+          <PARAM id="wave_mod" value="0.0"/>
+        </LFOParams>
+      </params>
+    </module>
+    <module logicalId="3" type="Random">
+      <params>
+        <RandomParams>
+          <PARAM id="cvMax" value="1.0"/>
+          <PARAM id="cvMin" value="0.0"/>
+          <PARAM id="max" value="1.0"/>
+          <PARAM id="min" value="0.0"/>
+          <PARAM id="rate" value="1.00000011920929"/>
+          <PARAM id="slew" value="0.0"/>
+        </RandomParams>
+      </params>
+    </module>
+  </modules>
+  <connections>
+    <connection srcId="2" srcChan="0" dstId="1" dstChan="0"/>
+  </connections>
+  <NodeEditorUI>
+    <node id="1" x="-358.0" y="-211.0"/>
+    <node id="2" x="-584.0" y="52.0"/>
+    <node id="3" x="-839.8959350585938" y="-320.1884765625"/>
+  </NodeEditorUI>
+</ModularSynthPreset>

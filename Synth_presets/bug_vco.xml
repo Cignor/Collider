@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<ModularSynthPreset version="1">
+  <modules>
+    <module logicalId="1" type="VCO">
+      <params>
+        <VCOParams>
+          <PARAM id="frequency" value="20.0"/>
+          <PARAM id="waveform" value="0.0"/>
+          <PARAM id="waveform_mod" value="0.0"/>
+        </VCOParams>
+      </params>
+    </module>
+    <module logicalId="2" type="midi player">
+      <params>
+        <MIDIPlayerParameters>
+          <PARAM id="loop" value="1.0"/>
+          <PARAM id="pitch" value="0.0"/>
+          <PARAM id="pitch_mod" value="0.5"/>
+          <PARAM id="speed" value="1.449999928474426"/>
+          <PARAM id="speed_mod" value="0.5"/>
+          <PARAM id="tempo" value="153.0"/>
+          <PARAM id="track" value="1.0"/>
+          <PARAM id="velocity_mod" value="0.5"/>
+        </MIDIPlayerParameters>
+      </params>
+      <extra>
+        <MIDIPlayerExtra fileName="Movie_Themes_-_20th_Century_Fox.mid" filePath="H:\0000_CODE\01_collider_pyo\audio\MIDI\Movie_Themes_-_20th_Century_Fox.mid"
+                         track="1"/>
+      </extra>
+    </module>
+    <module logicalId="3" type="Scope">
+      <params>
+        <ScopeParams>
+          <PARAM id="monitorSeconds" value="5.0"/>
+        </ScopeParams>
+      </params>
+    </module>
+    <module logicalId="4" type="Scope">
+      <params>
+        <ScopeParams>
+          <PARAM id="monitorSeconds" value="5.0"/>
+        </ScopeParams>
+      </params>
+    </module>
+  </modules>
+  <connections>
+    <connection srcId="1" srcChan="0" dstId="output" dstChan="0"/>
+    <connection srcId="1" srcChan="0" dstId="4" dstChan="0"/>
+    <connection srcId="2" srcChan="0" dstId="1" dstChan="0"/>
+    <connection srcId="2" srcChan="0" dstId="3" dstChan="0"/>
+  </connections>
+  <NodeEditorUI>
+    <node id="1" x="-585.0" y="-19.0"/>
+    <node id="2" x="-1033.0" y="1.0"/>
+    <node id="3" x="-596.0" y="239.0"/>
+    <node id="4" x="-58.0" y="237.0"/>
+  </NodeEditorUI>
+</ModularSynthPreset>

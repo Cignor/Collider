@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<ModularSynthPreset version="1">
+  <modules>
+    <module logicalId="1" type="Math">
+      <params>
+        <MathParams>
+          <PARAM id="operation" value="12.0"/>
+          <PARAM id="valueB" value="0.0"/>
+        </MathParams>
+      </params>
+    </module>
+    <module logicalId="2" type="Random">
+      <params>
+        <RandomParams>
+          <PARAM id="cvMax" value="1.0"/>
+          <PARAM id="cvMin" value="0.0"/>
+          <PARAM id="max" value="41.95999145507812"/>
+          <PARAM id="min" value="0.0"/>
+          <PARAM id="rate" value="0.6399999856948853"/>
+          <PARAM id="slew" value="0.0"/>
+        </RandomParams>
+      </params>
+    </module>
+    <module logicalId="3" type="VCO">
+      <params>
+        <VCOParams>
+          <PARAM id="frequency" value="440.0"/>
+          <PARAM id="waveform" value="0.0"/>
+        </VCOParams>
+      </params>
+    </module>
+    <module logicalId="5" type="Value">
+      <params>
+        <ValueParams>
+          <PARAM id="value" value="150.0"/>
+        </ValueParams>
+      </params>
+    </module>
+  </modules>
+  <connections>
+    <connection srcId="1" srcChan="0" dstId="3" dstChan="0"/>
+    <connection srcId="2" srcChan="1" dstId="1" dstChan="1"/>
+    <connection srcId="3" srcChan="0" dstId="output" dstChan="0"/>
+    <connection srcId="3" srcChan="1" dstId="output" dstChan="1"/>
+    <connection srcId="5" srcChan="0" dstId="1" dstChan="0"/>
+  </connections>
+  <NodeEditorUI>
+    <node id="1" x="296.0" y="293.0"/>
+    <node id="2" x="-98.0" y="402.0"/>
+    <node id="3" x="305.467041015625" y="496.297607421875"/>
+    <node id="5" x="-180.1298217773438" y="211.043212890625"/>
+  </NodeEditorUI>
+</ModularSynthPreset>

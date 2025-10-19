@@ -1,0 +1,96 @@
+{
+  "name": "Design Grid",
+  "description": "Enhanced UI design grid with macro, layout, and micro levels - replaces enhanced_grid_system.py",
+  "type": "ui_design_enhanced",
+  "version": "1.0",
+  "resolution_agnostic": true,
+  
+  "elements": {
+    "macro_grid": {
+      "enabled": true,
+      "spacing": 100,
+      "spacing_percentage": 0.052,
+      "color": "grid_primary",
+      "opacity": 80,
+      "thickness": 1
+    },
+    
+    "layout_grid": {
+      "enabled": true,
+      "spacing": 20,
+      "spacing_percentage": 0.010,
+      "color": "grid_layout_primary",
+      "opacity": 50,
+      "thickness": 1
+    },
+    
+    "micro_grid": {
+      "enabled": true,
+      "spacing": 8,
+      "spacing_percentage": 0.004,
+      "color": "grid_secondary", 
+      "opacity": 40,
+      "thickness": 1
+    }
+  },
+  
+  "grid_calculator": {
+    "enabled": true,
+    "edge_margin": 20,
+    "corner_margin": 40,
+    "macro_spacing": 100,
+    "layout_spacing": 20,
+    "micro_spacing": 4,
+    "columns": 12,
+    "gutter_width": 16,
+    "margin_width": 80,
+    "baseline": 4
+  },
+  
+  "forbidden_zones": {
+    "enabled": true,
+    "top_edge": {
+      "enabled": true,
+      "margin": 20,
+      "color": "debug_error",
+      "opacity": 30
+    },
+    "bottom_edge": {
+      "enabled": true,
+      "margin": 20,
+      "color": "debug_error",
+      "opacity": 30
+    },
+    "left_edge": {
+      "enabled": true,
+      "margin": 20,
+      "color": "debug_error",
+      "opacity": 30
+    },
+    "right_edge": {
+      "enabled": true,
+      "margin": 20,
+      "color": "debug_error",
+      "opacity": 30
+    },
+    "corners": {
+      "enabled": true,
+      "margin": 40,
+      "color": "debug_error",
+      "opacity": 30
+    }
+  },
+  
+  "performance": {
+    "caching_enabled": true,
+    "batch_rendering": true,
+    "update_frequency": "on_resolution_change"
+  },
+  
+  "colors": {
+    "grid_primary": "grid_primary",
+    "grid_secondary": "grid_secondary",
+    "grid_layout_primary": "grid_layout_primary",
+    "debug_error": "debug_error"
+  }
+}

@@ -1,0 +1,1071 @@
+@001 A\Note of the scale. A440 (440 cycles per second) is commonly 
+used for tuning the orchestra. Also, an analytical term for the first 
+section of a piece. 
+@002 abend (Ger.)\Evening. 
+@003 abendlied (Ger.)\Evening song. 
+@004 absolute music\Music composed simply as music, with no references 
+to emotions, stories, paintings or any other non-musical subject. 
+@005 absolute pitch\Perfect pitch. The ability to recognize or recall 
+any note. 
+@006 abstract music\Same as absolute music. 
+@007 accelerando (It.)\Getting gradually quicker. 
+@008 accent\Emphasizing a musical sound or note by playing it slightly 
+louder. 
+@009 acciaccatura (It.)\A crushed dissonant note of the shortest 
+possible duration played before or after the main note or chord and 
+immediately released. 
+@010 accidental\In music notation, a temporary alteration to a 
+particular note, raising it or lowering from its normal pitch only to 
+the bar in which the accidental occurs. It is indicated by a sharp, 
+flat, double sharp, double flat or natural sign preceding a particular 
+note. 
+@011 accompaniment\Harmonic or melodic support to the principal melody 
+in music. It is often made up of decorative or textural music, or 
+sometimes simple chords. The accompaniment often comes to the 
+forefront of the music, but its role is essentially to be supportive. 
+@012 acoustics\The sound qualities of a listening space, such as a 
+concert hall or theatre. The factors affecting acoustics have been 
+studied by scientists and engineers who have tried to document the 
+variables that contribute to satisfying sound for both the performing 
+musicians and the audience. This developing science, working with 
+things such as the dimensions and construction materials of a 
+structure, has been used with varying success in the design of new 
+concert halls. 
+@013 action\The parts of the piano that have to do with the keyboard, 
+hammer and damping mechanisms. 
+@014 adagio (It.)\Slow speed. Often used as the title of a slow 
+movement in Sonatas and similar pieces of music. 
+@015 à deux cordes (Fr.)\Or a due corde (It.). On two strings. 
+@016 ad lib\Play a passage with freedom as to rhythm and tempo. 
+@017 affettuoso (It.)\With feeling. 
+@018 agitato (It.)\Restless and wild. 
+@019 agogic\Used of deviations from the strict tempo and rhythm 
+necessary for the subtle performance of a musical phrase. 
+@020 air\A simple tune for voice or instrument. 
+@021 Alberti bass\A keyboard moving figuration for the left hand using 
+simple arpeggio treatment of a series of chords. This was much used by 
+18th and early 19th century composers. Named after the Italian 
+composer and keyboard player Domenico Alberti (1710-40). 
+@022 aleatoric music\Music containing chance or random elements. A 
+trend since 1945 with composers like John Cage and Karlheinz 
+Stockhausen. 
+@023 al fine (It.)\To the end. 
+@024 alla (It.)\To the, at the, in the manner of. 
+@025 alla breve (It.)\Take the half note as the main unit, not the 
+quarter note (e.g. 2/2 instead of 4/4). 
+@026 alla marcia (It.)\In march style. 
+@027 allargando (It.)\Getting broader. 
+@028 alla turca (It.)\In the Turkish style (e.g. Mozart’s Rondo alla 
+turca). 
+@029 alla zingarese (It.)\In the style of gypsy music. 
+@030 allegretto (It.)\Slower than allegro. 
+@031 allegro (It.)\Fast and lively. 
+@032 allegro non troppo\Fast but not too fast. 
+@033 allemande (Fr.)\(1) A moderately slow dance movement often 
+opening the Baroque suite in 4/4 time (based on an old German type of 
+dance); (2) A brisk dance in triple time current in the late 18th and 
+early 19th centuries. A prototype of the waltz. 
+@034 amoroso (It.)\Lovingly. 
+@035 andante (It.)\At a moderate speed. 
+@036 andantino(It.)\Slightly faster than andante. 
+@037 animato (It.)\Lively, animated. 
+@038 antiphon (Gk.)\The plainsong setting of sacred words sung as 
+responses in Roman Catholic or Greek orthodox services. The term 
+antiphonal derives from the practice of alternating performances 
+between sets of singers stationed apart. 
+@039 appassionato (It.)\Impassioned. 
+@040 appoggiatura (It.)\A musical ornament (chiefly 18th century) of 
+an auxiliary note falling or rising to a harmonized note. It can be 
+written or unwritten. 
+@041 arabesque (Fr. & Eng.)\Or arabeske (Ger.). A short piece with 
+decorative qualities (e.g. Debussy, Arabesques). 
+@042 aria (It.)\Air or song for one or more voices found in opera and 
+oratorio. A da capo aria is one in which the first section is finally 
+repeated after a contrasting section. 
+@043 arietta (It.)\A little or light aria. 
+@044 arioso (It.)\Similar to an aria. 
+@045 arpeggio (It.)\A chord performed with the notes separated or 
+played in succession. 
+@046 arrangement\A re-write of an existing piece of music into a 
+different style or combination of instruments or voices. 
+@047 assai (It.)\Very (eg. allegro assai means very quick). 
+@048 a tempo (It.)\Return to the original speed. 
+@049 atonal\Music which is composed without reference to a key (e.g. 
+major, minor or modal). All the expected devices for musical 
+composition, such as melody, chords, rhythm, can be used. However, 
+other methods of tonal organization (including mathematical patterns) 
+are used. 
+@050 attacca (It.)\Go on to the next section without a repeat. 
+@051 augmentation\The lengthening (e.g. doubling) of note time values. 
+The melody may be made of the same pitches, for example, but with 
+longer time values, has a different musical and emotional effect. 
+@052 augmented\Enlarged, usually referring to an interval of two notes 
+(eg. augmented 5th is a semitone wider than a regular or perfect 5th). 
+@053 ayre\A song for one or several voices in 17th century England. 
+@054 B\Note of the scale. 
+@055 baby grand\A small grand piano (less than 6 feet in length). 
+@056 badinage (Fr.)\‘playfulness’. Also badinerie. This term was used 
+as a title movement in quick 2/4 time in the 18th century suite (e.g. 
+Bach’s Suite in B minor for flute and strings. 
+@057 bagatelle (Fr.)\‘trifle’. Usually a short and light piano piece. 
+Beethoven wrote 26 (e.g. Für Elise). 
+@058 ballad\A traditional solo song telling a story with music 
+repeated for each verse. In the l9th century the term came to mean a 
+rather sentimental drawing-room song. However, it may also be applied 
+to a self-contained narrative song (e.g. Schubert’s Erlkönig or to 
+operatic arias (e.g. Senta’s Song from The Flying Dutchman by Wagner. 
+It describes a sentimental song in jazz. 
+@059 ballade\Chopin’s term for a long, dramatic piano piece suggesting 
+a story. His Four Ballades are inspired by the poems of Mickiewicz. 
+Brahms, Grieg, Liszt and others later used the title. 
+@060 bar\The metrical division of music into groups of beats, and 
+marked by vertical barlines drawn across the musical staff. Also known 
+as ‘measure’. Its main purposes are to indicate the placement of 
+rhythmic emphasis and to be a visual aid to musicians. A double bar 
+(two vertical lines close together) indicates the end of a piece, or 
+section. 
+@061 barcarolle (Fr. from It.)\A song or piece of instrumental music 
+in a swaying 6/8 or 12/8 time associated with the Venetian gondoliers. 
+@062 baritone\Male voice between bass and tenor with a range of two 
+octaves from G (on bottom line bass clef) to G (above middle C). The 
+term is also a prefix for instruments indicating the range below the 
+tenor type (e.g. baritone saxophone). 
+@063 baroque\The musical period approximately between 1600 and 1750 
+encompassing composers such as Monteverdi, Frescobaldi and Gabrieli 
+(early baroque) and Bach and Handel (late baroque). It is 
+characterized by elaborate treatment of melody in polyphonic style. 
+@064 bass\Bass can refer to the lowest sounding male voice, or the 
+largest bowed string instrument. Generally, it refers to music written 
+in the low range of notes and notated in the Bass Clef. In piano 
+music, this means the lower part of the keyboard played by the left 
+hand. 
+@065 bass clef\The symbol found at the beginning of the music staff of 
+low register instruments (eg. cello) or for the low notes of the 
+piano. It is more accurately called the “F”clef - the two small dots 
+indicating the F below middle C. 
+@066 basso (It.)\‘bass’. Basso cantabile describes a lyrical singing 
+voice; basso continuo is the same as continuo and basso ostinato is 
+the same as ground bass. 
+@067 berceuse (Fr.)\‘bercer’ to rock. An instrumental cradle song or 
+lullaby in compound duple time (e.g. Chopin’s Berceuse). 
+@068 bergamasque (Fr.)\Also bergamasca (It.) or bergomask (Eng.) A 
+peasant’s dance from Bergamo, north Italy, with 2 beats to the bar. 
+Composers have used the term in titles, (e.g. Debussy’s Suite 
+Bergamasque). 
+@069 binary form\A simple composition in two balanced sections. After 
+beginning in one key, the first section shifts to some other related 
+key. The second section, in the new key, then works its way back to 
+the original key. If the original key is a minor one, then the first 
+section ends with the relative major. Such compositions are usually 
+short. 
+@070 bitonality\A 20th century concept of using two keys 
+simultaneously, evident in Stravinsky’s music. 
+@071 bolero (Sp.)\A Spanish dance performed to the dancers’ singing 
+with castanets in simple triple time. 
+@072 bourrée (Fr.)\A popular fast dance of the 18th and l9th 
+centuries. It began with an upbeat, had two beats to the bar and was 
+often found in dance suites. 
+@073 brace\The line with bracket joining two staves in piano music. 
+@074 bravura (It.)\A display of a musical passage requiring great 
+virtuosity by the performer. 
+@075 brillant (Fr.)\Also brillante (It.). Brilliant. Usually a 
+direction for solo performers. 
+@076 Broadwood\A London builder of pianos founded in 1728. Beethoven 
+owned a Broadwood. 
+@077 broken chord\A chord in which notes are sounded one after the 
+other, rather than all together. 
+@078 broken octaves\Alternate notes played an octave apart, frequently 
+used in piano music. 
+@079 C\Note of the scale 
+@080 cadence\A progression of chords in music designed to produce a 
+closing effect, such as at the end of phrases, sections or the 
+composition. Over the years, some chord progressions have come to be 
+known as a standard cadences. 
+@081 cadenza (It.)\A solo passage before the final cadence, generally 
+occurring in the first or last movement in the classical concerto. It 
+suggests improvisation of the main themes and a display of the 
+soloist’s virtuosity. However, Mozart and other composers since have 
+taken no chances with the performer’s improvisational skills and have 
+written out their cadenzas in a style that matched the concerto. 
+@082 cakewalk\American ragtime style. Debussy used the style for his 
+Golliwogg’s Cakewalk in the Children’s Corner. 
+@083 calando (It.)\Dying away. 
+@084 canon\A contrapuntal work in which a melody, stated by one voice 
+(or part) is repeated by one or more voices in turn, each entering 
+before the previous part has finished. This results in overlapping, 
+similar to a type of music called the Round (e.g. Frère Jacques), but 
+more formal and complex in construction. Although canons can be 
+performed by a group of singers or instrumentalists, solo piano music 
+can imitate many voices. 
+@085 cantabile (It.)\In a singing style. 
+@086 cantata (It.)\Generally a vocal composition with instrumental 
+accompaniment telling a story by means of arias and recitatives. In 
+the 17th and 18th centuries two types existed - cantata da camera 
+which was secular and cantata da chiesa which was suitable for church. 
+Writers of this period included Schütz and J.S. Bach who made the 
+cantata more theatrical with the use of choruses, chorales and 
+strings. In the 19th century the term described short narrative choral 
+works accompanied by full-scale orchestra with arias, recitatives and 
+soloists. Modern writers include Bartok, Stravinsky and Britten. 
+@087 cantilena (It.)\A smooth Lyrical melody line. 
+@088 canzona (It.)\‘song’. A short, fairly polyphonic instrumental 
+piece popular in the 16th and 17th centuries. In the 18th century, 
+Canzoni referred to short arias and similar short Lyrical instrumental 
+pieces. 
+@089 capriccio (It.)\Or caprice (Fr.). A short, light and lively 
+pieces. In the 17th century, the term referred to keyboard works in 
+bright, fugal style. In the l9th century, it described piano pieces in 
+rhapsodic style (e.g. by Brahms). 
+@090 cédez (Fr.)\Slow down. 
+@091 cembalo (It.)\Italian word for harpsichord. 
+@092 chaconne (Fr.)\A vocal or instrumental composition in slow, 
+stately three-beat time with a ground bass, and popular in 17th 
+century keyboard music and opera. 
+@093 chaleur (Fr.)\Warmth. 
+@094 chamber music\Instrumental ensemble music with a limited number 
+of performers and with only one player per part, suitable for a small 
+performing space (such as in a private home). Chamber music is often 
+performed in small concert halls. 
+@095 chamber sonata\Also sonata da camera (It.). A type of suite 
+prevalent in the 17th and 18th centuries mainly in the form of dance 
+movements for two or more stringed instruments with keyboard 
+accompaniment. 
+@096 chanson (Fr.)\A song or an instrumental composition with a song-
+like character. 
+@097 chorale\A Lutheran metrical hymn tune often used by J.S. Bach. 
+@098 chorale prelude\An instrumental piece based on a chorale, usually 
+composed for organ. 
+@099 chord\The sounding together of two or more notes, usually with 
+harmonic implication. Chord progressions are a series of chords that 
+logically flow from one to the other. 
+@100 chromatic\Music which makes heavy use of notes not belong to the 
+scales within the composition’s key. A chromatic chord, for example, 
+has notes foreign to the key. J.S. Bach’s music is often very 
+chromatic. Chromaticism commonplace in 19th century music, evolving to 
+the point where the key is not always obvious. 
+@101 classical music\A style of music in the late 18th century written 
+by composers such as Haydn and Mozart, characterized by clarity of 
+texture, harmony and melody, as well as the refinement of abstract 
+musical forms such as the sonata, symphony and concerto. 
+@102 clavier (Ger.)\Also Klavier. German generic word for keyboard 
+instrument (eg. Bach’s Well-Tempered Clavier). 
+@103 clef\The symbol to determine the relative position of notes on 
+the musical staff, placed normally at the beginning of each line, or 
+whenever a different clef temporarily replaces the starting clef (to 
+make notes fit more easily on the staff). There are many possible 
+clefs (e.g. treble, bass, alto and tenor) chosen to accommodate the 
+range of various instruments or voices. In piano music, the double 
+staff (a staff for each hand) uses treble or bass clefs. 
+@104 close harmony\Harmony in which notes of chords are written 
+closely together (e.g. in barbershop quartets). 
+@105 cluster\A 20th century concept of playing a group of adjacent 
+notes simultaneously on the piano (e.g. with the forearm or a piece of 
+wood). The usual term is tone cluster or note cluster. Pioneered by 
+Cowell in 1912 and used by Ives. 
+@106 coda (It.)\‘tail’. The concluding section at the end of a 
+movement, not usually of structural necessity. However, Beethoven’s 
+codas have great significance in his musical design. 
+@107 codetta (It.)\Literally “little tail”. Similar to coda but on a 
+smaller scale, eg. rounding off a section of a movement as opposed to 
+a whole movement. 
+@108 coloratura (It.)\Agile and florid style of vocal performance. 
+@109 common time\Four quarter notes to the bar, written 4/4 or C. 
+@110 composition\Either a piece of music or the act of creating it. 
+@111 compound time\A type of metre where the beat units are divisible 
+into three (e.g. 6/8, 9/8, 12/8. Opposite of simple time. 
+@112 con forza (It.)\With force, vigorously. 
+@113 con fuoco (It.)\With fire. 
+@114 con grandezza\with grandeur. 
+@115 concertante\(1) A work for orchestra or for two or more 
+instruments with prominent solo parts; (2) The sinfonia-concertante is 
+a work with a form nearer to a symphony than concerto but employing 
+solo instruments and orchestra. 
+@116 concertino\(1) A small and light textured concerto; (2) The 
+soloist group in the 17th and 18th century concerto grosso. (3) A less 
+formally structured work than a concerto for one or more solo 
+instruments with orchestra. 
+@117 concerto\(1) A large-scale work, generally in three movements 
+involving solo instrument(s) contrasted with orchestra and 
+standardized by Mozart. Also called solo concerto; (2) An orchestral 
+work in several contrasting movements with or without solo 
+instruments, often supported by figured bass in the 17th and 18th 
+centuries. 
+@118 concord\Pleasing to the ear and sounding harmonically resolved. 
+However, interpretations of this term vary considerably. The opposite 
+is discord. 
+@119 conduct\To direct a performance of either singers, players or 
+both with a baton or hands in order to give precise indications of 
+dynamics, phrasing and speed. 
+@120 consecutive intervals\Harmonic intervals of the same kind (e.g. 
+thirds succeeding one another in the same parts. 
+@121 conservatoire (Fr.)\Or conservatory. A school for musical 
+training. 
+@122 consonance\Same as concord. 
+@123 continuo (It.)\Abbreviation of basso continuo. Same as figured 
+bass. 
+@124 contralto\The lower type of female voice having a range from F 
+below middle C to G above the treble clef. 
+@125 contrapuntal\Adjective from counterpoint. 
+@126 contrary motion\musical parts moving in opposite directions 
+simultaneously. 
+@127 corda, corde\String(s). In piano playing, una corda (one string) 
+indicates the use of the soft (left) pedal. The term tre corde (three 
+strings) cancels this, indicating the release of the soft pedal. 
+@128 counterpoint\The sounding together of two or more separate parts 
+of rhythmic and melodic independence, in harmony. Invertible 
+counterpoint occurs when any one melody strand can exchange its 
+position for another (e.g. the bass becomes treble). Between two 
+parts, this is called double counterpoint. 
+@129 courante (Fr.)\A lively dance in triple time popular in the 
+baroque period and found in the suite. 
+@130 crescendo (It.)\Getting gradually louder. 
+@131crotchet (Eng.)\Same as quarter note. 
+@132 csardas (Hung.)\Hungarian dance in contrasting sections (slow and 
+fast). 
+@133 cycle\A set of works, especially songs, intended to be performed 
+as a group with thematic connection (e.g. Schubert’s song cycle Die 
+Winterreise. 
+@134 cyclic form\A work in which a theme connects more than one 
+movement. Beethoven introduced it into symphonic music (e.g. in his 
+Symphony No. 5) and romantic composers developed it further. 
+@135 cycle of fifths\a chain of perfect fifths which will lead back to 
+the original note (at a different octave) after working through the 
+other eleven notes of the chromatic scale. It is useful for learning 
+key signatures. 
+@136 D\Note of the scale. Abbreviation for Deutsch in the cataloguing 
+of works by Schubert. 
+@137 da capo or DC\Repeat from the beginning. 
+@138 da capo al fine\Repeat up to the word Fine (the end). 
+@139 da capo al segno\Repeat to the sign. 
+@140 dal segno\Repeat from the sign. 
+@141 dampers\The felt tipped mechanisms which stop the sound of piano 
+strings when not in use or after a string has been sounded. The damper 
+pedal (right) when depressed lifts all the dampers. Also, depressing a 
+key will lift the single damper. Releasing the key makes the damper 
+fall back to the string. 
+@142 damper pedal\The right pedal on a piano. 
+@143 damping pedal\Soft (left) pedal on a piano. 
+@144 decrescendo (It.)\Becoming gradually softer. 
+@145 degree\Position of note in scale (e.g. D is the second degree of 
+C major scale). 
+@146 development\The section of a movement when initial statements of 
+themes are expanded, developed, modified and broken up. 
+@147 diatonic\Adjective describing major and minor scales and also 
+modes. The opposite of chromatic music which introduces notes not in 
+the prevailing key. Diatonic harmonies, intervals, passages, etc. are 
+made up of notes of the current key. 
+@148 diminished triad\A triad in which the perfect fifth is reduced 
+chromatically by a semitone (e.g. A, C and E flat. 
+@149 diminuendo (It.)\Or dim. Gradually becoming softer (see 
+decrescendo). 
+@150 diminution\The treatment of a melody by shortening the time 
+values of notes, usually by half (e.g. in fugues and canons). 
+@151 discord\See concord. 
+@152 dissonance\Same as discord (see concord). 
+@153 divertimento (It.)\Usually an 18th century term for an 
+entertaining suite of movements for chamber ensemble or orchestra. 
+Mozart wrote in this style. 
+@154 divertissement (Fr.)\‘amusement’. (1) Entertainment in ballet 
+form, sometimes with songs, found in operas or plays for contrast 
+(e.g. the operas of Lully; (2) Same as divertimento; (3) Instrumental 
+piece or fantasia employing popular tunes. 
+@155 dodecaphonic music\Same as serial music. 
+@156 dolce (It.)\Sweet and gentle. 
+@157 dolcissimo\Very sweetly. 
+@158 dolente (It.)\Sorrowful. 
+@159 dominant\Fifth degree of the major or minor scale, or a triad 
+built on it. 
+@160 dominant seventh\Dominant triad with the addition of the seventh 
+note from its root. 
+@161 Doppio movimento\At double the speed of the preceding section. 
+@162 double bar\Two bar lines placed closely together to signify the 
+end of a composition or section. 
+@163 double counterpoint\Invertible counterpoint in two parts 
+occurring frequently in fugues. 
+@164 double flat\A prefix to a note indicating the pitch is to be 
+lowered by two semitones. 
+@165 double sharp\Prefix attached to note indicating pitch to be 
+raised by two semitones. 
+@166 douce(ment) (Fr.)\Sweet (sweetly), gentle (gently). 
+@167 downbeat\The downward movement of the conductor’ s baton or hand 
+indicating the first beat of the bar. The term can also mean the first 
+beat of the bar. 
+@168 due corde (It.)\Two strings. In piano music this occasionally 
+indicates the release of the soft pedal (same as Tre Corde). 
+@169 duet\A composition for two performers sometimes with 
+accompaniment. A piano duet is for two pianists on one piano. 
+@170 duettino (It.)\A little duet. 
+@171 duo\Same as duet but mainly an instrumental composition for two 
+performers. A piano duo is for two pianists on separate pianos. 
+@172 duple time\Time in which the number of beats in the bar is 
+divisible by two or four (e.g. 2/4, 4/4, 2/2). 
+@173 duplet\A pair of notes occupying time usually taken by three 
+(e.g. 6/8 or 3/8). 
+@174 dynamics\The degrees of softness or loudness in music indicated 
+by signs or words on the score. 
+@175 clatant (Fr.)\(1) Brilliant, bright; (2) Blaring. 
+@176 cossaise (Fr.)\Short for danse ecossaise. Although meaning 
+Scottish dance, the term is apparently not of Scottish origin. A quick 
+dance in 2/4 time, it was popular in Britain and on the Continent in 
+the late 18th and early 19th centuries. Cultivated by Beethoven. 
+@177 eilen (Ger.)\To hurry. Nicht eilen, do not hurry. 
+@178 einfach (Ger.)\Simply. 
+@179 eisteddfod (Welsh, ‘assembly’)\Music or competitive festival. 
+@180 elegy\Or élégie (Fr.) Song or instrumental composition for the 
+dead. 
+@181 embellishments\Same as ornaments. 
+@182 embouchure (Fr.)\The correct position of lips to the mouthpiece 
+of an instrument to produce accurate intonation and good tone. 
+@183 enchaînez (Fr.)\Link together (e.g. go straight on to the next 
+section or movement without a break). 
+@184 encore (Fr.)\Again. Refers to an extra selection performed by 
+musicians after a program in response to audience applause. French 
+term is bis. 
+@185 enharmonic\Refers to alternate naming or spelling of the same 
+musical note (e.g. A flat is the same as G sharp) 
+@186 ensemble (Fr.)\Literally ‘together.’ (1) A small group of 
+performers (e.g. a vocal or instrumental ensemble; (2) In opera, an 
+ensemble is an selection for several soloists with or without chorus. 
+@187 entr’acte (Fr.)\(1) Interval during a play or opera; (2) Music to 
+be played between the acts of a play or opera. 
+@188 entrée (Fr.)\Chiefly a 17th century French music term for (1) an 
+introductory piece for the entry of characters in ballet or opera; (2) 
+an independent instrumental piece of similar nature; (3) the 
+equivalent of a scene or act in ballet or opera. 
+@189 entry\(1) The entrance of a theme in a fugue occurring not only 
+at the beginning but also at later stages in the composition; (2) A 
+17th century term for a prelude. 
+@190 episode\(1) In a rondo, this is a contrasting section between 
+episodical form recurrences of the main theme; (2) In a fugue, it is a 
+section linking (by means of contrast, modulation or possibly using 
+subject material) one entry and another. In both contexts, an episode 
+has a subordinate role. 
+@191 episodical form\Same as rondo form. 
+@192 equale (Old It.)\‘equal’. Piece or pieces (equali) for 
+instruments of the same kind. 
+@193 equal temperament\A method of tuning keyboard instruments so that 
+the difference in pitch between al notes is roughly the same. It makes 
+it possible to play in all keys and sound in tune. Bach wrote his 
+Well-Tempered Clavier to demonstrating this method of tuning (new in 
+his time). 
+@194 espressivo (It.)\With expression. 
+@195 estampie (Fr.)\A popular dance form in the 13th and 14th 
+centuries 
+consisting of several sections (puncta) each of which has a first 
+ending (ouvert) and a second ending (clos). 
+@196 estinto (It.)\‘extinct’. Music to be played so that it is barely 
+audible. 
+@197 étouffez (Fr.)\‘damp’. Indication to harp or cymbal players, etc. 
+that sound must be immediately cut short. 
+@198 etude (Fr.)\‘study’. An instrumental piece to improve or 
+demonstrate certain technical points. However, many etudes (such as 
+those by Chopin) have great artistic merit. 
+@199 exercise\(1) An instrumental or vocal piece intended to improve 
+aspects of technique and of no artistic value; (2) The term for a 
+keyboard suite in the 18th century. 
+@200 exposition\The initial statement of a musical theme or idea upon 
+which a movement or piece is based. In a fugue, the exposition is the 
+initial statement of the subject by each voice in turn. The exposition 
+is completed when each voice has been heard for the first time. In 
+sonata form, it is a repeated section in which the main themes are 
+first stated before moving on to the development section. 
+@201 expressionism\20th century term borrowed from painting and 
+applied to other art forms implying a reaction against impressionism 
+(e.g. the works of composers such as Debussy). Musically it is 
+especially applied to the works of Schoenberg, Berg and some 
+compositions of Hindemith. 
+@202 expression marks\Indications on the score provided by the 
+composer to aid accurate performance of a work and consisting of 
+dynamics (e.g. degrees of loudness and softness), tempo and mood. 
+@203 extemporisation\Same as improvisation. 
+@204 F\(1) Note of the scale; (2) Abbreviation of forte. 
+@205 f clef\Another name for bass clef. 
+@206 facile (Fr. & It.)\Easy, fluent. 
+@207 facilmente\Easily or fluently. 
+@208 falsetto (It.)\Singing or speech by an adult male voice in a 
+higher register than normal. It is sometimes used for a comic effect 
+and is used by tenors for notes above their normal range. 
+@209 fandango (Sp.)\A lively Spanish dance in 3/4 or 6/8 time 
+accompanied by guitar, castanets and performers’ singing. The fandango 
+includes sudden stops and speed increases 
+@210 fanfare\(1) A flourish for trumpets (or other imitating 
+instruments) usually for an introduction or proclamation; (2) French 
+for brass band. 
+@211 fantasia (It.)\fantaisie (Fr.), fantasie (Ger.), fantasy (Eng.). 
+This style is generally associated with the abandoning of set rules 
+for free flights of the composer’s imagination. Specific definitions 
+include: (1) a romantic mood piece of the 19th century (e.g. by 
+Schumann); (2) a contrapuntal piece, in several sections for one or 
+many players, current in the 16th and 17th centuries, of improvisatory 
+nature, with ‘fancy’ as an alternative name. The title phantasy was 
+used for the 20th century revival of the form. 
+@212 fantasiestücke (Ger.)\A short piece similar to capriccio or 
+intermezzo. 
+@213 farandole (Fr.)\A dance of Provence in 6/8 time accompanied by 
+pipe and tabor. 
+@214 fausset (Fr.)\Falsetto. 
+@215 fermata (It.)\Pause. 
+@216 ff\Abbreviation of fortissimo meaning very loud. 
+@217 figure\A short musical phrase (not as long as a theme) which is 
+recognizable through repetition in a composition. 
+@218 figuration\Decorative patterns of notes to ornament a melody in 
+piano music. 
+@219 figured bass\Also basso continuo (It.). The bass part (played on 
+keyboard or other chordal instrument) with figures written below the 
+notes indicating the harmonies to be played above them. This system 
+was used greatly in the baroque period as an accompaniment for 
+soloists or to enrich the general texture of a larger composition. 
+@220 final\The note on which the melody ends in church modes. In 
+authentic modes, the final is on the tonic. In plagal modes, it falls 
+on the fourth degree of the scale. 
+@221 finale (It.)\Final. In English there are two main meanings: (1) 
+the last movement of a work in several movements; (2) the lengthy 
+concluding section of an opera, often subdivided into smaller sections 
+with contrasting tempos or keys. Involves several singers and often a 
+chorus. 
+@222 fine (It.)\End. This term sometimes occurs in the middle of 
+music, often where there is an instruction to repeat an opening 
+section. The direction fine indicates the end of a piece. 
+@223 fino al segno (It.)\As far as the sign. 
+@224 fioritura (It.)\‘a flowering’. Decoration of a melody with 
+ornaments which may be notated or improvised. Evident in 17th and 18th 
+century Italian opera. 
+@225 first movement form\An alternative name for sonata form. 
+@226 flamenco or cante flamenco (Sp.)\An Andalusian song performed 
+with guitar accompaniment and dancing of a mostly sad nature. Various 
+types of flamenco exist and are named after districts (e.g. malaguena 
+and sevillana). Flamenco-style guitar employs quite different and 
+forceful techniques compared to classical guitar playing. 
+@227 flat\A lowering in pitch which may be a semitone, or a 
+description of someone singing or playing below normal pitch 
+unintentionally. A double flat indicates a lowering of the pitch by 
+two semitones. 
+@228 flebile (It.)\Mournful. 
+@229 fliessend (Ger.)\Flowing. 
+@230 flourish\(1) Fanfare; (2) Decorative musical figuration notated 
+or improvised. 
+@231 flutter-tongue\Extremely fast articulation of sound on a wind 
+instrument by the tongue, like trilling. 
+@232 forte (It.)\Loud. Abbreviated f. 
+@233 fortepiano\early form of the piano. 
+@234 fortissimo (It.)\Very loud. Abbreviated ff. 
+@235 forza (It.)\Force. 
+@236 forzando (It.)\Strongly accented. Abbreviated fz. 
+@237 frottola (It.)\A popular and light Italian strophic song for 
+several voices, with the melody on top, flourishing around 1500. 
+Particularly heard in aristocratic circles. 
+@238 fuga\(1) (Lat.) A canon in the 15th and 16th centuries; (2) (It.) 
+A fugue. 
+@239 fugato\Describes a section of a composition in fugal style which 
+is not actually a fugue. 
+@240 fuge (Ger.)\Fugue. 
+@241 fughetta (It.)\Short fugue. 
+@242 fugue\A contrapuntal composition for two or more voices or parts 
+built around a theme, which is successively imitated by entries of 
+each voice at the beginning and developed throughout the piece. The 
+initial entry in the tonic key is called the subject. The second entry 
+in the dominant is called the answer. If this answer is exact (e.g. it 
+reproduces the subject note for note in the dominant) then it is a 
+real answer. If the answer is slightly modified to preserve tonality, 
+it is called a tonal answer. After having announced the subject or 
+answer, each voice passes on to another thematic element known as the 
+countersubject. After each voice has made its initial entry the 
+exposition or first section of the fugue is complete. Thereafter, 
+further entries of the subject appear, separated by contrapuntal 
+episodes and the subject may be treated by augmentation, diminution, 
+inversion, etc. J.S. Bach was one of the great masters of the fugue. 
+@243 full close\Alternative name for perfect cadence. 
+@244 fundamental\First or lowest note of the harmonic series. 
+@245 funèbre (It.)\Funeral. March funèbre, funeral march. 
+@246 fuoco (It.)\Fire. 
+@furioso (It.)\Furiously. 
+@247 G\Note of the scale. 
+@248 gaio (It.)\Or gaie. Gay. 
+@249 galant (Fr. & Ger.)\Style galant. Courtly. This term, adopted by 
+German writers, refers to a mid-18th century style characterized by a 
+homophonic, formal elegance as opposed to the German contrapuntal 
+traditional style. This was practised by C.P.E. Bach and influenced 
+Mozart. 
+@250 galantieren (Ger.)\Optional dances (e.g. polonaise or minuet) in 
+the 18th century suite, normally placed between the sarabande and 
+gigue. 
+@251 galliard\A lively dance usually in triple time often contrasted 
+(although often thematically linked) with the slower pavan which it 
+followed. 
+@252 galop\A quick 19th century ballroom dance in 2/4 time. 
+@253 gamba (It.)\Abbreviation for viola da gamba. 
+@254 garbato (It.)\Graceful. 
+@255 gavotte\A fairly quick dance in 4/4 time. 
+@256 gebrauchmusik (Ger.)\Same as utility music. 
+@257 gedampft (Ger.)\Muted. 
+@258 gehalten (Ger.)\Sustained. Cutgehalten, well sustained. 
+@259 gehend (Ger.)\At a moderate speed. 
+@260 geistlich (Ger.)\Sacred. 
+@261 gemessen (Ger.)\Held back, tempo sustained. 
+@262 gemutlich (Ger.)\Easy going, cosy, comfortable. 
+@263 general pause\Complete silence. A rest of at least one bar for 
+the whole orchestra. Abbreviation is GP. 
+@264 German sixth\A type of ‘augmented sixth’ chord (e.g. A flat, C, E 
+flat and F sharp which also may be treated as a dominant seventh 
+chord. 
+@265 gesangvoll (Ger.)\Songful. 
+@266 geschleift (Ger.)\Smooth. Same as legato. 
+@267 geschwind (Ger.)\Quick. 
+@268 gestossen (Ger.)\Detached. Same as staccato. 
+@269 getragen (Ger.)\Slow and sustained. Same as sostenuto. 
+@270 gigue\Or giga (It.) or jig (Eng.). A lively dance in binary form, 
+usually in 6/8 or 12/8 time. Often occurs as the last movement in the 
+18th century suite. 
+@271 giocoso (It.)\Merry, playful. 
+@272 giusto (It.)\(1) In strict time; (2) At a reasonable speed. 
+@273 glee\A simple and short part-song in several sections for male 
+voices, flourishing in Britain between 1650 and 1830. 
+@274 glissando\The sliding up or down a scale, often abbreviated by 
+gliss. or a wavy or straight stroke between the highest and lowest 
+note. 
+@275 gopak\Or hopak. Lively Russian dance in duple time. 
+@276 GP\Abbreviation of general pause. 
+@277 grace note\Same as ornament, used to embellish a melody line and 
+normally printed in smaller type. 
+@278 gradevole (It.)\Pleasing. 
+@279 grandezza (It.)\Grandeur. 
+@280 grandioso (It.)\In an imposing manner. 
+@281 grand opera\A vague term describing: (1) the serious, entirely 
+sung operas as opposed to the lighter opera-comique which had 
+dialogue; (2) operas on a grand and lavish scale. 
+@282 grand piano\Type of piano (typically found in concert halls) in 
+which the strings are laid horizontally. 
+@283 grave (It.)\Slow and solemn. 
+@284 grazioso (It.)\Gracefully. 
+@285 Gregorian chant\A type of plainsong associated with Pope Gregory 
+I (590-604) existing as a large collection of ancient monophonic 
+melodies which were until quite recently used in the Roman Catholic 
+Church. 
+@286 ground bass\Or basso ostinato (It.). A bass line or pattern 
+repeated over and over while upper parts proceed. The ground bass is a 
+foundation for varied melodic, contrapuntal or harmonic treatment. 
+Forms which use this device include the chaconne and passacaglia. 
+@287 gut (Ger.)\Markedly. 
+@288 gymel\Lat. gemellus, ‘twin’. A type of two-part late medieval 
+English vocal music, with great use of thirds and sixths. 
+@289 habanera (Sp.)\A syncopated Cuban dance introduced into Spain in 
+the l9th century with singing, usually in 2/4 time. 
+@290 halb(e) (Ger.)\Half. Halbsopran, mezzo-soprano. Halbtenor, 
+baritone. 
+@291 half close\An imperfect cadence. 
+@292 half note\The equivalent of two quarter notes or half of a whole 
+note (two beats in 4/4 time). 
+@293 harmonic series\A set of notes produced by a vibrating string or 
+air column, determining the difference of tone colors of instruments. 
+@294 harmony\The sounding together of notes in a musically significant 
+manner. The main unit of harmony is the chord. The chords are built 
+around the degrees of the scale. The primary chords in most popular 
+compositions are based on the first, fourth and fifth degree of a 
+scale. Many different theories have evolved over the past few 
+centuries about the construction and interpolation of chords to create 
+various senses of musical movement or intellectual or emotional 
+responses. 
+@295 harpsichord\An early keyboard instrument. Instead of using 
+hammers to strike the strings, as in a piano, a mechanical device 
+called a jack plucks the strings with either a quill made of leather. 
+In modern harpsichords, fiberglass is used instead of leather. It was 
+the primary keyboard instrument of the baroque era. 
+@296 head voice\Upper register of voice. 
+@297 heiter (Ger.)\Cheerful. 
+@298 heptachord\The scale of seven notes (e.g. the modern major or 
+minor scale). 
+@299 hidden fifths\Consecutive fifths implied, but not actually 
+present in harmony and nevertheless frowned upon by academics. 
+@300 hocket\In medieval church music, the insertion of rests into 
+vocal parts for expressive purposes. 
+@301 homophony (Gk.)\‘same-sounding’. Music in which parts move 
+together presenting a top melody with accompanying chords. The 
+opposite of polyphony. 
+@302 hondo (Sp.)\Or cante hondo. A sad Andalusian song employing some 
+intervals smaller than a semitone. 
+@303 hornpipe\A lively English dance, in triple time in the early 16th 
+century. From the mid 18th century onwards it was in 4/4 time, 
+acquiring an association with sailors. 
+@304 humoresque (Fr.)\Or humoreske (Ger.). An instrumental composition 
+of a capricious nature. Schumann wrote in this style. 
+@305 hymn\A Christian song of praise sung by a congregation with words 
+specially written. 
+@306 idée fixe (Fr.)\‘fixed idea’. Berlioz’s term for motto theme 
+which means a recurring theme in a composition used (e.g. in his 
+Symphonie Fantastique). 
+@307 idyll\A literary term for a work of pastoral or peaceful nature 
+and transferred to music (e.g. Siegfried Idyll by Wagner). 
+@308 illustrative music\Descriptive music evoking a poem, novel, play, 
+painting emotion or other non-musical source. More common term is 
+programme music. 
+@309 imitation\A device in part-writing in which one voice repeats (or 
+approximately repeats) a musical figure previously stated by another 
+voice. Canon and fugue employ imitation with strict rules. 
+@310 imperfect cadence\See cadence. 
+@311 impressionism\Term borrowed from painting, describing the works 
+of Monet, Degas, etc. and transferred to music referring to the 
+atmospheric music of Debussy and Ravel. A famous example is Prelude a 
+l’aprés-midi d’un faune by Debussy evoking the imagery of Mallarme’s 
+symbolist poem. 
+@312 impromptu\A short composition of improvisatory nature usually for 
+piano. Schubert and Chopin wrote in this style. 
+@313 improvisation\Or extemporization. The art of spontaneous 
+composition of music in performance. This may take the form of 
+ornamentation, variation of a song or theme, or completely new 
+material. Improvisation is greatly used in jazz. 
+@314 incidental music\Properly, music to be performed during the 
+action of a play. However, the term also includes overtures and 
+interludes. 
+@315 inciso (It.)\Incisive. 
+@316 indeterminacy\A modernistic principal since 1945 of leaving 
+elements of performance to pure chance (see aleatoric music) or 
+letting performers decide when to play certain passages. Berio, Cage 
+and Stockhausen used this concept in their compositions. 
+@317 infinite canon\A perpetual canon popularly known as a round (e.g. 
+Three Blind Mice). 
+@318 inglese (It.)\English. 
+@319 in modo di (It.)\In the style or manner of. 
+@320 innig (Ger.)\Intimate, heartfelt. 
+@321 instrumentation\Composing music for particular instruments. This 
+term is used with reference to the composer’s skill and knowledge of 
+selecting instruments which sound well or are unusual, etc. 
+@322 interlude\(1) Music inserted between other pieces of music (e.g. 
+organ passages between hymn verses); (2) Music inserted between acts 
+of plays or other non-musical events. 
+@323 intermede (Fr.)\Same as intermezzo. 
+@324 intermezzo (It.)\‘something in the middle’. (1) An instrumental 
+piece in opera, i.e. performed while the stage is empty; (2) A short 
+concert piece. Brahms wrote in this style. 
+@325 interrupted cadence\See cadence. 
+@326 invention\A title used by J.S. Bach for contrapuntal two-part 
+compositions for clavier. Bach called three-part compositions sinfonie 
+but they are now also referred to as inventions. 
+@327 inversion\The turning upside-down of a chord or single melody (by 
+applying intervals in opposite directions) or two melodies in 
+counterpoint by the upper melody becoming the lower and vice-versa. 
+This last method is called invertible counterpoint. 
+@328 ionian mode\The mode which, on the white keys of the piano, is 
+represented from C to C (same as C major scale). 
+@329 isorhythmic\Gk. ‘equal-rhythmed’. A device used in motets around 
+1300-1450 in which the rhythmic pattern is repeated according to a 
+strict scheme. This usually occurs in the tenor line in which the 
+rhythm is repeated several times in diminishing note values. 
+@330 istesso tempo (It.)\At the same tempo. 
+@331 Italian overture\An orchestral work revealing a literary or 
+pictorial element in three movements, quick-slow-quick, from which the 
+symphony evolved. The French overture has slow-quick-slow movements. 
+@332 Italian sixth\A type of augmented sixth chord (e.g. A flat, C and 
+F sharp) distinguished by having a major triad and no other note 
+between the notes forming the sixth. 
+@333 jodel\A moderately fast Spanish dance in 3/4 time accompanied by 
+castanets. 
+@334 K\Abbreviation of Kochel in cataloguing Mozart’s works. 
+@335 kammer (Ger.)\Chamber. Kammermusik, chamber music. 
+@336 KB\Abbreviation of German Kontrabass, double-bass. 
+@337 keen\(Ir.) caoine. An Irish funeral song accompanied by wailing. 
+@338 key\Musical term to indicate the tonality of a piece based on the 
+major or minor scales and their relationship between the notes of the 
+scale and chords built around them. There are two traditional types of 
+keys (major or minor) depending upon whether they are based on the 
+notes of the major or minor scale. 
+@339 key signature\This indicates the precise key of the piece. Sharps 
+or flats are placed at the beginning of a composition after the clef. 
+Any other alteration (e.g. a brief modulation to another key, is 
+indicated by accidentals. If there is an extended passage in a new 
+key, however, then a new key signature may appear. The key signature 
+must be represented at the beginning of every new stave in a 
+composition (although not always in popular music). 
+@340 klein (Ger.)\Little. 
+@341 lacrimoso (It.)\Mournful, sad. 
+@342 lai (Fr.)\Or lay. A type of trouvere song similar to the sequence 
+with sections of irregular length and melodic repetition. 
+@343 lament\Music signifying grief but especially describing bagpipe 
+music played at Scottish clan funerals. 
+@344 landler\Slow Austrian dance in waltz time popular in the late 
+18th and early l9th centuries. 
+@345 largamente (It.)\Broad and deliberate in style. 
+@346 larghetto (It.)\‘a little largo’. Not quite as slow as a largo. 
+@347 largo (It.)\‘broad’. Slow and broad. 
+@348 leading note\The seventh degree of the major scale. This is so 
+called because it seems naturally to rise to the tonic a semitone 
+above. In the minor scale this note is used only when ascending, not 
+descending. 
+@349 lebhaft (Ger.)\Lively. 
+@350 legato (It.)\Smoothly. 
+@351 léger (Fr.)\Light. 
+@352 légerement\lightly. 
+@353 leggiero (It.)\Also leggieramente. Light, lightly. 
+@354 leyno (It.)\‘wood’ (1) Direction in some scores to use the 
+woodblock; (2) Direction to string players to hit the string with the 
+back of the bow. 
+@355 leicht (Ger.)\Lightly. 
+@356 leise (Ger.)\Soft, gentle. Leiser, softer. 
+@357 leitmotif (Ger.)\Leading motif. This is a recurring theme 
+symbolizing a character, emotion or object and was first used by H. 
+Von Wolzogen in a discussion of Wagner’s The Ring. 
+@358 lento (It.)\Slow. 
+@359 lesson\This term described a short, keyboard piece or a set of 
+short pieces in the 17th and 18th centuries. 
+@360 libretto (It.)\‘booklet’. The text of an opera or oratorio. 
+@361 licenza (It.)\Freedom, license. Con akune licenze, with some 
+freedom in style. 
+@362 lied (Ger.)\Plural lieder. Song. This term is particularly 
+applied to the German romantic songs of Schubert, Schumann and Brahms. 
+A characteristic is the importance paid to the piano part and the mood 
+of the words. 
+@363 ligature\(1) In vocal music this is a slur mark indicating that a 
+group of notes is to be sung to the same syllable; (2) In instrumental 
+music this is a slur indicating notes which are to be phrased 
+together. 
+@364 loco (It.)\‘place’. An indication to a performer that music is to 
+be played at the pitch written. This direction may (a) cancel previous 
+indications to play at a different pitch or (b) indicate a passage to 
+be played in the normal position as opposed to any other in string 
+music. 
+@365 locrian mode\A mode represented on the white keys of the piano 
+from B to B. 
+@366 lontano (It.)\Distant. 
+@367 loud pedal\A nickname for the sustaining (right) pedal on the 
+piano. 
+@368 lungo, lunga (It.)\Long. 
+@369 lusingando (It.)\Or lusinghiero. Alluringly. 
+@370 lustig (Ger.)\Cheerful, jolly. 
+@371 lydian mode\(1) In Ancient Greek music this could be represented 
+on the white keys of the piano from C to C; (2) From the middle ages, 
+the Lydian mode can be represented on the white keys of the piano from 
+F to F. 
+@372 lyric\(1) Words of a song; (2) A fairly short but expressive 
+piece (e.g. Lyric Piece by Grieg); (3) Describes vocal performance 
+with the lyre. (4) A Lyric drama is an occasional synonym for opera. 
+@373 ma (It.)\(1) But; (2) Abbreviation of the major scale. 
+@374 madrigal\A secular, polyphonic, unaccompanied vocal composition 
+set to poems for several parts, mainly cultivated in the 16th and 17th 
+centuries. Italian writers of this time included Gabrieli and 
+Palestrina (16th century). Monteverdi and Marenzio wrote in the later 
+highly stylized manner of the 17th century. English writers included 
+Morley and Weelkes. 
+@375 maestoso (It.)\Majestic, dignified. 
+@376 maestro (It.)\‘master’. This title was given to well-known 
+conductors and composers in Italy. It is now used (sometimes rather 
+amusingly) elsewhere. 
+@377 maggiore (It.)\Major. 
+@378 maj\Abbreviation of the major scale. 
+@379 major, minor\These are the two main scales of the western tonal 
+system. The major key is based on the major scale and the minor key is 
+based on the minor scale. The minor scale breaks into three 
+variations: harmonic, melodic and natural. These terms also refer to 
+chords and intervals being built out of the major or minor scale. 
+@380 mal (Ger.)\Time. 
+@381 malaguena (Sp.)\An Andalusian dance, originating in Malaga, 
+marked by singing. This term also describes an instrumental piece of 
+similar nature. 
+@382 malinconia (It.)\Melancholy. 
+@383 marcato (It.)\Marked, emphatic. 
+@384 march\A marching piece either slow (4/4 time) or quick (2/4 or 
+6/8 time). 
+@385 marche (Fr.)\March. 
+@386 marcia (It.)\March. Alla marcia, in a march-like style. 
+@387 marziale (It.)\Martial. 
+@388 masque\Aristocratic, elaborate English stage entertainment 
+chiefly cultivated in the 17th century and involving poetry, dancing, 
+scenery, costumes, instrumental and vocal music. The masque was 
+related to opera and ballet. 
+@389 mass\This is the main service of the Roman Catholic Church which 
+has been set to music by composers including Bach, Mozart and Haydn. 
+@390 mattinata (It.)\Morning song. 
+@391 mazurka\A Polish folk dance in moderate to fast 3/4 or 3/8 time. 
+Adapted and stylized by Chopin. 
+@392 m.d.\Instruction to play with the right hand in piano playing. 
+Abbreviations of main droite (Fr.) and mano destra (It.). 
+@393 mediant\A name for the third degree of the scale (e.g. E is in 
+the mediant in C major). The mediant is so-called because it stands 
+between the tonic and dominant. 
+@394 melisma (Gk.)\‘song’. Plural melismata. Describes a group of 
+notes sung to the same syllable. However, the term is also applied to 
+any florid vocal passage of improvisatory or cadenza-like nature. 
+@395 melodic minor\One of the three types of minor scale. 
+@396 melodie (Fr.)\(1) Melody; (2) Song. 
+@397 melodrama\In musical contexts, this term refers to the dramatic 
+use of the spoken word against a musical background. This style may be 
+used throughout an entire work or just as part of a work. 
+@398 meno (It.)\Less. 
+@399 Meno mosso\slower. 
+@400 menuet (Fr.)\menuett (Ger.). Same as minuet. 
+@401 menuetto\Term used by German composers who believed it to be 
+Italian for minuet. The Italian for minuet is minuetto. 
+@402 messa di voce (It.)\The steady increasing and decreasing of 
+volume on one long held note in singing. 
+@403 messe (Fr. and Ger.)\Same as mass. 
+@404 mesto (It.)\Sad. 
+@405 meta (It.)\Half. 
+@406 metamorphosis of themes\Liszt’s term for leitmotif, the recurring 
+and development of themes symbolizing a character, emotion, object, 
+idea, etc. 
+@407 metre\This is indicated by a time signature dividing up the music 
+into regularly occurring accents (e.g. 3/4 time means that the basic 
+note values are quarter notes and that every third one is accented). 
+@408 mezzo (It.)\‘half’. Mezzo-soprano, female voice midway between a 
+soprano and contralto range. 
+@409 mezzo forte\Midway between loud and soft and abbreviated mf. 
+@410 mezza voce\With a moderate tone. 
+@411 m.g.\Instruction to play with the left hand in piano playing. 
+Abbreviation of main gauche (Fr.). 
+@412 mi\Abbreviation of the minor scale. 
+@413 microtone\An interval smaller than a semitone, evident in some 
+modern compositions. 
+@414 min\Abbreviation of the minor scale. 
+@415 minacciando (It.)\Threatening. 
+@416 minor\Opposite of major. Applied to scales, keys, chords and 
+intervals. 
+@417 minuet (Eng.)\minuetto (It.). A moderately fast French dance of 
+rustic origin in 3/4 time but rising to court and becoming fashionable 
+in the 18th century. The minuet is the standard third movement in the 
+classical sonata, symphony, string quartet, etc., developing later 
+into the scherzo with Beethoven. Form is A A B A. 
+@418 mirror\This term is sometimes attached to a fugue or canon to 
+describe two or more parts appearing simultaneously, with one the 
+correct way up and the other upside down, as if a mirror had been 
+placed between them. 
+@419 missa (Lat.)\Mass. 
+@420 missa brevis (Lat.)\(1) A short concise musical setting of the 
+mass; (2) A setting of the Kyrie and Gloria only. 
+@421 missa solemnis\High Mass. 
+@422 misura (It.)\A measure. Senza misura, not in strict time. 
+@423 mit (Ger.)\With. 
+@424 mixed chorus, mixed voices\mixed chorus, mixed voices A body of 
+singers including both adult male and female voices. 
+@425 mixolydian mode\A mode represented on the white notes of the 
+piano from G to G. 
+@426 moderato (It.)\At a moderate pace. This term is used in other 
+tempos (e.g. allegro moderato, implying a moderately fast pace). 
+@427 modes\Sets of eight-note scales inherited from ancient Greece via 
+the Middle Ages in which they were most prevalent, although they still 
+survive today in plainsong and folk music. At the end of the 17th 
+century the modes had been reduced to two scales, major and minor, 
+which we know today. Here are the modes which may be represented by 
+scales of white notes on the piano with the names derived from the 
+Greek system. The ‘final’ of a mode is the note of a cadence, or 
+resting point, in a melody, and the ‘dominant’ is a reciting note. 
+@428 modo (It.)\Manner. In modo di, in the manner of. @429 
+modulate\The shift from one key to another in composition. 
+@430 molto (It.)\Much, very. 
+@431 monodrama\A dramatic stage work for only one character. 
+@432 monody (Gk.)\‘single song’. A term used to describe a solo song 
+with accompaniment (or continuo) in contrast to the polyphonic style 
+in which all parts are of equal importance. 
+@433 monophony (Gk.)\‘single song’. This term describes music with a 
+single melody line without support of accompaniment. 
+@434 monothematic\Music with only one theme. 
+@435 morbido (It.)\Gentle, delicate. 
+@436 mordent\An ornament which has two forms: (1) upper mordent (or 
+inverted mordent); (2) lower mordent or simply, mordent. 
+@437 morendo (It.)\Dying away (of force and sometimes, speed). 
+@438 mosso (It.)\Animated, moving. 
+@439 motet\(1) In modern use this is a religious choral composition in 
+Latin of the Roman Catholic service corresponding to the anthem in the 
+Anglican service; (2) In medieval times, this was a vocal composition 
+based on a given set of words and melody, which sometimes came from a 
+secular song. 
+@440 motif (Fr.)\(1) A term sometimes used in English for leitmotif; 
+(2) Same as motiv or motive. 
+@441 motion\A term describing the course of a melody or melodies. 
+Conjunct motion is movement by step. Disjunct motion is movement by 
+leap. Similar motion describes two melodies moving in the same 
+direction and contrary motion describes two melodies moving in 
+opposite directions. Parallel motion describes parts moving the same 
+way and also keeping the same interval between them. 
+@442 motiv (Ger.)\motive (Eng.). (1) A short but recognizable melodic 
+or rhythmic figure; (2) In analysis, this term describes the smallest 
+subdivision of (e.g. a theme). 
+@443 moto (It.)\Movement. Con Moto means ‘with movement’. 
+@444 motto theme\A term for music which recurs and develops in the 
+form of a quotation. 
+@445 movement\A self-contained section of a large composition having 
+its own time signature and title. In some works, movements are 
+directly linked (without a break inbetween) and sound incomplete 
+without performing them in sequence. In all works, movements form a 
+cohesive whole, much like in a set of related literary short stories. 
+@446 movimento (It.)\Motion. Doppio mouvmento, at double the preceding 
+speed. 
+@447 m.s. (It.)\‘mano sinistra’. Left hand. Instruction to play with 
+left hand in piano playing. 
+@448 m sop\Abbreviation of mezzo soprano. 
+@449 musical play\A type of American-influenced light stage 
+entertainment which succeeded the musical comedy in the mid-20th 
+century. Now known simply as a musical. An example is Phantom of the 
+Opera with music by Andrew Lloyd Webber. 
+@450 musical switch\A medley of popular tunes. 
+@451 music drama\A Wagnerian term for opera, which he felt to be 
+inadequate. This term describes Wagner’s new concept of the leitmotif 
+and the fusing of scenery, costume, libretti, music and drama into a 
+new art. 
+@452 music theatre\A term describing (from the 1960’s) dramatic works 
+simpler than opera and suitable for the concert platform. 
+@453 musique concrete (Fr.)\‘concrete music’. Music in which natural 
+sounds (instrumental, vocal or other) were recorded on tape and then 
+distorted, combined, etc. This term was coined by Peter Schaeffer in 
+1948 but it has largely been superseded by electronic music. 
+@454 muta (It.)\Change. Direction to the timpani player to change 
+tuning or to the wind player to change instrument. 
+@455 nach (Ger.)\To, after. 
+@456 nachschlag (Ger.)\Ornament in German music in the 17th and 18th 
+centuries. 
+@457 nachtanz (Ger.)\‘after dance’. A quick dance used to follow a 
+slow one. 
+@458 nachtmusik (Ger.)\Serenade or ‘night music’. A title used in 
+Mozart’s Eine Kleine Nachtmusik. 
+@459 nationalism\Or nationalist. Music with national characteristics 
+(e.g. use of folk music. The term is particularly applied to 19th 
+century composers (e.g. Smetena and Grieg. Bartok and Kodaly were also 
+famous as nationalist composers). 
+@460 natural\(1) The cancelling of a flat or sharp of a note or key 
+indicated by a sign beside the note; (2) A trumpet or horn, etc. not 
+having any valves or keys. 
+@461 naturale\Instruction to a singer or instrumentalist to perform in 
+the normal way (e.g. singing tenor instead of falsetto or playing 
+without mutes). 
+@462 neapolitan sixth\A chord on the fourth degree of the scale with a 
+minor third and sixth (e.g. in C major it includes the notes F, A flat 
+and D flat). 
+@463 neo (Gk.)\‘new’. A prefix indicating a new interest in older 
+styles (e.g. neo-romantic refers to composers in the 20th century 
+writing in the romantic style). 
+@464 neo-classical\Describes a trend, especially in the 1920s, 
+characterized by its use of the concerto grosso technique, 
+contrapuntal writing and avoidance of emotion. Neo-classical composers 
+included Stravinsky and Hindemith. 
+@465 new music\(1) In the early 17th century this described the new 
+expressive music; (2) Between 1850 and 1900 it described the new music 
+of Wagner and Liszt as opposed to the more traditional music of 
+Brahms; (3) Today it refers to music by contemporary composers. 
+@466 niente (It.)\Nothing. A niente, to nothing. Used after a 
+diminuendo symbol to indicate the sound dying away entirely. 
+@467 nobile, nobilmente (It.)\Noble, nobly. 
+@468 nocturne\A night piece with two main meanings: (1) In the 18th 
+century this was a composition close to a serenade for several 
+instruments and movements; (2) In the romantic period it was a short 
+lyrical piece in one movement for piano (e.g. by Chopin). 
+@469 noel (Fr.)\‘Christmas’. A Christmas carol. 
+@470 non (Fr. and It.)\Not. 
+@471 non-harmonic note\A note which is not part of the chord with 
+which it sounds. This could mean a passing note or an appoggiatura. 
+@472 nota cambiata (It.)\‘changed note’. A contrapuntal device whereby 
+a dissonant note is used when one expects a consonant one. 
+@473 notation\Written music, by ordinary staff notation symbols or 
+graphic representation or simply by letter-names (e.g. the tonic sol-
+fa). 
+@474 note cluster\The performance of a group of adjacent notes 
+simultaneously on the piano (e.g. with the forearm or a piece of 
+wood). Pioneered by Cowell in 1912 and used by Ives. Also known as 
+tone cluster. 
+@475 note row\This occurs in 20th century serial music, also called 
+dodecaphonic music or twelve-note music. It is the order in which the 
+composer chooses to arrange the twelve notes, which serves as the 
+foundation of the composition. 
+novelette (Eng.)\Or novellette (Ger.). A short, instrumental, romantic 
+piece. The term was first used by Schumann for a piano work in 1848. 
+@476 obbligato (It.)\‘obligatory’. An obbligato part is one which has 
+an important and unusual special role and cannot be dispensed with, as 
+opposed to an optional part. However, in some l9th century music, the 
+term obbligato was applied to an additional optional part. 
+@

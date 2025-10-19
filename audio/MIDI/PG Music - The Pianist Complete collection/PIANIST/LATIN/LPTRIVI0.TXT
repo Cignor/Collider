@@ -1,0 +1,370 @@
+@001 Salsa music gets its roots from what country?
+\*Cuba
+\Puerto Rico
+\Brazil
+\Mexico
+^Salsa began in Cuba in the 16th century, and represents the consolidation of religious and secular African and European rhythms. Of particular importance are the forms rumba, son and danzón.
+Many African traditions remain such as call-and-response singing, polymeter (duple meters playing simultaneously), pentatonic and non-Western scales, and the development of numerous instruments.
+<1
+
+@002 Most of the instruments that were first used in Salsa music in Cuba
+\Came from Africa
+\Came from Europe
+\*Came from Caribbean countries
+\Came from USA
+^The instruments originated in Africa (such as drums, bells and shakers), but were not brought along with the slave trade. The instruments were created in Cuba, Haiti and other Caribbean countries. The colonists banned many types of instruments. 
+<2
+
+@003 The 'clave' is 
+\*a rhythmic pattern that Salsa music is structured around
+\a rural style of Cuban rumba
+\a specific Cuban carnaval rhythm
+\a nineteenth-century musical and dance form
+^ The clave is a five-note, bi-measure pattern which serves as the foundation for all of the rhythmic styles in salsa music.  The clave consists of a "strong" measure containing three notes (also called the tresillo), and a "weak" measure containing two notes, resulting in patterns beginning with either measure, referred to as "three-two" or "two-three". 
+<1
+
+@004 Claves are:
+\Cuban drums
+\*two round, polished sticks 
+\repeated patterns played by the bass,
+\a set of two, tunable drums
+^Claves are the sticks which are used to play the clave patterns. The clave is the essential rhythm of salsa music.
+<2
+
+@005 The central instrument in Salsa music is the 
+\piano
+\drums
+\bass
+\*percussion
+^ Percussion instruments (bells, drums and shakers) are central to Salsa and Latin music.
+<1
+
+@006 Timbales were derived from
+\steel drums
+\*tympanies
+\timbalitos
+\conga drums
+^ The "word" timbale means tympani in French, and the Creole adaptation of the tympani without the kettledrum shape is known as the timbale. These are tunable drum heads mounted on a metal tripod.
+<1
+
+@007 The Tropicana- famous nightclub for Salsa music- is located in
+\Miami
+\Las Vegas
+\*Havana
+\Caracas
+^For many decades, much of the best live Salsa music was played at the Tropicana in Havana.
+<1
+@008 The Cuban term "Combo" refers to a group which has
+\a larger number of instruments than previous Salsa bands
+\*instrumentation closer to a North American jazz band
+\accordion, timbales, and guiro
+\musicians from different countries
+^ The combo is an adaptation of the North American jazz combo instrumentation in Cuba during the late 1950s, generally consisting of bass, drums, piano, sax, trumpet, Cuban percussion and electric guitar.
+<3
+@009 Rubén Blades and his group Seis del Solar
+\have 4-6 trumpets in the orchestra
+\*added synthesizers to the salsa orchestra
+\consist of 6 guitars
+\are composed only of percussion instruments
+^ Seis del Solar modernized the Salsa orchestra by combining synthesizers and vibraphone with the more traditional instruments.
+<3
+@010 A "three-two" Clave is so named because
+\it is played in 3/2 time signatures
+\*it is a 2 bar phrase with 3 notes in bar 1, and 2 in bar 2
+\it is played in a 32 bar form
+\none of the above
+^The clave rhythm is usually a 2 bar phrase, with 3 notes in bar 1 (dotted quarter, dotted quarter, quarter), then two notes in bar 2 (rest, quarter,quarter, rest)
+<3
+@011 The bombo is 
+\a famous Mexican dance
+\a troubador style of singing
+\*"and of beat 2 on the bar of the clave that has 3 notes 
+\a style of popular dance music
+^ The clave rhythm is usually 2 bars, with 3 notes in 1 bar, and 2 notes in the other bar.
+<3
+@012 "Afro" style describes a Cuban music style that
+\consisted only of guitars 
+\*was popular in the 1940's for playing lullabies
+\is synonymous with Tito Puente
+\is a percussive style played on wooden boxes
+^ Afro style is an adaptation of sacred, African batá drum rhythms into secular music, primarily played by charanga ensembles, often used in the interpretation of lullabies.  The afro style was very popular during the 1940s in Cuba.
+<3
+@013 batá refers to 
+\*a type of drum
+\tap dance rhythms with soft shoes
+\a slow ballad
+\an energetic style of dance music
+^batá refers to the sacred, two-headed drums of the Yoruba people of Nigeria.
+<2
+@014 The term "carnaval" 
+\refers to a cowbell (with the clapper removed)
+\refers to the bandleader at a carnival
+\*is an alternate spelling of the similar term "carnival"
+\describes a specific style of instrumentation used for carnivals
+^ Carnaval is an alternate spelling of the same term carnival
+<1
+@015 A "charanga" is 
+\*a specific style of instrumentation
+\the repeated pattern played by the tumbadoras
+\a repeated loop of 4 bars, with varying rhythms
+\a specific singing style
+^ Charanga is a specific style of instrumentation, consisting of rhythm section (contrabass, timbales, and güiro), strings (from two to four violins, or any number of violins with a cello), and one wood flute.  The piano and conga drum were added in the 1940s.  This term (and style of instrumentation) evolved from the charanga francesa, developed in the early twentieth century.
+<2
+@016 Bass players in Salas would least frequently
+\play electric bass
+\play slap bass
+\play chords
+\*bow the bass
+^Bowing is not common in Salsa music, except in the Danzón style which might feature a bowed section. Upright electric bass is the signature sound of Salsa bass. Chords and slap bass playing are common.
+<1
+@017 The montuno is 
+\a hand held shaker often used by singers
+\*a repeated, syncopated piano vamp
+\an up-tempo dance style
+\the leader of the dance band
+^The montuno is the repeated, syncopated vamp played by the piano in an ensemble. It is critical to the strength of the rhythm section, so it is important that this pattern be played in a solid fashion and does not distract from the singer or other instruments. The montuno rhythm fits with the clave in a specific manner.
+<1
+
+@018 Comparing the piano rhythm to the percussive rhythm of the clave
+\They both play the same rhythm
+\*The piano rhythm is different but fits with the clave
+\the rhythms are independent
+\both rhythms vary throughout the song
+^The piano rhythm (called the montuno) fits with the percussion (clave rhythm in a specific manner.
+<2
+
+@019 The descarga refers to a 
+\one of three styles of Cuban rumba
+\*"jam session" format
+\a ten-line, octo-syllabic verse
+\a Cuban musical and dance form
+<3
+@020 In Salsa music, a cierre is a "break" that
+\consists of the audience singing
+\*is usually played by all of the percussion instruments
+\is typically played by the piano only
+\has none of the musicians playing
+^The percussion section typically has a large number of breaks that can be played at any time during the performance. They often occur during the montuno section, particularly during an instrumental solo.
+<3
+@021 An important style that was a precursor to today's Salsa is
+\pachanga
+\*son
+\mambo
+\cha-cha-chá
+^The son is a style of popular dance music of the peasant or working-class, combining several Spanish and African elements.  The son began to take shape in the latter half of the nineteenth century in Cuba's Oriente province, and gave birth to several hybrids, including the afro-son, guajira-son, son-pregón, and son-montuno.  The son is perhaps the most important form at the root of today's popular salsa music.
+<2
+@022 The rumba is a style which is
+\identical to the American "rhumba" style
+\*a Cuban style which includes call-and-response singing
+\originated in New Orleans
+\consists of a simple repetitive rhythmic form
+^ Rumba is a Cuban folkloric secular form, consisting of drumming, dancing and call-and-response singing which contains both African and Spanish roots.  There are three styles of rumba: the yambú, guaguancó and columbia.
+<2
+@023 The danzón is a musical and dance form that features
+\bassoon
+\*flute
+\harmonica
+\organ
+^The danzón is a Cuban musical and dance form developed in the late 19th century, which is derived from the European Court and Country dances, as well as the contradanza and the danza.  The instrumentation which generally interprets this style is known as the charanga orchestra, featuring strings and flute with a rhythm section.  The danzón form consists of: an introduction called the paseo (A), the principal flute melody (B), a repeat of the introduction (A), and the violin trio (C).  Innovations by several composers lead to the addition of a fourth section (D) called nuevo ritmo, later known as mambo.  This section added elements of the Cuban son, and established an open vamp over which the flute, violin or piano would improvise.
+<3
+@024 Merengue comes from
+\Cuba
+\*Dominican Republic
+\Puerto Rico
+\Venezuela
+^Merengue is a rhythmic style from the Dominican Republic, which is a fast two-step, and is traditionally played on tambora, güira and accordion.
+<2
+@025 Bomba, a style played on bomba drums, comes from
+\Cuba
+\Dominican Republic
+\*Puerto Rico
+\Brazil
+^ Bomba is a style of Afro-Puerto Rican music and dance which is also commonly found in salsa repertoires. It uses the bomba drum -a barrel-shaped drum of Afro-Puerto Rican origin, similar to the Cuban tumbadora (conga drum), although shorter.
+<3
+@026 A "Change in clave direction" occurs when
+\it is signified by the bandleader 
+\*a song has a phrase with an odd number of bars
+\following a percussive break
+\the clave is pointed in a different direction
+^The clave is the characteristic 2 bar rhythm with 3 notes in one bar and 2 notes in the other bar. When there is an odd number of bars, it changes from a 3-2 clave to a 2-3 clave (or vice versa).
+<2
+@027 Which statement is not true about Tito Puente:
+\He is the composer of the Santana hit 'Oye Como Va'
+\*He is known as the 'King of the Latin Trumpet'
+\He has recorded over 100 albums
+\He played in Charlie Barnett's swing band
+^Tito Puente, the king of Latin music, is a drummer, percussionist, arranger and bandleader.
+<1
+
+@028 Salsa:
+\is the global term given to all Latin music
+\is derived from the Latin term for sexy
+\*is a musical genre which does not encompass Brazilian music
+\is a derived from the Samba and Partido Alto rhythms
+^Salsa, which means sauce, is the term given to Afro-Cuban music.
+<1
+
+@029 Enrique Jorrin was:
+\*the creator of the Cha-Cha-Cha style
+\the actual birth-name of Desi Arnaz
+\the writer of the first big Latin hit 'Patricia'
+\the father of Cuban music
+^Cuban violinist Jorrin named the style, derived from the Cuban Danzon-Mambo, after hearing the scraping sounds of dancer's feet.
+<3
+
+@030 In Salsa music a 5 note 2 measure rhythmic pattern is:
+\a Bossa Nova
+\a Charanga
+\*the Clave
+\a Montuno
+^The 2 measure Clave is the foundation for all the rhythmic styles in Salsa music.
+<2
+
+@031 The country of Colombia is:
+\where most of the Salsa rhythms originate
+\the birthplace of Perez Prado
+\*the source of the Cumbia style
+\not a place where one would expect to hear Salsa music
+^The Folkloric Colombian Cumbia style is one of South America's most popular rhythms and is considered a Salsa style.
+<3
+
+@032 Bandleader Tito Puente:
+\*grew up in East Harlem
+\played his first gig with band leader Desi Arnaz
+\never formally studied music
+\although never married, reportedly fathered 14 children
+^A child prodigy, he grew up in El Barrio, (East Harlem) and studied at Julliard.
+<2
+
+@033 A Montuno is:
+\a building or crescendo
+\a musical section where instruments are added one by one
+\*a repeated vamp section 
+\a dance derived from the Mambo style
+^The montuno section of a Salsa piece is the open repeated and syncopated vamp section.
+<2
+
+@034 In Salsa music, a Tres refers to:
+\a 3 bar repeated section
+\*a stringed instrument
+\a three-step rhythmic style
+\a rhythm instrument made from the jawbone of a horse
+^The Tres is a Cuban instrument derived from the Guitar. It has 3 double strings and is played with a pick.
+<2
+
+@035 The term 'Salsa',
+\is the name of the rhythm from which the Mambo was born
+\was actually banned in Cuba for many years by Castro
+\*was created in the 1960's
+\refers to Salsa Enrique, who created the rhythm
+^The term was developed in New York to promote this hot Afro-Cuban music.
+<1
+
+@036 Egberto Gismonte:
+\is a former Cuban cleric who became a Mambo King
+\*plays the piano and the guitar
+\is one of Cuba's most prolific composers and arrangers
+\is the adopted name of the Flamenco virtuoso, Chico Lopez
+^Egberto is a brilliant Brazilian composer, guitarist and pianist. 
+<3
+@037 Salsa Jazz Pianist Eddie Palmieri
+\has won 11 Grammy Awards
+\*had a Grammy nomination for every album from 1978-87
+\has remained with the same record label for over 40 years
+\is sometimes referred to as the "Chet Atkins" of salsa Piano
+^ Eddie Palmieri is a latin jazz and salsa piano master since the 1950's. He has won 5 Grammy awards, and was nominated for a Grammy for every album that he released from 1978-1987.
+^2
+@038 Antonio Carlos Brasileiro de Almeida Jobim
+\was born in Puerto Rico
+\was born in Havana
+\*died in New York City
+\died in Rio
+^Jobim is the famous composer sometimes referred to as the Gershwin of Brazil. His last recorded concert was a Carnegie Hall in Arpil 1994, and he died in New York City of heart failure.
+<2
+@039 Carlos Jobim wrote all of the following, except
+\Desafinado
+\Girl From Ipanema
+\*Green Dolphin Street
+\Meditation
+^Jobim wrote many bossa novas that have become standards. Green Dolphin Street was written by B. Kaper.
+<1
+@040 The first "out of tune" melody note in Jobim's Desafinado
+\is a flat 9 note on a dominant  seventh chord
+\*is a sharp 11 note on a dominant  seventh chord
+\in F, is usually a C# note played a quarter tone sharp
+\was not present in the original composition
+^In the key of F, the second chord of Desafinado is G7, with a C# melody note. This note is characteristic of the lydian flat 7 scale, and is a good example of the use of that scale on a G7 chord in the key of F.
+<2
+@041 The term tresillo is referring to 
+\a trill played by flutes and violin in unison
+\*the three-side of the son clave pattern
+\an instrumentation of three singers
+\a set of two, tunable drums
+^Tresillo is a term that means triplet, and is used to describe the three notes that are played in the first bar of the 2 bar clave rhythm.
+<3
+@042 Mozambique is a style of music that
+\is rarely played in Cuba
+\*is usually played only on percussion instruments
+\originated in the 16 or 17th century in Mozambique
+\is always played at extremely fast tempos 
+^Mozambique is a rhythmic style created in the 1960s by Pedro Izquierdo-also known as Pello el Afrokán-which is a style of Cuban carnaval music,  traditionally played only on percussion instruments.  The mozambique was popularized in North American salsa music by Eddie Palmieri, and was adapted into ensemble interpretations.
+<3
+@043 Guajeo is 
+\a characteristic 2 bar pattern played by percussion
+\*a repeated figure played by strings or horn lines
+\a piano pattern that interacts with the percussion rhythm
+\a variation of the piano rhythm
+^ Guajeo is the repeated figure played by the string instruments in a particular ensemble, such as the tres' vamp in a conjunto instrumentation, or the violin vamp in a charanga instrumentation.  Also used to refer to repeated horn lines, such as in a layered mambo section.
+<2
+@044 Cumbia is a style that comes from
+\Cuba
+\*Columbia
+\Puerto Rico
+\Miami
+^ Cumbia is a typical Colombian folkloric style which has emerged as one of South America's most popular rhythms, and is often interpreted by large ensembles.
+<2
+@045 Danzonette differs from danzón in that
+\*it adds lyrics and a refrain to the danzón form
+\it adds a flute and violin to the danzón instrumentation
+\it is a solo piano version of the danzón style
+\it originated in the USA
+^ Danzonette is  a style developed from the danzón, which added lyrics and a refrain to a simplified version of the original form. The danzón is a Cuban musical and dance form developed in the late 19th century
+<3
+@046 Desi Arnaz (from the "I Love Lucy" Show in the 1950's)
+\met Lucille Ball while she was vacationing in Havana in 1944
+\*was born in Cuba
+\performed at the Tropicana in Havana for over 20 years
+\was unable to play any musical instrument
+^Lucille Ball and Desi Arnaz were the stars of the I Love Lucy Show in the 1950's. Desi was born in Cuba into a prominent family, and fled Cuba in 1933 to New York. He started his own Latin band in New York City and became the "toast of New York" before marrying Lucy in 1939. Daughter Lucie Arnaz has made a 3 CD-ROM set with a MultiMedia memoir of the Arnaz family. (available from Education Through Entertainment, 800-200-7000)
+<1
+@047 The "Copa Cabana" Hotel in Havana
+\is not open to non-Cuban residents
+\prohibits dancing
+\is a fictional hotel, only mentioned in a Barry Manilow song
+\*doesn't take American Express
+^The Copa Cabana and The Tropicana are famous nightlubs in Havana, and are popular with tourists. The quality of dancing is very high, and live music is authentic and exciting. 
+<1
+@048 Rebeca Mauleón-Santana 
+\composed-performed all music for "The Latin Pianist"
+\has performed with Tito Puente and Carlos Santana
+\played piano on a 1996 Grammy nominated album
+\*all of the above
+^. Pianist/Composer Rebeca Mauleón-Santana composed and performed all of the music for the Latin Pianist program. She is the author of "The Latin Real Book" and the "bible" of Salsa, the "Salsa Guidebook for Piano and Ensemble (1993 Sher Music)". More information is available at http://www.batnet.com/jazmin/rebeca.html
+<1
+@049 Latin bandleader Xavier Cugat, born on January 1st, 1900
+\was born in Brazil and moved to Miami as a young child
+\*was born in Spain and moved to Havana as a young child
+\saw his popularity drop in the USA after World War II
+\wrote the hit song "Macarena"
+^ Xavier Cugat was born on January 1st 1900 in Spain. He moved to Havana Cuba as a young child, and subsequently moved to the United States. His version of "El Manicero" helped start a "Rumba" boom in the USA in the 1930's. He continued to popularize Latin music in the USA, especially after World War II.
+<2
+@050 "Salsa" differs from "Latin" Music in that Salsa
+\primarily describes music with origins in Brazil
+\primarily describes music with origins in New York and Miami
+\*primarily describes music with origins in Cuba
+\has only instrumental music
+^Salsa originated in Cuba, as a rhythm oriented blend of African and European styles of music.
+<1
+@
+
+

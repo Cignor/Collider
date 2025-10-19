@@ -1,0 +1,75 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<ModularSynthPreset version="1">
+  <modules>
+    <module logicalId="1" type="shaping oscillator">
+      <params>
+        <ShapingOscillatorParams>
+          <PARAM id="drive" value="1.879999995231628"/>
+          <PARAM id="frequency" value="59.0"/>
+          <PARAM id="waveform" value="1.0"/>
+        </ShapingOscillatorParams>
+      </params>
+    </module>
+    <module logicalId="2" type="VCO">
+      <params>
+        <VCOParams>
+          <PARAM id="frequency" value="440.0"/>
+          <PARAM id="waveform" value="0.0"/>
+        </VCOParams>
+      </params>
+    </module>
+    <module logicalId="3" type="Random">
+      <params>
+        <RandomParams>
+          <PARAM id="cvMax" value="1.0"/>
+          <PARAM id="cvMin" value="0.0"/>
+          <PARAM id="max" value="0.1100006103515625"/>
+          <PARAM id="min" value="0.0"/>
+          <PARAM id="rate" value="2.869999885559082"/>
+          <PARAM id="slew" value="0.107000008225441"/>
+        </RandomParams>
+      </params>
+    </module>
+    <module logicalId="4" type="MapRange">
+      <params>
+        <MapRangeParams>
+          <PARAM id="cvMax" value="0.4059999883174896"/>
+          <PARAM id="cvMin" value="0.3210000097751617"/>
+          <PARAM id="inMax" value="0.1100082397460938"/>
+          <PARAM id="inMin" value="0.0"/>
+          <PARAM id="outMax" value="0.298828125"/>
+          <PARAM id="outMin" value="0.0"/>
+        </MapRangeParams>
+      </params>
+    </module>
+    <module logicalId="5" type="MapRange">
+      <params>
+        <MapRangeParams>
+          <PARAM id="cvMax" value="1.0"/>
+          <PARAM id="cvMin" value="0.0"/>
+          <PARAM id="inMax" value="1.0"/>
+          <PARAM id="inMin" value="0.0"/>
+          <PARAM id="outMax" value="0.4990234375"/>
+          <PARAM id="outMin" value="0.0"/>
+        </MapRangeParams>
+      </params>
+    </module>
+  </modules>
+  <connections>
+    <connection srcId="1" srcChan="0" dstId="output" dstChan="0"/>
+    <connection srcId="1" srcChan="1" dstId="output" dstChan="1"/>
+    <connection srcId="2" srcChan="0" dstId="1" dstChan="0"/>
+    <connection srcId="2" srcChan="1" dstId="1" dstChan="1"/>
+    <connection srcId="3" srcChan="1" dstId="4" dstChan="0"/>
+    <connection srcId="4" srcChan="2" dstId="5" dstChan="0"/>
+    <connection srcId="5" srcChan="0" dstId="1" dstChan="4"/>
+  </connections>
+  <NodeEditorUI>
+    <node id="1" x="-147.0" y="158.0"/>
+    <node id="2" x="-615.0" y="37.0"/>
+    <node id="3" x="-785.0" y="304.0"/>
+    <node id="4" x="-443.0" y="420.0"/>
+    <node id="5" x="-114.0" y="680.0"/>
+  </NodeEditorUI>
+</ModularSynthPreset>

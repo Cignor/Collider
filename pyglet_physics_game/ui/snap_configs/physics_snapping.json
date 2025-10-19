@@ -1,0 +1,28 @@
+{
+  "name": "Physics Grid Snapping",
+  "description": "Snap zones for physics grid interaction when spacebar is held",
+  "zones": {
+    "physics_center": {
+      "type": "circular_deadzone",
+      "name": "physics_center",
+      "center": [960, 540],
+      "radius": 50,
+      "deadzone_radius": 30,
+      "snap_distance": 80,
+      "priority": 10,
+      "zero_values": {
+        "gravity": 0,
+        "wind": 0
+      },
+      "max_distance": 200,
+      "scaling_type": "linear",
+      "visual_feedback": true,
+      "active": true
+    }
+  },
+  "settings": {
+    "snap_animation_duration": 0.2,
+    "visual_feedback_intensity": 0.8,
+    "deadzone_highlight": true
+  }
+}

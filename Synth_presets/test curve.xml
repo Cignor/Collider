@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<ModularSynthPreset version="1">
+  <modules>
+    <module logicalId="1" type="curvedrawer">
+      <params>
+        <CurveDrawerParams>
+          <PARAM id="gateThreshold" value="0.02999999932944775"/>
+          <PARAM id="loop" value="1.0"/>
+          <PARAM id="mode" value="0.0"/>
+          <PARAM id="pitchBase" value="-0.8100000023841858"/>
+          <PARAM id="rate" value="4.03000020980835"/>
+          <PARAM id="slew" value="0.0"/>
+          <PARAM id="trigThreshold" value="0.550000011920929"/>
+          <PARAM id="valueMult" value="1.049999952316284"/>
+        </CurveDrawerParams>
+      </params>
+    </module>
+    <module logicalId="2" type="VCO">
+      <params>
+        <VCOParams>
+          <PARAM id="frequency" value="440.0"/>
+          <PARAM id="waveform" value="0.0"/>
+        </VCOParams>
+      </params>
+    </module>
+  </modules>
+  <connections>
+    <connection srcId="1" srcChan="3" dstId="2" dstChan="0"/>
+    <connection srcId="2" srcChan="0" dstId="output" dstChan="0"/>
+    <connection srcId="2" srcChan="1" dstId="output" dstChan="1"/>
+  </connections>
+  <NodeEditorUI>
+    <node id="1" x="-1.0" y="199.0"/>
+    <node id="2" x="494.0" y="223.0"/>
+  </NodeEditorUI>
+</ModularSynthPreset>

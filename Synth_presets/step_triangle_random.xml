@@ -1,0 +1,255 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<ModularSynthPreset version="1">
+  <modules>
+    <module logicalId="1" type="VCO">
+      <params>
+        <VCOParams>
+          <PARAM id="frequency" value="20.0"/>
+          <PARAM id="waveform" value="1.0"/>
+          <PARAM id="waveform_mod" value="0.09999999403953552"/>
+        </VCOParams>
+      </params>
+    </module>
+    <module logicalId="3" type="Sequencer">
+      <params>
+        <SeqParams>
+          <PARAM id="gateLength" value="0.4199999868869781"/>
+          <PARAM id="gateLength_mod" value="0.0"/>
+          <PARAM id="numSteps" value="8.0"/>
+          <PARAM id="numSteps_max" value="16.0"/>
+          <PARAM id="numSteps_mod" value="0.3599999845027924"/>
+          <PARAM id="rate" value="7.639999866485596"/>
+          <PARAM id="rate_mod" value="0.3599999845027924"/>
+          <PARAM id="step1" value="0.1499999612569809"/>
+          <PARAM id="step10" value="0.5"/>
+          <PARAM id="step10_mod" value="0.9899999499320984"/>
+          <PARAM id="step11" value="0.5"/>
+          <PARAM id="step11_mod" value="0.429999977350235"/>
+          <PARAM id="step12" value="0.5"/>
+          <PARAM id="step12_mod" value="0.3899999856948853"/>
+          <PARAM id="step13" value="0.5"/>
+          <PARAM id="step13_mod" value="0.9899999499320984"/>
+          <PARAM id="step14" value="0.5"/>
+          <PARAM id="step14_mod" value="0.429999977350235"/>
+          <PARAM id="step15" value="0.5"/>
+          <PARAM id="step15_mod" value="0.3899999856948853"/>
+          <PARAM id="step16" value="0.5"/>
+          <PARAM id="step16_mod" value="0.9899999499320984"/>
+          <PARAM id="step1_mod" value="0.9899999499320984"/>
+          <PARAM id="step2" value="0.7000000476837158"/>
+          <PARAM id="step2_mod" value="0.429999977350235"/>
+          <PARAM id="step3" value="0.3499999642372131"/>
+          <PARAM id="step3_mod" value="0.429999977350235"/>
+          <PARAM id="step4" value="0.2999999523162842"/>
+          <PARAM id="step4_mod" value="0.9899999499320984"/>
+          <PARAM id="step5" value="0.0"/>
+          <PARAM id="step5_mod" value="0.3899999856948853"/>
+          <PARAM id="step6" value="0.09999996423721313"/>
+          <PARAM id="step6_mod" value="0.429999977350235"/>
+          <PARAM id="step7" value="0.2499999552965164"/>
+          <PARAM id="step7_mod" value="0.9899999499320984"/>
+          <PARAM id="step8" value="0.0"/>
+          <PARAM id="step8_mod" value="0.3899999856948853"/>
+          <PARAM id="step9" value="0.5"/>
+          <PARAM id="step9_mod" value="0.3899999856948853"/>
+        </SeqParams>
+      </params>
+    </module>
+    <module logicalId="4" type="Random">
+      <params>
+        <RandomParams>
+          <PARAM id="max" value="100.0"/>
+          <PARAM id="min" value="0.0"/>
+          <PARAM id="rate" value="3.579999923706055"/>
+          <PARAM id="rate_mod" value="0.0"/>
+          <PARAM id="slew" value="0.0"/>
+          <PARAM id="slew_mod" value="0.0"/>
+        </RandomParams>
+      </params>
+    </module>
+    <module logicalId="5" type="Random">
+      <params>
+        <RandomParams>
+          <PARAM id="max" value="18.75"/>
+          <PARAM id="min" value="0.0"/>
+          <PARAM id="rate" value="3.579999923706055"/>
+          <PARAM id="rate_mod" value="0.0"/>
+          <PARAM id="slew" value="0.0"/>
+          <PARAM id="slew_mod" value="0.0"/>
+        </RandomParams>
+      </params>
+    </module>
+    <module logicalId="8" type="Delay">
+      <params>
+        <DelayParams>
+          <PARAM id="feedback" value="0.9413826465606689"/>
+          <PARAM id="mix" value="0.8914446830749512"/>
+          <PARAM id="timeMs" value="245.0"/>
+        </DelayParams>
+      </params>
+    </module>
+    <module logicalId="11" type="Quantizer">
+      <params>
+        <QuantizerParams>
+          <PARAM id="rootNote" value="0.0"/>
+          <PARAM id="root_mod" value="1.0"/>
+          <PARAM id="scale" value="0.0"/>
+          <PARAM id="scale_mod" value="1.0"/>
+        </QuantizerParams>
+      </params>
+    </module>
+    <module logicalId="13" type="Logic">
+      <params>
+        <LogicParams>
+          <PARAM id="operation" value="1.0"/>
+        </LogicParams>
+      </params>
+    </module>
+    <module logicalId="14" type="Quantizer">
+      <params>
+        <QuantizerParams>
+          <PARAM id="rootNote" value="0.0"/>
+          <PARAM id="root_mod" value="1.0"/>
+          <PARAM id="scale" value="0.0"/>
+          <PARAM id="scale_mod" value="1.0"/>
+        </QuantizerParams>
+      </params>
+    </module>
+    <module logicalId="15" type="Quantizer">
+      <params>
+        <QuantizerParams>
+          <PARAM id="rootNote" value="7.0"/>
+          <PARAM id="root_mod" value="1.0"/>
+          <PARAM id="scale" value="0.0"/>
+          <PARAM id="scale_mod" value="1.0"/>
+        </QuantizerParams>
+      </params>
+    </module>
+    <module logicalId="16" type="Attenuverter">
+      <params>
+        <AttenuverterParams>
+          <PARAM id="amount" value="6.057552337646484"/>
+        </AttenuverterParams>
+      </params>
+    </module>
+    <module logicalId="17" type="Random">
+      <params>
+        <RandomParams>
+          <PARAM id="max" value="0.7860031127929688"/>
+          <PARAM id="min" value="0.0"/>
+          <PARAM id="rate" value="5.579999923706055"/>
+          <PARAM id="rate_mod" value="0.0"/>
+          <PARAM id="slew" value="0.0"/>
+          <PARAM id="slew_mod" value="0.0"/>
+        </RandomParams>
+      </params>
+    </module>
+    <module logicalId="18" type="MapRange">
+      <params>
+        <MapRangeParams>
+          <PARAM id="inMax" value="1.0"/>
+          <PARAM id="inMin" value="0.0"/>
+          <PARAM id="outMax" value="1.0"/>
+          <PARAM id="outMin" value="1.400390625"/>
+        </MapRangeParams>
+      </params>
+    </module>
+    <module logicalId="19" type="Random">
+      <params>
+        <RandomParams>
+          <PARAM id="max" value="24.10700225830078"/>
+          <PARAM id="min" value="0.0"/>
+          <PARAM id="rate" value="3.579999923706055"/>
+          <PARAM id="rate_mod" value="0.0"/>
+          <PARAM id="slew" value="0.1379999965429306"/>
+          <PARAM id="slew_mod" value="0.0"/>
+        </RandomParams>
+      </params>
+    </module>
+    <module logicalId="20" type="Random">
+      <params>
+        <RandomParams>
+          <PARAM id="max" value="24.10700225830078"/>
+          <PARAM id="min" value="0.0"/>
+          <PARAM id="rate" value="12.73000049591064"/>
+          <PARAM id="rate_mod" value="0.0"/>
+          <PARAM id="slew" value="0.01799999922513962"/>
+          <PARAM id="slew_mod" value="0.0"/>
+        </RandomParams>
+      </params>
+    </module>
+    <module logicalId="21" type="Random">
+      <params>
+        <RandomParams>
+          <PARAM id="max" value="24.10700225830078"/>
+          <PARAM id="min" value="-6.25"/>
+          <PARAM id="rate" value="30.57999992370605"/>
+          <PARAM id="rate_mod" value="0.0"/>
+          <PARAM id="slew" value="0.1790000051259995"/>
+          <PARAM id="slew_mod" value="0.0"/>
+        </RandomParams>
+      </params>
+    </module>
+  </modules>
+  <connections>
+    <connection srcId="1" srcChan="0" dstId="3" dstChan="0"/>
+    <connection srcId="1" srcChan="1" dstId="3" dstChan="1"/>
+    <connection srcId="1" srcChan="0" dstId="8" dstChan="0"/>
+    <connection srcId="1" srcChan="0" dstId="8" dstChan="1"/>
+    <connection srcId="3" srcChan="0" dstId="11" dstChan="0"/>
+    <connection srcId="3" srcChan="0" dstId="14" dstChan="0"/>
+    <connection srcId="3" srcChan="0" dstId="15" dstChan="0"/>
+    <connection srcId="8" srcChan="0" dstId="output" dstChan="0"/>
+    <connection srcId="8" srcChan="1" dstId="output" dstChan="1"/>
+    <connection srcId="14" srcChan="0" dstId="16" dstChan="0"/>
+    <connection srcId="15" srcChan="0" dstId="16" dstChan="1"/>
+    <connection srcId="17" srcChan="0" dstId="18" dstChan="0"/>
+  </connections>
+  <modRoutes>
+    <modRoute srcId="4" srcChan="1" dstId="2" param="root_mod" depth="1.0"/>
+    <modRoute srcId="5" srcChan="0" dstId="2" param="scale_mod" depth="1.0"/>
+    <modRoute srcId="5" srcChan="1" dstId="11" param="scale_mod" depth="1.0"/>
+    <modRoute srcId="4" srcChan="1" dstId="11" param="root_mod" depth="1.0"/>
+    <modRoute srcId="18" srcChan="0" dstId="16" param="amount" depth="1.0"/>
+    <modRoute srcId="19" srcChan="0" dstId="3" param="step1_mod" depth="1.0"/>
+    <modRoute srcId="19" srcChan="0" dstId="3" param="step4_mod" depth="1.0"/>
+    <modRoute srcId="19" srcChan="0" dstId="3" param="step7_mod" depth="1.0"/>
+    <modRoute srcId="19" srcChan="0" dstId="3" param="step10_mod" depth="1.0"/>
+    <modRoute srcId="19" srcChan="0" dstId="3" param="step13_mod" depth="1.0"/>
+    <modRoute srcId="19" srcChan="0" dstId="3" param="step16_mod" depth="1.0"/>
+    <modRoute srcId="20" srcChan="0" dstId="3" param="step2_mod" depth="1.0"/>
+    <modRoute srcId="20" srcChan="0" dstId="3" param="step3_mod" depth="1.0"/>
+    <modRoute srcId="20" srcChan="0" dstId="3" param="numSteps_max" depth="1.0"/>
+    <modRoute srcId="20" srcChan="0" dstId="3" param="step6_mod" depth="1.0"/>
+    <modRoute srcId="20" srcChan="0" dstId="3" param="step11_mod" depth="1.0"/>
+    <modRoute srcId="20" srcChan="0" dstId="3" param="step14_mod" depth="1.0"/>
+    <modRoute srcId="21" srcChan="0" dstId="3" param="step15_mod" depth="1.0"/>
+    <modRoute srcId="21" srcChan="0" dstId="3" param="step12_mod" depth="1.0"/>
+    <modRoute srcId="21" srcChan="0" dstId="3" param="step9_mod" depth="1.0"/>
+    <modRoute srcId="21" srcChan="0" dstId="3" param="step8_mod" depth="1.0"/>
+    <modRoute srcId="21" srcChan="0" dstId="3" param="step5_mod" depth="1.0"/>
+    <modRoute srcId="5" srcChan="0" dstId="3" param="numSteps_mod" depth="1.0"/>
+    <modRoute srcId="5" srcChan="0" dstId="3" param="rate_mod" depth="1.0"/>
+    <modRoute srcId="19" srcChan="0" dstId="8" param="feedback" depth="1.0"/>
+    <modRoute srcId="14" srcChan="0" dstId="1" param="frequency" depth="1.0"/>
+    <modRoute srcId="11" srcChan="0" dstId="1" param="frequency" depth="1.0"/>
+  </modRoutes>
+  <NodeEditorUI>
+    <node id="1" x="-520.0" y="-120.0"/>
+    <node id="3" x="-1076.0" y="-195.0"/>
+    <node id="4" x="-1364.0" y="505.0"/>
+    <node id="5" x="-1488.0" y="245.0"/>
+    <node id="8" x="254.0" y="84.0"/>
+    <node id="11" x="-530.0" y="206.0"/>
+    <node id="13" x="416.0" y="494.0"/>
+    <node id="14" x="-512.0" y="393.0"/>
+    <node id="15" x="-497.0" y="572.0"/>
+    <node id="16" x="-131.0" y="416.0"/>
+    <node id="17" x="-1995.0" y="514.0"/>
+    <node id="18" x="-134.0" y="580.0"/>
+    <node id="19" x="-2012.0" y="-244.0"/>
+    <node id="20" x="-1995.0" y="5.0"/>
+    <node id="21" x="-2003.0" y="263.0"/>
+  </NodeEditorUI>
+</ModularSynthPreset>

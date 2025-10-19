@@ -1,0 +1,274 @@
+{
+  "0": {
+    "left_selector": {
+      "type": "frequencies",
+      "preset": "audio/frequencies/square.json",
+      "properties": {
+        "shape": "diamond",
+        "amplitude": 330.0,
+        "pitch_on_grid": "on",
+        "direction": "vertical",
+        "speed": 700.0,
+        "looping": "on",
+        "audio_group": 1,
+        "midi": {
+          "cc": 1,
+          "channel": 1
+        }
+      }
+    },
+    "right_selector": {
+      "type": "samples",
+      "folder": "melodic",
+      "file": "audio/samples/melodic/KSHMR_Sax_05_Melody_100_Bm.wav",
+      "properties": {
+        "shape": "diamond",
+        "color": {
+          "r": 255,
+          "g": 57,
+          "b": 255
+        },
+        "pitch_on_grid": "off",
+        "direction": "vertical",
+        "speed": 180.0,
+        "looping": "on",
+        "audio_group": 1,
+        "midi": {
+          "cc": 1,
+          "channel": 1
+        }
+      }
+    }
+  },
+  "1": {
+    "left_selector": {
+      "type": "frequencies",
+      "preset": "audio/frequencies/sine.json",
+      "properties": {
+        "shape": "star",
+        "color": {
+          "r": 255,
+          "g": 17,
+          "b": 255
+        },
+        "looping": "on",
+        "audio_group": 1,
+        "midi": {
+          "cc": 1,
+          "channel": 1
+        },
+        "amplitude": 110.0,
+        "pitch_on_grid": "on"
+      }
+    },
+    "right_selector": {
+      "type": "samples",
+      "folder": "melodic",
+      "file": "audio/samples/melodic/KSHMR_Instrumental_Fill_08_128_Bansuri_Em.wav",
+      "properties": {
+        "shape": "diamond",
+        "color": {
+          "r": 255,
+          "g": 57,
+          "b": 255
+        },
+        "pitch_on_grid": "on",
+        "looping": "on"
+      }
+    }
+  },
+  "2": {
+    "left_selector": {
+      "type": "noise",
+      "preset": "audio/noise/pink_noise.json",
+      "properties": {
+        "direction": "horizontal",
+        "speed": 100.0,
+        "amplitude": 70.0,
+        "pitch_on_grid": "on"
+      }
+    },
+    "right_selector": {
+      "type": "samples",
+      "folder": "melodic",
+      "file": "audio/samples/melodic/KSHMR_Orchestra_Fill_03_Brass_128_Fm.wav",
+      "properties": {
+        "direction": "horizontal",
+        "speed": 100.0,
+        "amplitude": 100.0,
+        "pitch_on_grid": "on",
+        "looping": "on"
+      }
+    }
+  },
+  "3": {
+    "left_selector": {
+      "type": "frequencies",
+      "preset": "audio/frequencies/triangle.json",
+      "properties": {
+        "direction": "horizontal",
+        "speed": 100.0,
+        "amplitude": 100.0,
+        "pitch_on_grid": "off"
+      }
+    },
+    "right_selector": {
+      "type": "frequencies",
+      "preset": "audio/frequencies/sine.json",
+      "properties": {
+        "direction": "horizontal",
+        "speed": 100.0,
+        "amplitude": 100.0,
+        "pitch_on_grid": "off"
+      }
+    }
+  },
+  "4": {
+    "left_selector": {
+      "type": "noise",
+      "preset": "audio/noise/pink_noise.json",
+      "properties": {
+        "direction": "horizontal",
+        "speed": 100.0,
+        "amplitude": 100.0,
+        "pitch_on_grid": "off"
+      }
+    },
+    "right_selector": {
+      "type": "noise",
+      "preset": "audio/noise/pink_noise.json",
+      "properties": {
+        "direction": "horizontal",
+        "speed": 100.0,
+        "amplitude": 100.0,
+        "pitch_on_grid": "off"
+      }
+    }
+  },
+  "5": {
+    "left_selector": {
+      "type": "samples",
+      "folder": "melodic",
+      "file": "audio/samples/melodic/KSHMR_Instrumental_Fill_08_128_Bansuri_Em.wav",
+      "properties": {
+        "direction": "horizontal",
+        "speed": 100.0,
+        "amplitude": 100.0,
+        "pitch_on_grid": "on",
+        "shape": "diamond",
+        "color": {
+          "r": 255,
+          "g": 209,
+          "b": 255
+        },
+        "looping": "on"
+      }
+    },
+    "right_selector": {
+      "type": "samples",
+      "folder": "effects",
+      "file": "audio/samples/effects/KSHMR_Animals_15_Elephant_A#.wav",
+      "properties": {
+        "direction": "horizontal",
+        "speed": 100.0,
+        "amplitude": 100.0,
+        "pitch_on_grid": "off",
+        "looping": "on"
+      }
+    }
+  },
+  "6": {
+    "left_selector": {
+      "type": "noise",
+      "preset": "audio/noise/brown.json",
+      "properties": {
+        "direction": "horizontal",
+        "speed": 100.0,
+        "amplitude": 100.0,
+        "pitch_on_grid": "off"
+      }
+    },
+    "right_selector": {
+      "type": "samples",
+      "folder": "ambient",
+      "file": "audio/samples/ambient/KSHMR_Duduk_09_One_Shot_Dm.wav",
+      "properties": {
+        "direction": "horizontal",
+        "speed": 100.0,
+        "amplitude": 100.0,
+        "pitch_on_grid": "on"
+      }
+    }
+  },
+  "7": {
+    "left_selector": {
+      "type": "frequencies",
+      "preset": "audio/frequencies/sine.json",
+      "properties": {
+        "direction": "horizontal",
+        "speed": 100.0,
+        "amplitude": 100.0,
+        "pitch_on_grid": "off"
+      }
+    },
+    "right_selector": {
+      "type": "samples",
+      "folder": "melodic",
+      "file": "audio/samples/melodic/KSHMR_Sax_12_Melody_110_F#m.wav",
+      "properties": {
+        "direction": "horizontal",
+        "speed": 100.0,
+        "amplitude": 100.0,
+        "pitch_on_grid": "off"
+      }
+    }
+  },
+  "8": {
+    "left_selector": {
+      "type": "samples",
+      "folder": "melodic",
+      "file": "audio/samples/melodic/KSHMR_Orchestra_Fill_12_Strings_128_Dm.wav",
+      "properties": {
+        "direction": "horizontal",
+        "speed": 100.0,
+        "amplitude": 100.0,
+        "pitch_on_grid": "on",
+        "looping": "on"
+      }
+    },
+    "right_selector": {
+      "type": "frequencies",
+      "preset": "audio/frequencies/square.json",
+      "properties": {
+        "direction": "horizontal",
+        "speed": 100.0,
+        "amplitude": 100.0,
+        "pitch_on_grid": "off"
+      }
+    }
+  },
+  "9": {
+    "left_selector": {
+      "type": "samples",
+      "folder": "percussion",
+      "file": "audio/samples/percussion/KSHMR_Acoustic_Tom_17_High_F.wav",
+      "properties": {
+        "direction": "horizontal",
+        "speed": 100.0,
+        "amplitude": 100.0,
+        "pitch_on_grid": "off",
+        "looping": "off"
+      }
+    },
+    "right_selector": {
+      "type": "frequencies",
+      "preset": "audio/frequencies/triangle.json",
+      "properties": {
+        "direction": "horizontal",
+        "speed": 100.0,
+        "amplitude": 100.0,
+        "pitch_on_grid": "off"
+      }
+    }
+  }
+}

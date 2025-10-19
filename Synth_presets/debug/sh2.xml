@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<ModularSynthPreset version="1">
+  <modules>
+    <module logicalId="1" type="S&amp;H">
+      <params>
+        <SAndHParams>
+          <PARAM id="edge" value="2.0"/>
+          <PARAM id="edge_mod" value="0.0"/>
+          <PARAM id="slewMs" value="0.0"/>
+          <PARAM id="slewMs_mod" value="0.0"/>
+          <PARAM id="threshold" value="0.239999994635582"/>
+          <PARAM id="threshold_mod" value="0.0"/>
+        </SAndHParams>
+      </params>
+    </module>
+    <module logicalId="2" type="LFO">
+      <params>
+        <LFOParams>
+          <PARAM id="bipolar" value="1.0"/>
+          <PARAM id="depth" value="0.5"/>
+          <PARAM id="depth_mod" value="0.0"/>
+          <PARAM id="rate" value="1.0"/>
+          <PARAM id="rate_mod" value="0.0"/>
+          <PARAM id="wave" value="0.0"/>
+          <PARAM id="wave_mod" value="0.0"/>
+        </LFOParams>
+      </params>
+    </module>
+    <module logicalId="3" type="Noise">
+      <params>
+        <NoiseParams>
+          <PARAM id="colour" value="0.0"/>
+          <PARAM id="level" value="-12.0"/>
+        </NoiseParams>
+      </params>
+    </module>
+    <module logicalId="5" type="VCO">
+      <params>
+        <VCOParams>
+          <PARAM id="frequency" value="440.0"/>
+          <PARAM id="waveform" value="0.0"/>
+        </VCOParams>
+      </params>
+    </module>
+  </modules>
+  <connections>
+    <connection srcId="1" srcChan="0" dstId="5" dstChan="0"/>
+    <connection srcId="2" srcChan="0" dstId="1" dstChan="2"/>
+    <connection srcId="2" srcChan="1" dstId="1" dstChan="3"/>
+    <connection srcId="3" srcChan="0" dstId="1" dstChan="0"/>
+    <connection srcId="3" srcChan="1" dstId="1" dstChan="1"/>
+    <connection srcId="5" srcChan="0" dstId="output" dstChan="0"/>
+  </connections>
+  <NodeEditorUI>
+    <node id="1" x="-150.0" y="172.0"/>
+    <node id="2" x="-509.0" y="383.0"/>
+    <node id="3" x="-486.0" y="-38.0"/>
+    <node id="5" x="272.6911926269531" y="156.4208374023438"/>
+  </NodeEditorUI>
+</ModularSynthPreset>

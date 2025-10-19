@@ -1,0 +1,1287 @@
+@001 What is a 'Scotch snap' ?
+\*a rhythmic pattern
+\an accompanying finger snapping to a rag
+\a dance
+\a young white male
+^This rhythmic pattern made up of a sixteenth note followed by a dotted 
+eighth note, was common in the Baroque era as well as in American jigs.
+It has been suggested that the basic Ragtime Rhythm evolved from it.
+<3
+@002 Other than the piano what was the next popular Ragtime instrument ?
+\the organ
+\the flute
+\*the banjo
+\the saxophone
+^Greatly overshadowed by the piano, the banjo played a very significant
+  role in Ragtime none the less.
+<2
+@003 Approximately how long was the Ragtime era ?
+\15 years
+\*two decades
+\one decade
+\three decades
+^Lasting from about 1900 to 1920, the Ragtime era gave the world its
+  first truly American music.
+<1
+@004 When was the first Ragtime piece published ?
+\1899
+\1901
+\1889
+\*1896
+^In 1886 two pieces labeled Rag were published: ' All coons look alike to me'
+(Ernest Hogan) and 'My coal black lady'(W.T.Jefferson). The widespread 
+prejudice of the time is evidenced by these titles. 
+<3
+@005 In 1901 what important musical organization voted to suppress Ragtime  ?
+\* the American Federation of Musicians
+\the Society of European conductors
+\Royal Philharmonic Society of London
+\none of the above
+^Ragtime created such a furor that musicians took sides to debate its legitimacy.
+<2
+@006 Who was dubbed 'the Black Chopin' ?
+\James Scott
+\* Scott Joplin 
+\Artie Matthews
+\Louis Chauvin
+^It was only until decades later that Joplin's true genius was recognized.
+<1
+@007 What was a 'tickler' ?
+\* a Ragtime pianist
+\a funny song
+\a game amongst musicians
+\an attractive woman
+^Many Ragtime pianists used this nickname.
+<2 
+@008 What was the term given to many a talented Ragtime pianist ?
+\a 'hot player'
+\a 'smoker'
+\* a 'perfessor'
+\all of the above
+^Because of James Scott's small stature he was called the 'little perfessor'.
+<2 
+@009 What does the term 'ragging' refer to ?
+\* superimposing a Ragtime feel over pre-existing pieces   
+\getting angry at someone
+\predecessor of the verb 'to rake' i.e. raking
+\bad clothing
+^Ragging classic tunes pre-dates the first published Ragtime pieces
+by several decades.
+<2  
+@010 What is a Rag ?
+\dance based American vernacular music
+\a syncopated melody against an even accompaniment
+\an African-American idiomatic music of the early 20th century
+\* all of the above
+^Although Ragtime cannot be described precisely the above statements
+are good approximations.
+<1
+@011 Which of the following is a typical Rag structure ?
+\* ABACD
+\ABC
+\ABCD
+\ABCDA
+^This form appears in most Ragtime pieces. It is worth noting that it bears
+a striking resemblance to pre-existing Classical structure.
+<3
+@012 Which of the following is not a type of Ragtime ?
+\*Ragtime hymns
+\Ragtime songs
+\Instrumental rags
+\none of the above
+^Although it is possible that some Ragtime composers attempted to introduce
+this type of Ragtime into the mainstream, it would have inevitably met with
+dire straits as the Religious institutes of the day were adamantly opposed to 
+this provocative music.  
+<2
+@013 Ragtime reached its highest point ... ?
+|  as songs with lyrics
+\* as an instrumental form
+\as waltzes
+\as a way of adapting classic tunes
+^The more serious Ragtime composers (Scott Joplin, James Scott, Joseph lamb)
+  concentrated on this type even though it was less popular.
+<2
+@014 What musical element gave Ragtime its distinctive appeal ?
+\its harmony
+\its lyrics
+\its personalities
+\* its rhythm
+^The appeal of Ragtime's rhythm is made apparent by its title which
+evolved from 'ragged time'. 
+<1
+@015 What form of Ragtime has best stood the test of time ?
+\* Instrumental rags
+\ragtime songs
+\adaptations of classic pieces
+\none of the above
+^Composers such as Joplin and Scott sought to improve the standing
+of their work alongside that of the classic masters. This goal was
+not met for decades to come.
+<2
+@016 What form of Ragtime was the most popular with the public ?
+\fast rags
+\* Ragtime songs
+\orchestral ragtime
+\rags played by woman
+^Ragtime songs employed the syncopated rhythm as well as colorful
+lyrics. The combination was irresistible to the youth of the day.
+<2
+@017 What is a secondary rag ?
+\one that isn't as good as the first
+\a backup tune
+\*a melodic motif
+\an encore piece
+^This motif was used so often that it became a cliche.
+<2
+@018 Rags generally employ which of the following ?
+\* conventional European harmony
+\mostly pentatonic scales
+\melodies with small intervallic leaps
+\only a few select keys
+^This fact serves to reinforce the importance of Ragtime's' rhythm.
+<2
+@019 Ragtime piano can best be described as ... ?
+\having an oom-pah in the bass
+\using octaves to accentuate melodies
+\a rag
+\* all of the above
+^Ragtime is a broad term while the piano 'rag' is specific to
+the instrumental form. The most significant contributions were made
+with the piano rag.
+<2 
+@020 What element of Ragtime was fundamental to the conception of its melodies ?
+\the player piano
+\* syncopated rhythms
+\playing octaves
+\large fingers
+^The left hand in a rag fulfilled only a support role while the right played
+its distinguishing syncopated melodies. 
+<2
+@021 What did the word Ragtime come to mean by the year 1910 ?
+\virtuostic piano displays
+\just the rhythmic aspect of what used to be called Ragtime
+\* any popular rhythmic song
+\none of the above
+^The word Ragtime was used loosely as a way of marketing any song
+that had rhythm, even if the song had virtually no syncopation.
+<2
+@022 Which of the following songs was the most popular ?
+\Spaghetti rag
+\Shave' em dry
+\Peaches and cream
+\*Alexander's Ragtime band
+^Irving Berlin's classic tune was so phenomenally successful that for many
+writers in the 20's and 30's it typified the best of Ragtime. Some even
+went so far as to say that it represented the culmination of all Ragtime
+to date. All this praise for a tune that was ironically almost non-syncopated.
+<2
+@023 What was the common meter for a rag ?
+\* 2/4 time
+\4/4 time
+\3/4 time
+\6/8 time
+^Although a 3/4 time signature was used for Ragtime waltzes the 2/4
+meter was by far the more common. 
+<2
+@024 What type of Ragtime employed a 3/4 time signature ?
+\* a Ragtime waltz
+\Ragtime songs
+\orchestral Ragtime
+\rags with a fruit in the title
+^Ragtime waltzes were generally in a minor genre and lacked the propulsion
+  that the normal variety possessed.
+<2
+@025 Generally Ragtime can be broken down into how many categories ?
+\7
+\* 4
+\3
+\5
+^These are : 1. Instrumental rags 2. Ragtime waltzes 3. Ragtime songs
+and 4. 'ragging' of classic or pre-existing tunes.  
+<3
+@026 What type of Ragtime pieces are Scott Joplin's 'Pleasant moments' and 'Bethena' ?
+\piano rags
+\ragtime songs
+\* Ragtime waltzes
+\none of the above
+^The most enduring waltzes of the day, they were less popular than
+his other work.
+<3
+@027 What do Mendelssohn's 'Spring song' and Rubinstein's 'Melody in F' have in common ?
+\* they were popular classics used for 'ragging'
+\nothing
+\they had similar stylistic elements to those of Ragtime
+\many Ragtime pianists found them too challenging
+^'Ragging classic tunes was how Ragtime began.
+<2
+@028 A good estimate of how many Instrumental rags were published is ?
+\* 2-3000
+\5000
+\3-4000
+\1500
+^Many gems from the Ragtime era have survived however unfortunately
+  works by outstanding pianist-composers such as Louis Chauvin were
+never captured due to the composers inability to write them down.
+<3 
+@029 Although historians still argue about the origins of Ragtime, which of the following do they agree on ?
+\* it was originally an Afro-American idiom
+\that it came from the Indians
+\that it was first conceived by Scott Joplin
+\it was invented by an African-American woman in 1888
+^Historically there is no doubt of this fact.
+<2
+@030 What were the first examples of Ragtime ?
+\* the ragging of classics
+\Ragtime songs
+\James Scott's experiments
+\the efforts of the 'Ragtime kid'
+^The 'ragging' of classics was popular decades before the Ragtime
+era began, however it wasn't until 1896 that the first original
+pieces were published.
+<2
+@031 Where does the term Ragtime originate ?
+\from the phrase 'broken time'
+\from a description of a black dance as having 'ragged' time
+\from the phrase 'ragged time'
+\* all of the above
+^The combination of these phrases eventually led to rag-time
+(a simple description) which consequently evolved to what we define as Ragtime. 
+<2
+@032 The year 1909 saw which two coinciding events take place ?
+\* peak year for piano sales and published pieces ? 
+\Joplin starts experiments, Louis Chauvin arrives on the scene
+\Kitten on the keys and Dizzy fingers are written
+\none of the above
+^The popularity of Ragtime and the popularity of the piano were
+interdependent. The successes of the one spurred the other on.
+<2
+@033 Which of the following were offshoots of Ragtime ?
+\Jazz
+\Novelty piano
+\stride piano
+\*all of the above
+^Ragtime's influence has been even more wide ranging than indicated
+above. Many classical 'greats' such as Stravinsky, Ravel, Satie and Ives
+incorporated it into their work as well as many other Jazzers such
+as Duke Ellington, Bix Beiderbecke and George Gershwin to name but a few. 
+<2
+@034 The peak years of the player piano ended with ... ?
+\the end of Novelty piano
+\Scott Joplin's death
+\* the end of the Ragtime era
+\all of the above
+^The player piano was an important part of Ragtime. Amateur musicians
+could at the same time learn from it and be dazzled by its apparent
+wizardry. More often than not embellishments such as tremolo and extra
+octaves were added to the rolls to make the pieces more extravagant.  
+<2
+@035 What were cutting contests ?
+\musical speed reading demonstrations
+\* virtuostic playing contests  
+\brawls engaged in by devotees over their favorite composer
+\unfortunate incidents in brothels
+^Louis Chauvin was especially good at these competitions.
+<2 
+@036 Many people found Ragtime to be ... ?
+\searching
+\simplistic
+\hard to dance to
+\* fascinating, Irresistible
+^Titles such as 'Irresistible rag', 'that fascinating rag', 
+'that nifty rag' and 'Irresistible fox trot rag' are testament to 
+ the kind of appeal Ragtime had.
+<2
+@037 Besides the increase in sound, the piano offered the Ragtime musician what advantage over the banjo ?
+\* Respect and prestige
+\more notes
+\easier access
+\all of the above
+^The piano represented many of the traditional music values that Ragtime
+composers sought. The banjo in comparison carried associations of plantations
+and minstrelsy. 
+<2
+@038 What city is thought to be the birthplace of Ragtime ?
+\* Saint Louis
+\Chicago
+\Kansas City
+\New York
+^Although many historians place Ragtime's birth in Chicago, substantially
+more agree on Saint Louis. 
+<2
+@039 Who were the two greatest Ragtime composers ?
+\Scott Joplin and Tom Turpin
+\Tom Turpin and Joseph Lamb
+\* Scott Joplin and James Scott
+\Scott Joplin and Irving Berlin
+^The only serious rivals that Scott Joplin had were Scott James and
+Joseph Lamb, both of whom were friends with Joplin.
+<1
+@040 Although originally an Afro-American idiom most of the prolific Ragtime composers were white, why ?
+\Racial discrimination from publishers
+\because many white musicians adopted Ragtime
+\many black musicians couldn't notate their work
+\* all of the above
+^Unfortunately many great black pianist-composers' works were never
+ heard because of the reasons mentioned above. 
+<1
+@041 Who wrote the Maple Leaf rag ?
+\James Scott
+\Tom Turpin
+\Eubie Blake
+\*Scott Joplin
+^The most enduring rag from the Ragtime era, it is probably one of the
+most well known tunes of all times.
+<1
+@042 In its heyday most ragtime was performed by whom ?
+\* amateur young white females  
+\perfessors
+\young black men
+\none of the above
+^A large section of the female youth was captivated by Ragtime; so much
+so that their parents concerns over racial and sexual associations with it
+were largely ignored.  
+<2
+@043 Ragtime was a music of ... ?
+\improvised explorations
+\* youth
+\south American origins
+\all of the above
+^America's youth embraced Ragtime wholeheartedly despite the many
+ barriers that seemed to arise in its wake. Its enthusiasm was contagious
+as it affected all branches of music and society.
+<2
+@044 Who was Sophie Tucker ?
+\a Ragtime composer
+\a flautist
+\wife of Leonard Cohen
+\* A Vaudevillian Ragtime Songstress
+^Alongside Dolly Connolly and Ruth Roye Tucker was one of the great
+  woman singers who helped to make this genre popular.
+<1
+@045 Who was John Stark ?
+\lesser known Ragtime composer
+\a politician against Ragtime
+\* important music publisher 
+\a religious zealot
+^John Stark was the principle publisher for Joplin and many other important
+composers.
+<3
+@046 Who was Al Jolson ?
+\a pianist
+\* well known ragtime-vaudeville singer
+\a composer of rags
+\all of the above
+^Jolson became famous by singing in blackface as well as starring in the 
+film 'the Jazz singer' in 1927. 
+<1
+@047 Who wrote 'Ragtime Nightingale' ?
+\* Joseph Lamb
+\Scott Joplin
+\James Scott
+\Artie Matthews
+^One of the most important figures in Ragtime , Lamb was greatly influenced
+by a meeting with Scott Joplin ; reportedly one of the only Ragtime composers
+he ever met.   
+<3
+@048 Who wrote Ragtime Oriole ?
+\* James Scott
+\Blind Boone
+\Scott Hayden
+\Percy Wenrich 'the Joplin kid'
+^James Scott was second only to Joplin in his contributions to Ragtime.
+<3
+@049 Scott Joplin wrote a famous rag after a fruit, what is its title ?
+\Fruit punch rag
+\Lemon drop rag
+\* Pine apple rag
+\Peach tree rag
+^One of Joplin's preferred pieces, it has been recorded many times.
+<2
+@050 Who wrote Alexander's Ragtime band ?
+\James Scott
+\* Irving Berlin
+\Jelly Roll Morton
+\Glover Compton
+^One of the most popular pieces of the day, it was considered the best
+that Ragtime had to offer by some, while a marked digression by others.
+The fact of the issue is that it belongs with those songs that used 
+the name 'Ragtime' as a marketing ploy, for the characteristic syncopations
+of Ragtime are suspiciously absent.
+<1
+@051 Who is one of those frequently credited with introducing Ragtime to Europeans ?
+\* John Philipe Sousa
+\Satie
+\Fred Van Eps
+\Zez Confrey
+^The famous Sousa band spread the word in Europe with much success. Aiding
+him in this endeavor was his assistant conductor Arthur Pryor who was himself
+an instrumental Ragtime composer.
+<
+@052 What is the 'Red back book' ?
+\a critique of important rags
+\* an orchestral folio
+\a book of rare Piano rags
+\Joplin's lost opera
+^Published by John Stark sometime between 1910-14, it is an important
+ collection of band and orchestral Ragtime pieces. Although its reputation
+has become legendary it was never in wide use during the Ragtime years, however
+among those who did use it were several influential orchestra leaders such as 
+John Robichaux of New Orleans and Charles Elgar of Chicago. 
+<2
+@053 Who wrote 'Dill Pickles'
+\*Charles.L.Johnson 
+\Clarence Woods
+\Tony Jackson
+\Willie 'the Lion' Smith
+^Johnson a white Kansas City musician had much success with 
+many of his rags; achieving ready publication and having a nation wide appeal
+Dill Pickles is perhaps Johnson's best, it is considered to be one of 
+the top 40 rags.
+<3
+@054 Eubie Blake wrote which one of the following songs ?
+\Reflection rag
+\*Charleston rag
+\Black and white
+\all of the above
+^A good example of the speedier, flashier Eastern ragtime school this
+'fingerbuster' also illustrates the transition of Ragtime into early Jazz
+with its freer 'hot jazz feeling'. It is one of the gems of the Ragtime
+repertory.
+<3
+@055 What year was Scott Joplin's 'Maple Leaf rag' published in ?
+\1903
+\1908
+\*1899
+\1901
+^Becoming the all-time best seller in its field, Joplin's classic
+ remains the best known rag today. Its success launched Ragtime 
+ into the world music scene. 
+<3
+@056 What American classical composer incorporated Ragtime into his work
+in 1902 ?
+\*Charles Ives
+\Aaron Copeland
+\Leonard Bernstein
+\Darius Milhaud
+^Ives pioneered the incorporation of Ragtime into classical forms
+with his 'Ragtime Dances'. He was soon followed his European colleagues
+Debussy, Stravinsky, Satie, Milhaud, Walton and others.
+<3
+@057 What did Joplin, Scott and Lamb have in common ?
+\all three were prolific writers of Ragtime songs
+\they all believed the key of D to be the best for Ragtime
+\all three had large hands
+\* they were less concerned about popular appeal
+^The three leading figures of the Ragtime era sought to elevate their
+  art.To this end they concentrated their efforts on the less popular
+  but more serious instrumental Ragtime forms.
+<3
+@058 What European composer incorporated Ragtime into his work 'Golliwog's Cakewalk'
+\Igor Stravinsky
+\*Claude Debussy
+\John Alden Carpenter
+\Antonin Dvorak
+^The next composer after Ives to incorporate ragtime into his work,
+Debussy wrote 'Golliwog's Cake Walk' for his daughter in 1908. In the piece 
+he pokes fun at Wagner by parodying the main motif from Tristan an Isolde.
+<2
+@059 The Saint Louis world's fair of 1904 was important to Ragtime in what way ?
+\the first 88 key player piano was unveiled
+\Scott Joplin was a featured performer
+\*it attracted many Ragtime musicians 
+\Scott James wrote 'Amusement rag' in retrospect.
+^Of the many playing contests held, the giant world's fair competition
+was said to have been among the largest going. Ragtime musicians from 
+across the country would gather at this fair. Reportedly Louis Chauvin
+was claimed the victor in 1904.
+<3
+@060 Who opened the Rosebud bar in 1900 ?
+\*Tom Turpin
+\Scott James
+\Fats Waller
+\Mike Bernard
+^This legendary club became a mecca for midwestern Ragtime pianists.
+  Many of the best players frequented the club and playing contests
+  were held regularly.
+<2
+@061 The year 1912 marked the entrance of ... ?
+\Jazz
+\Ragtime guitar
+\the fusion of Ragtime and Tin Pan alley
+\*the first hand played piano roles 
+^In 1912 Melville Clark issued the first hand played roll
+  made from a live performance of Lee Roberts's rendition of his
+  own composition 'Valse Parisienne'.
+<2
+@062  Who was Fats Waller ?
+\one of Joplin's publishers
+\composer of orchestral Ragtime
+\one of the great Instrumental Ragtime composers
+\*Stride piano player
+^Like many jazz musicians of the time, the great Fats Waller
+ was originally a Ragtime musician. Alongside James P.Johnson, Waller
+ was the leader of the Ragtime influenced Stride school of piano playing. 
+<2
+@063 What was Treemonisha ?
+\a group of Ragtime enthusiasts
+\a manual of Ragtime techniques
+\*Joplin's second opera
+\the name given Ragtime's musical lineage
+^One of Joplin's most consuming works, this opera in three acts and
+230 pages was copyrighted and published by Joplin himself at his own 
+expense in 1911. It received one poorly inadequate performance
+in Harlem hall in 1915 with Joplin himself playing the orchestral parts
+on the piano. The failure of this piece dealt a severe blow to Joplin's
+already failing state of mind, crushing his hopes of a lifetime. In the 
+fall of 1916 he was admitted to the Manhattan state Hospital where he
+ died April 1, 1917. 
+<2
+@064 Who was Luckey Roberts ?
+\Ragtime banjo player
+\Ragtime composer
+\stride pianist
+\*first Black stride pianist to make a record
+^A spectacular pianist ,Roberts could achieve many effects on the keyboard
+such as octave and single note tremolos without much effort. In 1916
+he became the first Black stride pianist to make a record.
+<2
+@065 In what year did Scott Joplin die ?
+\1915
+\*1917
+\1920
+\1918
+^It is only fitting that Ragtime's greatest composer's death marks 
+the end of the era. However the assumption that his death was the cause 
+of its end is a false one. Many factors played a role in the end of Ragtime,
+such as Joplin's own adherence to an idealistic style of Ragtime, which
+opened the door to the looser form of Jazz, and the abuse that Ragtime
+endured at the hands of the Tin Pan Alley practitioners. 
+<2
+@066 Which one of the following Classical composers wrote the piece
+    'Ragtime' ?
+\*Stravinsky 
+\Satie
+\Ives
+\Debussy
+^A piece in which Ragtime is incorporated with classical music, it uses
+eleven instruments including a French horn and a cimbalom (the Hungarian
+national instrument. 
+<3
+@067 A revival in Rag piano occurred ... ?
+\in the mid 70's
+\in the 60's
+\in the early 40's
+\*all of the above
+^A testament to its worth, Ragtime not only influenced everything from
+country to classical to jazz, but decided it needed to be heard in its true 
+form on several occasions since its heyday. The historian and author
+of 'They all played Ragtime', Rudi Blesh, the Ragtime entertainer Max Morath 
+and the conductor-arranger-scholar Gunther Shuller are three of the leading 
+revivalists. The 1974 movie 'the Sting' also prompted a revival of Ragtime 
+on records.  
+<2
+@068 Who was Jelly Roll Morton ?
+\Publisher-Promoter
+\*Ragtime influenced Jazz pianist
+\a vaudeville singer
+\a Ragtime arranger
+^Considering himself a Jazz musician first, Morton's playing marks
+the period of transition between Ragtime and Jazz. His style owed a great
+deal to Ragtime as he loved it and understood it, and could illustrate
+the difference between classic Ragtime and his deviations from it into Jazz.
+<2
+@069 What Actor-Comedian shares his name with a rag written by
+Eubie Blake ?
+\Smokey Mokes
+\Lovie Joe
+\Hitchy-Koo
+\*none of the above 
+^Published in 1914 Blake's 'Chevy Chase' rag had to undergo simplification
+ in order to be published. Eubie himself sums up the reasoning behind this
+ by saying, "We were advised we had to write for the girl in the 
+ five-and-ten -cent store." Meaning that the sale of a rag piece would
+ depend on whether the sales clerk could play it convincingly enough to the 
+ stores customers. 
+<3
+@070 The Ragtime era came to an end by what year ?
+\1925
+\*1920
+\1915
+\1930
+^Although Ragtime was still performed well into the twenties, it was
+considered old hat. The public was embracing the looser form of Jazz 
+and the novelty piano, which poked fun at Ragtime. Ragtime Composition
+and publication were virtually non-existent at this time.  
+<2
+@071 Who wrote the 'Pastime Rag' ?
+\*Artie Matthews
+\Joseph Lamb
+\Scott Joplin
+\Tom Turpin
+^One of the leading Ragtime figures, he is almost exclusively known
+for five rags, all of which go under the title of 'Pastime Rag'.
+These pieces go against the trend in that they are neither classic
+rags or rags in the Saint Louis style. 
+<3
+@072 Who was Tom Turpin ?
+\James Scott's mentor
+\important Ragtime publisher
+\Ragtime piano roll manufacturer
+\*composer of the 'Harlem rag'
+^Considered to be one of the top five leading Ragtime composers, Turpin
+helped usher in the era with The Harlem rag published in 1897. He also
+authored many other important works such as 'The Bowery Buck' and
+'St.Louis rag'.
+<2
+@073 How did a typical Ragtime pianist's left hand support the song ?
+\alternating oom-pah with strait chords
+\*with an oom-pah bass
+\strait chords
+\alternating bass octaves with strait chords
+^The time keeping oom-pah bass is precisely what the pioneers of Ragtime
+sought to discard during Ragtime's experimental years. Joplin and his
+colleagues were trying to make the inherent Rhythm less explicit in the form, however even though none of them ever completely achieved
+this goal their efforts yielded positive results. Mimicking the right 
+hand, and interspersing short single note lines are just two of the  
+approaches conceived.
+<2
+@074 What distinguished Jelly Roll Morton's versions of the Maple Leaf rag
+as Jazz rather than Ragtime ? 
+\his swing
+\his comping patterns with the left hand
+\*his hitting the left hand a 16th note early
+\he dropped the oom-pah bass
+^Coming from the Ragtime school Morton's departures from it led to his
+creation of his own early jazz style. Although very similar to Ragtime
+Jelly Roll's Jazz was looser. Ironically, it represented to the public
+the same sense of rhythmic freedom that Ragtime had twenty years earlier. 
+<2
+@075 The majority of Joplin's rags are structured in what way ?
+\*ABACD
+\ABCD
+\ABCDE
+\ABACDA
+^This widely used classic form in four strains was made popular by Joplin. Many leading Ragtime composers used the form however a notable
+exception is Joseph Lamb whose experiments with structure led to new ground within the genre.    
+<3
+@076 Joplin's use of prosody in his 'Magnetic rag' is evident through
+the use of which technique ?
+\octave tremolo
+\*dominant preparation
+\glissandos
+\chromatic chord motion
+^This classical technique of harping on and around the dominant of the
+ key which is to be restored, is particularly effective in achieving 
+what's implied by the piece's title.
+<3
+@077 What piece by Artie Matthews became widely used in Jazz ?
+\*Weary Blues
+\Pastime rag # 2
+\Pastime rag # 5
+\Wise Old Moon
+^Matthews' Weary Blues was published in the same year that he decided
+to leave Saint Louis and get out of Ragtime. Weary Blues went on to become 
+a classic of the Blues repertory while Matthews went on to become a teacher
+of classical music.   
+<2
+@078 Who was Louis Chauvin ?
+\*a Ragtime piano virtuoso
+\Joseph Lamb's publisher
+\a French Classical composer
+\a great Chicago bandleader
+^Possibly the greatest of all the Ragtime pianists Chauvin's virtuosity had
+no rivals. Unfortunately most of Chauvin's brilliance has been lost due to the
+fact that he couldn't write music. Only three of his pieces were published
+and no phonograph recordings were ever made.
+<2
+@079 Who wrote 'Bill Bailey, won't you please come home' ?
+\Irving Berlin
+\*Hughie Cannon
+\Sam Patterson
+\William Turk
+^Becoming a hit in 1902 it initiated a series of Bill Bailey songs by
+various composers. Hughie Cannon, an exceptional writer of 'coon songs'
+together with John Queen formed the successful song and dance team of
+Queen and Cannon.
+<3
+@080 Scott Joplin's 'Chrysanthemum' was a product of his ... ?
+\first attempts at Ragtime
+\efforts to achieve commercial success
+\*World's fair period
+\experimental years
+^In 1904 Joplin published three heavy rags that possess a light syncopation
+unlike any Ragtime heard before. All three 'Chrysanthemum', 'the Favorite'
+and 'The Sycamore' have a triumphant ring ; probably inspired by the World's
+fair bustle.
+<3
+@081 Who wrote 'Frog legs rag' ?
+\Charles Hunter
+\Max Morath
+\*James Scott
+\Arthur Marshall
+^Published in 1906 'Frog Legs rag' is in classic Ragtime form, except
+that it possesses a straightforward ragtime theme in the A section
+and a soaring B theme which is typical of Scott's brilliance. In 
+contrast most classic rags such as Joplin's 'Maple leaf rag' provide the main
+theme in the A section.
+<3
+@082 Ragtime inherited its rhythm from what instrument ?
+\*the banjo 
+\the guitar
+\the hand drum
+\African harps
+^Possessing what Music critic Rupert Hughes called 'banjo figurations'
+the rhythm of Ragtime developed from the banjo and its predecessors.
+The percussive playing style of the black banjo players eventually found its
+way to the piano.
+<2
+@083 What Irony is inherent in Irving Berlin's 'Alexander's Ragtime band' ?
+\it helped to sell more instrumental rags than it sold itself
+\*it is virtually non-syncopated
+\it was written about Melford Alexandre who was himself poor
+\none of the above
+^One of the most popular songs from the period it used the Ragtime
+title as a marketing gimmick as many other pieces did. However as
+great a tune as it is, it isn't Ragtime in the sense that we use the
+term today, as it's syncopation is not nearly as distinctive as that of the
+Ragtime forms of the day. 
+<2
+@084 Classical music had an influence on which of the following
+ Ragtime pianist's ?
+\Tom Turpin
+\Scott Joplin
+\James Scott
+\*all of the above 
+^Just as many classical composers incorporated Ragtime into their
+music so did the Ragtime composers employ many classical devices
+into Ragtime's Rhythmically intricate fabric. From a compositional
+point of view this is particularly interesting, as it suggests that
+the Ragtimers used a bottom-up (rhythm as a base) approach as opposed 
+to the top-down infusion method used by the classical composers.
+<2
+@085 What were called 'crazy chords' by musicians in the Ragtime era ?
+\13th chords
+\*cluster chords
+\full ten finger chords
+\very large voiced chords used by pianists such as Luckey Roberts
+^Although most Ragtime used traditional European harmony the experiments
+of the classical composers such as Charles Ives were paid close attention
+to, and vice-versa.
+<3
+@086 What important Ragtime composer devoted the last 30 years of his
+life to the classics ?
+\*Artie Matthews
+\James Scott
+\Eubie Blake
+\Tom Turpin
+^Matthews was one of ragtime's best trained and musically educated
+composers. During his early years in Saint Louis he was active as a composer
+and arranger turning out entire shows, including orchestrations, once a week.
+<2
+@087 He would hardly allow talk of Ragtime in his presence, who was he ?
+\Clarence Woods
+\James P.Johnson
+\*Artie Matthews 
+\Charles.L.Johnson
+^One of the leading composers of the Ragtime era, Matthews abandoned
+Ragtime the same year in which his classic Blues piece 'Weary Blues'
+was published. He went on to start his own classical conservatory where
+for a period he downplayed his association with Ragtime. His 'Pastime rags',
+no's 1-5, remain important contributions to the Ragtime repertoire.
+<2
+@088 What was the difference between pure Ragtime and early Jazz ?
+\*pure Ragtime was a notated form, Jazz was not notated
+\Ragtime used conventional harmony, Jazz didn't
+\Ragtime frequently employed octave tremolo, Jazz didn't
+\all of the above
+^In the early Jazz styles the use of conventional harmony and octave
+tremolo were still in wide use. The main differences between Jazz and
+Ragtime were that Ragtime was essentially fixed(not improvised)and 
+more or less played the same way each time, where as Jazz was improvised
+and played differently each time. Also early Jazz was primarily an un-notated
+music as mentioned above, and was looser rhythmically than Ragtime.   
+<2
+@089 What did Jelly Roll Morton and James Europe have in common ?
+\*they were both accomplished sight readers and improvisers
+\neither musician was influenced by classical music
+\they were both banjo enthusiasts
+\none of the above
+^Both musicians were among the few Jazz musicians that could read and 
+improvise. They both considered themselves Jazz musicians however they 
+originally came from Ragtime. Their knowledge of classical music was
+also quite considerable.
+<2
+@090 What was the difference between a New York rag and one from
+Saint Louis ?
+\major differences in use of harmony
+\New York Ragtime dropped octave tremolos
+\*speed 
+\Saint Louis rags were generally in a minor mode
+^The 'Saint Louis' style as it was sometimes called implied
+ "not-to-be-played-fast" Ragtime. In contrast the Eastern Ragtime
+possessed a stronger rhythmic drive as in Eubie Blake's classic
+'Charleston rag'.   
+<2
+@091 Which one of the following pieces by Eubie Blake was known as a
+fingerbuster ?  
+\Manda
+\Shuffle along
+\Fizz Water
+\*Charleston rag 
+^A good example of Eastern Ragtime it is a virtuoso instrumental piece.
+It incorporates a tricky walking bass in the A strain with loose feel.
+It is also a good representation of the transition from Ragtime to early 
+Jazz.
+<2
+@092 What was at once partially responsible for bringing Ragtime
+to a close and also preserving it ?
+\Religion
+\the American Federation of Musicians
+\*Jazz music 
+\country music
+^The freer more spontaneous form of Jazz received a reaction similar to
+that of Ragtime when it initially appeared on the scene, in that its
+provocative feel was very attractive and its allure made any previously
+known form seem pale by comparison. The idea of 'Jazzing up' a tune can 
+draw a parallel with the former 'ragging' of a tune, and thus when Jazz
+inherited Ragtime it took with it all of Ragtime's assets as they were 
+viewed at the time, providing us with an indication of its former glory.  
+<2
+@093 Who was Mike Bernard ?
+ 'the Ragtime King of the World'
+\the main Ragtime pianist on disc before the 20's
+\a  white classically trained Ragtime pianist
+\*all of the above
+^Cylinder recordings and phonographs recordings of solo piano were 
+scarcely made during the Ragtime era, however the main pianist on disc
+until the 20's was Mike Bernard. A child prodigy trained on the classics
+Bernard's opportunism led him to Ragtime. Designated 
+'the Ragtime King of the World' by largely white audiences he was the first
+of the pseudo-Ragmen, brilliantly emulating Ragtime but never capturing its 
+true essence. 
+<2
+@094 What was the best selling piano roll of a Ragtime piece ?
+\Temptation rag
+\The Entertainer
+\*Dill Pickles rag by Charles L.Johnson 
+\Black and white rag
+^Piano roll companies would use any type of music that was popular.
+Of the piano rags 'Dill Pickles' was the best seller, being issued
+by at least ten different companies. 'At a Georgia Camp meeting' and
+'the Maple Leaf rag' were also best-sellers.
+<2
+@095 What type of embellishments were added on to piano rolls ?
+\*double the bass and treble
+\Jazz fills
+\the bending of notes
+\all of the above
+^A few more piano roll embellishments were the extensive use of the tremolo
+and short fill-in runs. The most popular was the mid-range melody in tremolo
+with flashy playing in the higher range. Another technique used to create
+a subtle strumming type effect was to cut one bass note out of the first
+octave played of the oom-pah bass part. This characteristic was typical
+of piano rolls made by the Connorized company.
+<2
+@096 Who said that Ragtime was characteristic of our "thoughtless
+superficial optimism" ?
+\Theodore Thomas
+\*Daniel Gregory Mason
+\Hiram K.Moderwell
+\Walter Damrosch
+^The foremost of the anti-Ragtimers, Mason was adamantly opposed to 
+Ragtime and its possible consequences. His fanatical attitude led him
+to believe and say that he thought the 'jerk and rattle'of Ragtime to
+be ugly' and that it was 'a caricature with the vitality of a comic strip. 
+<3
+@097 Many anti-Ragtimers believed that the popular music was... ?
+\demonic
+\satanic music
+\to be avoided like the black death 
+\*all of the above
+^Ragtime enjoys the company of many other great art forms in its
+initial persecution. However unlike many others its circumstances prompted
+attacks on many different levels : religious, social, sexual, racial, etc.
+The mere fact that Religious institutions made Ragtime a concern is a
+testament to its importance.   
+<2
+@098 Who said that Ragtime caused brain damage ?
+\*Francis Toye
+\Gustav Kuhl
+\Max Weber
+\Canon Newboldt
+^Another anti-Ragtimer Toye tried to gain acceptance for his belief that
+ listening to Ragtime would 'eventually stagnate the brain cells and wreck
+ the nervous system'. He even went so far as to cite 'scientific' data to
+ this effect.
+<2
+@099 Which of the following contributed to Ragtime's controversy ?
+\widespread bigotry
+\sexual connotations
+\moral indignation
+\*all of the above 
+^Ragtime endured all types of attack but the issue causing it the most
+damage was that of racial discrimination. Many brilliant composers and
+musicians were denied opportunities on this basis, a fact that makes
+all other disputes seem ridiculous.
+<2
+@100 Who was 'the King of the Ragtime writers' ?
+\Mike Bernard
+\*Scott Joplin
+\Porter King
+\Jack Diamond
+^Mike Bernard went by 'the Ragtime King of the World', Jack Diamond's
+real name was Bert King, and from Porter King and Jelly Roll Morton
+we get the 'King Porter Stomp', but only Joplin could truly lay claim
+to his given title of 'the King of the Ragtime writers' 
+<2
+@101 Joplin's most popular rag was named after a ... ?
+\*a club
+\a small town
+\a fruit
+\none of the above
+^The 'Maple Leaf rag', the most popular rag of all times, was named
+after the much frequented club of the same name in Sedalia. An important
+center of political and social activity in Sedalia, it was here that John
+Stark Joplin's future publisher first heard him play. 
+<3
+@102 In what city did Scott Joplin first achieve success ?
+\New York
+\Saint Louis
+\*Sedalia
+\Chicago
+^It has been suggested that when Joplin played the Maple Leaf rag 
+for John Stark in his Sedalia office, he brought a little boy
+along with him to dance to the tune. This helped sway Stark into
+publishing the piece. In any event Joplin and Stark signed a five
+year contract which eventually brought Joplin worldwide fame.
+<2
+@103 Who wrote Smokey Mokes?
+\*Abe Holzmann
+\Willy the Lion smith
+\Jay Roberts
+\May Aufderheide
+^One of the most popular rags on Piano rolls it was also a favorite
+on banjo and in larger settings. 
+<3
+@104 What was Scott Joplin's rag manual called ?
+\'Ragtime Method'
+\'Ragtime studies'
+\*the 'School of Ragtime'
+\'Learn to play Ragtime'
+^Published by John Stark in 1908, Joplin's preface to it read : 
+"What is scurrilously called ragtime is an invention that is here to stay. 
+That is now conceded by all classes of musicians. That all publications
+masquerading under the name of ragtime are not the genuine article will
+be better known when these exercises are studied. That real ragtime of 
+the higher class is rather difficult to play is a painful truth which 
+most pianists have discovered. Syncopations are no indication of light
+or trashy music, and to shy bricks at 'hateful ragtime' no longer passes
+for musical culture.To assist amateur players in giving the 'Joplin Rags'
+that weird and intoxicating effect intended by the composer is the object
+of this work."
+<3
+@105 Included in many of Joplin's publications is a note which
+indicates ... ?
+\*not to play this piece fast
+\must be played fast
+\to play lightly
+\to play aggressively
+^Proper ragtime playing according to Scott Joplin was never supposed to
+ be played fast. In contrast many New York pianist's rags epitomized 
+ flashy, speedy playing.
+<2
+@106 Scott Joplin was friend with which of the following composers ?
+\Arthur Marshall
+\Scott Hayden
+\Joseph Lamb
+\*all of the above
+^Joplin's natural drive was to work for the music he loved, not only
+through his own efforts but by assisting other talents.
+<2
+@107 How did Scott Joplin die ?
+\dementia paralytica-cerebral
+\syphilis
+\*all of the above
+\none of the above
+^After the failure of his opera Treemonisha in 1915 Joplin suffered
+a complete breakdown. In the fall of 1916 he was committed to the Manhattan
+State Hospital where he died on April 1,1917. 
+<2
+@108 What important pianist swept the floors of a music store on his
+way up ?
+\Joseph Lamb
+\*James Scott
+\Scott Joplin
+\Eubie Blake
+^Working for Dumars' music company the 16 year old Scott swept floors 
+until the owner Charles Dumars heard him play. Scott was soon promoted
+to sales clerk and song demonstrator. Recognizing Scott's genius Dumars
+started a publishing division in March 1903 with Scott's 'A Summer
+Breeze : March and Two-step. 
+<3
+@109 Which one of the following Ragtime composers possessed a developed sense
+of perfect pitch ?
+\*James Scott
+\Joseph Lamb
+\Scott Joplin
+\Tony Jackson
+^Scott's perfect pitch was so comprehensive that even as a child he
+could distinguish full chords and repeat them back at will.
+However only did he have an extremely developed sense of pitch but 
+it has been rumored that he was ambidextrous as well.
+<3
+@110 Who was dubbed 'the little perfessor' ?
+\Eubie Blake
+\Brun Campbell
+\*James Scott
+\Percy Wenrich
+^Slight in stature Scott gained the title of the little perfessor
+from his colleagues. He also acquired the title of 'The Crown Prince
+of Ragtime'.
+<2
+@111 The inner strains of a rag are... ?
+\longer than the first and last strains
+\generally more interesting
+\*symmetrical
+\seemingly disjointed
+^Although square by nature the inner parts of a rag are original
+ and forward thinking given tonal considerations. Looking at a rag
+ harmonically as a tonic-tonic  structure(AB-CD), this becomes more
+ evident, as the second tonic section is at a higher key level than
+ the first. This innovation is made all the more remarkable when 
+ considering that Ragtime employs conventional European harmony 
+ and a fairly rigid part structure.   
+<2
+@112 Who said "We were advised in those days to write for the girl
+     in the five-and-dime store" ?
+\Roy Bargy
+\Zez Confrey
+\Charles Warfield
+\*Eubie Blake
+^Referring to the trend of simplifying rags for public consumption
+ Blake sums up what the climate was really like with this sentiment.
+ For the Eastern Ragtime's this fact of life was all the more obvious,
+ as their brand of Ragtime grew more and more complex the public's
+ taste thirsted for the watered down versions. Unfortunately even
+ if the public's taste had wanted the original versions the method
+ by which these pieces could have been heard didn't exist, as
+ recordings of rags were only made if the piece became popular and 
+ that was truly in the hands of the dime store girl.   
+<3
+@113 Which way of harmonically analyzing a rag is correct ?
+\tonic-subdominant
+\dominant-tonic
+\tonic-tonic
+\*all of the above
+^It must be pointed out that the method of analysis varies and that
+although all of these answers are correct the more common way of 
+interpreting a rag is to view it as a tonic (A&B strains) to 
+subdominant (C&D strains) harmonic structure. Two other ways of 
+looking at a rag are from Tonic-Tonic(a perfect 4th apart) and from
+Dominant-Tonic. The first concedes a functionally equal relationship 
+between the AB sections and the CD sections which is not always 
+present, while the second is simply backwards. Which method to use 
+depends on the individual rag.    
+<3
+@114 The C-D strains of a rag are usually... ?
+\*a trio
+\symmetrical
+\shorter than the A and B sections
+\none of the above
+^An interesting feature of rag form is that the trio which usually
+ occurs in the C and D sections begins and ends in another key. In 
+ traditional forms containing a trio, the A strain returns whereas
+ in some Ragtime it does not. There is no doubt that Ragtime composers 
+ were aware of circular ternary structure in music before Ragtime,
+ as many examples point to this fact. Rather it was an adventurous
+ compositional leap that brought about this development in Ragtime.
+<3
+@115 Who was the first to use the term 'hot' in relation to African
+     rhythms ?
+\John Stark
+\Ted Shapiro
+\*Richard A.Waterman
+\Joseph W.Stern
+^The concept of 'hot' to African rhythms found in the New World, originated 
+ with a paper written by Waterman. It was read at the ninth annual meeting
+ of the American Musicological Society in New York City on December 28th,
+ 1943. The idea was subsequently adopted by American society. 
+<3
+@116 Which of the following is a recurring rhythmic motif in Ragtime ?
+\8th note - 16th note - 8th note
+\*16th note - 8th note - 16th note
+\half note - 16th note - half note
+\whole note - 8th note
+^This rhythmic motif was used so many times that it became a cliche. It
+ was used in many of the first Major rags of the era and consequently
+ was jumped on by imitators. It became an indicator of formula writing
+ and lack of originality on the composer's part. Only when re-visited
+ with the intention of expanding on it did this motif yield any fresh
+ material in the later Ragtime years.
+<3
+@117 What was 'Kitten on the keys' ?
+\an expression meaning 'unpredictable'
+\a popular Joplin piece for three pianos, it was simplified for piano roll
+\a virtuostic ragtime masterpiece
+\*a novelty piece
+^Written by Zez Confrey, a conservatory trained classical pianist who
+turned to ragtime, it was actually inspired by the composer's pet kitten
+walking across the keys. Hugely successful, it marked the inception of 
+the Novelty piano style. The novelty style being very pianistic, lightly
+poked fun at ragtime by incorporating concert piano embellishments.
+<2
+@118 Ragtime generally does not...?
+\incorporate cultural influences
+\use introductions
+\*employ mixed meters
+\use chromatic harmony
+^Strongly influenced by western dance music Ragtime's duple meter is 
+ consistent. It does however make use of bass lines that give the illusion
+ of 3/4 time by placing an accent on the first beat and weaker accents on
+ the second half of the first beat and on the second beat. The only
+ exception to using the duple meter is found in Ragtime waltzes which use
+ a 3/4 meter proper.
+<2
+@119 Who wrote 'Grace and Beauty' ?
+\*James Scott
+\Scott Joplin
+\Tony Jackson
+\Clarence Woods
+^Many authorities agree that 'Grace and Beauty' is Scott's finest rag.
+ John Stark also had much regard for it describing it as "heavy", 
+ "high class", and "A rag as it ought to be". He also admonished his 
+ customers, "Play every note of Grace and Beauty in slow march time and
+ there is no person with soul so dead as not to like it."
+<2
+@120 What does Joplin's 'Magnetic rag' and 'Euphonic Sounds' have
+     in common ?  
+\they were both written in the same year
+\*the left hand plays more than oom-pah
+\they both use forward and backward simultaneous glissandos
+\they both share the same theme
+^During Joplin's later experimental years he sought, to weaken the 
+stronghold that the oom-pah bass had on Ragtime. He only accomplished
+this in a minor fashion having never achieved a full blown unified style 
+that he was after. He was not alone in this goal as many Ragtime's and 
+Jazzmen have sought to downplay the explicit beat while maintaining rhythmic 
+momentum. It is interesting to note that there is no universally accepted
+technique of achieving this end in music. A fact which perhaps points
+out the importance of Rhythm in music, and our lack of understanding of it.
+<2
+@121 When Jazz inherited ragtime what did it leave behind ?
+\a reliance on diatonic harmony
+\the oom-pah bass
+\*form
+\all of the above
+^Seeking one theme as a center for improvisation the Jazz musicians 
+weakened the sense of form that it originally took from Ragtime. This 
+is ironic in that at the same time that early Jazz with its looser form was
+emerging, Scott Joplin was writing music that solidified form in ragtime. 
+While improving Ragtime, this also contributed to its demise as the public
+wanted to here a less structured music that was again ironically implied
+by Ragtime's syncopation.  
+<2
+@122 What is Scott Joplin's most Ambitious rag ?
+\Solace
+\Euphonic Sounds
+\Pastime rag
+\*Magnetic rag
+^The third theme (C section) of the Magnetic rag is Joplin's only
+successful attempt at breaking the 16 bar barrier. This unique Joplin rag 
+points to sonata form, as well as employing the tonic minor in the D
+section rather than the relative minor as is customary. Another attribute
+that it boasts is the use of dominant preparation which involves moving to 
+and around the dominant of the key that is to be restored. Considering its
+title, this technique creates the subtle effect of harmonic prosody .      
+<2
+@123 Which of the following Joplin rags is in Rondo form ?
+\Maple Leaf rag
+\American Beauty rag
+\*Euphonic Sounds
+\Original rags
+^The study of Euphonic Sounds reveals the heights that Joplin attained
+during his later, experimental years. Cast in Rondo form (ABACA) its 
+principle theme is repeated three times with the B and C sections in 
+between. Its use of contrast between the themes is outstanding and further
+contrast is provided by the internal structure of the themes. Euphonic
+Sounds is also rich in its use of dynamics as well.   
+<3
+@124 What musical problem was Joplin not able to overcome ?
+\breaking the 16 bar barrier
+\*making rhythmic momentum implicit
+\using chromatic harmony the way he envisioned
+\achieving a balanced form that would rival classical structure
+^The goal of making the Ragtime oom-pah bass an implicit factor of the
+ music rather than an explicit one, was common among Ragtime composers.  
+ No one composer achieved this in any significant manner, however Joplin,
+  and Lamb all had small successes in this area. The best examples of
+ this to be found in Joplin's music are in his 'Euphonic Sounds' and his
+ 'Magnetic rag'. 
+<2
+@125 How did Joplin attempt to maintain rhythmic momentum without
+     explicit delineation ?
+\*with straight chords and arpeggios
+\using tenths moving by single quarter notes
+\by playing the melody in the bass and comping with the right hand
+\none of the above
+^The straight chords of the trios in 'Paragon' and the arpeggios in
+ 'Euphonic Sounds' are good examples of the attempts made by Joplin
+ to deal with this problem. However they left much to be desired, in fact
+ the other solutions mentioned in the question above were also not 
+ conclusive. They were conceived by Joseph Lamb who finished work on them
+ in the 60's. This seems to indicate that the explicit Rhythm of Ragtime
+ doesn't appreciate being tampered with.  
+<3
+@126 How could a listener tell that Joplin studied Beethoven ?
+\he ragged some of his motifs and incorporated them into his own music
+\*He always approached keys through its dominant
+\his use of dynamics is similar
+\Many of his early rags use variations on Beethoven's sonatas
+^It was a well known fact that Joplin was an avid student of the
+ classical masters, employing classical structures as well as European
+ harmony in his work. Beethoven's influence on him is indisputable as 
+ aspects of Joplin's music contain devices that originated with Beethoven.
+ A good example of the above 'Beethovian' device in Joplin's music can be
+ found in the second theme of his 'Euphonic Sounds'.  
+<2
+@127 In what year did Joplin start his experimentation
+\1905
+\1911
+\*1909
+\1914
+^Joplin's experimental years never came to their fruition by the time
+he died in 1917. His many ideas began to cover new territory which he
+alone was equipped to explore, as the younger musicians were more 
+interested in Jazz and not the disciplines of Ragtime. In retrospect
+Joplin's years after 1909 yielded many important innovations which
+influenced much music that followed.
+<3
+@128 What Ragtime composer synthesized the styles of Scott Joplin and
+     James Scott ?
+\Paul Seminole
+\Jack Diamond
+\Porter King
+\*Joseph Lamb
+^Joe Lamb's initial exposure to Ragtime was almost exclusively limited
+ to written music. Unbelievable as this might seem when considering his
+ stature as one of the three major Ragtime figures, it allowed him the 
+ opportunity for in-depth study of the most important works of his
+ colleagues. Of course Lamb's music was not limited by the above mentioned 
+ synthesis, his ability to manipulate diverse elements created many unique
+ rags.
+<2
+
+@129 Joseph Lamb employed diverse textures in his work, this is best
+     exemplified by his... ?
+\piano rags and orchestral Ragtime pieces
+\*light and heavy rags
+\transition to jazz
+\Tin Pan alley hits
+^One of Lamb's major contributions to Ragtime was his ability to mix
+diverse textures, and as mentioned above this is most evident when
+comparing his light rags to his heavy rags. However the extent of this
+talent goes far beyond the differences between rags, as Lamb was able to
+create tremendous diversity between strains and even phrases as well.
+<2
+@

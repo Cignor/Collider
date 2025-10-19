@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<ModularSynthPreset version="1">
+  <modules>
+    <module logicalId="1" type="VCO">
+      <params>
+        <VCOParams>
+          <PARAM id="frequency" value="440.0"/>
+          <PARAM id="waveform" value="0.0"/>
+        </VCOParams>
+      </params>
+    </module>
+    <module logicalId="2" type="timepitch">
+      <params>
+        <TimePitchParams>
+          <PARAM id="engine" value="0.0"/>
+          <PARAM id="pitch" value="0.0"/>
+          <PARAM id="pitch_mod" value="0.0"/>
+          <PARAM id="speed" value="0.9999999403953552"/>
+          <PARAM id="speed_mod" value="0.9999999403953552"/>
+        </TimePitchParams>
+      </params>
+    </module>
+    <module logicalId="4" type="Attenuverter">
+      <params>
+        <AttenuverterParams>
+          <PARAM id="amount" value="1.0"/>
+          <PARAM id="rectify" value="0.0"/>
+        </AttenuverterParams>
+      </params>
+    </module>
+    <module logicalId="5" type="MapRange">
+      <params>
+        <MapRangeParams>
+          <PARAM id="cvMax" value="1.0"/>
+          <PARAM id="cvMin" value="0.0"/>
+          <PARAM id="inMax" value="1.0"/>
+          <PARAM id="inMin" value="0.0"/>
+          <PARAM id="outMax" value="1.0"/>
+          <PARAM id="outMin" value="-1.0"/>
+        </MapRangeParams>
+      </params>
+    </module>
+  </modules>
+  <connections>
+    <connection srcId="1" srcChan="0" dstId="2" dstChan="0"/>
+    <connection srcId="1" srcChan="1" dstId="4" dstChan="0"/>
+    <connection srcId="2" srcChan="0" dstId="output" dstChan="0"/>
+    <connection srcId="2" srcChan="1" dstId="5" dstChan="0"/>
+    <connection srcId="4" srcChan="0" dstId="2" dstChan="1"/>
+    <connection srcId="5" srcChan="1" dstId="output" dstChan="1"/>
+  </connections>
+  <NodeEditorUI>
+    <node id="1" x="-371.0" y="-37.0"/>
+    <node id="2" x="24.0" y="65.0"/>
+    <node id="4" x="-193.640625" y="227.4643707275391"/>
+    <node id="5" x="338.359375" y="203.4643707275391"/>
+  </NodeEditorUI>
+</ModularSynthPreset>

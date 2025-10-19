@@ -1,0 +1,31 @@
+{
+  "sample_rate": 48000,
+  "buffer_size": 512,
+  "mono_downmix": "left",
+  "use_native_mixer": false,
+  "prefer_native_when_neutral": true,
+  "pan_smoothing_ms": 30,
+  "spatial_near_ratio": 0.12,
+  "max_audible_voices": 100,
+  "voice_steal_low_thresh": 0.02,
+  "voice_steal_high_thresh": 0.04,
+  "native_stream_enable": false,
+  "native_stream_capacity": 262144,
+  "native_stream_target_blocks": 4,
+  "wasapi_exclusive": false,
+  "mix_queue_target": 6,
+  "mix_sleep_ms": 1,
+  "stream_processed_to_native": false,
+  "native_output_only": false,
+  "native_dsp_enable": true,
+  "allow_native_in_python_path": false,
+  "strict_native_only": false,
+  "safe_mix_enabled": false,
+  "clock_bpm": 120,
+  "clock_ppq": 480,
+  "clock_quantize_enabled": true,
+  "clock_quantize_subdiv": "1/8",
+  "use_miniaudio": false
+}
+
+

@@ -1,0 +1,202 @@
+{
+  "shapes": {
+    "circle": {
+      "name": "Circle",
+      "description": "Perfect circle",
+      "category": "basic",
+      "visual": {
+        "type": "circle",
+        "size": 8
+      },
+      "physics": {
+        "type": "circle",
+        "size": 8
+      },
+      "debug": {
+        "type": "circle",
+        "size": 8,
+        "color": [0, 255, 255]
+      }
+    },
+    "rectangle": {
+      "name": "Rectangle",
+      "description": "Wide rectangle",
+      "category": "basic",
+      "visual": {
+        "type": "rectangle",
+        "width": 16,
+        "height": 8
+      },
+      "physics": {
+        "type": "box",
+        "width": 16,
+        "height": 8
+      },
+      "debug": {
+        "type": "rectangle",
+        "width": 16,
+        "height": 8,
+        "color": [0, 255, 255]
+      }
+    },
+    "square": {
+      "name": "Square",
+      "description": "Perfect square",
+      "category": "basic",
+      "visual": {
+        "type": "rectangle",
+        "width": 16,
+        "height": 16
+      },
+      "physics": {
+        "type": "box",
+        "width": 16,
+        "height": 16
+      },
+      "debug": {
+        "type": "rectangle",
+        "width": 16,
+        "height": 16,
+        "color": [0, 255, 255]
+      }
+    },
+    "triangle": {
+      "name": "Triangle",
+      "description": "Equilateral triangle pointing up",
+      "category": "polygon",
+      "visual": {
+        "type": "polygon",
+        "points": [
+          [0, 5.33],
+          [-8, -2.67],
+          [8, -2.67]
+        ]
+      },
+      "physics": {
+        "type": "polygon",
+        "points": [
+          [0, 5.33],
+          [-8, -2.67],
+          [8, -2.67]
+        ]
+      },
+      "debug": {
+        "type": "polygon",
+        "points": [
+          [0, 5.33],
+          [-8, -2.67],
+          [8, -2.67]
+        ],
+        "color": [0, 255, 255]
+      }
+    },
+    "star": {
+      "name": "Star",
+      "description": "5-pointed star",
+      "category": "polygon",
+      "visual": {
+        "type": "polygon",
+        "points": [
+          [0, 8], [2.47, 2.47], [8, 0], [2.47, -2.47], [0, -8],
+          [-2.47, -2.47], [-8, 0], [-2.47, 2.47]
+        ]
+      },
+      "physics": {
+        "type": "polygon",
+        "points": [
+          [0, 8], [2.47, 2.47], [8, 0], [2.47, -2.47], [0, -8],
+          [-2.47, -2.47], [-8, 0], [-2.47, 2.47]
+        ]
+      },
+      "debug": {
+        "type": "polygon",
+        "points": [
+          [0, 8], [2.47, 2.47], [8, 0], [2.47, -2.47], [0, -8],
+          [-2.47, -2.47], [-8, 0], [-2.47, 2.47]
+        ],
+        "color": [0, 255, 255]
+      }
+    },
+    "ellipse": {
+      "name": "Ellipse",
+      "description": "Wide ellipse",
+      "category": "polygon",
+      "visual": {
+        "type": "polygon",
+        "points": [
+          [8, 0], [7.39, 2.4], [5.66, 4.8], [2.83, 6.4], [0, 6.4],
+          [-2.83, 6.4], [-5.66, 4.8], [-7.39, 2.4], [-8, 0],
+          [-7.39, -2.4], [-5.66, -4.8], [-2.83, -6.4], [0, -6.4],
+          [2.83, -6.4], [5.66, -4.8], [7.39, -2.4]
+        ]
+      },
+      "physics": {
+        "type": "polygon",
+        "points": [
+          [8, 0], [7.39, 2.4], [5.66, 4.8], [2.83, 6.4], [0, 6.4],
+          [-2.83, 6.4], [-5.66, 4.8], [-7.39, 2.4], [-8, 0],
+          [-7.39, -2.4], [-5.66, -4.8], [-2.83, -6.4], [0, -6.4],
+          [2.83, -6.4], [5.66, -4.8], [7.39, -2.4]
+        ]
+      },
+      "debug": {
+        "type": "polygon",
+        "points": [
+          [8, 0], [7.39, 2.4], [5.66, 4.8], [2.83, 6.4], [0, 6.4],
+          [-2.83, 6.4], [-5.66, 4.8], [-7.39, 2.4], [-8, 0],
+          [-7.39, -2.4], [-5.66, -4.8], [-2.83, -6.4], [0, -6.4],
+          [2.83, -6.4], [5.66, -4.8], [7.39, -2.4]
+        ],
+        "color": [0, 255, 255]
+      }
+    },
+    "hexagon": {
+      "name": "Hexagon",
+      "description": "Regular hexagon",
+      "category": "polygon",
+      "visual": {
+        "type": "polygon",
+        "points": [
+          [8, 0], [4, 6.93], [-4, 6.93], [-8, 0], [-4, -6.93], [4, -6.93]
+        ]
+      },
+      "physics": {
+        "type": "polygon",
+        "points": [
+          [8, 0], [4, 6.93], [-4, 6.93], [-8, 0], [-4, -6.93], [4, -6.93]
+        ]
+      },
+      "debug": {
+        "type": "polygon",
+        "points": [
+          [8, 0], [4, 6.93], [-4, 6.93], [-8, 0], [-4, -6.93], [4, -6.93]
+        ],
+        "color": [0, 255, 255]
+      }
+    },
+    "diamond": {
+      "name": "Diamond",
+      "description": "Diamond shape",
+      "category": "polygon",
+      "visual": {
+        "type": "polygon",
+        "points": [
+          [0, 8], [8, 0], [0, -8], [-8, 0]
+        ]
+      },
+      "physics": {
+        "type": "polygon",
+        "points": [
+          [0, 8], [8, 0], [0, -8], [-8, 0]
+        ]
+      },
+      "debug": {
+        "type": "polygon",
+        "points": [
+          [0, 8], [8, 0], [0, -8], [-8, 0]
+        ],
+        "color": [0, 255, 255]
+      }
+    }
+  }
+}

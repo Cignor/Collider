@@ -1,0 +1,859 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<ModularSynthPreset version="1">
+  <modules>
+    <module logicalId="1" type="Random">
+      <params>
+        <RandomParams>
+          <PARAM id="cvMax" value="0.0"/>
+          <PARAM id="cvMin" value="0.0"/>
+          <PARAM id="max" value="1.0"/>
+          <PARAM id="min" value="0.0"/>
+          <PARAM id="rate" value="1.0"/>
+          <PARAM id="rate_mod" value="0.0"/>
+          <PARAM id="slew" value="0.0"/>
+          <PARAM id="slew_mod" value="0.0"/>
+        </RandomParams>
+      </params>
+    </module>
+    <module logicalId="6" type="midi player">
+      <params>
+        <MIDIPlayerParameters>
+          <PARAM id="loop" value="1.0"/>
+          <PARAM id="pitch" value="0.0"/>
+          <PARAM id="pitch_mod" value="0.5"/>
+          <PARAM id="speed" value="1.0"/>
+          <PARAM id="speed_mod" value="0.5"/>
+          <PARAM id="tempo" value="120.0"/>
+          <PARAM id="track" value="0.0"/>
+          <PARAM id="velocity_mod" value="0.5"/>
+        </MIDIPlayerParameters>
+      </params>
+      <extra>
+        <MIDIPlayerExtra fileName="" filePath="" track="0"/>
+      </extra>
+    </module>
+    <module logicalId="7" type="VCO">
+      <params>
+        <VCOParams>
+          <PARAM id="frequency" value="440.0"/>
+          <PARAM id="waveform" value="0.0"/>
+        </VCOParams>
+      </params>
+    </module>
+    <module logicalId="8" type="polyvco">
+      <params>
+        <PolyVCOParams>
+          <PARAM id="freq_1" value="440.0"/>
+          <PARAM id="freq_10" value="440.0"/>
+          <PARAM id="freq_11" value="440.0"/>
+          <PARAM id="freq_12" value="440.0"/>
+          <PARAM id="freq_13" value="440.0"/>
+          <PARAM id="freq_14" value="440.0"/>
+          <PARAM id="freq_15" value="440.0"/>
+          <PARAM id="freq_16" value="440.0"/>
+          <PARAM id="freq_17" value="440.0"/>
+          <PARAM id="freq_18" value="440.0"/>
+          <PARAM id="freq_19" value="440.0"/>
+          <PARAM id="freq_2" value="440.0"/>
+          <PARAM id="freq_20" value="440.0"/>
+          <PARAM id="freq_21" value="440.0"/>
+          <PARAM id="freq_22" value="440.0"/>
+          <PARAM id="freq_23" value="440.0"/>
+          <PARAM id="freq_24" value="440.0"/>
+          <PARAM id="freq_25" value="440.0"/>
+          <PARAM id="freq_26" value="440.0"/>
+          <PARAM id="freq_27" value="440.0"/>
+          <PARAM id="freq_28" value="440.0"/>
+          <PARAM id="freq_29" value="440.0"/>
+          <PARAM id="freq_3" value="440.0"/>
+          <PARAM id="freq_30" value="440.0"/>
+          <PARAM id="freq_31" value="440.0"/>
+          <PARAM id="freq_32" value="440.0"/>
+          <PARAM id="freq_4" value="440.0"/>
+          <PARAM id="freq_5" value="440.0"/>
+          <PARAM id="freq_6" value="440.0"/>
+          <PARAM id="freq_7" value="440.0"/>
+          <PARAM id="freq_8" value="440.0"/>
+          <PARAM id="freq_9" value="440.0"/>
+          <PARAM id="gate_1" value="1.0"/>
+          <PARAM id="gate_10" value="1.0"/>
+          <PARAM id="gate_11" value="1.0"/>
+          <PARAM id="gate_12" value="1.0"/>
+          <PARAM id="gate_13" value="1.0"/>
+          <PARAM id="gate_14" value="1.0"/>
+          <PARAM id="gate_15" value="1.0"/>
+          <PARAM id="gate_16" value="1.0"/>
+          <PARAM id="gate_17" value="1.0"/>
+          <PARAM id="gate_18" value="1.0"/>
+          <PARAM id="gate_19" value="1.0"/>
+          <PARAM id="gate_2" value="1.0"/>
+          <PARAM id="gate_20" value="1.0"/>
+          <PARAM id="gate_21" value="1.0"/>
+          <PARAM id="gate_22" value="1.0"/>
+          <PARAM id="gate_23" value="1.0"/>
+          <PARAM id="gate_24" value="1.0"/>
+          <PARAM id="gate_25" value="1.0"/>
+          <PARAM id="gate_26" value="1.0"/>
+          <PARAM id="gate_27" value="1.0"/>
+          <PARAM id="gate_28" value="1.0"/>
+          <PARAM id="gate_29" value="1.0"/>
+          <PARAM id="gate_3" value="1.0"/>
+          <PARAM id="gate_30" value="1.0"/>
+          <PARAM id="gate_31" value="1.0"/>
+          <PARAM id="gate_32" value="1.0"/>
+          <PARAM id="gate_4" value="1.0"/>
+          <PARAM id="gate_5" value="1.0"/>
+          <PARAM id="gate_6" value="1.0"/>
+          <PARAM id="gate_7" value="1.0"/>
+          <PARAM id="gate_8" value="1.0"/>
+          <PARAM id="gate_9" value="1.0"/>
+          <PARAM id="numVoices" value="8.0"/>
+          <PARAM id="wave_1" value="0.0"/>
+          <PARAM id="wave_10" value="0.0"/>
+          <PARAM id="wave_11" value="0.0"/>
+          <PARAM id="wave_12" value="0.0"/>
+          <PARAM id="wave_13" value="0.0"/>
+          <PARAM id="wave_14" value="0.0"/>
+          <PARAM id="wave_15" value="0.0"/>
+          <PARAM id="wave_16" value="0.0"/>
+          <PARAM id="wave_17" value="0.0"/>
+          <PARAM id="wave_18" value="0.0"/>
+          <PARAM id="wave_19" value="0.0"/>
+          <PARAM id="wave_2" value="0.0"/>
+          <PARAM id="wave_20" value="0.0"/>
+          <PARAM id="wave_21" value="0.0"/>
+          <PARAM id="wave_22" value="0.0"/>
+          <PARAM id="wave_23" value="0.0"/>
+          <PARAM id="wave_24" value="0.0"/>
+          <PARAM id="wave_25" value="0.0"/>
+          <PARAM id="wave_26" value="0.0"/>
+          <PARAM id="wave_27" value="0.0"/>
+          <PARAM id="wave_28" value="0.0"/>
+          <PARAM id="wave_29" value="0.0"/>
+          <PARAM id="wave_3" value="0.0"/>
+          <PARAM id="wave_30" value="0.0"/>
+          <PARAM id="wave_31" value="0.0"/>
+          <PARAM id="wave_32" value="0.0"/>
+          <PARAM id="wave_4" value="0.0"/>
+          <PARAM id="wave_5" value="0.0"/>
+          <PARAM id="wave_6" value="0.0"/>
+          <PARAM id="wave_7" value="0.0"/>
+          <PARAM id="wave_8" value="0.0"/>
+          <PARAM id="wave_9" value="0.0"/>
+        </PolyVCOParams>
+      </params>
+    </module>
+    <module logicalId="9" type="Comparator">
+      <params>
+        <ComparatorParams>
+          <PARAM id="threshold" value="0.5"/>
+        </ComparatorParams>
+      </params>
+    </module>
+    <module logicalId="10" type="Noise">
+      <params>
+        <NoiseParams>
+          <PARAM id="colour" value="0.0"/>
+          <PARAM id="colour_mod" value="0.0"/>
+          <PARAM id="level" value="-12.0"/>
+        </NoiseParams>
+      </params>
+    </module>
+    <module logicalId="11" type="Sequencer">
+      <params>
+        <SeqParams>
+          <PARAM id="gateLength" value="0.5"/>
+          <PARAM id="gateLength_mod" value="0.5"/>
+          <PARAM id="gateThreshold" value="0.5"/>
+          <PARAM id="numSteps" value="8.0"/>
+          <PARAM id="numSteps_max" value="16.0"/>
+          <PARAM id="numSteps_mod" value="0.5"/>
+          <PARAM id="rate" value="2.0"/>
+          <PARAM id="rate_mod" value="0.0"/>
+          <PARAM id="step1" value="0.5"/>
+          <PARAM id="step10" value="0.5"/>
+          <PARAM id="step10_gate" value="0.7999999523162842"/>
+          <PARAM id="step10_gate_mod" value="0.5"/>
+          <PARAM id="step10_mod" value="0.5"/>
+          <PARAM id="step10_trig" value="0.0"/>
+          <PARAM id="step10_trig_mod" value="0.5"/>
+          <PARAM id="step11" value="0.5"/>
+          <PARAM id="step11_gate" value="0.7999999523162842"/>
+          <PARAM id="step11_gate_mod" value="0.5"/>
+          <PARAM id="step11_mod" value="0.5"/>
+          <PARAM id="step11_trig" value="0.0"/>
+          <PARAM id="step11_trig_mod" value="0.5"/>
+          <PARAM id="step12" value="0.5"/>
+          <PARAM id="step12_gate" value="0.7999999523162842"/>
+          <PARAM id="step12_gate_mod" value="0.5"/>
+          <PARAM id="step12_mod" value="0.5"/>
+          <PARAM id="step12_trig" value="0.0"/>
+          <PARAM id="step12_trig_mod" value="0.5"/>
+          <PARAM id="step13" value="0.5"/>
+          <PARAM id="step13_gate" value="0.7999999523162842"/>
+          <PARAM id="step13_gate_mod" value="0.5"/>
+          <PARAM id="step13_mod" value="0.5"/>
+          <PARAM id="step13_trig" value="0.0"/>
+          <PARAM id="step13_trig_mod" value="0.5"/>
+          <PARAM id="step14" value="0.5"/>
+          <PARAM id="step14_gate" value="0.7999999523162842"/>
+          <PARAM id="step14_gate_mod" value="0.5"/>
+          <PARAM id="step14_mod" value="0.5"/>
+          <PARAM id="step14_trig" value="0.0"/>
+          <PARAM id="step14_trig_mod" value="0.5"/>
+          <PARAM id="step15" value="0.5"/>
+          <PARAM id="step15_gate" value="0.7999999523162842"/>
+          <PARAM id="step15_gate_mod" value="0.5"/>
+          <PARAM id="step15_mod" value="0.5"/>
+          <PARAM id="step15_trig" value="0.0"/>
+          <PARAM id="step15_trig_mod" value="0.5"/>
+          <PARAM id="step16" value="0.5"/>
+          <PARAM id="step16_gate" value="0.7999999523162842"/>
+          <PARAM id="step16_gate_mod" value="0.5"/>
+          <PARAM id="step16_mod" value="0.5"/>
+          <PARAM id="step16_trig" value="0.0"/>
+          <PARAM id="step16_trig_mod" value="0.5"/>
+          <PARAM id="step1_gate" value="0.7999999523162842"/>
+          <PARAM id="step1_gate_mod" value="0.5"/>
+          <PARAM id="step1_mod" value="0.5"/>
+          <PARAM id="step1_trig" value="0.0"/>
+          <PARAM id="step1_trig_mod" value="0.5"/>
+          <PARAM id="step2" value="0.5"/>
+          <PARAM id="step2_gate" value="0.7999999523162842"/>
+          <PARAM id="step2_gate_mod" value="0.5"/>
+          <PARAM id="step2_mod" value="0.5"/>
+          <PARAM id="step2_trig" value="0.0"/>
+          <PARAM id="step2_trig_mod" value="0.5"/>
+          <PARAM id="step3" value="0.5"/>
+          <PARAM id="step3_gate" value="0.7999999523162842"/>
+          <PARAM id="step3_gate_mod" value="0.5"/>
+          <PARAM id="step3_mod" value="0.5"/>
+          <PARAM id="step3_trig" value="0.0"/>
+          <PARAM id="step3_trig_mod" value="0.5"/>
+          <PARAM id="step4" value="0.5"/>
+          <PARAM id="step4_gate" value="0.7999999523162842"/>
+          <PARAM id="step4_gate_mod" value="0.5"/>
+          <PARAM id="step4_mod" value="0.5"/>
+          <PARAM id="step4_trig" value="0.0"/>
+          <PARAM id="step4_trig_mod" value="0.5"/>
+          <PARAM id="step5" value="0.5"/>
+          <PARAM id="step5_gate" value="0.7999999523162842"/>
+          <PARAM id="step5_gate_mod" value="0.5"/>
+          <PARAM id="step5_mod" value="0.5"/>
+          <PARAM id="step5_trig" value="0.0"/>
+          <PARAM id="step5_trig_mod" value="0.5"/>
+          <PARAM id="step6" value="0.5"/>
+          <PARAM id="step6_gate" value="0.7999999523162842"/>
+          <PARAM id="step6_gate_mod" value="0.5"/>
+          <PARAM id="step6_mod" value="0.5"/>
+          <PARAM id="step6_trig" value="0.0"/>
+          <PARAM id="step6_trig_mod" value="0.5"/>
+          <PARAM id="step7" value="0.5"/>
+          <PARAM id="step7_gate" value="0.7999999523162842"/>
+          <PARAM id="step7_gate_mod" value="0.5"/>
+          <PARAM id="step7_mod" value="0.5"/>
+          <PARAM id="step7_trig" value="0.0"/>
+          <PARAM id="step7_trig_mod" value="0.5"/>
+          <PARAM id="step8" value="0.5"/>
+          <PARAM id="step8_gate" value="0.7999999523162842"/>
+          <PARAM id="step8_gate_mod" value="0.5"/>
+          <PARAM id="step8_mod" value="0.5"/>
+          <PARAM id="step8_trig" value="0.0"/>
+          <PARAM id="step8_trig_mod" value="0.5"/>
+          <PARAM id="step9" value="0.5"/>
+          <PARAM id="step9_gate" value="0.7999999523162842"/>
+          <PARAM id="step9_gate_mod" value="0.5"/>
+          <PARAM id="step9_mod" value="0.5"/>
+          <PARAM id="step9_trig" value="0.0"/>
+          <PARAM id="step9_trig_mod" value="0.5"/>
+        </SeqParams>
+      </params>
+    </module>
+    <module logicalId="12" type="midi player">
+      <params>
+        <MIDIPlayerParameters>
+          <PARAM id="loop" value="1.0"/>
+          <PARAM id="pitch" value="0.0"/>
+          <PARAM id="pitch_mod" value="0.5"/>
+          <PARAM id="speed" value="1.0"/>
+          <PARAM id="speed_mod" value="0.5"/>
+          <PARAM id="tempo" value="120.0"/>
+          <PARAM id="track" value="0.0"/>
+          <PARAM id="velocity_mod" value="0.5"/>
+        </MIDIPlayerParameters>
+      </params>
+      <extra>
+        <MIDIPlayerExtra fileName="Movie_Themes_-_20th_Century_Fox.mid" filePath="H:\0000_CODE\01_collider_pyo\audio\MIDI\Movie_Themes_-_20th_Century_Fox.mid"
+                         track="0"/>
+      </extra>
+    </module>
+    <module logicalId="14" type="sample loader">
+      <params>
+        <SampleLoaderParameters samplePath="H:\0000_CODE\01_collider_pyo\audio\samples\ambient\KSHMR_Duduk_02_One_Shot_Bm.wav">
+          <PARAM id="engine" value="1.0"/>
+          <PARAM id="gate_mod" value="1.0"/>
+          <PARAM id="loop" value="0.0"/>
+          <PARAM id="pitch" value="0.0"/>
+          <PARAM id="pitch_mod" value="0.0"/>
+          <PARAM id="rangeEnd" value="1.0"/>
+          <PARAM id="rangeEnd_mod" value="1.0"/>
+          <PARAM id="rangeStart" value="0.0"/>
+          <PARAM id="rangeStart_mod" value="0.0"/>
+          <PARAM id="rbPhaseInd" value="1.0"/>
+          <PARAM id="rbWindowShort" value="1.0"/>
+          <PARAM id="speed" value="1.0"/>
+          <PARAM id="speed_mod" value="1.0"/>
+          <PARAM id="trigger_mod" value="0.0"/>
+          <PARAM id="volume" value="0.7999999523162842"/>
+        </SampleLoaderParameters>
+      </params>
+    </module>
+    <module logicalId="15" type="Random">
+      <params>
+        <RandomParams>
+          <PARAM id="cvMax" value="1.0"/>
+          <PARAM id="cvMin" value="0.0"/>
+          <PARAM id="max" value="1.0"/>
+          <PARAM id="min" value="0.0"/>
+          <PARAM id="rate" value="1.0"/>
+          <PARAM id="rate_mod" value="0.0"/>
+          <PARAM id="slew" value="0.0"/>
+          <PARAM id="slew_mod" value="0.0"/>
+        </RandomParams>
+      </params>
+    </module>
+    <module logicalId="16" type="Comparator">
+      <params>
+        <ComparatorParams>
+          <PARAM id="threshold" value="0.5"/>
+        </ComparatorParams>
+      </params>
+    </module>
+    <module logicalId="18" type="TTS Performer">
+      <params>
+        <TTSPerformerParams>
+          <PARAM id="language" value="0.0"/>
+          <PARAM id="pitch" value="0.0"/>
+          <PARAM id="speed" value="1.0"/>
+          <PARAM id="start" value="0.0"/>
+          <PARAM id="volume" value="0.7999999523162842"/>
+        </TTSPerformerParams>
+      </params>
+    </module>
+    <module logicalId="19" type="Random">
+      <params>
+        <RandomParams>
+          <PARAM id="cvMax" value="1.0"/>
+          <PARAM id="cvMin" value="0.0"/>
+          <PARAM id="max" value="1.0"/>
+          <PARAM id="min" value="0.0"/>
+          <PARAM id="rate" value="4.349999904632568"/>
+          <PARAM id="rate_mod" value="0.0"/>
+          <PARAM id="slew" value="0.0"/>
+          <PARAM id="slew_mod" value="0.0"/>
+        </RandomParams>
+      </params>
+    </module>
+    <module logicalId="20" type="Vocal Tract Filter">
+      <params>
+        <VocalTractParams>
+          <PARAM id="formantGain" value="0.0"/>
+          <PARAM id="formantShift" value="0.0"/>
+          <PARAM id="instability" value="0.0"/>
+          <PARAM id="vowelShape" value="0.0"/>
+        </VocalTractParams>
+      </params>
+    </module>
+    <module logicalId="35" type="VCF">
+      <params>
+        <VCFParams>
+          <PARAM id="cutoff" value="999.9999389648438"/>
+          <PARAM id="resonance" value="1.0"/>
+          <PARAM id="type" value="0.0"/>
+          <PARAM id="type_mod" value="0.0"/>
+        </VCFParams>
+      </params>
+    </module>
+    <module logicalId="36" type="Delay">
+      <params>
+        <DelayParams>
+          <PARAM id="feedback" value="0.4000000059604645"/>
+          <PARAM id="mix" value="0.300000011920929"/>
+          <PARAM id="timeMs" value="400.0"/>
+        </DelayParams>
+      </params>
+    </module>
+    <module logicalId="37" type="Reverb">
+      <params>
+        <ReverbParams>
+          <PARAM id="damp" value="0.300000011920929"/>
+          <PARAM id="mix" value="0.800000011920929"/>
+          <PARAM id="size" value="0.5"/>
+        </ReverbParams>
+      </params>
+    </module>
+    <module logicalId="38" type="timepitch">
+      <params>
+        <TimePitchParams>
+          <PARAM id="engine" value="0.0"/>
+          <PARAM id="pitch" value="0.0"/>
+          <PARAM id="pitch_mod" value="0.0"/>
+          <PARAM id="speed" value="0.9999999403953552"/>
+          <PARAM id="speed_mod" value="0.9999999403953552"/>
+        </TimePitchParams>
+      </params>
+    </module>
+    <module logicalId="39" type="Waveshaper">
+      <params>
+        <WaveshaperParams>
+          <PARAM id="drive" value="1.0"/>
+          <PARAM id="type" value="0.0"/>
+        </WaveshaperParams>
+      </params>
+    </module>
+    <module logicalId="40" type="Random">
+      <params>
+        <RandomParams>
+          <PARAM id="cvMax" value="1.0"/>
+          <PARAM id="cvMin" value="0.0"/>
+          <PARAM id="max" value="21.53599548339844"/>
+          <PARAM id="min" value="0.0"/>
+          <PARAM id="rate" value="16.07999992370605"/>
+          <PARAM id="rate_mod" value="0.0"/>
+          <PARAM id="slew" value="0.0"/>
+          <PARAM id="slew_mod" value="0.0"/>
+        </RandomParams>
+      </params>
+    </module>
+    <module logicalId="42" type="LFO">
+      <params>
+        <LFOParams>
+          <PARAM id="bipolar" value="1.0"/>
+          <PARAM id="depth" value="0.5"/>
+          <PARAM id="depth_mod" value="0.0"/>
+          <PARAM id="rate" value="1.0"/>
+          <PARAM id="rate_mod" value="0.0"/>
+          <PARAM id="wave" value="0.0"/>
+          <PARAM id="wave_mod" value="0.0"/>
+        </LFOParams>
+      </params>
+    </module>
+    <module logicalId="43" type="ADSR">
+      <params>
+        <ADSRParams>
+          <PARAM id="attack" value="0.01099999994039536"/>
+          <PARAM id="attack_mod" value="0.0"/>
+          <PARAM id="decay" value="0.1009999960660934"/>
+          <PARAM id="decay_mod" value="0.0"/>
+          <PARAM id="release" value="0.001000000047497451"/>
+          <PARAM id="release_mod" value="0.0"/>
+          <PARAM id="sustain" value="0.0"/>
+          <PARAM id="sustain_mod" value="0.0"/>
+        </ADSRParams>
+      </params>
+    </module>
+    <module logicalId="44" type="Random">
+      <params>
+        <RandomParams>
+          <PARAM id="cvMax" value="1.0"/>
+          <PARAM id="cvMin" value="0.0"/>
+          <PARAM id="max" value="1.0"/>
+          <PARAM id="min" value="0.0"/>
+          <PARAM id="rate" value="1.0"/>
+          <PARAM id="rate_mod" value="0.0"/>
+          <PARAM id="slew" value="0.0"/>
+          <PARAM id="slew_mod" value="0.0"/>
+        </RandomParams>
+      </params>
+    </module>
+    <module logicalId="45" type="S&amp;H">
+      <params>
+        <SAndHParams>
+          <PARAM id="edge" value="0.0"/>
+          <PARAM id="edge_mod" value="0.0"/>
+          <PARAM id="slewMs" value="0.0"/>
+          <PARAM id="slewMs_mod" value="0.0"/>
+          <PARAM id="threshold" value="0.5"/>
+          <PARAM id="threshold_mod" value="0.0"/>
+        </SAndHParams>
+      </params>
+    </module>
+    <module logicalId="46" type="curvedrawer">
+      <params>
+        <CurveDrawerParams>
+          <PARAM id="curveSelect" value="0.0"/>
+          <PARAM id="curveSelect_mod" value="0.5"/>
+          <PARAM id="gateThreshold" value="0.5"/>
+          <PARAM id="gateThreshold_mod" value="0.5"/>
+          <PARAM id="loop" value="1.0"/>
+          <PARAM id="mode" value="0.0"/>
+          <PARAM id="pitchBase" value="0.0"/>
+          <PARAM id="pitchBase_mod" value="0.5"/>
+          <PARAM id="rate" value="0.9999999403953552"/>
+          <PARAM id="rate_mod" value="0.5"/>
+          <PARAM id="slew" value="0.0"/>
+          <PARAM id="slew_mod" value="0.5"/>
+          <PARAM id="trigThreshold" value="0.7999999523162842"/>
+          <PARAM id="trigThreshold_mod" value="0.5"/>
+          <PARAM id="valueMult" value="1.0"/>
+          <PARAM id="valueMult_mod" value="0.5"/>
+        </CurveDrawerParams>
+      </params>
+      <extra>
+        <CurveDrawerState>
+          <CurvePoints_0 p0="0.0" p1="0.003921568859368563" p2="0.007843137718737125"
+                         p3="0.0117647061124444" p4="0.01568627543747425" p5="0.01960784383118153"
+                         p6="0.0235294122248888" p7="0.02745098061859608" p8="0.0313725508749485"
+                         p9="0.03529411926865578" p10="0.03921568766236305" p11="0.04313725605607033"
+                         p12="0.0470588244497776" p13="0.05098039284348488" p14="0.05490196123719215"
+                         p15="0.05882352963089943" p16="0.062745101749897" p17="0.06666667014360428"
+                         p18="0.07058823853731155" p19="0.07450980693101883" p20="0.0784313753247261"
+                         p21="0.08235294371843338" p22="0.08627451211214066" p23="0.09019608050584793"
+                         p24="0.09411764889955521" p25="0.09803921729326248" p26="0.1019607856869698"
+                         p27="0.105882354080677" p28="0.1098039224743843" p29="0.1137254908680916"
+                         p30="0.1176470592617989" p31="0.1215686276555061" p32="0.125490203499794"
+                         p33="0.1294117718935013" p34="0.1333333402872086" p35="0.1372549086809158"
+                         p36="0.1411764770746231" p37="0.1450980454683304" p38="0.1490196138620377"
+                         p39="0.1529411822557449" p40="0.1568627506494522" p41="0.1607843190431595"
+                         p42="0.1647058874368668" p43="0.168627455830574" p44="0.1725490242242813"
+                         p45="0.1764705926179886" p46="0.1803921610116959" p47="0.1843137294054031"
+                         p48="0.1882352977991104" p49="0.1921568661928177" p50="0.196078434586525"
+                         p51="0.2000000029802322" p52="0.2039215713739395" p53="0.2078431397676468"
+                         p54="0.2117647081613541" p55="0.2156862765550613" p56="0.2196078449487686"
+                         p57="0.2235294133424759" p58="0.2274509817361832" p59="0.2313725501298904"
+                         p60="0.2352941185235977" p61="0.239215686917305" p62="0.2431372553110123"
+                         p63="0.2470588237047195" p64="0.250980406999588" p65="0.2549019753932953"
+                         p66="0.2588235437870026" p67="0.2627451121807098" p68="0.2666666805744171"
+                         p69="0.2705882489681244" p70="0.2745098173618317" p71="0.2784313857555389"
+                         p72="0.2823529541492462" p73="0.2862745225429535" p74="0.2901960909366608"
+                         p75="0.294117659330368" p76="0.2980392277240753" p77="0.3019607961177826"
+                         p78="0.3058823645114899" p79="0.3098039329051971" p80="0.3137255012989044"
+                         p81="0.3176470696926117" p82="0.321568638086319" p83="0.3254902064800262"
+                         p84="0.3294117748737335" p85="0.3333333432674408" p86="0.3372549116611481"
+                         p87="0.3411764800548553" p88="0.3450980484485626" p89="0.3490196168422699"
+                         p90="0.3529411852359772" p91="0.3568627536296844" p92="0.3607843220233917"
+                         p93="0.364705890417099" p94="0.3686274588108063" p95="0.3725490272045135"
+                         p96="0.3764705955982208" p97="0.3803921639919281" p98="0.3843137323856354"
+                         p99="0.3882353007793427" p100="0.3921568691730499" p101="0.3960784375667572"
+                         p102="0.4000000059604645" p103="0.4039215743541718" p104="0.407843142747879"
+                         p105="0.4117647111415863" p106="0.4156862795352936" p107="0.4196078479290009"
+                         p108="0.4235294163227081" p109="0.4274509847164154" p110="0.4313725531101227"
+                         p111="0.43529412150383" p112="0.4392156898975372" p113="0.4431372582912445"
+                         p114="0.4470588266849518" p115="0.4509803950786591" p116="0.4549019634723663"
+                         p117="0.4588235318660736" p118="0.4627451002597809" p119="0.4666666686534882"
+                         p120="0.4705882370471954" p121="0.4745098054409027" p122="0.47843137383461"
+                         p123="0.4823529422283173" p124="0.4862745106220245" p125="0.4901960790157318"
+                         p126="0.4941176474094391" p127="0.4980392158031464" p128="0.501960813999176"
+                         p129="0.5058823823928833" p130="0.5098039507865906" p131="0.5137255191802979"
+                         p132="0.5176470875740051" p133="0.5215686559677124" p134="0.5254902243614197"
+                         p135="0.529411792755127" p136="0.5333333611488342" p137="0.5372549295425415"
+                         p138="0.5411764979362488" p139="0.5450980663299561" p140="0.5490196347236633"
+                         p141="0.5529412031173706" p142="0.5568627715110779" p143="0.5607843399047852"
+                         p144="0.5647059082984924" p145="0.5686274766921997" p146="0.572549045085907"
+                         p147="0.5764706134796143" p148="0.5803921818733215" p149="0.5843137502670288"
+                         p150="0.5882353186607361" p151="0.5921568870544434" p152="0.5960784554481506"
+                         p153="0.6000000238418579" p154="0.6039215922355652" p155="0.6078431606292725"
+                         p156="0.6117647290229797" p157="0.615686297416687" p158="0.6196078658103943"
+                         p159="0.6235294342041016" p160="0.6274510025978088" p161="0.6313725709915161"
+                         p162="0.6352941393852234" p163="0.6392157077789307" p164="0.6431372761726379"
+                         p165="0.6470588445663452" p166="0.6509804129600525" p167="0.6549019813537598"
+                         p168="0.658823549747467" p169="0.6627451181411743" p170="0.6666666865348816"
+                         p171="0.6705882549285889" p172="0.6745098233222961" p173="0.6784313917160034"
+                         p174="0.6823529601097107" p175="0.686274528503418" p176="0.6901960968971252"
+                         p177="0.6941176652908325" p178="0.6980392336845398" p179="0.7019608020782471"
+                         p180="0.7058823704719543" p181="0.7098039388656616" p182="0.7137255072593689"
+                         p183="0.7176470756530762" p184="0.7215686440467834" p185="0.7254902124404907"
+                         p186="0.729411780834198" p187="0.7333333492279053" p188="0.7372549176216125"
+                         p189="0.7411764860153198" p190="0.7450980544090271" p191="0.7490196228027344"
+                         p192="0.7529411911964417" p193="0.7568627595901489" p194="0.7607843279838562"
+                         p195="0.7647058963775635" p196="0.7686274647712708" p197="0.772549033164978"
+                         p198="0.7764706015586853" p199="0.7803921699523926" p200="0.7843137383460999"
+                         p201="0.7882353067398071" p202="0.7921568751335144" p203="0.7960784435272217"
+                         p204="0.800000011920929" p205="0.8039215803146362" p206="0.8078431487083435"
+                         p207="0.8117647171020508" p208="0.8156862854957581" p209="0.8196078538894653"
+                         p210="0.8235294222831726" p211="0.8274509906768799" p212="0.8313725590705872"
+                         p213="0.8352941274642944" p214="0.8392156958580017" p215="0.843137264251709"
+                         p216="0.8470588326454163" p217="0.8509804010391235" p218="0.8549019694328308"
+                         p219="0.8588235378265381" p220="0.8627451062202454" p221="0.8666666746139526"
+                         p222="0.8705882430076599" p223="0.8745098114013672" p224="0.8784313797950745"
+                         p225="0.8823529481887817" p226="0.886274516582489" p227="0.8901960849761963"
+                         p228="0.8941176533699036" p229="0.8980392217636108" p230="0.9019607901573181"
+                         p231="0.9058823585510254" p232="0.9098039269447327" p233="0.9137254953384399"
+                         p234="0.9176470637321472" p235="0.9215686321258545" p236="0.9254902005195618"
+                         p237="0.929411768913269" p238="0.9333333373069763" p239="0.9372549057006836"
+                         p240="0.9411764740943909" p241="0.9450980424880981" p242="0.9490196108818054"
+                         p243="0.9529411792755127" p244="0.95686274766922" p245="0.9607843160629272"
+                         p246="0.9647058844566345" p247="0.9686274528503418" p248="0.9725490212440491"
+                         p249="0.9764705896377563" p250="0.9803921580314636" p251="0.9843137264251709"
+                         p252="0.9882352948188782" p253="0.9921568632125854" p254="0.9960784316062927"
+                         p255="1.0"/>
+          <CurvePoints_1 p0="1.0" p1="0.9960784316062927" p2="0.9921568632125854" p3="0.9882352948188782"
+                         p4="0.9843137264251709" p5="0.9803921580314636" p6="0.9764705896377563"
+                         p7="0.9725490212440491" p8="0.9686274528503418" p9="0.9647058844566345"
+                         p10="0.9607843160629272" p11="0.95686274766922" p12="0.9529411792755127"
+                         p13="0.9490196108818054" p14="0.9450980424880981" p15="0.9411764740943909"
+                         p16="0.9372549057006836" p17="0.9333333373069763" p18="0.929411768913269"
+                         p19="0.9254902005195618" p20="0.9215686321258545" p21="0.9176470637321472"
+                         p22="0.9137254953384399" p23="0.9098039269447327" p24="0.9058823585510254"
+                         p25="0.9019607901573181" p26="0.8980392217636108" p27="0.8941176533699036"
+                         p28="0.8901960849761963" p29="0.886274516582489" p30="0.8823529481887817"
+                         p31="0.8784313797950745" p32="0.8745098114013672" p33="0.8705882430076599"
+                         p34="0.8666666746139526" p35="0.8627451062202454" p36="0.8588235378265381"
+                         p37="0.8549019694328308" p38="0.8509804010391235" p39="0.8470588326454163"
+                         p40="0.843137264251709" p41="0.8392156958580017" p42="0.8352941274642944"
+                         p43="0.8313725590705872" p44="0.8274509906768799" p45="0.8235294222831726"
+                         p46="0.8196078538894653" p47="0.8156862854957581" p48="0.8117647171020508"
+                         p49="0.8078431487083435" p50="0.8039215803146362" p51="0.800000011920929"
+                         p52="0.7960784435272217" p53="0.7921568751335144" p54="0.7882353067398071"
+                         p55="0.7843137383460999" p56="0.7803921699523926" p57="0.7764706015586853"
+                         p58="0.772549033164978" p59="0.7686274647712708" p60="0.7647058963775635"
+                         p61="0.7607843279838562" p62="0.7568627595901489" p63="0.7529411911964417"
+                         p64="0.7490196228027344" p65="0.7450979948043823" p66="0.7411764860153198"
+                         p67="0.7372548580169678" p68="0.7333333492279053" p69="0.7294117212295532"
+                         p70="0.7254902124404907" p71="0.7215685844421387" p72="0.7176470756530762"
+                         p73="0.7137254476547241" p74="0.7098039388656616" p75="0.7058823108673096"
+                         p76="0.7019608020782471" p77="0.698039174079895" p78="0.6941176652908325"
+                         p79="0.6901960372924805" p80="0.686274528503418" p81="0.6823529005050659"
+                         p82="0.6784313917160034" p83="0.6745097637176514" p84="0.6705882549285889"
+                         p85="0.6666666269302368" p86="0.6627451181411743" p87="0.6588234901428223"
+                         p88="0.6549019813537598" p89="0.6509803533554077" p90="0.6470588445663452"
+                         p91="0.6431372165679932" p92="0.6392157077789307" p93="0.6352940797805786"
+                         p94="0.6313725709915161" p95="0.6274509429931641" p96="0.6235294342041016"
+                         p97="0.6196078062057495" p98="0.615686297416687" p99="0.611764669418335"
+                         p100="0.6078431606292725" p101="0.6039215326309204" p102="0.6000000238418579"
+                         p103="0.5960783958435059" p104="0.5921568870544434" p105="0.5882352590560913"
+                         p106="0.5843137502670288" p107="0.5803921222686768" p108="0.5764706134796143"
+                         p109="0.5725489854812622" p110="0.5686274766921997" p111="0.5647058486938477"
+                         p112="0.5607843399047852" p113="0.5568627119064331" p114="0.5529412031173706"
+                         p115="0.5490195751190186" p116="0.5450980663299561" p117="0.541176438331604"
+                         p118="0.5372549295425415" p119="0.5333333015441895" p120="0.529411792755127"
+                         p121="0.5254901647567749" p122="0.5215686559677124" p123="0.5176470279693604"
+                         p124="0.5137255191802979" p125="0.5098038911819458" p126="0.5058823823928833"
+                         p127="0.5019607543945312" p128="0.498039186000824" p129="0.4941176176071167"
+                         p130="0.4901960492134094" p131="0.4862744808197021" p132="0.4823529124259949"
+                         p133="0.4784313440322876" p134="0.4745097756385803" p135="0.470588207244873"
+                         p136="0.4666666388511658" p137="0.4627450704574585" p138="0.4588235020637512"
+                         p139="0.4549019336700439" p140="0.4509803652763367" p141="0.4470587968826294"
+                         p142="0.4431372284889221" p143="0.4392156600952148" p144="0.4352940917015076"
+                         p145="0.4313725233078003" p146="0.427450954914093" p147="0.4235293865203857"
+                         p148="0.4196078181266785" p149="0.4156862497329712" p150="0.4117646813392639"
+                         p151="0.4078431129455566" p152="0.4039215445518494" p153="0.3999999761581421"
+                         p154="0.3960784077644348" p155="0.3921568393707275" p156="0.3882352709770203"
+                         p157="0.384313702583313" p158="0.3803921341896057" p159="0.3764705657958984"
+                         p160="0.3725489974021912" p161="0.3686274290084839" p162="0.3647058606147766"
+                         p163="0.3607842922210693" p164="0.3568627238273621" p165="0.3529411554336548"
+                         p166="0.3490195870399475" p167="0.3450980186462402" p168="0.341176450252533"
+                         p169="0.3372548818588257" p170="0.3333333134651184" p171="0.3294117450714111"
+                         p172="0.3254901766777039" p173="0.3215686082839966" p174="0.3176470398902893"
+                         p175="0.313725471496582" p176="0.3098039031028748" p177="0.3058823347091675"
+                         p178="0.3019607663154602" p179="0.2980391979217529" p180="0.2941176295280457"
+                         p181="0.2901960611343384" p182="0.2862744927406311" p183="0.2823529243469238"
+                         p184="0.2784313559532166" p185="0.2745097875595093" p186="0.270588219165802"
+                         p187="0.2666666507720947" p188="0.2627450823783875" p189="0.2588235139846802"
+                         p190="0.2549019455909729" p191="0.2509803771972656" p192="0.2470588088035583"
+                         p193="0.2431372404098511" p194="0.2392156720161438" p195="0.2352941036224365"
+                         p196="0.2313725352287292" p197="0.227450966835022" p198="0.2235293984413147"
+                         p199="0.2196078300476074" p200="0.2156862616539001" p201="0.2117646932601929"
+                         p202="0.2078431248664856" p203="0.2039215564727783" p204="0.199999988079071"
+                         p205="0.1960784196853638" p206="0.1921568512916565" p207="0.1882352828979492"
+                         p208="0.1843137145042419" p209="0.1803921461105347" p210="0.1764705777168274"
+                         p211="0.1725490093231201" p212="0.1686274409294128" p213="0.1647058725357056"
+                         p214="0.1607843041419983" p215="0.156862735748291" p216="0.1529411673545837"
+                         p217="0.1490195989608765" p218="0.1450980305671692" p219="0.1411764621734619"
+                         p220="0.1372548937797546" p221="0.1333333253860474" p222="0.1294117569923401"
+                         p223="0.1254901885986328" p224="0.1215686202049255" p225="0.1176470518112183"
+                         p226="0.113725483417511" p227="0.1098039150238037" p228="0.1058823466300964"
+                         p229="0.1019607782363892" p230="0.09803920984268188" p231="0.09411764144897461"
+                         p232="0.09019607305526733" p233="0.08627450466156006" p234="0.08235293626785278"
+                         p235="0.07843136787414551" p236="0.07450979948043823" p237="0.07058823108673096"
+                         p238="0.06666666269302368" p239="0.06274509429931641" p240="0.05882352590560913"
+                         p241="0.05490195751190186" p242="0.05098038911819458" p243="0.0470588207244873"
+                         p244="0.04313725233078003" p245="0.03921568393707275" p246="0.03529411554336548"
+                         p247="0.0313725471496582" p248="0.02745097875595093" p249="0.02352941036224365"
+                         p250="0.01960784196853638" p251="0.0156862735748291" p252="0.01176470518112183"
+                         p253="0.007843136787414551" p254="0.003921568393707275" p255="0.0"/>
+          <CurvePoints_2 p0="0.5" p1="0.5123187303543091" p2="0.5246299505233765" p3="0.53692626953125"
+                         p4="0.5492001175880432" p5="0.5614441633224487" p6="0.5736508369445801"
+                         p7="0.5858128666877747" p8="0.5979227423667908" p9="0.6099731922149658"
+                         p10="0.6219568848609924" p11="0.6338664889335632" p12="0.6456948518753052"
+                         p13="0.6574348211288452" p14="0.6690791249275208" p15="0.6806208491325378"
+                         p16="0.6920529007911682" p17="0.7033683061599731" p18="0.714560329914093"
+                         p19="0.7256220579147339" p20="0.7365467548370361" p21="0.7473279237747192"
+                         p22="0.7579588890075684" p23="0.7684333324432373" p24="0.7787446975708008"
+                         p25="0.7888869047164917" p26="0.7988537549972534" p27="0.8086391687393188"
+                         p28="0.8182371258735657" p29="0.8276419639587402" p30="0.8368477821350098"
+                         p31="0.8458492159843445" p32="0.8546406626701355" p33="0.8632168173789978"
+                         p34="0.8715724349021912" p35="0.8797024488449097" p36="0.8876019716262817"
+                         p37="0.8952662348747253" p38="0.9026904702186584" p39="0.9098702669143677"
+                         p40="0.9168012142181396" p41="0.9234790802001953" p42="0.9298999309539795"
+                         p43="0.9360597729682922" p44="0.9419548511505127" p45="0.9475816488265991"
+                         p46="0.9529367089271545" p47="0.9580168128013611" p48="0.9628188610076904"
+                         p49="0.9673398733139038" p50="0.9715772271156311" p51="0.9755282402038574"
+                         p52="0.9791905879974365" p53="0.9825620651245117" p54="0.9856405258178711"
+                         p55="0.9884241819381714" p56="0.9909112453460693" p57="0.9931004047393799"
+                         p58="0.9949901103973389" p59="0.9965793490409851" p60="0.9978671073913574"
+                         p61="0.9988526105880737" p62="0.9995352029800415" p63="0.9999146461486816"
+                         p64="0.9999905228614807" p65="0.9997628927230835" p66="0.9992318153381348"
+                         p67="0.9983976483345032" p68="0.9972609281539917" p69="0.9958223104476929"
+                         p70="0.9940826892852783" p71="0.992043137550354" p72="0.9897048473358154"
+                         p73="0.9870692491531372" p74="0.984138011932373" p75="0.9809128046035767"
+                         p76="0.9773956537246704" p77="0.9735886454582214" p78="0.9694941639900208"
+                         p79="0.9651145935058594" p80="0.9604527354240417" p81="0.9555113315582275"
+                         p82="0.9502933025360107" p83="0.9448020458221436" p84="0.9390406012535095"
+                         p85="0.9330127239227295" p86="0.9267218112945557" p87="0.9201719760894775"
+                         p88="0.9133670926094055" p89="0.9063111543655396" p90="0.8990086317062378"
+                         p91="0.8914637565612793" p92="0.8836812973022461" p93="0.8756659030914307"
+                         p94="0.8674224615097046" p95="0.858955979347229" p96="0.850271463394165"
+                         p97="0.841374397277832" p98="0.8322700262069702" p99="0.8229639530181885"
+                         p100="0.8134618997573853" p101="0.8037694096565247" p102="0.7938926219940186"
+                         p103="0.7838372588157654" p104="0.7736097574234009" p105="0.7632160782814026"
+                         p106="0.7526625394821167" p107="0.7419556975364685" p108="0.7311018705368042"
+                         p109="0.7201077938079834" p110="0.7089802026748657" p111="0.6977255344390869"
+                         p112="0.68635094165802" p113="0.6748631596565247" p114="0.6632692813873291"
+                         p115="0.6515763401985168" p116="0.6397912502288818" p117="0.6279213428497314"
+                         p118="0.6159737110137939" p119="0.6039558053016663" p120="0.5918747782707214"
+                         p121="0.5797378420829773" p122="0.5675526261329651" p123="0.5553262829780579"
+                         p124="0.5430664420127869" p125="0.5307804942131042" p126="0.5184757113456726"
+                         p127="0.5061598420143127" p128="0.4938400983810425" p129="0.4815241098403931"
+                         p130="0.469219446182251" p131="0.4569333493709564" p132="0.4446735382080078"
+                         p133="0.4324471950531006" p134="0.4202619791030884" p135="0.4081251621246338"
+                         p136="0.396043986082077" p137="0.384026050567627" p138="0.3720784187316895"
+                         p139="0.3602085709571838" p140="0.348423570394516" p141="0.3367304801940918"
+                         p142="0.325136661529541" p143="0.3136488199234009" p144="0.3022742867469788"
+                         p145="0.2910197377204895" p146="0.2798919975757599" p147="0.2688979506492615"
+                         p148="0.2580441236495972" p149="0.2473373115062714" p150="0.2367838621139526"
+                         p151="0.2263900935649872" p152="0.2161625623703003" p153="0.2061072289943695"
+                         p154="0.1962304413318634" p155="0.18653804063797" p156="0.1770358681678772"
+                         p157="0.1677298247814178" p158="0.158625453710556" p159="0.149728387594223"
+                         p160="0.1410439908504486" p161="0.1325774192810059" p162="0.1243340075016022"
+                         p163="0.1163186430931091" p164="0.1085361242294312" p165="0.100991278886795"
+                         p166="0.09368881583213806" p167="0.08663287758827209" p168="0.07982787489891052"
+                         p169="0.07327798008918762" p170="0.06698727607727051" p171="0.06095930933952332"
+                         p172="0.05519789457321167" p173="0.04970663785934448" p174="0.04448863863945007"
+                         p175="0.03954717516899109" p176="0.03488534688949585" p177="0.03050580620765686"
+                         p178="0.0264112651348114" p179="0.02260428667068481" p180="0.01908716559410095"
+                         p181="0.01586195826530457" p182="0.01293066143989563" p183="0.01029512286186218"
+                         p184="0.007956802845001221" p185="0.005917251110076904" p186="0.004177629947662354"
+                         p187="0.002739042043685913" p188="0.001602321863174438" p189="0.0007681846618652344"
+                         p190="0.0002371370792388916" p191="9.477138519287109e-6" p192="0.00008538365364074707"
+                         p193="0.0004647672176361084" p194="0.001147419214248657" p195="0.002132922410964966"
+                         p196="0.00342068076133728" p197="0.005009889602661133" p198="0.006899654865264893"
+                         p199="0.009088754653930664" p200="0.011575847864151" p201="0.01435950398445129"
+                         p202="0.01743799448013306" p203="0.02080938220024109" p204="0.02447175979614258"
+                         p205="0.02842283248901367" p206="0.03266018629074097" p207="0.03718119859695435"
+                         p208="0.04198324680328369" p209="0.04706338047981262" p210="0.05241835117340088"
+                         p211="0.05804517865180969" p212="0.06394031643867493" p213="0.07010006904602051"
+                         p214="0.07652091979980469" p215="0.08319887518882751" p216="0.09012988209724426"
+                         p217="0.09730955958366394" p218="0.1047338545322418" p219="0.1123981177806854"
+                         p220="0.1202975511550903" p221="0.1284276247024536" p222="0.1367833018302917"
+                         p223="0.1453594863414764" p224="0.1541508138179779" p225="0.163152277469635"
+                         p226="0.1723582148551941" p227="0.1817629039287567" p228="0.1913609504699707"
+                         p229="0.2011463940143585" p230="0.2111130654811859" p231="0.2212553322315216"
+                         p232="0.2315668165683746" p233="0.2420412600040436" p234="0.2526721060276031"
+                         p235="0.2634533047676086" p236="0.2743781208992004" p237="0.2854396998882294"
+                         p238="0.2966317534446716" p239="0.3079472780227661" p240="0.3193791508674622"
+                         p241="0.330920934677124" p242="0.3425653278827667" p243="0.3543053269386292"
+                         p244="0.3661335110664368" p245="0.3780432343482971" p246="0.3900269865989685"
+                         p247="0.4020772576332092" p248="0.4141872227191925" p249="0.4263492822647095"
+                         p250="0.4385558366775513" p251="0.4507999122142792" p252="0.4630738496780396"
+                         p253="0.4753702282905579" p254="0.4876812994480133" p255="0.5000000596046448"/>
+        </CurveDrawerState>
+      </extra>
+    </module>
+    <module logicalId="47" type="Random">
+      <params>
+        <RandomParams>
+          <PARAM id="cvMax" value="1.0"/>
+          <PARAM id="cvMin" value="0.0"/>
+          <PARAM id="max" value="1.0"/>
+          <PARAM id="min" value="0.0"/>
+          <PARAM id="rate" value="1.0"/>
+          <PARAM id="rate_mod" value="0.0"/>
+          <PARAM id="slew" value="0.0"/>
+          <PARAM id="slew_mod" value="0.0"/>
+        </RandomParams>
+      </params>
+    </module>
+  </modules>
+  <connections>
+    <connection srcId="1" srcChan="0" dstId="6" dstChan="0"/>
+    <connection srcId="1" srcChan="0" dstId="6" dstChan="1"/>
+    <connection srcId="1" srcChan="0" dstId="6" dstChan="2"/>
+    <connection srcId="1" srcChan="0" dstId="6" dstChan="3"/>
+    <connection srcId="1" srcChan="0" dstId="6" dstChan="4"/>
+    <connection srcId="1" srcChan="0" dstId="7" dstChan="0"/>
+    <connection srcId="1" srcChan="0" dstId="7" dstChan="1"/>
+    <connection srcId="1" srcChan="0" dstId="7" dstChan="2"/>
+    <connection srcId="1" srcChan="0" dstId="8" dstChan="0"/>
+    <connection srcId="1" srcChan="0" dstId="8" dstChan="1"/>
+    <connection srcId="1" srcChan="0" dstId="8" dstChan="33"/>
+    <connection srcId="1" srcChan="0" dstId="9" dstChan="0"/>
+    <connection srcId="9" srcChan="0" dstId="8" dstChan="65"/>
+    <connection srcId="15" srcChan="0" dstId="10" dstChan="0"/>
+    <connection srcId="15" srcChan="0" dstId="10" dstChan="1"/>
+    <connection srcId="15" srcChan="0" dstId="11" dstChan="2"/>
+    <connection srcId="15" srcChan="0" dstId="11" dstChan="3"/>
+    <connection srcId="15" srcChan="0" dstId="11" dstChan="4"/>
+    <connection srcId="15" srcChan="0" dstId="11" dstChan="6"/>
+    <connection srcId="15" srcChan="0" dstId="11" dstChan="22"/>
+    <connection srcId="15" srcChan="0" dstId="11" dstChan="38"/>
+    <connection srcId="15" srcChan="0" dstId="12" dstChan="0"/>
+    <connection srcId="15" srcChan="0" dstId="12" dstChan="1"/>
+    <connection srcId="15" srcChan="0" dstId="12" dstChan="2"/>
+    <connection srcId="15" srcChan="0" dstId="12" dstChan="3"/>
+    <connection srcId="15" srcChan="0" dstId="12" dstChan="4"/>
+    <connection srcId="15" srcChan="0" dstId="14" dstChan="0"/>
+    <connection srcId="15" srcChan="0" dstId="14" dstChan="1"/>
+    <connection srcId="15" srcChan="0" dstId="14" dstChan="2"/>
+    <connection srcId="15" srcChan="0" dstId="14" dstChan="4"/>
+    <connection srcId="15" srcChan="0" dstId="14" dstChan="5"/>
+    <connection srcId="15" srcChan="0" dstId="16" dstChan="0"/>
+    <connection srcId="16" srcChan="0" dstId="14" dstChan="3"/>
+    <connection srcId="19" srcChan="0" dstId="18" dstChan="1"/>
+    <connection srcId="19" srcChan="0" dstId="18" dstChan="2"/>
+    <connection srcId="19" srcChan="0" dstId="18" dstChan="3"/>
+    <connection srcId="19" srcChan="0" dstId="20" dstChan="1"/>
+    <connection srcId="19" srcChan="0" dstId="20" dstChan="2"/>
+    <connection srcId="19" srcChan="0" dstId="20" dstChan="3"/>
+    <connection srcId="19" srcChan="0" dstId="20" dstChan="4"/>
+    <connection srcId="40" srcChan="0" dstId="36" dstChan="2"/>
+    <connection srcId="40" srcChan="0" dstId="36" dstChan="3"/>
+    <connection srcId="40" srcChan="0" dstId="36" dstChan="4"/>
+    <connection srcId="40" srcChan="0" dstId="37" dstChan="2"/>
+    <connection srcId="40" srcChan="0" dstId="37" dstChan="3"/>
+    <connection srcId="40" srcChan="0" dstId="37" dstChan="4"/>
+    <connection srcId="40" srcChan="0" dstId="38" dstChan="2"/>
+    <connection srcId="40" srcChan="2" dstId="38" dstChan="3"/>
+    <connection srcId="40" srcChan="2" dstId="39" dstChan="2"/>
+    <connection srcId="40" srcChan="2" dstId="39" dstChan="3"/>
+  </connections>
+  <NodeEditorUI>
+    <node id="1" x="-259.0" y="157.0"/>
+    <node id="6" x="198.0" y="124.0"/>
+    <node id="7" x="169.0" y="-76.0"/>
+    <node id="8" x="562.0" y="-36.0"/>
+    <node id="9" x="561.0" y="543.0"/>
+    <node id="10" x="-1378.0" y="-257.0"/>
+    <node id="11" x="-1390.0" y="52.0"/>
+    <node id="12" x="-1770.0" y="273.0"/>
+    <node id="14" x="-1828.0" y="-221.0"/>
+    <node id="15" x="-2219.0" y="479.0"/>
+    <node id="16" x="-2199.0" y="329.0"/>
+    <node id="18" x="-2943.0" y="-147.0"/>
+    <node id="19" x="-3418.0" y="232.0"/>
+    <node id="20" x="-2945.0" y="257.0"/>
+    <node id="35" x="-4913.0" y="534.0"/>
+    <node id="36" x="-4910.0" y="-87.0"/>
+    <node id="37" x="-4465.0" y="336.0"/>
+    <node id="38" x="-4463.0" y="117.0"/>
+    <node id="39" x="-4469.0" y="-83.0"/>
+    <node id="40" x="-5370.0" y="166.0"/>
+    <node id="42" x="-6248.0" y="89.0"/>
+    <node id="43" x="-5903.0" y="265.0"/>
+    <node id="44" x="-5909.0" y="571.0"/>
+    <node id="45" x="-6322.0" y="764.0"/>
+    <node id="46" x="-6684.0" y="538.0"/>
+    <node id="47" x="-6696.0" y="173.0"/>
+  </NodeEditorUI>
+</ModularSynthPreset>

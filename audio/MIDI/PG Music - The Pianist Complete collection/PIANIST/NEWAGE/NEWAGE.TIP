@@ -1,0 +1,27 @@
+The New Age Pianist uses standard MIDI files (.MID) so you can load the files into your sequencer.
+If you would like to see the file name of the MIDI file playing, choose Options | General settings "Show song length and File Name"
+If you're using a laptop ( or would prefer the Standard black/white Windows colors) then choose the black/white display option ( Options | General Settings | Standard Colors )
+Uncheck the 'Show Tips at Startup' checkbox if you don't want to see this Tip of the Day dialog at startup any more!
+To print blank staff paper (w/ just clef/key sign) uncheck the 'include notes', 'chord symbols', and 'bar numbers' checkboxes, select 1 bar per line. The song section will be printed blank.
+If Playback is silent (no sound), then choose the menu item Options | Driver setting to select a driver. Run Windows Control Panel | Drivers to install new drivers to this list.
+The New Age Pianist can show musical notes on a staff. Press the notation button (note) near the top of the screen. The program displays the highlighted instrument in standard notation and tablature.
+As a song is playing, use the 1 to 9 number keys to quickly move to any location in the song.
+Use the square bracket keys "[" and "]" to speed up or slow down the song. Toggled back to regular tempo by hitting "F5".
+You may step through the song one chord at a time by pressing <CTRL> <RIGHT ARROW>. To advance one note at a time press <SHIFT><RIGHT ARROW>
+You may print out a list of all songs, or any list that you have selected as list of songs. To do this choose File | Copy list of songs to Clipboard, then paste into your word processor (eg. Windows Write), and Print .
+Use the right mouse button to place an asterisk beside a song name. This makes the song a "favorite". You can unmark it by clicking again.
+You can slow down the music by using the "[" key and speed it up with the "]" key.
+You can experiment all you like with the settings in the Notation window (and elsewhere). If you don't like the results, just erase the file "NEWAGE.INI". That will set all you options back to "factory presets".
+Use the "Enter" key or "Space Bar" to pause a song. Back up with the "minus" key.
+Click on the little "note" button to open the notation window.
+When you change the key of a song, the on-screen notation window changes too!
+To learn the songs, slow them down and practise them one hand at a time.
+To print out the piano music, choose a song, open the notation window, and press "PRINT".
+Open the notation window and press "OPTIONS".  The "Scroll Ahead" settings are really useful for sight reading. Make sure to check "Scroll Ahead Enabled" if you want to try them out.
+For the most readable notation, make sure "Auto Hand-Splitting" is enabled in the MIDI settings box.
+Some of the songs sound really nice on Rhodes Piano. Press the GM button to change instruments.
+Use the GM button to change instruments. Nylon Acoustic Guitar is a good setting for some songs.
+
+
+
+

@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<ModularSynthPreset version="1">
+  <modules>
+    <module logicalId="1" type="8bandshaper">
+      <params>
+        <MultiBandShaperParams>
+          <PARAM id="drive_1" value="100.0"/>
+          <PARAM id="drive_2" value="100.0"/>
+          <PARAM id="drive_3" value="1.0"/>
+          <PARAM id="drive_4" value="1.0"/>
+          <PARAM id="drive_5" value="1.0"/>
+          <PARAM id="drive_6" value="1.0"/>
+          <PARAM id="drive_7" value="11.55000019073486"/>
+          <PARAM id="drive_8" value="1.0"/>
+          <PARAM id="outputGain" value="-16.10000038146973"/>
+        </MultiBandShaperParams>
+      </params>
+    </module>
+    <module logicalId="2" type="TTS Performer">
+      <params>
+        <TTSPerformerParams>
+          <PARAM id="engine" value="1.0"/>
+          <PARAM id="gate" value="0.7999999523162842"/>
+          <PARAM id="pitch" value="0.0"/>
+          <PARAM id="rate" value="2.0"/>
+          <PARAM id="speed" value="1.0"/>
+          <PARAM id="trimEnd" value="1.0"/>
+          <PARAM id="trimStart" value="0.0"/>
+          <PARAM id="volume" value="0.7999999523162842"/>
+        </TTSPerformerParams>
+      </params>
+    </module>
+  </modules>
+  <connections>
+    <connection srcId="2" srcChan="0" dstId="1" dstChan="0"/>
+    <connection srcId="2" srcChan="0" dstId="1" dstChan="1"/>
+  </connections>
+  <NodeEditorUI>
+    <node id="1" x="-136.0" y="480.0"/>
+    <node id="2" x="-970.0" y="278.0"/>
+  </NodeEditorUI>
+</ModularSynthPreset>

@@ -1,0 +1,22 @@
+You have now installed The Program.
+This has copied the program files to the directory 
+that you've chosen.
+
+********************************************************
+To finish installation from DOS, you need to 
+1. copy the font 
+files PGMUSIC.TTF and PGTEXT.TTF to your Windows System
+directory eg.  c:\windows\system
+2. (If you're upgrading a previous version of the program
+and are using virus TSR scanning software (eg VSAFE.SYS from CPAV and DOS 6)
+then delete the c:\bb\smartchk.cps or c:\chklist.ms file. Otherwise
+you'll get a message about "file size has changed (due to the upgraded
+program being a different size than the old one)
+3.When you run Windows, you'll need to install the program into
+your program manager group by :
+     - choosing File\New\Program item
+     - typing the program name
+     - the program icon will then appear and you can
+       mouse click on it to start the program !
+********************************************************
+

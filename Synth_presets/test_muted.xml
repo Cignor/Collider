@@ -1,0 +1,96 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<ModularSynthPreset version="1">
+  <modules>
+    <module logicalId="1" type="Noise">
+      <params>
+        <NoiseParams>
+          <PARAM id="colour" value="1.0"/>
+          <PARAM id="level" value="0.5"/>
+        </NoiseParams>
+      </params>
+    </module>
+    <module logicalId="3" type="LFO">
+      <params>
+        <LFOParams>
+          <PARAM id="depth" value="0.6000000238418579"/>
+          <PARAM id="rate" value="0.1499999910593033"/>
+          <PARAM id="wave" value="0.0"/>
+          <PARAM id="bipolar"/>
+        </LFOParams>
+      </params>
+    </module>
+    <module logicalId="4" type="Noise">
+      <params>
+        <NoiseParams>
+          <PARAM id="colour" value="2.0"/>
+          <PARAM id="level" value="0.4000015258789062"/>
+        </NoiseParams>
+      </params>
+    </module>
+    <module logicalId="6" type="LFO">
+      <params>
+        <LFOParams>
+          <PARAM id="depth" value="1.0"/>
+          <PARAM id="rate" value="8.0"/>
+          <PARAM id="wave" value="1.0"/>
+          <PARAM id="bipolar"/>
+        </LFOParams>
+      </params>
+    </module>
+    <module logicalId="7" type="Random">
+      <params>
+        <RandomParams>
+          <PARAM id="mode" value="0.0"/>
+          <PARAM id="rate" value="10.0"/>
+          <PARAM id="slew" value="0.0"/>
+          <PARAM id="boolThreshold"/>
+          <PARAM id="cvMax"/>
+          <PARAM id="cvMin"/>
+          <PARAM id="max"/>
+          <PARAM id="min"/>
+          <PARAM id="normMax"/>
+          <PARAM id="normMin"/>
+        </RandomParams>
+      </params>
+    </module>
+    <module logicalId="8" type="Mixer">
+      <params>
+        <MixerParams>
+          <PARAM id="gainA" value="0.800000011920929"/>
+          <PARAM id="gainB" value="0.5"/>
+          <PARAM id="mix" value="0.5"/>
+          <PARAM id="outputGain" value="0.800000011920929"/>
+          <PARAM id="panA" value="0.0"/>
+          <PARAM id="panB" value="0.0"/>
+          <PARAM id="crossfade" value="-1.0"/>
+          <PARAM id="gain" value="-1.770000457763672"/>
+          <PARAM id="pan"/>
+        </MixerParams>
+      </params>
+    </module>
+    <module logicalId="16" type="VCA">
+      <params>
+        <VCAParams>
+          <PARAM id="gain" value="1.0"/>
+        </VCAParams>
+      </params>
+    </module>
+  </modules>
+  <connections>
+    <connection srcId="1" srcChan="0" dstId="8" dstChan="0"/>
+    <connection srcId="4" srcChan="0" dstId="8" dstChan="1"/>
+    <connection srcId="6" srcChan="0" dstId="7" dstChan="0"/>
+    <connection srcId="8" srcChan="0" dstId="output" dstChan="0"/>
+    <connection srcId="8" srcChan="1" dstId="output" dstChan="1"/>
+  </connections>
+  <NodeEditorUI>
+    <node id="1" x="-112.0" y="192.0"/>
+    <node id="3" x="-75.0" y="389.0"/>
+    <node id="4" x="-100.0" y="611.0"/>
+    <node id="6" x="-155.0" y="835.0"/>
+    <node id="7" x="175.0" y="852.0"/>
+    <node id="8" x="941.0" y="468.0"/>
+    <node id="16" x="458.0" y="609.0" muted="1"/>
+  </NodeEditorUI>
+</ModularSynthPreset>

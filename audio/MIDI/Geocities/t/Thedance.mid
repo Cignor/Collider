@@ -1,0 +1,321 @@
+<!--Created by GeoCities Home Page Generator-->
+<HTML>
+<HEAD>
+<TITLE>Lincoln's Log Cabin</TITLE>
+<meta name="keywords" content="Christian, Military, USMC, Marine Corps, Marine, Iwakuni Japan, MCAS, Marine Corps Air Station,  overseas, Lincoln Family, recruiting, Marine Recruiter, Hannibal, St. Louis, Missouri, Jacksonville, North Carolina">
+<meta name="description" content="A Christian and Military Family living in Iwakuni, Japan.">
+</HEAD>
+
+<BODY BACKGROUND="floralbg.jpg" TEXT="brown" LINK="#ff0000" VLINK="#0000ff">
+
+<table width="100%">
+<tr>
+<td valign=top>
+
+<!- Border Content ->
+<img src="clear.gif" width="140" height="1">
+<!- End Border Content ->
+
+</td><td valign=top>
+
+
+
+<bgsound="Thedance.mid"><embed src="Thedance.mid" autostart=true controls width=51 height=15 controls=smallconsole loop=true></embed>
+<br><b>The Dance<b>
+<h6>Stuck in frames ~ <a href="http://www.geocities.com/Heartland/Village/8105/index.html">Break free</a>.</h6>
+
+<p>
+<h2>major re-construction going on - please be patient</h2>
+<p>
+
+
+<center><b>
+This page was <img src="cntryupdatedsign.gif" alt="updated">on 16 September 2002!
+</b></center>
+<P>
+<center><img src="floralwelcome.gif" alt="Welcome Friends">
+<br><h1>Lincoln's Log Cabin</h1></center>
+<center><img src="blesshome.gif" alt="God Bless our home!"> <img src="logcabin.gif" alt="Lincoln's Log Cabin"> <img src="blesshome.gif" alt="God Bless our home!"></center>
+<p>
+<h3><i><center>"...choose for yourselves this day whom you will serve, ... But as for me and my household, we will serve the LORD."</i>  Joshua 24:15</center></h3>
+<p>
+<center><img src="floralbar.gif" alt-"bar"></center>
+<p>
+
+<img src="homemil.gif" ALT="Home is where the Marine Corps sends you!" align=left>
+<h4>
+Welcome to our homepage.  We are constantly adding too and reconstructing our pages, so check back often.  We want to improve ourselves and our homepage.  Our goal is to have fun and bring you a little joy and maybe even some information too.  
+<P>
+We are a military family who is ~ back again ~ in Jacksonville, NC.  After doing a tour at MCAS Iwakuni, Japan, and a couple of years on recruiting duty in Hannibal Missouri, it is wonderful to be back.  But as with every move we miss our many friends we have in Japan and in Hannibal.  We have lived in North Carolina and Japan for most of our 18 year career.  
+</h4>
+<p>
+<center><img src="floralbar.gif" alt="bar"></center>
+<p>
+
+<center>
+<SCRIPT language="JavaScript"
+src="http://www.geocities.com/addon/gadget-lv2-100-100/"></SCRIPT><NOSCRIPT><TABLE
+BORDER=0 CELLSPACING=0 CELLPADDING=0><TR><TD><A
+HREF="http://www.geocities.com/addon/gadget-lv2-100-210/"
+TARGET="_top"><IMG
+SRC="http://www.geocities.com/addon/gadget-lv2-100-220/" ISMAP
+BORDER=0></A></TD></TR><TR><TD><A
+HREF="http://www.geocities.com/addon/gadget-lv2-100-310/"
+TARGET="_top"><IMG
+SRC="http://www.geocities.com/addon/gadget-lv2-100-320/" ISMAP
+BORDER=0></A></TD></TR></TABLE></NOSCRIPT>
+<br><b>
+This is just for fun!  How do you and your better half match up?
+</b></center>
+
+
+<p>
+<center><img src="floralbar.gif" alt="bar"></center>
+<p>
+
+
+<center><img src="crossbridge.gif" alt="Allow Christ to be YOUR bridge"></center>
+
+
+<p>
+<center><img src="floralbar.gif" alt="bar"></center>
+<p>
+<center><a href="http://www.gentle.org/"><img src="joinhands.jpg" border=0 alt="Join hands with other Christians across the web."></a></center>
+<p>
+<center><img src="floralbar.gif" alt-"bar"></center>
+<p>
+<center>
+Visit our church homes.
+
+<br>
+<a href="http://www.urban.ne.jp/home/zabbott/index.html">Faith Baptist Church ~ Iwakuni, Japan</a>
+<br>
+<a href="http://homepage.dstream.net/immanuel/">Immanuel Baptist Church ~ Hannibal, Missouri</a>
+<br>
+<a href="http://www.bluecreekbaptist.com">Blue Creek Baptist Church ~ Jacksonville, North Carolina</a>
+</center>
+
+<p>
+<center><img src="floralbar.gif" alt="bar"></center>
+<p>
+
+<center>
+<!--- Begin GodSpeaks Graphic Server Code.  
+Need Netscape 3.X and up or IE 4.X and up to view. ---> 
+<center>
+  <!-- this portion for IE browsers-->
+  <iframe src="http://www.godspeaks.net/cycleGodBanners3.htm"
+        scrolling="No"
+        align="MIDDLE"
+        width="468"
+        height="60"
+        marginwidth="0"
+        marginheight="0"
+        frameborder="No"
+        hspace="0"
+        vspace="0"> 
+<!-- this portion for Netscape browsers-->
+<script language="JavaScript">
+
+<!--hide 
+//last updated Wed. March 17, 1999 11:48:30 AM
+
+var NumOfItems = 18;
+var ticks = 15000;
+var startday = new Date();
+var clockStart = startday.getTime();
+
+function RandomHREFandIMG()
+{
+ RandomNumber = parseInt(Math.random()*(NumOfItems)+1);
+if (document.images)
+ {
+ document.HisBanner.src = 
+ "http://www.godspeaks.net/banners/Godspeaks" + 
+ RandomNumber + ".gif";
+ for (var i = 0; i < document.links.length; i++)
+        {
+   if ((document.links[i].host == 
+   'www.godspeaks.net') || 
+   (document.links[i].host == 
+   'www.godspeaks.net:80'))
+    {   document.links[i].href = 
+    "http://www.godspeaks.net/scripture" + 
+    RandomNumber +".htm";   }
+        }
+ }
+}
+
+function getSeconds() 
+{ 
+ var HisTime = new Date(); 
+ var HisSeconds = 
+ parseInt((HisTime.getTime()-startday.getTime()+1)/1000); 
+ RandomHREFandIMG();
+ this.setTimeout('getSeconds()',ticks); 
+}
+
+//-->
+
+</script>
+<a href="http://www.godspeaks.net/scripture18.htm" 
+target="_blank">
+<img src="http://www.godspeaks.net/banners/GodSpeaks18.gif" 
+border=0 width=468 height=60 name="HisBanner"></a>
+<script language="JavaScript">
+
+this.setTimeout('getSeconds()',ticks)
+
+</script>
+<!-- end Netscape browser code-->
+  </iframe> 
+<!-- IFRAME ends IE code -->
+</center>
+<!--- End GodSpeaks Graphic Server Code. 
+PLEASE DON'T MODIFY ABOVE CODE! :) --->
+</center>
+
+<p>
+<center><img src="floralbar.gif" alt="bar"></center>
+<p>
+
+<h3>INDEX of PAGES </h3><h5>This index is on every page</h5>
+<p>
+<center>
+<table border="5" cellpadding="0" cellspacing="0"><tr><td>
+<table border="4" cellpadding="0" cellspacing="0"><tr><td>
+<table border="3" cellpadding="0" cellspacing="0"><tr><td>
+
+
+
+<tr>
+
+<td><b><i>Visit Bobby</b></i><br><a href="bobby.html">click here</a></td>
+
+<td><b><i>See Sheila</b></i><br><a href="sheila.html">click here</a></td>
+
+<td><b><i>LaNae's Room</b></i><br><a href="lanae.html">click here</a></td>
+
+<td><b><i>Laci's Letters</b></i><br><a href="laci.html">click here</a></td>
+
+</tr>
+<tr>
+
+<td><b><i>Military Life</b></i><br><a href="militarypage.html">click here</a></td>
+
+<td><b><i>Meet our Best Friend</b></i><br><a href="romansroad.html">click here</a></td>
+
+<td><b><i>Military Wife</b></i><br><a href="milwife.html">click here</a></td>
+
+<td><b><i>Directory of Stories</b></i><br><a href="directory.html">click here</a></td>
+</tr>
+<tr>
+
+<td><b><i>In Honor of Vietnam Veterans</b></i><br><a href="remember.html">click here</a></td>
+
+<td><b><i>Coming Soon</b></i><br> </td>
+
+<td><b><i>Favorite Site Links</b></i><br><a href="links.html">click here</a></td>
+
+<td><b><i>Web Rings</b></i><br><a href="webrings.html">click here</a></td>
+
+</tr>
+<tr>
+
+<td><b><i>Banner Exchange</b></i><br> <a href="bannerexchange.html">click here</a></td>
+
+<td><b><i>Help Wanted!<br>
+<a href="help.html"></b></i>click here</td></a>
+
+<td><b><i>Photo Album</b></i><br><a href="photo.html">click here</a></td>
+
+<td><b><i>Our Awards</b></i><br><a href="awards.html">click here</a></td>
+
+</tr>
+<tr>
+
+<td><b><i>Christmas Pages</b></i><br><a href="cmaspage1.html">click here</a></td>
+
+<td><b><i>Meet our Adopted<br>POW/MIA Marine</b></i><br><a href="powmia.html">click here</a></td>
+
+<td><b><i>Play a<br>Card Game</b></i><br><a href="trick1.html">click here</a></td></b>
+
+<td><b><i>Apply for<br>our Award</b></i><br><a href="apply4award.html">click here</a></td></b>
+
+</tr>
+
+
+
+
+<tr><td></table>
+<tr><td></table>
+<tr><td></table>
+</center>
+
+<p>
+<center><img src="floralbar.gif" alt="bar"></center>
+<p>
+
+
+<h4>
+<center>
+Now that you have gotten to know us, please allow us the privilege of getting to know you.
+<br>
+Email us and don't forget to sign our guest book.<br>
+Have a blessed day!!!
+<p>
+
+<a href="/cgi-bin/geoplus_apps/ans_entry"><img src="floralsign.gif" border=0 alt="Sign"></a> <img src="floralguestbk.gif" alt="Guestbook"> <a href="geobook.html"><img src="floralview.gif" border=0 alt="View"></a>
+<p>
+<a href=mailto:usmcbjwife@yahoo.com><img src="floralemail.gif" border=0 alt="Email Me"></a>
+
+</center>
+</h4>
+<p>
+<h5>
+<center>
+Thank You for visiting our Log Cabin.<br>
+You are guest <IMG SRC=http://visit.geocities.com/counter.gif ALT="Counter"> since September 1998!</center>
+</h5>
+
+<p>
+<center><img src="floralbar.gif" alt="bar"></center>
+<p>
+
+<p>
+
+<applet code="NCMECbanner.class" codebase="http://www.missingkids.com/java/"
+align="baseline" hspace="8" width="342" height="128">
+</applet>
+<p><br>
+
+<a href="http://avoncrusade.com/index.html"><img src="ribbon.gif" height=72 width=72 border=0 ALT="Join the Crusade"></a><p>
+
+
+<p>
+<center><img src="floralbar.gif" alt="bar"></center>
+<p>
+
+<center><b>I found these great Graphics at:
+<br>
+<a href="http://www.geocities.com/~mariasplace"><img src="floralgraphiclogo.gif" border="0" alt="Maria's graphic logo"></a>
+<p>
+<center><img src="floralbar.gif" alt="bar"></center>
+<p>
+<h5>I do not necessarily agree with the banners below!</h5><br>
+<BR>
+<center><br>
+<!-- BEGIN LINKEXCHANGE CODE --> 
+<center><iframe src="http://leader.linkexchange.com/1/X797812/showiframe?" width=468 height=60 marginwidth=0 marginheight=0 hspace=0 vspace=0 frameborder=0 scrolling=no>
+<a href="http://leader.linkexchange.com/1/X797812/clickle" target="_top"><img width=468 height=60 border=0 ismap alt="" src="http://leader.linkexchange.com/1/X797812/showle?"></a></iframe><br><a href="http://leader.linkexchange.com/1/X797812/clicklogo" target="_top"><img src="http://leader.linkexchange.com/1/X797812/showlogo?" width=468 height=16 border=0 ismap alt=""></a><br></center>
+<!-- END LINKEXCHANGE CODE -->
+<br>
+<p>
+<CENTER><B>
+This page hosted by<br><A HREF="/"><img src="floralgeo.gif" border=0 alt="geocities"></A>
+</td></tr>
+</table>
+</BODY>
+</HTML>
+<!-- text below generated by server. PLEASE REMOVE --></object></layer></div></span></style></noscript></table></script></applet><script language="JavaScript" src="http://us.i1.yimg.com/us.yimg.com/i/mc/mc.js"></script><script language="JavaScript" src="http://us.js2.yimg.com/us.js.yimg.com/lib/smb/js/hosting/cp/js_source/geov2_001.js"></script><script language="javascript">geovisit();</script><noscript><img src="http://visit.geocities.yahoo.com/visit.gif?us1256319458" alt="setstats" border="0" width="1" height="1"></noscript>
+<IMG SRC="http://geo.yahoo.com/serv?s=76001068&t=1256319458&f=us-w6" ALT=1 WIDTH=1 HEIGHT=1>
