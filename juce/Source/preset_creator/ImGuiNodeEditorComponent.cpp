@@ -1,7 +1,9 @@
-#include "ImGuiNodeEditorComponent.h"
+﻿#include "ImGuiNodeEditorComponent.h"
+#include "PinDatabase.h"
 
 #include <imgui.h>
 #include <imnodes.h>
+#include <juce_audio_utils/juce_audio_utils.h>
 #include <unordered_map>
 #include <unordered_set>
 #include <cstdint>
@@ -32,6 +34,9 @@
 #include "../audio/modules/LimiterModuleProcessor.h"
 #include "../audio/modules/GateModuleProcessor.h"
 #include "../audio/modules/DriveModuleProcessor.h"
+#include "../audio/modules/VstHostModuleProcessor.h"
+#include "PresetCreatorApplication.h"
+#include <juce_audio_processors/juce_audio_processors.h>
 #include <imgui_impl_juce/imgui_impl_juce.h>
 #include <backends/imgui_impl_opengl2.h>
 #include <juce_opengl/juce_opengl.h>
@@ -39,68 +44,6 @@
 #define NODE_DEBUG 1
 
 // --- Module Descriptions for Tooltips ---
-static const std::map<juce::String, const char*> moduleDescriptions = {
-    // Sources
-    {"audio input", "Brings hardware audio into the patch."},
-    {"VCO", "A standard Voltage-Controlled Oscillator."},
-    {"polyvco", "A multi-voice oscillator bank for polyphony."},
-    {"Noise", "Generates white, pink, or brown noise."},
-    {"Sequencer", "A classic 16-step CV and Gate sequencer."},
-    {"multi sequencer", "Advanced sequencer with parallel per-step outputs."},
-    {"midi player", "Plays MIDI files and outputs CV/Gate for each track."},
-    {"Value", "Outputs a constant, adjustable numerical value."},
-    {"sample loader", "Loads and plays audio samples with pitch/time control."},
-    {"best practice", "A template and example node demonstrating best practices."},
-    // TTS Family
-    {"TTS Performer", "Advanced Text-to-Speech engine with word-level sequencing."},
-    {"Vocal Tract Filter", "A formant filter that simulates human vowel sounds."},
-    // Effects
-    {"VCF", "A Voltage-Controlled Filter (LP, HP, BP)."},
-    {"Delay", "A stereo delay effect with modulation."},
-    {"Reverb", "A stereo reverb effect."},
-    {"chorus", "A stereo chorus effect."},
-    {"phaser", "A stereo phaser effect."},
-    {"compressor", "Reduces the dynamic range of a signal."},
-    {"limiter", "Prevents a signal from exceeding a set level."},
-    {"gate", "A stereo noise gate to silence signals below a threshold."},
-    {"drive", "A waveshaping distortion effect."},
-    {"graphic eq", "An 8-band graphic equalizer."},
-    {"Frequency Graph", "A high-resolution, real-time spectrum analyzer."},
-    {"Waveshaper", "A distortion effect with multiple shaping algorithms."},
-    {"8bandshaper", "A multi-band waveshaper for frequency-specific distortion."},
-    {"Granulator", "A granular synthesizer/effect that plays small grains of a sample."},
-    {"harmonic shaper", "Shapes the harmonic content of a signal."},
-    {"timepitch", "Real-time pitch and time manipulation using RubberBand."},
-    {"De-Crackle", "A utility to reduce clicks from discontinuous signals."},
-    {"recorder", "Records incoming audio to a WAV, AIFF, or FLAC file."},
-    // Modulators
-    {"LFO", "A Low-Frequency Oscillator for modulation."},
-    {"ADSR", "An Attack-Decay-Sustain-Release envelope generator."},
-    {"Random", "A random value generator with internal sample & hold."},
-    {"S&H", "A classic Sample and Hold module."},
-    {"Function Generator", "A complex, drawable envelope/LFO generator."},
-    {"shaping oscillator", "An oscillator with a built-in waveshaper."},
-    // Utilities & Logic
-    {"VCA", "A Voltage-Controlled Amplifier to control signal level."},
-    {"Mixer", "A stereo audio mixer with crossfading and panning."},
-    {"cv mixer", "A mixer specifically for control voltage signals."},
-    {"trackmixer", "A multi-channel mixer for polyphonic sources."},
-    {"Attenuverter", "Attenuates (reduces) and/or inverts signals."},
-    {"Lag Processor", "Smooths out abrupt changes in a signal (slew limiter)."},
-    {"Math", "Performs mathematical operations on signals."},
-    {"MapRange", "Remaps a signal from one numerical range to another."},
-    {"Quantizer", "Snaps a continuous signal to a musical scale."},
-    {"Rate", "Converts a control signal into a normalized rate value."},
-    {"Comparator", "Outputs a high signal if an input is above a threshold."},
-    {"Logic", "Performs boolean logic (AND, OR, XOR, NOT) on gate signals."},
-    {"ClockDivider", "Divides and multiplies clock signals."},
-    {"SequentialSwitch", "A signal router with multiple thresholds."},
-    // Analysis
-    {"Scope", "Visualizes an audio or CV signal."},
-    {"debug", "A tool for logging signal value changes."},
-    {"input debug", "A passthrough version of the Debug node for inspecting signals on a cable."}
-};
-
 static const char* toString(PinDataType t)
 {
     switch (t)
@@ -187,723 +130,18 @@ void configureMapRangeFor(PinDataType srcType, PinDataType dstType, MapRangeModu
     }
 }
 
-// ADD ALL OF THIS CODE:
-
-// --- Structs to define a module's connection points ---
-// (Structs are now defined in the header file)
 
 
-// --- A map to hold the pin info for every module type ---
-std::map<juce::String, ModulePinInfo> modulePinDatabase;
-
-// --- A function to populate the database ---
-void populatePinDatabase()
-{
-    if (!modulePinDatabase.empty()) return; // Only run once
-
-    // --- Sources ---
-    modulePinDatabase["audio input"] = ModulePinInfo(
-        {},
-        { AudioPin("Out 1", 0, PinDataType::Audio), AudioPin("Out 2", 1, PinDataType::Audio),
-          AudioPin("Gate", 16, PinDataType::Gate), AudioPin("Trigger", 17, PinDataType::Gate), AudioPin("EOP", 18, PinDataType::Gate) },
-        {}
-    );
-    modulePinDatabase["vco"] = ModulePinInfo(
-        { AudioPin("Frequency", 0, PinDataType::CV), AudioPin("Waveform", 1, PinDataType::CV), AudioPin("Gate", 2, PinDataType::Gate) },
-        { AudioPin("Out", 0, PinDataType::Audio) },
-        {}
-    );
-    modulePinDatabase["noise"] = ModulePinInfo(
-        { AudioPin("Level Mod", 0, PinDataType::CV), AudioPin("Colour Mod", 1, PinDataType::CV) },
-        { AudioPin("Out L", 0, PinDataType::Audio), AudioPin("Out R", 1, PinDataType::Audio) }, // Stereo output to match actual implementation
-        {}
-    );
-    modulePinDatabase["value"] = ModulePinInfo(
-        {},
-        { AudioPin("Raw", 0, PinDataType::Raw), AudioPin("Normalized", 1, PinDataType::CV), AudioPin("Inverted", 2, PinDataType::Raw),
-          AudioPin("Integer", 3, PinDataType::Raw), AudioPin("CV Out", 4, PinDataType::CV) },
-        {}
-    );
-    modulePinDatabase["sample loader"] = ModulePinInfo(
-        { AudioPin("Pitch Mod", 0, PinDataType::CV), AudioPin("Speed Mod", 1, PinDataType::CV), AudioPin("Gate Mod", 2, PinDataType::CV),
-          AudioPin("Trigger Mod", 3, PinDataType::Gate), AudioPin("Range Start Mod", 4, PinDataType::CV), AudioPin("Range End Mod", 5, PinDataType::CV),
-          AudioPin("Randomize Trig", 6, PinDataType::Gate) },
-        { AudioPin("Audio Output", 0, PinDataType::Audio) },
-        {}
-    );
-
-    // --- Effects ---
-    modulePinDatabase["vcf"] = ModulePinInfo(
-        { AudioPin("In L", 0, PinDataType::Audio), AudioPin("In R", 1, PinDataType::Audio), AudioPin("Cutoff Mod", 2, PinDataType::CV),
-          AudioPin("Resonance Mod", 3, PinDataType::CV), AudioPin("Type Mod", 4, PinDataType::CV) },
-        { AudioPin("Out L", 0, PinDataType::Audio), AudioPin("Out R", 1, PinDataType::Audio) },
-        {}
-    );
-    modulePinDatabase["delay"] = ModulePinInfo(
-        { AudioPin("In L", 0, PinDataType::Audio), AudioPin("In R", 1, PinDataType::Audio), AudioPin("Time Mod", 2, PinDataType::CV),
-          AudioPin("Feedback Mod", 3, PinDataType::CV), AudioPin("Mix Mod", 4, PinDataType::CV) },
-        { AudioPin("Out L", 0, PinDataType::Audio), AudioPin("Out R", 1, PinDataType::Audio) },
-        {}
-    );
-    modulePinDatabase["reverb"] = ModulePinInfo(
-        { AudioPin("In L", 0, PinDataType::Audio), AudioPin("In R", 1, PinDataType::Audio), AudioPin("Size Mod", 2, PinDataType::CV),
-          AudioPin("Damp Mod", 3, PinDataType::CV), AudioPin("Mix Mod", 4, PinDataType::CV) },
-        { AudioPin("Out L", 0, PinDataType::Audio), AudioPin("Out R", 1, PinDataType::Audio) },
-        {}
-    );
-    modulePinDatabase["compressor"] = ModulePinInfo(
-        { AudioPin("In L", 0, PinDataType::Audio), AudioPin("In R", 1, PinDataType::Audio), AudioPin("Thresh Mod", 2, PinDataType::CV),
-          AudioPin("Ratio Mod", 3, PinDataType::CV), AudioPin("Attack Mod", 4, PinDataType::CV), AudioPin("Release Mod", 5, PinDataType::CV),
-          AudioPin("Makeup Mod", 6, PinDataType::CV) },
-        { AudioPin("Out L", 0, PinDataType::Audio), AudioPin("Out R", 1, PinDataType::Audio) },
-        {}
-    );
-
-    // --- Modulators ---
-    modulePinDatabase["lfo"] = ModulePinInfo(
-        { AudioPin("Rate Mod", 0, PinDataType::CV), AudioPin("Depth Mod", 1, PinDataType::CV), AudioPin("Wave Mod", 2, PinDataType::CV) },
-        { AudioPin("Out", 0, PinDataType::CV) },
-        {}
-    );
-    modulePinDatabase["adsr"] = ModulePinInfo(
-        { AudioPin("Gate In", 0, PinDataType::Gate), AudioPin("Trigger In", 1, PinDataType::Gate), AudioPin("Attack Mod", 2, PinDataType::CV),
-          AudioPin("Decay Mod", 3, PinDataType::CV), AudioPin("Sustain Mod", 4, PinDataType::CV), AudioPin("Release Mod", 5, PinDataType::CV) },
-        { AudioPin("Env Out", 0, PinDataType::CV), AudioPin("Inv Out", 1, PinDataType::CV), AudioPin("EOR Gate", 2, PinDataType::Gate),
-          AudioPin("EOC Gate", 3, PinDataType::Gate) },
-        {}
-    );
-    modulePinDatabase["random"] = ModulePinInfo(
-        { AudioPin("Trigger In", 0, PinDataType::Gate), AudioPin("Rate Mod", 1, PinDataType::CV), AudioPin("Slew Mod", 2, PinDataType::CV) },
-        { AudioPin("Norm Out", 0, PinDataType::CV), AudioPin("Raw Out", 1, PinDataType::Raw), AudioPin("CV Out", 2, PinDataType::CV),
-          AudioPin("Bool Out", 3, PinDataType::Gate), AudioPin("Trig Out", 4, PinDataType::Gate) },
-        {}
-    );
-
-    // --- Utilities ---
-    modulePinDatabase["vca"] = ModulePinInfo(
-        { AudioPin("In L", 0, PinDataType::Audio), AudioPin("In R", 1, PinDataType::Audio), AudioPin("Gain Mod", 2, PinDataType::CV) },
-        { AudioPin("Out L", 0, PinDataType::Audio), AudioPin("Out R", 1, PinDataType::Audio) },
-        {}
-    );
-    modulePinDatabase["mixer"] = ModulePinInfo(
-        { AudioPin("In A L", 0, PinDataType::Audio), AudioPin("In A R", 1, PinDataType::Audio), AudioPin("In B L", 2, PinDataType::Audio),
-          AudioPin("In B R", 3, PinDataType::Audio), AudioPin("Gain Mod", 4, PinDataType::CV), AudioPin("Pan Mod", 5, PinDataType::CV),
-          AudioPin("X-Fade Mod", 6, PinDataType::CV) },
-        { AudioPin("Out L", 0, PinDataType::Audio), AudioPin("Out R", 1, PinDataType::Audio) },
-        {}
-    );
-    modulePinDatabase["scope"] = ModulePinInfo(
-        { AudioPin("In", 0, PinDataType::Audio) },
-        { AudioPin("Out", 0, PinDataType::Audio) },
-        {}
-    );
-    modulePinDatabase["graphic eq"] = ModulePinInfo(
-        { AudioPin("In L", 0, PinDataType::Audio), AudioPin("In R", 1, PinDataType::Audio),
-          AudioPin("Band 1 Mod", 2, PinDataType::CV), AudioPin("Band 2 Mod", 3, PinDataType::CV),
-          AudioPin("Band 3 Mod", 4, PinDataType::CV), AudioPin("Band 4 Mod", 5, PinDataType::CV),
-          AudioPin("Band 5 Mod", 6, PinDataType::CV), AudioPin("Band 6 Mod", 7, PinDataType::CV),
-          AudioPin("Band 7 Mod", 8, PinDataType::CV), AudioPin("Band 8 Mod", 9, PinDataType::CV) },
-        { AudioPin("Out L", 0, PinDataType::Audio), AudioPin("Out R", 1, PinDataType::Audio) },
-        {}
-    );
-    modulePinDatabase["frequency graph"] = ModulePinInfo(
-        { AudioPin("In", 0, PinDataType::Audio) }, // Mono Audio Input
-        { // Outputs: Stereo audio pass-through + 8 Gate/Trigger outputs
-            AudioPin("Out L", 0, PinDataType::Audio),
-            AudioPin("Out R", 1, PinDataType::Audio),
-            AudioPin("Sub Gate", 2, PinDataType::Gate),
-            AudioPin("Sub Trig", 3, PinDataType::Gate),
-            AudioPin("Bass Gate", 4, PinDataType::Gate),
-            AudioPin("Bass Trig", 5, PinDataType::Gate),
-            AudioPin("Mid Gate", 6, PinDataType::Gate),
-            AudioPin("Mid Trig", 7, PinDataType::Gate),
-            AudioPin("High Gate", 8, PinDataType::Gate),
-            AudioPin("High Trig", 9, PinDataType::Gate)
-        },
-        {} // No modulation inputs
-    );
-    modulePinDatabase["chorus"] = ModulePinInfo(
-        { AudioPin("In L", 0, PinDataType::Audio), AudioPin("In R", 1, PinDataType::Audio),
-          AudioPin("Rate Mod", 2, PinDataType::CV), AudioPin("Depth Mod", 3, PinDataType::CV),
-          AudioPin("Mix Mod", 4, PinDataType::CV) },
-        { AudioPin("Out L", 0, PinDataType::Audio), AudioPin("Out R", 1, PinDataType::Audio) },
-        {}
-    );
-    modulePinDatabase["phaser"] = ModulePinInfo(
-        { AudioPin("In L", 0, PinDataType::Audio), AudioPin("In R", 1, PinDataType::Audio),
-          AudioPin("Rate Mod", 2, PinDataType::CV), AudioPin("Depth Mod", 3, PinDataType::CV),
-          AudioPin("Centre Mod", 4, PinDataType::CV), AudioPin("Feedback Mod", 5, PinDataType::CV),
-          AudioPin("Mix Mod", 6, PinDataType::CV) },
-        { AudioPin("Out L", 0, PinDataType::Audio), AudioPin("Out R", 1, PinDataType::Audio) },
-        {}
-    );
-    modulePinDatabase["compressor"] = ModulePinInfo(
-        { AudioPin("In L", 0, PinDataType::Audio), AudioPin("In R", 1, PinDataType::Audio),
-          AudioPin("Thresh Mod", 2, PinDataType::CV), AudioPin("Ratio Mod", 3, PinDataType::CV),
-          AudioPin("Attack Mod", 4, PinDataType::CV), AudioPin("Release Mod", 5, PinDataType::CV),
-          AudioPin("Makeup Mod", 6, PinDataType::CV) },
-        { AudioPin("Out L", 0, PinDataType::Audio), AudioPin("Out R", 1, PinDataType::Audio) },
-        {}
-    );
-    modulePinDatabase["Recorder"] = ModulePinInfo(
-        { AudioPin("In L", 0, PinDataType::Audio), AudioPin("In R", 1, PinDataType::Audio) },
-        {}, // No outputs
-        {}
-    );
-    modulePinDatabase["limiter"] = ModulePinInfo(
-        { AudioPin("In L", 0, PinDataType::Audio), AudioPin("In R", 1, PinDataType::Audio),
-          AudioPin("Thresh Mod", 2, PinDataType::CV), AudioPin("Release Mod", 3, PinDataType::CV) },
-        { AudioPin("Out L", 0, PinDataType::Audio), AudioPin("Out R", 1, PinDataType::Audio) },
-        {}
-    );
-    modulePinDatabase["gate"] = ModulePinInfo(
-        { AudioPin("In L", 0, PinDataType::Audio), AudioPin("In R", 1, PinDataType::Audio) },
-        { AudioPin("Out L", 0, PinDataType::Audio), AudioPin("Out R", 1, PinDataType::Audio) },
-        {}
-    );
-    modulePinDatabase["drive"] = ModulePinInfo(
-        { AudioPin("In L", 0, PinDataType::Audio), AudioPin("In R", 1, PinDataType::Audio) },
-        { AudioPin("Out L", 0, PinDataType::Audio), AudioPin("Out R", 1, PinDataType::Audio) },
-        {}
-    );
-    modulePinDatabase["time/pitch"] = ModulePinInfo(
-        { AudioPin("In L", 0, PinDataType::Audio), AudioPin("In R", 1, PinDataType::Audio), AudioPin("Speed Mod", 2, PinDataType::CV), AudioPin("Pitch Mod", 3, PinDataType::CV) },
-        { AudioPin("Out L", 0, PinDataType::Audio), AudioPin("Out R", 1, PinDataType::Audio) },
-        {}
-    );
-    modulePinDatabase["waveshaper"] = ModulePinInfo(
-        { AudioPin("In L", 0, PinDataType::Audio), AudioPin("In R", 1, PinDataType::Audio), AudioPin("Drive Mod", 2, PinDataType::CV), AudioPin("Type Mod", 3, PinDataType::CV) },
-        { AudioPin("Out L", 0, PinDataType::Audio), AudioPin("Out R", 1, PinDataType::Audio) },
-        {}
-    );
-    modulePinDatabase["8bandshaper"] = ModulePinInfo(
-        {
-            AudioPin("In L", 0, PinDataType::Audio),
-            AudioPin("In R", 1, PinDataType::Audio),
-            AudioPin("Drive 1 Mod", 2, PinDataType::CV),
-            AudioPin("Drive 2 Mod", 3, PinDataType::CV),
-            AudioPin("Drive 3 Mod", 4, PinDataType::CV),
-            AudioPin("Drive 4 Mod", 5, PinDataType::CV),
-            AudioPin("Drive 5 Mod", 6, PinDataType::CV),
-            AudioPin("Drive 6 Mod", 7, PinDataType::CV),
-            AudioPin("Drive 7 Mod", 8, PinDataType::CV),
-            AudioPin("Drive 8 Mod", 9, PinDataType::CV),
-            AudioPin("Gain Mod", 10, PinDataType::CV)
-        },
-        { AudioPin("Out L", 0, PinDataType::Audio), AudioPin("Out R", 1, PinDataType::Audio) },
-        {}
-    );
-    modulePinDatabase["granulator"] = ModulePinInfo(
-        {
-            AudioPin("In L", 0, PinDataType::Audio),
-            AudioPin("In R", 1, PinDataType::Audio),
-            AudioPin("Trigger In", 2, PinDataType::Gate),
-            AudioPin("Density Mod", 3, PinDataType::CV),
-            AudioPin("Size Mod", 4, PinDataType::CV),
-            AudioPin("Position Mod", 5, PinDataType::CV),
-            AudioPin("Pitch Mod", 6, PinDataType::CV),
-            AudioPin("Gate Mod", 7, PinDataType::CV)
-        },
-        { AudioPin("Out L", 0, PinDataType::Audio), AudioPin("Out R", 1, PinDataType::Audio) },
-        {}
-    );
-    modulePinDatabase["granulator"] = modulePinDatabase["Granulator"];
-    modulePinDatabase["mixer"] = ModulePinInfo(
-        { AudioPin("In A L", 0, PinDataType::Audio), AudioPin("In A R", 1, PinDataType::Audio), AudioPin("In B L", 2, PinDataType::Audio), AudioPin("In B R", 3, PinDataType::Audio), AudioPin("Gain Mod", 4, PinDataType::CV), AudioPin("Pan Mod", 5, PinDataType::CV), AudioPin("X-Fade Mod", 6, PinDataType::CV) },
-        { AudioPin("Out L", 0, PinDataType::Audio), AudioPin("Out R", 1, PinDataType::Audio) },
-        {}
-    );
-    modulePinDatabase["sequencer"] = ModulePinInfo(
-        { AudioPin("Mod In L", 0, PinDataType::Audio), AudioPin("Mod In R", 1, PinDataType::Audio), AudioPin("Rate Mod", 2, PinDataType::CV), AudioPin("Gate Mod", 3, PinDataType::CV), AudioPin("Steps Mod", 4, PinDataType::CV), AudioPin("Steps Max", 5, PinDataType::CV),
-          // Per-step value mods absolute 6..21 (Step1..Step16)
-          AudioPin("Step 1 Mod", 6, PinDataType::CV), AudioPin("Step 2 Mod", 7, PinDataType::CV), AudioPin("Step 3 Mod", 8, PinDataType::CV), AudioPin("Step 4 Mod", 9, PinDataType::CV),
-          AudioPin("Step 5 Mod", 10, PinDataType::CV), AudioPin("Step 6 Mod", 11, PinDataType::CV), AudioPin("Step 7 Mod", 12, PinDataType::CV), AudioPin("Step 8 Mod", 13, PinDataType::CV),
-          AudioPin("Step 9 Mod", 14, PinDataType::CV), AudioPin("Step 10 Mod", 15, PinDataType::CV), AudioPin("Step 11 Mod", 16, PinDataType::CV), AudioPin("Step 12 Mod", 17, PinDataType::CV),
-          AudioPin("Step 13 Mod", 18, PinDataType::CV), AudioPin("Step 14 Mod", 19, PinDataType::CV), AudioPin("Step 15 Mod", 20, PinDataType::CV), AudioPin("Step 16 Mod", 21, PinDataType::CV),
-          // Per-step trig mods absolute 22..37 (Step1..Step16) — these are Gates
-          AudioPin("Step 1 Trig Mod", 22, PinDataType::Gate), AudioPin("Step 2 Trig Mod", 23, PinDataType::Gate), AudioPin("Step 3 Trig Mod", 24, PinDataType::Gate), AudioPin("Step 4 Trig Mod", 25, PinDataType::Gate),
-          AudioPin("Step 5 Trig Mod", 26, PinDataType::Gate), AudioPin("Step 6 Trig Mod", 27, PinDataType::Gate), AudioPin("Step 7 Trig Mod", 28, PinDataType::Gate), AudioPin("Step 8 Trig Mod", 29, PinDataType::Gate),
-          AudioPin("Step 9 Trig Mod", 30, PinDataType::Gate), AudioPin("Step 10 Trig Mod", 31, PinDataType::Gate), AudioPin("Step 11 Trig Mod", 32, PinDataType::Gate), AudioPin("Step 12 Trig Mod", 33, PinDataType::Gate),
-          AudioPin("Step 13 Trig Mod", 34, PinDataType::Gate), AudioPin("Step 14 Trig Mod", 35, PinDataType::Gate), AudioPin("Step 15 Trig Mod", 36, PinDataType::Gate), AudioPin("Step 16 Trig Mod", 37, PinDataType::Gate),
-          // Per-step gate level mods absolute 38..53
-          AudioPin("Step 1 Gate Mod", 38, PinDataType::CV), AudioPin("Step 2 Gate Mod", 39, PinDataType::CV), AudioPin("Step 3 Gate Mod", 40, PinDataType::CV), AudioPin("Step 4 Gate Mod", 41, PinDataType::CV),
-          AudioPin("Step 5 Gate Mod", 42, PinDataType::CV), AudioPin("Step 6 Gate Mod", 43, PinDataType::CV), AudioPin("Step 7 Gate Mod", 44, PinDataType::CV), AudioPin("Step 8 Gate Mod", 45, PinDataType::CV),
-          AudioPin("Step 9 Gate Mod", 46, PinDataType::CV), AudioPin("Step 10 Gate Mod", 47, PinDataType::CV), AudioPin("Step 11 Gate Mod", 48, PinDataType::CV), AudioPin("Step 12 Gate Mod", 49, PinDataType::CV),
-          AudioPin("Step 13 Gate Mod", 50, PinDataType::CV), AudioPin("Step 14 Gate Mod", 51, PinDataType::CV), AudioPin("Step 15 Gate Mod", 52, PinDataType::CV), AudioPin("Step 16 Gate Mod", 53, PinDataType::CV) },
-        { AudioPin("Pitch", 0, PinDataType::CV), AudioPin("Gate", 1, PinDataType::Gate), AudioPin("Gate Nuanced", 2, PinDataType::CV), AudioPin("Velocity", 3, PinDataType::CV), AudioPin("Mod", 4, PinDataType::CV), AudioPin("Trigger", 5, PinDataType::Gate) },
-        {}
-    );
-
-    modulePinDatabase["value"] = ModulePinInfo(
-        {},
-        { AudioPin("Raw", 0, PinDataType::Raw), AudioPin("Normalized", 1, PinDataType::CV), AudioPin("Inverted", 2, PinDataType::Raw), AudioPin("Integer", 3, PinDataType::Raw), AudioPin("CV Out", 4, PinDataType::CV) },
-        {}
-    );
-// in populatePinDatabase()
-
-// in populatePinDatabase()
-
-// in populatePinDatabase()
-
-modulePinDatabase["random"] = ModulePinInfo(
-    { 
-        AudioPin("Trigger In", 0, PinDataType::Gate), 
-        AudioPin("Rate Mod", 1, PinDataType::CV), 
-        AudioPin("Slew Mod", 2, PinDataType::CV) 
-    },
-    { 
-        AudioPin("Norm Out", 0, PinDataType::CV), 
-        AudioPin("Raw Out", 1, PinDataType::Raw), 
-        AudioPin("CV Out", 2, PinDataType::CV),
-        AudioPin("Bool Out", 3, PinDataType::Gate), 
-        AudioPin("Trig Out", 4, PinDataType::Gate) 
-    },
-    { 
-        ModPin("Rate", "rate_mod", PinDataType::CV),
-        ModPin("Slew", "slew_mod", PinDataType::CV)
-    }
-);
-
-    modulePinDatabase["tts performer"] = ModulePinInfo(
-        { // Inputs (absolute channels based on bus structure)
-            AudioPin("Rate Mod", 0, PinDataType::CV),
-            AudioPin("Gate Mod", 1, PinDataType::CV),
-            AudioPin("Trigger", 2, PinDataType::Gate),
-            AudioPin("Reset", 3, PinDataType::Gate),
-            AudioPin("Randomize Trig", 4, PinDataType::Gate),
-            AudioPin("Trim Start Mod", 5, PinDataType::CV),
-            AudioPin("Trim End Mod", 6, PinDataType::CV),
-            AudioPin("Speed Mod", 7, PinDataType::CV),
-            AudioPin("Pitch Mod", 8, PinDataType::CV),
-            // Word Triggers (Channels 9-24)
-            AudioPin("Word 1 Trig", 9, PinDataType::Gate), AudioPin("Word 2 Trig", 10, PinDataType::Gate),
-            AudioPin("Word 3 Trig", 11, PinDataType::Gate), AudioPin("Word 4 Trig", 12, PinDataType::Gate),
-            AudioPin("Word 5 Trig", 13, PinDataType::Gate), AudioPin("Word 6 Trig", 14, PinDataType::Gate),
-            AudioPin("Word 7 Trig", 15, PinDataType::Gate), AudioPin("Word 8 Trig", 16, PinDataType::Gate),
-            AudioPin("Word 9 Trig", 17, PinDataType::Gate), AudioPin("Word 10 Trig", 18, PinDataType::Gate),
-            AudioPin("Word 11 Trig", 19, PinDataType::Gate), AudioPin("Word 12 Trig", 20, PinDataType::Gate),
-            AudioPin("Word 13 Trig", 21, PinDataType::Gate), AudioPin("Word 14 Trig", 22, PinDataType::Gate),
-            AudioPin("Word 15 Trig", 23, PinDataType::Gate), AudioPin("Word 16 Trig", 24, PinDataType::Gate)
-        },
-        { // Outputs
-            AudioPin("Audio", 0, PinDataType::Audio),
-            AudioPin("Word Gate", 1, PinDataType::Gate),
-            AudioPin("EOP Gate", 2, PinDataType::Gate),
-            // Per-Word Gates (Channels 3-18)
-            AudioPin("Word 1 Gate", 3, PinDataType::Gate), AudioPin("Word 2 Gate", 4, PinDataType::Gate),
-            AudioPin("Word 3 Gate", 5, PinDataType::Gate), AudioPin("Word 4 Gate", 6, PinDataType::Gate),
-            AudioPin("Word 5 Gate", 7, PinDataType::Gate), AudioPin("Word 6 Gate", 8, PinDataType::Gate),
-            AudioPin("Word 7 Gate", 9, PinDataType::Gate), AudioPin("Word 8 Gate", 10, PinDataType::Gate),
-            AudioPin("Word 9 Gate", 11, PinDataType::Gate), AudioPin("Word 10 Gate", 12, PinDataType::Gate),
-            AudioPin("Word 11 Gate", 13, PinDataType::Gate), AudioPin("Word 12 Gate", 14, PinDataType::Gate),
-            AudioPin("Word 13 Gate", 15, PinDataType::Gate), AudioPin("Word 14 Gate", 16, PinDataType::Gate),
-            AudioPin("Word 15 Gate", 17, PinDataType::Gate), AudioPin("Word 16 Gate", 18, PinDataType::Gate),
-            // Per-Word Triggers (Channels 19-34)
-            AudioPin("Word 1 Trig", 19, PinDataType::Gate), AudioPin("Word 2 Trig", 20, PinDataType::Gate),
-            AudioPin("Word 3 Trig", 21, PinDataType::Gate), AudioPin("Word 4 Trig", 22, PinDataType::Gate),
-            AudioPin("Word 5 Trig", 23, PinDataType::Gate), AudioPin("Word 6 Trig", 24, PinDataType::Gate),
-            AudioPin("Word 7 Trig", 25, PinDataType::Gate), AudioPin("Word 8 Trig", 26, PinDataType::Gate),
-            AudioPin("Word 9 Trig", 27, PinDataType::Gate), AudioPin("Word 10 Trig", 28, PinDataType::Gate),
-            AudioPin("Word 11 Trig", 29, PinDataType::Gate), AudioPin("Word 12 Trig", 30, PinDataType::Gate),
-            AudioPin("Word 13 Trig", 31, PinDataType::Gate), AudioPin("Word 14 Trig", 32, PinDataType::Gate),
-            AudioPin("Word 15 Trig", 33, PinDataType::Gate), AudioPin("Word 16 Trig", 34, PinDataType::Gate)
-        },
-        { // Modulation Pins (for UI parameter disabling)
-            ModPin("Rate", "rate_mod", PinDataType::CV),
-            ModPin("Gate", "gate_mod", PinDataType::CV),
-            ModPin("Trim Start", "trimStart_mod", PinDataType::CV),
-            ModPin("Trim End", "trimEnd_mod", PinDataType::CV),
-            ModPin("Speed", "speed_mod", PinDataType::CV),
-            ModPin("Pitch", "pitch_mod", PinDataType::CV)
-        }
-    );
-    modulePinDatabase["vocal tract filter"] = ModulePinInfo(
-        { AudioPin("Audio In", 0, PinDataType::Audio) },
-        { AudioPin("Audio Out", 0, PinDataType::Audio) },
-        { ModPin("Vowel", "vowelShape", PinDataType::CV), ModPin("Formant", "formantShift", PinDataType::CV), ModPin("Instability", "instability", PinDataType::CV), ModPin("Gain", "formantGain", PinDataType::CV) }
-    );
-    modulePinDatabase["best practice"] = ModulePinInfo(
-        { AudioPin("In L", 0, PinDataType::Audio), AudioPin("In R", 1, PinDataType::Audio), AudioPin("Freq Mod", 2, PinDataType::CV), AudioPin("Wave Mod", 3, PinDataType::CV), AudioPin("Drive Mod", 4, PinDataType::CV) },
-        { AudioPin("Out L", 0, PinDataType::Audio), AudioPin("Out R", 1, PinDataType::Audio) },
-        { ModPin("Frequency", "frequency_mod", PinDataType::CV), ModPin("Waveform", "waveform_mod", PinDataType::CV), ModPin("Drive", "drive_mod", PinDataType::CV) }
-    );
-    modulePinDatabase["shaping oscillator"] = ModulePinInfo(
-        { AudioPin("In L", 0, PinDataType::Audio), AudioPin("In R", 1, PinDataType::Audio), AudioPin("Freq Mod", 2, PinDataType::CV), AudioPin("Wave Mod", 3, PinDataType::CV), AudioPin("Drive Mod", 4, PinDataType::CV) },
-        { AudioPin("Out L", 0, PinDataType::Audio), AudioPin("Out R", 1, PinDataType::Audio) },
-        { ModPin("Frequency", "frequency_mod", PinDataType::CV), ModPin("Waveform", "waveform_mod", PinDataType::CV), ModPin("Drive", "drive_mod", PinDataType::CV) }
-    );
-    modulePinDatabase["harmonic shaper"] = ModulePinInfo(
-        { AudioPin("In L", 0, PinDataType::Audio), AudioPin("In R", 1, PinDataType::Audio), AudioPin("Freq Mod", 2, PinDataType::CV), AudioPin("Drive Mod", 3, PinDataType::CV) },
-        { AudioPin("Out L", 0, PinDataType::Audio), AudioPin("Out R", 1, PinDataType::Audio) },
-        { ModPin("Master Frequency", "masterFrequency_mod", PinDataType::CV), ModPin("Master Drive", "masterDrive_mod", PinDataType::CV) }
-    );
-    modulePinDatabase["function generator"] = ModulePinInfo(
-        { 
-            AudioPin("Gate In", 0, PinDataType::Gate),
-            AudioPin("Trigger In", 1, PinDataType::Gate),
-            AudioPin("Sync In", 2, PinDataType::Gate),
-            AudioPin("Rate Mod", 3, PinDataType::CV),
-            AudioPin("Slew Mod", 4, PinDataType::CV),
-            AudioPin("Gate Thresh Mod", 5, PinDataType::CV),
-            AudioPin("Trig Thresh Mod", 6, PinDataType::CV),
-            AudioPin("Pitch Base Mod", 7, PinDataType::CV),
-            AudioPin("Value Mult Mod", 8, PinDataType::CV),
-            AudioPin("Curve Select Mod", 9, PinDataType::CV)
-        },
-        { 
-            AudioPin("Value", 0, PinDataType::CV),
-            AudioPin("Inverted", 1, PinDataType::CV),
-            AudioPin("Bipolar", 2, PinDataType::CV),
-            AudioPin("Pitch", 3, PinDataType::CV),
-            AudioPin("Gate", 4, PinDataType::Gate),
-            AudioPin("Trigger", 5, PinDataType::Gate),
-            AudioPin("End of Cycle", 6, PinDataType::Gate),
-            // New dedicated outputs
-            AudioPin("Blue Value", 7, PinDataType::CV),
-            AudioPin("Blue Pitch", 8, PinDataType::CV),
-            AudioPin("Red Value", 9, PinDataType::CV),
-            AudioPin("Red Pitch", 10, PinDataType::CV),
-            AudioPin("Green Value", 11, PinDataType::CV),
-            AudioPin("Green Pitch", 12, PinDataType::CV)
-        },
-        { 
-            ModPin("Rate", "rate_mod", PinDataType::CV),
-            ModPin("Slew", "slew_mod", PinDataType::CV),
-            ModPin("Gate Thresh", "gateThresh_mod", PinDataType::CV),
-            ModPin("Trig Thresh", "trigThresh_mod", PinDataType::CV),
-            ModPin("Pitch Base", "pitchBase_mod", PinDataType::CV),
-            ModPin("Value Mult", "valueMult_mod", PinDataType::CV),
-            ModPin("Curve Select", "curveSelect_mod", PinDataType::CV)
-        }
-    );
-
-    modulePinDatabase["multi sequencer"] = ModulePinInfo(
-        { // Inputs: Mod In L, Mod In R, Rate Mod, Gate Mod, Steps Mod, plus per-step mods and triggers
-            AudioPin("Mod In L", 0, PinDataType::Audio), AudioPin("Mod In R", 1, PinDataType::Audio),
-            AudioPin("Rate Mod", 2, PinDataType::CV), AudioPin("Gate Mod", 3, PinDataType::CV),
-            AudioPin("Steps Mod", 4, PinDataType::CV),
-            // Per-step mods (channels 6-21)
-            AudioPin("Step 1 Mod", 6, PinDataType::CV), AudioPin("Step 2 Mod", 7, PinDataType::CV),
-            AudioPin("Step 3 Mod", 8, PinDataType::CV), AudioPin("Step 4 Mod", 9, PinDataType::CV),
-            AudioPin("Step 5 Mod", 10, PinDataType::CV), AudioPin("Step 6 Mod", 11, PinDataType::CV),
-            AudioPin("Step 7 Mod", 12, PinDataType::CV), AudioPin("Step 8 Mod", 13, PinDataType::CV),
-            AudioPin("Step 9 Mod", 14, PinDataType::CV), AudioPin("Step 10 Mod", 15, PinDataType::CV),
-            AudioPin("Step 11 Mod", 16, PinDataType::CV), AudioPin("Step 12 Mod", 17, PinDataType::CV),
-            AudioPin("Step 13 Mod", 18, PinDataType::CV), AudioPin("Step 14 Mod", 19, PinDataType::CV),
-            AudioPin("Step 15 Mod", 20, PinDataType::CV), AudioPin("Step 16 Mod", 21, PinDataType::CV),
-            // Per-step trigger mods (channels 22-37)
-            AudioPin("Step 1 Trig Mod", 22, PinDataType::Gate), AudioPin("Step 2 Trig Mod", 23, PinDataType::Gate),
-            AudioPin("Step 3 Trig Mod", 24, PinDataType::Gate), AudioPin("Step 4 Trig Mod", 25, PinDataType::Gate),
-            AudioPin("Step 5 Trig Mod", 26, PinDataType::Gate), AudioPin("Step 6 Trig Mod", 27, PinDataType::Gate),
-            AudioPin("Step 7 Trig Mod", 28, PinDataType::Gate), AudioPin("Step 8 Trig Mod", 29, PinDataType::Gate),
-            AudioPin("Step 9 Trig Mod", 30, PinDataType::Gate), AudioPin("Step 10 Trig Mod", 31, PinDataType::Gate),
-            AudioPin("Step 11 Trig Mod", 32, PinDataType::Gate), AudioPin("Step 12 Trig Mod", 33, PinDataType::Gate),
-            AudioPin("Step 13 Trig Mod", 34, PinDataType::Gate), AudioPin("Step 14 Trig Mod", 35, PinDataType::Gate),
-            AudioPin("Step 15 Trig Mod", 36, PinDataType::Gate), AudioPin("Step 16 Trig Mod", 37, PinDataType::Gate)
-        },
-        { // Outputs: Live outputs (0-5) + Parallel step outputs (6+)
-            // Live Outputs
-            AudioPin("Pitch", 0, PinDataType::CV), AudioPin("Gate", 1, PinDataType::Gate),
-            AudioPin("Gate Nuanced", 2, PinDataType::CV), AudioPin("Velocity", 3, PinDataType::CV),
-            AudioPin("Mod", 4, PinDataType::CV), AudioPin("Trigger", 5, PinDataType::Gate),
-            // Parallel Step Outputs (Corrected Names and Channels)
-            AudioPin("Pitch 1", 6, PinDataType::CV), AudioPin("Gate 1", 7, PinDataType::Gate), AudioPin("Trig 1", 8, PinDataType::Gate),
-            AudioPin("Pitch 2", 9, PinDataType::CV), AudioPin("Gate 2", 10, PinDataType::Gate), AudioPin("Trig 2", 11, PinDataType::Gate),
-            AudioPin("Pitch 3", 12, PinDataType::CV), AudioPin("Gate 3", 13, PinDataType::Gate), AudioPin("Trig 3", 14, PinDataType::Gate),
-            AudioPin("Pitch 4", 15, PinDataType::CV), AudioPin("Gate 4", 16, PinDataType::Gate), AudioPin("Trig 4", 17, PinDataType::Gate),
-            AudioPin("Pitch 5", 18, PinDataType::CV), AudioPin("Gate 5", 19, PinDataType::Gate), AudioPin("Trig 5", 20, PinDataType::Gate),
-            AudioPin("Pitch 6", 21, PinDataType::CV), AudioPin("Gate 6", 22, PinDataType::Gate), AudioPin("Trig 6", 23, PinDataType::Gate),
-            AudioPin("Pitch 7", 24, PinDataType::CV), AudioPin("Gate 7", 25, PinDataType::Gate), AudioPin("Trig 7", 26, PinDataType::Gate),
-            AudioPin("Pitch 8", 27, PinDataType::CV), AudioPin("Gate 8", 28, PinDataType::Gate), AudioPin("Trig 8", 29, PinDataType::Gate),
-            AudioPin("Pitch 9", 30, PinDataType::CV), AudioPin("Gate 9", 31, PinDataType::Gate), AudioPin("Trig 9", 32, PinDataType::Gate),
-            AudioPin("Pitch 10", 33, PinDataType::CV), AudioPin("Gate 10", 34, PinDataType::Gate), AudioPin("Trig 10", 35, PinDataType::Gate),
-            AudioPin("Pitch 11", 36, PinDataType::CV), AudioPin("Gate 11", 37, PinDataType::Gate), AudioPin("Trig 11", 38, PinDataType::Gate),
-            AudioPin("Pitch 12", 39, PinDataType::CV), AudioPin("Gate 12", 40, PinDataType::Gate), AudioPin("Trig 12", 41, PinDataType::Gate),
-            AudioPin("Pitch 13", 42, PinDataType::CV), AudioPin("Gate 13", 43, PinDataType::Gate), AudioPin("Trig 13", 44, PinDataType::Gate),
-            AudioPin("Pitch 14", 45, PinDataType::CV), AudioPin("Gate 14", 46, PinDataType::Gate), AudioPin("Trig 14", 47, PinDataType::Gate),
-            AudioPin("Pitch 15", 48, PinDataType::CV), AudioPin("Gate 15", 49, PinDataType::Gate), AudioPin("Trig 15", 50, PinDataType::Gate),
-            AudioPin("Pitch 16", 51, PinDataType::CV), AudioPin("Gate 16", 52, PinDataType::Gate), AudioPin("Trig 16", 53, PinDataType::Gate)
-        },
-        {}
-    );
-    modulePinDatabase["comparator"] = ModulePinInfo(
-        { AudioPin("In", 0, PinDataType::CV) },
-        { AudioPin("Out", 0, PinDataType::Gate) },
-        {}
-    );
-
-    modulePinDatabase["sample loader"] = ModulePinInfo(
-        {
-            AudioPin("Pitch Mod", 0, PinDataType::CV),
-            AudioPin("Speed Mod", 1, PinDataType::CV),
-            AudioPin("Gate Mod", 2, PinDataType::CV),
-            AudioPin("Trigger Mod", 3, PinDataType::Gate),
-            AudioPin("Range Start Mod", 4, PinDataType::CV),
-            AudioPin("Range End Mod", 5, PinDataType::CV)
-        },
-        {
-            AudioPin("Audio Output", 0, PinDataType::Audio)
-        },
-        {}
-    );
-    
-    // Track Mixer - first 8 tracks UI definition (mono per track + gain/pan CV) and a Tracks Mod pin
-    modulePinDatabase["track mixer"] = ModulePinInfo(
-        {
-            // Mono audio inputs for first 8 tracks (absolute channels 0..7)
-            AudioPin("In 1", 0, PinDataType::Audio),
-            AudioPin("In 2", 1, PinDataType::Audio),
-            AudioPin("In 3", 2, PinDataType::Audio),
-            AudioPin("In 4", 3, PinDataType::Audio),
-            AudioPin("In 5", 4, PinDataType::Audio),
-            AudioPin("In 6", 5, PinDataType::Audio),
-            AudioPin("In 7", 6, PinDataType::Audio),
-            AudioPin("In 8", 7, PinDataType::Audio),
-
-            // Num Tracks modulation CV at absolute channel 64 (start of Mod bus)
-            AudioPin("Num Tracks Mod", 64, PinDataType::CV),
-
-            // Per-track CV inputs on Mod bus: Gain at 65,67,... Pan at 66,68,...
-            AudioPin("Gain 1 Mod", 65, PinDataType::CV),  AudioPin("Pan 1 Mod", 66, PinDataType::CV),
-            AudioPin("Gain 2 Mod", 67, PinDataType::CV),  AudioPin("Pan 2 Mod", 68, PinDataType::CV),
-            AudioPin("Gain 3 Mod", 69, PinDataType::CV),  AudioPin("Pan 3 Mod", 70, PinDataType::CV),
-            AudioPin("Gain 4 Mod", 71, PinDataType::CV),  AudioPin("Pan 4 Mod", 72, PinDataType::CV),
-            AudioPin("Gain 5 Mod", 73, PinDataType::CV),  AudioPin("Pan 5 Mod", 74, PinDataType::CV),
-            AudioPin("Gain 6 Mod", 75, PinDataType::CV),  AudioPin("Pan 6 Mod", 76, PinDataType::CV),
-            AudioPin("Gain 7 Mod", 77, PinDataType::CV),  AudioPin("Pan 7 Mod", 78, PinDataType::CV),
-            AudioPin("Gain 8 Mod", 79, PinDataType::CV),  AudioPin("Pan 8 Mod", 80, PinDataType::CV)
-        },
-        {
-            AudioPin("Out L", 0, PinDataType::Audio),
-            AudioPin("Out R", 1, PinDataType::Audio)
-        },
-        {}
-    );
-    
-    // Add PolyVCO module - Build the pin lists directly in initializer list
-    modulePinDatabase["polyvco"] = ModulePinInfo(
-        {
-            // Num Voices modulation input
-            AudioPin("Num Voices Mod", 0, PinDataType::CV),
-            
-            // Frequency modulation inputs (channels 1-32)
-            AudioPin("Freq 1 Mod", 1, PinDataType::CV), AudioPin("Freq 2 Mod", 2, PinDataType::CV),
-            AudioPin("Freq 3 Mod", 3, PinDataType::CV), AudioPin("Freq 4 Mod", 4, PinDataType::CV),
-            AudioPin("Freq 5 Mod", 5, PinDataType::CV), AudioPin("Freq 6 Mod", 6, PinDataType::CV),
-            AudioPin("Freq 7 Mod", 7, PinDataType::CV), AudioPin("Freq 8 Mod", 8, PinDataType::CV),
-            AudioPin("Freq 9 Mod", 9, PinDataType::CV), AudioPin("Freq 10 Mod", 10, PinDataType::CV),
-            AudioPin("Freq 11 Mod", 11, PinDataType::CV), AudioPin("Freq 12 Mod", 12, PinDataType::CV),
-            AudioPin("Freq 13 Mod", 13, PinDataType::CV), AudioPin("Freq 14 Mod", 14, PinDataType::CV),
-            AudioPin("Freq 15 Mod", 15, PinDataType::CV), AudioPin("Freq 16 Mod", 16, PinDataType::CV),
-            AudioPin("Freq 17 Mod", 17, PinDataType::CV), AudioPin("Freq 18 Mod", 18, PinDataType::CV),
-            AudioPin("Freq 19 Mod", 19, PinDataType::CV), AudioPin("Freq 20 Mod", 20, PinDataType::CV),
-            AudioPin("Freq 21 Mod", 21, PinDataType::CV), AudioPin("Freq 22 Mod", 22, PinDataType::CV),
-            AudioPin("Freq 23 Mod", 23, PinDataType::CV), AudioPin("Freq 24 Mod", 24, PinDataType::CV),
-            AudioPin("Freq 25 Mod", 25, PinDataType::CV), AudioPin("Freq 26 Mod", 26, PinDataType::CV),
-            AudioPin("Freq 27 Mod", 27, PinDataType::CV), AudioPin("Freq 28 Mod", 28, PinDataType::CV),
-            AudioPin("Freq 29 Mod", 29, PinDataType::CV), AudioPin("Freq 30 Mod", 30, PinDataType::CV),
-            AudioPin("Freq 31 Mod", 31, PinDataType::CV), AudioPin("Freq 32 Mod", 32, PinDataType::CV),
-            
-            // Waveform modulation inputs (channels 33-64)
-            AudioPin("Wave 1 Mod", 33, PinDataType::CV), AudioPin("Wave 2 Mod", 34, PinDataType::CV),
-            AudioPin("Wave 3 Mod", 35, PinDataType::CV), AudioPin("Wave 4 Mod", 36, PinDataType::CV),
-            AudioPin("Wave 5 Mod", 37, PinDataType::CV), AudioPin("Wave 6 Mod", 38, PinDataType::CV),
-            AudioPin("Wave 7 Mod", 39, PinDataType::CV), AudioPin("Wave 8 Mod", 40, PinDataType::CV),
-            AudioPin("Wave 9 Mod", 41, PinDataType::CV), AudioPin("Wave 10 Mod", 42, PinDataType::CV),
-            AudioPin("Wave 11 Mod", 43, PinDataType::CV), AudioPin("Wave 12 Mod", 44, PinDataType::CV),
-            AudioPin("Wave 13 Mod", 45, PinDataType::CV), AudioPin("Wave 14 Mod", 46, PinDataType::CV),
-            AudioPin("Wave 15 Mod", 47, PinDataType::CV), AudioPin("Wave 16 Mod", 48, PinDataType::CV),
-            AudioPin("Wave 17 Mod", 49, PinDataType::CV), AudioPin("Wave 18 Mod", 50, PinDataType::CV),
-            AudioPin("Wave 19 Mod", 51, PinDataType::CV), AudioPin("Wave 20 Mod", 52, PinDataType::CV),
-            AudioPin("Wave 21 Mod", 53, PinDataType::CV), AudioPin("Wave 22 Mod", 54, PinDataType::CV),
-            AudioPin("Wave 23 Mod", 55, PinDataType::CV), AudioPin("Wave 24 Mod", 56, PinDataType::CV),
-            AudioPin("Wave 25 Mod", 57, PinDataType::CV), AudioPin("Wave 26 Mod", 58, PinDataType::CV),
-            AudioPin("Wave 27 Mod", 59, PinDataType::CV), AudioPin("Wave 28 Mod", 60, PinDataType::CV),
-            AudioPin("Wave 29 Mod", 61, PinDataType::CV), AudioPin("Wave 30 Mod", 62, PinDataType::CV),
-            AudioPin("Wave 31 Mod", 63, PinDataType::CV), AudioPin("Wave 32 Mod", 64, PinDataType::CV),
-            
-            // Gate modulation inputs (channels 65-96)
-            AudioPin("Gate 1 Mod", 65, PinDataType::Gate), AudioPin("Gate 2 Mod", 66, PinDataType::Gate),
-            AudioPin("Gate 3 Mod", 67, PinDataType::Gate), AudioPin("Gate 4 Mod", 68, PinDataType::Gate),
-            AudioPin("Gate 5 Mod", 69, PinDataType::Gate), AudioPin("Gate 6 Mod", 70, PinDataType::Gate),
-            AudioPin("Gate 7 Mod", 71, PinDataType::Gate), AudioPin("Gate 8 Mod", 72, PinDataType::Gate),
-            AudioPin("Gate 9 Mod", 73, PinDataType::Gate), AudioPin("Gate 10 Mod", 74, PinDataType::Gate),
-            AudioPin("Gate 11 Mod", 75, PinDataType::Gate), AudioPin("Gate 12 Mod", 76, PinDataType::Gate),
-            AudioPin("Gate 13 Mod", 77, PinDataType::Gate), AudioPin("Gate 14 Mod", 78, PinDataType::Gate),
-            AudioPin("Gate 15 Mod", 79, PinDataType::Gate), AudioPin("Gate 16 Mod", 80, PinDataType::Gate),
-            AudioPin("Gate 17 Mod", 81, PinDataType::Gate), AudioPin("Gate 18 Mod", 82, PinDataType::Gate),
-            AudioPin("Gate 19 Mod", 83, PinDataType::Gate), AudioPin("Gate 20 Mod", 84, PinDataType::Gate),
-            AudioPin("Gate 21 Mod", 85, PinDataType::Gate), AudioPin("Gate 22 Mod", 86, PinDataType::Gate),
-            AudioPin("Gate 23 Mod", 87, PinDataType::Gate), AudioPin("Gate 24 Mod", 88, PinDataType::Gate),
-            AudioPin("Gate 25 Mod", 89, PinDataType::Gate), AudioPin("Gate 26 Mod", 90, PinDataType::Gate),
-            AudioPin("Gate 27 Mod", 91, PinDataType::Gate), AudioPin("Gate 28 Mod", 92, PinDataType::Gate),
-            AudioPin("Gate 29 Mod", 93, PinDataType::Gate), AudioPin("Gate 30 Mod", 94, PinDataType::Gate),
-            AudioPin("Gate 31 Mod", 95, PinDataType::Gate), AudioPin("Gate 32 Mod", 96, PinDataType::Gate)
-        },
-        {
-            // Audio outputs (channels 0-31)
-            AudioPin("Out 1", 0, PinDataType::Audio), AudioPin("Out 2", 1, PinDataType::Audio),
-            AudioPin("Out 3", 2, PinDataType::Audio), AudioPin("Out 4", 3, PinDataType::Audio),
-            AudioPin("Out 5", 4, PinDataType::Audio), AudioPin("Out 6", 5, PinDataType::Audio),
-            AudioPin("Out 7", 6, PinDataType::Audio), AudioPin("Out 8", 7, PinDataType::Audio),
-            AudioPin("Out 9", 8, PinDataType::Audio), AudioPin("Out 10", 9, PinDataType::Audio),
-            AudioPin("Out 11", 10, PinDataType::Audio), AudioPin("Out 12", 11, PinDataType::Audio),
-            AudioPin("Out 13", 12, PinDataType::Audio), AudioPin("Out 14", 13, PinDataType::Audio),
-            AudioPin("Out 15", 14, PinDataType::Audio), AudioPin("Out 16", 15, PinDataType::Audio),
-            AudioPin("Out 17", 16, PinDataType::Audio), AudioPin("Out 18", 17, PinDataType::Audio),
-            AudioPin("Out 19", 18, PinDataType::Audio), AudioPin("Out 20", 19, PinDataType::Audio),
-            AudioPin("Out 21", 20, PinDataType::Audio), AudioPin("Out 22", 21, PinDataType::Audio),
-            AudioPin("Out 23", 22, PinDataType::Audio), AudioPin("Out 24", 23, PinDataType::Audio),
-            AudioPin("Out 25", 24, PinDataType::Audio), AudioPin("Out 26", 25, PinDataType::Audio),
-            AudioPin("Out 27", 26, PinDataType::Audio), AudioPin("Out 28", 27, PinDataType::Audio),
-            AudioPin("Out 29", 28, PinDataType::Audio), AudioPin("Out 30", 29, PinDataType::Audio),
-            AudioPin("Out 31", 30, PinDataType::Audio), AudioPin("Out 32", 31, PinDataType::Audio)
-        },
-        {}
-    );
-    
-    // Add missing modules
-    modulePinDatabase["Quantizer"] = ModulePinInfo(
-        { AudioPin("CV In", 0, PinDataType::CV), AudioPin("Scale Mod", 1, PinDataType::CV), AudioPin("Root Mod", 2, PinDataType::CV) },
-        { AudioPin("Out", 0, PinDataType::CV) },
-        {}
-    );
-    
-    modulePinDatabase["TimePitch"] = ModulePinInfo(
-        { AudioPin("Audio In", 0, PinDataType::Audio), AudioPin("Speed Mod", 1, PinDataType::CV), AudioPin("Pitch Mod", 2, PinDataType::CV) },
-        { AudioPin("Out", 0, PinDataType::Audio) },
-        {}
-    );
-    
-    // Note: TTS Performer pin database is defined earlier in this function (around line 378)
-    // Duplicate entry removed to avoid conflicts
-
-    
-    // Add TrackMixer module alias (main definition is "track mixer" above)
-    modulePinDatabase["trackmixer"] = modulePinDatabase["track mixer"];
-    
-    
-    // Add MIDI Player module
-    modulePinDatabase["midiplayer"] = ModulePinInfo(
-        {},
-        {},
-        {}
-    );
-    
-    // Add converter modules
-    modulePinDatabase["Attenuverter"] = {
-        { AudioPin("In L", 0, PinDataType::Audio), AudioPin("In R", 1, PinDataType::Audio), AudioPin("Amount Mod", 2, PinDataType::CV) },
-        { AudioPin("Out L", 0, PinDataType::Audio), AudioPin("Out R", 1, PinDataType::Audio) },
-        {}
-    };
-    
-    // Add lowercase alias for Attenuverter
-    modulePinDatabase["attenuverter"] = modulePinDatabase["Attenuverter"];
-    
-    // Add Sample & Hold module
-    modulePinDatabase["s&h"] = ModulePinInfo(
-        { 
-            AudioPin("Signal In L", 0, PinDataType::Audio),
-            AudioPin("Signal In R", 1, PinDataType::Audio),
-            AudioPin("Trig In L", 2, PinDataType::Gate),
-            AudioPin("Trig In R", 3, PinDataType::Gate),
-            AudioPin("Threshold Mod", 4, PinDataType::CV),
-            AudioPin("Edge Mod", 5, PinDataType::CV),
-            AudioPin("Slew Mod", 6, PinDataType::CV)
-        },
-        { 
-            AudioPin("Out L", 0, PinDataType::Audio),
-            AudioPin("Out R", 1, PinDataType::Audio)
-        },
-        {}
-    );
-    
-    modulePinDatabase["MapRange"] = {
-        { AudioPin("Raw In", 0, PinDataType::Raw) },
-        { AudioPin("CV Out", 0, PinDataType::CV), AudioPin("Audio Out", 1, PinDataType::Audio) },
-        { ModPin("Min In", "minIn", PinDataType::Raw), ModPin("Max In", "maxIn", PinDataType::Raw), ModPin("Min Out", "minOut", PinDataType::Raw), ModPin("Max Out", "maxOut", PinDataType::Raw) }
-    };
-    
-    modulePinDatabase["Lag Processor"] = {
-        { AudioPin("Signal In", 0, PinDataType::CV), AudioPin("Rise Mod", 1, PinDataType::CV), AudioPin("Fall Mod", 2, PinDataType::CV) },
-        { AudioPin("Smoothed Out", 0, PinDataType::CV) },
-        {}
-    };
-    
-    modulePinDatabase["De-Crackle"] = {
-        { AudioPin("In L", 0, PinDataType::Audio), AudioPin("In R", 1, PinDataType::Audio) },
-        { AudioPin("Out L", 0, PinDataType::Audio), AudioPin("Out R", 1, PinDataType::Audio) },
-        {}
-    };
-
-    // ADD MISSING MODULES FOR COLOR-CODED CHAINING
-
-    modulePinDatabase["Scope"] = ModulePinInfo(
-        { AudioPin("In", 0, PinDataType::Audio) },
-        { AudioPin("Out", 0, PinDataType::Audio) },
-        {}
-    );
-
-    modulePinDatabase["Logic"] = ModulePinInfo(
-        { AudioPin("In A", 0, PinDataType::Gate), AudioPin("In B", 1, PinDataType::Gate) },
-        {
-            AudioPin("AND", 0, PinDataType::Gate),
-            AudioPin("OR", 1, PinDataType::Gate),
-            AudioPin("XOR", 2, PinDataType::Gate),
-            AudioPin("NOT A", 3, PinDataType::Gate)
-        },
-        {}
-    );
-
-    modulePinDatabase["ClockDivider"] = ModulePinInfo(
-        { AudioPin("Clock In", 0, PinDataType::Gate), AudioPin("Reset", 1, PinDataType::Gate) },
-        {
-            AudioPin("/2", 0, PinDataType::Gate), AudioPin("/4", 1, PinDataType::Gate),
-            AudioPin("/8", 2, PinDataType::Gate), AudioPin("x2", 3, PinDataType::Gate),
-            AudioPin("x3", 4, PinDataType::Gate), AudioPin("x4", 5, PinDataType::Gate)
-        },
-        {}
-    );
-
-    modulePinDatabase["Rate"] = ModulePinInfo(
-        { AudioPin("Rate Mod", 0, PinDataType::CV) },
-        { AudioPin("Out", 0, PinDataType::CV) },
-        {}
-    );
-
-    // ADD REMAINING MISSING MODULES FROM CMAKE LISTS
-
-    modulePinDatabase["Math"] = ModulePinInfo(
-        { AudioPin("In A", 0, PinDataType::CV), AudioPin("In B", 1, PinDataType::CV) },
-        { AudioPin("Add", 0, PinDataType::CV), AudioPin("Subtract", 1, PinDataType::CV),
-          AudioPin("Multiply", 2, PinDataType::CV), AudioPin("Divide", 3, PinDataType::CV) },
-        {}
-    );
-
-    modulePinDatabase["SequentialSwitch"] = ModulePinInfo(
-        { AudioPin("CV In", 0, PinDataType::CV), AudioPin("Gate In", 1, PinDataType::Gate) },
-        { AudioPin("Out", 0, PinDataType::CV) },
-        {}
-    );
-
-    modulePinDatabase["Debug"] = ModulePinInfo(
-        { AudioPin("In", 0, PinDataType::Audio) },
-        {}, // No outputs
-        {}
-    );
-
-    modulePinDatabase["InputDebug"] = ModulePinInfo(
-        {}, // No inputs
-        { AudioPin("Out", 0, PinDataType::Audio) },
-        {}
-    );
-
-}
 
 ImGuiNodeEditorComponent::ImGuiNodeEditorComponent(juce::AudioDeviceManager& dm)
     : deviceManager(dm)
 {
+    juce::Logger::writeToLog("ImGuiNodeEditorComponent constructor starting...");
+    
+    // --- THIS WILL BE THE SMOKING GUN ---
+    juce::Logger::writeToLog("About to populate pin database...");
     populatePinDatabase(); // Initialize the pin database for color coding
+    juce::Logger::writeToLog("Pin database populated.");
     
     glContext.setRenderer (this);
     glContext.setContinuousRepainting (true);
@@ -1124,6 +362,81 @@ void ImGuiNodeEditorComponent::renderImGui()
                     onShowAudioSettings();
             }
             
+            ImGui::Separator();
+            
+            // Plugin scanning menu item
+            if (ImGui::MenuItem("Scan for Plugins..."))
+            {
+                // Get the application instance to access plugin management
+                auto& app = PresetCreatorApplication::getApp();
+                auto& formatManager = app.getPluginFormatManager();
+                auto& knownPluginList = app.getKnownPluginList();
+
+                // 1. Find the VST3 format
+                juce::VST3PluginFormat* vst3Format = nullptr;
+                for (int i = 0; i < formatManager.getNumFormats(); ++i)
+                {
+                    if (auto* format = formatManager.getFormat(i); format->getName() == "VST3")
+                    {
+                        vst3Format = dynamic_cast<juce::VST3PluginFormat*>(format);
+                        break;
+                    }
+                }
+
+                if (vst3Format != nullptr)
+                {
+                    // 2. Define the specific folder to scan
+                    juce::File vstDir = juce::File::getSpecialLocation(juce::File::currentExecutableFile)
+                                            .getParentDirectory().getChildFile("VST");
+
+                    juce::FileSearchPath searchPath;
+                    if (vstDir.isDirectory())
+                    {
+                        searchPath.add(vstDir);
+                        juce::Logger::writeToLog("[VST Scan] Starting scan in: " + vstDir.getFullPathName());
+                    }
+                    else
+                    {
+                        vstDir.createDirectory();
+                        searchPath.add(vstDir);
+                        juce::Logger::writeToLog("[VST Scan] Created VST directory at: " + vstDir.getFullPathName());
+                    }
+
+                    // 3. Scan for plugins
+                    auto appDataDir = juce::File::getSpecialLocation(juce::File::userApplicationDataDirectory)
+                                        .getChildFile(app.getApplicationName());
+                    
+                    juce::PluginDirectoryScanner scanner(knownPluginList, *vst3Format, searchPath, true,
+                                                         appDataDir.getChildFile("dead_plugins.txt"), true);
+
+                    // 4. Perform the scan
+                    juce::String pluginBeingScanned;
+                    int numFound = 0;
+                    while (scanner.scanNextFile(true, pluginBeingScanned))
+                    {
+                        juce::Logger::writeToLog("[VST Scan] Scanning: " + pluginBeingScanned);
+                        ++numFound;
+                    }
+                    
+                    juce::Logger::writeToLog("[VST Scan] Scan complete. Found " + juce::String(numFound) + " plugin(s).");
+                    juce::Logger::writeToLog("[VST Scan] Total plugins in list: " + juce::String(knownPluginList.getNumTypes()));
+                    
+                    // 5. Save the updated plugin list
+                    auto pluginListFile = appDataDir.getChildFile("known_plugins.xml");
+                    if (auto pluginListXml = knownPluginList.createXml())
+                    {
+                        if (pluginListXml->writeTo(pluginListFile))
+                        {
+                            juce::Logger::writeToLog("[VST Scan] Saved plugin list to: " + pluginListFile.getFullPathName());
+                        }
+                    }
+                }
+                else
+                {
+                    juce::Logger::writeToLog("[VST Scan] ERROR: VST3 format not found in format manager.");
+                }
+            }
+            
             ImGui::EndMenu();
         }
         
@@ -1307,6 +620,11 @@ void ImGuiNodeEditorComponent::renderImGui()
 
     // ADD THIS BLOCK:
     ImGui::Text("Module Browser");
+    
+    // Create a scrolling child window to contain the entire module list
+    // This prevents the plugin list from expanding over the node editor
+    ImGui::BeginChild("ModuleBrowserScrollRegion", ImVec2(0, 0), true);
+    
     auto addModuleButton = [this](const char* label, const char* type)
     {
         if (ImGui::Selectable(label, false))
@@ -1329,8 +647,8 @@ void ImGuiNodeEditorComponent::renderImGui()
             ImGui::BeginTooltip();
             
             // Find the description in our map using the module's internal 'type'
-            auto it = moduleDescriptions.find(type);
-            if (it != moduleDescriptions.end())
+            auto it = getModuleDescriptions().find(type);
+            if (it != getModuleDescriptions().end())
             {
                 // If found, display it
                 ImGui::TextUnformatted(it->second);
@@ -1412,7 +730,14 @@ void ImGuiNodeEditorComponent::renderImGui()
         addModuleButton("Input Debug", "input debug");
         addModuleButton("Frequency Graph", "Frequency Graph");
     }
+    
+    // VST Plugins section
+    if (ImGui::CollapsingHeader("Plugins", ImGuiTreeNodeFlags_DefaultOpen)) {
+        addPluginModules();
+    }
 
+    // End the scrolling region
+    ImGui::EndChild();
 
     ImGui::NextColumn();
 
@@ -2856,6 +2181,42 @@ if (auto* mp = synth->getModuleForLogical (lid))
                 if (ImGui::MenuItem("Frequency Graph")) addAtMouse("Frequency Graph");
                 ImGui::EndMenu();
             }
+            
+            // VST Plugins submenu
+            ImGui::Separator();
+            if (ImGui::BeginMenu("VST Plugins"))
+            {
+                auto& app = PresetCreatorApplication::getApp();
+                auto& formatManager = app.getPluginFormatManager();
+                auto& knownPluginList = app.getKnownPluginList();
+                
+                for (const auto& desc : knownPluginList.getTypes())
+                {
+                    if (ImGui::MenuItem(desc.name.toRawUTF8()))
+                    {
+                        if (synth != nullptr)
+                        {
+                            auto nodeId = synth->addVstModule(formatManager, desc);
+                            const ImVec2 mouse = ImGui::GetMousePos();
+                            const int logicalId = (int) synth->getLogicalIdForNode(nodeId);
+                            pendingNodeScreenPositions[logicalId] = mouse;
+                            snapshotAfterEditor = true;
+                        }
+                    }
+                    
+                    // Show tooltip with plugin info
+                    if (ImGui::IsItemHovered())
+                    {
+                        ImGui::BeginTooltip();
+                        ImGui::Text("Manufacturer: %s", desc.manufacturerName.toRawUTF8());
+                        ImGui::Text("Version: %s", desc.version.toRawUTF8());
+                        ImGui::Text("Format: %s", desc.pluginFormatName.toRawUTF8());
+                        ImGui::EndTooltip();
+                    }
+                }
+                ImGui::EndMenu();
+            }
+            
             ImGui::EndPopup();
         }
 
@@ -3377,6 +2738,17 @@ juce::ValueTree ImGuiNodeEditorComponent::getUiValueTree()
         
         ui.addChild (n, -1, nullptr);
     }
+    
+    // --- FIX: Explicitly save the output node position (ID 0) ---
+    // The main output node is not part of getModulesInfo(), so we need to save it separately
+    const ImVec2 outputPos = ImNodes::GetNodeGridSpacePos(0);
+    juce::ValueTree outputNode("node");
+    outputNode.setProperty("id", 0, nullptr);
+    outputNode.setProperty("x", outputPos.x, nullptr);
+    outputNode.setProperty("y", outputPos.y, nullptr);
+    ui.addChild(outputNode, -1, nullptr);
+    // --- END OF FIX ---
+    
     return ui;
 }
 
@@ -3644,7 +3016,7 @@ void ImGuiNodeEditorComponent::muteNode(juce::uint32 logicalId)
     // --- FIX: More robust bypass splicing logic ---
     // 3. Splice the connections to bypass the node.
     // Connect the FIRST input source to ALL output destinations.
-    // This correctly handles cases where input channel != output channel (e.g., Mixer input 3 → output 0).
+    // This correctly handles cases where input channel != output channel (e.g., Mixer input 3 â†’ output 0).
     if (!state.incomingConnections.empty() && !state.outgoingConnections.empty())
     {
         const auto& primary_input = state.incomingConnections[0];
@@ -3864,8 +3236,8 @@ void ImGuiNodeEditorComponent::handleRandomizePatch()
     std::vector<std::pair<juce::uint32, ModPin>> allModIns;
 
     for (const auto& mod : addedModules) {
-        auto it = modulePinDatabase.find(mod.second);
-        if (it != modulePinDatabase.end()) {
+        auto it = getModulePinDatabase().find(mod.second);
+        if (it != getModulePinDatabase().end()) {
             for(const auto& pin : it->second.audioOuts) allAudioOuts.push_back({mod.first, pin});
             for(const auto& pin : it->second.audioIns) allAudioIns.push_back({mod.first, pin});
             for(const auto& pin : it->second.modIns) allModIns.push_back({mod.first, pin});
@@ -3977,8 +3349,8 @@ void ImGuiNodeEditorComponent::handleRandomizeConnections()
     // Refresh module list in case we added a Mixer/Scope
     auto updatedModules = synth->getModulesInfo();
     for (const auto& mod : updatedModules) {
-        auto it = modulePinDatabase.find(mod.second);
-        if (it != modulePinDatabase.end()) {
+        auto it = getModulePinDatabase().find(mod.second);
+        if (it != getModulePinDatabase().end()) {
             for(const auto& pin : it->second.audioOuts) allAudioOuts.push_back({mod.first, pin});
             for(const auto& pin : it->second.audioIns) allAudioIns.push_back({mod.first, pin});
             for(const auto& pin : it->second.modIns) allModIns.push_back({mod.first, pin});
@@ -4618,16 +3990,16 @@ void ImGuiNodeEditorComponent::parsePinName(const juce::String& fullName, juce::
 // Helper functions to get pins from modules
 std::vector<AudioPin> ImGuiNodeEditorComponent::getOutputPins(const juce::String& moduleType)
 {
-    auto it = modulePinDatabase.find(moduleType);
-    if (it != modulePinDatabase.end())
+    auto it = getModulePinDatabase().find(moduleType);
+    if (it != getModulePinDatabase().end())
         return it->second.audioOuts;
     return {};
 }
 
 std::vector<AudioPin> ImGuiNodeEditorComponent::getInputPins(const juce::String& moduleType)
 {
-    auto it = modulePinDatabase.find(moduleType);
-    if (it != modulePinDatabase.end())
+    auto it = getModulePinDatabase().find(moduleType);
+    if (it != getModulePinDatabase().end())
         return it->second.audioIns;
     return {};
 }
@@ -4932,6 +4304,44 @@ void ImGuiNodeEditorComponent::drawInsertNodeOnLinkPopup()
                 ImGui::CloseCurrentPopup();
             }
         }
+        
+        // VST Plugins submenu (only for audio cables)
+        if (!linkToInsertOn.isMod)
+        {
+            ImGui::Separator();
+            if (ImGui::BeginMenu("VST"))
+            {
+                auto& app = PresetCreatorApplication::getApp();
+                auto& knownPluginList = app.getKnownPluginList();
+                
+                for (const auto& desc : knownPluginList.getTypes())
+                {
+                    if (ImGui::MenuItem(desc.name.toRawUTF8()))
+                    {
+                        if (isMultiInsert)
+                        {
+                            handleInsertNodeOnSelectedLinks(desc.name);
+                        }
+                        else
+                        {
+                            insertNodeBetween(desc.name);
+                        }
+                        ImGui::CloseCurrentPopup();
+                    }
+                    
+                    // Show tooltip with plugin info
+                    if (ImGui::IsItemHovered())
+                    {
+                        ImGui::BeginTooltip();
+                        ImGui::Text("Manufacturer: %s", desc.manufacturerName.toRawUTF8());
+                        ImGui::Text("Version: %s", desc.version.toRawUTF8());
+                        ImGui::EndTooltip();
+                    }
+                }
+                ImGui::EndMenu();
+            }
+        }
+        
         ImGui::EndPopup();
     }
     else
@@ -4954,7 +4364,29 @@ void ImGuiNodeEditorComponent::insertNodeOnLink(const juce::String& nodeType, co
     PinDataType dstType = getPinDataTypeForPin(linkInfo.dstPin);
 
     // 1. Create and Position the New Node
-    auto newNodeId = synth->addModule(nodeType);
+    // Check if this is a VST plugin by checking against known plugins
+    juce::AudioProcessorGraph::NodeID newNodeId;
+    auto& app = PresetCreatorApplication::getApp();
+    auto& knownPluginList = app.getKnownPluginList();
+    bool isVst = false;
+    
+    for (const auto& desc : knownPluginList.getTypes())
+    {
+        if (desc.name == nodeType)
+        {
+            // This is a VST plugin - use addVstModule
+            newNodeId = synth->addVstModule(app.getPluginFormatManager(), desc);
+            isVst = true;
+            break;
+        }
+    }
+    
+    if (!isVst)
+    {
+        // Regular module - use addModule
+        newNodeId = synth->addModule(nodeType);
+    }
+    
     auto newNodeLid = synth->getLogicalIdForNode(newNodeId);
     pendingNodeScreenPositions[(int)newNodeLid] = position;
 
@@ -4995,7 +4427,27 @@ void ImGuiNodeEditorComponent::insertNodeBetween(const juce::String& nodeType, c
     ImVec2 newNodePos = ImVec2((srcPos.x + dstPos.x) * 0.5f, (srcPos.y + dstPos.y) * 0.5f);
 
     // 2. Create and position the new converter node
-    auto newNodeId = synth->addModule(nodeType);
+    // Check if this is a VST plugin
+    juce::AudioProcessorGraph::NodeID newNodeId;
+    auto& app = PresetCreatorApplication::getApp();
+    auto& knownPluginList = app.getKnownPluginList();
+    bool isVst = false;
+    
+    for (const auto& desc : knownPluginList.getTypes())
+    {
+        if (desc.name == nodeType)
+        {
+            newNodeId = synth->addVstModule(app.getPluginFormatManager(), desc);
+            isVst = true;
+            break;
+        }
+    }
+    
+    if (!isVst)
+    {
+        newNodeId = synth->addModule(nodeType);
+    }
+    
     auto newNodeLid = synth->getLogicalIdForNode(newNodeId);
     pendingNodePositions[(int)newNodeLid] = newNodePos;
 
@@ -5115,21 +4567,32 @@ PinDataType ImGuiNodeEditorComponent::getPinDataTypeForPin(const PinID& pin)
     juce::String moduleType = getTypeForLogical(pin.logicalId);
     if (moduleType.isEmpty()) return PinDataType::Raw;
 
-    auto it = modulePinDatabase.find(moduleType);
-    if (it == modulePinDatabase.end())
+    auto it = getModulePinDatabase().find(moduleType);
+    if (it == getModulePinDatabase().end())
     {
         // Fallback: case-insensitive lookup (module registry may use different casing)
         juce::String moduleTypeLower = moduleType.toLowerCase();
-        for (const auto& kv : modulePinDatabase)
+        for (const auto& kv : getModulePinDatabase())
         {
             if (kv.first.compareIgnoreCase(moduleType) == 0 || kv.first.toLowerCase() == moduleTypeLower)
             {
-                it = modulePinDatabase.find(kv.first);
+                it = getModulePinDatabase().find(kv.first);
                 break;
             }
         }
-        if (it == modulePinDatabase.end())
+        if (it == getModulePinDatabase().end())
+        {
+            // If the module type is not in our static database, it's likely a VST plugin.
+            // A safe assumption is that its pins are for audio.
+            if (auto* module = synth->getModuleForLogical(pin.logicalId))
+            {
+                if (dynamic_cast<VstHostModuleProcessor*>(module))
+                {
+                    return PinDataType::Audio; // Green for VST pins
+                }
+            }
             return PinDataType::Raw;
+        }
     }
 
     const auto& pinInfo = it->second;
@@ -5252,18 +4715,18 @@ std::vector<AudioPin> ImGuiNodeEditorComponent::getPinsOfType(juce::uint32 logic
         return matchingPins;
     }
 
-    auto it = modulePinDatabase.find(moduleType);
+    auto it = getModulePinDatabase().find(moduleType);
 
     // --- CASE-INSENSITIVE LOOKUP FIX ---
     // If the direct lookup fails, try a case-insensitive search.
-    if (it == modulePinDatabase.end())
+    if (it == getModulePinDatabase().end())
     {
         juce::String moduleTypeLower = moduleType.toLowerCase();
-        for (const auto& kv : modulePinDatabase)
+        for (const auto& kv : getModulePinDatabase())
         {
             if (kv.first.compareIgnoreCase(moduleType) == 0 || kv.first.toLowerCase() == moduleTypeLower)
             {
-                it = modulePinDatabase.find(kv.first);
+                it = getModulePinDatabase().find(kv.first);
                 juce::Logger::writeToLog("[getPinsOfType] Found case-insensitive match: '" + moduleType + "' -> '" + kv.first + "'");
                 break;
             }
@@ -5271,7 +4734,7 @@ std::vector<AudioPin> ImGuiNodeEditorComponent::getPinsOfType(juce::uint32 logic
     }
     // --- END OF CASE-INSENSITIVE LOOKUP FIX ---
 
-    if (it == modulePinDatabase.end())
+    if (it == getModulePinDatabase().end())
     {
         juce::Logger::writeToLog("[getPinsOfType] ERROR: Module '" + moduleType + "' not in database");
         return matchingPins;
@@ -5386,4 +4849,70 @@ void ImGuiNodeEditorComponent::handleColorCodedChaining(PinDataType targetType)
     // 3. Apply all new connections to the audio graph.
     graphNeedsRebuild = true;
 }
+
+// VST Plugin Support
+void ImGuiNodeEditorComponent::addPluginModules()
+{
+    if (synth == nullptr)
+        return;
+    
+    auto& app = PresetCreatorApplication::getApp();
+    auto& knownPluginList = app.getKnownPluginList();
+    auto& formatManager = app.getPluginFormatManager();
+    
+    // Set the plugin format manager and known plugin list on the synth if not already set
+    synth->setPluginFormatManager(&formatManager);
+    synth->setKnownPluginList(&knownPluginList);
+    
+    // Display each known plugin as a button
+    const auto& plugins = knownPluginList.getTypes();
+    
+    if (plugins.isEmpty())
+    {
+        ImGui::TextDisabled("No plugins found.");
+        ImGui::TextDisabled("Use 'Scan for Plugins...' in the File menu.");
+        return;
+    }
+    
+    for (const auto& desc : plugins)
+    {
+        juce::String buttonLabel = desc.name;
+        if (desc.manufacturerName.isNotEmpty())
+        {
+            buttonLabel += " (" + desc.manufacturerName + ")";
+        }
+        
+        if (ImGui::Selectable(buttonLabel.toRawUTF8()))
+        {
+            auto nodeId = synth->addVstModule(formatManager, desc);
+            if (nodeId.uid != 0)
+            {
+                const ImVec2 mouse = ImGui::GetMousePos();
+                const auto logicalId = synth->getLogicalIdForNode(nodeId);
+                pendingNodeScreenPositions[(int)logicalId] = mouse;
+                snapshotAfterEditor = true;
+                juce::Logger::writeToLog("[VST] Added plugin: " + desc.name);
+            }
+            else
+            {
+                juce::Logger::writeToLog("[VST] ERROR: Failed to add plugin: " + desc.name);
+            }
+        }
+        
+        // Show tooltip with plugin info on hover
+        if (ImGui::IsItemHovered())
+        {
+            ImGui::BeginTooltip();
+            ImGui::Text("Name: %s", desc.name.toRawUTF8());
+            ImGui::Text("Manufacturer: %s", desc.manufacturerName.toRawUTF8());
+            ImGui::Text("Version: %s", desc.version.toRawUTF8());
+            ImGui::Text("Format: %s", desc.pluginFormatName.toRawUTF8());
+            ImGui::Text("Type: %s", desc.isInstrument ? "Instrument" : "Effect");
+            ImGui::Text("Inputs: %d", desc.numInputChannels);
+            ImGui::Text("Outputs: %d", desc.numOutputChannels);
+            ImGui::EndTooltip();
+        }
+    }
+}
+
 

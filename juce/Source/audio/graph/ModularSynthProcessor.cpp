@@ -31,6 +31,7 @@
 #include "../modules/TTSPerformerModuleProcessor.h"
 #include "../modules/ComparatorModuleProcessor.h"
 #include "../modules/VocalTractFilterModuleProcessor.h"
+#include "../modules/VstHostModuleProcessor.h"
 #include "../modules/SampleLoaderModuleProcessor.h"
 #include "../modules/FunctionGeneratorModuleProcessor.h"
 #include "../modules/TimePitchModuleProcessor.h"
@@ -80,6 +81,8 @@ void ModularSynthProcessor::prepareToPlay(double sampleRate, int samplesPerBlock
     // Ensure the internal graph has matching I/O channel counts before preparation
     internalGraph->setPlayConfigDetails(getTotalNumInputChannels(), getTotalNumOutputChannels(), sampleRate, samplesPerBlock);
     internalGraph->prepareToPlay(sampleRate, samplesPerBlock);
+
+    // REPLACED: Do not rebuild here. It invalidates the preparation.
 }
 
 void ModularSynthProcessor::releaseResources()
@@ -138,18 +141,34 @@ void ModularSynthProcessor::getStateInformation(juce::MemoryBlock& destData)
         {
             if (auto* modProc = dynamic_cast<ModuleProcessor*>(itNode->second->getProcessor()))
             {
-                juce::ValueTree params = modProc->getAPVTS().copyState();
-                // Wrap params under a known tag
-                juce::ValueTree paramsWrapper("params");
-                paramsWrapper.addChild(params, -1, nullptr);
-                mv.addChild(paramsWrapper, -1, nullptr);
-
-                // Append optional extra state
-                if (auto extra = modProc->getExtraStateTree(); extra.isValid())
+                // For VST modules, save the full processor state via extra state
+                if (auto* vstHost = dynamic_cast<VstHostModuleProcessor*>(modProc))
                 {
-                    juce::ValueTree extraWrapper("extra");
-                    extraWrapper.addChild(extra, -1, nullptr);
-                    mv.addChild(extraWrapper, -1, nullptr);
+                    // VST Module Saving Path
+                    // The extra state tree contains both the plugin identity and its binary state
+                    if (auto extra = vstHost->getExtraStateTree(); extra.isValid())
+                    {
+                        juce::ValueTree extraWrapper("extra");
+                        extraWrapper.addChild(extra, -1, nullptr);
+                        mv.addChild(extraWrapper, -1, nullptr);
+                    }
+                }
+                else
+                {
+                    // Regular Module Saving Path
+                    // 1. Save APVTS parameters
+                    juce::ValueTree params = modProc->getAPVTS().copyState();
+                    juce::ValueTree paramsWrapper("params");
+                    paramsWrapper.addChild(params, -1, nullptr);
+                    mv.addChild(paramsWrapper, -1, nullptr);
+
+                    // 2. Append optional extra state (like sample paths, etc.)
+                    if (auto extra = modProc->getExtraStateTree(); extra.isValid())
+                    {
+                        juce::ValueTree extraWrapper("extra");
+                        extraWrapper.addChild(extra, -1, nullptr);
+                        mv.addChild(extraWrapper, -1, nullptr);
+                    }
                 }
             }
         }
@@ -255,10 +274,63 @@ void ModularSynthProcessor::setStateInformation(const void* data, int sizeInByte
 
         if (logicalId > 0 && type.isNotEmpty())
         {
-            // Create the module using the existing addModule function
-            juce::Logger::writeToLog("[STATE]   Calling addModule('" + type + "')...");
-            auto nodeId = addModule(type);
-            juce::Logger::writeToLog("[STATE]   addModule returned nodeId.uid=" + juce::String(nodeId.uid));
+            NodeID nodeId;
+            
+            // Check if this is a VST module by looking for the extra state
+            auto extraWrapper = mv.getChildWithName("extra");
+            bool isVstModule = false;
+            
+            if (extraWrapper.isValid() && extraWrapper.getNumChildren() > 0)
+            {
+                auto extraState = extraWrapper.getChild(0);
+                if (extraState.hasType("VstHostState"))
+                {
+                    isVstModule = true;
+                    juce::Logger::writeToLog("[STATE]   Loading VST module...");
+                    
+                    // Get the plugin identifier from the extra state
+                    juce::String identifier = extraState.getProperty("fileOrIdentifier", "").toString();
+                    
+                    if (identifier.isNotEmpty() && pluginFormatManager != nullptr && knownPluginList != nullptr)
+                    {
+                        // Find the plugin in the known plugins list
+                        bool found = false;
+                        for (const auto& desc : knownPluginList->getTypes())
+                        {
+                            if (desc.fileOrIdentifier == identifier)
+                            {
+                                juce::Logger::writeToLog("[STATE]   Found VST to load: " + desc.name);
+                                nodeId = addVstModule(*pluginFormatManager, desc, logicalId);
+                                found = true;
+                                break;
+                            }
+                        }
+                        
+                        if (!found)
+                        {
+                            juce::Logger::writeToLog("[STATE]   ERROR: VST plugin not found: " + identifier);
+                        }
+                    }
+                    else
+                    {
+                        juce::Logger::writeToLog("[STATE]   ERROR: No plugin identifier or format manager/list not available");
+                    }
+                    
+                    if (nodeId.uid == 0)
+                    {
+                        juce::Logger::writeToLog("[STATE]   ERROR: Failed to create VST module, skipping...");
+                        continue;
+                    }
+                }
+            }
+            
+            if (!isVstModule)
+            {
+                // Create regular module using the existing addModule function
+                juce::Logger::writeToLog("[STATE]   Calling addModule('" + type + "')...");
+                nodeId = addModule(type);
+                juce::Logger::writeToLog("[STATE]   addModule returned nodeId.uid=" + juce::String(nodeId.uid));
+            }
             
             auto* node = internalGraph->getNodeForId(nodeId);
             
@@ -266,19 +338,25 @@ void ModularSynthProcessor::setStateInformation(const void* data, int sizeInByte
             {
                 juce::Logger::writeToLog("[STATE]   Node created successfully.");
                 
-                // Remove the auto-assigned logical mapping and assign the correct one
-                for (auto it = logicalIdToModule.begin(); it != logicalIdToModule.end(); )
+                // For VST modules, the logical ID was already assigned in addVstModule
+                // For regular modules, we need to update the mapping
+                if (!isVstModule)
                 {
-                    if (it->second.nodeID == nodeId)
-                        it = logicalIdToModule.erase(it);
-                    else
-                        ++it;
+                    // Remove the auto-assigned logical mapping and assign the correct one
+                    for (auto it = logicalIdToModule.begin(); it != logicalIdToModule.end(); )
+                    {
+                        if (it->second.nodeID == nodeId)
+                            it = logicalIdToModule.erase(it);
+                        else
+                            ++it;
+                    }
+                    logicalIdToModule[logicalId] = LogicalModule{ nodeId, type };
                 }
-                logicalIdToModule[logicalId] = LogicalModule{ nodeId, type };
+                
                 logicalToNodeId[logicalId] = nodeId;
                 juce::Logger::writeToLog("[STATE]   Mapped logicalId " + juce::String(logicalId) + " to nodeId.uid " + juce::String(nodeId.uid));
 
-                // Restore parameters for this module
+                // Restore parameters for all modules
                 auto paramsWrapper = mv.getChildWithName("params");
                 if (paramsWrapper.isValid() && paramsWrapper.getNumChildren() > 0)
                 {
@@ -290,7 +368,7 @@ void ModularSynthProcessor::setStateInformation(const void* data, int sizeInByte
                     }
                 }
 
-                // Restore optional extra state (e.g., file paths)
+                // Restore optional extra state (e.g., VST plugin state, file paths)
                 auto extraWrapper = mv.getChildWithName("extra");
                 if (extraWrapper.isValid() && extraWrapper.getNumChildren() > 0)
                 {
@@ -459,7 +537,6 @@ ModularSynthProcessor::NodeID ModularSynthProcessor::addModule(const juce::Strin
 
     if (! processor)
     {
-        // Try loose match if aliases weren’t added
         for (const auto& kv : factory)
             if (moduleType.equalsIgnoreCase(kv.first)) { processor = kv.second(); break; }
     }
@@ -472,22 +549,16 @@ ModularSynthProcessor::NodeID ModularSynthProcessor::addModule(const juce::Strin
         modules[(juce::uint32) node->nodeID.uid] = node;
         const juce::uint32 logicalId = nextLogicalId++;
         logicalIdToModule[logicalId] = LogicalModule{ node->nodeID, moduleType };
-        // Wire stable logical ID into the module to avoid pointer-based lookup races
         if (auto* mp = dynamic_cast<ModuleProcessor*>(node->getProcessor()))
             mp->setLogicalId(logicalId);
         
-        // If this is our new Audio Input module, set up initial default channel mapping
         if (moduleType.equalsIgnoreCase("audio input"))
         {
-            // Default to 2 channels mapping to hardware channels 0 and 1
             std::vector<int> defaultMapping = {0, 1};
             setAudioInputChannelMapping(node->nodeID, defaultMapping);
         }
         
-        // --- DEBUG-ADDMODULE ---
-        juce::Logger::writeToLog("[DEBUG-ADDMODULE] Added module '" + moduleType + "' with NodeID: " + juce::String(node->nodeID.uid));
-
-        // CRITICAL FIX: Rebuild the graph so processBlock is actually called!
+        // Ensure the new module is immediately active
         commitChanges();
         
         return node->nodeID;
@@ -495,6 +566,59 @@ ModularSynthProcessor::NodeID ModularSynthProcessor::addModule(const juce::Strin
 
     juce::Logger::writeToLog("[ModSynth][WARN] Unknown module type: " + moduleType);
     return {};
+}
+
+// This overload is used when loading from presets (with a specific logical ID)
+ModularSynthProcessor::NodeID ModularSynthProcessor::addVstModule(
+    juce::AudioPluginFormatManager& formatManager,
+    const juce::PluginDescription& vstDesc,
+    juce::uint32 logicalIdToAssign)
+{
+    juce::String errorMessage;
+    std::unique_ptr<juce::AudioPluginInstance> instance = 
+        formatManager.createPluginInstance(vstDesc, getSampleRate(), getBlockSize(), errorMessage);
+
+    if (instance == nullptr)
+    {
+        juce::Logger::writeToLog("[ModSynth][ERROR] Could not create VST instance: " + errorMessage);
+        return {};
+    }
+
+    // 1. Create the wrapper - its constructor automatically configures the correct bus layout
+    auto wrapper = std::make_unique<VstHostModuleProcessor>(std::move(instance), vstDesc);
+    
+    // 2. Add the fully configured node to the graph
+    auto node = internalGraph->addNode(std::move(wrapper), {}, juce::AudioProcessorGraph::UpdateKind::none);
+
+    if (auto* mp = dynamic_cast<ModuleProcessor*>(node->getProcessor()))
+        mp->setParent(this);
+    
+    modules[(juce::uint32) node->nodeID.uid] = node;
+    
+    // Use the assigned logical ID (important for preset loading)
+    logicalIdToModule[logicalIdToAssign] = LogicalModule{ node->nodeID, vstDesc.name };
+    
+    if (auto* mp = dynamic_cast<ModuleProcessor*>(node->getProcessor()))
+        mp->setLogicalId(logicalIdToAssign);
+    
+    juce::Logger::writeToLog("[ModSynth] Added VST module: " + vstDesc.name + " with logical ID " + juce::String(logicalIdToAssign));
+    return node->nodeID;
+}
+
+// This overload is used for interactive adding (generates a new logical ID)
+ModularSynthProcessor::NodeID ModularSynthProcessor::addVstModule(
+    juce::AudioPluginFormatManager& formatManager,
+    const juce::PluginDescription& vstDesc)
+{
+    // Call the overload with a fresh ID
+    const juce::uint32 logicalId = nextLogicalId++;
+    auto nodeId = addVstModule(formatManager, vstDesc, logicalId);
+    
+    // Commit changes for interactive adding
+    if (nodeId.uid != 0)
+        commitChanges();
+    
+    return nodeId;
 }
 
 void ModularSynthProcessor::removeModule(const NodeID& nodeID)
@@ -534,35 +658,39 @@ void ModularSynthProcessor::commitChanges()
 {
     internalGraph->rebuild();
     
-    // --- DEBUG-COMMIT: Post-rebuild state ---
-    juce::Logger::writeToLog("--- [DEBUG-COMMIT] Graph State Post-Rebuild ---");
-    juce::Logger::writeToLog("[DEBUG-COMMIT] Num Nodes: " + juce::String(internalGraph->getNodes().size()));
-    juce::Logger::writeToLog("[DEBUG-COMMIT] Num Connections: " + juce::String(internalGraph->getConnections().size()));
-    for (const auto& conn : internalGraph->getConnections())
-    {
-        juce::Logger::writeToLog("  - Connection: [" + juce::String(conn.source.nodeID.uid) + ":" + juce::String(conn.source.channelIndex)
-            + "] -> [" + juce::String(conn.destination.nodeID.uid) + ":" + juce::String(conn.destination.channelIndex) + "]");
-    }
-    juce::Logger::writeToLog("-----------------------------------------");
-
-    // CRITICAL FIX: Force graph to re-prepare after topology changes to update internal routing
+    // CRITICAL FIX: Force graph to re-prepare after topology changes. This makes the "Silent Wire" carry audio.
     if (getSampleRate() > 0 && getBlockSize() > 0)
     {
         internalGraph->prepareToPlay(getSampleRate(), getBlockSize());
     }
 
-    // --- DEBUG-COMMIT: Sync logical IDs to processors ---
-    juce::Logger::writeToLog("[DEBUG-COMMIT] Syncing logical IDs to module processors...");
+    // --- SANE, ON-DEMAND DIAGNOSTICS (NO MORE LOG FLOOD) ---
+    juce::Logger::writeToLog("--- Modular Synth Internal Patch State ---");
+    juce::Logger::writeToLog("Num Nodes: " + juce::String(internalGraph->getNodes().size()));
+    juce::Logger::writeToLog("Num Connections: " + juce::String(internalGraph->getConnections().size()));
+    for (const auto& node : internalGraph->getNodes())
+    {
+        auto* p = node->getProcessor();
+        juce::String name = p ? p->getName() : juce::String("<null>");
+        const int ins  = p ? p->getTotalNumInputChannels()  : -1;
+        const int outs = p ? p->getTotalNumOutputChannels() : -1;
+        juce::Logger::writeToLog("  Node: id=" + juce::String(node->nodeID.uid) + " name='" + name + "' ins=" + juce::String(ins) + " outs=" + juce::String(outs));
+    }
+    for (const auto& conn : internalGraph->getConnections())
+    {
+        juce::Logger::writeToLog("  Connection: [" + juce::String(conn.source.nodeID.uid) + ":" + juce::String(conn.source.channelIndex)
+            + "] -> [" + juce::String(conn.destination.nodeID.uid) + ":" + juce::String(conn.destination.channelIndex) + "]");
+    }
+    juce::Logger::writeToLog("-----------------------------------------");
+    
+    // CRITICAL FIX: Always sync logical IDs to module processors to fix preset loading.
     for (const auto& kv : logicalIdToModule)
     {
-        ModuleProcessor* mp = getModuleForLogical(kv.first);
-        if (mp != nullptr)
+        if (ModuleProcessor* mp = getModuleForLogical(kv.first))
         {
-            juce::Logger::writeToLog("  - Syncing LID=" + juce::String((int)kv.first) + " to processor. Current stored ID: " + juce::String((int)mp->getLogicalId()));
             mp->setLogicalId(kv.first);
         }
     }
-    juce::Logger::writeToLog("[DEBUG-COMMIT] Sync complete.");
 }
 
 void ModularSynthProcessor::clearAll()

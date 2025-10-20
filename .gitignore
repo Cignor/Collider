@@ -61,4 +61,5 @@ audio_sdk_juce/*.zip
 *.lib
 *.obj
 *.o
-
+*.vst3
+*.vst

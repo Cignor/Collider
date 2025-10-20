@@ -11,7 +11,9 @@ class PresetCreatorComponent : public juce::Component,
                                private juce::Timer
 {
 public:
-    PresetCreatorComponent(juce::AudioDeviceManager& deviceManager);
+    PresetCreatorComponent(juce::AudioDeviceManager& deviceManager,
+                           juce::AudioPluginFormatManager& formatManager,
+                           juce::KnownPluginList& knownPluginList);
     ~PresetCreatorComponent() override;
 
     void paint (juce::Graphics&) override;
@@ -67,6 +69,8 @@ private:
     std::unique_ptr<juce::FileChooser> loadChooser;
 
     juce::AudioDeviceManager& deviceManager;
+    juce::AudioPluginFormatManager& pluginFormatManager;
+    juce::KnownPluginList& knownPluginList;
     juce::AudioProcessorPlayer processorPlayer;
     bool auditioning { false };
 };

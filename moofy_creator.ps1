@@ -129,6 +129,8 @@
 "juce/Source/audio/modules/VCOModuleProcessor.h",
 "juce/Source/audio/modules/VocalTractFilterModuleProcessor.cpp",
 "juce/Source/audio/modules/VocalTractFilterModuleProcessor.h",
+"juce/Source/audio/modules/VstHostModuleProcessor.cpp",
+"juce/Source/audio/modules/VstHostModuleProcessor.h",
 "juce/Source/audio/modules/WaveshaperModuleProcessor.cpp",
 "juce/Source/audio/modules/WaveshaperModuleProcessor.h",
 
@@ -155,6 +157,9 @@
     # --- Preset Creator UI ---
     "juce/Source/preset_creator/ImGuiNodeEditorComponent.h",
     "juce/Source/preset_creator/ImGuiNodeEditorComponent.cpp",
+    "juce/Source/preset_creator/PinDatabase.h",
+    "juce/Source/preset_creator/PinDatabase.cpp",
+    "juce/Source/preset_creator/PresetCreatorApplication.h",
     "juce/Source/preset_creator/PresetCreatorComponent.h",
     "juce/Source/preset_creator/PresetCreatorComponent.cpp",    
 	"juce/CMakeLists.txt",

@@ -1,0 +1,91 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<ModularSynthPreset version="1">
+  <modules>
+    <module logicalId="3" type="VCO">
+      <params>
+        <VCOParams>
+          <PARAM id="frequency" value="158.0"/>
+          <PARAM id="waveform" value="1.0"/>
+        </VCOParams>
+      </params>
+    </module>
+    <module logicalId="4" type="Random">
+      <params>
+        <RandomParams>
+          <PARAM id="cvMax" value="1.0"/>
+          <PARAM id="cvMin" value="0.0"/>
+          <PARAM id="max" value="1.0"/>
+          <PARAM id="min" value="0.0"/>
+          <PARAM id="normMax" value="1.0"/>
+          <PARAM id="normMin" value="0.0"/>
+          <PARAM id="rate" value="1.00000011920929"/>
+          <PARAM id="slew" value="0.0"/>
+          <PARAM id="trigThreshold" value="0.5"/>
+        </RandomParams>
+      </params>
+    </module>
+    <module logicalId="14" type="VCO">
+      <params>
+        <VCOParams>
+          <PARAM id="frequency" value="158.0"/>
+          <PARAM id="waveform" value="2.0"/>
+        </VCOParams>
+      </params>
+    </module>
+    <module logicalId="22" type="Things Motor">
+      <extra>
+        <VstHostState fileOrIdentifier="H:\0000_CODE\01_collider_pyo\juce\build\PresetCreatorApp_artefacts\Release\VST\ThingsMotor.vst3"
+                      name="Things Motor" manufacturerName="AudioThing" version="1.1.0"
+                      pluginFormatName="VST3" pluginState="996.VMjLgr8....O+fWarAhckI2bo8la8HRLt.iHfTlai8FYo41Y8HRUTYTK3HxO9.BOVMEUy.Ea0cVZtMEcgQWY9vSRC8Vav8lak4Fc9XiMy3hUMczXWEjKt3hYt3hKt.kKt3hKt3BS5gEcyQjKtfjckYTR5AkaA4hKtfjKi0TPCUkKDAkKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKAIFcUMTRSgDZF4hKtXWdOMCLFElYXcUV30zUZUGMV8DZDk1R1gjPHsFMwfUcQYkVzMlUOgFUEUkQvHjSncSZOYlcCUkaqwVXs0zUSUWTxDFd3.CUEEUQUkDM5E0TAIzTFgiZTcVTWkENHIESz4RZHYlcpE0SAUjVm0zUYgCRBwDctjFRlYmZQ8zXUgULUY0Sn4RZKoGTC0jdPMTS5AUdMICUS0zLDkGSwfjPHwTV5M0Tq0VXoASZHc2LBwDZtfFTmcmUXQWSVkENHIDSzIVdLQCQS4DMpkGSwvzPNQiZowTdDkFRlA0ZhsFLwDlb3X0Sn4RZKQCQCwjdtLDS1oVZLEiKSwjLhkVS2gjPHY0ZrgEdEYzX0ASZHY2LB4DMPkGSzn1PNMCQ4wTLHMkS2QUZHYlKUgEczXUV3ASZHY2Ln0DdhkFS14xPLYmXC0TdlkVSvnVdMglKRMUcQISX3ASZHc2LBwDZtH0T0EkLggWSEI1ZUYTV3fjPLQGUogjY5QkVy.SZHc2LBwDZtfFTzDzUXkWSW8DZDk1R1gjPHYUUrIVdqESXzASZHc2LRwDctjFRlQEUXkWTWkEdUoWVsASZHcGRBgDTIcUV4UkQigCRRIEcqYzXn4hPTcVRWg0bUYzXqkzQSUWSwnENHgFRlAUQZ8FMwjUdvnWX5gCahQURWk0b3XTX0ASZHYGRBgDTEwlXmAiUYoWUrIVdvjFR2gjPHQ0YVoEciEiXHUjUZQWRVgUZmY0SngTZHU2LC4hKt3hKt3hKt3hKlIUUMQUTPkzUZESQFM1ZQQEV5UjQtDDQlAEMAcEV40zQtDDQ14hK5EjKt3hKt3hKt3hRUACTEEzZh8VVWgkdUYTTmE0UXwyKIMzasA2atUlaz4COuX0TTMCTrU2Yo41TzEFck4C."/>
+      </extra>
+    </module>
+    <module logicalId="23" type="Springs">
+      <extra>
+        <VstHostState fileOrIdentifier="H:\0000_CODE\01_collider_pyo\juce\build\PresetCreatorApp_artefacts\Release\VST\Springs.vst3"
+                      name="Springs" manufacturerName="AudioThing" version="1.3.3"
+                      pluginFormatName="VST3" pluginState="1680.VMjLgbnA...O+fWarAhckI2bo8la8HRLt.iHfTlai8FYo41Y8HRUTYTK3HxO9.BOVMEUy.Ea0cVZtMEcgQWY9vSRC8Vav8lak4Fc9DSL2TiKV0zQicUPt3hKl4hKt3BTt3hKt3hKLoGVzMGQt3BT1UlQIoGTtEjKt3BR1QkcIUkVtPjctLjKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKtLjXzU0PIMERn4jKt3hc48zLvXTXlg0UYgWSWoUczX0SnQTZKYGRBgzZzDCV0EkUZQ2XV8DZTUTUFAiPNg1Mo8jY1kGU1kzUZQ2XwHVYMUUTTEUUR4zX5QkYpoVX1U0QigCRBwDcHMDS4Q0PLYmKCwDdXkFS3g0PLoGTogjYPolXuk0UYgCRBwDctjWSwn1TNQiZS4DMTMjS3IVZMICTS4DZtHkTzEzUio2cDQENHIDSzgTdMQiZS4DMpMTS2Q0PNICTC0zLDkFRlolZgYWUGMFRAU0Sn4RZKIiKS4DMpMkSzH1PNACTowTdHkWSzfjPHMUPsI1azDSVTs1QhsFLogzTAcEVoUkQjYWQrElZUwlXn4hPQsVSVgEMvjFR1MiPLglKBQkaEEiXqslZgESUrIldvjFR2MiPLglKBIUTvjFR2MiPLglKnMUcqEiXqASZHY2LBwjdDMUS2A0PLkGU4wzcPkGS3QzTMgGRBgjS3XkV4UkUQQWVWkkb3XjXqASZHc2LBwDZtfGU5UEahsFNwT0aQYzXtASZHY2LBwTdpMkSzn1TNQiZSwjcTMkS44RdLkGRBgDTIcUVyAEUYIWQVQFNHIDSzQUdMQiZS4DMpMjS4wzTLYGVS4DMTkFRlQEUgY2YVgUdqEiX3fjPLQGUo0jctLDS14xPLgGSC4jdDMjSvXVZHYFS5E1bA0lXq0jLhgCRBwDchkWSzn1TNQiZ40zcLMjSzHVdMYGUogjYHQEV40jLQc1ZrEFNHIDSzA0TMomZS4DMpMjS4wzTLYGVS4DMTkFRlgDUXkWSsEEdUYkXvTEagk1ZW8DZtj1R1A0PLYmKCwjcHMUS2YVZLQCVowjdHkFRloGUZo1XTg0azX0Sn4RZKgGR40jdpMkSzn1TLECUS0TdPMkSxfjPH0zZFkkQIcUV2U0UYQWSVQFNHIDSz4xPNQiZS4DMpkGSwPUZLcmKS0TdLMESn4hTS8VTVQENHIDSzg0PLYmKCwjctjFS4Y1PMcmYS0jLpkFRlA0ZhsVRFE1ZiQEVuQiUOglKosTdHMTSzn1TNQiYC4jchMkS1I1TLglKBUEdUwFVxUEaQgWUVIFLUwVXos1UOglKoszLXMDS14xPLcGS4wDLDMTS54xPMkGRBgTQEU0T0EkUYgCRBwDctjFRlQEUTUDMVgEZ2YUV3fjPLQmKogjYLASXrEkLPI2ZFIFNHIDSz4RZHYlXUkkdvjFR1MCZLkmKCwjctLDS1A0TLICR4wDdTMESn4hPQg2ZW8DZtj1RzvzTNQiZS4DMpkWSwPzTMMCQC0DdHIDRBs1QhcVSxHFNHIESz4RZHYlZpQETqYzXoclUOglKosDLHIDRIkDLToWQrIldvjFR1MiPLglKRIkTUoVXpASZHc2LBwDZtHkTRkEUXoVUVIEcvjFR1MiPLglKRIkTYQEVpUkURQWSTMFdYcUV3fjPLQGUogjYpoFUFUjQYsFNTMldvjFR2MiPLglKRIkTYQEVpUULSASTx.ELI01XqASZHY2LR0DZtHkTRUEQY8VTxDFdUoVXmkjQgsFLogzcyHDSn4BZUsVRxH1a3vVX3fjTLQGSosTdHIDREEkUZoGNrIFNHIDSn4hPTcVRWg0bUYzXqkzQSUWSwnENHgFRl4xZhsVSWkkdvjFRIQiUZoWR3sTNt3hKt3hKt3hKt3hKtQUUCUEQTg2ZrM1YQcUVDUjQicVPP4RPHQEY1UTLhkWPP4RPL4hKi4hKt3hKt3hKtXlTU0DUQAURWoULEYzXqEEUXoWQFwyKIMzasA2atUlaz4COuX0TTMCTrU2Yo41TzEFck4C."/>
+      </extra>
+    </module>
+    <module logicalId="24" type="Megaphone">
+      <extra>
+        <VstHostState fileOrIdentifier="H:\0000_CODE\01_collider_pyo\juce\build\PresetCreatorApp_artefacts\Release\VST\Megaphone_x64.vst3"
+                      name="Megaphone" manufacturerName="AudioThing" version="1.5.4"
+                      pluginFormatName="VST3" pluginState="1082.VMjLgDCA...O+fWarAhckI2bo8la8HRLt.iHfTlai8FYo41Y8HRUTYTK3HxO9.BOVMEUy.Ea0cVZtMEcgQWY9vSRC8Vav8lak4Fc9biL23hUMczXWEjKt3hYt3hKt.kKt3hKt3BS5gEcyQjKtfjc0YTR5AkaA4hKtfDTSsVPEokKDAUPD4hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKBIFZUMTRSgDZG4hKtXWdOMCLFElYXcUV30zUZUGMV8DZDk1R1gjPHsFMwfUcQYkVzMlUOgFUEUkQvHjSncSZOYlcSM0ZiYEV1cVLgQWUwb0TUQTUTslZScTSEgTS3XTVqASZHY2LBwDZtfFTmQiQYIyZFkkdmY0Sn4RZKMCQS4DMpMkSznVZLMCT40jdPkFSwfjPHQTRWoULUY0Sn4RZKICVS4DMpMkSzX1PLQCRo0DLDkGSxfjPHYTUVkkZIYEVoMmQU8FLVkENHIDSzQUdMQiZS4DMpMjS4wzTLYGVS4DMTkFRlgEUYsVTrg0YMEiVAASLgACMFMFNHIDSzg0TNQiZS4DMpMjSy3RdMQiK40zcHIDRNgiUZkWUFUEdqESVsUEahgCRRwDctjFRlMidg8VSWkESUw1XqcmUOglKosjdhMkSzn1TNQiYS4DdhMES2gUdLQCRBgTRzXjXvD0UOglKosjctLkSzn1TNQiZS4jLhkVS5YVZLAiYowDZtf2TvD0QhASTW8DZtj1Rw3xPLYmKCwjcHkGSy.0TLMCU40DMHIDRMslQjgCRBwDcTMTS14xPLYmKowzcPMUSxfUdMgGQogjYHQEY1UTLhkGLogjcyHDSn4BZSU2ZwH1ZMASXvjjLXsFLogjcyHESy3xPLYmKCwjchMESvfzTMAiXC0DZtf1T0sVLhsVUpEVLUYTX0EzUYgCRRwDctjFRlYGUZM2ZFM1ZIc0Sn4RZKYGRBgTS3vVX0ASZHYGRBgjUUwlX4sVLgQGLogzcyHUSzAUZHYlKqI1ZMcUV5ASZHkDMVokdIIDRPUDahcFLVkkdUwlX3fjTLECRBgDTEwlXmAiUYoWUrIFS3DCVwASZHg1Mn8jKt3hKt3hKt3hKt3hRUACTEEzZh8VVWgkdUYTTmE0UX4BQP4hPqcjXm0jLh4BQP4xPt.0Qt3hKt3hKt3hKtQUUCUEQTg2ZrM1YQcUVDUjQicVP77RRC8Vav8lak4Fc9vyKVMEUy.Ea0cVZtMEcgQWY9.."/>
+      </extra>
+    </module>
+    <module logicalId="25" type="Vinyl Strip">
+      <extra>
+        <VstHostState fileOrIdentifier="H:\0000_CODE\01_collider_pyo\juce\build\PresetCreatorApp_artefacts\Release\VST\VinylStrip.vst3"
+                      name="Vinyl Strip" manufacturerName="AudioThing" version="1.6.1"
+                      pluginFormatName="VST3" pluginState="1629.VMjLgPkA...O+fWarAhckI2bo8la8HRLt.iHfTlai8FYo41Y8HRUTYTK3HxO9.BOVMEUy.Ea0cVZtMEcgQWY9vSRC8Vav8lak4Fc9DSLybiKV0zQicUPt3hKl4hKt3BTt3hKt3hKLoGVzMGQt3BTPYkQIoGTtEjKt3BRlUEMMslXtPjYAEjKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKtLDQxU0PIMER2zjKt3hc48zLvXTXlg0UYgWSWoUczX0SnQTZKYGRBgzZzDCV0EkUZQ2XV8DZTUTUFAiPNg1Mo8jY1kVUuQiUjIWSEMFdqYjXk0TUQQUTUIkSioGUlwjdgMWPsI1ZMIiX0kzUPMGNVMFcQc0Sn4RZKomKS4DMpMkSznVZMoGR4wjLHMES4gjPHMDNVElcIcUV40jLggWUpEVLUYTX0EzUYgCRBwDcTMjSzn1TNQiZ40TdhkWS4o1TMECSogjYLoWXyETahsVSxHVcI0FTzDzUXkWSW8DZDk1R1gjPHQzZwHld3vlX5sVLgQWTpI1aYcUV3fjPLQGVC4DMpMkSzn1TNICVSwDLlMES5gTZHYFTToUdQISX3E0UZUGMw.Uc2ESX3ASZHY2L30DLHIDRDsVLhoGNrIldqESXzkDUjYWQwHVdvjFR1MiPLglKnQ0ZYcUV3kjUPMGNVMFcQc0Sn4RZKQiZCwjctLDS14xTNACSo0jLPkGS3gjPHIUUrM1ZI0FVSsFajsFLogjcyfFSvn1TNQiZS4DMtLTSwvTZLACVC4DZtfFUqk0UYgWRw.Uc2ESX3ASZHY2LB0TLpMkSzn1TNQiYC4jchMkS1I1TLglKnQ0ZYcUV3kDaPQSPWgUdMc0Sn4RZKYGRBgTQEUTUucmQigCRBwDcTkVS14xPLYmKCwDdLMjS5QzPNAiYogjYTQEUCU0QiUWVrkENHIDSzoVdLYmKCwjctLDSxPzTMgGUS0jLPkFRlQEUTIzZGI1YMIiX3fjTLQmKogjYXUkVzs1QgQTUxHldvjFR1MiPNcmKCwjctLDS1gTdLMCTSwzLTMjSn4BZU8FMVQlbQQ0X4EUaTcVTWkENHIDSzgzTLQiZS4DMpMkSyX1PLIiZCwjLDkFRlgUUZQ2ZGElS3XkV4UkUOglKosDMTMkSzn1TNQiXC4DLPkFS4gTdMQCRBgjUqwVXzbWLU8zXU8DZtj1RvfjPHY0ZrEFM2wFUq0TLggWTVAUaUY0Sn4RZKcGQS4DMpMkSznVdMkGQ40jLpMESn4BZU8FMVQlbMUzXqkzUYUGLogjcyfGS44xPLYmKCwzcLMES2wzPLgGQS4DZtfVUuQiUjIWRTQlcEEiX4ASZHc2LBwDZtfGUmAiQhIWUrIlPqYzX4ASZHY2LB4DdpMkSzn1TNMCS4wzctjVSzn1TMglK3Q0YvXjXxUEahIUQFM1ZvjFR1MCdMIiZS4DMpMkSxPTdLMiZ40jLtLUSn4BdTcFLFIlbUwlXBs1QhcVSxHFNHIESz4RZHYldTgUdQcUV3ACUZMCLogzcyHDSn4hTScVSGM1ZIISTmsFaggCRBwDcTkFRloGUXkWTWkEdIQEY1UTLhkGLogzcyHDSn4hTSUWTVMlbUYDS3fjTMglKRMUcQY0XxUkULgCRB0DZtH0T0EkUiIWUrwDNHIDSn4hTSUWTVMlbUECS3fjTLglKRMUcQY0XxUkQMgCR3wDZtH0T0EkUiIWUV0DNHgFSn4BZUsVRxH1a3vVX3fjTLQGVoszcHIDRPkzUYkWUFMFNHIkTzslQiglKBQ0YIcEVyUkQisVRGMUcMEiV3fDZHU2LC4hKt3hKt3hKt3hKlIUUMQUTPkzUZESQFM1ZQQEV5UjQtDDQlAEMAcEV40zQtDDQ14hK5EjKt3hKt3hKt3hRUACTEEzZh8VVWgkdUYTTmE0UXwyKIMzasA2atUlaz4COuX0TTMCTrU2Yo41TzEFck4C."/>
+      </extra>
+    </module>
+  </modules>
+  <connections>
+    <connection srcId="3" srcChan="0" dstId="23" dstChan="0"/>
+    <connection srcId="4" srcChan="2" dstId="3" dstChan="0"/>
+    <connection srcId="4" srcChan="2" dstId="14" dstChan="0"/>
+    <connection srcId="14" srcChan="0" dstId="23" dstChan="1"/>
+    <connection srcId="22" srcChan="0" dstId="25" dstChan="0"/>
+    <connection srcId="22" srcChan="1" dstId="25" dstChan="1"/>
+    <connection srcId="23" srcChan="0" dstId="22" dstChan="2"/>
+    <connection srcId="23" srcChan="1" dstId="22" dstChan="3"/>
+    <connection srcId="23" srcChan="0" dstId="24" dstChan="0"/>
+    <connection srcId="23" srcChan="1" dstId="24" dstChan="1"/>
+    <connection srcId="24" srcChan="0" dstId="22" dstChan="0"/>
+    <connection srcId="24" srcChan="1" dstId="22" dstChan="1"/>
+    <connection srcId="25" srcChan="0" dstId="output" dstChan="0"/>
+    <connection srcId="25" srcChan="1" dstId="output" dstChan="1"/>
+  </connections>
+  <NodeEditorUI>
+    <node id="3" x="-1060.3935546875" y="1092.217163085938"/>
+    <node id="4" x="-1492.3935546875" y="1078.217163085938"/>
+    <node id="14" x="-1048.3935546875" y="1268.217163085938"/>
+    <node id="22" x="28.0" y="1226.0"/>
+    <node id="23" x="-625.0" y="1199.0"/>
+    <node id="24" x="-262.0" y="1210.0"/>
+    <node id="25" x="351.0" y="1272.0"/>
+    <node id="0" x="879.8976440429688" y="1171.295043945312"/>
+  </NodeEditorUI>
+</ModularSynthPreset>

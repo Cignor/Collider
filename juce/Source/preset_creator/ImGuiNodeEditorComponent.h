@@ -15,13 +15,7 @@ struct ImGuiContext; struct ImGuiIO; struct ImNodesContext;
 class MIDIPlayerModuleProcessor;
 class MultiSequencerModuleProcessor;
 
-// Global pin database (defined in ImGuiNodeEditorComponent.cpp)
-
-
-
-extern std::map<juce::String, ModulePinInfo> modulePinDatabase;
-
-// Add this simple struct to hold pin information
+// Pin information struct for node editor
 struct PinInfo {
     uint32_t id;      // The unique ID of the pin
     juce::String type; // The parsed type ("Pitch", "Gate", "Trig", etc.)
@@ -38,7 +32,12 @@ public:
     void resized() override;
     // Input is handled by imgui_juce backend; no JUCE overrides needed
 
-    void setModel (ModularSynthProcessor* model) { synth = model; undoStack.clear(); redoStack.clear(); if (synth != nullptr) pushSnapshot(); }
+    void setModel (ModularSynthProcessor* model) 
+    { 
+        synth = model; 
+        undoStack.clear(); 
+        redoStack.clear(); 
+    }
     
     // ADD: Callback for showing audio settings dialog
     std::function<void()> onShowAudioSettings;
@@ -310,6 +309,9 @@ public:
     // --- NEW: Handlers for color-coded chaining ---
     void handleColorCodedChaining(PinDataType targetType);
     std::vector<AudioPin> getPinsOfType(juce::uint32 logicalId, bool isInput, PinDataType targetType);
+    
+    // --- VST Plugin Support ---
+    void addPluginModules();
 };
 
 

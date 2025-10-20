@@ -35,6 +35,8 @@ public:
     using NodeID = juce::AudioProcessorGraph::NodeID;
 
     NodeID addModule(const juce::String& moduleType);
+    NodeID addVstModule(juce::AudioPluginFormatManager& formatManager, const juce::PluginDescription& vstDesc);
+    NodeID addVstModule(juce::AudioPluginFormatManager& formatManager, const juce::PluginDescription& vstDesc, juce::uint32 logicalIdToAssign);
     void removeModule(const NodeID& nodeID);
     void clearAll(); // Add this line
     void clearAllConnections(); // Add this line
@@ -89,6 +91,10 @@ public:
     // Global start/stop all recorders (used by menu bar)
     void startAllRecorders();
     void stopAllRecorders();
+    
+    // Plugin format manager for VST support (optional, set by application)
+    void setPluginFormatManager(juce::AudioPluginFormatManager* manager) { pluginFormatManager = manager; }
+    void setKnownPluginList(juce::KnownPluginList* list) { knownPluginList = list; }
 
 private:
     // The internal graph that represents the modular patch
@@ -112,6 +118,10 @@ private:
     };
     std::map<juce::uint32, LogicalModule> logicalIdToModule; // logicalId -> module
     juce::uint32 nextLogicalId { 1 };
+    
+    // Optional pointers for VST support
+    juce::AudioPluginFormatManager* pluginFormatManager { nullptr };
+    juce::KnownPluginList* knownPluginList { nullptr };
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (ModularSynthProcessor)
 };

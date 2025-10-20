@@ -3,21 +3,34 @@
 #include "ImGuiNodeEditorComponent.h"
 #include "../utils/RtLogger.h"
 
-PresetCreatorComponent::PresetCreatorComponent(juce::AudioDeviceManager& adm)
-    : deviceManager(adm)
+PresetCreatorComponent::PresetCreatorComponent(juce::AudioDeviceManager& adm,
+                                               juce::AudioPluginFormatManager& fm,
+                                               juce::KnownPluginList& kl)
+    : deviceManager(adm),
+      pluginFormatManager(fm),
+      knownPluginList(kl)
 {
     juce::Logger::writeToLog("PresetCreatorComponent constructor starting...");
     addAndMakeVisible (log);
 
     // Replace list/combos UI with ImGui node editor
-    juce::Logger::writeToLog("Creating ImGuiNodeEditorComponent...");
+    juce::Logger::writeToLog("Attempting to create ImGuiNodeEditorComponent...");
     editor.reset (new ImGuiNodeEditorComponent(deviceManager));
+    juce::Logger::writeToLog("ImGuiNodeEditorComponent created.");
     editor->onShowAudioSettings = [this]() { this->showAudioSettingsDialog(); };
     addAndMakeVisible (editor.get());
     log.setMultiLine (true); log.setReadOnly (true);
 
     juce::Logger::writeToLog("Creating ModularSynthProcessor...");
     synth = std::make_unique<ModularSynthProcessor>();
+    
+    // --- THIS IS THE FIX ---
+    // Set the managers immediately so the synth is ready for state restoration.
+    synth->setPluginFormatManager(&pluginFormatManager);
+    synth->setKnownPluginList(&knownPluginList);
+    juce::Logger::writeToLog("Plugin managers set on ModularSynthProcessor.");
+    // --- END OF FIX ---
+    
     juce::Logger::writeToLog("Setting model on editor...");
     if (editor != nullptr)
         editor->setModel (synth.get());

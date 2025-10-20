@@ -253,6 +253,8 @@ target_sources(ColliderApp PRIVATE
     Source/audio/modules/BestPracticeNodeProcessor.cpp
     Source/audio/modules/VocalTractFilterModuleProcessor.h
     Source/audio/modules/VocalTractFilterModuleProcessor.cpp
+    Source/audio/modules/VstHostModuleProcessor.h
+    Source/audio/modules/VstHostModuleProcessor.cpp
     Source/audio/modules/ShapingOscillatorModuleProcessor.h
     Source/audio/modules/ShapingOscillatorModuleProcessor.cpp
     Source/ipc/IpcServer.cpp
@@ -270,6 +272,7 @@ target_compile_definitions(ColliderApp PRIVATE
     JUCE_APPLICATION_NAME_STRING="$<TARGET_PROPERTY:ColliderApp,PRODUCT_NAME>"
     JUCE_APPLICATION_VERSION_STRING="$<TARGET_PROPERTY:ColliderApp,VERSION>"
     JUCE_WEB_BROWSER=0 JUCE_USE_CURL=0
+    JUCE_PLUGINHOST_VST3=1
     $<$<BOOL:${USE_RUBBERBAND}>:USE_RUBBERBAND=1>
     $<$<NOT:$<BOOL:${USE_RUBBERBAND}>>:USE_RUBBERBAND=0>
 )
@@ -310,6 +313,8 @@ juce_add_gui_app(PresetCreatorApp
 target_sources(PresetCreatorApp PRIVATE
     # Your application sources
     Source/preset_creator/PresetCreatorMain.cpp
+    Source/preset_creator/PinDatabase.h
+    Source/preset_creator/PinDatabase.cpp
     Source/preset_creator/ImGuiNodeEditorComponent.h
     Source/preset_creator/ImGuiNodeEditorComponent.cpp
     Source/preset_creator/PresetCreatorComponent.h
@@ -420,6 +425,8 @@ target_sources(PresetCreatorApp PRIVATE
     Source/utils/RtLogger.cpp
     Source/audio/modules/VocalTractFilterModuleProcessor.h
     Source/audio/modules/VocalTractFilterModuleProcessor.cpp
+    Source/audio/modules/VstHostModuleProcessor.h
+    Source/audio/modules/VstHostModuleProcessor.cpp
     Source/audio/modules/MultiSequencerModuleProcessor.h
     Source/audio/modules/MultiSequencerModuleProcessor.cpp
     Source/audio/modules/LagProcessorModuleProcessor.h
@@ -465,6 +472,7 @@ target_compile_definitions(PresetCreatorApp PRIVATE
     JUCE_APPLICATION_NAME_STRING="$<TARGET_PROPERTY:PresetCreatorApp,PRODUCT_NAME>"
     JUCE_APPLICATION_VERSION_STRING="$<TARGET_PROPERTY:PresetCreatorApp,VERSION>"
     JUCE_WEB_BROWSER=0 JUCE_USE_CURL=0
+    JUCE_PLUGINHOST_VST3=1
     IMGUI_IMPL_JUCE_BEZEL=0
     IMGUI_DEFINE_MATH_OPERATORS
     IMNODES_NAMESPACE=ImNodes

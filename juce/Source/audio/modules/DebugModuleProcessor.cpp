@@ -1,9 +1,10 @@
-#include "DebugModuleProcessor.h"
+﻿#include "DebugModuleProcessor.h"
 #include "../../utils/RtLogger.h"
 #include "../graph/ModularSynthProcessor.h"
 
 #if defined(PRESET_CREATOR_UI)
 #include "../../preset_creator/ImGuiNodeEditorComponent.h"
+#include "../../preset_creator/PinDatabase.h"
 #endif
 
 juce::AudioProcessorValueTreeState::ParameterLayout DebugModuleProcessor::createParameterLayout()
@@ -108,8 +109,8 @@ void DebugModuleProcessor::drawParametersInNode(float itemWidth, const std::func
         auto outputLabelFor = [&](const juce::String& moduleType, int channel, ModuleProcessor* mp) -> juce::String
         {
 #if defined(PRESET_CREATOR_UI)
-            auto it = modulePinDatabase.find(moduleType);
-            if (it != modulePinDatabase.end())
+            auto it = getModulePinDatabase().find(moduleType);
+            if (it != getModulePinDatabase().end())
             {
                 for (const auto& ap : it->second.audioOuts)
                     if (ap.channel == channel) return ap.name;
@@ -183,8 +184,8 @@ void DebugModuleProcessor::drawParametersInNode(float itemWidth, const std::func
             auto outputLabelFor = [&](const juce::String& moduleType, int channel, ModuleProcessor* mp) -> juce::String
             {
 #if defined(PRESET_CREATOR_UI)
-                auto it = modulePinDatabase.find(moduleType);
-                if (it != modulePinDatabase.end())
+                auto it = getModulePinDatabase().find(moduleType);
+                if (it != getModulePinDatabase().end())
                 {
                     for (const auto& ap : it->second.audioOuts)
                         if (ap.channel == channel) return ap.name;
@@ -299,5 +300,6 @@ void DebugModuleProcessor::drawIoPins(const NodePinHelpers& helpers)
     helpers.drawAudioInputPin("In 8", 7);
 }
 #endif
+
 
 

@@ -1,17 +1,8 @@
-#include <juce_gui_extra/juce_gui_extra.h>
+#include "PresetCreatorApplication.h"
 #include "PresetCreatorComponent.h"
 #include "../utils/RtLogger.h"
 
-class PresetCreatorApplication : public juce::JUCEApplication
-{
-public:
-    const juce::String getApplicationName() override { return "Preset Creator"; }
-    const juce::String getApplicationVersion() override { return "0.1.0"; }
-    
-    // ADD: Accessor for shared AudioDeviceManager
-    juce::AudioDeviceManager& getAudioDeviceManager() { return audioDeviceManager; }
-    
-    void initialise (const juce::String&) override
+void PresetCreatorApplication::initialise(const juce::String&)
     {
         DBG("[PresetCreator] initialise() starting"); RtLogger::init();
         // Crash handler to capture unexpected exceptions
@@ -52,13 +43,39 @@ public:
         // It will automatically use the saved settings or fall back to defaults.
         audioDeviceManager.initialise(2, 2, savedState.get(), true);
         
-        mainWindow.reset (new MainWindow (getApplicationName(), audioDeviceManager));
+        // Initialize plugin management
+        pluginFormatManager.addDefaultFormats();
+        
+        // Define where to save the plugin list XML
+        auto deadMansPedalFile = appDataDir.getChildFile("blacklisted_plugins.txt");
+        pluginScanListFile = appDataDir.getChildFile("known_plugins.xml");
+        
+        // Load the list from the XML file
+        if (pluginScanListFile.existsAsFile())
+        {
+            auto pluginListXml = juce::XmlDocument::parse(pluginScanListFile);
+            if (pluginListXml != nullptr)
+            {
+                knownPluginList.recreateFromXml(*pluginListXml);
+                juce::Logger::writeToLog("Loaded " + juce::String(knownPluginList.getNumTypes()) + " plugin(s) from cache");
+            }
+        }
+        else
+        {
+            juce::Logger::writeToLog("No cached plugin list found");
+        }
+        
+        juce::Logger::writeToLog("Attempting to create MainWindow...");
+        mainWindow.reset (new MainWindow (getApplicationName(), 
+                                         audioDeviceManager,
+                                         pluginFormatManager,
+                                         knownPluginList));
         juce::Logger::writeToLog("MainWindow created successfully");
-    }
-    void shutdown() override 
-    { 
-        // ADD: Save persistent audio settings
-        // Get the current audio device settings as an XML element
+}
+
+void PresetCreatorApplication::shutdown()
+{ 
+        // Save persistent audio settings
         std::unique_ptr<juce::XmlElement> currentState(audioDeviceManager.createStateXml());
 
         if (currentState != nullptr)
@@ -79,44 +96,43 @@ public:
             }
         }
         
+        // Save plugin list
+        if (auto pluginListXml = knownPluginList.createXml())
+        {
+            if (pluginListXml->writeTo(pluginScanListFile))
+            {
+                juce::Logger::writeToLog("Plugin list saved to: " + pluginScanListFile.getFullPathName());
+            }
+        }
+        
         RtLogger::shutdown(); 
         mainWindow = nullptr; 
         juce::Logger::setCurrentLogger (nullptr); 
         fileLogger = nullptr; 
-    }
+}
 
-    class MainWindow : public juce::DocumentWindow
-    {
-    public:
-        MainWindow (juce::String name, juce::AudioDeviceManager& adm)
-            : DocumentWindow (name,
-                              juce::Desktop::getInstance().getDefaultLookAndFeel()
-                                  .findColour (ResizableWindow::backgroundColourId),
-                              DocumentWindow::allButtons),
-              deviceManager(adm)
-        {
-            juce::Logger::writeToLog("MainWindow constructor starting...");
-            setUsingNativeTitleBar (true);
-            juce::Logger::writeToLog("Creating PresetCreatorComponent...");
-            setContentOwned (new PresetCreatorComponent(deviceManager), true);
-            juce::Logger::writeToLog("PresetCreatorComponent created, setting up window...");
-            centreWithSize (2600, 1080);
-            setVisible (true);
-            toFront (true);
-            juce::Logger::writeToLog("MainWindow setup complete");
-        }
-        void closeButtonPressed() override { juce::JUCEApplication::getInstance()->systemRequestedQuit(); }
-        
-    private:
-        juce::AudioDeviceManager& deviceManager;
-    };
-
-private:
-    // ADD: Shared AudioDeviceManager for the entire application
-    juce::AudioDeviceManager audioDeviceManager;
-    std::unique_ptr<MainWindow> mainWindow;
-    std::unique_ptr<juce::FileLogger> fileLogger;
-};
+PresetCreatorApplication::MainWindow::MainWindow(juce::String name, 
+                                                 juce::AudioDeviceManager& adm,
+                                                 juce::AudioPluginFormatManager& fm,
+                                                 juce::KnownPluginList& kl)
+    : DocumentWindow(name,
+                     juce::Desktop::getInstance().getDefaultLookAndFeel()
+                         .findColour(ResizableWindow::backgroundColourId),
+                     DocumentWindow::allButtons),
+      deviceManager(adm),
+      pluginFormatManager(fm),
+      knownPluginList(kl)
+{
+    juce::Logger::writeToLog("MainWindow constructor starting...");
+    setUsingNativeTitleBar(true);
+    juce::Logger::writeToLog("Attempting to create PresetCreatorComponent...");
+    setContentOwned(new PresetCreatorComponent(deviceManager, pluginFormatManager, knownPluginList), true);
+    juce::Logger::writeToLog("PresetCreatorComponent created and set.");
+    centreWithSize(2600, 1080);
+    setVisible(true);
+    toFront(true);
+    juce::Logger::writeToLog("MainWindow setup complete");
+}
 
 START_JUCE_APPLICATION (PresetCreatorApplication)
 
