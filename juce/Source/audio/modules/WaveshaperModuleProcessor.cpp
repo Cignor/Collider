@@ -13,9 +13,7 @@ juce::AudioProcessorValueTreeState::ParameterLayout WaveshaperModuleProcessor::c
 
 WaveshaperModuleProcessor::WaveshaperModuleProcessor()
     : ModuleProcessor(BusesProperties()
-                        .withInput("In", juce::AudioChannelSet::stereo(), true)
-                        .withInput("Drive Mod", juce::AudioChannelSet::mono(), true)
-                        .withInput("Type Mod", juce::AudioChannelSet::mono(), true)
+                        .withInput("Inputs", juce::AudioChannelSet::discreteChannels(4), true) // 0-1: Audio In, 2: Drive Mod, 3: Type Mod
                         .withOutput("Out", juce::AudioChannelSet::stereo(), true)),
       apvts(*this, nullptr, "WaveshaperParams", createParameterLayout())
 {
@@ -31,11 +29,12 @@ void WaveshaperModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
 {
     juce::ignoreUnused(midi);
     
-    // PER-SAMPLE FIX: Get pointers to modulation CV inputs, if they are connected
+    // Get pointers to modulation CV inputs from unified input bus
     const bool isDriveMod = isParamInputConnected("drive");
     const bool isTypeMod = isParamInputConnected("type");
-    const float* driveCV = isDriveMod ? getBusBuffer(buffer, true, 1).getReadPointer(0) : nullptr;
-    const float* typeCV = isTypeMod ? getBusBuffer(buffer, true, 2).getReadPointer(0) : nullptr;
+    auto inBus = getBusBuffer(buffer, true, 0);
+    const float* driveCV = isDriveMod && inBus.getNumChannels() > 2 ? inBus.getReadPointer(2) : nullptr;
+    const float* typeCV = isTypeMod && inBus.getNumChannels() > 3 ? inBus.getReadPointer(3) : nullptr;
 
     // Get base parameter values ONCE
     const float baseDrive = driveParam != nullptr ? driveParam->get() : 1.0f;
@@ -161,7 +160,9 @@ void WaveshaperModuleProcessor::drawIoPins(const NodePinHelpers& helpers)
 // Parameter bus contract implementation
 bool WaveshaperModuleProcessor::getParamRouting(const juce::String& paramId, int& outBusIndex, int& outChannelIndexInBus) const
 {
-    if (paramId == "drive") { outBusIndex = 1; outChannelIndexInBus = 0; return true; }
-    if (paramId == "type") { outBusIndex = 2; outChannelIndexInBus = 0; return true; }
+    outBusIndex = 0; // All modulation is on the single input bus
+    
+    if (paramId == "drive") { outChannelIndexInBus = 2; return true; }
+    if (paramId == "type") { outChannelIndexInBus = 3; return true; }
     return false;
 }

@@ -63,6 +63,17 @@ void GraphicEQModuleProcessor::prepareToPlay(double sampleRate, int samplesPerBl
     processorChain.prepare(spec);
     processorChain.reset();
 
+    // CRITICAL: Initialize all filter coefficients with unity gain (0 dB) to prevent uninitialized state
+    const float q = 1.414f;
+    *processorChain.get<0>().state = *juce::dsp::IIR::Coefficients<float>::makeLowShelf(sampleRate, centerFrequencies[0], q, 1.0f);
+    *processorChain.get<1>().state = *juce::dsp::IIR::Coefficients<float>::makePeakFilter(sampleRate, centerFrequencies[1], q, 1.0f);
+    *processorChain.get<2>().state = *juce::dsp::IIR::Coefficients<float>::makePeakFilter(sampleRate, centerFrequencies[2], q, 1.0f);
+    *processorChain.get<3>().state = *juce::dsp::IIR::Coefficients<float>::makePeakFilter(sampleRate, centerFrequencies[3], q, 1.0f);
+    *processorChain.get<4>().state = *juce::dsp::IIR::Coefficients<float>::makePeakFilter(sampleRate, centerFrequencies[4], q, 1.0f);
+    *processorChain.get<5>().state = *juce::dsp::IIR::Coefficients<float>::makePeakFilter(sampleRate, centerFrequencies[5], q, 1.0f);
+    *processorChain.get<6>().state = *juce::dsp::IIR::Coefficients<float>::makePeakFilter(sampleRate, centerFrequencies[6], q, 1.0f);
+    *processorChain.get<7>().state = *juce::dsp::IIR::Coefficients<float>::makeHighShelf(sampleRate, centerFrequencies[7], q, 1.0f);
+
     // Reset gate/trigger state
     lastTriggerState = false;
     triggerPulseSamplesRemaining = 0;
@@ -72,7 +83,6 @@ void GraphicEQModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, ju
 {
     juce::ScopedNoDenormals noDenormals;
 
-    // --- THE FIX: Get the two separate output busses by their index ---
     auto inBus = getBusBuffer(buffer, true, 0);
     auto audioOutBus = getBusBuffer(buffer, false, 0); // Audio is on bus 0
     auto cvOutBus = getBusBuffer(buffer, false, 1);    // CV is on bus 1
@@ -80,7 +90,36 @@ void GraphicEQModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, ju
     const int numSamples = buffer.getNumSamples();
     if (numSamples <= 0) return;
 
-    // --- 1. Gate/Trigger Analysis (on clean INPUT signal) ---
+    // --- Logging Setup ---
+    // Log only once every 100 blocks to avoid spamming the log file.
+    static int debugCounter = 0;
+    const bool shouldLog = ((debugCounter++ % 100) == 0);
+
+    // LOG POINT 1: Check input signal at entry
+    if (shouldLog && inBus.getNumChannels() > 0)
+    {
+        float inputRms = inBus.getRMSLevel(0, 0, numSamples);
+        juce::Logger::writeToLog("[GraphicEQ Debug] At Entry - Input RMS: " + juce::String(inputRms, 6));
+    }
+
+    // --- CRITICAL FIX: Capture input audio BEFORE any write operations ---
+    // Create a temporary buffer to hold a copy of the stereo input (true stereo path)
+    juce::AudioBuffer<float> inputCopy(2, numSamples);
+    if (inBus.getNumChannels() > 0)
+    {
+        inputCopy.copyFrom(0, 0, inBus, 0, 0, numSamples);
+        if (inBus.getNumChannels() > 1)
+            inputCopy.copyFrom(1, 0, inBus, 1, 0, numSamples);
+        else
+            inputCopy.copyFrom(1, 0, inBus, 0, 0, numSamples); // duplicate mono to R
+    }
+    else
+    {
+        inputCopy.clear();
+    }
+    // --- END OF CRITICAL FIX ---
+
+    // --- 1. Gate/Trigger Analysis (now on the SAFE captured input signal) ---
     // Read threshold parameters and check for modulation CVs
     float gateThreshDb = gateThresholdParam->load();
     float trigThreshDb = triggerThresholdParam->load();
@@ -104,7 +143,7 @@ void GraphicEQModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, ju
     const float gateThreshLin = juce::Decibels::decibelsToGain(gateThreshDb);
     const float trigThreshLin = juce::Decibels::decibelsToGain(trigThreshDb);
 
-    // --- THE FIX: Write CV outputs to the dedicated cvOutBus ---
+    // --- 2. Write Gate/Trigger CVs (using a mono sum of the captured stereo input) ---
     if (cvOutBus.getNumChannels() >= 2)
     {
         float* gateOut = cvOutBus.getWritePointer(GateOut);
@@ -112,8 +151,7 @@ void GraphicEQModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, ju
 
         for (int i = 0; i < numSamples; ++i)
         {
-            // Compute mono signal from stereo input (channels 0-1)
-            float monoSample = (inBus.getSample(0, i) + inBus.getSample(inBus.getNumChannels() > 1 ? 1 : 0, i)) * 0.5f;
+            float monoSample = 0.5f * (inputCopy.getSample(0, i) + inputCopy.getSample(1, i));
             float sampleAbs = std::abs(monoSample);
 
             // Gate output
@@ -131,21 +169,29 @@ void GraphicEQModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, ju
         }
     }
 
-    // --- 2. Copy Input Audio to AUDIO Output Bus ---
+    // --- 3. Copy Captured Input to AUDIO Output Bus (true stereo) ---
     if (audioOutBus.getNumChannels() >= 2)
     {
-        audioOutBus.copyFrom(0, 0, inBus, 0, 0, numSamples);
-        if (inBus.getNumChannels() > 1)
-            audioOutBus.copyFrom(1, 0, inBus, 1, 0, numSamples);
-        else
-            audioOutBus.copyFrom(1, 0, inBus, 0, 0, numSamples);
+        audioOutBus.copyFrom(0, 0, inputCopy, 0, 0, numSamples);
+        audioOutBus.copyFrom(1, 0, inputCopy, 1, 0, numSamples);
+    }
+    else if (audioOutBus.getNumChannels() == 1)
+    {
+        audioOutBus.copyFrom(0, 0, inputCopy, 0, 0, numSamples);
     }
     else
     {
         audioOutBus.clear();
     }
 
-    // --- 3. Update Filter Coefficients ---
+    // LOG POINT 2: Check signal after copying to output bus
+    if (shouldLog && audioOutBus.getNumChannels() > 0)
+    {
+        float afterCopyRms = audioOutBus.getRMSLevel(0, 0, numSamples);
+        juce::Logger::writeToLog("[GraphicEQ Debug] After Copy - Audio Out RMS: " + juce::String(afterCopyRms, 6));
+    }
+
+    // --- 4. Update Filter Coefficients ---
     double sampleRate = getSampleRate();
     const float q = 1.414f;
 
@@ -165,44 +211,67 @@ void GraphicEQModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, ju
 
         float gainLinear = juce::Decibels::decibelsToGain(gainDb);
 
-        // CRITICAL FIX: Use independent 'if' statements (not 'else if') so ALL filters update every block
+        // LOG POINT 3: Log filter parameters for Band 1 as a sample
+        if (shouldLog && bandIndex == 0)
+        {
+            juce::Logger::writeToLog("[GraphicEQ Debug] Band 1 - Gain (dB): " + juce::String(gainDb, 2) + 
+                                   ", Gain (Linear): " + juce::String(gainLinear, 6));
+        }
+
+        // CRITICAL FIX: ProcessorDuplicator needs the shared_ptr, not dereferenced coefficients
         if (bandIndex == 0)
         {
-            processorChain.get<0>().state = *juce::dsp::IIR::Coefficients<float>::makeLowShelf(sampleRate, centerFrequencies[bandIndex], q, gainLinear);
+            *processorChain.get<0>().state = *juce::dsp::IIR::Coefficients<float>::makeLowShelf(sampleRate, centerFrequencies[bandIndex], q, gainLinear);
         }
-        
-        if (bandIndex > 0 && bandIndex < 7) // Peak filters for bands 1-6
+        else if (bandIndex == 7)
         {
-            auto newCoefficients = *juce::dsp::IIR::Coefficients<float>::makePeakFilter(sampleRate, centerFrequencies[bandIndex], q, gainLinear);
-            if      (bandIndex == 1) { processorChain.get<1>().state = newCoefficients; }
-            else if (bandIndex == 2) { processorChain.get<2>().state = newCoefficients; }
-            else if (bandIndex == 3) { processorChain.get<3>().state = newCoefficients; }
-            else if (bandIndex == 4) { processorChain.get<4>().state = newCoefficients; }
-            else if (bandIndex == 5) { processorChain.get<5>().state = newCoefficients; }
-            else if (bandIndex == 6) { processorChain.get<6>().state = newCoefficients; }
+            *processorChain.get<7>().state = *juce::dsp::IIR::Coefficients<float>::makeHighShelf(sampleRate, centerFrequencies[bandIndex], q, gainLinear);
         }
-        
-        if (bandIndex == 7)
+        else if (bandIndex >= 1 && bandIndex <= 6) // Peak filters for bands 1-6
         {
-            processorChain.get<7>().state = *juce::dsp::IIR::Coefficients<float>::makeHighShelf(sampleRate, centerFrequencies[bandIndex], q, gainLinear);
+            auto newCoefficients = juce::dsp::IIR::Coefficients<float>::makePeakFilter(sampleRate, centerFrequencies[bandIndex], q, gainLinear);
+            switch (bandIndex)
+            {
+                case 1: *processorChain.get<1>().state = *newCoefficients; break;
+                case 2: *processorChain.get<2>().state = *newCoefficients; break;
+                case 3: *processorChain.get<3>().state = *newCoefficients; break;
+                case 4: *processorChain.get<4>().state = *newCoefficients; break;
+                case 5: *processorChain.get<5>().state = *newCoefficients; break;
+                case 6: *processorChain.get<6>().state = *newCoefficients; break;
+            }
         }
     }
 
-    // --- 4. Process Entire Chain in Series (in-place on output buffer) ---
-    // SAFETY FIX: Only process if we have a valid output bus
-    if (outBus.getNumChannels() > 0)
+    // --- 5. Process Entire Chain in Series (in-place on audioOutBus) ---
+    if (audioOutBus.getNumChannels() > 0)
     {
-        juce::dsp::AudioBlock<float> audioBlock(outBus.getArrayOfWritePointers(), 
-                                                 std::min(2, outBus.getNumChannels()), 
+        juce::dsp::AudioBlock<float> audioBlock(audioOutBus.getArrayOfWritePointers(), 
+                                                 std::min(2, audioOutBus.getNumChannels()), 
                                                  numSamples);
         juce::dsp::ProcessContextReplacing<float> context(audioBlock);
         processorChain.process(context);
 
-        // --- 5. Apply Output Gain ---
+        // LOG POINT 4: Check signal after processing through filter chain
+        if (shouldLog)
+        {
+            float afterChainRms = audioOutBus.getRMSLevel(0, 0, numSamples);
+            juce::Logger::writeToLog("[GraphicEQ Debug] After Filter Chain - Audio Out RMS: " + juce::String(afterChainRms, 6));
+        }
+
+        // --- 6. Apply Output Gain ---
         float outputGain = juce::Decibels::decibelsToGain(outputLevelParam->load());
-        outBus.applyGain(0, 0, numSamples, outputGain);
-        if (outBus.getNumChannels() > 1)
-            outBus.applyGain(1, 0, numSamples, outputGain);
+        audioOutBus.applyGain(0, 0, numSamples, outputGain);
+        if (audioOutBus.getNumChannels() > 1)
+            audioOutBus.applyGain(1, 0, numSamples, outputGain);
+
+        // LOG POINT 5: Check final signal after output gain
+        if (shouldLog)
+        {
+            float finalRms = audioOutBus.getRMSLevel(0, 0, numSamples);
+            float outputGainDb = outputLevelParam->load();
+            juce::Logger::writeToLog("[GraphicEQ Debug] After Output Gain - Audio Out RMS: " + juce::String(finalRms, 6) + 
+                                   ", Output Gain (dB): " + juce::String(outputGainDb, 2));
+        }
     }
 }
 
@@ -392,4 +461,6 @@ void GraphicEQModuleProcessor::setStateInformation(const void* data, int sizeInB
     if (xmlState != nullptr)
         if (xmlState->hasTagName(apvts.state.getType()))
             // ...replace the current APVTS state with the new one.
-            apvts.repla
+            apvts.replaceState(juce::ValueTree::fromXml(*xmlState));
+}
+

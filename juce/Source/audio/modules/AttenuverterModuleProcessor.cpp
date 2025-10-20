@@ -2,8 +2,7 @@
 
 AttenuverterModuleProcessor::AttenuverterModuleProcessor()
     : ModuleProcessor (BusesProperties()
-                        .withInput ("Input", juce::AudioChannelSet::stereo(), true)
-                        .withInput ("Amount Mod", juce::AudioChannelSet::mono(), true)
+                        .withInput ("Inputs", juce::AudioChannelSet::discreteChannels(3), true) // 0-1: Audio In, 2: Amount Mod
                         .withOutput("Output", juce::AudioChannelSet::stereo(), true)),
       apvts (*this, nullptr, "AttenuverterParams", createParameterLayout())
 {
@@ -33,16 +32,15 @@ void AttenuverterModuleProcessor::processBlock (juce::AudioBuffer<float>& buffer
 {
     juce::ignoreUnused (midi);
     auto in  = getBusBuffer (buffer, true, 0);
-    auto modIn = getBusBuffer (buffer, true, 1); // Amount Mod bus
     auto out = getBusBuffer (buffer, false, 0);
     
     const float baseGain = amountParam != nullptr ? amountParam->load() : 1.0f;
     const bool shouldRectify = rectifyParam != nullptr ? rectifyParam->get() : false;
     const int nSamps = buffer.getNumSamples();
     
-    // Check if amount is modulated
+    // Check if amount is modulated and get from unified input bus
     const bool isAmountModulated = isParamInputConnected("amount");
-    const float* modSignal = isAmountModulated ? modIn.getReadPointer(0) : nullptr;
+    const float* modSignal = isAmountModulated && in.getNumChannels() > 2 ? in.getReadPointer(2) : nullptr;
     
     for (int ch = 0; ch < out.getNumChannels(); ++ch)
     {
@@ -78,10 +76,11 @@ void AttenuverterModuleProcessor::processBlock (juce::AudioBuffer<float>& buffer
 
 bool AttenuverterModuleProcessor::getParamRouting(const juce::String& paramId, int& outBusIndex, int& outChannelIndexInBus) const
 {
+    outBusIndex = 0; // All modulation is on the single input bus
+    
     if (paramId == "amount")
     {
-        outBusIndex = 1; // "Amount Mod" is Bus 1
-        outChannelIndexInBus = 0;
+        outChannelIndexInBus = 2;
         return true;
     }
     return false;

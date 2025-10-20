@@ -5,7 +5,7 @@
 class RandomModuleProcessor : public ModuleProcessor
 {
 public:
-    // Parameter IDs for APVTS and modulation routing
+    // Parameter IDs for APVTS
     static constexpr auto paramIdMin = "min";
     static constexpr auto paramIdMax = "max";
     static constexpr auto paramIdCvMin = "cvMin";
@@ -16,7 +16,8 @@ public:
     static constexpr auto paramIdRate = "rate";
     static constexpr auto paramIdTrigThreshold = "trigThreshold";
     
-    // Virtual modulation target IDs (not in APVTS)
+    // Virtual modulation and input IDs (no APVTS parameters required)
+    static constexpr auto paramIdTriggerIn = "trigger_in";
     static constexpr auto paramIdRateMod = "rate_mod";
     static constexpr auto paramIdSlewMod = "slew_mod";
 
@@ -70,17 +71,16 @@ private:
     std::atomic<float>* trigThresholdParam{ nullptr };
     
     // --- DSP State ---
-    float lastTrig{ 0.0f };
     float currentValue{ 0.0f };
     float targetValue{ 0.0f };
     float currentValueCV{ 0.0f };
     float targetValueCV{ 0.0f };
     double sampleRate{ 44100.0 };
-    double phase{ 0.0 };
-    int samplesUntilNext{ 0 }; // internal S&H countdown in samples
-    int trigPulseRemaining { 0 }; // For the new trigger output
+    double phase{ 0.0 }; // Phase accumulator for internal clock
+    bool lastTriggerState { false }; // For external trigger edge detection
+    int trigPulseRemaining { 0 }; // For the trigger output
     
-    // --- Smoothed values for modulated parameters (like BestPracticeNodeProcessor) ---
+    // --- Smoothed values for modulated parameters ---
     juce::SmoothedValue<float> smoothedRate;
     juce::SmoothedValue<float> smoothedSlew;
     

@@ -478,36 +478,7 @@ void FunctionGeneratorModuleProcessor::drawParametersInNode(float itemWidth, con
     ImGui::PopItemWidth(); // <<< FIX: Added to match the PushItemWidth at the top.
 }
 
-void FunctionGeneratorModuleProcessor::drawIoPins(const NodePinHelpers& helpers)
-{
-    // Input pins
-    helpers.drawAudioInputPin("Gate In", 0);
-    helpers.drawAudioInputPin("Trigger In", 1);
-    helpers.drawAudioInputPin("Sync In", 2);
-    helpers.drawAudioInputPin("Rate Mod", 3);
-    helpers.drawAudioInputPin("Slew Mod", 4);
-    helpers.drawAudioInputPin("Gate Thresh Mod", 5);
-    helpers.drawAudioInputPin("Trig Thresh Mod", 6);
-    helpers.drawAudioInputPin("Pitch Base Mod", 7);
-    helpers.drawAudioInputPin("Value Mult Mod", 8);
-    helpers.drawAudioInputPin("Curve Select Mod", 9);
 
-    // Selected Outputs
-    helpers.drawAudioOutputPin("Value", 0);
-    helpers.drawAudioOutputPin("Inverted", 1);
-    helpers.drawAudioOutputPin("Bipolar", 2);
-    helpers.drawAudioOutputPin("Pitch", 3);
-    helpers.drawAudioOutputPin("Gate", 4);
-    helpers.drawAudioOutputPin("Trigger", 5);
-    helpers.drawAudioOutputPin("End of Cycle", 6);
-    // Dedicated Outputs
-    helpers.drawAudioOutputPin("Blue Value", 7);
-    helpers.drawAudioOutputPin("Blue Pitch", 8);
-    helpers.drawAudioOutputPin("Red Value", 9);
-    helpers.drawAudioOutputPin("Red Pitch", 10);
-    helpers.drawAudioOutputPin("Green Value", 11);
-    helpers.drawAudioOutputPin("Green Pitch", 12);
-}
 
 juce::String FunctionGeneratorModuleProcessor::getAudioInputLabel(int channel) const
 {

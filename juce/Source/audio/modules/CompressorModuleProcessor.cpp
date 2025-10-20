@@ -15,9 +15,7 @@ juce::AudioProcessorValueTreeState::ParameterLayout CompressorModuleProcessor::c
 
 CompressorModuleProcessor::CompressorModuleProcessor()
     : ModuleProcessor(BusesProperties()
-          .withInput("Audio In", juce::AudioChannelSet::stereo(), true)
-          // Add 5 mono mod inputs, one for each parameter
-          .withInput("Modulation In", juce::AudioChannelSet::discreteChannels(5), true)
+          .withInput("Inputs", juce::AudioChannelSet::discreteChannels(7), true) // 0-1: Audio In, 2-6: Threshold/Ratio/Attack/Release/Makeup Mods
           .withOutput("Audio Out", juce::AudioChannelSet::stereo(), true)),
       apvts(*this, nullptr, "CompressorParams", createParameterLayout())
 {
@@ -47,7 +45,6 @@ void CompressorModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
     juce::ignoreUnused(midi);
     
     auto inBus = getBusBuffer(buffer, true, 0);
-    auto modBus = getBusBuffer(buffer, true, 1);
     auto outBus = getBusBuffer(buffer, false, 0);
 
     // Copy input to output for in-place processing
@@ -57,27 +54,26 @@ void CompressorModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
         outBus.copyFrom(ch, 0, inBus, ch, 0, buffer.getNumSamples());
     }
 
-    // --- Update DSP Parameters (once per block) ---
-    // (A per-sample loop would be needed for audio-rate modulation, but this is efficient and common)
+    // --- Update DSP Parameters from unified input bus (once per block) ---
     float finalThreshold = thresholdParam->load();
-    if (isParamInputConnected(paramIdThreshold) && modBus.getNumChannels() > 0)
-        finalThreshold = juce::jmap(modBus.getSample(0, 0), 0.0f, 1.0f, -60.0f, 0.0f);
+    if (isParamInputConnected(paramIdThresholdMod) && inBus.getNumChannels() > 2)
+        finalThreshold = juce::jmap(inBus.getSample(2, 0), 0.0f, 1.0f, -60.0f, 0.0f);
         
     float finalRatio = ratioParam->load();
-    if (isParamInputConnected(paramIdRatio) && modBus.getNumChannels() > 1)
-        finalRatio = juce::jmap(modBus.getSample(1, 0), 0.0f, 1.0f, 1.0f, 20.0f);
+    if (isParamInputConnected(paramIdRatioMod) && inBus.getNumChannels() > 3)
+        finalRatio = juce::jmap(inBus.getSample(3, 0), 0.0f, 1.0f, 1.0f, 20.0f);
 
     float finalAttack = attackParam->load();
-    if (isParamInputConnected(paramIdAttack) && modBus.getNumChannels() > 2)
-        finalAttack = juce::jmap(modBus.getSample(2, 0), 0.0f, 1.0f, 0.1f, 200.0f);
+    if (isParamInputConnected(paramIdAttackMod) && inBus.getNumChannels() > 4)
+        finalAttack = juce::jmap(inBus.getSample(4, 0), 0.0f, 1.0f, 0.1f, 200.0f);
 
     float finalRelease = releaseParam->load();
-    if (isParamInputConnected(paramIdRelease) && modBus.getNumChannels() > 3)
-        finalRelease = juce::jmap(modBus.getSample(3, 0), 0.0f, 1.0f, 5.0f, 1000.0f);
+    if (isParamInputConnected(paramIdReleaseMod) && inBus.getNumChannels() > 5)
+        finalRelease = juce::jmap(inBus.getSample(5, 0), 0.0f, 1.0f, 5.0f, 1000.0f);
         
     float finalMakeup = makeupParam->load();
-    if (isParamInputConnected(paramIdMakeup) && modBus.getNumChannels() > 4)
-        finalMakeup = juce::jmap(modBus.getSample(4, 0), 0.0f, 1.0f, -12.0f, 12.0f);
+    if (isParamInputConnected(paramIdMakeupMod) && inBus.getNumChannels() > 6)
+        finalMakeup = juce::jmap(inBus.getSample(6, 0), 0.0f, 1.0f, -12.0f, 12.0f);
 
     compressor.setThreshold(finalThreshold);
     compressor.setRatio(finalRatio);
@@ -108,12 +104,13 @@ void CompressorModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
 
 bool CompressorModuleProcessor::getParamRouting(const juce::String& paramId, int& outBusIndex, int& outChannelIndexInBus) const
 {
-    outBusIndex = 1; // All modulation is on Bus 1
-    if (paramId == paramIdThreshold) { outChannelIndexInBus = 0; return true; }
-    if (paramId == paramIdRatio)     { outChannelIndexInBus = 1; return true; }
-    if (paramId == paramIdAttack)    { outChannelIndexInBus = 2; return true; }
-    if (paramId == paramIdRelease)   { outChannelIndexInBus = 3; return true; }
-    if (paramId == paramIdMakeup)    { outChannelIndexInBus = 4; return true; }
+    outBusIndex = 0; // All modulation is on the single input bus
+    
+    if (paramId == paramIdThresholdMod) { outChannelIndexInBus = 2; return true; }
+    if (paramId == paramIdRatioMod)     { outChannelIndexInBus = 3; return true; }
+    if (paramId == paramIdAttackMod)    { outChannelIndexInBus = 4; return true; }
+    if (paramId == paramIdReleaseMod)   { outChannelIndexInBus = 5; return true; }
+    if (paramId == paramIdMakeupMod)    { outChannelIndexInBus = 6; return true; }
     return false;
 }
 
@@ -143,19 +140,25 @@ void CompressorModuleProcessor::drawParametersInNode(float itemWidth, const std:
     auto& ap = getAPVTS();
     ImGui::PushItemWidth(itemWidth);
 
-    auto drawSlider = [&](const char* label, const juce::String& paramId, float min, float max, const char* format) {
-        float value = ap.getRawParameterValue(paramId)->load();
+    // Lambda that correctly handles modulation
+    auto drawSlider = [&](const char* label, const juce::String& paramId, const juce::String& modId, float min, float max, const char* format) {
+        bool isMod = isParamModulated(modId);
+        float value = isMod ? getLiveParamValueFor(modId, paramId + juce::String("_live"), ap.getRawParameterValue(paramId)->load())
+                            : ap.getRawParameterValue(paramId)->load();
+        
+        if (isMod) ImGui::BeginDisabled();
         if (ImGui::SliderFloat(label, &value, min, max, format))
-            *dynamic_cast<juce::AudioParameterFloat*>(ap.getParameter(paramId)) = value;
-        adjustParamOnWheel(ap.getParameter(paramId), paramId, value);
+            if (!isMod) *dynamic_cast<juce::AudioParameterFloat*>(ap.getParameter(paramId)) = value;
+        if (!isMod) adjustParamOnWheel(ap.getParameter(paramId), paramId, value);
         if (ImGui::IsItemDeactivatedAfterEdit()) { onModificationEnded(); }
+        if (isMod) { ImGui::EndDisabled(); ImGui::SameLine(); ImGui::TextUnformatted("(mod)"); }
     };
 
-    drawSlider("Threshold", paramIdThreshold, -60.0f, 0.0f, "%.1f dB");
-    drawSlider("Ratio", paramIdRatio, 1.0f, 20.0f, "%.1f : 1");
-    drawSlider("Attack", paramIdAttack, 0.1f, 200.0f, "%.1f ms");
-    drawSlider("Release", paramIdRelease, 5.0f, 1000.0f, "%.0f ms");
-    drawSlider("Makeup", paramIdMakeup, -12.0f, 12.0f, "%.1f dB");
+    drawSlider("Threshold", paramIdThreshold, paramIdThresholdMod, -60.0f, 0.0f, "%.1f dB");
+    drawSlider("Ratio", paramIdRatio, paramIdRatioMod, 1.0f, 20.0f, "%.1f : 1");
+    drawSlider("Attack", paramIdAttack, paramIdAttackMod, 0.1f, 200.0f, "%.1f ms");
+    drawSlider("Release", paramIdRelease, paramIdReleaseMod, 5.0f, 1000.0f, "%.0f ms");
+    drawSlider("Makeup", paramIdMakeup, paramIdMakeupMod, -12.0f, 12.0f, "%.1f dB");
 
     ImGui::PopItemWidth();
 }

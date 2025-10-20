@@ -80,8 +80,6 @@ void ModularSynthProcessor::prepareToPlay(double sampleRate, int samplesPerBlock
     // Ensure the internal graph has matching I/O channel counts before preparation
     internalGraph->setPlayConfigDetails(getTotalNumInputChannels(), getTotalNumOutputChannels(), sampleRate, samplesPerBlock);
     internalGraph->prepareToPlay(sampleRate, samplesPerBlock);
-
-    internalGraph->rebuild();
 }
 
 void ModularSynthProcessor::releaseResources()
@@ -402,7 +400,6 @@ namespace {
             reg("scope", []{ return std::make_unique<ScopeModuleProcessor>(); });
             reg("frequency graph", []{ return std::make_unique<FrequencyGraphModuleProcessor>(); });
             reg("s&h", []{ return std::make_unique<SAndHModuleProcessor>(); });
-            reg("sandh", []{ return std::make_unique<SAndHModuleProcessor>(); });
             reg("sequencer", []{ return std::make_unique<StepSequencerModuleProcessor>(); });
             reg("stepsequencer", []{ return std::make_unique<StepSequencerModuleProcessor>(); });
             reg("math", []{ return std::make_unique<MathModuleProcessor>(); });
@@ -487,6 +484,9 @@ ModularSynthProcessor::NodeID ModularSynthProcessor::addModule(const juce::Strin
             setAudioInputChannelMapping(node->nodeID, defaultMapping);
         }
         
+        // --- DEBUG-ADDMODULE ---
+        juce::Logger::writeToLog("[DEBUG-ADDMODULE] Added module '" + moduleType + "' with NodeID: " + juce::String(node->nodeID.uid));
+
         // CRITICAL FIX: Rebuild the graph so processBlock is actually called!
         commitChanges();
         
@@ -533,50 +533,36 @@ bool ModularSynthProcessor::connect(const NodeID& sourceNodeID, int sourceChanne
 void ModularSynthProcessor::commitChanges()
 {
     internalGraph->rebuild();
-
-    // --- BEGIN DIAGNOSTIC INSERTION ---
-    juce::Logger::writeToLog("--- Modular Synth Internal Patch State ---");
-    juce::Logger::writeToLog("Num Nodes: " + juce::String(internalGraph->getNodes().size()));
-    juce::Logger::writeToLog("Num Connections: " + juce::String(internalGraph->getConnections().size()));
-    for (const auto& node : internalGraph->getNodes())
-    {
-        auto* p = node->getProcessor();
-        juce::String name = p ? p->getName() : juce::String("<null>");
-        const int ins  = p ? p->getTotalNumInputChannels()  : -1;
-        const int outs = p ? p->getTotalNumOutputChannels() : -1;
-        juce::Logger::writeToLog("  Node: id=" + juce::String(node->nodeID.uid) + " name='" + name + "' ins=" + juce::String(ins) + " outs=" + juce::String(outs));
-    }
+    
+    // --- DEBUG-COMMIT: Post-rebuild state ---
+    juce::Logger::writeToLog("--- [DEBUG-COMMIT] Graph State Post-Rebuild ---");
+    juce::Logger::writeToLog("[DEBUG-COMMIT] Num Nodes: " + juce::String(internalGraph->getNodes().size()));
+    juce::Logger::writeToLog("[DEBUG-COMMIT] Num Connections: " + juce::String(internalGraph->getConnections().size()));
     for (const auto& conn : internalGraph->getConnections())
     {
-        juce::Logger::writeToLog("  Connection: [" + juce::String(conn.source.nodeID.uid) + ":" + juce::String(conn.source.channelIndex)
+        juce::Logger::writeToLog("  - Connection: [" + juce::String(conn.source.nodeID.uid) + ":" + juce::String(conn.source.channelIndex)
             + "] -> [" + juce::String(conn.destination.nodeID.uid) + ":" + juce::String(conn.destination.channelIndex) + "]");
     }
     juce::Logger::writeToLog("-----------------------------------------");
-    // Dump logicalId -> node mapping for engine/editor identity checks
-    juce::Logger::writeToLog("--- Logical ID Map ---");
-    for (const auto& kv : logicalIdToModule)
+
+    // CRITICAL FIX: Force graph to re-prepare after topology changes to update internal routing
+    if (getSampleRate() > 0 && getBlockSize() > 0)
     {
-        juce::String type = kv.second.type;
-        juce::Logger::writeToLog("  logicalId=" + juce::String((int)kv.first) + " nodeID=" + juce::String(kv.second.nodeID.uid) + " type='" + type + "'");
+        internalGraph->prepareToPlay(getSampleRate(), getBlockSize());
     }
-    juce::Logger::writeToLog("----------------------");
-    // Assign missing logical IDs to module processors and log processor pointers
+
+    // --- DEBUG-COMMIT: Sync logical IDs to processors ---
+    juce::Logger::writeToLog("[DEBUG-COMMIT] Syncing logical IDs to module processors...");
     for (const auto& kv : logicalIdToModule)
     {
         ModuleProcessor* mp = getModuleForLogical(kv.first);
         if (mp != nullptr)
         {
-            if (mp->getLogicalId() == 0)
-            {
-                mp->setLogicalId(kv.first);
-                juce::Logger::writeToLog("[ModSynth] Assigned logicalId=" + juce::String((int)kv.first) +
-                                         " to procPtr=" + juce::String((juce::uint64)(uintptr_t)mp));
-            }
-            juce::Logger::writeToLog("[ModSynth] Map logicalId=" + juce::String((int)kv.first) +
-                                     " procPtr=" + juce::String((juce::uint64)(uintptr_t)mp));
+            juce::Logger::writeToLog("  - Syncing LID=" + juce::String((int)kv.first) + " to processor. Current stored ID: " + juce::String((int)mp->getLogicalId()));
+            mp->setLogicalId(kv.first);
         }
     }
-    // --- END DIAGNOSTIC INSERTION ---
+    juce::Logger::writeToLog("[DEBUG-COMMIT] Sync complete.");
 }
 
 void ModularSynthProcessor::clearAll()

@@ -13,16 +13,16 @@
     <module logicalId="2" type="graphic eq">
       <params>
         <GraphicEQParams>
-          <PARAM id="gainBand1" value="-23.13999938964844"/>
-          <PARAM id="gainBand2" value="-37.70999908447266"/>
-          <PARAM id="gainBand3" value="-18.86000061035156"/>
-          <PARAM id="gainBand4" value="0.0"/>
-          <PARAM id="gainBand5" value="-22.29000091552734"/>
-          <PARAM id="gainBand6" value="-20.56999969482422"/>
-          <PARAM id="gainBand7" value="-34.29000091552734"/>
-          <PARAM id="gainBand8" value="-15.43000030517578"/>
+          <PARAM id="gainBand1" value="-6.0"/>
+          <PARAM id="gainBand2" value="-26.56999969482422"/>
+          <PARAM id="gainBand3" value="-11.15000152587891"/>
+          <PARAM id="gainBand4" value="-8.569999694824219"/>
+          <PARAM id="gainBand5" value="-33.43000030517578"/>
+          <PARAM id="gainBand6" value="-33.43000030517578"/>
+          <PARAM id="gainBand7" value="-57.43000030517578"/>
+          <PARAM id="gainBand8" value="-60.0"/>
           <PARAM id="gateThreshold" value="-30.0"/>
-          <PARAM id="outputLevel" value="0.0"/>
+          <PARAM id="outputLevel" value="1.69999885559082"/>
           <PARAM id="triggerThreshold" value="-6.0"/>
         </GraphicEQParams>
       </params>
@@ -95,27 +95,27 @@
         </SampleLoaderParameters>
       </params>
     </module>
-    <module logicalId="25" type="drive">
-      <params>
-        <DriveParams>
-          <PARAM id="drive" value="1.289999961853027"/>
-          <PARAM id="mix" value="1.0"/>
-        </DriveParams>
-      </params>
-    </module>
-    <module logicalId="26" type="drive">
-      <params>
-        <DriveParams>
-          <PARAM id="drive" value="1.019999980926514"/>
-          <PARAM id="mix" value="1.0"/>
-        </DriveParams>
-      </params>
-    </module>
     <module logicalId="37" type="Scope">
       <params>
         <ScopeParams>
           <PARAM id="monitorSeconds" value="12.40000057220459"/>
         </ScopeParams>
+      </params>
+    </module>
+    <module logicalId="49" type="drive">
+      <params>
+        <DriveParams>
+          <PARAM id="drive" value="1.279999971389771"/>
+          <PARAM id="mix" value="1.0"/>
+        </DriveParams>
+      </params>
+    </module>
+    <module logicalId="50" type="drive">
+      <params>
+        <DriveParams>
+          <PARAM id="drive" value="1.029999971389771"/>
+          <PARAM id="mix" value="1.0"/>
+        </DriveParams>
       </params>
     </module>
   </modules>
@@ -124,25 +124,25 @@
     <connection srcId="2" srcChan="1" dstId="output" dstChan="1"/>
     <connection srcId="2" srcChan="0" dstId="3" dstChan="0"/>
     <connection srcId="2" srcChan="2" dstId="6" dstChan="0"/>
-    <connection srcId="2" srcChan="3" dstId="7" dstChan="0"/>
-    <connection srcId="2" srcChan="0" dstId="15" dstChan="0"/>
+    <connection srcId="2" srcChan="1" dstId="7" dstChan="0"/>
+    <connection srcId="2" srcChan="1" dstId="15" dstChan="0"/>
     <connection srcId="15" srcChan="4" dstId="37" dstChan="0"/>
-    <connection srcId="24" srcChan="0" dstId="25" dstChan="0"/>
-    <connection srcId="24" srcChan="0" dstId="26" dstChan="0"/>
-    <connection srcId="25" srcChan="1" dstId="2" dstChan="1"/>
-    <connection srcId="26" srcChan="0" dstId="2" dstChan="0"/>
+    <connection srcId="24" srcChan="0" dstId="49" dstChan="0"/>
+    <connection srcId="24" srcChan="0" dstId="50" dstChan="0"/>
+    <connection srcId="49" srcChan="0" dstId="2" dstChan="1"/>
+    <connection srcId="50" srcChan="0" dstId="2" dstChan="0"/>
   </connections>
   <NodeEditorUI>
     <node id="1" x="-226.0" y="-139.0"/>
-    <node id="2" x="288.0" y="99.0"/>
-    <node id="3" x="800.0" y="25.0"/>
+    <node id="2" x="350.0" y="11.0"/>
+    <node id="3" x="880.0" y="-28.0"/>
     <node id="4" x="-67.0" y="520.0"/>
-    <node id="6" x="800.0" y="257.0"/>
-    <node id="7" x="886.0" y="477.0"/>
-    <node id="15" x="1216.9150390625" y="597.860595703125"/>
+    <node id="6" x="894.0" y="169.0"/>
+    <node id="7" x="659.0" y="698.0"/>
+    <node id="15" x="1241.9150390625" y="477.860595703125"/>
     <node id="24" x="-530.0" y="-50.0"/>
-    <node id="25" x="-66.0" y="325.0"/>
-    <node id="26" x="-39.0" y="152.0"/>
     <node id="37" x="1861.0" y="820.0"/>
+    <node id="49" x="-87.0" y="316.0"/>
+    <node id="50" x="-79.0" y="146.0"/>
   </NodeEditorUI>
 </ModularSynthPreset>

@@ -28,8 +28,7 @@ juce::AudioProcessorValueTreeState::ParameterLayout MultiBandShaperModuleProcess
 
 MultiBandShaperModuleProcessor::MultiBandShaperModuleProcessor()
     : ModuleProcessor(BusesProperties()
-          .withInput("Audio In", juce::AudioChannelSet::stereo(), true)
-          .withInput("Mod In", juce::AudioChannelSet::discreteChannels(NUM_BANDS + 1), true) // One mod input per drive control + gain
+          .withInput("Inputs", juce::AudioChannelSet::discreteChannels(2 + NUM_BANDS + 1), true) // 0-1: Audio In, 2-9: Drive Mods, 10: Gain Mod
           .withOutput("Out", juce::AudioChannelSet::stereo(), true)),
       apvts(*this, nullptr, "MultiBandShaperParams", createParameterLayout())
 {
@@ -79,7 +78,6 @@ void MultiBandShaperModuleProcessor::releaseResources()
 void MultiBandShaperModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffer&)
 {
     auto inBus = getBusBuffer(buffer, true, 0);
-    auto modBus = getBusBuffer(buffer, true, 1);
     auto outBus = getBusBuffer(buffer, false, 0);
 
     const int numSamples = buffer.getNumSamples();
@@ -106,13 +104,14 @@ void MultiBandShaperModuleProcessor::processBlock(juce::AudioBuffer<float>& buff
         // 2. Apply waveshaping to the filtered band
         float drive = driveParams[band]->load();
         
-        // Check for modulation input
+        // Check for modulation input from unified input bus (channels 2-9)
         if (isParamInputConnected("drive_" + juce::String(band + 1)))
         {
-            if (band < modBus.getNumChannels())
+            int modChannel = 2 + band; // Channels 2-9 are drive mods for bands 0-7
+            if (inBus.getNumChannels() > modChannel)
             {
                 // Simple 0..1 CV to full drive range mapping (0-100)
-                float modValue = modBus.getSample(band, 0);
+                float modValue = inBus.getSample(modChannel, 0);
                 drive = juce::jmap(modValue, 0.0f, 1.0f, 0.0f, 100.0f);
             }
         }
@@ -140,12 +139,13 @@ void MultiBandShaperModuleProcessor::processBlock(juce::AudioBuffer<float>& buff
     // 4. Apply output gain and copy to the final output bus
     float gainDb = outputGainParam->load();
     
-    // Check for modulation on output gain
+    // Check for modulation on output gain from unified input bus
     if (isParamInputConnected("outputGain"))
     {
-        if (NUM_BANDS < modBus.getNumChannels())
+        int gainModChannel = 2 + NUM_BANDS; // Channel 10
+        if (inBus.getNumChannels() > gainModChannel)
         {
-            float modValue = modBus.getSample(NUM_BANDS, 0);
+            float modValue = inBus.getSample(gainModChannel, 0);
             gainDb = juce::jmap(modValue, 0.0f, 1.0f, -24.0f, 24.0f);
         }
     }
@@ -162,20 +162,20 @@ void MultiBandShaperModuleProcessor::processBlock(juce::AudioBuffer<float>& buff
 
 bool MultiBandShaperModuleProcessor::getParamRouting(const juce::String& paramId, int& outBusIndex, int& outChannelIndexInBus) const
 {
-    outBusIndex = 1; // All modulation is on the "Mod In" bus
+    outBusIndex = 0; // All modulation is on the single input bus
     
     if (paramId.startsWith("drive_"))
     {
         int bandNum = paramId.getTrailingIntValue(); // e.g., "drive_5" -> 5
         if (bandNum > 0 && bandNum <= NUM_BANDS)
         {
-            outChannelIndexInBus = bandNum - 1; // 0-indexed channel
+            outChannelIndexInBus = 2 + (bandNum - 1); // Channels 2-9 for drives 1-8
             return true;
         }
     }
     if (paramId == "outputGain")
     {
-        outChannelIndexInBus = NUM_BANDS; // Use the channel after all the drive mods
+        outChannelIndexInBus = 2 + NUM_BANDS; // Channel 10 for output gain
         return true;
     }
     return false;

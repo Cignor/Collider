@@ -49,7 +49,35 @@ public:
     // --- UI drawing functions ---
 #if defined(PRESET_CREATOR_UI)
     void drawParametersInNode(float itemWidth, const std::function<bool(const juce::String&)>&, const std::function<void()>&) override;
-    void drawIoPins(const NodePinHelpers& helpers) override;
+    
+    // --- REFACTORED drawIoPins ---
+    void drawIoPins(const NodePinHelpers& helpers) override
+    {
+        // Group global inputs with primary outputs
+        helpers.drawParallelPins("Gate In", 0, "Value", 0);
+        helpers.drawParallelPins("Trigger In", 1, "Inverted", 1);
+        helpers.drawParallelPins("Sync In", 2, "Bipolar", 2);
+        helpers.drawParallelPins("Rate Mod", 3, "Pitch", 3);
+        helpers.drawParallelPins("Slew Mod", 4, "Gate", 4);
+        helpers.drawParallelPins("Gate Thresh Mod", 5, "Trigger", 5);
+        helpers.drawParallelPins("Trig Thresh Mod", 6, "End of Cycle", 6);
+        
+        // Remaining global inputs
+        helpers.drawAudioInputPin("Pitch Base Mod", 7);
+        helpers.drawAudioInputPin("Value Mult Mod", 8);
+        helpers.drawAudioInputPin("Curve Select Mod", 9);
+
+        ImGui::Spacing(); // Add a visual separator
+
+        // Dedicated curve outputs
+        helpers.drawAudioOutputPin("Blue Value", 7);
+        helpers.drawAudioOutputPin("Blue Pitch", 8);
+        helpers.drawAudioOutputPin("Red Value", 9);
+        helpers.drawAudioOutputPin("Red Pitch", 10);
+        helpers.drawAudioOutputPin("Green Value", 11);
+        helpers.drawAudioOutputPin("Green Pitch", 12);
+    }
+
     juce::String getAudioInputLabel(int channel) const override;
     juce::String getAudioOutputLabel(int channel) const override;
 #endif
@@ -62,7 +90,7 @@ private:
 
     // --- Core state for the curves ---
     std::array<std::vector<float>, 3> curves;
-    static constexpr int CURVE_RESOLUTION = 256; // 256 points in each curve
+    static constexpr int CURVE_RESOLUTION = 256;
 
     // --- DSP State ---
     double phase{ 0.0 };
@@ -72,9 +100,9 @@ private:
     bool lastSyncState{ false };
     float currentValue{ 0.0f };
     float targetValue{ 0.0f };
-    bool isRunning{ false }; // For state in Sync mode
-    bool lastGateOut{ false }; // For Trigger pulse generation
-    int eocPulseRemaining{ 0 }; // For End of Cycle pulse timing
+    bool isRunning{ false };
+    bool lastGateOut{ false };
+    int eocPulseRemaining{ 0 };
     
     // --- Smoothed values ---
     juce::SmoothedValue<float> smoothedSlew;

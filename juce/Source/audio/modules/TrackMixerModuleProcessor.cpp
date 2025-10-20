@@ -3,8 +3,7 @@
 
 TrackMixerModuleProcessor::TrackMixerModuleProcessor()
     : ModuleProcessor(BusesProperties()
-          .withInput("Audio In", juce::AudioChannelSet::discreteChannels(MAX_TRACKS), true)
-          .withInput("Mod In", juce::AudioChannelSet::discreteChannels(1 + (MAX_TRACKS * 2)), true) // 1 for NumTracks + 2 for each track (Gain/Pan)
+          .withInput("Inputs", juce::AudioChannelSet::discreteChannels(MAX_TRACKS + 1 + (MAX_TRACKS * 2)), true) // 0-63: Audio, 64: NumTracks Mod, 65+: Gain/Pan Mods
           .withOutput("Out", juce::AudioChannelSet::stereo(), true)),
       apvts(*this, nullptr, "TrackMixerParams", createParameterLayout())
 {
@@ -49,18 +48,17 @@ void TrackMixerModuleProcessor::prepareToPlay(double sampleRate, int samplesPerB
 void TrackMixerModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midi)
 {
     juce::ignoreUnused(midi);
-    auto audioInBus = getBusBuffer(buffer, true, 0);
-    auto modInBus   = getBusBuffer(buffer, true, 1);
-    auto outBus     = getBusBuffer(buffer, false, 0);
+    auto inBus  = getBusBuffer(buffer, true, 0);
+    auto outBus = getBusBuffer(buffer, false, 0);
 
     const int numSamples = buffer.getNumSamples();
     
     // Determine the number of active tracks from the parameter or its modulation input
     int numTracks = numTracksParam->get();
     
-    if (isParamInputConnected(paramIdNumTracksMod))
+    if (isParamInputConnected(paramIdNumTracksMod) && inBus.getNumChannels() > MAX_TRACKS)
     {
-        float modValue = modInBus.getReadPointer(0)[0];
+        float modValue = inBus.getReadPointer(MAX_TRACKS)[0]; // Channel 64 for numTracks mod
 
         // Interpret modValue as a raw track count (not normalized CV)
         int maxTracks = numTracksMaxParam->get();
@@ -78,7 +76,7 @@ void TrackMixerModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
     // Loop through every active track and add its sound to the mix
     for (int t = 0; t < numTracks; ++t)
     {
-        const float* src = (t < audioInBus.getNumChannels()) ? audioInBus.getReadPointer(t) : nullptr;
+        const float* src = (t < inBus.getNumChannels()) ? inBus.getReadPointer(t) : nullptr;
         if (src == nullptr) continue;
 
         float* mixL = mixBus.getWritePointer(0);
@@ -105,8 +103,12 @@ void TrackMixerModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
         {
             const float baseGainDb = trackGainParams[t]->load();
             const float basePan = trackPanParams[t]->load();
-            const float* gainModSignal = isGainModulated ? modInBus.getReadPointer(1 + t * 2) : nullptr;
-            const float* panModSignal  = isPanModulated ? modInBus.getReadPointer(1 + t * 2 + 1) : nullptr;
+            
+            // Get modulation signals from unified input bus
+            const int gainModChannel = MAX_TRACKS + 1 + (t * 2);
+            const int panModChannel = MAX_TRACKS + 1 + (t * 2) + 1;
+            const float* gainModSignal = isGainModulated && inBus.getNumChannels() > gainModChannel ? inBus.getReadPointer(gainModChannel) : nullptr;
+            const float* panModSignal  = isPanModulated && inBus.getNumChannels() > panModChannel ? inBus.getReadPointer(panModChannel) : nullptr;
 
             for (int i = 0; i < numSamples; ++i)
             {
@@ -329,12 +331,12 @@ void TrackMixerModuleProcessor::drawIoPins(const NodePinHelpers& helpers)
 
 bool TrackMixerModuleProcessor::getParamRouting(const juce::String& paramId, int& outBusIndex, int& outChannelIndexInBus) const
 {
-    // All modulation is on Bus 1, "Mod In".
-    outBusIndex = 1;
+    // All modulation is on the single input bus
+    outBusIndex = 0;
 
     if (paramId == paramIdNumTracksMod)
     {
-        outChannelIndexInBus = 0; // First channel in mod bus
+        outChannelIndexInBus = MAX_TRACKS; // Channel 64
         return true;
     }
 
@@ -344,7 +346,7 @@ bool TrackMixerModuleProcessor::getParamRouting(const juce::String& paramId, int
         const int trackNum = trackNumStr.getIntValue();
         if (trackNum > 0 && trackNum <= MAX_TRACKS)
         {
-            outChannelIndexInBus = 1 + (trackNum - 1) * 2; // Channels 1, 3, 5...
+            outChannelIndexInBus = MAX_TRACKS + 1 + (trackNum - 1) * 2; // Gain channels start at 65
             return true;
         }
     }
@@ -354,7 +356,7 @@ bool TrackMixerModuleProcessor::getParamRouting(const juce::String& paramId, int
         const int trackNum = trackNumStr.getIntValue();
         if (trackNum > 0 && trackNum <= MAX_TRACKS)
         {
-            outChannelIndexInBus = 1 + (trackNum - 1) * 2 + 1; // Channels 2, 4, 6...
+            outChannelIndexInBus = MAX_TRACKS + 1 + (trackNum - 1) * 2 + 1; // Pan channels start at 66
             return true;
         }
     }

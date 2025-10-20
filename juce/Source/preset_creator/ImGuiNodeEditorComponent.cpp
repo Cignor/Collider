@@ -376,7 +376,7 @@ void populatePinDatabase()
         { AudioPin("Out L", 0, PinDataType::Audio), AudioPin("Out R", 1, PinDataType::Audio) },
         {}
     );
-    modulePinDatabase["8-band shaper"] = ModulePinInfo(
+    modulePinDatabase["8bandshaper"] = ModulePinInfo(
         {
             AudioPin("In L", 0, PinDataType::Audio),
             AudioPin("In R", 1, PinDataType::Audio),
@@ -393,8 +393,6 @@ void populatePinDatabase()
         { AudioPin("Out L", 0, PinDataType::Audio), AudioPin("Out R", 1, PinDataType::Audio) },
         {}
     );
-    // Alias for lowercase registry key
-    modulePinDatabase["8bandshaper"] = modulePinDatabase["8-Band Shaper"];
     modulePinDatabase["granulator"] = ModulePinInfo(
         {
             AudioPin("In L", 0, PinDataType::Audio),
@@ -422,12 +420,17 @@ void populatePinDatabase()
           AudioPin("Step 5 Mod", 10, PinDataType::CV), AudioPin("Step 6 Mod", 11, PinDataType::CV), AudioPin("Step 7 Mod", 12, PinDataType::CV), AudioPin("Step 8 Mod", 13, PinDataType::CV),
           AudioPin("Step 9 Mod", 14, PinDataType::CV), AudioPin("Step 10 Mod", 15, PinDataType::CV), AudioPin("Step 11 Mod", 16, PinDataType::CV), AudioPin("Step 12 Mod", 17, PinDataType::CV),
           AudioPin("Step 13 Mod", 18, PinDataType::CV), AudioPin("Step 14 Mod", 19, PinDataType::CV), AudioPin("Step 15 Mod", 20, PinDataType::CV), AudioPin("Step 16 Mod", 21, PinDataType::CV),
-          // Per-step trig mods absolute 22..37 (Step1..Step16)
-          AudioPin("Step 1 Trig Mod", 22, PinDataType::CV), AudioPin("Step 2 Trig Mod", 23, PinDataType::CV), AudioPin("Step 3 Trig Mod", 24, PinDataType::CV), AudioPin("Step 4 Trig Mod", 25, PinDataType::CV),
-          AudioPin("Step 5 Trig Mod", 26, PinDataType::CV), AudioPin("Step 6 Trig Mod", 27, PinDataType::CV), AudioPin("Step 7 Trig Mod", 28, PinDataType::CV), AudioPin("Step 8 Trig Mod", 29, PinDataType::CV),
-          AudioPin("Step 9 Trig Mod", 30, PinDataType::CV), AudioPin("Step 10 Trig Mod", 31, PinDataType::CV), AudioPin("Step 11 Trig Mod", 32, PinDataType::CV), AudioPin("Step 12 Trig Mod", 33, PinDataType::CV),
-          AudioPin("Step 13 Trig Mod", 34, PinDataType::CV), AudioPin("Step 14 Trig Mod", 35, PinDataType::CV), AudioPin("Step 15 Trig Mod", 36, PinDataType::CV), AudioPin("Step 16 Trig Mod", 37, PinDataType::CV) },
-        { AudioPin("Pitch", 0, PinDataType::CV), AudioPin("Gate", 1, PinDataType::Gate), AudioPin("Velocity", 2, PinDataType::CV), AudioPin("Mod", 3, PinDataType::CV) },
+          // Per-step trig mods absolute 22..37 (Step1..Step16) — these are Gates
+          AudioPin("Step 1 Trig Mod", 22, PinDataType::Gate), AudioPin("Step 2 Trig Mod", 23, PinDataType::Gate), AudioPin("Step 3 Trig Mod", 24, PinDataType::Gate), AudioPin("Step 4 Trig Mod", 25, PinDataType::Gate),
+          AudioPin("Step 5 Trig Mod", 26, PinDataType::Gate), AudioPin("Step 6 Trig Mod", 27, PinDataType::Gate), AudioPin("Step 7 Trig Mod", 28, PinDataType::Gate), AudioPin("Step 8 Trig Mod", 29, PinDataType::Gate),
+          AudioPin("Step 9 Trig Mod", 30, PinDataType::Gate), AudioPin("Step 10 Trig Mod", 31, PinDataType::Gate), AudioPin("Step 11 Trig Mod", 32, PinDataType::Gate), AudioPin("Step 12 Trig Mod", 33, PinDataType::Gate),
+          AudioPin("Step 13 Trig Mod", 34, PinDataType::Gate), AudioPin("Step 14 Trig Mod", 35, PinDataType::Gate), AudioPin("Step 15 Trig Mod", 36, PinDataType::Gate), AudioPin("Step 16 Trig Mod", 37, PinDataType::Gate),
+          // Per-step gate level mods absolute 38..53
+          AudioPin("Step 1 Gate Mod", 38, PinDataType::CV), AudioPin("Step 2 Gate Mod", 39, PinDataType::CV), AudioPin("Step 3 Gate Mod", 40, PinDataType::CV), AudioPin("Step 4 Gate Mod", 41, PinDataType::CV),
+          AudioPin("Step 5 Gate Mod", 42, PinDataType::CV), AudioPin("Step 6 Gate Mod", 43, PinDataType::CV), AudioPin("Step 7 Gate Mod", 44, PinDataType::CV), AudioPin("Step 8 Gate Mod", 45, PinDataType::CV),
+          AudioPin("Step 9 Gate Mod", 46, PinDataType::CV), AudioPin("Step 10 Gate Mod", 47, PinDataType::CV), AudioPin("Step 11 Gate Mod", 48, PinDataType::CV), AudioPin("Step 12 Gate Mod", 49, PinDataType::CV),
+          AudioPin("Step 13 Gate Mod", 50, PinDataType::CV), AudioPin("Step 14 Gate Mod", 51, PinDataType::CV), AudioPin("Step 15 Gate Mod", 52, PinDataType::CV), AudioPin("Step 16 Gate Mod", 53, PinDataType::CV) },
+        { AudioPin("Pitch", 0, PinDataType::CV), AudioPin("Gate", 1, PinDataType::Gate), AudioPin("Gate Nuanced", 2, PinDataType::CV), AudioPin("Velocity", 3, PinDataType::CV), AudioPin("Mod", 4, PinDataType::CV), AudioPin("Trigger", 5, PinDataType::Gate) },
         {}
     );
 
@@ -436,11 +439,30 @@ void populatePinDatabase()
         { AudioPin("Raw", 0, PinDataType::Raw), AudioPin("Normalized", 1, PinDataType::CV), AudioPin("Inverted", 2, PinDataType::Raw), AudioPin("Integer", 3, PinDataType::Raw), AudioPin("CV Out", 4, PinDataType::CV) },
         {}
     );
-    modulePinDatabase["random"] = ModulePinInfo(
-        { AudioPin("Trigger In", 0, PinDataType::Gate), AudioPin("Rate Mod", 1, PinDataType::CV), AudioPin("Slew Mod", 2, PinDataType::CV) },
-        { AudioPin("Norm Out", 0, PinDataType::CV), AudioPin("Raw Out", 1, PinDataType::Raw), AudioPin("CV Out", 2, PinDataType::CV), AudioPin("Bool Out", 3, PinDataType::Gate), AudioPin("Trig Out", 4, PinDataType::Gate) },
-        {}
-    );
+// in populatePinDatabase()
+
+// in populatePinDatabase()
+
+// in populatePinDatabase()
+
+modulePinDatabase["random"] = ModulePinInfo(
+    { 
+        AudioPin("Trigger In", 0, PinDataType::Gate), 
+        AudioPin("Rate Mod", 1, PinDataType::CV), 
+        AudioPin("Slew Mod", 2, PinDataType::CV) 
+    },
+    { 
+        AudioPin("Norm Out", 0, PinDataType::CV), 
+        AudioPin("Raw Out", 1, PinDataType::Raw), 
+        AudioPin("CV Out", 2, PinDataType::CV),
+        AudioPin("Bool Out", 3, PinDataType::Gate), 
+        AudioPin("Trig Out", 4, PinDataType::Gate) 
+    },
+    { 
+        ModPin("Rate", "rate_mod", PinDataType::CV),
+        ModPin("Slew", "slew_mod", PinDataType::CV)
+    }
+);
 
     modulePinDatabase["tts performer"] = ModulePinInfo(
         { // Inputs (absolute channels based on bus structure)
@@ -757,12 +779,8 @@ void populatePinDatabase()
     // Duplicate entry removed to avoid conflicts
 
     
-    // Add TrackMixer module
-    modulePinDatabase["trackmixer"] = ModulePinInfo(
-        {},
-        { AudioPin("Out L", 0, PinDataType::Audio), AudioPin("Out R", 1, PinDataType::Audio) },
-        { ModPin("Num Tracks Mod", "numTracks", PinDataType::CV) }
-    );
+    // Add TrackMixer module alias (main definition is "track mixer" above)
+    modulePinDatabase["trackmixer"] = modulePinDatabase["track mixer"];
     
     
     // Add MIDI Player module
@@ -774,10 +792,31 @@ void populatePinDatabase()
     
     // Add converter modules
     modulePinDatabase["Attenuverter"] = {
-        { AudioPin("Audio In", 0, PinDataType::Audio), AudioPin("Amount Mod", 1, PinDataType::CV) },
-        { AudioPin("CV Out", 0, PinDataType::CV) },
+        { AudioPin("In L", 0, PinDataType::Audio), AudioPin("In R", 1, PinDataType::Audio), AudioPin("Amount Mod", 2, PinDataType::CV) },
+        { AudioPin("Out L", 0, PinDataType::Audio), AudioPin("Out R", 1, PinDataType::Audio) },
         {}
     };
+    
+    // Add lowercase alias for Attenuverter
+    modulePinDatabase["attenuverter"] = modulePinDatabase["Attenuverter"];
+    
+    // Add Sample & Hold module
+    modulePinDatabase["s&h"] = ModulePinInfo(
+        { 
+            AudioPin("Signal In L", 0, PinDataType::Audio),
+            AudioPin("Signal In R", 1, PinDataType::Audio),
+            AudioPin("Trig In L", 2, PinDataType::Gate),
+            AudioPin("Trig In R", 3, PinDataType::Gate),
+            AudioPin("Threshold Mod", 4, PinDataType::CV),
+            AudioPin("Edge Mod", 5, PinDataType::CV),
+            AudioPin("Slew Mod", 6, PinDataType::CV)
+        },
+        { 
+            AudioPin("Out L", 0, PinDataType::Audio),
+            AudioPin("Out R", 1, PinDataType::Audio)
+        },
+        {}
+    );
     
     modulePinDatabase["MapRange"] = {
         { AudioPin("Raw In", 0, PinDataType::Raw) },

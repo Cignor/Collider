@@ -534,7 +534,6 @@ namespace {
             reg("scope", []{ return std::make_unique<ScopeModuleProcessor>(); });
             reg("frequency graph", []{ return std::make_unique<FrequencyGraphModuleProcessor>(); });
             reg("s&h", []{ return std::make_unique<SAndHModuleProcessor>(); });
-            reg("sandh", []{ return std::make_unique<SAndHModuleProcessor>(); });
             reg("sequencer", []{ return std::make_unique<StepSequencerModuleProcessor>(); });
             reg("stepsequencer", []{ return std::make_unique<StepSequencerModuleProcessor>(); });
             reg("math", []{ return std::make_unique<MathModuleProcessor>(); });
@@ -665,6 +664,12 @@ bool ModularSynthProcessor::connect(const NodeID& sourceNodeID, int sourceChanne
 void ModularSynthProcessor::commitChanges()
 {
     internalGraph->rebuild();
+    
+    // CRITICAL FIX: Force graph to re-prepare after topology changes to update internal routing
+    if (getSampleRate() > 0 && getBlockSize() > 0)
+    {
+        internalGraph->prepareToPlay(getSampleRate(), getBlockSize());
+    }
 
     // --- BEGIN DIAGNOSTIC INSERTION ---
     juce::Logger::writeToLog("--- Modular Synth Internal Patch State ---");
@@ -692,20 +697,17 @@ void ModularSynthProcessor::commitChanges()
         juce::Logger::writeToLog("  logicalId=" + juce::String((int)kv.first) + " nodeID=" + juce::String(kv.second.nodeID.uid) + " type='" + type + "'");
     }
     juce::Logger::writeToLog("----------------------");
-    // Assign missing logical IDs to module processors and log processor pointers
+    // CRITICAL FIX: Always sync logical IDs to module processors (not just when 0)
+    // This ensures restored modules get the correct ID, not the auto-assigned temporary one
     for (const auto& kv : logicalIdToModule)
     {
         ModuleProcessor* mp = getModuleForLogical(kv.first);
         if (mp != nullptr)
         {
-            if (mp->getLogicalId() == 0)
-            {
-                mp->setLogicalId(kv.first);
-                juce::Logger::writeToLog("[ModSynth] Assigned logicalId=" + juce::String((int)kv.first) +
-                                         " to procPtr=" + juce::String((juce::uint64)(uintptr_t)mp));
-            }
-            juce::Logger::writeToLog("[ModSynth] Map logicalId=" + juce::String((int)kv.first) +
-                                     " procPtr=" + juce::String((juce::uint64)(uintptr_t)mp));
+            // ALWAYS set the ID to match the map (fixes restore bug where addModule assigns temp ID)
+            mp->setLogicalId(kv.first);
+            juce::Logger::writeToLog("[ModSynth] Synced logicalId=" + juce::String((int)kv.first) +
+                                     " to procPtr=" + juce::String((juce::uint64)(uintptr_t)mp));
         }
     }
     // --- END DIAGNOSTIC INSERTION ---
@@ -2925,8 +2927,7 @@ FILE: juce\Source\audio\modules\AttenuverterModuleProcessor.cpp
 
 AttenuverterModuleProcessor::AttenuverterModuleProcessor()
     : ModuleProcessor (BusesProperties()
-                        .withInput ("Input", juce::AudioChannelSet::stereo(), true)
-                        .withInput ("Amount Mod", juce::AudioChannelSet::mono(), true)
+                        .withInput ("Inputs", juce::AudioChannelSet::discreteChannels(3), true) // 0-1: Audio In, 2: Amount Mod
                         .withOutput("Output", juce::AudioChannelSet::stereo(), true)),
       apvts (*this, nullptr, "AttenuverterParams", createParameterLayout())
 {
@@ -2956,16 +2957,15 @@ void AttenuverterModuleProcessor::processBlock (juce::AudioBuffer<float>& buffer
 {
     juce::ignoreUnused (midi);
     auto in  = getBusBuffer (buffer, true, 0);
-    auto modIn = getBusBuffer (buffer, true, 1); // Amount Mod bus
     auto out = getBusBuffer (buffer, false, 0);
     
     const float baseGain = amountParam != nullptr ? amountParam->load() : 1.0f;
     const bool shouldRectify = rectifyParam != nullptr ? rectifyParam->get() : false;
     const int nSamps = buffer.getNumSamples();
     
-    // Check if amount is modulated
+    // Check if amount is modulated and get from unified input bus
     const bool isAmountModulated = isParamInputConnected("amount");
-    const float* modSignal = isAmountModulated ? modIn.getReadPointer(0) : nullptr;
+    const float* modSignal = isAmountModulated && in.getNumChannels() > 2 ? in.getReadPointer(2) : nullptr;
     
     for (int ch = 0; ch < out.getNumChannels(); ++ch)
     {
@@ -3001,10 +3001,11 @@ void AttenuverterModuleProcessor::processBlock (juce::AudioBuffer<float>& buffer
 
 bool AttenuverterModuleProcessor::getParamRouting(const juce::String& paramId, int& outBusIndex, int& outChannelIndexInBus) const
 {
+    outBusIndex = 0; // All modulation is on the single input bus
+    
     if (paramId == "amount")
     {
-        outBusIndex = 1; // "Amount Mod" is Bus 1
-        outChannelIndexInBus = 0;
+        outChannelIndexInBus = 2;
         return true;
     }
     return false;
@@ -3981,10 +3982,7 @@ juce::AudioProcessorValueTreeState::ParameterLayout ChorusModuleProcessor::creat
 
 ChorusModuleProcessor::ChorusModuleProcessor()
     : ModuleProcessor(BusesProperties()
-          .withInput("Audio In", juce::AudioChannelSet::stereo(), true)
-          .withInput("Rate Mod", juce::AudioChannelSet::mono(), true)
-          .withInput("Depth Mod", juce::AudioChannelSet::mono(), true)
-          .withInput("Mix Mod", juce::AudioChannelSet::mono(), true)
+          .withInput("Inputs", juce::AudioChannelSet::discreteChannels(5), true) // 0-1: Audio In, 2: Rate Mod, 3: Depth Mod, 4: Mix Mod
           .withOutput("Audio Out", juce::AudioChannelSet::stereo(), true)),
       apvts(*this, nullptr, "ChorusParams", createParameterLayout())
 {
@@ -4023,14 +4021,14 @@ void ChorusModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce:
         outBus.copyFrom(ch, 0, inBus, ch, 0, buffer.getNumSamples());
     }
 
-    // --- Get Modulation CVs (if connected) ---
+    // --- Get Modulation CVs from unified input bus ---
     const bool isRateMod = isParamInputConnected(paramIdRateMod);
     const bool isDepthMod = isParamInputConnected(paramIdDepthMod);
     const bool isMixMod = isParamInputConnected(paramIdMixMod);
 
-    const float* rateCV = isRateMod ? getBusBuffer(buffer, true, 1).getReadPointer(0) : nullptr;
-    const float* depthCV = isDepthMod ? getBusBuffer(buffer, true, 2).getReadPointer(0) : nullptr;
-    const float* mixCV = isMixMod ? getBusBuffer(buffer, true, 3).getReadPointer(0) : nullptr;
+    const float* rateCV = isRateMod && inBus.getNumChannels() > 2 ? inBus.getReadPointer(2) : nullptr;
+    const float* depthCV = isDepthMod && inBus.getNumChannels() > 3 ? inBus.getReadPointer(3) : nullptr;
+    const float* mixCV = isMixMod && inBus.getNumChannels() > 4 ? inBus.getReadPointer(4) : nullptr;
 
     // --- Get Base Parameter Values ---
     const float baseRate = rateParam->load();
@@ -4083,9 +4081,11 @@ void ChorusModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce:
 
 bool ChorusModuleProcessor::getParamRouting(const juce::String& paramId, int& outBusIndex, int& outChannelIndexInBus) const
 {
-    if (paramId == paramIdRateMod) { outBusIndex = 1; outChannelIndexInBus = 0; return true; }
-    if (paramId == paramIdDepthMod) { outBusIndex = 2; outChannelIndexInBus = 0; return true; }
-    if (paramId == paramIdMixMod) { outBusIndex = 3; outChannelIndexInBus = 0; return true; }
+    outBusIndex = 0; // All modulation is on the single input bus
+    
+    if (paramId == paramIdRateMod) { outChannelIndexInBus = 2; return true; }
+    if (paramId == paramIdDepthMod) { outChannelIndexInBus = 3; return true; }
+    if (paramId == paramIdMixMod) { outChannelIndexInBus = 4; return true; }
     return false;
 }
 
@@ -4598,9 +4598,7 @@ juce::AudioProcessorValueTreeState::ParameterLayout CompressorModuleProcessor::c
 
 CompressorModuleProcessor::CompressorModuleProcessor()
     : ModuleProcessor(BusesProperties()
-          .withInput("Audio In", juce::AudioChannelSet::stereo(), true)
-          // Add 5 mono mod inputs, one for each parameter
-          .withInput("Modulation In", juce::AudioChannelSet::discreteChannels(5), true)
+          .withInput("Inputs", juce::AudioChannelSet::discreteChannels(7), true) // 0-1: Audio In, 2-6: Threshold/Ratio/Attack/Release/Makeup Mods
           .withOutput("Audio Out", juce::AudioChannelSet::stereo(), true)),
       apvts(*this, nullptr, "CompressorParams", createParameterLayout())
 {
@@ -4630,7 +4628,6 @@ void CompressorModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
     juce::ignoreUnused(midi);
     
     auto inBus = getBusBuffer(buffer, true, 0);
-    auto modBus = getBusBuffer(buffer, true, 1);
     auto outBus = getBusBuffer(buffer, false, 0);
 
     // Copy input to output for in-place processing
@@ -4640,27 +4637,26 @@ void CompressorModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
         outBus.copyFrom(ch, 0, inBus, ch, 0, buffer.getNumSamples());
     }
 
-    // --- Update DSP Parameters (once per block) ---
-    // (A per-sample loop would be needed for audio-rate modulation, but this is efficient and common)
+    // --- Update DSP Parameters from unified input bus (once per block) ---
     float finalThreshold = thresholdParam->load();
-    if (isParamInputConnected(paramIdThreshold) && modBus.getNumChannels() > 0)
-        finalThreshold = juce::jmap(modBus.getSample(0, 0), 0.0f, 1.0f, -60.0f, 0.0f);
+    if (isParamInputConnected(paramIdThresholdMod) && inBus.getNumChannels() > 2)
+        finalThreshold = juce::jmap(inBus.getSample(2, 0), 0.0f, 1.0f, -60.0f, 0.0f);
         
     float finalRatio = ratioParam->load();
-    if (isParamInputConnected(paramIdRatio) && modBus.getNumChannels() > 1)
-        finalRatio = juce::jmap(modBus.getSample(1, 0), 0.0f, 1.0f, 1.0f, 20.0f);
+    if (isParamInputConnected(paramIdRatioMod) && inBus.getNumChannels() > 3)
+        finalRatio = juce::jmap(inBus.getSample(3, 0), 0.0f, 1.0f, 1.0f, 20.0f);
 
     float finalAttack = attackParam->load();
-    if (isParamInputConnected(paramIdAttack) && modBus.getNumChannels() > 2)
-        finalAttack = juce::jmap(modBus.getSample(2, 0), 0.0f, 1.0f, 0.1f, 200.0f);
+    if (isParamInputConnected(paramIdAttackMod) && inBus.getNumChannels() > 4)
+        finalAttack = juce::jmap(inBus.getSample(4, 0), 0.0f, 1.0f, 0.1f, 200.0f);
 
     float finalRelease = releaseParam->load();
-    if (isParamInputConnected(paramIdRelease) && modBus.getNumChannels() > 3)
-        finalRelease = juce::jmap(modBus.getSample(3, 0), 0.0f, 1.0f, 5.0f, 1000.0f);
+    if (isParamInputConnected(paramIdReleaseMod) && inBus.getNumChannels() > 5)
+        finalRelease = juce::jmap(inBus.getSample(5, 0), 0.0f, 1.0f, 5.0f, 1000.0f);
         
     float finalMakeup = makeupParam->load();
-    if (isParamInputConnected(paramIdMakeup) && modBus.getNumChannels() > 4)
-        finalMakeup = juce::jmap(modBus.getSample(4, 0), 0.0f, 1.0f, -12.0f, 12.0f);
+    if (isParamInputConnected(paramIdMakeupMod) && inBus.getNumChannels() > 6)
+        finalMakeup = juce::jmap(inBus.getSample(6, 0), 0.0f, 1.0f, -12.0f, 12.0f);
 
     compressor.setThreshold(finalThreshold);
     compressor.setRatio(finalRatio);
@@ -4691,12 +4687,13 @@ void CompressorModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
 
 bool CompressorModuleProcessor::getParamRouting(const juce::String& paramId, int& outBusIndex, int& outChannelIndexInBus) const
 {
-    outBusIndex = 1; // All modulation is on Bus 1
-    if (paramId == paramIdThreshold) { outChannelIndexInBus = 0; return true; }
-    if (paramId == paramIdRatio)     { outChannelIndexInBus = 1; return true; }
-    if (paramId == paramIdAttack)    { outChannelIndexInBus = 2; return true; }
-    if (paramId == paramIdRelease)   { outChannelIndexInBus = 3; return true; }
-    if (paramId == paramIdMakeup)    { outChannelIndexInBus = 4; return true; }
+    outBusIndex = 0; // All modulation is on the single input bus
+    
+    if (paramId == paramIdThresholdMod) { outChannelIndexInBus = 2; return true; }
+    if (paramId == paramIdRatioMod)     { outChannelIndexInBus = 3; return true; }
+    if (paramId == paramIdAttackMod)    { outChannelIndexInBus = 4; return true; }
+    if (paramId == paramIdReleaseMod)   { outChannelIndexInBus = 5; return true; }
+    if (paramId == paramIdMakeupMod)    { outChannelIndexInBus = 6; return true; }
     return false;
 }
 
@@ -4726,19 +4723,25 @@ void CompressorModuleProcessor::drawParametersInNode(float itemWidth, const std:
     auto& ap = getAPVTS();
     ImGui::PushItemWidth(itemWidth);
 
-    auto drawSlider = [&](const char* label, const juce::String& paramId, float min, float max, const char* format) {
-        float value = ap.getRawParameterValue(paramId)->load();
+    // Lambda that correctly handles modulation
+    auto drawSlider = [&](const char* label, const juce::String& paramId, const juce::String& modId, float min, float max, const char* format) {
+        bool isMod = isParamModulated(modId);
+        float value = isMod ? getLiveParamValueFor(modId, paramId + juce::String("_live"), ap.getRawParameterValue(paramId)->load())
+                            : ap.getRawParameterValue(paramId)->load();
+        
+        if (isMod) ImGui::BeginDisabled();
         if (ImGui::SliderFloat(label, &value, min, max, format))
-            *dynamic_cast<juce::AudioParameterFloat*>(ap.getParameter(paramId)) = value;
-        adjustParamOnWheel(ap.getParameter(paramId), paramId, value);
+            if (!isMod) *dynamic_cast<juce::AudioParameterFloat*>(ap.getParameter(paramId)) = value;
+        if (!isMod) adjustParamOnWheel(ap.getParameter(paramId), paramId, value);
         if (ImGui::IsItemDeactivatedAfterEdit()) { onModificationEnded(); }
+        if (isMod) { ImGui::EndDisabled(); ImGui::SameLine(); ImGui::TextUnformatted("(mod)"); }
     };
 
-    drawSlider("Threshold", paramIdThreshold, -60.0f, 0.0f, "%.1f dB");
-    drawSlider("Ratio", paramIdRatio, 1.0f, 20.0f, "%.1f : 1");
-    drawSlider("Attack", paramIdAttack, 0.1f, 200.0f, "%.1f ms");
-    drawSlider("Release", paramIdRelease, 5.0f, 1000.0f, "%.0f ms");
-    drawSlider("Makeup", paramIdMakeup, -12.0f, 12.0f, "%.1f dB");
+    drawSlider("Threshold", paramIdThreshold, paramIdThresholdMod, -60.0f, 0.0f, "%.1f dB");
+    drawSlider("Ratio", paramIdRatio, paramIdRatioMod, 1.0f, 20.0f, "%.1f : 1");
+    drawSlider("Attack", paramIdAttack, paramIdAttackMod, 0.1f, 200.0f, "%.1f ms");
+    drawSlider("Release", paramIdRelease, paramIdReleaseMod, 5.0f, 1000.0f, "%.0f ms");
+    drawSlider("Makeup", paramIdMakeup, paramIdMakeupMod, -12.0f, 12.0f, "%.1f dB");
 
     ImGui::PopItemWidth();
 }
@@ -4778,6 +4781,13 @@ public:
     static constexpr auto paramIdAttack = "attack";
     static constexpr auto paramIdRelease = "release";
     static constexpr auto paramIdMakeup = "makeup";
+
+    // Virtual IDs for modulation inputs
+    static constexpr auto paramIdThresholdMod = "threshold_mod";
+    static constexpr auto paramIdRatioMod = "ratio_mod";
+    static constexpr auto paramIdAttackMod = "attack_mod";
+    static constexpr auto paramIdReleaseMod = "release_mod";
+    static constexpr auto paramIdMakeupMod = "makeup_mod";
 
     CompressorModuleProcessor();
     ~CompressorModuleProcessor() override = default;
@@ -6825,36 +6835,7 @@ void FunctionGeneratorModuleProcessor::drawParametersInNode(float itemWidth, con
     ImGui::PopItemWidth(); // <<< FIX: Added to match the PushItemWidth at the top.
 }
 
-void FunctionGeneratorModuleProcessor::drawIoPins(const NodePinHelpers& helpers)
-{
-    // Input pins
-    helpers.drawAudioInputPin("Gate In", 0);
-    helpers.drawAudioInputPin("Trigger In", 1);
-    helpers.drawAudioInputPin("Sync In", 2);
-    helpers.drawAudioInputPin("Rate Mod", 3);
-    helpers.drawAudioInputPin("Slew Mod", 4);
-    helpers.drawAudioInputPin("Gate Thresh Mod", 5);
-    helpers.drawAudioInputPin("Trig Thresh Mod", 6);
-    helpers.drawAudioInputPin("Pitch Base Mod", 7);
-    helpers.drawAudioInputPin("Value Mult Mod", 8);
-    helpers.drawAudioInputPin("Curve Select Mod", 9);
 
-    // Selected Outputs
-    helpers.drawAudioOutputPin("Value", 0);
-    helpers.drawAudioOutputPin("Inverted", 1);
-    helpers.drawAudioOutputPin("Bipolar", 2);
-    helpers.drawAudioOutputPin("Pitch", 3);
-    helpers.drawAudioOutputPin("Gate", 4);
-    helpers.drawAudioOutputPin("Trigger", 5);
-    helpers.drawAudioOutputPin("End of Cycle", 6);
-    // Dedicated Outputs
-    helpers.drawAudioOutputPin("Blue Value", 7);
-    helpers.drawAudioOutputPin("Blue Pitch", 8);
-    helpers.drawAudioOutputPin("Red Value", 9);
-    helpers.drawAudioOutputPin("Red Pitch", 10);
-    helpers.drawAudioOutputPin("Green Value", 11);
-    helpers.drawAudioOutputPin("Green Pitch", 12);
-}
 
 juce::String FunctionGeneratorModuleProcessor::getAudioInputLabel(int channel) const
 {
@@ -7004,7 +6985,35 @@ public:
     // --- UI drawing functions ---
 #if defined(PRESET_CREATOR_UI)
     void drawParametersInNode(float itemWidth, const std::function<bool(const juce::String&)>&, const std::function<void()>&) override;
-    void drawIoPins(const NodePinHelpers& helpers) override;
+    
+    // --- REFACTORED drawIoPins ---
+    void drawIoPins(const NodePinHelpers& helpers) override
+    {
+        // Group global inputs with primary outputs
+        helpers.drawParallelPins("Gate In", 0, "Value", 0);
+        helpers.drawParallelPins("Trigger In", 1, "Inverted", 1);
+        helpers.drawParallelPins("Sync In", 2, "Bipolar", 2);
+        helpers.drawParallelPins("Rate Mod", 3, "Pitch", 3);
+        helpers.drawParallelPins("Slew Mod", 4, "Gate", 4);
+        helpers.drawParallelPins("Gate Thresh Mod", 5, "Trigger", 5);
+        helpers.drawParallelPins("Trig Thresh Mod", 6, "End of Cycle", 6);
+        
+        // Remaining global inputs
+        helpers.drawAudioInputPin("Pitch Base Mod", 7);
+        helpers.drawAudioInputPin("Value Mult Mod", 8);
+        helpers.drawAudioInputPin("Curve Select Mod", 9);
+
+        ImGui::Spacing(); // Add a visual separator
+
+        // Dedicated curve outputs
+        helpers.drawAudioOutputPin("Blue Value", 7);
+        helpers.drawAudioOutputPin("Blue Pitch", 8);
+        helpers.drawAudioOutputPin("Red Value", 9);
+        helpers.drawAudioOutputPin("Red Pitch", 10);
+        helpers.drawAudioOutputPin("Green Value", 11);
+        helpers.drawAudioOutputPin("Green Pitch", 12);
+    }
+
     juce::String getAudioInputLabel(int channel) const override;
     juce::String getAudioOutputLabel(int channel) const override;
 #endif
@@ -7017,7 +7026,7 @@ private:
 
     // --- Core state for the curves ---
     std::array<std::vector<float>, 3> curves;
-    static constexpr int CURVE_RESOLUTION = 256; // 256 points in each curve
+    static constexpr int CURVE_RESOLUTION = 256;
 
     // --- DSP State ---
     double phase{ 0.0 };
@@ -7027,9 +7036,9 @@ private:
     bool lastSyncState{ false };
     float currentValue{ 0.0f };
     float targetValue{ 0.0f };
-    bool isRunning{ false }; // For state in Sync mode
-    bool lastGateOut{ false }; // For Trigger pulse generation
-    int eocPulseRemaining{ 0 }; // For End of Cycle pulse timing
+    bool isRunning{ false };
+    bool lastGateOut{ false };
+    int eocPulseRemaining{ 0 };
     
     // --- Smoothed values ---
     juce::SmoothedValue<float> smoothedSlew;
@@ -7060,7 +7069,6 @@ private:
     ImVec2 lastMousePosInCanvas{ -1, -1 };
 #endif
 };
-
 
 ================================================================================
 FILE: juce\Source\audio\modules\GateModuleProcessor.cpp
@@ -7659,8 +7667,9 @@ GraphicEQModuleProcessor::GraphicEQModuleProcessor()
     : ModuleProcessor(BusesProperties()
           // Single unified input bus: Channels 0-1 (Audio In L/R), 2-9 (Band Mods), 10-11 (Gate/Trig Thresh Mods)
           .withInput("Audio In", juce::AudioChannelSet::discreteChannels(12), true)
-          // Stereo Out + Gate + Trigger = 4 outputs
-          .withOutput("Audio Out", juce::AudioChannelSet::discreteChannels(4), true)),
+          // --- THE FIX: Define TWO separate output busses ---
+          .withOutput("Audio Out", juce::AudioChannelSet::stereo(), true)
+          .withOutput("CV Out", juce::AudioChannelSet::discreteChannels(TotalCVOutputs), true)),
       apvts(*this, nullptr, "GraphicEQParams", createParameterLayout())
 {
     for (int i = 0; i < 8; ++i)
@@ -7686,6 +7695,17 @@ void GraphicEQModuleProcessor::prepareToPlay(double sampleRate, int samplesPerBl
     processorChain.prepare(spec);
     processorChain.reset();
 
+    // CRITICAL: Initialize all filter coefficients with unity gain (0 dB) to prevent uninitialized state
+    const float q = 1.414f;
+    *processorChain.get<0>().state = *juce::dsp::IIR::Coefficients<float>::makeLowShelf(sampleRate, centerFrequencies[0], q, 1.0f);
+    *processorChain.get<1>().state = *juce::dsp::IIR::Coefficients<float>::makePeakFilter(sampleRate, centerFrequencies[1], q, 1.0f);
+    *processorChain.get<2>().state = *juce::dsp::IIR::Coefficients<float>::makePeakFilter(sampleRate, centerFrequencies[2], q, 1.0f);
+    *processorChain.get<3>().state = *juce::dsp::IIR::Coefficients<float>::makePeakFilter(sampleRate, centerFrequencies[3], q, 1.0f);
+    *processorChain.get<4>().state = *juce::dsp::IIR::Coefficients<float>::makePeakFilter(sampleRate, centerFrequencies[4], q, 1.0f);
+    *processorChain.get<5>().state = *juce::dsp::IIR::Coefficients<float>::makePeakFilter(sampleRate, centerFrequencies[5], q, 1.0f);
+    *processorChain.get<6>().state = *juce::dsp::IIR::Coefficients<float>::makePeakFilter(sampleRate, centerFrequencies[6], q, 1.0f);
+    *processorChain.get<7>().state = *juce::dsp::IIR::Coefficients<float>::makeHighShelf(sampleRate, centerFrequencies[7], q, 1.0f);
+
     // Reset gate/trigger state
     lastTriggerState = false;
     triggerPulseSamplesRemaining = 0;
@@ -7695,14 +7715,43 @@ void GraphicEQModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, ju
 {
     juce::ScopedNoDenormals noDenormals;
 
-    // With the unified bus layout, all inputs are on bus 0
     auto inBus = getBusBuffer(buffer, true, 0);
-    auto outBus = getBusBuffer(buffer, false, 0);
+    auto audioOutBus = getBusBuffer(buffer, false, 0); // Audio is on bus 0
+    auto cvOutBus = getBusBuffer(buffer, false, 1);    // CV is on bus 1
 
     const int numSamples = buffer.getNumSamples();
     if (numSamples <= 0) return;
 
-    // --- 1. Gate/Trigger Analysis (on clean INPUT signal) ---
+    // --- Logging Setup ---
+    // Log only once every 100 blocks to avoid spamming the log file.
+    static int debugCounter = 0;
+    const bool shouldLog = ((debugCounter++ % 100) == 0);
+
+    // LOG POINT 1: Check input signal at entry
+    if (shouldLog && inBus.getNumChannels() > 0)
+    {
+        float inputRms = inBus.getRMSLevel(0, 0, numSamples);
+        juce::Logger::writeToLog("[GraphicEQ Debug] At Entry - Input RMS: " + juce::String(inputRms, 6));
+    }
+
+    // --- CRITICAL FIX: Capture input audio BEFORE any write operations ---
+    // Create a temporary buffer to hold a copy of the stereo input (true stereo path)
+    juce::AudioBuffer<float> inputCopy(2, numSamples);
+    if (inBus.getNumChannels() > 0)
+    {
+        inputCopy.copyFrom(0, 0, inBus, 0, 0, numSamples);
+        if (inBus.getNumChannels() > 1)
+            inputCopy.copyFrom(1, 0, inBus, 1, 0, numSamples);
+        else
+            inputCopy.copyFrom(1, 0, inBus, 0, 0, numSamples); // duplicate mono to R
+    }
+    else
+    {
+        inputCopy.clear();
+    }
+    // --- END OF CRITICAL FIX ---
+
+    // --- 1. Gate/Trigger Analysis (now on the SAFE captured input signal) ---
     // Read threshold parameters and check for modulation CVs
     float gateThreshDb = gateThresholdParam->load();
     float trigThreshDb = triggerThresholdParam->load();
@@ -7726,16 +7775,15 @@ void GraphicEQModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, ju
     const float gateThreshLin = juce::Decibels::decibelsToGain(gateThreshDb);
     const float trigThreshLin = juce::Decibels::decibelsToGain(trigThreshDb);
 
-    // Generate gate and trigger outputs
-    if (outBus.getNumChannels() >= 4)
+    // --- 2. Write Gate/Trigger CVs (using a mono sum of the captured stereo input) ---
+    if (cvOutBus.getNumChannels() >= 2)
     {
-        float* gateOut = outBus.getWritePointer(2);
-        float* trigOut = outBus.getWritePointer(3);
+        float* gateOut = cvOutBus.getWritePointer(GateOut);
+        float* trigOut = cvOutBus.getWritePointer(TrigOut);
 
         for (int i = 0; i < numSamples; ++i)
         {
-            // Compute mono signal from stereo input (channels 0-1)
-            float monoSample = (inBus.getSample(0, i) + inBus.getSample(inBus.getNumChannels() > 1 ? 1 : 0, i)) * 0.5f;
+            float monoSample = 0.5f * (inputCopy.getSample(0, i) + inputCopy.getSample(1, i));
             float sampleAbs = std::abs(monoSample);
 
             // Gate output
@@ -7753,24 +7801,29 @@ void GraphicEQModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, ju
         }
     }
 
-    // --- 2. Copy Input Audio to Output (prepare for in-place processing) ---
-    // SAFETY FIX: Only copy if we have a valid output bus
-    if (outBus.getNumChannels() > 0 && inBus.getNumChannels() > 0)
+    // --- 3. Copy Captured Input to AUDIO Output Bus (true stereo) ---
+    if (audioOutBus.getNumChannels() >= 2)
     {
-        outBus.copyFrom(0, 0, inBus, 0, 0, numSamples);
-        if (outBus.getNumChannels() > 1)
-        {
-            // Create stereo output from mono or stereo input
-            outBus.copyFrom(1, 0, inBus, (inBus.getNumChannels() > 1 ? 1 : 0), 0, numSamples);
-        }
+        audioOutBus.copyFrom(0, 0, inputCopy, 0, 0, numSamples);
+        audioOutBus.copyFrom(1, 0, inputCopy, 1, 0, numSamples);
     }
-    else if (outBus.getNumChannels() > 0)
+    else if (audioOutBus.getNumChannels() == 1)
     {
-        // No input, clear the output
-        outBus.clear();
+        audioOutBus.copyFrom(0, 0, inputCopy, 0, 0, numSamples);
+    }
+    else
+    {
+        audioOutBus.clear();
     }
 
-    // --- 3. Update Filter Coefficients ---
+    // LOG POINT 2: Check signal after copying to output bus
+    if (shouldLog && audioOutBus.getNumChannels() > 0)
+    {
+        float afterCopyRms = audioOutBus.getRMSLevel(0, 0, numSamples);
+        juce::Logger::writeToLog("[GraphicEQ Debug] After Copy - Audio Out RMS: " + juce::String(afterCopyRms, 6));
+    }
+
+    // --- 4. Update Filter Coefficients ---
     double sampleRate = getSampleRate();
     const float q = 1.414f;
 
@@ -7790,44 +7843,67 @@ void GraphicEQModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, ju
 
         float gainLinear = juce::Decibels::decibelsToGain(gainDb);
 
-        // CRITICAL FIX: Use independent 'if' statements (not 'else if') so ALL filters update every block
+        // LOG POINT 3: Log filter parameters for Band 1 as a sample
+        if (shouldLog && bandIndex == 0)
+        {
+            juce::Logger::writeToLog("[GraphicEQ Debug] Band 1 - Gain (dB): " + juce::String(gainDb, 2) + 
+                                   ", Gain (Linear): " + juce::String(gainLinear, 6));
+        }
+
+        // CRITICAL FIX: ProcessorDuplicator needs the shared_ptr, not dereferenced coefficients
         if (bandIndex == 0)
         {
-            processorChain.get<0>().state = *juce::dsp::IIR::Coefficients<float>::makeLowShelf(sampleRate, centerFrequencies[bandIndex], q, gainLinear);
+            *processorChain.get<0>().state = *juce::dsp::IIR::Coefficients<float>::makeLowShelf(sampleRate, centerFrequencies[bandIndex], q, gainLinear);
         }
-        
-        if (bandIndex > 0 && bandIndex < 7) // Peak filters for bands 1-6
+        else if (bandIndex == 7)
         {
-            auto newCoefficients = *juce::dsp::IIR::Coefficients<float>::makePeakFilter(sampleRate, centerFrequencies[bandIndex], q, gainLinear);
-            if      (bandIndex == 1) { processorChain.get<1>().state = newCoefficients; }
-            else if (bandIndex == 2) { processorChain.get<2>().state = newCoefficients; }
-            else if (bandIndex == 3) { processorChain.get<3>().state = newCoefficients; }
-            else if (bandIndex == 4) { processorChain.get<4>().state = newCoefficients; }
-            else if (bandIndex == 5) { processorChain.get<5>().state = newCoefficients; }
-            else if (bandIndex == 6) { processorChain.get<6>().state = newCoefficients; }
+            *processorChain.get<7>().state = *juce::dsp::IIR::Coefficients<float>::makeHighShelf(sampleRate, centerFrequencies[bandIndex], q, gainLinear);
         }
-        
-        if (bandIndex == 7)
+        else if (bandIndex >= 1 && bandIndex <= 6) // Peak filters for bands 1-6
         {
-            processorChain.get<7>().state = *juce::dsp::IIR::Coefficients<float>::makeHighShelf(sampleRate, centerFrequencies[bandIndex], q, gainLinear);
+            auto newCoefficients = juce::dsp::IIR::Coefficients<float>::makePeakFilter(sampleRate, centerFrequencies[bandIndex], q, gainLinear);
+            switch (bandIndex)
+            {
+                case 1: *processorChain.get<1>().state = *newCoefficients; break;
+                case 2: *processorChain.get<2>().state = *newCoefficients; break;
+                case 3: *processorChain.get<3>().state = *newCoefficients; break;
+                case 4: *processorChain.get<4>().state = *newCoefficients; break;
+                case 5: *processorChain.get<5>().state = *newCoefficients; break;
+                case 6: *processorChain.get<6>().state = *newCoefficients; break;
+            }
         }
     }
 
-    // --- 4. Process Entire Chain in Series (in-place on output buffer) ---
-    // SAFETY FIX: Only process if we have a valid output bus
-    if (outBus.getNumChannels() > 0)
+    // --- 5. Process Entire Chain in Series (in-place on audioOutBus) ---
+    if (audioOutBus.getNumChannels() > 0)
     {
-        juce::dsp::AudioBlock<float> audioBlock(outBus.getArrayOfWritePointers(), 
-                                                 std::min(2, outBus.getNumChannels()), 
+        juce::dsp::AudioBlock<float> audioBlock(audioOutBus.getArrayOfWritePointers(), 
+                                                 std::min(2, audioOutBus.getNumChannels()), 
                                                  numSamples);
         juce::dsp::ProcessContextReplacing<float> context(audioBlock);
         processorChain.process(context);
 
-        // --- 5. Apply Output Gain ---
+        // LOG POINT 4: Check signal after processing through filter chain
+        if (shouldLog)
+        {
+            float afterChainRms = audioOutBus.getRMSLevel(0, 0, numSamples);
+            juce::Logger::writeToLog("[GraphicEQ Debug] After Filter Chain - Audio Out RMS: " + juce::String(afterChainRms, 6));
+        }
+
+        // --- 6. Apply Output Gain ---
         float outputGain = juce::Decibels::decibelsToGain(outputLevelParam->load());
-        outBus.applyGain(0, 0, numSamples, outputGain);
-        if (outBus.getNumChannels() > 1)
-            outBus.applyGain(1, 0, numSamples, outputGain);
+        audioOutBus.applyGain(0, 0, numSamples, outputGain);
+        if (audioOutBus.getNumChannels() > 1)
+            audioOutBus.applyGain(1, 0, numSamples, outputGain);
+
+        // LOG POINT 5: Check final signal after output gain
+        if (shouldLog)
+        {
+            float finalRms = audioOutBus.getRMSLevel(0, 0, numSamples);
+            float outputGainDb = outputLevelParam->load();
+            juce::Logger::writeToLog("[GraphicEQ Debug] After Output Gain - Audio Out RMS: " + juce::String(finalRms, 6) + 
+                                   ", Output Gain (dB): " + juce::String(outputGainDb, 2));
+        }
     }
 }
 
@@ -8036,6 +8112,13 @@ FILE: juce\Source\audio\modules\GraphicEQModuleProcessor.h
 class GraphicEQModuleProcessor : public ModuleProcessor
 {
 public:
+    enum CVOutputChannel
+    {
+        GateOut = 0,
+        TrigOut,
+        TotalCVOutputs // = 2
+    };
+
     GraphicEQModuleProcessor();
     ~GraphicEQModuleProcessor() override = default;
 
@@ -8157,39 +8240,47 @@ void FrequencyGraphModuleProcessor::processBlock(juce::AudioBuffer<float>& buffe
     const int numSamples = buffer.getNumSamples();
     const double sampleRate = getSampleRate();
 
-    // --- CRITICAL FIX: Read input BEFORE clearing any outputs ---
-    // In-place processing means input and output might share the same memory.
-    // We must capture the input data first to prevent it from being erased.
     const float* inputData = inBus.getNumChannels() > 0 ? inBus.getReadPointer(0) : nullptr;
-    
-    static int debugCounter = 0;
-    if ((debugCounter++ % 100) == 0 && inputData)
-    {
-        float rms = inBus.getRMSLevel(0, 0, numSamples);
-        if (rms > 1e-5f) {
-            juce::Logger::writeToLog("[FrequencyGraph] processBlock: Receiving audio, RMS: " + juce::String(rms));
-        }
-    }
 
-    // --- 1. PERFORM FFT ANALYSIS FIRST (before touching output buffers) ---
+    // --- REAL-TIME SAFE FFT PROCESSING ---
+    // Instead of looping through every sample individually, we process the buffer in chunks.
+    // This prevents the expensive FFT from blocking individual sample processing.
     if (inputData)
     {
+        // Update threshold values from parameters
         bandAnalysers[0].thresholdDb = subThresholdParam->load();
         bandAnalysers[1].thresholdDb = bassThresholdParam->load();
         bandAnalysers[2].thresholdDb = midThresholdParam->load();
         bandAnalysers[3].thresholdDb = highThresholdParam->load();
         
-        for (int i = 0; i < numSamples; ++i)
+        int inputSamplesConsumed = 0;
+        
+        // Process the incoming buffer in chunks
+        while (inputSamplesConsumed < numSamples)
         {
-            fftInputBuffer[samplesAccumulated++] = inputData[i];
+            // Calculate how many samples we can copy before the FFT buffer is full
+            const int samplesToCopy = std::min(numSamples - inputSamplesConsumed, 
+                                               fftSize - samplesAccumulated);
+            
+            // Quickly copy the available data into our FFT buffer
+            std::copy(inputData + inputSamplesConsumed,
+                      inputData + inputSamplesConsumed + samplesToCopy,
+                      fftInputBuffer.begin() + samplesAccumulated);
+            
+            samplesAccumulated += samplesToCopy;
+            inputSamplesConsumed += samplesToCopy;
 
+            // If the FFT buffer is full, process it now
+            // This happens outside the per-sample loop, preventing stalls
             if (samplesAccumulated >= fftSize)
             {
+                // 1. Perform FFT
                 std::fill(fftData.begin(), fftData.end(), 0.0f);
                 std::copy(fftInputBuffer.begin(), fftInputBuffer.end(), fftData.begin());
                 window.multiplyWithWindowingTable(fftData.data(), fftSize);
                 fft.performFrequencyOnlyForwardTransform(fftData.data());
 
+                // 2. Analyze frequency bands and update gate/trigger states
                 float bandEnergyDb[4] = { -100.0f, -100.0f, -100.0f, -100.0f };
                 const float bandRanges[] = { 60, 250, 2000, 8000, 22000 };
                 int currentBand = 0;
@@ -8200,7 +8291,7 @@ void FrequencyGraphModuleProcessor::processBlock(juce::AudioBuffer<float>& buffe
                     float freq = (float)bin * (float)sampleRate / (float)fftSize;
                     if (freq > bandRanges[currentBand])
                     {
-                        // Normalize before converting to dB
+                        // FIX: Correctly normalize FFT magnitude before converting to dB
                         float normalizedMagnitude = maxInBand / (float)fftSize;
                         bandEnergyDb[currentBand] = juce::Decibels::gainToDecibels(normalizedMagnitude, -100.0f);
                         currentBand++;
@@ -8210,6 +8301,7 @@ void FrequencyGraphModuleProcessor::processBlock(juce::AudioBuffer<float>& buffe
                     maxInBand = std::max(maxInBand, fftData[bin]);
                 }
 
+                // Update gate/trigger states for each band
                 for (int band = 0; band < 4; ++band)
                 {
                     bool gateState = bandEnergyDb[band] > bandAnalysers[band].thresholdDb;
@@ -8220,31 +8312,29 @@ void FrequencyGraphModuleProcessor::processBlock(juce::AudioBuffer<float>& buffe
                     bandAnalysers[band].lastGateState = gateState;
                 }
 
+                // 3. Push data to UI thread via lock-free FIFO
                 int start1, size1, start2, size2;
                 abstractFifo.prepareToWrite(1, start1, size1, start2, size2);
                 if (size1 > 0)
                 {
                     for (int bin = 0; bin < fftSize / 2 + 1; ++bin)
                     {
-                        // CRITICAL FIX: FFT output is magnitude, need to:
-                        // 1. Normalize by FFT size
-                        // 2. Convert to dB properly (20*log10 for magnitude, not 10*log10)
+                        // FIX: Correctly normalize FFT magnitude before converting to dB
                         float magnitude = fftData[bin] / (float)fftSize;
-                        
-                        // For visual spectrum, use magnitude directly (20*log10)
-                        // This is what Decibels::gainToDecibels does
                         fifoBuffer[start1][bin] = juce::Decibels::gainToDecibels(magnitude, -100.0f);
                     }
                     abstractFifo.finishedWrite(1);
                 }
 
-                samplesAccumulated = fftSize - hopSize;
+                // 4. Shift buffer for overlap-add (hop size)
                 std::move(fftInputBuffer.begin() + hopSize, fftInputBuffer.end(), fftInputBuffer.begin());
+                samplesAccumulated -= hopSize;
             }
         }
     }
 
-    // --- 2. HANDLE AUDIO PASSTHROUGH (after analysis is complete) ---
+    // --- HANDLE AUDIO PASSTHROUGH ---
+    // The analysis is done. Now we can safely write to our output buffers.
     if (inBus.getNumChannels() > 0 && audioOutBus.getNumChannels() > 0)
     {
         audioOutBus.copyFrom(0, 0, inBus, 0, 0, numSamples); // L channel
@@ -8258,7 +8348,9 @@ void FrequencyGraphModuleProcessor::processBlock(juce::AudioBuffer<float>& buffe
         audioOutBus.clear();
     }
 
-    // --- 3. WRITE CV/GATE OUTPUTS ---
+    // --- WRITE CV/GATE OUTPUTS ---
+    // This loop uses the gate/trigger states that were last updated by the FFT block.
+    // The state is held constant between FFT calculations, which is the correct behavior.
     cvOutBus.clear();
     for (int i = 0; i < numSamples; ++i)
     {
@@ -8270,10 +8362,15 @@ void FrequencyGraphModuleProcessor::processBlock(juce::AudioBuffer<float>& buffe
                 float* trigOut = cvOutBus.getWritePointer(band * 2 + 1);
                 gateOut[i] = bandAnalysers[band].lastGateState ? 1.0f : 0.0f;
                 trigOut[i] = (bandAnalysers[band].triggerSamplesRemaining > 0) ? 1.0f : 0.0f;
-                if (bandAnalysers[band].triggerSamplesRemaining > 0)
-                {
-                    bandAnalysers[band].triggerSamplesRemaining--;
-                }
+            }
+        }
+        
+        // Decrement trigger counters once per sample for all bands
+        for (auto& analyser : bandAnalysers)
+        {
+            if (analyser.triggerSamplesRemaining > 0)
+            {
+                analyser.triggerSamplesRemaining--;
             }
         }
     }
@@ -9905,8 +10002,7 @@ juce::AudioProcessorValueTreeState::ParameterLayout LimiterModuleProcessor::crea
 
 LimiterModuleProcessor::LimiterModuleProcessor()
     : ModuleProcessor(BusesProperties()
-          .withInput("Audio In", juce::AudioChannelSet::stereo(), true)
-          .withInput("Modulation In", juce::AudioChannelSet::discreteChannels(2), true) // Threshold, Release
+          .withInput("Inputs", juce::AudioChannelSet::discreteChannels(4), true) // 0-1: Audio In, 2: Threshold Mod, 3: Release Mod
           .withOutput("Audio Out", juce::AudioChannelSet::stereo(), true)),
       apvts(*this, nullptr, "LimiterParams", createParameterLayout())
 {
@@ -9933,7 +10029,6 @@ void LimiterModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce
     juce::ignoreUnused(midi);
     
     auto inBus = getBusBuffer(buffer, true, 0);
-    auto modBus = getBusBuffer(buffer, true, 1);
     auto outBus = getBusBuffer(buffer, false, 0);
 
     // Copy input to output for in-place processing
@@ -9943,14 +10038,14 @@ void LimiterModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce
         outBus.copyFrom(ch, 0, inBus, ch, 0, buffer.getNumSamples());
     }
 
-    // --- Update DSP Parameters (once per block) ---
+    // --- Update DSP Parameters from unified input bus (once per block) ---
     float finalThreshold = thresholdParam->load();
-    if (isParamInputConnected(paramIdThresholdMod) && modBus.getNumChannels() > 0)
-        finalThreshold = juce::jmap(modBus.getSample(0, 0), 0.0f, 1.0f, -20.0f, 0.0f);
+    if (isParamInputConnected(paramIdThresholdMod) && inBus.getNumChannels() > 2)
+        finalThreshold = juce::jmap(inBus.getSample(2, 0), 0.0f, 1.0f, -20.0f, 0.0f);
         
     float finalRelease = releaseParam->load();
-    if (isParamInputConnected(paramIdReleaseMod) && modBus.getNumChannels() > 1)
-        finalRelease = juce::jmap(modBus.getSample(1, 0), 0.0f, 1.0f, 1.0f, 200.0f);
+    if (isParamInputConnected(paramIdReleaseMod) && inBus.getNumChannels() > 3)
+        finalRelease = juce::jmap(inBus.getSample(3, 0), 0.0f, 1.0f, 1.0f, 200.0f);
 
     limiter.setThreshold(finalThreshold);
     limiter.setRelease(finalRelease);
@@ -9973,9 +10068,10 @@ void LimiterModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce
 
 bool LimiterModuleProcessor::getParamRouting(const juce::String& paramId, int& outBusIndex, int& outChannelIndexInBus) const
 {
-    outBusIndex = 1; // All modulation on Bus 1
-    if (paramId == paramIdThresholdMod) { outChannelIndexInBus = 0; return true; }
-    if (paramId == paramIdReleaseMod)   { outChannelIndexInBus = 1; return true; }
+    outBusIndex = 0; // All modulation is on the single input bus
+    
+    if (paramId == paramIdThresholdMod) { outChannelIndexInBus = 2; return true; }
+    if (paramId == paramIdReleaseMod)   { outChannelIndexInBus = 3; return true; }
     return false;
 }
 
@@ -12721,8 +12817,7 @@ juce::AudioProcessorValueTreeState::ParameterLayout MultiBandShaperModuleProcess
 
 MultiBandShaperModuleProcessor::MultiBandShaperModuleProcessor()
     : ModuleProcessor(BusesProperties()
-          .withInput("Audio In", juce::AudioChannelSet::stereo(), true)
-          .withInput("Mod In", juce::AudioChannelSet::discreteChannels(NUM_BANDS + 1), true) // One mod input per drive control + gain
+          .withInput("Inputs", juce::AudioChannelSet::discreteChannels(2 + NUM_BANDS + 1), true) // 0-1: Audio In, 2-9: Drive Mods, 10: Gain Mod
           .withOutput("Out", juce::AudioChannelSet::stereo(), true)),
       apvts(*this, nullptr, "MultiBandShaperParams", createParameterLayout())
 {
@@ -12772,7 +12867,6 @@ void MultiBandShaperModuleProcessor::releaseResources()
 void MultiBandShaperModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffer&)
 {
     auto inBus = getBusBuffer(buffer, true, 0);
-    auto modBus = getBusBuffer(buffer, true, 1);
     auto outBus = getBusBuffer(buffer, false, 0);
 
     const int numSamples = buffer.getNumSamples();
@@ -12799,13 +12893,14 @@ void MultiBandShaperModuleProcessor::processBlock(juce::AudioBuffer<float>& buff
         // 2. Apply waveshaping to the filtered band
         float drive = driveParams[band]->load();
         
-        // Check for modulation input
+        // Check for modulation input from unified input bus (channels 2-9)
         if (isParamInputConnected("drive_" + juce::String(band + 1)))
         {
-            if (band < modBus.getNumChannels())
+            int modChannel = 2 + band; // Channels 2-9 are drive mods for bands 0-7
+            if (inBus.getNumChannels() > modChannel)
             {
                 // Simple 0..1 CV to full drive range mapping (0-100)
-                float modValue = modBus.getSample(band, 0);
+                float modValue = inBus.getSample(modChannel, 0);
                 drive = juce::jmap(modValue, 0.0f, 1.0f, 0.0f, 100.0f);
             }
         }
@@ -12833,12 +12928,13 @@ void MultiBandShaperModuleProcessor::processBlock(juce::AudioBuffer<float>& buff
     // 4. Apply output gain and copy to the final output bus
     float gainDb = outputGainParam->load();
     
-    // Check for modulation on output gain
+    // Check for modulation on output gain from unified input bus
     if (isParamInputConnected("outputGain"))
     {
-        if (NUM_BANDS < modBus.getNumChannels())
+        int gainModChannel = 2 + NUM_BANDS; // Channel 10
+        if (inBus.getNumChannels() > gainModChannel)
         {
-            float modValue = modBus.getSample(NUM_BANDS, 0);
+            float modValue = inBus.getSample(gainModChannel, 0);
             gainDb = juce::jmap(modValue, 0.0f, 1.0f, -24.0f, 24.0f);
         }
     }
@@ -12855,20 +12951,20 @@ void MultiBandShaperModuleProcessor::processBlock(juce::AudioBuffer<float>& buff
 
 bool MultiBandShaperModuleProcessor::getParamRouting(const juce::String& paramId, int& outBusIndex, int& outChannelIndexInBus) const
 {
-    outBusIndex = 1; // All modulation is on the "Mod In" bus
+    outBusIndex = 0; // All modulation is on the single input bus
     
     if (paramId.startsWith("drive_"))
     {
         int bandNum = paramId.getTrailingIntValue(); // e.g., "drive_5" -> 5
         if (bandNum > 0 && bandNum <= NUM_BANDS)
         {
-            outChannelIndexInBus = bandNum - 1; // 0-indexed channel
+            outChannelIndexInBus = 2 + (bandNum - 1); // Channels 2-9 for drives 1-8
             return true;
         }
     }
     if (paramId == "outputGain")
     {
-        outChannelIndexInBus = NUM_BANDS; // Use the channel after all the drive mods
+        outChannelIndexInBus = 2 + NUM_BANDS; // Channel 10 for output gain
         return true;
     }
     return false;
@@ -14123,12 +14219,7 @@ juce::AudioProcessorValueTreeState::ParameterLayout PhaserModuleProcessor::creat
 
 PhaserModuleProcessor::PhaserModuleProcessor()
     : ModuleProcessor(BusesProperties()
-          .withInput("Audio In", juce::AudioChannelSet::stereo(), true)
-          .withInput("Rate Mod", juce::AudioChannelSet::mono(), true)
-          .withInput("Depth Mod", juce::AudioChannelSet::mono(), true)
-          .withInput("Centre Mod", juce::AudioChannelSet::mono(), true)
-          .withInput("Feedback Mod", juce::AudioChannelSet::mono(), true)
-          .withInput("Mix Mod", juce::AudioChannelSet::mono(), true)
+          .withInput("Inputs", juce::AudioChannelSet::discreteChannels(7), true) // 0-1: Audio In, 2: Rate Mod, 3: Depth Mod, 4: Centre Mod, 5: Feedback Mod, 6: Mix Mod
           .withOutput("Audio Out", juce::AudioChannelSet::stereo(), true)),
       apvts(*this, nullptr, "PhaserParams", createParameterLayout())
 {
@@ -14169,21 +14260,19 @@ void PhaserModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce:
         outBus.copyFrom(ch, 0, inBus, ch, 0, buffer.getNumSamples());
     }
 
-    // --- Get Modulation CVs ---
-    auto readCv = [&](const juce::String& paramId, int busIndex) -> float {
-        if (isParamInputConnected(paramId)) {
-            const auto& modBus = getBusBuffer(buffer, true, busIndex);
-            if (modBus.getNumChannels() > 0)
-                return modBus.getReadPointer(0)[0]; // Read first sample
+    // --- Get Modulation CVs from unified input bus ---
+    auto readCv = [&](const juce::String& paramId, int channelIndex) -> float {
+        if (isParamInputConnected(paramId) && inBus.getNumChannels() > channelIndex) {
+            return inBus.getReadPointer(channelIndex)[0]; // Read first sample
         }
         return -1.0f; // Use a sentinel to indicate no CV
     };
 
-    float rateCv = readCv(paramIdRateMod, 1);
-    float depthCv = readCv(paramIdDepthMod, 2);
-    float centreCv = readCv(paramIdCentreHzMod, 3);
-    float feedbackCv = readCv(paramIdFeedbackMod, 4);
-    float mixCv = readCv(paramIdMixMod, 5);
+    float rateCv = readCv(paramIdRateMod, 2);
+    float depthCv = readCv(paramIdDepthMod, 3);
+    float centreCv = readCv(paramIdCentreHzMod, 4);
+    float feedbackCv = readCv(paramIdFeedbackMod, 5);
+    float mixCv = readCv(paramIdMixMod, 6);
 
     // --- Update DSP Parameters (once per block) ---
     float finalRate = (rateCv >= 0.0f) ? juce::jmap(rateCv, 0.0f, 1.0f, 0.01f, 10.0f) : rateParam->load();
@@ -14230,11 +14319,13 @@ void PhaserModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce:
 
 bool PhaserModuleProcessor::getParamRouting(const juce::String& paramId, int& outBusIndex, int& outChannelIndexInBus) const
 {
-    if (paramId == paramIdRateMod) { outBusIndex = 1; outChannelIndexInBus = 0; return true; }
-    if (paramId == paramIdDepthMod) { outBusIndex = 2; outChannelIndexInBus = 0; return true; }
-    if (paramId == paramIdCentreHzMod) { outBusIndex = 3; outChannelIndexInBus = 0; return true; }
-    if (paramId == paramIdFeedbackMod) { outBusIndex = 4; outChannelIndexInBus = 0; return true; }
-    if (paramId == paramIdMixMod) { outBusIndex = 5; outChannelIndexInBus = 0; return true; }
+    outBusIndex = 0; // All modulation is on the single input bus
+    
+    if (paramId == paramIdRateMod) { outChannelIndexInBus = 2; return true; }
+    if (paramId == paramIdDepthMod) { outChannelIndexInBus = 3; return true; }
+    if (paramId == paramIdCentreHzMod) { outChannelIndexInBus = 4; return true; }
+    if (paramId == paramIdFeedbackMod) { outChannelIndexInBus = 5; return true; }
+    if (paramId == paramIdMixMod) { outChannelIndexInBus = 6; return true; }
     return false;
 }
 
@@ -14837,9 +14928,7 @@ FILE: juce\Source\audio\modules\QuantizerModuleProcessor.cpp
 
 QuantizerModuleProcessor::QuantizerModuleProcessor()
     : ModuleProcessor(BusesProperties()
-                        .withInput("In", juce::AudioChannelSet::mono(), true)
-                        .withInput("Scale Mod", juce::AudioChannelSet::mono(), true)
-                        .withInput("Root Mod", juce::AudioChannelSet::mono(), true)
+                        .withInput("Inputs", juce::AudioChannelSet::discreteChannels(3), true) // 0: Audio In, 1: Scale Mod, 2: Root Mod
                         .withOutput("Out", juce::AudioChannelSet::mono(), true)),
       apvts(*this, nullptr, "QuantizerParams", createParameterLayout())
 {
@@ -14881,24 +14970,20 @@ void QuantizerModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, ju
     auto in = getBusBuffer(buffer, true, 0);
     auto out = getBusBuffer(buffer, false, 0);
 
-    // Read CV from input buses (if connected)
+    // Read CV from unified input bus (if connected)
     float scaleModCV = 0.0f;
     float rootModCV = 0.0f;
     
-    // Check if scale mod bus is connected and read CV
-    if (isParamInputConnected("scale_mod")) // Scale Mod bus
+    // Check if scale mod is connected and read CV from channel 1
+    if (isParamInputConnected("scale_mod") && in.getNumChannels() > 1)
     {
-        const auto& scaleModBus = getBusBuffer(buffer, true, 1);
-        if (scaleModBus.getNumChannels() > 0)
-            scaleModCV = scaleModBus.getReadPointer(0)[0];
+        scaleModCV = in.getReadPointer(1)[0];
     }
     
-    // Check if root mod bus is connected and read CV
-    if (isParamInputConnected("root_mod")) // Root Mod bus
+    // Check if root mod is connected and read CV from channel 2
+    if (isParamInputConnected("root_mod") && in.getNumChannels() > 2)
     {
-        const auto& rootModBus = getBusBuffer(buffer, true, 2);
-        if (rootModBus.getNumChannels() > 0)
-            rootModCV = rootModBus.getReadPointer(0)[0];
+        rootModCV = in.getReadPointer(2)[0];
     }
 
     // Apply modulation or use parameter values
@@ -15025,9 +15110,10 @@ void QuantizerModuleProcessor::drawIoPins(const NodePinHelpers& helpers)
 
 bool QuantizerModuleProcessor::getParamRouting(const juce::String& paramId, int& outBusIndex, int& outChannelIndexInBus) const
 {
-    outChannelIndexInBus = 0;
-    if (paramId == "scale_mod") { outBusIndex = 1; return true; }
-    if (paramId == "root_mod")  { outBusIndex = 2; return true; }
+    outBusIndex = 0; // All modulation is on the single input bus
+    
+    if (paramId == "scale_mod") { outChannelIndexInBus = 1; return true; }
+    if (paramId == "root_mod")  { outChannelIndexInBus = 2; return true; }
     return false;
 }
 
@@ -15140,7 +15226,7 @@ juce::AudioProcessorValueTreeState::ParameterLayout RandomModuleProcessor::creat
 // --- Constructor ---
 RandomModuleProcessor::RandomModuleProcessor()
     : ModuleProcessor(BusesProperties()
-                        .withInput("Inputs", juce::AudioChannelSet::discreteChannels(3), true) // 0:Trig, 1:Rate Mod, 2:Slew Mod
+                        .withInput("Inputs", juce::AudioChannelSet::discreteChannels(3), true) // 0:Trig, 1:Rate, 2:Slew
                         .withOutput("Outputs", juce::AudioChannelSet::discreteChannels(5), true)), // 0:Norm, 1:Raw, 2:CV, 3:Bool, 4:Trig
       apvts(*this, nullptr, "RandomParams", createParameterLayout())
 {
@@ -15175,16 +15261,13 @@ void RandomModuleProcessor::prepareToPlay(double newSampleRate, int)
     const float cvMaxVal = cvMaxParam->load();
     targetValueCV = currentValueCV = cvMinVal + rng.nextFloat() * (cvMaxVal - cvMinVal);
     
-    lastTrig = 0.0f;
-    phase = 0.0;
-    samplesUntilNext = (int) std::max(1.0, std::floor(sampleRate / std::max(0.1, (double) rateParam->load())));
+    // Use phase accumulator; force trigger on first sample
+    phase = 1.0;
     trigPulseRemaining = 0;
-    
-    // CRITICAL FIX: Initialize smoothed values (like BestPracticeNodeProcessor)
-    smoothedRate.reset(newSampleRate, 0.01);  // 10ms smoothing time
+    lastTriggerState = false;
+
+    smoothedRate.reset(newSampleRate, 0.01);
     smoothedSlew.reset(newSampleRate, 0.01);
-    smoothedRate.setCurrentAndTargetValue(rateParam->load());
-    smoothedSlew.setCurrentAndTargetValue(slewParam->load());
 }
 
 // --- Main Audio Processing Block ---
@@ -15192,133 +15275,128 @@ void RandomModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce:
 {
     juce::ignoreUnused(midi);
     
-    // Get dedicated handles for input and output buses
     auto inBus = getBusBuffer(buffer, true, 0);
     auto outBus = getBusBuffer(buffer, false, 0);
-    
-    // Clear ONLY the output bus to start fresh
     outBus.clear();
-    
+
     const int numSamples = buffer.getNumSamples();
 
-    // Check for modulation using virtual _mod parameter IDs (Pattern B)
+    // Connectivity for virtual inputs
+    const bool isTrigIn = isParamInputConnected(paramIdTriggerIn);
     const bool isRateMod = isParamInputConnected(paramIdRateMod);
     const bool isSlewMod = isParamInputConnected(paramIdSlewMod);
 
-    // Get modulation CVs from the single input bus
-    const float* trigIn = inBus.getNumChannels() > 0 ? inBus.getReadPointer(0) : nullptr;
+    // Input pointers if connected
+    const float* trigCV = isTrigIn && inBus.getNumChannels() > 0 ? inBus.getReadPointer(0) : nullptr;
     const float* rateCV = isRateMod && inBus.getNumChannels() > 1 ? inBus.getReadPointer(1) : nullptr;
     const float* slewCV = isSlewMod && inBus.getNumChannels() > 2 ? inBus.getReadPointer(2) : nullptr;
 
-    // Get base parameter values
+    // Base parameter values
     const float minVal = minParam->load();
     const float maxVal = maxParam->load();
     const float cvMinVal = cvMinParam->load();
     const float cvMaxVal = cvMaxParam->load();
     const float normMinVal = normMinParam->load();
     const float normMaxVal = normMaxParam->load();
-    const float baseSlew = slewParam->load();
     const float baseRate = rateParam->load();
+    const float baseSlew = slewParam->load();
     const float trigThreshold = trigThresholdParam->load();
 
-    // Get write pointers FROM THE CORRECT OUTPUT BUS
-    auto* normOut = outBus.getNumChannels() > 0 ? outBus.getWritePointer(0) : nullptr;
-    auto* rawOut  = outBus.getNumChannels() > 1 ? outBus.getWritePointer(1) : nullptr;
-    auto* cvOut   = outBus.getNumChannels() > 2 ? outBus.getWritePointer(2) : nullptr;
-    auto* boolOut = outBus.getNumChannels() > 3 ? outBus.getWritePointer(3) : nullptr;
-    auto* trigOut = outBus.getNumChannels() > 4 ? outBus.getWritePointer(4) : nullptr;
+    auto* normOut = outBus.getWritePointer(0);
+    auto* rawOut  = outBus.getWritePointer(1);
+    auto* cvOut   = outBus.getWritePointer(2);
+    auto* boolOut = outBus.getWritePointer(3);
+    auto* trigOut = outBus.getWritePointer(4);
 
-    // --- The entire per-sample processing loop (FIXED WITH SMOOTHING) ---
     for (int i = 0; i < numSamples; ++i)
     {
-        // 1. Calculate effective parameter values for this sample (with smoothing like BestPracticeNodeProcessor)
-        float targetRate = baseRate;
-        if (rateCV != nullptr) {
-            const float cv01 = juce::jlimit(0.0f, 1.0f, rateCV[i]);
-            constexpr float fMin = 0.1f;
-            constexpr float fMax = 50.0f;
-            const float spanOct = std::log2(fMax / fMin);
-            targetRate = fMin * std::pow(2.0f, cv01 * spanOct);
+        // 1) Effective parameters per-sample
+        float effectiveRate = baseRate;
+        if (isRateMod && rateCV)
+        {
+            const float cv = juce::jlimit(0.0f, 1.0f, rateCV[i]);
+            effectiveRate = 0.1f * std::pow(500.0f, cv); // 0.1..50 Hz logarithmic
         }
-        smoothedRate.setTargetValue(targetRate);
-        float effectiveRate = smoothedRate.getNextValue();
 
-        float targetSlew = baseSlew;
-        if (slewCV != nullptr) {
-            targetSlew = juce::jlimit(0.0f, 1.0f, slewCV[i]);
+        float effectiveSlew = baseSlew;
+        if (isSlewMod && slewCV)
+        {
+            effectiveSlew = juce::jlimit(0.0f, 1.0f, slewCV[i]);
         }
-        smoothedSlew.setTargetValue(targetSlew);
-        float effectiveSlew = smoothedSlew.getNextValue();
 
-        // 2. Check for triggers
+        smoothedRate.setTargetValue(effectiveRate);
+        smoothedSlew.setTargetValue(effectiveSlew);
+        const float smoothedRateValue = smoothedRate.getNextValue();
+        const float smoothedSlewValue = smoothedSlew.getNextValue();
+
+        // 2) Triggering: external edge has priority, otherwise internal clock
         bool shouldGenerateNew = false;
-        const int periodSamples = (int) std::max(1.0, std::floor(sampleRate / std::max(0.1, (double) effectiveRate)));
-        if (samplesUntilNext <= 0)
+        if (isTrigIn && trigCV)
         {
-            samplesUntilNext = periodSamples;
-            shouldGenerateNew = true;
+            const bool trigHigh = trigCV[i] > 0.5f;
+            if (trigHigh && !lastTriggerState)
+                shouldGenerateNew = true;
+            lastTriggerState = trigHigh;
         }
-        --samplesUntilNext;
-        if (trigIn != nullptr)
+        else
         {
-            const bool triggered = trigIn[i] > 0.5f && lastTrig <= 0.5f;
-            lastTrig = trigIn[i];
-            if (triggered) shouldGenerateNew = true;
+            phase += smoothedRateValue / sampleRate;
+            if (phase >= 1.0)
+            {
+                phase -= 1.0;
+                shouldGenerateNew = true;
+            }
         }
 
-        // 3. Generate new target values if triggered
+        // 3) Generate new targets
         if (shouldGenerateNew)
         {
             targetValue = minVal + rng.nextFloat() * (maxVal - minVal);
             targetValueCV = cvMinVal + rng.nextFloat() * (cvMaxVal - cvMinVal);
-            if (targetValueCV >= trigThreshold) {
-                trigPulseRemaining = (int) std::max(1.0, sampleRate * 0.001);
-            }
+            if (currentValueCV >= trigThreshold)
+                trigPulseRemaining = (int) std::max(1.0, sampleRate * 0.001); // 1 ms pulse
         }
 
-        // 4. Apply slew
-        if (effectiveSlew <= 0.0001f)
+        // 4) Slew limiting
+        if (smoothedSlewValue <= 0.0001f)
         {
             currentValue = targetValue;
             currentValueCV = targetValueCV;
         }
         else
         {
-            const float slewSeconds = effectiveSlew;
-            const float slewCoeff = (float)(1.0 - std::exp(-1.0 / (slewSeconds * sampleRate)));
+            const float slewCoeff = (float)(1.0 - std::exp(-1.0 / (smoothedSlewValue * sampleRate)));
             currentValue += (targetValue - currentValue) * slewCoeff;
             currentValueCV += (targetValueCV - currentValueCV) * slewCoeff;
         }
 
-        // 5. Calculate normalized output
+        // 5) Outputs
         float tempNormalized;
         const float range = maxVal - minVal;
-        if (std::abs(range) < 1e-6f) {
+        if (std::abs(range) < 1e-6f)
             tempNormalized = 0.5f;
-        } else {
+        else
             tempNormalized = (currentValue - minVal) / range;
-        }
-        float normalizedValue = juce::jmap(tempNormalized, 0.0f, 1.0f, normMinVal, normMaxVal);
-        
-        // 6. Write to output channels (pointers are now correct)
-        if (normOut) normOut[i] = normalizedValue;
-        if (rawOut)  rawOut[i]  = currentValue;
-        if (cvOut)   cvOut[i]   = currentValueCV;
-        if (boolOut) boolOut[i] = (tempNormalized >= trigThreshold) ? 1.0f : 0.0f;
-        if (trigOut) {
-            trigOut[i] = (trigPulseRemaining > 0) ? 1.0f : 0.0f;
-            if (trigPulseRemaining > 0)
-                --trigPulseRemaining;
-        }
 
-        // 7. Update telemetry for UI (throttled) - CRITICAL FIX: Use smoothed current values
-        if ((i & 0x3F) == 0) {
-            setLiveParamValue("rate_live", smoothedRate.getCurrentValue());
-            setLiveParamValue("slew_live", smoothedSlew.getCurrentValue());
+        const float normalizedValue = juce::jmap(tempNormalized, 0.0f, 1.0f, normMinVal, normMaxVal);
+
+        normOut[i] = normalizedValue;
+        rawOut[i]  = currentValue;
+        cvOut[i]   = currentValueCV;
+        boolOut[i] = (currentValueCV >= trigThreshold) ? 1.0f : 0.0f;
+
+        trigOut[i] = (trigPulseRemaining > 0) ? 1.0f : 0.0f;
+        if (trigPulseRemaining > 0) --trigPulseRemaining;
+
+        // 6) Live telemetry for UI
+        if ((i & 0x3F) == 0)
+        {
+            setLiveParamValue("rate_live", smoothedRateValue);
+            setLiveParamValue("slew_live", smoothedSlewValue);
         }
     }
     
-    // --- Update Inspector and UI Display Values from the correct output bus ---
+    // --- Update Inspector and UI Display Values ---
     lastNormalizedOutputValue.store(normOut ? normOut[numSamples - 1] : 0.0f);
     lastOutputValue.store(rawOut ? rawOut[numSamples - 1] : 0.0f);
     lastCvOutputValue.store(cvOut ? cvOut[numSamples - 1] : 0.0f);
@@ -15343,17 +15421,15 @@ void RandomModuleProcessor::drawParametersInNode(float itemWidth, const std::fun
 {
     auto& ap = getAPVTS();
 
-    // Check for modulation using virtual _mod parameter IDs (Pattern B)
-    bool slewIsMod = isParamModulated(paramIdSlewMod);
-    bool rateIsMod = isParamModulated(paramIdRateMod);
-
+    // Show live values when parameters are under modulation
     float cvMin = cvMinParam->load();
     float cvMax = cvMaxParam->load();
     float minVal = minParam->load();
     float maxVal = maxParam->load();
-    // --- Get live values if modulated, otherwise get base parameter values ---
-    float slew = slewIsMod ? getLiveParamValueFor(paramIdSlew, "slew_live", slewParam->load()) : slewParam->load();
-    float rate = rateIsMod ? getLiveParamValueFor(paramIdRate, "rate_live", rateParam->load()) : rateParam->load();
+    const bool isRateMod = isParamModulated(paramIdRateMod);
+    float rate = isRateMod ? getLiveParamValueFor(paramIdRateMod, "rate_live", rateParam->load()) : rateParam->load();
+    const bool isSlewMod = isParamModulated(paramIdSlewMod);
+    float slew = isSlewMod ? getLiveParamValueFor(paramIdSlewMod, "slew_live", slewParam->load()) : slewParam->load();
     float trigThreshold = trigThresholdParam->load();
 
     ImGui::PushItemWidth(itemWidth);
@@ -15385,19 +15461,19 @@ void RandomModuleProcessor::drawParametersInNode(float itemWidth, const std::fun
     if (ImGui::IsItemDeactivatedAfterEdit()) onModificationEnded();
     adjustParamOnWheel(ap.getParameter(paramIdMax), "max", maxVal);
 
-    // --- Slew Slider with Modulation Feedback ---
-    if (slewIsMod) ImGui::BeginDisabled();
-    if (ImGui::SliderFloat("Slew", &slew, 0.0f, 1.0f, "%.3f")) if (!slewIsMod) *dynamic_cast<juce::AudioParameterFloat*>(ap.getParameter(paramIdSlew)) = slew;
+    // --- Slew Slider (disabled when modulated) ---
+    if (isSlewMod) ImGui::BeginDisabled();
+    if (ImGui::SliderFloat("Slew", &slew, 0.0f, 1.0f, "%.3f")) { if (!isSlewMod) *dynamic_cast<juce::AudioParameterFloat*>(ap.getParameter(paramIdSlew)) = slew; }
     if (ImGui::IsItemDeactivatedAfterEdit()) onModificationEnded();
-    if (!slewIsMod) adjustParamOnWheel(ap.getParameter(paramIdSlew), "slew", slew);
-    if (slewIsMod) { ImGui::EndDisabled(); ImGui::SameLine(); ImGui::TextUnformatted("(mod)"); }
+    if (!isSlewMod) adjustParamOnWheel(ap.getParameter(paramIdSlew), "slew", slew);
+    if (isSlewMod) { ImGui::EndDisabled(); ImGui::SameLine(); ImGui::TextUnformatted("(mod)"); }
 
-    // --- Rate Slider with Modulation Feedback ---
-    if (rateIsMod) ImGui::BeginDisabled();
-    if (ImGui::SliderFloat("Rate", &rate, 0.1f, 50.0f, "%.3f", ImGuiSliderFlags_Logarithmic)) if (!rateIsMod) *dynamic_cast<juce::AudioParameterFloat*>(ap.getParameter(paramIdRate)) = rate;
+    // --- Rate Slider (disabled when modulated) ---
+    if (isRateMod) ImGui::BeginDisabled();
+    if (ImGui::SliderFloat("Rate", &rate, 0.1f, 50.0f, "%.3f Hz", ImGuiSliderFlags_Logarithmic)) { if (!isRateMod) *dynamic_cast<juce::AudioParameterFloat*>(ap.getParameter(paramIdRate)) = rate; }
     if (ImGui::IsItemDeactivatedAfterEdit()) onModificationEnded();
-    if (!rateIsMod) adjustParamOnWheel(ap.getParameter(paramIdRate), "rate", rate);
-    if (rateIsMod) { ImGui::EndDisabled(); ImGui::SameLine(); ImGui::TextUnformatted("(mod)"); }
+    if (!isRateMod) adjustParamOnWheel(ap.getParameter(paramIdRate), "rate", rate);
+    if (isRateMod) { ImGui::EndDisabled(); ImGui::SameLine(); ImGui::TextUnformatted("(mod)"); }
 
     if (ImGui::SliderFloat("Trig Threshold", &trigThreshold, 0.0f, 1.0f, "%.2f")) *dynamic_cast<juce::AudioParameterFloat*>(ap.getParameter(paramIdTrigThreshold)) = trigThreshold;
     if (ImGui::IsItemDeactivatedAfterEdit()) onModificationEnded();
@@ -15451,11 +15527,10 @@ juce::String RandomModuleProcessor::getAudioOutputLabel(int channel) const
 
 bool RandomModuleProcessor::getParamRouting(const juce::String& paramId, int& outBusIndex, int& outChannelIndexInBus) const
 {
-    outBusIndex = 0; // All modulation is on the single input bus
-    // Map virtual _mod parameter IDs to physical channels (Pattern B)
-    if (paramId == paramIdRateMod) { outChannelIndexInBus = 1; return true; }
-    if (paramId == paramIdSlewMod) { outChannelIndexInBus = 2; return true; }
-    // Note: The trigger input doesn't need routing as it's not tied to a parameter
+    outBusIndex = 0; // All inputs on the single input bus
+    if (paramId == paramIdTriggerIn) { outChannelIndexInBus = 0; return true; }
+    if (paramId == paramIdRateMod)   { outChannelIndexInBus = 1; return true; }
+    if (paramId == paramIdSlewMod)   { outChannelIndexInBus = 2; return true; }
     return false;
 }
 #endif
@@ -15490,7 +15565,8 @@ public:
     static constexpr auto paramIdRate = "rate";
     static constexpr auto paramIdTrigThreshold = "trigThreshold";
     
-    // Virtual modulation target IDs (not in APVTS)
+    // Virtual modulation and input IDs (no APVTS parameters required)
+    static constexpr auto paramIdTriggerIn = "trigger_in";
     static constexpr auto paramIdRateMod = "rate_mod";
     static constexpr auto paramIdSlewMod = "slew_mod";
 
@@ -15544,15 +15620,14 @@ private:
     std::atomic<float>* trigThresholdParam{ nullptr };
     
     // --- DSP State ---
-    float lastTrig{ 0.0f };
     float currentValue{ 0.0f };
     float targetValue{ 0.0f };
     float currentValueCV{ 0.0f };
     float targetValueCV{ 0.0f };
     double sampleRate{ 44100.0 };
     double phase{ 0.0 };
-    int samplesUntilNext{ 0 }; // internal S&H countdown in samples
-    int trigPulseRemaining { 0 }; // For the new trigger output
+    bool lastTriggerState { false }; // For external trigger edge detection
+    int trigPulseRemaining { 0 }; // For the trigger output
     
     // --- Smoothed values for modulated parameters (like BestPracticeNodeProcessor) ---
     juce::SmoothedValue<float> smoothedRate;
@@ -16285,10 +16360,7 @@ FILE: juce\Source\audio\modules\ReverbModuleProcessor.cpp
 
 ReverbModuleProcessor::ReverbModuleProcessor()
     : ModuleProcessor (BusesProperties()
-        .withInput ("In", juce::AudioChannelSet::stereo(), true)
-        .withInput ("Size Mod", juce::AudioChannelSet::mono(), true)
-        .withInput ("Damp Mod", juce::AudioChannelSet::mono(), true)
-        .withInput ("Mix Mod", juce::AudioChannelSet::mono(), true)
+        .withInput ("Inputs", juce::AudioChannelSet::discreteChannels(5), true) // 0-1: Audio In, 2: Size Mod, 3: Damp Mod, 4: Mix Mod
         .withOutput("Out", juce::AudioChannelSet::stereo(), true)),
       apvts (*this, nullptr, "ReverbParams", createParameterLayout())
 {
@@ -16339,33 +16411,27 @@ void ReverbModuleProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce
     }
     // --- END OF INPUT COPYING ---
     
-    // Read CV from input buses (if connected)
+    // Read CV from the unified input bus
     float sizeModCV = 0.0f;
     float dampModCV = 0.0f;
     float mixModCV = 0.0f;
     
-    // Check if size mod bus is connected and read CV
-    if (isParamInputConnected("size")) // Size Mod bus
+    // Check if size mod is connected and read CV from channel 2
+    if (isParamInputConnected("size") && inBus.getNumChannels() > 2)
     {
-        const auto& sizeModBus = getBusBuffer(buffer, true, 1);
-        if (sizeModBus.getNumChannels() > 0)
-            sizeModCV = sizeModBus.getReadPointer(0)[0]; // Read first sample
+        sizeModCV = inBus.getReadPointer(2)[0]; // Read first sample from channel 2
     }
     
-    // Check if damp mod bus is connected and read CV
-    if (isParamInputConnected("damp")) // Damp Mod bus
+    // Check if damp mod is connected and read CV from channel 3
+    if (isParamInputConnected("damp") && inBus.getNumChannels() > 3)
     {
-        const auto& dampModBus = getBusBuffer(buffer, true, 2);
-        if (dampModBus.getNumChannels() > 0)
-            dampModCV = dampModBus.getReadPointer(0)[0]; // Read first sample
+        dampModCV = inBus.getReadPointer(3)[0]; // Read first sample from channel 3
     }
     
-    // Check if mix mod bus is connected and read CV
-    if (isParamInputConnected("mix")) // Mix Mod bus
+    // Check if mix mod is connected and read CV from channel 4
+    if (isParamInputConnected("mix") && inBus.getNumChannels() > 4)
     {
-        const auto& mixModBus = getBusBuffer(buffer, true, 3);
-        if (mixModBus.getNumChannels() > 0)
-            mixModCV = mixModBus.getReadPointer(0)[0]; // Read first sample
+        mixModCV = inBus.getReadPointer(4)[0]; // Read first sample from channel 4
     }
 
     // Apply modulation or use parameter values
@@ -16442,10 +16508,11 @@ void ReverbModuleProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce
 // Parameter bus contract implementation
 bool ReverbModuleProcessor::getParamRouting(const juce::String& paramId, int& outBusIndex, int& outChannelIndexInBus) const
 {
-    outChannelIndexInBus = 0;
-    if (paramId == "size") { outBusIndex = 1; return true; }
-    if (paramId == "damp") { outBusIndex = 2; return true; }
-    if (paramId == "mix")  { outBusIndex = 3; return true; }
+    outBusIndex = 0; // All modulation is on the single input bus
+    
+    if (paramId == "size") { outChannelIndexInBus = 2; return true; }
+    if (paramId == "damp") { outChannelIndexInBus = 3; return true; }
+    if (paramId == "mix")  { outChannelIndexInBus = 4; return true; }
     return false;
 }
 
@@ -17439,10 +17506,7 @@ FILE: juce\Source\audio\modules\SAndHModuleProcessor.cpp
 
 SAndHModuleProcessor::SAndHModuleProcessor()
     : ModuleProcessor (BusesProperties()
-                        .withInput ("Input", juce::AudioChannelSet::discreteChannels(4), true) // 0-1=signal, 2-3=trigger
-                        .withInput ("Threshold Mod", juce::AudioChannelSet::mono(), true)
-                        .withInput ("Edge Mod", juce::AudioChannelSet::mono(), true)
-                        .withInput ("Slew Mod", juce::AudioChannelSet::mono(), true)
+                        .withInput ("Inputs", juce::AudioChannelSet::discreteChannels(7), true) // 0-1=signal, 2-3=trigger, 4=threshold mod, 5=edge mod, 6=slew mod
                         .withOutput("Output", juce::AudioChannelSet::stereo(), true)),
       apvts (*this, nullptr, "SAndHParams", createParameterLayout())
 {
@@ -17502,14 +17566,14 @@ void SAndHModuleProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce:
     float* outLw = out.getWritePointer (0);
     float* outRw = out.getNumChannels() > 1 ? out.getWritePointer (1) : out.getWritePointer (0);
 
-    // PER-SAMPLE FIX: Get pointers to modulation CV inputs, if they are connected
+    // Get modulation CV inputs from the single unified input bus
     const bool isThresholdMod = isParamInputConnected("threshold_mod");
     const bool isEdgeMod = isParamInputConnected("edge_mod");
     const bool isSlewMod = isParamInputConnected("slewMs_mod");
 
-    const float* thresholdCV = isThresholdMod ? getBusBuffer(buffer, true, 1).getReadPointer(0) : nullptr;
-    const float* edgeCV = isEdgeMod ? getBusBuffer(buffer, true, 2).getReadPointer(0) : nullptr;
-    const float* slewCV = isSlewMod ? getBusBuffer(buffer, true, 3).getReadPointer(0) : nullptr;
+    const float* thresholdCV = isThresholdMod && in.getNumChannels() > 4 ? in.getReadPointer(4) : nullptr;
+    const float* edgeCV = isEdgeMod && in.getNumChannels() > 5 ? in.getReadPointer(5) : nullptr;
+    const float* slewCV = isSlewMod && in.getNumChannels() > 6 ? in.getReadPointer(6) : nullptr;
 
     // Get base parameter values ONCE
     const float baseThreshold = thresholdParam != nullptr ? thresholdParam->load() : 0.5f;
@@ -17595,9 +17659,11 @@ void SAndHModuleProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce:
 // Parameter bus contract implementation
 bool SAndHModuleProcessor::getParamRouting(const juce::String& paramId, int& outBusIndex, int& outChannelIndexInBus) const
 {
-    if (paramId == "threshold_mod") { outBusIndex = 1; outChannelIndexInBus = 0; return true; }
-    if (paramId == "edge_mod") { outBusIndex = 2; outChannelIndexInBus = 0; return true; }
-    if (paramId == "slewMs_mod") { outBusIndex = 3; outChannelIndexInBus = 0; return true; }
+    outBusIndex = 0; // All modulation is on the single input bus
+    
+    if (paramId == "threshold_mod") { outChannelIndexInBus = 4; return true; }
+    if (paramId == "edge_mod") { outChannelIndexInBus = 5; return true; }
+    if (paramId == "slewMs_mod") { outChannelIndexInBus = 6; return true; }
     return false;
 }
 
@@ -19932,8 +19998,7 @@ FILE: juce\Source\audio\modules\TrackMixerModuleProcessor.cpp
 
 TrackMixerModuleProcessor::TrackMixerModuleProcessor()
     : ModuleProcessor(BusesProperties()
-          .withInput("Audio In", juce::AudioChannelSet::discreteChannels(MAX_TRACKS), true)
-          .withInput("Mod In", juce::AudioChannelSet::discreteChannels(1 + (MAX_TRACKS * 2)), true) // 1 for NumTracks + 2 for each track (Gain/Pan)
+          .withInput("Inputs", juce::AudioChannelSet::discreteChannels(MAX_TRACKS + 1 + (MAX_TRACKS * 2)), true) // 0-63: Audio, 64: NumTracks Mod, 65+: Gain/Pan Mods
           .withOutput("Out", juce::AudioChannelSet::stereo(), true)),
       apvts(*this, nullptr, "TrackMixerParams", createParameterLayout())
 {
@@ -19978,18 +20043,17 @@ void TrackMixerModuleProcessor::prepareToPlay(double sampleRate, int samplesPerB
 void TrackMixerModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midi)
 {
     juce::ignoreUnused(midi);
-    auto audioInBus = getBusBuffer(buffer, true, 0);
-    auto modInBus   = getBusBuffer(buffer, true, 1);
-    auto outBus     = getBusBuffer(buffer, false, 0);
+    auto inBus  = getBusBuffer(buffer, true, 0);
+    auto outBus = getBusBuffer(buffer, false, 0);
 
     const int numSamples = buffer.getNumSamples();
     
     // Determine the number of active tracks from the parameter or its modulation input
     int numTracks = numTracksParam->get();
     
-    if (isParamInputConnected(paramIdNumTracksMod))
+    if (isParamInputConnected(paramIdNumTracksMod) && inBus.getNumChannels() > MAX_TRACKS)
     {
-        float modValue = modInBus.getReadPointer(0)[0];
+        float modValue = inBus.getReadPointer(MAX_TRACKS)[0]; // Channel 64 for numTracks mod
 
         // Interpret modValue as a raw track count (not normalized CV)
         int maxTracks = numTracksMaxParam->get();
@@ -20007,7 +20071,7 @@ void TrackMixerModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
     // Loop through every active track and add its sound to the mix
     for (int t = 0; t < numTracks; ++t)
     {
-        const float* src = (t < audioInBus.getNumChannels()) ? audioInBus.getReadPointer(t) : nullptr;
+        const float* src = (t < inBus.getNumChannels()) ? inBus.getReadPointer(t) : nullptr;
         if (src == nullptr) continue;
 
         float* mixL = mixBus.getWritePointer(0);
@@ -20034,8 +20098,12 @@ void TrackMixerModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
         {
             const float baseGainDb = trackGainParams[t]->load();
             const float basePan = trackPanParams[t]->load();
-            const float* gainModSignal = isGainModulated ? modInBus.getReadPointer(1 + t * 2) : nullptr;
-            const float* panModSignal  = isPanModulated ? modInBus.getReadPointer(1 + t * 2 + 1) : nullptr;
+            
+            // Get modulation signals from unified input bus
+            const int gainModChannel = MAX_TRACKS + 1 + (t * 2);
+            const int panModChannel = MAX_TRACKS + 1 + (t * 2) + 1;
+            const float* gainModSignal = isGainModulated && inBus.getNumChannels() > gainModChannel ? inBus.getReadPointer(gainModChannel) : nullptr;
+            const float* panModSignal  = isPanModulated && inBus.getNumChannels() > panModChannel ? inBus.getReadPointer(panModChannel) : nullptr;
 
             for (int i = 0; i < numSamples; ++i)
             {
@@ -20258,12 +20326,12 @@ void TrackMixerModuleProcessor::drawIoPins(const NodePinHelpers& helpers)
 
 bool TrackMixerModuleProcessor::getParamRouting(const juce::String& paramId, int& outBusIndex, int& outChannelIndexInBus) const
 {
-    // All modulation is on Bus 1, "Mod In".
-    outBusIndex = 1;
+    // All modulation is on the single input bus
+    outBusIndex = 0;
 
     if (paramId == paramIdNumTracksMod)
     {
-        outChannelIndexInBus = 0; // First channel in mod bus
+        outChannelIndexInBus = MAX_TRACKS; // Channel 64
         return true;
     }
 
@@ -20273,7 +20341,7 @@ bool TrackMixerModuleProcessor::getParamRouting(const juce::String& paramId, int
         const int trackNum = trackNumStr.getIntValue();
         if (trackNum > 0 && trackNum <= MAX_TRACKS)
         {
-            outChannelIndexInBus = 1 + (trackNum - 1) * 2; // Channels 1, 3, 5...
+            outChannelIndexInBus = MAX_TRACKS + 1 + (trackNum - 1) * 2; // Gain channels start at 65
             return true;
         }
     }
@@ -20283,7 +20351,7 @@ bool TrackMixerModuleProcessor::getParamRouting(const juce::String& paramId, int
         const int trackNum = trackNumStr.getIntValue();
         if (trackNum > 0 && trackNum <= MAX_TRACKS)
         {
-            outChannelIndexInBus = 1 + (trackNum - 1) * 2 + 1; // Channels 2, 4, 6...
+            outChannelIndexInBus = MAX_TRACKS + 1 + (trackNum - 1) * 2 + 1; // Pan channels start at 66
             return true;
         }
     }
@@ -24130,8 +24198,7 @@ FILE: juce\Source\audio\modules\VCAModuleProcessor.cpp
 
 VCAModuleProcessor::VCAModuleProcessor()
     : ModuleProcessor(BusesProperties()
-                        .withInput("Audio In", juce::AudioChannelSet::stereo(), true)
-                        .withInput("Gain Mod", juce::AudioChannelSet::mono(), true)
+                        .withInput("Inputs", juce::AudioChannelSet::discreteChannels(3), true) // 0-1: Audio In, 2: Gain Mod
                         .withOutput("Output", juce::AudioChannelSet::stereo(), true)),
       apvts(*this, nullptr, "VCAParams", createParameterLayout())
 {
@@ -24163,14 +24230,14 @@ void VCAModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::Mi
 {
     juce::ignoreUnused(midi);
     
-    // Read CV from gain mod bus (if connected)
+    // Read CV from unified input bus (if connected)
     float gainModCV = 1.0f; // Default to no modulation
     
     if (isParamInputConnected("gain"))
     {
-        const auto& gainModBus = getBusBuffer(buffer, true, 1);
-        if (gainModBus.getNumChannels() > 0)
-            gainModCV = gainModBus.getReadPointer(0)[0]; // Read first sample
+        const auto& inBus = getBusBuffer(buffer, true, 0);
+        if (inBus.getNumChannels() > 2)
+            gainModCV = inBus.getReadPointer(2)[0]; // Read first sample from channel 2
     }
     
     // Process sample by sample to apply modulation
@@ -24206,7 +24273,9 @@ void VCAModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::Mi
 // Parameter bus contract implementation
 bool VCAModuleProcessor::getParamRouting(const juce::String& paramId, int& outBusIndex, int& outChannelIndexInBus) const
 {
-    if (paramId == "gain") { outBusIndex = 1; outChannelIndexInBus = 0; return true; }
+    outBusIndex = 0; // All modulation is on the single input bus
+    
+    if (paramId == "gain") { outChannelIndexInBus = 2; return true; }
     return false;
 }
 
@@ -25384,9 +25453,7 @@ juce::AudioProcessorValueTreeState::ParameterLayout WaveshaperModuleProcessor::c
 
 WaveshaperModuleProcessor::WaveshaperModuleProcessor()
     : ModuleProcessor(BusesProperties()
-                        .withInput("In", juce::AudioChannelSet::stereo(), true)
-                        .withInput("Drive Mod", juce::AudioChannelSet::mono(), true)
-                        .withInput("Type Mod", juce::AudioChannelSet::mono(), true)
+                        .withInput("Inputs", juce::AudioChannelSet::discreteChannels(4), true) // 0-1: Audio In, 2: Drive Mod, 3: Type Mod
                         .withOutput("Out", juce::AudioChannelSet::stereo(), true)),
       apvts(*this, nullptr, "WaveshaperParams", createParameterLayout())
 {
@@ -25402,11 +25469,12 @@ void WaveshaperModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
 {
     juce::ignoreUnused(midi);
     
-    // PER-SAMPLE FIX: Get pointers to modulation CV inputs, if they are connected
+    // Get pointers to modulation CV inputs from unified input bus
     const bool isDriveMod = isParamInputConnected("drive");
     const bool isTypeMod = isParamInputConnected("type");
-    const float* driveCV = isDriveMod ? getBusBuffer(buffer, true, 1).getReadPointer(0) : nullptr;
-    const float* typeCV = isTypeMod ? getBusBuffer(buffer, true, 2).getReadPointer(0) : nullptr;
+    auto inBus = getBusBuffer(buffer, true, 0);
+    const float* driveCV = isDriveMod && inBus.getNumChannels() > 2 ? inBus.getReadPointer(2) : nullptr;
+    const float* typeCV = isTypeMod && inBus.getNumChannels() > 3 ? inBus.getReadPointer(3) : nullptr;
 
     // Get base parameter values ONCE
     const float baseDrive = driveParam != nullptr ? driveParam->get() : 1.0f;
@@ -25532,8 +25600,10 @@ void WaveshaperModuleProcessor::drawIoPins(const NodePinHelpers& helpers)
 // Parameter bus contract implementation
 bool WaveshaperModuleProcessor::getParamRouting(const juce::String& paramId, int& outBusIndex, int& outChannelIndexInBus) const
 {
-    if (paramId == "drive") { outBusIndex = 1; outChannelIndexInBus = 0; return true; }
-    if (paramId == "type") { outBusIndex = 2; outChannelIndexInBus = 0; return true; }
+    outBusIndex = 0; // All modulation is on the single input bus
+    
+    if (paramId == "drive") { outChannelIndexInBus = 2; return true; }
+    if (paramId == "type") { outChannelIndexInBus = 3; return true; }
     return false;
 }
 
@@ -27026,7 +27096,7 @@ void populatePinDatabase()
         { AudioPin("Out L", 0, PinDataType::Audio), AudioPin("Out R", 1, PinDataType::Audio) },
         {}
     );
-    modulePinDatabase["8-band shaper"] = ModulePinInfo(
+    modulePinDatabase["8bandshaper"] = ModulePinInfo(
         {
             AudioPin("In L", 0, PinDataType::Audio),
             AudioPin("In R", 1, PinDataType::Audio),
@@ -27043,8 +27113,6 @@ void populatePinDatabase()
         { AudioPin("Out L", 0, PinDataType::Audio), AudioPin("Out R", 1, PinDataType::Audio) },
         {}
     );
-    // Alias for lowercase registry key
-    modulePinDatabase["8bandshaper"] = modulePinDatabase["8-Band Shaper"];
     modulePinDatabase["granulator"] = ModulePinInfo(
         {
             AudioPin("In L", 0, PinDataType::Audio),
@@ -27407,12 +27475,8 @@ void populatePinDatabase()
     // Duplicate entry removed to avoid conflicts
 
     
-    // Add TrackMixer module
-    modulePinDatabase["trackmixer"] = ModulePinInfo(
-        {},
-        { AudioPin("Out L", 0, PinDataType::Audio), AudioPin("Out R", 1, PinDataType::Audio) },
-        { ModPin("Num Tracks Mod", "numTracks", PinDataType::CV) }
-    );
+    // Add TrackMixer module alias (main definition is "track mixer" above)
+    modulePinDatabase["trackmixer"] = modulePinDatabase["track mixer"];
     
     
     // Add MIDI Player module
@@ -27424,10 +27488,31 @@ void populatePinDatabase()
     
     // Add converter modules
     modulePinDatabase["Attenuverter"] = {
-        { AudioPin("Audio In", 0, PinDataType::Audio), AudioPin("Amount Mod", 1, PinDataType::CV) },
-        { AudioPin("CV Out", 0, PinDataType::CV) },
+        { AudioPin("In L", 0, PinDataType::Audio), AudioPin("In R", 1, PinDataType::Audio), AudioPin("Amount Mod", 2, PinDataType::CV) },
+        { AudioPin("Out L", 0, PinDataType::Audio), AudioPin("Out R", 1, PinDataType::Audio) },
         {}
     };
+    
+    // Add lowercase alias for Attenuverter
+    modulePinDatabase["attenuverter"] = modulePinDatabase["Attenuverter"];
+    
+    // Add Sample & Hold module
+    modulePinDatabase["s&h"] = ModulePinInfo(
+        { 
+            AudioPin("Signal In L", 0, PinDataType::Audio),
+            AudioPin("Signal In R", 1, PinDataType::Audio),
+            AudioPin("Trig In L", 2, PinDataType::Gate),
+            AudioPin("Trig In R", 3, PinDataType::Gate),
+            AudioPin("Threshold Mod", 4, PinDataType::CV),
+            AudioPin("Edge Mod", 5, PinDataType::CV),
+            AudioPin("Slew Mod", 6, PinDataType::CV)
+        },
+        { 
+            AudioPin("Out L", 0, PinDataType::Audio),
+            AudioPin("Out R", 1, PinDataType::Audio)
+        },
+        {}
+    );
     
     modulePinDatabase["MapRange"] = {
         { AudioPin("Raw In", 0, PinDataType::Raw) },

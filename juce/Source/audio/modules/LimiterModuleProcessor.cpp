@@ -12,8 +12,7 @@ juce::AudioProcessorValueTreeState::ParameterLayout LimiterModuleProcessor::crea
 
 LimiterModuleProcessor::LimiterModuleProcessor()
     : ModuleProcessor(BusesProperties()
-          .withInput("Audio In", juce::AudioChannelSet::stereo(), true)
-          .withInput("Modulation In", juce::AudioChannelSet::discreteChannels(2), true) // Threshold, Release
+          .withInput("Inputs", juce::AudioChannelSet::discreteChannels(4), true) // 0-1: Audio In, 2: Threshold Mod, 3: Release Mod
           .withOutput("Audio Out", juce::AudioChannelSet::stereo(), true)),
       apvts(*this, nullptr, "LimiterParams", createParameterLayout())
 {
@@ -40,7 +39,6 @@ void LimiterModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce
     juce::ignoreUnused(midi);
     
     auto inBus = getBusBuffer(buffer, true, 0);
-    auto modBus = getBusBuffer(buffer, true, 1);
     auto outBus = getBusBuffer(buffer, false, 0);
 
     // Copy input to output for in-place processing
@@ -50,14 +48,14 @@ void LimiterModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce
         outBus.copyFrom(ch, 0, inBus, ch, 0, buffer.getNumSamples());
     }
 
-    // --- Update DSP Parameters (once per block) ---
+    // --- Update DSP Parameters from unified input bus (once per block) ---
     float finalThreshold = thresholdParam->load();
-    if (isParamInputConnected(paramIdThresholdMod) && modBus.getNumChannels() > 0)
-        finalThreshold = juce::jmap(modBus.getSample(0, 0), 0.0f, 1.0f, -20.0f, 0.0f);
+    if (isParamInputConnected(paramIdThresholdMod) && inBus.getNumChannels() > 2)
+        finalThreshold = juce::jmap(inBus.getSample(2, 0), 0.0f, 1.0f, -20.0f, 0.0f);
         
     float finalRelease = releaseParam->load();
-    if (isParamInputConnected(paramIdReleaseMod) && modBus.getNumChannels() > 1)
-        finalRelease = juce::jmap(modBus.getSample(1, 0), 0.0f, 1.0f, 1.0f, 200.0f);
+    if (isParamInputConnected(paramIdReleaseMod) && inBus.getNumChannels() > 3)
+        finalRelease = juce::jmap(inBus.getSample(3, 0), 0.0f, 1.0f, 1.0f, 200.0f);
 
     limiter.setThreshold(finalThreshold);
     limiter.setRelease(finalRelease);
@@ -80,9 +78,10 @@ void LimiterModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce
 
 bool LimiterModuleProcessor::getParamRouting(const juce::String& paramId, int& outBusIndex, int& outChannelIndexInBus) const
 {
-    outBusIndex = 1; // All modulation on Bus 1
-    if (paramId == paramIdThresholdMod) { outChannelIndexInBus = 0; return true; }
-    if (paramId == paramIdReleaseMod)   { outChannelIndexInBus = 1; return true; }
+    outBusIndex = 0; // All modulation is on the single input bus
+    
+    if (paramId == paramIdThresholdMod) { outChannelIndexInBus = 2; return true; }
+    if (paramId == paramIdReleaseMod)   { outChannelIndexInBus = 3; return true; }
     return false;
 }
 

@@ -2,10 +2,7 @@
 
 SAndHModuleProcessor::SAndHModuleProcessor()
     : ModuleProcessor (BusesProperties()
-                        .withInput ("Input", juce::AudioChannelSet::discreteChannels(4), true) // 0-1=signal, 2-3=trigger
-                        .withInput ("Threshold Mod", juce::AudioChannelSet::mono(), true)
-                        .withInput ("Edge Mod", juce::AudioChannelSet::mono(), true)
-                        .withInput ("Slew Mod", juce::AudioChannelSet::mono(), true)
+                        .withInput ("Inputs", juce::AudioChannelSet::discreteChannels(7), true) // 0-1=signal, 2-3=trigger, 4=threshold mod, 5=edge mod, 6=slew mod
                         .withOutput("Output", juce::AudioChannelSet::stereo(), true)),
       apvts (*this, nullptr, "SAndHParams", createParameterLayout())
 {
@@ -65,14 +62,14 @@ void SAndHModuleProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce:
     float* outLw = out.getWritePointer (0);
     float* outRw = out.getNumChannels() > 1 ? out.getWritePointer (1) : out.getWritePointer (0);
 
-    // PER-SAMPLE FIX: Get pointers to modulation CV inputs, if they are connected
+    // Get modulation CV inputs from the single unified input bus
     const bool isThresholdMod = isParamInputConnected("threshold_mod");
     const bool isEdgeMod = isParamInputConnected("edge_mod");
     const bool isSlewMod = isParamInputConnected("slewMs_mod");
 
-    const float* thresholdCV = isThresholdMod ? getBusBuffer(buffer, true, 1).getReadPointer(0) : nullptr;
-    const float* edgeCV = isEdgeMod ? getBusBuffer(buffer, true, 2).getReadPointer(0) : nullptr;
-    const float* slewCV = isSlewMod ? getBusBuffer(buffer, true, 3).getReadPointer(0) : nullptr;
+    const float* thresholdCV = isThresholdMod && in.getNumChannels() > 4 ? in.getReadPointer(4) : nullptr;
+    const float* edgeCV = isEdgeMod && in.getNumChannels() > 5 ? in.getReadPointer(5) : nullptr;
+    const float* slewCV = isSlewMod && in.getNumChannels() > 6 ? in.getReadPointer(6) : nullptr;
 
     // Get base parameter values ONCE
     const float baseThreshold = thresholdParam != nullptr ? thresholdParam->load() : 0.5f;
@@ -158,9 +155,11 @@ void SAndHModuleProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce:
 // Parameter bus contract implementation
 bool SAndHModuleProcessor::getParamRouting(const juce::String& paramId, int& outBusIndex, int& outChannelIndexInBus) const
 {
-    if (paramId == "threshold_mod") { outBusIndex = 1; outChannelIndexInBus = 0; return true; }
-    if (paramId == "edge_mod") { outBusIndex = 2; outChannelIndexInBus = 0; return true; }
-    if (paramId == "slewMs_mod") { outBusIndex = 3; outChannelIndexInBus = 0; return true; }
+    outBusIndex = 0; // All modulation is on the single input bus
+    
+    if (paramId == "threshold_mod") { outChannelIndexInBus = 4; return true; }
+    if (paramId == "edge_mod") { outChannelIndexInBus = 5; return true; }
+    if (paramId == "slewMs_mod") { outChannelIndexInBus = 6; return true; }
     return false;
 }
 

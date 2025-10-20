@@ -2,9 +2,7 @@
 
 QuantizerModuleProcessor::QuantizerModuleProcessor()
     : ModuleProcessor(BusesProperties()
-                        .withInput("In", juce::AudioChannelSet::mono(), true)
-                        .withInput("Scale Mod", juce::AudioChannelSet::mono(), true)
-                        .withInput("Root Mod", juce::AudioChannelSet::mono(), true)
+                        .withInput("Inputs", juce::AudioChannelSet::discreteChannels(3), true) // 0: Audio In, 1: Scale Mod, 2: Root Mod
                         .withOutput("Out", juce::AudioChannelSet::mono(), true)),
       apvts(*this, nullptr, "QuantizerParams", createParameterLayout())
 {
@@ -46,24 +44,20 @@ void QuantizerModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, ju
     auto in = getBusBuffer(buffer, true, 0);
     auto out = getBusBuffer(buffer, false, 0);
 
-    // Read CV from input buses (if connected)
+    // Read CV from unified input bus (if connected)
     float scaleModCV = 0.0f;
     float rootModCV = 0.0f;
     
-    // Check if scale mod bus is connected and read CV
-    if (isParamInputConnected("scale_mod")) // Scale Mod bus
+    // Check if scale mod is connected and read CV from channel 1
+    if (isParamInputConnected("scale_mod") && in.getNumChannels() > 1)
     {
-        const auto& scaleModBus = getBusBuffer(buffer, true, 1);
-        if (scaleModBus.getNumChannels() > 0)
-            scaleModCV = scaleModBus.getReadPointer(0)[0];
+        scaleModCV = in.getReadPointer(1)[0];
     }
     
-    // Check if root mod bus is connected and read CV
-    if (isParamInputConnected("root_mod")) // Root Mod bus
+    // Check if root mod is connected and read CV from channel 2
+    if (isParamInputConnected("root_mod") && in.getNumChannels() > 2)
     {
-        const auto& rootModBus = getBusBuffer(buffer, true, 2);
-        if (rootModBus.getNumChannels() > 0)
-            rootModCV = rootModBus.getReadPointer(0)[0];
+        rootModCV = in.getReadPointer(2)[0];
     }
 
     // Apply modulation or use parameter values
@@ -190,8 +184,9 @@ void QuantizerModuleProcessor::drawIoPins(const NodePinHelpers& helpers)
 
 bool QuantizerModuleProcessor::getParamRouting(const juce::String& paramId, int& outBusIndex, int& outChannelIndexInBus) const
 {
-    outChannelIndexInBus = 0;
-    if (paramId == "scale_mod") { outBusIndex = 1; return true; }
-    if (paramId == "root_mod")  { outBusIndex = 2; return true; }
+    outBusIndex = 0; // All modulation is on the single input bus
+    
+    if (paramId == "scale_mod") { outChannelIndexInBus = 1; return true; }
+    if (paramId == "root_mod")  { outChannelIndexInBus = 2; return true; }
     return false;
 }

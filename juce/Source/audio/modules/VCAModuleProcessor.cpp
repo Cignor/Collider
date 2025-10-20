@@ -2,8 +2,7 @@
 
 VCAModuleProcessor::VCAModuleProcessor()
     : ModuleProcessor(BusesProperties()
-                        .withInput("Audio In", juce::AudioChannelSet::stereo(), true)
-                        .withInput("Gain Mod", juce::AudioChannelSet::mono(), true)
+                        .withInput("Inputs", juce::AudioChannelSet::discreteChannels(3), true) // 0-1: Audio In, 2: Gain Mod
                         .withOutput("Output", juce::AudioChannelSet::stereo(), true)),
       apvts(*this, nullptr, "VCAParams", createParameterLayout())
 {
@@ -35,14 +34,14 @@ void VCAModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::Mi
 {
     juce::ignoreUnused(midi);
     
-    // Read CV from gain mod bus (if connected)
+    // Read CV from unified input bus (if connected)
     float gainModCV = 1.0f; // Default to no modulation
     
     if (isParamInputConnected("gain"))
     {
-        const auto& gainModBus = getBusBuffer(buffer, true, 1);
-        if (gainModBus.getNumChannels() > 0)
-            gainModCV = gainModBus.getReadPointer(0)[0]; // Read first sample
+        const auto& inBus = getBusBuffer(buffer, true, 0);
+        if (inBus.getNumChannels() > 2)
+            gainModCV = inBus.getReadPointer(2)[0]; // Read first sample from channel 2
     }
     
     // Process sample by sample to apply modulation
@@ -78,7 +77,9 @@ void VCAModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::Mi
 // Parameter bus contract implementation
 bool VCAModuleProcessor::getParamRouting(const juce::String& paramId, int& outBusIndex, int& outChannelIndexInBus) const
 {
-    if (paramId == "gain") { outBusIndex = 1; outChannelIndexInBus = 0; return true; }
+    outBusIndex = 0; // All modulation is on the single input bus
+    
+    if (paramId == "gain") { outChannelIndexInBus = 2; return true; }
     return false;
 }
 

@@ -2,10 +2,7 @@
 
 ReverbModuleProcessor::ReverbModuleProcessor()
     : ModuleProcessor (BusesProperties()
-        .withInput ("In", juce::AudioChannelSet::stereo(), true)
-        .withInput ("Size Mod", juce::AudioChannelSet::mono(), true)
-        .withInput ("Damp Mod", juce::AudioChannelSet::mono(), true)
-        .withInput ("Mix Mod", juce::AudioChannelSet::mono(), true)
+        .withInput ("Inputs", juce::AudioChannelSet::discreteChannels(5), true) // 0-1: Audio In, 2: Size Mod, 3: Damp Mod, 4: Mix Mod
         .withOutput("Out", juce::AudioChannelSet::stereo(), true)),
       apvts (*this, nullptr, "ReverbParams", createParameterLayout())
 {
@@ -56,33 +53,27 @@ void ReverbModuleProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce
     }
     // --- END OF INPUT COPYING ---
     
-    // Read CV from input buses (if connected)
+    // Read CV from the unified input bus
     float sizeModCV = 0.0f;
     float dampModCV = 0.0f;
     float mixModCV = 0.0f;
     
-    // Check if size mod bus is connected and read CV
-    if (isParamInputConnected("size")) // Size Mod bus
+    // Check if size mod is connected and read CV from channel 2
+    if (isParamInputConnected("size") && inBus.getNumChannels() > 2)
     {
-        const auto& sizeModBus = getBusBuffer(buffer, true, 1);
-        if (sizeModBus.getNumChannels() > 0)
-            sizeModCV = sizeModBus.getReadPointer(0)[0]; // Read first sample
+        sizeModCV = inBus.getReadPointer(2)[0]; // Read first sample from channel 2
     }
     
-    // Check if damp mod bus is connected and read CV
-    if (isParamInputConnected("damp")) // Damp Mod bus
+    // Check if damp mod is connected and read CV from channel 3
+    if (isParamInputConnected("damp") && inBus.getNumChannels() > 3)
     {
-        const auto& dampModBus = getBusBuffer(buffer, true, 2);
-        if (dampModBus.getNumChannels() > 0)
-            dampModCV = dampModBus.getReadPointer(0)[0]; // Read first sample
+        dampModCV = inBus.getReadPointer(3)[0]; // Read first sample from channel 3
     }
     
-    // Check if mix mod bus is connected and read CV
-    if (isParamInputConnected("mix")) // Mix Mod bus
+    // Check if mix mod is connected and read CV from channel 4
+    if (isParamInputConnected("mix") && inBus.getNumChannels() > 4)
     {
-        const auto& mixModBus = getBusBuffer(buffer, true, 3);
-        if (mixModBus.getNumChannels() > 0)
-            mixModCV = mixModBus.getReadPointer(0)[0]; // Read first sample
+        mixModCV = inBus.getReadPointer(4)[0]; // Read first sample from channel 4
     }
 
     // Apply modulation or use parameter values
@@ -159,10 +150,11 @@ void ReverbModuleProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce
 // Parameter bus contract implementation
 bool ReverbModuleProcessor::getParamRouting(const juce::String& paramId, int& outBusIndex, int& outChannelIndexInBus) const
 {
-    outChannelIndexInBus = 0;
-    if (paramId == "size") { outBusIndex = 1; return true; }
-    if (paramId == "damp") { outBusIndex = 2; return true; }
-    if (paramId == "mix")  { outBusIndex = 3; return true; }
+    outBusIndex = 0; // All modulation is on the single input bus
+    
+    if (paramId == "size") { outChannelIndexInBus = 2; return true; }
+    if (paramId == "damp") { outChannelIndexInBus = 3; return true; }
+    if (paramId == "mix")  { outChannelIndexInBus = 4; return true; }
     return false;
 }
 

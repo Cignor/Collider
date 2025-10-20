@@ -1,0 +1,87 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<ModularSynthPreset version="1">
+  <modules>
+    <module logicalId="1" type="Random">
+      <params>
+        <RandomParams>
+          <PARAM id="cvMax" value="0.5899999737739563"/>
+          <PARAM id="cvMin" value="0.4699999988079071"/>
+          <PARAM id="max" value="59.03999328613281"/>
+          <PARAM id="min" value="0.0"/>
+          <PARAM id="normMax" value="0.6299999952316284"/>
+          <PARAM id="normMin" value="0.5"/>
+          <PARAM id="rate" value="14.35000038146973"/>
+          <PARAM id="slew" value="0.0"/>
+          <PARAM id="trigThreshold" value="0.5299999713897705"/>
+        </RandomParams>
+      </params>
+    </module>
+    <module logicalId="2" type="Scope">
+      <params>
+        <ScopeParams>
+          <PARAM id="monitorSeconds" value="5.0"/>
+        </ScopeParams>
+      </params>
+    </module>
+    <module logicalId="3" type="Scope">
+      <params>
+        <ScopeParams>
+          <PARAM id="monitorSeconds" value="5.0"/>
+        </ScopeParams>
+      </params>
+    </module>
+    <module logicalId="4" type="MapRange">
+      <params>
+        <MapRangeParams>
+          <PARAM id="cvMax" value="1.0"/>
+          <PARAM id="cvMin" value="0.0"/>
+          <PARAM id="inMax" value="59.03999328613281"/>
+          <PARAM id="inMin" value="0.0"/>
+          <PARAM id="normMax" value="1.0"/>
+          <PARAM id="normMin" value="-1.0"/>
+          <PARAM id="outMax" value="1.0"/>
+          <PARAM id="outMin" value="-1.0"/>
+        </MapRangeParams>
+      </params>
+    </module>
+    <module logicalId="5" type="Scope">
+      <params>
+        <ScopeParams>
+          <PARAM id="monitorSeconds" value="5.0"/>
+        </ScopeParams>
+      </params>
+    </module>
+    <module logicalId="6" type="Scope">
+      <params>
+        <ScopeParams>
+          <PARAM id="monitorSeconds" value="5.0"/>
+        </ScopeParams>
+      </params>
+    </module>
+    <module logicalId="7" type="Scope">
+      <params>
+        <ScopeParams>
+          <PARAM id="monitorSeconds" value="5.0"/>
+        </ScopeParams>
+      </params>
+    </module>
+  </modules>
+  <connections>
+    <connection srcId="1" srcChan="0" dstId="2" dstChan="0"/>
+    <connection srcId="1" srcChan="1" dstId="4" dstChan="0"/>
+    <connection srcId="1" srcChan="2" dstId="5" dstChan="0"/>
+    <connection srcId="1" srcChan="3" dstId="6" dstChan="0"/>
+    <connection srcId="1" srcChan="4" dstId="7" dstChan="0"/>
+    <connection srcId="4" srcChan="1" dstId="3" dstChan="0"/>
+  </connections>
+  <NodeEditorUI>
+    <node id="1" x="47.0" y="484.0"/>
+    <node id="2" x="567.0" y="619.0"/>
+    <node id="3" x="672.0" y="870.0"/>
+    <node id="4" x="218.5" y="1055.5"/>
+    <node id="5" x="667.0" y="1076.0"/>
+    <node id="6" x="654.0" y="1280.0"/>
+    <node id="7" x="1106.0" y="947.0"/>
+  </NodeEditorUI>
+</ModularSynthPreset>

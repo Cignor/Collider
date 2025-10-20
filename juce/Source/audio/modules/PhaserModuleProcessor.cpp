@@ -16,12 +16,7 @@ juce::AudioProcessorValueTreeState::ParameterLayout PhaserModuleProcessor::creat
 
 PhaserModuleProcessor::PhaserModuleProcessor()
     : ModuleProcessor(BusesProperties()
-          .withInput("Audio In", juce::AudioChannelSet::stereo(), true)
-          .withInput("Rate Mod", juce::AudioChannelSet::mono(), true)
-          .withInput("Depth Mod", juce::AudioChannelSet::mono(), true)
-          .withInput("Centre Mod", juce::AudioChannelSet::mono(), true)
-          .withInput("Feedback Mod", juce::AudioChannelSet::mono(), true)
-          .withInput("Mix Mod", juce::AudioChannelSet::mono(), true)
+          .withInput("Inputs", juce::AudioChannelSet::discreteChannels(7), true) // 0-1: Audio In, 2: Rate Mod, 3: Depth Mod, 4: Centre Mod, 5: Feedback Mod, 6: Mix Mod
           .withOutput("Audio Out", juce::AudioChannelSet::stereo(), true)),
       apvts(*this, nullptr, "PhaserParams", createParameterLayout())
 {
@@ -62,21 +57,19 @@ void PhaserModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce:
         outBus.copyFrom(ch, 0, inBus, ch, 0, buffer.getNumSamples());
     }
 
-    // --- Get Modulation CVs ---
-    auto readCv = [&](const juce::String& paramId, int busIndex) -> float {
-        if (isParamInputConnected(paramId)) {
-            const auto& modBus = getBusBuffer(buffer, true, busIndex);
-            if (modBus.getNumChannels() > 0)
-                return modBus.getReadPointer(0)[0]; // Read first sample
+    // --- Get Modulation CVs from unified input bus ---
+    auto readCv = [&](const juce::String& paramId, int channelIndex) -> float {
+        if (isParamInputConnected(paramId) && inBus.getNumChannels() > channelIndex) {
+            return inBus.getReadPointer(channelIndex)[0]; // Read first sample
         }
         return -1.0f; // Use a sentinel to indicate no CV
     };
 
-    float rateCv = readCv(paramIdRateMod, 1);
-    float depthCv = readCv(paramIdDepthMod, 2);
-    float centreCv = readCv(paramIdCentreHzMod, 3);
-    float feedbackCv = readCv(paramIdFeedbackMod, 4);
-    float mixCv = readCv(paramIdMixMod, 5);
+    float rateCv = readCv(paramIdRateMod, 2);
+    float depthCv = readCv(paramIdDepthMod, 3);
+    float centreCv = readCv(paramIdCentreHzMod, 4);
+    float feedbackCv = readCv(paramIdFeedbackMod, 5);
+    float mixCv = readCv(paramIdMixMod, 6);
 
     // --- Update DSP Parameters (once per block) ---
     float finalRate = (rateCv >= 0.0f) ? juce::jmap(rateCv, 0.0f, 1.0f, 0.01f, 10.0f) : rateParam->load();
@@ -123,11 +116,13 @@ void PhaserModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce:
 
 bool PhaserModuleProcessor::getParamRouting(const juce::String& paramId, int& outBusIndex, int& outChannelIndexInBus) const
 {
-    if (paramId == paramIdRateMod) { outBusIndex = 1; outChannelIndexInBus = 0; return true; }
-    if (paramId == paramIdDepthMod) { outBusIndex = 2; outChannelIndexInBus = 0; return true; }
-    if (paramId == paramIdCentreHzMod) { outBusIndex = 3; outChannelIndexInBus = 0; return true; }
-    if (paramId == paramIdFeedbackMod) { outBusIndex = 4; outChannelIndexInBus = 0; return true; }
-    if (paramId == paramIdMixMod) { outBusIndex = 5; outChannelIndexInBus = 0; return true; }
+    outBusIndex = 0; // All modulation is on the single input bus
+    
+    if (paramId == paramIdRateMod) { outChannelIndexInBus = 2; return true; }
+    if (paramId == paramIdDepthMod) { outChannelIndexInBus = 3; return true; }
+    if (paramId == paramIdCentreHzMod) { outChannelIndexInBus = 4; return true; }
+    if (paramId == paramIdFeedbackMod) { outChannelIndexInBus = 5; return true; }
+    if (paramId == paramIdMixMod) { outChannelIndexInBus = 6; return true; }
     return false;
 }
 

@@ -13,6 +13,13 @@ public:
     static constexpr auto paramIdRelease = "release";
     static constexpr auto paramIdMakeup = "makeup";
 
+    // Virtual IDs for modulation inputs
+    static constexpr auto paramIdThresholdMod = "threshold_mod";
+    static constexpr auto paramIdRatioMod = "ratio_mod";
+    static constexpr auto paramIdAttackMod = "attack_mod";
+    static constexpr auto paramIdReleaseMod = "release_mod";
+    static constexpr auto paramIdMakeupMod = "makeup_mod";
+
     CompressorModuleProcessor();
     ~CompressorModuleProcessor() override = default;
 

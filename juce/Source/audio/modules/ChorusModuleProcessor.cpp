@@ -13,10 +13,7 @@ juce::AudioProcessorValueTreeState::ParameterLayout ChorusModuleProcessor::creat
 
 ChorusModuleProcessor::ChorusModuleProcessor()
     : ModuleProcessor(BusesProperties()
-          .withInput("Audio In", juce::AudioChannelSet::stereo(), true)
-          .withInput("Rate Mod", juce::AudioChannelSet::mono(), true)
-          .withInput("Depth Mod", juce::AudioChannelSet::mono(), true)
-          .withInput("Mix Mod", juce::AudioChannelSet::mono(), true)
+          .withInput("Inputs", juce::AudioChannelSet::discreteChannels(5), true) // 0-1: Audio In, 2: Rate Mod, 3: Depth Mod, 4: Mix Mod
           .withOutput("Audio Out", juce::AudioChannelSet::stereo(), true)),
       apvts(*this, nullptr, "ChorusParams", createParameterLayout())
 {
@@ -55,14 +52,14 @@ void ChorusModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce:
         outBus.copyFrom(ch, 0, inBus, ch, 0, buffer.getNumSamples());
     }
 
-    // --- Get Modulation CVs (if connected) ---
+    // --- Get Modulation CVs from unified input bus ---
     const bool isRateMod = isParamInputConnected(paramIdRateMod);
     const bool isDepthMod = isParamInputConnected(paramIdDepthMod);
     const bool isMixMod = isParamInputConnected(paramIdMixMod);
 
-    const float* rateCV = isRateMod ? getBusBuffer(buffer, true, 1).getReadPointer(0) : nullptr;
-    const float* depthCV = isDepthMod ? getBusBuffer(buffer, true, 2).getReadPointer(0) : nullptr;
-    const float* mixCV = isMixMod ? getBusBuffer(buffer, true, 3).getReadPointer(0) : nullptr;
+    const float* rateCV = isRateMod && inBus.getNumChannels() > 2 ? inBus.getReadPointer(2) : nullptr;
+    const float* depthCV = isDepthMod && inBus.getNumChannels() > 3 ? inBus.getReadPointer(3) : nullptr;
+    const float* mixCV = isMixMod && inBus.getNumChannels() > 4 ? inBus.getReadPointer(4) : nullptr;
 
     // --- Get Base Parameter Values ---
     const float baseRate = rateParam->load();
@@ -115,9 +112,11 @@ void ChorusModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce:
 
 bool ChorusModuleProcessor::getParamRouting(const juce::String& paramId, int& outBusIndex, int& outChannelIndexInBus) const
 {
-    if (paramId == paramIdRateMod) { outBusIndex = 1; outChannelIndexInBus = 0; return true; }
-    if (paramId == paramIdDepthMod) { outBusIndex = 2; outChannelIndexInBus = 0; return true; }
-    if (paramId == paramIdMixMod) { outBusIndex = 3; outChannelIndexInBus = 0; return true; }
+    outBusIndex = 0; // All modulation is on the single input bus
+    
+    if (paramId == paramIdRateMod) { outChannelIndexInBus = 2; return true; }
+    if (paramId == paramIdDepthMod) { outChannelIndexInBus = 3; return true; }
+    if (paramId == paramIdMixMod) { outChannelIndexInBus = 4; return true; }
     return false;
 }
 
