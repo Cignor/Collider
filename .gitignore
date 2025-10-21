@@ -21,9 +21,22 @@ __pycache__/
 .vscode/
 .idea/
 .cursor/
+.vs/
 *.swp
 *.swo
 *~
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+*.vcxproj.filters
+*.vsidx
+*.vspscc
+*.vssscc
+.builds
+*.pidb
+*.svclog
+*.scc
 
 # Logs
 *.log
@@ -51,6 +64,15 @@ audio_sdk_juce/*.zip
 
 # Large MIDI collections (optional - uncomment if repository is too large)
 # audio/MIDI/
+
+# Large audio recordings
+audio/Recorder/*.wav
+
+# C# build artifacts
+**/obj/Debug/
+**/obj/Release/
+**/bin/Debug/
+**/bin/Release/
 
 # Build output
 *.exe
