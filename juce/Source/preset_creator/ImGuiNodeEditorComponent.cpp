@@ -1,4 +1,4 @@
-﻿#include "ImGuiNodeEditorComponent.h"
+#include "ImGuiNodeEditorComponent.h"
 #include "PinDatabase.h"
 
 #include <imgui.h>
@@ -31,6 +31,7 @@
 #include "../audio/modules/PhaserModuleProcessor.h"
 #include "../audio/modules/CompressorModuleProcessor.h"
 #include "../audio/modules/RecordModuleProcessor.h"
+#include "../audio/modules/CommentModuleProcessor.h"
 #include "../audio/modules/LimiterModuleProcessor.h"
 #include "../audio/modules/GateModuleProcessor.h"
 #include "../audio/modules/DriveModuleProcessor.h"
@@ -214,6 +215,10 @@ void ImGuiNodeEditorComponent::newOpenGLContextCreated()
     // Setup imnodes
     ImNodes::SetImGuiContext(ImGui::GetCurrentContext());
     editorContext = ImNodes::CreateContext();
+    
+    // Enable grid snapping
+    ImNodes::GetStyle().GridSpacing = 64.0f;
+    
     // Optional ergonomics: Alt = pan, Ctrl = detach link
     {
         auto& ioNodes = ImNodes::GetIO();
@@ -280,6 +285,44 @@ void ImGuiNodeEditorComponent::renderOpenGL()
 
 void ImGuiNodeEditorComponent::renderImGui()
 {
+    static int frameCounter = 0;
+    frameCounter++;
+
+    // ========================= THE DEFINITIVE FIX =========================
+    //
+    // Rebuild the audio graph at the START of the frame if a change is pending.
+    // This ensures that the synth model is in a consistent state BEFORE we try
+    // to draw the UI, eliminating the "lost frame" that caused nodes to jump.
+    //
+    if (graphNeedsRebuild.load())
+    {
+        juce::Logger::writeToLog("[GraphSync] Rebuild flag is set. Committing changes now...");
+        if (synth)
+        {
+            synth->commitChanges();
+        }
+        graphNeedsRebuild = false; // Reset the flag immediately after committing.
+        
+        // CRITICAL: Invalidate hover state to prevent cable inspector from accessing
+        // modules that were just deleted/recreated during commitChanges()
+        lastHoveredLinkId = -1;
+        lastHoveredNodeId = -1;
+        hoveredLinkSrcId = 0;
+        hoveredLinkDstId = 0;
+        
+        juce::Logger::writeToLog("[GraphSync] Graph rebuild complete.");
+    }
+    // ========================== END OF FIX ==========================
+
+    // Frame start
+    
+    // --- Stateless Frame Rendering ---
+    // Clear link registries at start of each frame for fully stateless rendering.
+    // Pin IDs are now generated directly via bitmasking, no maps needed.
+    linkIdToAttrs.clear();
+    linkToId.clear();
+    nextLinkId = 1000;
+
     // Handle F1 key for shortcuts window
     if (ImGui::IsKeyPressed(ImGuiKey_F1, false))
     {
@@ -487,6 +530,11 @@ void ImGuiNodeEditorComponent::renderImGui()
                 handleConnectSelectedToTrackMixer();
             }
             
+            if (ImGui::MenuItem("Record Output", "Ctrl+R"))
+            {
+                handleRecordOutput();
+            }
+            
             if (ImGui::MenuItem("Beautify Layout", "Ctrl+B"))
             {
                 handleBeautifyLayout();
@@ -613,6 +661,31 @@ void ImGuiNodeEditorComponent::renderImGui()
         ImGui::EndMainMenuBar();
     }
 
+    // --- PRESET STATUS OVERLAY ---
+    ImGui::SetNextWindowPos(ImVec2(sidebarWidth + padding, menuBarHeight + padding));
+    ImGui::SetNextWindowBgAlpha(0.7f);
+    ImGui::Begin("Preset Status", nullptr, 
+                 ImGuiWindowFlags_NoDecoration | 
+                 ImGuiWindowFlags_NoMove | 
+                 ImGuiWindowFlags_NoFocusOnAppearing | 
+                 ImGuiWindowFlags_NoNav | 
+                 ImGuiWindowFlags_AlwaysAutoResize);
+
+    if (currentPresetFile.isNotEmpty()) {
+        ImGui::Text("Preset: %s", currentPresetFile.toRawUTF8());
+    } else {
+        ImGui::Text("Preset: Unsaved Patch");
+    }
+
+    if (isPatchDirty) {
+        ImGui::TextColored(ImVec4(1.0f, 1.0f, 0.0f, 1.0f), "Status: EDITED");
+    } else {
+        ImGui::TextColored(ImVec4(0.0f, 1.0f, 0.0f, 1.0f), "Status: SAVED");
+    }
+
+    ImGui::End();
+    // --- END OF PRESET STATUS OVERLAY ---
+
     ImGui::Columns (2, nullptr, true);
     ImGui::SetColumnWidth (0, 260.0f);
 
@@ -646,14 +719,19 @@ void ImGuiNodeEditorComponent::renderImGui()
         {
             ImGui::BeginTooltip();
             
-            // Find the description in our map using the module's internal 'type'
-            auto it = getModuleDescriptions().find(type);
-            if (it != getModuleDescriptions().end())
+            // Find the description in our list using the module's internal 'type'
+            bool found = false;
+            for (const auto& pair : getModuleDescriptions())
             {
-                // If found, display it
-                ImGui::TextUnformatted(it->second);
+                if (pair.first.equalsIgnoreCase(type))
+                {
+                    // If found, display it
+                    ImGui::TextUnformatted(pair.second);
+                    found = true;
+                    break;
+                }
             }
-            else
+            if (!found)
             {
                 // Fallback text if a description is missing
                 ImGui::TextUnformatted("No description available.");
@@ -748,12 +826,12 @@ void ImGuiNodeEditorComponent::renderImGui()
     {
         for (const auto& c : synth->getConnectionsInfo())
         {
-            int srcAttr = getAttrId(c.srcLogicalId, c.srcChan, false, false);
+            int srcAttr = encodePinId({c.srcLogicalId, c.srcChan, false});
             connectedOutputAttrs.insert(srcAttr);
 
             int dstAttr = c.dstIsOutput ? 
-                getAttrId(0, c.dstChan, true, false) : 
-                getAttrId(c.dstLogicalId, c.dstChan, true, false);
+                encodePinId({0, c.dstChan, true}) : 
+                encodePinId({c.dstLogicalId, c.dstChan, true});
             connectedInputAttrs.insert(dstAttr);
         }
     }
@@ -764,22 +842,90 @@ void ImGuiNodeEditorComponent::renderImGui()
     const ImU32 colPinConnected = IM_COL32(120, 255, 120, 255); // Green for connected
     // <<< END OF BLOCK >>>
 
-    // Pre-register attr IDs for all endpoints referenced by connections, so links can draw regardless of draw order
-    if (synth != nullptr)
+    // Pre-register is no longer needed - stateless encoding generates IDs on-the-fly
+    // (Removed the old pre-registration loop)
+
+    // --- BACKGROUND GRID AND COORDINATE DISPLAY ---
+    const ImU32 GRID_COLOR = IM_COL32(50, 50, 50, 255);
+    const ImU32 GRID_ORIGIN_COLOR = IM_COL32(80, 80, 80, 255);
+    const float GRID_SIZE = 64.0f;
+    ImVec2 canvas_p0 = ImGui::GetCursorScreenPos();
+    ImVec2 canvas_sz = ImGui::GetContentRegionAvail();
+    ImVec2 canvas_p1 = ImVec2(canvas_p0.x + canvas_sz.x, canvas_p0.y + canvas_sz.y);
+    ImDrawList* draw_list = ImGui::GetBackgroundDrawList();
+    ImVec2 panning = ImNodes::EditorContextGetPanning();
+
+    // Draw grid lines
+    for (float x = fmodf(panning.x, GRID_SIZE); x < canvas_sz.x; x += GRID_SIZE)
+        draw_list->AddLine(ImVec2(canvas_p0.x + x, canvas_p0.y), ImVec2(canvas_p0.x + x, canvas_p0.y + canvas_sz.y), GRID_COLOR);
+    for (float y = fmodf(panning.y, GRID_SIZE); y < canvas_sz.y; y += GRID_SIZE)
+        draw_list->AddLine(ImVec2(canvas_p0.x, canvas_p0.y + y), ImVec2(canvas_p0.x + canvas_sz.x, canvas_p0.y + y), GRID_COLOR);
+
+    // Draw thicker lines for the origin (0,0)
+    ImVec2 origin_on_screen = ImVec2(canvas_p0.x + panning.x, canvas_p0.y + panning.y);
+    draw_list->AddLine(ImVec2(origin_on_screen.x, canvas_p0.y), ImVec2(origin_on_screen.x, canvas_p1.y), GRID_ORIGIN_COLOR, 2.0f);
+    draw_list->AddLine(ImVec2(canvas_p0.x, origin_on_screen.y), ImVec2(canvas_p1.x, origin_on_screen.y), GRID_ORIGIN_COLOR, 2.0f);
+
+    // Draw scale markers every 400 grid units as a grid (not a cross)
+    const float SCALE_INTERVAL = 400.0f;
+    const ImU32 SCALE_TEXT_COLOR = IM_COL32(150, 150, 150, 80); // Reduced opacity
+    ImDrawList* fg_draw_list = ImGui::GetForegroundDrawList();
+    
+    // X-axis scale markers - always at the bottom edge
+    float gridLeft = -panning.x;
+    float gridRight = canvas_sz.x - panning.x;
+    int startX = (int)std::floor(gridLeft / SCALE_INTERVAL);
+    int endX = (int)std::ceil(gridRight / SCALE_INTERVAL);
+    
+    for (int i = startX; i <= endX; ++i)
     {
-        for (const auto& c : synth->getConnectionsInfo())
+        float gridX = i * SCALE_INTERVAL;
+        float screenX = canvas_p0.x + panning.x + gridX;
+        
+        // Only draw if visible on screen
+        if (screenX >= canvas_p0.x && screenX <= canvas_p1.x)
         {
-            (void) getAttrId(c.srcLogicalId, c.srcChan, false, false);
-            if (c.dstIsOutput) (void) getAttrId(0, c.dstChan, true, false);
-            else               (void) getAttrId(c.dstLogicalId, c.dstChan, true, false);
+            char label[16];
+            snprintf(label, sizeof(label), "%.0f", gridX);
+            // Always draw at bottom edge
+            fg_draw_list->AddText(ImVec2(screenX + 2, canvas_p1.y - 45), SCALE_TEXT_COLOR, label);
         }
     }
+    
+    // Y-axis scale markers - always at the left edge
+    float gridTop = -panning.y;
+    float gridBottom = canvas_sz.y - panning.y;
+    int startY = (int)std::floor(gridTop / SCALE_INTERVAL);
+    int endY = (int)std::ceil(gridBottom / SCALE_INTERVAL);
+    
+    for (int i = startY; i <= endY; ++i)
+    {
+        float gridY = i * SCALE_INTERVAL;
+        float screenY = canvas_p0.y + panning.y + gridY;
+        
+        // Only draw if visible on screen
+        if (screenY >= canvas_p0.y && screenY <= canvas_p1.y)
+        {
+            char label[16];
+            snprintf(label, sizeof(label), "%.0f", gridY);
+            // Always draw at left edge
+            fg_draw_list->AddText(ImVec2(canvas_p0.x + 5, screenY + 2), SCALE_TEXT_COLOR, label);
+        }
+    }
+
+    // Mouse coordinate display overlay (bottom-left)
+    ImVec2 mouseScreenPos = ImGui::GetMousePos();
+    ImVec2 mouseGridPos = ImVec2(mouseScreenPos.x - canvas_p0.x - panning.x, mouseScreenPos.y - canvas_p0.y - panning.y);
+    char posStr[32];
+    snprintf(posStr, sizeof(posStr), "%.0f, %.0f", mouseGridPos.x, mouseGridPos.y);
+    // Use the foreground draw list to ensure text is on top of everything
+    // Position at bottom-left: canvas_p1.y is bottom edge, subtract text height plus padding
+    ImGui::GetForegroundDrawList()->AddText(ImVec2(canvas_p0.x + 10, canvas_p1.y - 25), IM_COL32(200, 200, 200, 150), posStr);
+    // --- END OF BACKGROUND GRID AND COORDINATE DISPLAY ---
 
     // Node canvas bound to the underlying model if available
     ImNodes::BeginNodeEditor();
     // Begin the editor
-
-    linkIdToAttrs.clear();
 
     // +++ ADD THIS LINE AT THE START OF THE RENDER LOOP +++
     attrPositions.clear(); // Clear the cache at the beginning of each frame.
@@ -808,25 +954,33 @@ if (! n.hasType("node")) continue;
                 const int nid = (int) n.getProperty("id", 0);
                 const float x = (float) n.getProperty("x", 0.0f);
 const float y = (float) n.getProperty("y", 0.0f);
-                pendingNodePositions[nid] = ImVec2(x, y);
+                if (!(x == 0.0f && y == 0.0f))
+                    pendingNodePositions[nid] = ImVec2(x, y);
 }
             uiPending = {};
 }
 
         // Draw module nodes (exactly once per logical module)
+        // Graph is now always in consistent state since we rebuild at frame start
         std::unordered_set<int> drawnNodes;
         for (const auto& mod : synth->getModulesInfo())
         {
             const juce::uint32 lid = mod.first;
 const juce::String& type = mod.second;
 
-            // Highlight nodes participating in the hovered link
+            // Color-code modules by category (base colors)
+            const auto moduleCategory = getModuleCategory(type);
+            ImNodes::PushColorStyle(ImNodesCol_TitleBar, getImU32ForCategory(moduleCategory));
+            ImNodes::PushColorStyle(ImNodesCol_TitleBarHovered, getImU32ForCategory(moduleCategory, true));
+            ImNodes::PushColorStyle(ImNodesCol_TitleBarSelected, getImU32ForCategory(moduleCategory, true));
+
+            // Highlight nodes participating in the hovered link (overrides category color)
             const bool isHoveredSource = (hoveredLinkSrcId != 0 && hoveredLinkSrcId == (juce::uint32) lid);
             const bool isHoveredDest   = (hoveredLinkDstId != 0 && hoveredLinkDstId == (juce::uint32) lid);
             if (isHoveredSource || isHoveredDest)
                 ImNodes::PushColorStyle(ImNodesCol_TitleBar, IM_COL32(255, 220, 0, 255));
 
-            // Visual feedback for muted nodes
+            // Visual feedback for muted nodes (overrides category color and hover)
             const bool isMuted = mutedNodeStates.count(lid) > 0;
             if (isMuted) {
                 ImNodes::PushStyleVar(ImNodesStyleVar_NodePadding, ImVec2(8, 8));
@@ -838,9 +992,6 @@ const juce::String& type = mod.second;
             ImNodes::BeginNodeTitleBar();
             ImGui::TextUnformatted (type.toRawUTF8());
             ImNodes::EndNodeTitleBar();
-
-            if (isHoveredSource || isHoveredDest)
-                ImNodes::PopColorStyle();
 
             // Constrain node content width for compact layout and predictable label placement
             const float nodeContentWidth = 240.0f;
@@ -1150,8 +1301,8 @@ if (auto* mp = synth->getModuleForLogical (lid))
                 };
             helpers.drawAudioInputPin = [&](const char* label, int channel)
             {
-                int attr = getAttrId((juce::uint32)lid, channel, true, false);
-                seenAttrs.insert(attr); // Always insert, no warning needed - getAttrId is designed to return consistent IDs
+                int attr = encodePinId({lid, channel, true});
+                seenAttrs.insert(attr);
                 availableAttrs.insert(attr);
 
                 // Get pin data type for color coding
@@ -1203,8 +1354,8 @@ if (auto* mp = synth->getModuleForLogical (lid))
             };
             helpers.drawAudioOutputPin = [&](const char* label, int channel)
             {
-                int attr = getAttrId((juce::uint32)lid, channel, false, false);
-                seenAttrs.insert(attr); // Always insert, no warning needed - getAttrId is designed to return consistent IDs
+                int attr = encodePinId({lid, channel, false});
+                seenAttrs.insert(attr);
                 availableAttrs.insert(attr);
 
                 PinID pinId = { lid, channel, false, false, "" };
@@ -1253,7 +1404,7 @@ if (auto* mp = synth->getModuleForLogical (lid))
                 // Draw Input Pin (Left Side) - only if inLabel is provided
                 if (inLabel != nullptr)
                 {
-                    int attr = getAttrId((juce::uint32)lid, inChannel, true, false);
+                    int attr = encodePinId({lid, inChannel, true});
                     seenAttrs.insert(attr);
                     availableAttrs.insert(attr);
 
@@ -1307,7 +1458,7 @@ if (auto* mp = synth->getModuleForLogical (lid))
                 // Draw Output Pin (Right Side) - only if outLabel is provided
                 if (outLabel != nullptr)
                 {
-                    int attr = getAttrId((juce::uint32)lid, outChannel, false, false);
+                    int attr = encodePinId({lid, outChannel, false});
                     seenAttrs.insert(attr);
                     availableAttrs.insert(attr);
 
@@ -1374,12 +1525,25 @@ if (auto* mp = synth->getModuleForLogical (lid))
 
             ImNodes::EndNode();
             
-            // Pop muted node styles
+            // Cache position for snapshot safety
+            // Graph is always in consistent state since we rebuild at frame start
+            lastKnownNodePositions[(int)lid] = ImNodes::GetNodeGridSpacePos((int)lid);
+            
+            // Pop muted node styles (in reverse order of push)
             if (isMuted) {
-                ImNodes::PopColorStyle();
-                ImGui::PopStyleVar();
-                ImNodes::PopStyleVar();
+                ImNodes::PopColorStyle();      // Mute TitleBar
+                ImGui::PopStyleVar();          // Alpha
+                ImNodes::PopStyleVar();        // NodePadding
             }
+            
+            // Pop hover highlight color
+            if (isHoveredSource || isHoveredDest)
+                ImNodes::PopColorStyle();      // Hover TitleBar
+            
+            // Pop category colors (in reverse order of push)
+            ImNodes::PopColorStyle();          // TitleBarSelected
+            ImNodes::PopColorStyle();          // TitleBarHovered
+            ImNodes::PopColorStyle();          // TitleBar
             
             // Apply pending placement if queued
             if (auto itS = pendingNodeScreenPositions.find((int) lid); itS != pendingNodeScreenPositions.end())
@@ -1387,10 +1551,27 @@ if (auto* mp = synth->getModuleForLogical (lid))
                 ImNodes::SetNodeScreenSpacePos((int) lid, itS->second);
                 pendingNodeScreenPositions.erase(itS);
             }
-            if (auto it = pendingNodePositions.find((int) lid); it != pendingNodePositions.end())
+        if (auto it = pendingNodePositions.find((int) lid); it != pendingNodePositions.end())
+        {
+            // Apply saved position once; do not write (0,0) defaults
+            const ImVec2 p = it->second;
+            if (!(p.x == 0.0f && p.y == 0.0f))
             {
-                ImNodes::SetNodeGridSpacePos((int) lid, it->second);
-                pendingNodePositions.erase(it);
+                ImNodes::SetNodeGridSpacePos((int) lid, p);
+                juce::Logger::writeToLog("[PositionRestore] Applied pending position for node " + juce::String((int)lid) + ": (" + juce::String(p.x) + ", " + juce::String(p.y) + ")");
+            }
+            pendingNodePositions.erase(it);
+        }
+            // Apply pending size if queued (for Comment nodes to prevent feedback loop)
+            if (auto itSize = pendingNodeSizes.find((int) lid); itSize != pendingNodeSizes.end())
+            {
+                // Store the desired size in the Comment module itself
+                if (auto* comment = dynamic_cast<CommentModuleProcessor*>(synth->getModuleForLogical((juce::uint32)lid)))
+                {
+                    comment->nodeWidth = itSize->second.x;
+                    comment->nodeHeight = itSize->second.y;
+                }
+                pendingNodeSizes.erase(itSize);
             }
             drawnNodes.insert((int) lid);
         }
@@ -1435,6 +1616,12 @@ if (auto* mp = synth->getModuleForLogical (lid))
             mixerShortcutCooldown = false;
             insertNodeShortcutCooldown = false;
         }
+        // Ctrl+R: Record Output
+        if (ctrlDown && ImGui::IsKeyPressed(ImGuiKey_R, false))
+        {
+            handleRecordOutput();
+        }
+        
         if ((triggerInsertMixer || (selectedLogicalId != 0 && ctrlDown && ImGui::IsKeyPressed(ImGuiKey_T))) && !mixerShortcutCooldown)
         {
             mixerShortcutCooldown = true; // Prevent re-triggering in the same frame
@@ -1463,11 +1650,33 @@ if (auto* mp = synth->getModuleForLogical (lid))
                     juce::Logger::writeToLog("  - Stored connection: [Src: " + juce::String(c.srcLogicalId) + ":" + juce::String(c.srcChan) + "] -> [Dst: " + destStr + ":" + juce::String(c.dstChan) + "]");
                 }
 
-                // 2. Create and position the new mixer node
+                // 2. Create and position the new mixer node intelligently
                 auto mixNodeIdGraph = synth->addModule("Mixer");
                 const juce::uint32 mixLid = synth->getLogicalIdForNode(mixNodeIdGraph);
-                ImVec2 pos = ImNodes::GetNodeGridSpacePos(selectedLogicalId);
-                pendingNodePositions[(int)mixLid] = ImVec2(pos.x + 300.0f, pos.y);
+                
+                ImVec2 srcPos = ImNodes::GetNodeGridSpacePos(selectedLogicalId);
+                ImVec2 avgDestPos = srcPos; // Default to source pos if no outputs
+                
+                if (!outgoingConnections.empty())
+                {
+                    float totalX = 0.0f, totalY = 0.0f;
+                    for (const auto& c : outgoingConnections)
+                    {
+                        int destId = c.dstIsOutput ? 0 : (int)c.dstLogicalId;
+                        ImVec2 pos = ImNodes::GetNodeGridSpacePos(destId);
+                        totalX += pos.x;
+                        totalY += pos.y;
+                    }
+                    avgDestPos = ImVec2(totalX / outgoingConnections.size(), totalY / outgoingConnections.size());
+                }
+                else
+                {
+                    // If there are no outgoing connections, place it to the right
+                    avgDestPos.x += 600.0f;
+                }
+                
+                // Place the new mixer halfway between the source and the average destination
+                pendingNodePositions[(int)mixLid] = ImVec2((srcPos.x + avgDestPos.x) * 0.5f, (srcPos.y + avgDestPos.y) * 0.5f);
                 juce::Logger::writeToLog("[InsertMixer] Added new Mixer. Logical ID: " + juce::String(mixLid) + ", Node ID: " + juce::String(mixNodeIdGraph.uid));
 
                 // 3. Disconnect all original outgoing links
@@ -1579,16 +1788,22 @@ if (auto* mp = synth->getModuleForLogical (lid))
         ImNodes::EndNodeTitleBar();
         if (isOutputHovered)
             ImNodes::PopColorStyle();
-        { int a = getAttrId(0, 0, true, false); seenAttrs.insert(a); availableAttrs.insert(a); ImNodes::BeginInputAttribute (a);
+        { int a = encodePinId({0, 0, true}); seenAttrs.insert(a); availableAttrs.insert(a); ImNodes::BeginInputAttribute (a);
         ImGui::Text ("In L");
         ImNodes::EndInputAttribute(); }
-        { int a = getAttrId(0, 1, true, false); seenAttrs.insert(a); availableAttrs.insert(a); ImNodes::BeginInputAttribute (a);
+        { int a = encodePinId({0, 1, true}); seenAttrs.insert(a); availableAttrs.insert(a); ImNodes::BeginInputAttribute (a);
         ImGui::Text ("In R");
         ImNodes::EndInputAttribute(); }
         ImNodes::EndNode();
+        
+        // Cache output node position for snapshot safety
+        // Graph is always in consistent state since we rebuild at frame start
+        lastKnownNodePositions[0] = ImNodes::GetNodeGridSpacePos(0);
+        
         if (auto it = pendingNodePositions.find(0); it != pendingNodePositions.end())
         {
             ImNodes::SetNodeGridSpacePos(0, it->second);
+            juce::Logger::writeToLog("[PositionRestore] Applied pending position for output node 0: (" + juce::String(it->second.x) + ", " + juce::String(it->second.y) + ")");
             pendingNodePositions.erase(it);
         }
         drawnNodes.insert(0);
@@ -1596,14 +1811,22 @@ if (auto* mp = synth->getModuleForLogical (lid))
         // Use last frame's hovered node id for highlighting (queried after EndNodeEditor)
         int hoveredNodeId = lastHoveredNodeId;
 
-        // Draw existing audio connections (IDs stable via registry)
+        // Draw existing audio connections (IDs stable via bitmasking)
+        int cableIdx = 0;
         for (const auto& c : synth->getConnectionsInfo())
         {
+            
             // Skip links whose nodes weren't drawn this frame (e.g., just deleted)
-            if (c.srcLogicalId != 0 && ! drawnNodes.count((int) c.srcLogicalId)) continue;
-            if (! c.dstIsOutput && c.dstLogicalId != 0 && ! drawnNodes.count((int) c.dstLogicalId)) continue;
-            const int srcAttr = getAttrId(c.srcLogicalId, c.srcChan, false, false);
-            const int dstAttr = c.dstIsOutput ? getAttrId(0, c.dstChan, true, false) : getAttrId(c.dstLogicalId, c.dstChan, true, false);
+            if (c.srcLogicalId != 0 && ! drawnNodes.count((int) c.srcLogicalId)) {
+                continue;
+            }
+            if (! c.dstIsOutput && c.dstLogicalId != 0 && ! drawnNodes.count((int) c.dstLogicalId)) {
+                continue;
+            }
+            
+            const int srcAttr = encodePinId({c.srcLogicalId, c.srcChan, false});
+            const int dstAttr = c.dstIsOutput ? encodePinId({0, c.dstChan, true}) : encodePinId({c.dstLogicalId, c.dstChan, true});
+            
             if (! availableAttrs.count(srcAttr) || ! availableAttrs.count(dstAttr))
             {
                 static std::unordered_set<std::string> skipOnce;
@@ -1620,11 +1843,12 @@ if (auto* mp = synth->getModuleForLogical (lid))
                 }
                 continue;
             }
+            
             const int linkId = linkIdOf(srcAttr, dstAttr);
             linkIdToAttrs[linkId] = { srcAttr, dstAttr };
             
             // Determine the data type of the source pin for color coding
-            auto srcPin = decodeAttr(srcAttr);
+            auto srcPin = decodePinId(srcAttr);
             PinDataType linkDataType = getPinDataTypeForPin(srcPin);
             ImU32 linkColor = getImU32ForType(linkDataType);
             
@@ -1691,7 +1915,7 @@ if (auto* mp = synth->getModuleForLogical (lid))
             }
         }
     }
-    
+
     // --- Handle Auto-Connect Requests using new intelligent system ---
     handleAutoConnectionRequests();
 
@@ -1703,6 +1927,7 @@ if (auto* mp = synth->getModuleForLogical (lid))
     // Declare these variables ONCE, immediately after the editor has ended.
     // All subsequent features that need to know about hovered links can now
     // safely reuse these results without causing redefinition or scope errors.
+    // Graph is always in consistent state since we rebuild at frame start
     int hoveredLinkId = -1;
     bool isLinkHovered = ImNodes::IsLinkHovered(&hoveredLinkId);
     // --- END OF CONSOLIDATED DECLARATION ---
@@ -1738,8 +1963,8 @@ if (auto* mp = synth->getModuleForLogical (lid))
             auto& attrs = linkIdToAttrs[hoveredLinkId];
             juce::Logger::writeToLog("[InsertNode][RC] Audio link attrs: srcAttr=" + juce::String(attrs.first) +
                                       " dstAttr=" + juce::String(attrs.second));
-            linkToInsertOn.srcPin = decodeAttr(attrs.first);
-            linkToInsertOn.dstPin = decodeAttr(attrs.second);
+            linkToInsertOn.srcPin = decodePinId(attrs.first);
+            linkToInsertOn.dstPin = decodePinId(attrs.second);
             juce::Logger::writeToLog("[InsertNode][RC] Audio pins: src(lid=" + juce::String((int)linkToInsertOn.srcPin.logicalId) +
                                       ",ch=" + juce::String(linkToInsertOn.srcPin.channel) +
                                       ",in=" + juce::String((int)linkToInsertOn.srcPin.isInput) + ") -> dst(lid=" +
@@ -1831,8 +2056,8 @@ if (auto* mp = synth->getModuleForLogical (lid))
             if (ImNodes::IsPinHovered(&hoveredPinId) && hoveredPinId != -1)
             {
                 // User dropped the link on a pin.
-                auto srcPin = decodeAttr(splittingFromAttrId);
-                auto dstPin = decodeAttr(hoveredPinId);
+                auto srcPin = decodePinId(splittingFromAttrId);
+                auto dstPin = decodePinId(hoveredPinId);
 
                 // Ensure the connection is valid (Output -> Input).
                 if (!srcPin.isInput && dstPin.isInput)
@@ -1909,8 +2134,8 @@ if (auto* mp = synth->getModuleForLogical (lid))
         if (auto it = linkIdToAttrs.find(id); it != linkIdToAttrs.end())
         {
             linkToInsertOn.isMod = false;
-            linkToInsertOn.srcPin = decodeAttr(it->second.first);
-            linkToInsertOn.dstPin = decodeAttr(it->second.second);
+            linkToInsertOn.srcPin = decodePinId(it->second.first);
+            linkToInsertOn.dstPin = decodePinId(it->second.second);
             captured = true;
             juce::Logger::writeToLog("[InsertNode][RC-Fallback] Audio link captured id=" + juce::String(id));
         }
@@ -1928,114 +2153,61 @@ if (auto* mp = synth->getModuleForLogical (lid))
     // This function draws the popup if the popup is open.
     drawInsertNodeOnLinkPopup();
 
-    // --- Cable Inspector: hovered link tooltip and highlight ---
-    hoveredLinkSrcId = 0; hoveredLinkDstId = 0;
-    // 3. Handle Cable Inspector Tooltip (only if no popup is open)
-    if (!ImGui::IsPopupOpen("InsertNodeOnLinkPopup") && isLinkHovered && hoveredLinkId != -1 && synth != nullptr)
+    // --- Cable Inspector: Stateless, rebuild-safe implementation ---
+    hoveredLinkSrcId = 0;
+    hoveredLinkDstId = 0;
+
+    // Skip inspector if popups are open (graph is always in consistent state now)
+    const bool anyPopupOpen = ImGui::IsPopupOpen("InsertNodeOnLinkPopup") || ImGui::IsPopupOpen("AddModulePopup");
+    // Do not early-return here; we still need to finish the frame and close any ImGui scopes.
+
+    if (!anyPopupOpen && isLinkHovered && hoveredLinkId != -1 && synth != nullptr)
     {
+        // Safety: Re-verify link still exists in our mapping
         auto it = linkIdToAttrs.find(hoveredLinkId);
         if (it != linkIdToAttrs.end())
         {
-            auto srcPin = decodeAttr(it->second.first);
-            auto dstPin = decodeAttr(it->second.second);
+            auto srcPin = decodePinId(it->second.first);
+            auto dstPin = decodePinId(it->second.second);
+
+            // Set highlight IDs for this frame only
             hoveredLinkSrcId = srcPin.logicalId;
             hoveredLinkDstId = (dstPin.logicalId == 0) ? kOutputHighlightId : dstPin.logicalId;
 
+            // Query source module (no caching - stateless)
             if (auto* srcModule = synth->getModuleForLogical(srcPin.logicalId))
             {
-                const float v = srcModule->getOutputChannelValue(srcPin.channel);
-                // Update rolling history
-                const double nowSec = juce::Time::getMillisecondCounterHiRes() * 0.001;
-                auto& hist = inspectorHistory[{ srcPin.logicalId, srcPin.channel }];
-                hist.samples.emplace_back(nowSec, v);
-                const double cutoff = nowSec - inspectorWindowSeconds;
-                while (!hist.samples.empty() && hist.samples.front().first < cutoff) hist.samples.pop_front();
-                float vmin = v, vmax = v;
-                for (const auto& pr : hist.samples) { vmin = std::min(vmin, pr.second); vmax = std::max(vmax, pr.second); }
-                ImGui::BeginTooltip();
-                ImGui::Text("Value: %.3f", v);
-                ImGui::Text("%.1fs Min: %.3f", inspectorWindowSeconds, vmin);
-                ImGui::Text("%.1fs Max: %.3f", inspectorWindowSeconds, vmax);
-                ImGui::Text("From: %s (ID %u)", srcModule->getName().toRawUTF8(), (unsigned) srcPin.logicalId);
-                ImGui::Text("  Pin: %s", srcModule->getAudioOutputLabel(srcPin.channel).toRawUTF8());
-
-                const bool hoveredIsModLink = false; // TODO: (modLinkIdToRoute.find(hoveredLinkId) != modLinkIdToRoute.end());
-                if (!hoveredIsModLink)
+                // Validate channel index
+                const int numOutputs = srcModule->getTotalNumOutputChannels();
+                if (srcPin.channel >= 0 && srcPin.channel < numOutputs)
                 {
-                    if (dstPin.logicalId == 0)
-                    {
-                        ImGui::Text("To:   Main Output");
-                        ImGui::Text("  Pin: %s", (dstPin.channel == 0 ? "In L" : "In R"));
-                    }
-                    else if (auto* dstModule = synth->getModuleForLogical(dstPin.logicalId))
-                    {
-                        ImGui::Text("To:   %s (ID %u)", dstModule->getName().toRawUTF8(), (unsigned) dstPin.logicalId);
-                        ImGui::Text("  Pin: %s", dstModule->getAudioInputLabel(dstPin.channel).toRawUTF8());
-                    }
-                }
+                    // Optional: Throttle value sampling to 60 Hz (every 16.67ms)
+                    // For now, query every frame for responsive UI
+                    const float liveValue = srcModule->getOutputChannelValue(srcPin.channel);
+                    const juce::String srcName = srcModule->getName();
+                    const juce::String srcLabel = srcModule->getAudioOutputLabel(srcPin.channel);
 
-                // If this is a modulation link, show destination parameter details
-                // TODO: Handle modulation link inspection for new bus-based system
-                // if (auto itM = modLinkIdToRoute.find(hoveredLinkId); itM != modLinkIdToRoute.end())
-                // {
-                //     int sL, sC, dL; juce::String paramId; std::tie(sL, sC, dL, paramId) = itM->second;
-                //     if (auto* dstModule = synth->getModuleForLogical((juce::uint32) dL))
-                //     {
-                //         auto& ap = dstModule->getAPVTS();
-                //         if (auto* p = ap.getParameter(paramId))
-                //         {
-                //             ImGui::Separator();
-                //             ImGui::Text("To:   %s (ID %u)", dstModule->getName().toRawUTF8(), (unsigned) dL);
-                //             ImGui::Text("Param: %s", paramId.toRawUTF8());
-                //             if (auto* pf = dynamic_cast<juce::AudioParameterFloat*>(p))
-                //             {
-                //                 const auto& r = pf->range; const float pv = pf->get();
-                //                 ImGui::Text("Type: float  Value: %.4f  Range: [%.4f .. %.4f]", pv, r.start, r.end);
-                //             }
-                //             else if (auto* pi = dynamic_cast<juce::AudioParameterInt*>(p))
-                //             {
-                //                 const auto& r = pi->getNormalisableRange();
-                //                 ImGui::Text("Type: int    Value: %d  Range: [%d .. %d]", (int) pi->get(), (int) r.start, (int) r.end);
-                //             }
-                //             else if (auto* pb = dynamic_cast<juce::AudioParameterBool*>(p))
-                //             {
-                //                 ImGui::Text("Type: bool   Value: %s", (*pb ? "true" : "false"));
-                //             }
-                //             else if (auto* pc = dynamic_cast<juce::AudioParameterChoice*>(p))
-                //             {
-                //                 ImGui::Text("Type: choice Value: %s (index %d)", pc->getCurrentChoiceName().toRawUTF8(), pc->getIndex());
-                //             }
-                //             else
-                //             {
-                //                 ImGui::Text("Type: unknown");
-                //             }
-                //         }
-                //     }
-                // }
-                ImGui::EndTooltip();
+                    // Render tooltip (stateless - no caching)
+                    ImGui::BeginTooltip();
+                    ImGui::Text("Value: %.3f", liveValue);
+                    ImGui::Text("From: %s (ID %u)", srcName.toRawUTF8(), (unsigned)srcPin.logicalId);
+                    if (srcLabel.isNotEmpty())
+                        ImGui::Text("Pin: %s", srcLabel.toRawUTF8());
+                    ImGui::EndTooltip();
+                }
             }
         }
     }
-
-    // Deferred graph rebuild (once per frame)
-    if (graphNeedsRebuild.load())
-    {
-        if (synth)
-        {
-            synth->commitChanges();
-        }
-        graphNeedsRebuild = false;
-    }
+    
 
     // Update hovered node/link id for next frame (must be called outside editor scope)
-    {
-        int hv = -1;
-        if (ImNodes::IsNodeHovered(&hv)) lastHoveredNodeId = hv; else lastHoveredNodeId = -1;
-    }
-    {
-        int hl = -1;
-        if (ImNodes::IsLinkHovered(&hl)) lastHoveredLinkId = hl; else lastHoveredLinkId = -1;
-    }
+    // Graph is always in consistent state since we rebuild at frame start
+    int hv = -1;
+    if (ImNodes::IsNodeHovered(&hv)) lastHoveredNodeId = hv; else lastHoveredNodeId = -1;
+    
+    int hl = -1;
+    if (ImNodes::IsLinkHovered(&hl)) lastHoveredLinkId = hl; else lastHoveredLinkId = -1;
+    
 
     // Shortcut: press 'I' while hovering a link to open Insert-on-Link popup (bypasses mouse handling)
     if (ImGui::IsKeyPressed(ImGuiKey_I) && lastHoveredLinkId != -1 && !ImGui::IsPopupOpen("InsertNodeOnLinkPopup"))
@@ -2059,8 +2231,8 @@ if (auto* mp = synth->getModuleForLogical (lid))
         if (auto it = linkIdToAttrs.find(lastHoveredLinkId); it != linkIdToAttrs.end())
         {
             linkToInsertOn.isMod = false;
-            linkToInsertOn.srcPin = decodeAttr(it->second.first);
-            linkToInsertOn.dstPin = decodeAttr(it->second.second);
+            linkToInsertOn.srcPin = decodePinId(it->second.first);
+            linkToInsertOn.dstPin = decodePinId(it->second.second);
             captured = true;
             juce::Logger::writeToLog("[InsertNode][KeyI] Audio link captured id=" + juce::String(lastHoveredLinkId));
         }
@@ -2101,122 +2273,163 @@ if (auto* mp = synth->getModuleForLogical (lid))
                 ImGui::OpenPopup("AddModulePopup");
         }
 
+        // --- REVISED AND IMPROVED "QUICK ADD" POPUP ---
         if (ImGui::BeginPopup("AddModulePopup"))
         {
+            static char searchQuery[128] = "";
+
+            // Auto-focus the search bar when the popup opens and clear any previous search
+            if (ImGui::IsWindowAppearing()) {
+                ImGui::SetKeyboardFocusHere(0);
+                searchQuery[0] = '\0';
+            }
+            
+            ImGui::Text("Add Module");
+            ImGui::PushItemWidth(250.0f);
+            if (ImGui::InputText("Search", searchQuery, sizeof(searchQuery))) {
+                // Text was changed
+            }
+            ImGui::PopItemWidth();
+            ImGui::Separator();
+
             auto addAtMouse = [this](const char* type) {
                 auto nodeId = synth->addModule(type);
-                const ImVec2 mouse = ImGui::GetMousePos();
                 const int logicalId = (int) synth->getLogicalIdForNode (nodeId);
-                pendingNodeScreenPositions[logicalId] = mouse;
-                snapshotAfterEditor = true;
-            };
-
-            if (ImGui::BeginMenu("Sources")) {
-                if (ImGui::MenuItem("Audio Input")) addAtMouse("audio input");
-                if (ImGui::MenuItem("VCO")) addAtMouse("VCO");
-                if (ImGui::MenuItem("Polyphonic VCO")) addAtMouse("polyvco");
-                if (ImGui::MenuItem("Noise")) addAtMouse("Noise");
-                if (ImGui::MenuItem("Sequencer")) addAtMouse("Sequencer");
-                if (ImGui::MenuItem("Multi Sequencer")) addAtMouse("multi sequencer");
-                if (ImGui::MenuItem("MIDI Player")) addAtMouse("midi player");
-                if (ImGui::MenuItem("Value")) addAtMouse("Value");
-                if (ImGui::MenuItem("Sample Loader")) addAtMouse("sample loader");
-                ImGui::EndMenu();
-            }
-            if (ImGui::BeginMenu("TTS")) {
-                if (ImGui::MenuItem("TTS Performer")) addAtMouse("TTS Performer");
-                if (ImGui::MenuItem("Vocal Tract Filter")) addAtMouse("Vocal Tract Filter");
-                ImGui::EndMenu();
-            }
-            if (ImGui::BeginMenu("Effects")) {
-                if (ImGui::MenuItem("VCF")) addAtMouse("VCF");
-            if (ImGui::MenuItem("Delay")) addAtMouse("Delay");
-            if (ImGui::MenuItem("Reverb")) addAtMouse("Reverb");
-                if (ImGui::MenuItem("Chorus")) addAtMouse("chorus");
-                if (ImGui::MenuItem("Phaser")) addAtMouse("phaser");
-                if (ImGui::MenuItem("Compressor")) addAtMouse("compressor");
-                if (ImGui::MenuItem("Recorder")) addAtMouse("recorder");
-                if (ImGui::MenuItem("Limiter")) addAtMouse("limiter");
-                if (ImGui::MenuItem("Noise Gate")) addAtMouse("gate");
-                if (ImGui::MenuItem("Drive")) addAtMouse("drive");
-                if (ImGui::MenuItem("Graphic EQ")) addAtMouse("graphic eq");
-                if (ImGui::MenuItem("Waveshaper")) addAtMouse("Waveshaper");
-                if (ImGui::MenuItem("8-Band Shaper")) addAtMouse("8bandshaper");
-                if (ImGui::MenuItem("Granulator")) addAtMouse("granulator");
-                if (ImGui::MenuItem("Harmonic Shaper")) addAtMouse("harmonic shaper");
-                ImGui::EndMenu();
-            }
-            if (ImGui::BeginMenu("Modulators")) {
-                if (ImGui::MenuItem("LFO")) addAtMouse("LFO");
-                if (ImGui::MenuItem("ADSR")) addAtMouse("ADSR");
-                if (ImGui::MenuItem("Random")) addAtMouse("Random");
-                if (ImGui::MenuItem("S&H")) addAtMouse("S&H");
-                if (ImGui::MenuItem("Function Generator")) addAtMouse("Function Generator");
-                if (ImGui::MenuItem("Shaping Oscillator")) addAtMouse("shaping oscillator");
-                ImGui::EndMenu();
-            }
-            if (ImGui::BeginMenu("Utilities & Logic")) {
-                if (ImGui::MenuItem("VCA")) addAtMouse("VCA");
-                if (ImGui::MenuItem("Mixer")) addAtMouse("Mixer");
-                if (ImGui::MenuItem("CV Mixer")) addAtMouse("cv mixer");
-                if (ImGui::MenuItem("Track Mixer")) addAtMouse("trackmixer");
-                if (ImGui::MenuItem("Attenuverter")) addAtMouse("Attenuverter");
-                if (ImGui::MenuItem("Lag Processor")) addAtMouse("Lag Processor");
-                if (ImGui::MenuItem("De-Crackle")) addAtMouse("De-Crackle");
-                if (ImGui::MenuItem("Math")) addAtMouse("Math");
-                if (ImGui::MenuItem("Map Range")) addAtMouse("MapRange");
-                if (ImGui::MenuItem("Quantizer")) addAtMouse("Quantizer");
-                if (ImGui::MenuItem("Rate")) addAtMouse("Rate");
-                if (ImGui::MenuItem("Comparator")) addAtMouse("Comparator");
-                if (ImGui::MenuItem("Logic")) addAtMouse("Logic");
-                if (ImGui::MenuItem("Clock Divider")) addAtMouse("ClockDivider");
-                if (ImGui::MenuItem("Sequential Switch")) addAtMouse("SequentialSwitch");
-                if (ImGui::MenuItem("Best Practice")) addAtMouse("best practice");
-                ImGui::EndMenu();
-            }
-            if (ImGui::BeginMenu("Analysis")) {
-                if (ImGui::MenuItem("Scope")) addAtMouse("Scope");
-                if (ImGui::MenuItem("Debug")) addAtMouse("debug");
-                if (ImGui::MenuItem("Input Debug")) addAtMouse("input debug");
-                if (ImGui::MenuItem("Frequency Graph")) addAtMouse("Frequency Graph");
-                ImGui::EndMenu();
-            }
-            
-            // VST Plugins submenu
-            ImGui::Separator();
-            if (ImGui::BeginMenu("VST Plugins"))
-            {
-                auto& app = PresetCreatorApplication::getApp();
-                auto& formatManager = app.getPluginFormatManager();
-                auto& knownPluginList = app.getKnownPluginList();
+                // This places the new node exactly where the user right-clicked
+                pendingNodeScreenPositions[logicalId] = ImGui::GetMousePosOnOpeningCurrentPopup();
                 
-                for (const auto& desc : knownPluginList.getTypes())
+                // Special handling for recorder module
+                if (juce::String(type).equalsIgnoreCase("recorder"))
                 {
-                    if (ImGui::MenuItem(desc.name.toRawUTF8()))
+                    if (auto* recorder = dynamic_cast<RecordModuleProcessor*>(synth->getModuleForLogical((juce::uint32)logicalId)))
                     {
-                        if (synth != nullptr)
-                        {
-                            auto nodeId = synth->addVstModule(formatManager, desc);
-                            const ImVec2 mouse = ImGui::GetMousePos();
-                            const int logicalId = (int) synth->getLogicalIdForNode(nodeId);
-                            pendingNodeScreenPositions[logicalId] = mouse;
-                            snapshotAfterEditor = true;
-                        }
-                    }
-                    
-                    // Show tooltip with plugin info
-                    if (ImGui::IsItemHovered())
-                    {
-                        ImGui::BeginTooltip();
-                        ImGui::Text("Manufacturer: %s", desc.manufacturerName.toRawUTF8());
-                        ImGui::Text("Version: %s", desc.version.toRawUTF8());
-                        ImGui::Text("Format: %s", desc.pluginFormatName.toRawUTF8());
-                        ImGui::EndTooltip();
+                        recorder->setPropertiesFile(PresetCreatorApplication::getApp().getProperties());
                     }
                 }
-                ImGui::EndMenu();
-            }
+                
+                // Give comment nodes a default size to prevent feedback loop
+                if (juce::String(type).equalsIgnoreCase("comment"))
+                {
+                    pendingNodeSizes[logicalId] = ImVec2(250.f, 150.f);
+                }
+                
+                snapshotAfterEditor = true;
+                ImGui::CloseCurrentPopup();
+            };
             
+            juce::String filter(searchQuery);
+
+            ImGui::BeginChild("ModuleList", ImVec2(280, 350), true);
+
+            if (filter.isEmpty())
+            {
+                // --- BROWSE MODE (No text in search bar) ---
+                if (ImGui::BeginMenu("Sources")) {
+                    if (ImGui::MenuItem("Audio Input")) addAtMouse("audio input");
+                    if (ImGui::MenuItem("VCO")) addAtMouse("VCO");
+                    if (ImGui::MenuItem("Polyphonic VCO")) addAtMouse("polyvco");
+                    if (ImGui::MenuItem("Noise")) addAtMouse("Noise");
+                    if (ImGui::MenuItem("Sequencer")) addAtMouse("Sequencer");
+                    if (ImGui::MenuItem("Multi Sequencer")) addAtMouse("multi sequencer");
+                    if (ImGui::MenuItem("MIDI Player")) addAtMouse("midi player");
+                    if (ImGui::MenuItem("Value")) addAtMouse("Value");
+                    if (ImGui::MenuItem("Sample Loader")) addAtMouse("sample loader");
+                    ImGui::EndMenu();
+                }
+                if (ImGui::BeginMenu("TTS")) {
+                    if (ImGui::MenuItem("TTS Performer")) addAtMouse("TTS Performer");
+                    if (ImGui::MenuItem("Vocal Tract Filter")) addAtMouse("Vocal Tract Filter");
+                    ImGui::EndMenu();
+                }
+                if (ImGui::BeginMenu("Effects")) {
+                    if (ImGui::MenuItem("VCF")) addAtMouse("VCF");
+                    if (ImGui::MenuItem("Delay")) addAtMouse("Delay");
+                    if (ImGui::MenuItem("Reverb")) addAtMouse("Reverb");
+                    if (ImGui::MenuItem("Chorus")) addAtMouse("chorus");
+                    if (ImGui::MenuItem("Phaser")) addAtMouse("phaser");
+                    if (ImGui::MenuItem("Compressor")) addAtMouse("compressor");
+                    if (ImGui::MenuItem("Recorder")) addAtMouse("recorder");
+                    if (ImGui::MenuItem("Limiter")) addAtMouse("limiter");
+                    if (ImGui::MenuItem("Noise Gate")) addAtMouse("gate");
+                    if (ImGui::MenuItem("Drive")) addAtMouse("drive");
+                    if (ImGui::MenuItem("Graphic EQ")) addAtMouse("graphic eq");
+                    if (ImGui::MenuItem("Waveshaper")) addAtMouse("Waveshaper");
+                    if (ImGui::MenuItem("8-Band Shaper")) addAtMouse("8bandshaper");
+                    if (ImGui::MenuItem("Granulator")) addAtMouse("granulator");
+                    if (ImGui::MenuItem("Harmonic Shaper")) addAtMouse("harmonic shaper");
+                    if (ImGui::MenuItem("Time/Pitch Shifter")) addAtMouse("timepitch");
+                    if (ImGui::MenuItem("De-Crackle")) addAtMouse("De-Crackle");
+                    ImGui::EndMenu();
+                }
+                if (ImGui::BeginMenu("Modulators")) {
+                    if (ImGui::MenuItem("LFO")) addAtMouse("LFO");
+                    if (ImGui::MenuItem("ADSR")) addAtMouse("ADSR");
+                    if (ImGui::MenuItem("Random")) addAtMouse("Random");
+                    if (ImGui::MenuItem("S&H")) addAtMouse("S&H");
+                    if (ImGui::MenuItem("Function Generator")) addAtMouse("Function Generator");
+                    if (ImGui::MenuItem("Shaping Oscillator")) addAtMouse("shaping oscillator");
+                    ImGui::EndMenu();
+                }
+                if (ImGui::BeginMenu("Utilities & Logic")) {
+                    if (ImGui::MenuItem("VCA")) addAtMouse("VCA");
+                    if (ImGui::MenuItem("Mixer")) addAtMouse("Mixer");
+                    if (ImGui::MenuItem("CV Mixer")) addAtMouse("cv mixer");
+                    if (ImGui::MenuItem("Track Mixer")) addAtMouse("trackmixer");
+                    if (ImGui::MenuItem("Attenuverter")) addAtMouse("Attenuverter");
+                    if (ImGui::MenuItem("Lag Processor")) addAtMouse("Lag Processor");
+                    if (ImGui::MenuItem("Math")) addAtMouse("Math");
+                    if (ImGui::MenuItem("Map Range")) addAtMouse("MapRange");
+                    if (ImGui::MenuItem("Quantizer")) addAtMouse("Quantizer");
+                    if (ImGui::MenuItem("Rate")) addAtMouse("Rate");
+                    if (ImGui::MenuItem("Comparator")) addAtMouse("Comparator");
+                    if (ImGui::MenuItem("Logic")) addAtMouse("Logic");
+                    if (ImGui::MenuItem("Clock Divider")) addAtMouse("ClockDivider");
+                    if (ImGui::MenuItem("Sequential Switch")) addAtMouse("SequentialSwitch");
+                    if (ImGui::MenuItem("Comment")) addAtMouse("comment");
+                    if (ImGui::MenuItem("Best Practice")) addAtMouse("best practice");
+                    ImGui::EndMenu();
+                }
+                if (ImGui::BeginMenu("Analysis")) {
+                    if (ImGui::MenuItem("Scope")) addAtMouse("Scope");
+                    if (ImGui::MenuItem("Debug")) addAtMouse("debug");
+                    if (ImGui::MenuItem("Input Debug")) addAtMouse("input debug");
+                    if (ImGui::MenuItem("Frequency Graph")) addAtMouse("Frequency Graph");
+                    ImGui::EndMenu();
+                }
+                if (ImGui::BeginMenu("VST Plugins")) {
+                    addPluginModules(); // Re-use your existing plugin menu logic
+                    ImGui::EndMenu();
+                }
+            }
+            else
+            {
+                // --- SEARCH MODE (Text has been entered) ---
+                // Use the new registry to get display names and internal types
+                for (const auto& entry : getModuleRegistry())
+                {
+                    const juce::String& displayName = entry.first;
+                    const char* internalType = entry.second.first;
+                    const char* description = entry.second.second;
+
+                    // Search against the display name, not the internal type
+                    if (displayName.containsIgnoreCase(filter))
+                    {
+                        if (ImGui::Selectable(displayName.toRawUTF8()))
+                        {
+                            // Use the correct internal type name!
+                            addAtMouse(internalType);
+                        }
+                        if (ImGui::IsItemHovered())
+                        {
+                            ImGui::BeginTooltip();
+                            ImGui::TextUnformatted(description);
+                            ImGui::EndTooltip();
+                        }
+                    }
+                }
+            }
+
+            ImGui::EndChild();
             ImGui::EndPopup();
         }
 
@@ -2226,8 +2439,8 @@ if (auto* mp = synth->getModuleForLogical (lid))
         int startAttr = 0, endAttr = 0;
         if (ImNodes::IsLinkCreated(&startAttr, &endAttr))
         {
-            auto startPin = decodeAttr(startAttr);
-            auto endPin = decodeAttr(endAttr);
+            auto startPin = decodePinId(startAttr);
+            auto endPin = decodePinId(endAttr);
             auto srcPin = startPin.isInput ? endPin : startPin;
             auto dstPin = startPin.isInput ? startPin : endPin;
 
@@ -2273,8 +2486,8 @@ if (auto* mp = synth->getModuleForLogical (lid))
                     auto dstNode = (dstPin.logicalId == 0) ? synth->getOutputNodeID() : synth->getNodeIdForLogical(dstPin.logicalId);
 
                     synth->connect(srcNode, srcPin.channel, dstNode, dstPin.channel);
+                    // Immediate commit for RecordModuleProcessor filename update
                     synth->commitChanges();
-                    graphNeedsRebuild = false;
 
                     if (auto* dstModule = synth->getModuleForLogical(dstPin.logicalId)) {
                         if (auto* recorder = dynamic_cast<RecordModuleProcessor*>(dstModule)) {
@@ -2297,8 +2510,8 @@ if (auto* mp = synth->getModuleForLogical (lid))
         {
             if (auto it = linkIdToAttrs.find(linkId); it != linkIdToAttrs.end())
             {
-                auto srcPin = decodeAttr(it->second.first);
-                auto dstPin = decodeAttr(it->second.second);
+                auto srcPin = decodePinId(it->second.first);
+                auto dstPin = decodePinId(it->second.second);
                 
                 auto srcNode = synth->getNodeIdForLogical(srcPin.logicalId);
                 auto dstNode = (dstPin.logicalId == 0) ? synth->getOutputNodeID() : synth->getNodeIdForLogical(dstPin.logicalId);
@@ -2310,9 +2523,8 @@ if (auto* mp = synth->getModuleForLogical (lid))
 
                 synth->disconnect(srcNode, srcPin.channel, dstNode, dstPin.channel);
                 
-                // CORRECTED ORDER: Commit changes first
+                // Immediate commit for RecordModuleProcessor filename update
                 synth->commitChanges();
-                graphNeedsRebuild = false; // The rebuild is no longer pending
                 
                 // After disconnecting, tell the recorder to update (pass empty string for unconnected)
                 if (auto* dstModule = synth->getModuleForLogical(dstPin.logicalId))
@@ -2339,6 +2551,7 @@ if (auto* mp = synth->getModuleForLogical (lid))
         if (ctrl && ImGui::IsKeyPressed(ImGuiKey_P)) { handleRandomizePatch(); }
         if (ctrl && ImGui::IsKeyPressed(ImGuiKey_M)) { handleRandomizeConnections(); }
         if (ctrl && ImGui::IsKeyPressed(ImGuiKey_B)) { handleBeautifyLayout(); }
+        if (ctrl && !shift && !alt && ImGui::IsKeyPressed(ImGuiKey_R, false)) { handleRecordOutput(); }
         
         // M: Mute/Bypass selected nodes (without Ctrl modifier)
         if (!ctrl && !alt && !shift && ImGui::IsKeyPressed(ImGuiKey_M, false) && ImNodes::NumSelectedNodes() > 0)
@@ -2432,22 +2645,80 @@ if (auto* mp = synth->getModuleForLogical (lid))
             }
         }
         
-        // F: Frame Selected
-        if (!ctrl && !alt && !shift && ImGui::IsKeyPressed(ImGuiKey_F, false) && ImNodes::NumSelectedNodes() > 0)
-        {
-            std::vector<int> selectedNodeIds(ImNodes::NumSelectedNodes());
-            ImNodes::GetSelectedNodes(selectedNodeIds.data());
-            if (!selectedNodeIds.empty())
+        // --- REVISED 'F' and 'Home' KEY LOGIC ---
+        auto frameNodes = [&](const std::vector<int>& nodeIds) {
+            if (nodeIds.empty() || synth == nullptr) return;
+
+            juce::Rectangle<float> bounds;
+            bool foundAny = false;
+            
+            // Build a set of valid node IDs for checking
+            std::unordered_set<int> validNodes;
+            validNodes.insert(0); // Output node
+            for (const auto& mod : synth->getModulesInfo())
+                validNodes.insert((int)mod.first);
+            
+            for (size_t i = 0; i < nodeIds.size(); ++i)
             {
-                ImVec2 centerPos = ImNodes::GetNodeGridSpacePos(selectedNodeIds[0]);
-                ImNodes::EditorContextResetPanning(centerPos);
+                // Ensure the node exists before getting its position
+                if (validNodes.find(nodeIds[i]) != validNodes.end())
+                {
+                    ImVec2 pos = ImNodes::GetNodeGridSpacePos(nodeIds[i]);
+                    if (!foundAny)
+                    {
+                        bounds = juce::Rectangle<float>(pos.x, pos.y, 1, 1);
+                        foundAny = true;
+                    }
+                    else
+                    {
+                        bounds = bounds.getUnion(juce::Rectangle<float>(pos.x, pos.y, 1, 1));
+                    }
+                }
+            }
+
+            if (!foundAny) return;
+
+            // Add some padding to the bounds
+            if (!nodeIds.empty() && validNodes.find(nodeIds[0]) != validNodes.end())
+                bounds = bounds.expanded(ImNodes::GetNodeDimensions(nodeIds[0]).x, ImNodes::GetNodeDimensions(nodeIds[0]).y);
+            
+            ImVec2 center((bounds.getX() + bounds.getRight()) * 0.5f, (bounds.getY() + bounds.getBottom()) * 0.5f);
+            ImNodes::EditorContextResetPanning(center);
+        };
+
+        // F: Frame Selected
+        if (!ctrl && !alt && !shift && ImGui::IsKeyPressed(ImGuiKey_F, false))
+        {
+            const int numSelected = ImNodes::NumSelectedNodes();
+            if (numSelected > 0)
+            {
+                std::vector<int> selectedNodeIds(numSelected);
+                ImNodes::GetSelectedNodes(selectedNodeIds.data());
+                frameNodes(selectedNodeIds);
             }
         }
-        
-        // Home: Frame All
+
+        // Home and Ctrl+Home: Frame All / Reset to Origin
         if (ImGui::IsKeyPressed(ImGuiKey_Home, false))
         {
-            ImNodes::EditorContextResetPanning(ImVec2(0, 0));
+            if (ctrl) // Ctrl+Home: Reset to origin
+            {
+                ImNodes::EditorContextResetPanning(ImVec2(0, 0));
+            }
+            else // Home: Frame all
+            {
+                if (synth != nullptr)
+                {
+                    auto modules = synth->getModulesInfo();
+                    std::vector<int> allNodeIds;
+                    allNodeIds.push_back(0); // Include output node
+                    for (const auto& mod : modules)
+                    {
+                        allNodeIds.push_back((int)mod.first);
+                    }
+                    frameNodes(allNodeIds);
+                }
+            }
         }
         
         // Debug menu (Ctrl+Shift+D)
@@ -2618,7 +2889,7 @@ if (auto* mp = synth->getModuleForLogical (lid))
         ImGui::Separator();
         ImGui::BulletText("M: Mute/Bypass selected node(s).");
         ImGui::BulletText("Ctrl + A: Select all nodes.");
-        ImGui::BulletText("Ctrl + R: Reset selected node(s) to default parameters.");
+        ImGui::BulletText("Ctrl + R: Insert a Recorder tapped into the Main Output.");
         
         ImGui::Spacing();
         ImGui::Text("Connection & Signal Flow");
@@ -2671,6 +2942,11 @@ void ImGuiNodeEditorComponent::pushSnapshot()
     // by applying them immediately before capturing.
     if (! pendingNodePositions.empty())
     {
+        // Temporarily mask rebuild flag to avoid ImNodes queries during capture
+        const bool rebuilding = graphNeedsRebuild.load();
+        if (rebuilding) {
+            // getUiValueTree will still avoid ImNodes now, but assert safety
+        }
         juce::ValueTree applied = getUiValueTree();
         for (const auto& kv : pendingNodePositions)
         {
@@ -2680,6 +2956,21 @@ void ImGuiNodeEditorComponent::pushSnapshot()
                 auto n = applied.getChild(i);
                 if (n.hasType("node") && (int) n.getProperty("id", -1) == kv.first)
                 { n.setProperty("x", kv.second.x, nullptr); n.setProperty("y", kv.second.y, nullptr); break; }
+            }
+        }
+        // Do not commit pending positions of (0,0) which are placeholders
+        for (int i = 0; i < applied.getNumChildren(); ++i)
+        {
+            auto n = applied.getChild(i);
+            if (! n.hasType("node")) continue;
+            const float x = (float) n.getProperty("x", 0.0f);
+            const float y = (float) n.getProperty("y", 0.0f);
+            if (x == 0.0f && y == 0.0f) {
+                // Try to recover from last-known or pending
+                const int nid = (int) n.getProperty("id", -1);
+                auto itL = lastKnownNodePositions.find(nid);
+                if (itL != lastKnownNodePositions.end()) { n.setProperty("x", itL->second.x, nullptr); n.setProperty("y", itL->second.y, nullptr); }
+                else if (auto itP = pendingNodePositions.find(nid); itP != pendingNodePositions.end()) { n.setProperty("x", itP->second.x, nullptr); n.setProperty("y", itP->second.y, nullptr); }
             }
         }
         Snapshot s; s.uiState = applied; if (synth != nullptr) synth->getStateInformation (s.synthState);
@@ -2723,7 +3014,24 @@ juce::ValueTree ImGuiNodeEditorComponent::getUiValueTree()
     for (const auto& mod : synth->getModulesInfo())
     {
         const int nid = (int) mod.first;
-        const ImVec2 pos = ImNodes::GetNodeGridSpacePos(nid);
+        
+        // Prefer cached position if available; never query ImNodes while rebuilding
+        ImVec2 pos;
+        if (lastKnownNodePositions.count(nid) > 0)
+        {
+            pos = lastKnownNodePositions[nid];
+        }
+        else if (graphNeedsRebuild.load())
+        {
+            // Fallback to any pending position queued for this node
+            auto it = pendingNodePositions.find(nid);
+            pos = (it != pendingNodePositions.end()) ? it->second : ImVec2(0.0f, 0.0f);
+        }
+        else
+        {
+            pos = ImNodes::GetNodeGridSpacePos(nid);
+        }
+        
         juce::ValueTree n ("node");
         n.setProperty ("id", nid, nullptr);
         n.setProperty ("x", pos.x, nullptr);
@@ -2741,7 +3049,19 @@ juce::ValueTree ImGuiNodeEditorComponent::getUiValueTree()
     
     // --- FIX: Explicitly save the output node position (ID 0) ---
     // The main output node is not part of getModulesInfo(), so we need to save it separately
-    const ImVec2 outputPos = ImNodes::GetNodeGridSpacePos(0);
+    
+    // Prefer cached output position; avoid ImNodes when rebuilding
+    ImVec2 outputPos;
+    if (lastKnownNodePositions.count(0) > 0)
+        outputPos = lastKnownNodePositions[0];
+    else if (graphNeedsRebuild.load())
+    {
+        auto it0 = pendingNodePositions.find(0);
+        outputPos = (it0 != pendingNodePositions.end()) ? it0->second : ImVec2(0.0f, 0.0f);
+    }
+    else
+        outputPos = ImNodes::GetNodeGridSpacePos(0);
+    
     juce::ValueTree outputNode("node");
     outputNode.setProperty("id", 0, nullptr);
     outputNode.setProperty("x", outputPos.x, nullptr);
@@ -2766,11 +3086,17 @@ void ImGuiNodeEditorComponent::applyUiValueTreeNow (const juce::ValueTree& uiSta
     for (int i = 0; i < nodes.getNumChildren(); ++i)
     {
         auto n = nodes.getChild(i);
+        
         if (! n.hasType ("node")) continue;
         const int nid = (int) n.getProperty ("id", 0);
         const float x = (float) n.getProperty ("x", 0.0f);
         const float y = (float) n.getProperty ("y", 0.0f);
-        pendingNodePositions[nid] = ImVec2(x, y);
+        // Avoid forcing nodes to origin when snapshot contained (0,0)
+        if (!(x == 0.0f && y == 0.0f))
+        {
+            pendingNodePositions[nid] = ImVec2(x, y);
+            juce::Logger::writeToLog("[applyUiValueTreeNow] Queued position for node " + juce::String(nid) + ": (" + juce::String(x) + ", " + juce::String(y) + ")");
+        }
         
         // --- FIX: Read and apply muted state from preset ---
         // When loading a preset, we need to mark nodes as muted and create bypass connections.
@@ -2850,8 +3176,8 @@ void ImGuiNodeEditorComponent::handleDeletion()
             // else 
             if (auto it = linkIdToAttrs.find(id); it != linkIdToAttrs.end())
             {
-                auto srcPin = decodeAttr(it->second.first);
-                auto dstPin = decodeAttr(it->second.second);
+                auto srcPin = decodePinId(it->second.first);
+                auto dstPin = decodePinId(it->second.second);
 
                 auto srcNode = synth->getNodeIdForLogical(srcPin.logicalId);
                 auto dstNode = (dstPin.logicalId == 0) ? synth->getOutputNodeID() : synth->getNodeIdForLogical(dstPin.logicalId);
@@ -2882,6 +3208,7 @@ void ImGuiNodeEditorComponent::handleDeletion()
         {
             if (nid == 0) continue; // don't delete output sink
             mutedNodeStates.erase((juce::uint32)nid); // Clean up muted state if exists
+            lastKnownNodePositions.erase(nid); // Clean up position cache
             synth->removeModule(synth->getNodeIdForLogical((juce::uint32) nid));
         }
     }
@@ -3016,7 +3343,7 @@ void ImGuiNodeEditorComponent::muteNode(juce::uint32 logicalId)
     // --- FIX: More robust bypass splicing logic ---
     // 3. Splice the connections to bypass the node.
     // Connect the FIRST input source to ALL output destinations.
-    // This correctly handles cases where input channel != output channel (e.g., Mixer input 3 â†’ output 0).
+    // This correctly handles cases where input channel != output channel (e.g., Mixer input 3 → output 0).
     if (!state.incomingConnections.empty() && !state.outgoingConnections.empty())
     {
         const auto& primary_input = state.incomingConnections[0];
@@ -3395,6 +3722,7 @@ void ImGuiNodeEditorComponent::handleBeautifyLayout()
 {
     if (synth == nullptr) return;
 
+    // Graph is always in consistent state since we rebuild at frame start
     // Create an undo state so the action can be reversed
     pushSnapshot();
     juce::Logger::writeToLog("--- [Beautify Layout] Starting ---");
@@ -3411,10 +3739,18 @@ void ImGuiNodeEditorComponent::handleBeautifyLayout()
         inDegree[mod.first] = 0;
         adjacencyList[mod.first] = {};
     }
+    // Include the output node in the graph
+    inDegree[0] = 0; // Output node ID is 0
+    adjacencyList[0] = {}; // Output node has no outgoing connections
 
     for (const auto& conn : synth->getConnectionsInfo())
     {
-        if (!conn.dstIsOutput)
+        if (conn.dstIsOutput)
+        {
+            adjacencyList[conn.srcLogicalId].push_back(0); // Connect to output node
+            inDegree[0]++;
+        }
+        else
         {
             adjacencyList[conn.srcLogicalId].push_back(conn.dstLogicalId);
             inDegree[conn.dstLogicalId]++;
@@ -3561,6 +3897,12 @@ void ImGuiNodeEditorComponent::handleBeautifyLayout()
         }
     }
 
+    // Position the output node to the right of all other modules
+    float finalX = (maxColumn + 1) * COLUMN_WIDTH;
+    float outputNodeY = (tallestColumnHeight - ImNodes::GetNodeDimensions(0).y) / 2.0f;
+    pendingNodePositions[0] = ImVec2(finalX, outputNodeY);
+    juce::Logger::writeToLog("[Beautify] Applied position to Output Node");
+    
     juce::Logger::writeToLog("[Beautify] Applied positions to " + juce::String(modules.size()) + " nodes");
     juce::Logger::writeToLog("--- [Beautify Layout] Complete ---");
 }
@@ -4513,8 +4855,8 @@ void ImGuiNodeEditorComponent::handleInsertNodeOnSelectedLinks(const juce::Strin
             LinkInfo currentLink;
             currentLink.linkId = linkId;
             currentLink.isMod = false; // Assuming audio links for now
-            currentLink.srcPin = decodeAttr(it->second.first);
-            currentLink.dstPin = decodeAttr(it->second.second);
+            currentLink.srcPin = decodePinId(it->second.first);
+            currentLink.dstPin = decodePinId(it->second.second);
             
             // Calculate a staggered position for the new node
             ImVec2 newPosition = ImVec2(basePosition.x + x_offset, basePosition.y);
@@ -4693,6 +5035,18 @@ void ImGuiNodeEditorComponent::handleNodeChaining()
             synth->connect(sourceNodeId, 1, destNodeId, 1); // Connect channel 1
 
             juce::Logger::writeToLog("[Node Chaining] Connected " + getTypeForLogical(sourceLid) + " (" + juce::String(sourceLid) + ") to " + getTypeForLogical(destLid) + " (" + juce::String(destLid) + ")");
+            
+            // Check if the destination is a recorder and update its filename
+            if (auto* destModule = synth->getModuleForLogical(destLid))
+            {
+                if (auto* recorder = dynamic_cast<RecordModuleProcessor*>(destModule))
+                {
+                    if (auto* sourceModule = synth->getModuleForLogical(sourceLid))
+                    {
+                        recorder->updateSuggestedFilename(sourceModule->getName());
+                    }
+                }
+            }
         }
     }
 
@@ -4707,57 +5061,124 @@ std::vector<AudioPin> ImGuiNodeEditorComponent::getPinsOfType(juce::uint32 logic
     std::vector<AudioPin> matchingPins;
     juce::String moduleType = getTypeForLogical(logicalId);
 
-    juce::Logger::writeToLog("[getPinsOfType] Looking for " + juce::String(toString(targetType)) + " " + juce::String(isInput ? "input" : "output") + " pins on logicalId=" + juce::String(logicalId) + " (type='" + moduleType + "')");
-
     if (moduleType.isEmpty())
     {
-        juce::Logger::writeToLog("[getPinsOfType] ERROR: moduleType is empty");
         return matchingPins;
     }
 
     auto it = getModulePinDatabase().find(moduleType);
 
-    // --- CASE-INSENSITIVE LOOKUP FIX ---
-    // If the direct lookup fails, try a case-insensitive search.
+    // --- CASE-INSENSITIVE LOOKUP ---
     if (it == getModulePinDatabase().end())
     {
-        juce::String moduleTypeLower = moduleType.toLowerCase();
         for (const auto& kv : getModulePinDatabase())
         {
-            if (kv.first.compareIgnoreCase(moduleType) == 0 || kv.first.toLowerCase() == moduleTypeLower)
+            if (kv.first.compareIgnoreCase(moduleType) == 0)
             {
                 it = getModulePinDatabase().find(kv.first);
-                juce::Logger::writeToLog("[getPinsOfType] Found case-insensitive match: '" + moduleType + "' -> '" + kv.first + "'");
                 break;
             }
         }
     }
-    // --- END OF CASE-INSENSITIVE LOOKUP FIX ---
 
-    if (it == getModulePinDatabase().end())
+    if (it != getModulePinDatabase().end())
     {
-        juce::Logger::writeToLog("[getPinsOfType] ERROR: Module '" + moduleType + "' not in database");
-        return matchingPins;
-    }
-
-    const auto& pins = isInput ? it->second.audioIns : it->second.audioOuts;
-    juce::Logger::writeToLog("[getPinsOfType] Found " + juce::String(pins.size()) + " " + juce::String(isInput ? "input" : "output") + " pins total");
-
-    for (const auto& pin : pins)
-    {
-        juce::Logger::writeToLog("[getPinsOfType] Checking pin '" + pin.name + "' (type=" + juce::String(toString(pin.type)) + ", channel=" + juce::String(pin.channel) + ")");
-        if (pin.type == targetType)
+        // --- Standard path for built-in modules ---
+        const auto& pins = isInput ? it->second.audioIns : it->second.audioOuts;
+        for (const auto& pin : pins)
         {
-            matchingPins.push_back(pin);
-            juce::Logger::writeToLog("[getPinsOfType] MATCH! Added pin '" + pin.name + "'");
+            if (pin.type == targetType)
+            {
+                matchingPins.push_back(pin);
+            }
+        }
+    }
+    else if (auto* module = synth->getModuleForLogical(logicalId))
+    {
+        // --- DYNAMIC PATH FOR VSTs AND OTHER UNLISTED MODULES ---
+        if (dynamic_cast<VstHostModuleProcessor*>(module))
+        {
+            // For VSTs, assume all pins are 'Audio' type for chaining.
+            if (targetType == PinDataType::Audio)
+            {
+                const int numChannels = isInput ? module->getTotalNumInputChannels() : module->getTotalNumOutputChannels();
+                for (int i = 0; i < numChannels; ++i)
+                {
+                    juce::String pinName = isInput ? module->getAudioInputLabel(i) : module->getAudioOutputLabel(i);
+                    if (pinName.isNotEmpty())
+                    {
+                        matchingPins.emplace_back(pinName, i, PinDataType::Audio);
+                    }
+                }
+            }
         }
     }
 
-    juce::Logger::writeToLog("[getPinsOfType] Returning " + juce::String(matchingPins.size()) + " matching pins");
     return matchingPins;
 }
 
 // Add this new function implementation to the .cpp file.
+
+void ImGuiNodeEditorComponent::handleRecordOutput()
+{
+    if (!synth) return;
+
+    pushSnapshot();
+    juce::Logger::writeToLog("[Record Output] Initiated.");
+
+    // 1. Find connections going to the main output node.
+    std::vector<ModularSynthProcessor::ConnectionInfo> outputFeeds;
+    for (const auto& c : synth->getConnectionsInfo())
+    {
+        if (c.dstIsOutput)
+        {
+            outputFeeds.push_back(c);
+        }
+    }
+
+    if (outputFeeds.empty())
+    {
+        juce::Logger::writeToLog("[Record Output] No connections to main output found.");
+        return;
+    }
+
+    // 2. Create and position the recorder.
+    auto recorderNodeId = synth->addModule("recorder");
+    auto recorderLid = synth->getLogicalIdForNode(recorderNodeId);
+    ImVec2 outPos = ImNodes::GetNodeGridSpacePos(0);
+    pendingNodePositions[(int)recorderLid] = ImVec2(outPos.x - 400.0f, outPos.y);
+    
+    auto* recorder = dynamic_cast<RecordModuleProcessor*>(synth->getModuleForLogical(recorderLid));
+    if (recorder)
+    {
+        recorder->setPropertiesFile(PresetCreatorApplication::getApp().getProperties());
+    }
+
+    // 3. "Tap" the signals by connecting the original sources to the recorder.
+    juce::String sourceName;
+    for (const auto& feed : outputFeeds)
+    {
+        auto srcNodeId = synth->getNodeIdForLogical(feed.srcLogicalId);
+        synth->connect(srcNodeId, feed.srcChan, recorderNodeId, feed.dstChan); // dstChan will be 0 or 1
+        
+        // Get the name of the first source for the filename prefix
+        if (sourceName.isEmpty())
+        {
+            if (auto* srcModule = synth->getModuleForLogical(feed.srcLogicalId))
+            {
+                sourceName = srcModule->getName();
+            }
+        }
+    }
+    
+    if (recorder)
+    {
+        recorder->updateSuggestedFilename(sourceName);
+    }
+
+    graphNeedsRebuild = true;
+    juce::Logger::writeToLog("[Record Output] Recorder added and connected.");
+}
 
 void ImGuiNodeEditorComponent::handleColorCodedChaining(PinDataType targetType)
 {
@@ -4840,6 +5261,18 @@ void ImGuiNodeEditorComponent::handleColorCodedChaining(PinDataType targetType)
             {
                 totalConnectionsMade++;
                 juce::Logger::writeToLog("[Color Chaining] Connected " + getTypeForLogical(sourceLid) + " -> " + getTypeForLogical(destLid));
+
+                // Check if the destination is a recorder and update its filename
+                if (auto* destModule = synth->getModuleForLogical(destLid))
+                {
+                    if (auto* recorder = dynamic_cast<RecordModuleProcessor*>(destModule))
+                    {
+                        if (auto* sourceModule = synth->getModuleForLogical(sourceLid))
+                        {
+                            recorder->updateSuggestedFilename(sourceModule->getName());
+                        }
+                    }
+                }
             }
         }
     }
@@ -4848,6 +5281,155 @@ void ImGuiNodeEditorComponent::handleColorCodedChaining(PinDataType targetType)
 
     // 3. Apply all new connections to the audio graph.
     graphNeedsRebuild = true;
+}
+
+// Module Category Color Coding
+ImGuiNodeEditorComponent::ModuleCategory ImGuiNodeEditorComponent::getModuleCategory(const juce::String& moduleType)
+{
+    if (moduleType.containsIgnoreCase("vco") || moduleType.containsIgnoreCase("noise") || 
+        moduleType.containsIgnoreCase("sequencer") || moduleType.containsIgnoreCase("sample") || 
+        moduleType.containsIgnoreCase("midi") || moduleType.containsIgnoreCase("input") ||
+        moduleType.containsIgnoreCase("polyvco")) 
+        return ModuleCategory::Source;
+    
+    if (moduleType.containsIgnoreCase("vcf") || moduleType.containsIgnoreCase("delay") || 
+        moduleType.containsIgnoreCase("reverb") || moduleType.containsIgnoreCase("chorus") || 
+        moduleType.containsIgnoreCase("phaser") || moduleType.containsIgnoreCase("compressor") || 
+        moduleType.containsIgnoreCase("drive") || moduleType.containsIgnoreCase("shaper") || 
+        moduleType.containsIgnoreCase("filter") || moduleType.containsIgnoreCase("waveshaper") ||
+        moduleType.containsIgnoreCase("limiter") || moduleType.containsIgnoreCase("gate") ||
+        moduleType.containsIgnoreCase("granulator") || moduleType.containsIgnoreCase("eq") ||
+        moduleType.containsIgnoreCase("crackle") || moduleType.containsIgnoreCase("timepitch") ||
+        moduleType.containsIgnoreCase("tract")) 
+        return ModuleCategory::Effect;
+    
+    if (moduleType.containsIgnoreCase("lfo") || moduleType.containsIgnoreCase("adsr") || 
+        moduleType.containsIgnoreCase("random") || moduleType.containsIgnoreCase("s&h") || 
+        moduleType.containsIgnoreCase("function")) 
+        return ModuleCategory::Modulator;
+    
+    if (moduleType.containsIgnoreCase("comment")) 
+        return ModuleCategory::Comment;
+    
+    if (moduleType.containsIgnoreCase("scope") || moduleType.containsIgnoreCase("debug") || 
+        moduleType.containsIgnoreCase("graph") || moduleType.containsIgnoreCase("recorder")) 
+        return ModuleCategory::Analysis;
+    
+    // Check for VST plugins
+    if (moduleType.containsIgnoreCase("vst") || moduleType.containsIgnoreCase("plugin"))
+        return ModuleCategory::Plugin;
+    
+    return ModuleCategory::Utility;
+}
+
+unsigned int ImGuiNodeEditorComponent::getImU32ForCategory(ModuleCategory category, bool hovered)
+{
+    ImU32 color;
+    switch (category)
+    {
+        case ModuleCategory::Source:     color = IM_COL32(50, 120, 50, 255); break;   // Green
+        case ModuleCategory::Effect:     color = IM_COL32(130, 60, 60, 255); break;   // Red
+        case ModuleCategory::Modulator:  color = IM_COL32(50, 50, 130, 255); break;   // Blue
+        case ModuleCategory::Utility:    color = IM_COL32(110, 80, 50, 255); break;   // Orange
+        case ModuleCategory::Analysis:   color = IM_COL32(100, 50, 110, 255); break;  // Purple
+        case ModuleCategory::Comment:    color = IM_COL32(80, 80, 80, 255); break;    // Grey
+        case ModuleCategory::Plugin:     color = IM_COL32(50, 110, 110, 255); break;  // Teal
+        default:                         color = IM_COL32(70, 70, 70, 255); break;
+    }
+    
+    if (hovered) 
+    { 
+        // Brighten on hover
+        ImVec4 c = ImGui::ColorConvertU32ToFloat4(color);
+        c.x *= 1.3f; c.y *= 1.3f; c.z *= 1.3f;
+        return ImGui::ColorConvertFloat4ToU32(c);
+    }
+    return color;
+}
+
+// Quick Add Menu - Module Registry
+// Maps Display Name -> { Internal Type, Description }
+std::map<juce::String, std::pair<const char*, const char*>> ImGuiNodeEditorComponent::getModuleRegistry()
+{
+    return {
+        // Sources
+        {"Audio Input", {"audio input", "Records audio from your audio interface"}},
+        {"VCO", {"VCO", "Voltage Controlled Oscillator - generates waveforms"}},
+        {"Polyphonic VCO", {"polyvco", "Polyphonic VCO with multiple voices"}},
+        {"Noise", {"Noise", "White, pink, or brown noise generator"}},
+        {"Sequencer", {"Sequencer", "Step sequencer for creating patterns"}},
+        {"Multi Sequencer", {"multi sequencer", "Multi-track step sequencer"}},
+        {"MIDI Player", {"midi player", "Plays MIDI files"}},
+        {"Value", {"Value", "Constant CV value output"}},
+        {"Sample Loader", {"sample loader", "Loads and plays audio samples"}},
+        
+        // TTS
+        {"TTS Performer", {"TTS Performer", "Text-to-speech synthesizer"}},
+        {"Vocal Tract Filter", {"Vocal Tract Filter", "Physical model vocal tract filter"}},
+        
+        // Effects
+        {"VCF", {"VCF", "Voltage Controlled Filter"}},
+        {"Delay", {"Delay", "Echo/delay effect"}},
+        {"Reverb", {"Reverb", "Reverb effect"}},
+        {"Chorus", {"chorus", "Chorus effect for thickening sound"}},
+        {"Phaser", {"phaser", "Phaser modulation effect"}},
+        {"Compressor", {"compressor", "Dynamic range compressor"}},
+        {"Recorder", {"recorder", "Records audio to disk"}},
+        {"Limiter", {"limiter", "Peak limiter"}},
+        {"Noise Gate", {"gate", "Noise gate"}},
+        {"Drive", {"drive", "Distortion/overdrive"}},
+        {"Graphic EQ", {"graphic eq", "Graphic equalizer"}},
+        {"Waveshaper", {"Waveshaper", "Waveshaping distortion"}},
+        {"8-Band Shaper", {"8bandshaper", "8-band spectral shaper"}},
+        {"Granulator", {"granulator", "Granular synthesis effect"}},
+        {"Harmonic Shaper", {"harmonic shaper", "Harmonic content shaper"}},
+        {"Time/Pitch Shifter", {"timepitch", "Time stretching and pitch shifting"}},
+        {"De-Crackle", {"De-Crackle", "Removes clicks and pops"}},
+        
+        // Modulators
+        {"LFO", {"LFO", "Low Frequency Oscillator for modulation"}},
+        {"ADSR", {"ADSR", "Attack Decay Sustain Release envelope"}},
+        {"Random", {"Random", "Random value generator"}},
+        {"S&H", {"S&H", "Sample and Hold"}},
+        {"Function Generator", {"Function Generator", "Custom function curves"}},
+        {"Shaping Oscillator", {"shaping oscillator", "Oscillator with waveshaping"}},
+        
+        // Utilities
+        {"VCA", {"VCA", "Voltage Controlled Amplifier"}},
+        {"Mixer", {"Mixer", "Audio/CV mixer"}},
+        {"CV Mixer", {"cv mixer", "CV signal mixer"}},
+        {"Track Mixer", {"trackmixer", "Multi-track mixer with panning"}},
+        {"Attenuverter", {"Attenuverter", "Attenuate and invert signals"}},
+        {"Lag Processor", {"Lag Processor", "Slew rate limiter/smoother"}},
+        {"Math", {"Math", "Mathematical operations"}},
+        {"Map Range", {"MapRange", "Map values from one range to another"}},
+        {"Quantizer", {"Quantizer", "Quantize CV to scales"}},
+        {"Rate", {"Rate", "Rate/frequency divider"}},
+        {"Comparator", {"Comparator", "Compare and threshold signals"}},
+        {"Logic", {"Logic", "Boolean logic operations"}},
+        {"Clock Divider", {"ClockDivider", "Clock division and multiplication"}},
+        {"Sequential Switch", {"SequentialSwitch", "Sequential signal router"}},
+        {"Comment", {"comment", "Text comment box"}},
+        {"Best Practice", {"best practice", "Best practice node template"}},
+        
+        // Analysis
+        {"Scope", {"Scope", "Oscilloscope display"}},
+        {"Debug", {"debug", "Debug value display"}},
+        {"Input Debug", {"input debug", "Input signal debugger"}},
+        {"Frequency Graph", {"Frequency Graph", "Spectrum analyzer display"}}
+    };
+}
+
+// Legacy function for backwards compatibility with tooltip display
+std::vector<std::pair<juce::String, const char*>> ImGuiNodeEditorComponent::getModuleDescriptions()
+{
+    std::vector<std::pair<juce::String, const char*>> result;
+    for (const auto& entry : getModuleRegistry())
+    {
+        // Return {internal type, description} for compatibility
+        result.push_back({entry.second.first, entry.second.second});
+    }
+    return result;
 }
 
 // VST Plugin Support
