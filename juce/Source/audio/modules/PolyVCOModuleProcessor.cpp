@@ -70,6 +70,9 @@ void PolyVCOModuleProcessor::prepareToPlay(double sampleRate, int samplesPerBloc
         sineOscillators[i].prepare(spec);
         sawOscillators[i].prepare(spec);
         squareOscillators[i].prepare(spec);
+        smoothedGateLevels[i] = 0.0f;
+        gateEnvelope[i] = 0.0f;
+        gateOnState[i] = 0;
     }
 }
 
@@ -83,21 +86,20 @@ void PolyVCOModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce
     auto modInBus = getBusBuffer(buffer, true, 0);
     auto outBus   = getBusBuffer(buffer, false, 0);
 
+    // Prevent denormals in Debug which can cause audible pops
+    juce::ScopedNoDenormals noDenormals;
+
     // --- ADD GATE SMOOTHING FACTOR ---
     constexpr float GATE_SMOOTHING_FACTOR = 0.001f;
+    constexpr float GATE_ATTACK_SECONDS = 0.001f;   // 1ms attack
+    constexpr float GATE_RELEASE_SECONDS = 0.002f;  // 2ms release
+    const float gateAttackCoeff = (float)((1.0 - std::exp(-1.0 / juce::jmax(1.0, getSampleRate() * GATE_ATTACK_SECONDS))));
+    const float gateReleaseCoeff = (float)((1.0 - std::exp(-1.0 / juce::jmax(1.0, getSampleRate() * GATE_RELEASE_SECONDS))));
+    constexpr float HYST_ON  = 0.55f; // hysteresis thresholds to avoid chatter
+    constexpr float HYST_OFF = 0.45f;
 
     // PER-SAMPLE FIX: Check connections and also buffer activity once per block
     const bool isNumVoicesModulated = isParamInputConnected("numVoices");
-#if defined(PRESET_CREATOR_UI)
-    {
-        static int dbgCounterPV = 0;
-        if ((dbgCounterPV++ & 0x3F) == 0)
-        {
-            juce::Logger::writeToLog(juce::String("[PolyVCO] inCh=") + juce::String(modInBus.getNumChannels()) +
-                                      " voicesRMS=" + juce::String((modInBus.getNumChannels()>0)?modInBus.getRMSLevel(0,0,outBus.getNumSamples()):0.0f));
-        }
-    }
-#endif
     std::array<bool, MAX_VOICES> freqIsModulated, waveIsModulated, gateIsModulated;
     
     for (int i = 0; i < MAX_VOICES; ++i)
@@ -108,7 +110,12 @@ void PolyVCOModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce
         gateIsModulated[i] = isParamInputConnected("gate_" + idx);
     }
 
-    // PER-SAMPLE FIX: Process each sample individually to respond to changing modulation
+    // Cache last per-voice values for once-per-block telemetry
+    std::array<float, MAX_VOICES> lastFreq {};
+    std::array<int,   MAX_VOICES> lastWave {};
+    std::array<float, MAX_VOICES> lastGate {};
+
+    // PER-SAMPLE processing to respond to changing modulation
     int finalActiveVoices = numVoicesParam != nullptr ? numVoicesParam->get() : 1;
     for (int sample = 0; sample < outBus.getNumSamples(); ++sample)
     {
@@ -160,9 +167,19 @@ void PolyVCOModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce
                     gateLevel = juce::jlimit(0.0f, 1.0f, modInBus.getReadPointer(chan)[sample]);
             }
 
-            // --- REPLACED GATE LOGIC WITH SMOOTHING ---
-            // Instead of using gateLevel directly, treat it as a target and move the smoothed value toward it.
+            // Hysteresis on gate detection to avoid 0/1 chatter from sequencers in Debug
+            if (gateOnState[voice]) {
+                if (gateLevel <= HYST_OFF) gateOnState[voice] = 0;
+            } else {
+                if (gateLevel >= HYST_ON) gateOnState[voice] = 1;
+            }
+            const float gateTarget = gateOnState[voice] ? 1.0f : 0.0f;
+
+            // Smooth raw mod gate toward 0..1 (slow tiny smoothing of control)
             smoothedGateLevels[voice] += (gateLevel - smoothedGateLevels[voice]) * GATE_SMOOTHING_FACTOR;
+            // Clickless envelope applied to audio multiplier (fast attack/release)
+            const float coeff = (gateTarget > gateEnvelope[voice]) ? gateAttackCoeff : gateReleaseCoeff;
+            gateEnvelope[voice] += coeff * (gateTarget - gateEnvelope[voice]);
 
             // RACE CONDITION FIX: Use pre-initialized oscillators instead of calling initialise() on audio thread
             juce::dsp::Oscillator<float>* currentOscillator = nullptr;
@@ -181,16 +198,13 @@ void PolyVCOModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce
             // PER-SAMPLE FIX: Process a single sample instead of entire block
             const float sampleValue = currentOscillator->processSample(0.0f);
             // Use the new smoothed gate value for multiplication.
-            outBus.setSample(voice, sample, sampleValue * smoothedGateLevels[voice]);
+            // Multiply oscillator by clickless gate envelope (not the raw/smoothed control)
+            outBus.setSample(voice, sample, sampleValue * gateEnvelope[voice]);
 
-            // Live telemetry: update every ~64 samples
-            if ((sample & 0x3F) == 0)
-            {
-                const auto idxStr = juce::String(voice + 1);
-                setLiveParamValue("freq_" + idxStr + "_live", freq);
-                setLiveParamValue("wave_" + idxStr + "_live", (float)waveChoice);
-                setLiveParamValue("gate_" + idxStr + "_live", gateLevel);
-            }
+            // Remember last values for this voice to publish once per block
+            lastFreq[voice] = freq;
+            lastWave[voice] = waveChoice;
+            lastGate[voice] = gateLevel;
         }
         
         // Clear unused voices for this sample
@@ -198,6 +212,14 @@ void PolyVCOModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce
         {
             outBus.setSample(voice, sample, 0.0f);
         }
+    }
+    // Publish per-voice live telemetry once per block (cheap, avoids debug pops)
+    for (int voice = 0; voice < finalActiveVoices; ++voice)
+    {
+        const auto idxStr = juce::String(voice + 1);
+        setLiveParamValue("freq_" + idxStr + "_live", lastFreq[voice]);
+        setLiveParamValue("wave_" + idxStr + "_live", (float) lastWave[voice]);
+        setLiveParamValue("gate_" + idxStr + "_live", lastGate[voice]);
     }
     
     // Update lastOutputValues for cable inspector

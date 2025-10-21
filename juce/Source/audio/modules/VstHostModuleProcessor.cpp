@@ -55,10 +55,21 @@ void VstHostModuleProcessor::prepareToPlay(double sampleRate, int samplesPerBloc
 {
     if (hostedPlugin != nullptr)
     {
-        hostedPlugin->prepareToPlay(sampleRate, samplesPerBlock);
-        juce::Logger::writeToLog("[VstHost] " + getName() + " prepared: " + 
-                                 juce::String(sampleRate) + " Hz, " + 
-                                 juce::String(samplesPerBlock) + " samples");
+        try
+        {
+            hostedPlugin->prepareToPlay(sampleRate, samplesPerBlock);
+            juce::Logger::writeToLog("[VstHost] " + getName() + " prepared: " +
+                                     juce::String(sampleRate) + " Hz, " +
+                                     juce::String(samplesPerBlock) + " samples");
+        }
+        catch (const std::exception& e)
+        {
+            juce::Logger::writeToLog("[VstHost] Exception during prepareToPlay for " + getName() + ": " + e.what());
+        }
+        catch (...)
+        {
+            juce::Logger::writeToLog("[VstHost] Unknown exception during prepareToPlay for " + getName());
+        }
     }
 }
 
@@ -66,7 +77,18 @@ void VstHostModuleProcessor::releaseResources()
 {
     if (hostedPlugin != nullptr)
     {
-        hostedPlugin->releaseResources();
+        try
+        {
+            hostedPlugin->releaseResources();
+        }
+        catch (const std::exception& e)
+        {
+            juce::Logger::writeToLog("[VstHost] Exception during releaseResources for " + getName() + ": " + e.what());
+        }
+        catch (...)
+        {
+            juce::Logger::writeToLog("[VstHost] Unknown exception during releaseResources for " + getName());
+        }
     }
 }
 
@@ -74,7 +96,23 @@ void VstHostModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce
 {
     if (hostedPlugin != nullptr)
     {
-        hostedPlugin->processBlock(buffer, midi);
+        try
+        {
+            // Add error handling around VST plugin processing to prevent crashes
+            hostedPlugin->processBlock(buffer, midi);
+        }
+        catch (const std::exception& e)
+        {
+            juce::Logger::writeToLog("[VstHost] Exception in plugin " + getName() + ": " + e.what());
+            // Clear the buffer to prevent noise/feedback if the plugin crashes
+            buffer.clear();
+        }
+        catch (...)
+        {
+            juce::Logger::writeToLog("[VstHost] Unknown exception in plugin " + getName());
+            // Clear the buffer to prevent noise/feedback if the plugin crashes
+            buffer.clear();
+        }
     }
 }
 
@@ -111,13 +149,24 @@ juce::ValueTree VstHostModuleProcessor::getExtraStateTree() const
 
     // 2. Get the plugin's internal state as binary data
     juce::MemoryBlock pluginState;
-    hostedPlugin->getStateInformation(pluginState);
-
-    // 3. Store the binary data as a Base64 string in our ValueTree
-    if (pluginState.getSize() > 0)
+    try
     {
-        state.setProperty("pluginState", pluginState.toBase64Encoding(), nullptr);
-        juce::Logger::writeToLog("[VstHost] Saved state for: " + getName() + " (" + juce::String(pluginState.getSize()) + " bytes)");
+        hostedPlugin->getStateInformation(pluginState);
+
+        // 3. Store the binary data as a Base64 string in our ValueTree
+        if (pluginState.getSize() > 0)
+        {
+            state.setProperty("pluginState", pluginState.toBase64Encoding(), nullptr);
+            juce::Logger::writeToLog("[VstHost] Saved state for: " + getName() + " (" + juce::String(pluginState.getSize()) + " bytes)");
+        }
+    }
+    catch (const std::exception& e)
+    {
+        juce::Logger::writeToLog("[VstHost] Exception getting state for " + getName() + ": " + e.what());
+    }
+    catch (...)
+    {
+        juce::Logger::writeToLog("[VstHost] Unknown exception getting state for " + getName());
     }
 
     return state;
@@ -140,8 +189,19 @@ void VstHostModuleProcessor::setExtraStateTree(const juce::ValueTree& vt)
             if (pluginState.fromBase64Encoding(stateString))
             {
                 // Restore the plugin's state
-                hostedPlugin->setStateInformation(pluginState.getData(), (int)pluginState.getSize());
-                juce::Logger::writeToLog("[VstHost] Restored state for: " + getName() + " (" + juce::String(pluginState.getSize()) + " bytes)");
+                try
+                {
+                    hostedPlugin->setStateInformation(pluginState.getData(), (int)pluginState.getSize());
+                    juce::Logger::writeToLog("[VstHost] Restored state for: " + getName() + " (" + juce::String(pluginState.getSize()) + " bytes)");
+                }
+                catch (const std::exception& e)
+                {
+                    juce::Logger::writeToLog("[VstHost] Exception setting state for " + getName() + ": " + e.what());
+                }
+                catch (...)
+                {
+                    juce::Logger::writeToLog("[VstHost] Unknown exception setting state for " + getName());
+                }
             }
         }
     }
@@ -155,19 +215,30 @@ juce::String VstHostModuleProcessor::getAudioInputLabel(int channel) const
     
     // Iterate through all input buses to find which one contains this channel
     int channelOffset = 0;
-    for (int busIndex = 0; busIndex < hostedPlugin->getBusCount(true); ++busIndex)
+    try
     {
-        if (auto* bus = hostedPlugin->getBus(true, busIndex))
+        for (int busIndex = 0; busIndex < hostedPlugin->getBusCount(true); ++busIndex)
         {
-            const int busChannels = bus->getNumberOfChannels();
-            if (channel < channelOffset + busChannels)
+            if (auto* bus = hostedPlugin->getBus(true, busIndex))
             {
-                // This channel belongs to this bus
-                const int channelInBus = channel - channelOffset;
-                return bus->getName() + " " + juce::String(channelInBus + 1);
+                const int busChannels = bus->getNumberOfChannels();
+                if (channel < channelOffset + busChannels)
+                {
+                    // This channel belongs to this bus
+                    const int channelInBus = channel - channelOffset;
+                    return bus->getName() + " " + juce::String(channelInBus + 1);
+                }
+                channelOffset += busChannels;
             }
-            channelOffset += busChannels;
         }
+    }
+    catch (const std::exception& e)
+    {
+        juce::Logger::writeToLog("[VstHost] Exception in getAudioInputLabel for " + getName() + ": " + e.what());
+    }
+    catch (...)
+    {
+        juce::Logger::writeToLog("[VstHost] Unknown exception in getAudioInputLabel for " + getName());
     }
     return "In " + juce::String(channel + 1);
 }
@@ -179,19 +250,30 @@ juce::String VstHostModuleProcessor::getAudioOutputLabel(int channel) const
     
     // Iterate through all output buses to find which one contains this channel
     int channelOffset = 0;
-    for (int busIndex = 0; busIndex < hostedPlugin->getBusCount(false); ++busIndex)
+    try
     {
-        if (auto* bus = hostedPlugin->getBus(false, busIndex))
+        for (int busIndex = 0; busIndex < hostedPlugin->getBusCount(false); ++busIndex)
         {
-            const int busChannels = bus->getNumberOfChannels();
-            if (channel < channelOffset + busChannels)
+            if (auto* bus = hostedPlugin->getBus(false, busIndex))
             {
-                // This channel belongs to this bus
-                const int channelInBus = channel - channelOffset;
-                return bus->getName() + " " + juce::String(channelInBus + 1);
+                const int busChannels = bus->getNumberOfChannels();
+                if (channel < channelOffset + busChannels)
+                {
+                    // This channel belongs to this bus
+                    const int channelInBus = channel - channelOffset;
+                    return bus->getName() + " " + juce::String(channelInBus + 1);
+                }
+                channelOffset += busChannels;
             }
-            channelOffset += busChannels;
         }
+    }
+    catch (const std::exception& e)
+    {
+        juce::Logger::writeToLog("[VstHost] Exception in getAudioOutputLabel for " + getName() + ": " + e.what());
+    }
+    catch (...)
+    {
+        juce::Logger::writeToLog("[VstHost] Unknown exception in getAudioOutputLabel for " + getName());
     }
     return "Out " + juce::String(channel + 1);
 }
@@ -227,15 +309,45 @@ void VstHostModuleProcessor::drawParametersInNode(float itemWidth,
 #if defined(PRESET_CREATOR_UI)
     if (ImGui::Button("Open Editor", ImVec2(itemWidth, 0)))
     {
-        if (auto* editor = createEditor())
+        try
         {
-            // Create a new self-deleting window to host the editor
-            new PluginEditorWindow(getName(), editor);
-            juce::Logger::writeToLog("[VstHost] Opened editor for: " + getName());
+            if (auto* editor = createEditor())
+            {
+                // --- THIS IS THE FIX ---
+                // Don't create the window directly. Post the task to the message queue.
+                // Capture the name as a string to avoid lifetime issues
+                auto pluginName = getName();
+                juce::MessageManager::callAsync([pluginName, editor] {
+                    // This code will run safely after the current ImGui frame is finished.
+                    try
+                    {
+                        new PluginEditorWindow(pluginName, editor);
+                    }
+                    catch (const std::exception& e)
+                    {
+                        juce::Logger::writeToLog("[VstHost] Exception creating editor window for " + pluginName + ": " + e.what());
+                    }
+                    catch (...)
+                    {
+                        juce::Logger::writeToLog("[VstHost] Unknown exception creating editor window for " + pluginName);
+                    }
+                });
+                // --- END OF FIX ---
+
+                juce::Logger::writeToLog("[VstHost] Opened editor for: " + getName());
+            }
+            else
+            {
+                juce::Logger::writeToLog("[VstHost] Plugin has no editor: " + getName());
+            }
         }
-        else
+        catch (const std::exception& e)
         {
-            juce::Logger::writeToLog("[VstHost] Plugin has no editor: " + getName());
+            juce::Logger::writeToLog("[VstHost] Exception creating editor for " + getName() + ": " + e.what());
+        }
+        catch (...)
+        {
+            juce::Logger::writeToLog("[VstHost] Unknown exception creating editor for " + getName());
         }
     }
     
@@ -251,19 +363,46 @@ void VstHostModuleProcessor::drawIoPins(const NodePinHelpers& helpers)
 {
     if (hostedPlugin == nullptr)
         return;
-    
-    // Draw input pins for all input channels using dynamic labels
-    const int numInputs = hostedPlugin->getTotalNumInputChannels();
-    for (int i = 0; i < numInputs; ++i)
+
+    try
     {
-        helpers.drawAudioInputPin(getAudioInputLabel(i).toRawUTF8(), i);
+        // Draw input pins for all input channels using dynamic labels
+        const int numInputs = hostedPlugin->getTotalNumInputChannels();
+        for (int i = 0; i < numInputs; ++i)
+        {
+            try
+            {
+                helpers.drawAudioInputPin(getAudioInputLabel(i).toRawUTF8(), i);
+            }
+            catch (const std::exception& e)
+            {
+                juce::Logger::writeToLog("[VstHost] Exception drawing input pin " + juce::String(i) + " for " + getName() + ": " + e.what());
+                helpers.drawAudioInputPin(("In " + juce::String(i + 1)).toRawUTF8(), i);
+            }
+        }
+
+        // Draw output pins for all output channels using dynamic labels
+        const int numOutputs = hostedPlugin->getTotalNumOutputChannels();
+        for (int i = 0; i < numOutputs; ++i)
+        {
+            try
+            {
+                helpers.drawAudioOutputPin(getAudioOutputLabel(i).toRawUTF8(), i);
+            }
+            catch (const std::exception& e)
+            {
+                juce::Logger::writeToLog("[VstHost] Exception drawing output pin " + juce::String(i) + " for " + getName() + ": " + e.what());
+                helpers.drawAudioOutputPin(("Out " + juce::String(i + 1)).toRawUTF8(), i);
+            }
+        }
     }
-    
-    // Draw output pins for all output channels using dynamic labels
-    const int numOutputs = hostedPlugin->getTotalNumOutputChannels();
-    for (int i = 0; i < numOutputs; ++i)
+    catch (const std::exception& e)
     {
-        helpers.drawAudioOutputPin(getAudioOutputLabel(i).toRawUTF8(), i);
+        juce::Logger::writeToLog("[VstHost] Exception in drawIoPins for " + getName() + ": " + e.what());
+    }
+    catch (...)
+    {
+        juce::Logger::writeToLog("[VstHost] Unknown exception in drawIoPins for " + getName());
     }
 }
 

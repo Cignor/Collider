@@ -33,6 +33,8 @@
 "juce/Source/audio/modules/ChorusModuleProcessor.h",
 "juce/Source/audio/modules/ClockDividerModuleProcessor.cpp",
 "juce/Source/audio/modules/ClockDividerModuleProcessor.h",
+"juce/Source/audio/modules/CommentModuleProcessor.cpp",
+"juce/Source/audio/modules/CommentModuleProcessor.h",
 "juce/Source/audio/modules/ComparatorModuleProcessor.cpp",
 "juce/Source/audio/modules/ComparatorModuleProcessor.h",
 "juce/Source/audio/modules/CompressorModuleProcessor.cpp",

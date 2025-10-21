@@ -196,6 +196,8 @@ target_sources(ColliderApp PRIVATE
     Source/audio/modules/CompressorModuleProcessor.cpp
     Source/audio/modules/RecordModuleProcessor.h
     Source/audio/modules/RecordModuleProcessor.cpp
+    Source/audio/modules/CommentModuleProcessor.h
+    Source/audio/modules/CommentModuleProcessor.cpp
     Source/audio/modules/LimiterModuleProcessor.h
     Source/audio/modules/LimiterModuleProcessor.cpp
     Source/audio/modules/GateModuleProcessor.h
@@ -240,6 +242,8 @@ target_sources(ColliderApp PRIVATE
     Source/audio/modules/PolyVCOModuleProcessor.cpp
         Source/audio/modules/DebugModuleProcessor.h
         Source/audio/modules/DebugModuleProcessor.cpp
+        Source/audio/modules/CommentModuleProcessor.h
+        Source/audio/modules/CommentModuleProcessor.cpp
         Source/audio/modules/InputDebugModuleProcessor.h
         Source/audio/modules/InputDebugModuleProcessor.cpp
     Source/audio/modules/TTSPerformerModuleProcessor.h
@@ -393,6 +397,8 @@ target_sources(PresetCreatorApp PRIVATE
     Source/audio/modules/ValueModuleProcessor.cpp
         Source/audio/modules/DebugModuleProcessor.h
         Source/audio/modules/DebugModuleProcessor.cpp
+        Source/audio/modules/CommentModuleProcessor.h
+        Source/audio/modules/CommentModuleProcessor.cpp
         Source/audio/modules/InputDebugModuleProcessor.h
         Source/audio/modules/InputDebugModuleProcessor.cpp
     Source/audio/modules/TimePitchModuleProcessor.h
@@ -445,6 +451,8 @@ target_sources(PresetCreatorApp PRIVATE
     Source/audio/modules/CompressorModuleProcessor.cpp
     Source/audio/modules/RecordModuleProcessor.h
     Source/audio/modules/RecordModuleProcessor.cpp
+    Source/audio/modules/CommentModuleProcessor.h
+    Source/audio/modules/CommentModuleProcessor.cpp
     Source/audio/modules/LimiterModuleProcessor.h
     Source/audio/modules/LimiterModuleProcessor.cpp
     Source/audio/modules/GateModuleProcessor.h

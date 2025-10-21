@@ -21,6 +21,8 @@ public:
         return *dynamic_cast<PresetCreatorApplication*>(juce::JUCEApplication::getInstance());
     }
     
+    juce::PropertiesFile* getProperties() { return appProperties.get(); }
+    
     void initialise(const juce::String&) override;
     void shutdown() override;
 
@@ -48,5 +50,6 @@ private:
     
     std::unique_ptr<MainWindow> mainWindow;
     std::unique_ptr<juce::FileLogger> fileLogger;
+    std::unique_ptr<juce::PropertiesFile> appProperties;
 };
 

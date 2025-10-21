@@ -54,4 +54,8 @@ private:
     
     // --- ADD GATE SMOOTHING ---
     std::array<float, MAX_VOICES> smoothedGateLevels {};
+
+    // Clickless gate: per-voice envelope and hysteresis state
+    std::array<float, MAX_VOICES> gateEnvelope {};
+    std::array<uint8_t, MAX_VOICES> gateOnState {}; // 0/1 with hysteresis
 };

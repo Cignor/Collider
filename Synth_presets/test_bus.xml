@@ -49,7 +49,7 @@
     <module logicalId="7" type="trackmixer">
       <params>
         <TrackMixerParams>
-          <PARAM id="numTracks" value="8.0"/>
+          <PARAM id="numTracks" value="4.0"/>
           <PARAM id="numTracks_max" value="64.0"/>
           <PARAM id="track_gain_1" value="0.0"/>
           <PARAM id="track_gain_10" value="0.0"/>
@@ -73,7 +73,7 @@
           <PARAM id="track_gain_27" value="0.0"/>
           <PARAM id="track_gain_28" value="0.0"/>
           <PARAM id="track_gain_29" value="0.0"/>
-          <PARAM id="track_gain_3" value="0.0"/>
+          <PARAM id="track_gain_3" value="-16.5"/>
           <PARAM id="track_gain_30" value="0.0"/>
           <PARAM id="track_gain_31" value="0.0"/>
           <PARAM id="track_gain_32" value="0.0"/>
@@ -84,7 +84,7 @@
           <PARAM id="track_gain_37" value="0.0"/>
           <PARAM id="track_gain_38" value="0.0"/>
           <PARAM id="track_gain_39" value="0.0"/>
-          <PARAM id="track_gain_4" value="0.0"/>
+          <PARAM id="track_gain_4" value="-14.39999771118164"/>
           <PARAM id="track_gain_40" value="0.0"/>
           <PARAM id="track_gain_41" value="0.0"/>
           <PARAM id="track_gain_42" value="0.0"/>
@@ -148,7 +148,7 @@
           <PARAM id="track_pan_37" value="0.0"/>
           <PARAM id="track_pan_38" value="0.0"/>
           <PARAM id="track_pan_39" value="0.0"/>
-          <PARAM id="track_pan_4" value="0.0"/>
+          <PARAM id="track_pan_4" value="0.5699999332427979"/>
           <PARAM id="track_pan_40" value="0.0"/>
           <PARAM id="track_pan_41" value="0.0"/>
           <PARAM id="track_pan_42" value="0.0"/>
@@ -257,16 +257,47 @@
         </ComparatorParams>
       </params>
     </module>
+    <module logicalId="51" type="Things Texture">
+      <extra>
+        <VstHostState fileOrIdentifier="H:\0000_CODE\01_collider_pyo\juce\build\PresetCreatorApp_artefacts\Release\VST\ThingsTexture.vst3"
+                      name="Things Texture" manufacturerName="AudioThing" version="1.1.1"
+                      pluginFormatName="VST3" pluginState="752.VMjLgbt....O+fWarAhckI2bo8la8HRLt.iHfTlai8FYo41Y8HRUTYTK3HxO9.BOVMEUy.Ea0cVZtMEcgQWY9vSRC8Vav8lak4Fc9PCNv3hUMczXWEjKt3hYt3hKt.kKt3hKt3BS5gEcyQjKtPjK3YTR5AkaA4hKtfjKiQ0YW0jKDAkKA4hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKA4RZUMTRSgTbC4hKtXWdOMCLFElYXcUV30zUZUGMV8DZDk1R1gjPHsFMwfUcQYkVzMlUOgFUEUkQvHjSncSZOYlcCUkaqwVXs0zQUs1YGMFLIcUVk0TUQQUTUIkSioGUloGUZoVSUokZUY0Sn4RZKYGRBgDQqwVVrUkLh8FNrEFNHIESz4RZHYlKUokdMYjV3fjPLQGUogjYHQEVxUDagkVUV8DZtj1R5I1TNQiZS4DMlMkS3I1TLcGV4wDMHIDRMslQjgCRBwDchMTS14xPLYmKCwDMTkGSwH1PMkGRogjYHQEY1UTLhkGLogzcyHDSn4BZUsVRxH1a3vVX3fjTLQGQoszcHIDRPkzUYkWUFMFNHIkTzslQiglKBQ0YIcEVyUkQisVRW8DZlMjSn4hPTcVRWg0bUYzXqkzQSUWSwnENHgFR0MyPt3hKt3hKt3hKt3hYRUUSTEETIckVwTjQisVTTgkdEYjKAQjYPQSPWgUdMcjKAQjct3hdA4hKt3hKt3hKtnTUv.UQAslXuk0UXoWUFE0YQcEV77RRC8Vav8lak4Fc9vyKVMEUy.Ea0cVZtMEcgQWY9.."/>
+      </extra>
+    </module>
+    <module logicalId="95" type="recorder">
+      <params>
+        <RecordParams>
+          <PARAM id="format" value="0.0"/>
+        </RecordParams>
+      </params>
+    </module>
+    <module logicalId="110" type="Wave Box">
+      <extra>
+        <VstHostState fileOrIdentifier="H:\0000_CODE\01_collider_pyo\juce\build\PresetCreatorApp_artefacts\Release\VST\WaveBox_x64.vst3"
+                      name="Wave Box" manufacturerName="AudioThing" version="1.5.1"
+                      pluginFormatName="VST3" pluginState="1791.VMjLgXuA...O+fWarAhckI2bo8la8HRLt.iHfTlai8FYo41Y8HRUTYTK3HxO9.BOVMEUy.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."/>
+      </extra>
+    </module>
+    <module logicalId="125" type="comment">
+      <params>
+        <CommentParams/>
+      </params>
+      <extra>
+        <CommentState title="phaser " text="those are the tests" width="2635.0" height="167.8243408203125"/>
+      </extra>
+    </module>
   </modules>
   <connections>
     <connection srcId="3" srcChan="0" dstId="7" dstChan="0"/>
     <connection srcId="3" srcChan="1" dstId="7" dstChan="1"/>
     <connection srcId="4" srcChan="0" dstId="3" dstChan="0"/>
     <connection srcId="4" srcChan="1" dstId="3" dstChan="1"/>
+    <connection srcId="5" srcChan="0" dstId="7" dstChan="2"/>
+    <connection srcId="5" srcChan="1" dstId="7" dstChan="3"/>
     <connection srcId="6" srcChan="0" dstId="4" dstChan="0"/>
     <connection srcId="6" srcChan="1" dstId="4" dstChan="1"/>
-    <connection srcId="7" srcChan="0" dstId="output" dstChan="0"/>
-    <connection srcId="7" srcChan="1" dstId="output" dstChan="1"/>
+    <connection srcId="7" srcChan="0" dstId="51" dstChan="0"/>
+    <connection srcId="7" srcChan="1" dstId="51" dstChan="1"/>
     <connection srcId="14" srcChan="0" dstId="35" dstChan="0"/>
     <connection srcId="14" srcChan="1" dstId="36" dstChan="0"/>
     <connection srcId="15" srcChan="0" dstId="6" dstChan="0"/>
@@ -284,24 +315,37 @@
     <connection srcId="18" srcChan="0" dstId="17" dstChan="0"/>
     <connection srcId="18" srcChan="0" dstId="17" dstChan="1"/>
     <connection srcId="18" srcChan="2" dstId="17" dstChan="2"/>
+    <connection srcId="32" srcChan="0" dstId="5" dstChan="0"/>
     <connection srcId="32" srcChan="0" dstId="15" dstChan="0"/>
+    <connection srcId="33" srcChan="0" dstId="5" dstChan="1"/>
     <connection srcId="33" srcChan="0" dstId="15" dstChan="1"/>
     <connection srcId="35" srcChan="0" dstId="3" dstChan="2"/>
     <connection srcId="36" srcChan="0" dstId="3" dstChan="3"/>
+    <connection srcId="51" srcChan="0" dstId="110" dstChan="0"/>
+    <connection srcId="51" srcChan="1" dstId="110" dstChan="1"/>
+    <connection srcId="110" srcChan="0" dstId="output" dstChan="0"/>
+    <connection srcId="110" srcChan="1" dstId="output" dstChan="1"/>
+    <connection srcId="110" srcChan="0" dstId="95" dstChan="0"/>
+    <connection srcId="110" srcChan="1" dstId="95" dstChan="1"/>
   </connections>
   <NodeEditorUI>
-    <node id="3" x="-803.0" y="426.0"/>
-    <node id="4" x="-1236.0" y="470.0"/>
-    <node id="5" x="-2749.813720703125" y="1021.640380859375"/>
-    <node id="6" x="-1750.0" y="348.0"/>
-    <node id="7" x="-392.1444091796875" y="239.40673828125"/>
-    <node id="14" x="-1739.0" y="832.0"/>
-    <node id="15" x="-2213.0" y="550.0"/>
-    <node id="17" x="-2327.0" y="937.0"/>
-    <node id="18" x="-2964.0" y="344.0"/>
-    <node id="32" x="-2553.0" y="196.0"/>
-    <node id="33" x="-2597.0" y="371.0"/>
-    <node id="35" x="-1273.0" y="665.5"/>
-    <node id="36" x="-1225.0" y="876.5"/>
+    <node id="3" x="1600.0" y="258.0701904296875"/>
+    <node id="4" x="1200.0" y="163.25"/>
+    <node id="5" x="400.0" y="39.22476196289062"/>
+    <node id="6" x="800.0" y="10.86514282226562"/>
+    <node id="7" x="2000.0" y="188.2460632324219"/>
+    <node id="14" x="800.0" y="467.3651428222656"/>
+    <node id="15" x="400.0" y="310.1348571777344"/>
+    <node id="17" x="400.0" y="580.685302734375"/>
+    <node id="18" x="0.0" y="0.0"/>
+    <node id="32" x="0.0" y="436.0"/>
+    <node id="33" x="0.0" y="636.8201904296875"/>
+    <node id="35" x="1200.0" y="362.25"/>
+    <node id="36" x="1200.0" y="509.5701904296875"/>
+    <node id="51" x="2400.0" y="302.4451904296875"/>
+    <node id="95" x="3160.0" y="533.0701904296875"/>
+    <node id="110" x="2733.76953125" y="306.573486328125"/>
+    <node id="125" x="803.7371826171875" y="787.0851440429688"/>
+    <node id="0" x="3200.0" y="373.0701904296875"/>
   </NodeEditorUI>
 </ModularSynthPreset>

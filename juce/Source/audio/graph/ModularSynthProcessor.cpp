@@ -36,6 +36,7 @@
 #include "../modules/FunctionGeneratorModuleProcessor.h"
 #include "../modules/TimePitchModuleProcessor.h"
 #include "../modules/DebugModuleProcessor.h"
+#include "../modules/CommentModuleProcessor.h"
 #include "../modules/MIDIPlayerModuleProcessor.h"
 #include "../modules/PolyVCOModuleProcessor.h"
 #include "../modules/BestPracticeNodeProcessor.h"
@@ -519,6 +520,7 @@ namespace {
             reg("limiter", []{ return std::make_unique<LimiterModuleProcessor>(); });
             reg("gate", []{ return std::make_unique<GateModuleProcessor>(); });
             reg("drive", []{ return std::make_unique<DriveModuleProcessor>(); });
+            reg("comment", []{ return std::make_unique<CommentModuleProcessor>(); });
 
             initialised = true;
         }
@@ -644,6 +646,20 @@ bool ModularSynthProcessor::connect(const NodeID& sourceNodeID, int sourceChanne
         { sourceNodeID, sourceChannel },
         { destNodeID, destChannel }
     };
+
+    // Dedupe: avoid duplicate connections which can cause double-driving/stutter
+    for (const auto& existing : internalGraph->getConnections())
+    {
+        if (existing.source.nodeID == sourceNodeID &&
+            existing.source.channelIndex == sourceChannel &&
+            existing.destination.nodeID == destNodeID &&
+            existing.destination.channelIndex == destChannel)
+        {
+            juce::Logger::writeToLog("[ModSynth][INFO] Skipping duplicate connection [" + juce::String(sourceNodeID.uid) + ":" + juce::String(sourceChannel)
+                                     + "] -> [" + juce::String(destNodeID.uid) + ":" + juce::String(destChannel) + "]");
+            return true; // treat as success
+        }
+    }
 
     const bool ok = internalGraph->addConnection(connection, juce::AudioProcessorGraph::UpdateKind::none);
     if (! ok)

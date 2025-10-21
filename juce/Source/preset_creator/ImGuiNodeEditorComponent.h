@@ -114,56 +114,51 @@ public:
     void startLoadDialog();
     juce::String getTypeForLogical (juce::uint32 logicalId) const;
 
-    // --- New Bitmask-based Pin ID System ---
-
-    // Define how the 32 bits of an integer are allocated
-    constexpr static int LOGICAL_ID_BITS = 16;
-    // Use wider channel space so high parameter indices (for mod pins) don't collide
-    constexpr static int CHANNEL_BITS = 12; // supports up to 4096 distinct channels/param-indices
-    constexpr static int IS_INPUT_BITS = 1;
-    constexpr static int IS_MOD_BITS = 1;
-
-    constexpr static int LOGICAL_ID_SHIFT = 0;
-    constexpr static int CHANNEL_SHIFT = LOGICAL_ID_SHIFT + LOGICAL_ID_BITS;
-    constexpr static int IS_INPUT_SHIFT = CHANNEL_SHIFT + CHANNEL_BITS;
-    constexpr static int IS_MOD_SHIFT = IS_INPUT_SHIFT + IS_INPUT_BITS;
-
-    // Stable attribute registry (avoids collisions and survives frame order)
-    struct AttrKey { juce::uint32 logicalId; int channel; bool isInput; bool isMod; };
-    struct AttrKeyHash { size_t operator()(const AttrKey& k) const noexcept { return ((size_t)k.logicalId << 20) ^ ((size_t)k.channel << 4) ^ ((k.isInput?1:0)<<2) ^ (k.isMod?1:0); } };
-    struct AttrKeyEq { bool operator()(const AttrKey& a, const AttrKey& b) const noexcept { return a.logicalId==b.logicalId && a.channel==b.channel && a.isInput==b.isInput && a.isMod==b.isMod; } };
-
-    int getAttrId(juce::uint32 logicalId, int channel, bool isInput, bool isMod)
+    // --- Collision-Proof Pin ID System ---
+    // 32-bit ID with guaranteed separation from node IDs:
+    // Bit 31: PIN_ID_FLAG (always 1 for pins, 0 for nodes)
+    // Bit 30: IS_INPUT_FLAG (1 for input, 0 for output)
+    // Bits 16-29: Channel Index (14 bits, up to 16384 channels)
+    // Bits 0-15: Node Logical ID (16 bits, up to 65535 nodes)
+    // This ensures pin IDs can never collide with node IDs
+    
+    static int encodePinId(const PinID& pinId)
     {
-        AttrKey key{ logicalId, channel, isInput, isMod };
-        auto it = pinToAttr.find(key);
-        if (it != pinToAttr.end()) return it->second;
-        const int id = nextAttrId++;
-        pinToAttr.emplace(key, id);
-        attrToPin.emplace(id, key);
-        return id;
+        const juce::uint32 PIN_ID_FLAG = (1u << 31);
+        const juce::uint32 IS_INPUT_FLAG = (1u << 30);
+        
+        juce::uint32 encoded = PIN_ID_FLAG |
+                               (pinId.isInput ? IS_INPUT_FLAG : 0) |
+                               (((juce::uint32)pinId.channel & 0x3FFF) << 16) |
+                               (pinId.logicalId & 0xFFFF);
+        
+        return (int)encoded;
     }
-    PinID decodeAttr(int attr) const
-    {
-        PinID out{};
-        if (auto it = attrToPin.find(attr); it != attrToPin.end())
-        {
-            out.logicalId = it->second.logicalId;
-            out.channel   = it->second.channel;
-            out.isInput   = it->second.isInput;
-            out.isMod     = it->second.isMod;
 
-            // If it's a mod pin, look up its parameter ID string
-            if (out.isMod)
-            {
-                // TODO: Implement parameter ID lookup for new bus-based system
-                // if (auto itMod = modAttrToParam.find(attr); itMod != modAttrToParam.end())
-                // {
-                //     out.paramId = itMod->second.second;
-                // }
-            }
+    static PinID decodePinId(int id)
+    {
+        PinID pinId;
+        const juce::uint32 uid = (juce::uint32)id;
+        const juce::uint32 PIN_ID_FLAG = (1u << 31);
+        const juce::uint32 IS_INPUT_FLAG = (1u << 30);
+
+        // Only decode if this is actually a pin ID (has the flag set)
+        if ((uid & PIN_ID_FLAG) == 0)
+        {
+            // This is not a pin ID! Return invalid pin
+            juce::Logger::writeToLog("[ERROR] decodePinId called with non-pin ID: " + juce::String((int)id));
+            pinId.logicalId = 0;
+            pinId.channel = 0;
+            pinId.isInput = false;
+            pinId.isMod = false;
+            return pinId;
         }
-        return out;
+
+        pinId.logicalId = uid & 0xFFFF;
+        pinId.channel   = (int)((uid >> 16) & 0x3FFF); // 14-bit mask
+        pinId.isInput   = (uid & IS_INPUT_FLAG) != 0;
+        pinId.isMod     = false; // handled contextually, not in the bitmask
+        return pinId;
     }
 
 
@@ -177,6 +172,9 @@ public:
     ModularSynthProcessor* synth { nullptr };
     juce::ValueTree uiPending; // applied at next render before drawing nodes
     std::atomic<bool> graphNeedsRebuild { false };
+    
+    // Cache of last-known valid node positions (used when graphNeedsRebuild prevents rendering)
+    std::unordered_map<int, ImVec2> lastKnownNodePositions;
 
     // Selection state
     int selectedLogicalId { 0 };
@@ -185,12 +183,8 @@ public:
 
     // Map of linkId -> (srcAttr, dstAttr) populated each frame
     std::unordered_map<int, std::pair<int,int>> linkIdToAttrs;
-    // Stable attr registry
-    std::unordered_map<AttrKey, int, AttrKeyHash, AttrKeyEq> pinToAttr;
-    std::unordered_map<int, AttrKey> attrToPin;
-    int nextAttrId { 1 };
-
-    // Stable link registry to avoid hash collisions
+    
+    // Link ID registry (cleared each frame for stateless rendering)
     struct LinkKey { int srcAttr; int dstAttr; };
     struct LinkKeyHash { size_t operator()(const LinkKey& k) const noexcept { return ((size_t)k.srcAttr << 32) ^ (size_t)k.dstAttr; } };
     struct LinkKeyEq { bool operator()(const LinkKey& a, const LinkKey& b) const noexcept { return a.srcAttr==b.srcAttr && a.dstAttr==b.dstAttr; } };
@@ -216,6 +210,8 @@ public:
     std::unordered_map<int, ImVec2> pendingNodePositions;
     // Screen-space positions queued for just-created nodes (converted after draw)
     std::unordered_map<int, ImVec2> pendingNodeScreenPositions;
+    // Sizes to apply for specific node IDs on the next render (for Comment nodes)
+    std::unordered_map<int, ImVec2> pendingNodeSizes;
 
     // Cable inspector rolling stats (last N seconds) for quick visual validation
     struct ChannelHistory { std::deque<std::pair<double,float>> samples; };
@@ -309,6 +305,18 @@ public:
     // --- NEW: Handlers for color-coded chaining ---
     void handleColorCodedChaining(PinDataType targetType);
     std::vector<AudioPin> getPinsOfType(juce::uint32 logicalId, bool isInput, PinDataType targetType);
+    
+    // --- Recorder Output Shortcut ---
+    void handleRecordOutput();
+    
+    // --- Module Category Color Coding ---
+    enum class ModuleCategory { Source, Effect, Modulator, Utility, Analysis, Comment, Plugin };
+    ModuleCategory getModuleCategory(const juce::String& moduleType);
+    unsigned int getImU32ForCategory(ModuleCategory category, bool hovered = false);
+    
+    // --- Quick Add Menu ---
+    std::map<juce::String, std::pair<const char*, const char*>> getModuleRegistry();
+    std::vector<std::pair<juce::String, const char*>> getModuleDescriptions();
     
     // --- VST Plugin Support ---
     void addPluginModules();

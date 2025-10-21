@@ -27,6 +27,10 @@ LogicModuleProcessor::LogicModuleProcessor()
 {
     operationParam = apvts.getRawParameterValue("operation");
     gateThresholdParam = apvts.getRawParameterValue("gateThreshold");
+    
+    // Initialize lastOutputValues for cable inspector (4 outputs)
+    for (int i = 0; i < 4; ++i)
+        lastOutputValues.push_back(std::make_unique<std::atomic<float>>(0.0f));
 }
 
 void LogicModuleProcessor::prepareToPlay(double sampleRate, int samplesPerBlock)

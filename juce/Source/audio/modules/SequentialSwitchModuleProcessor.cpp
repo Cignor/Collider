@@ -17,6 +17,10 @@ SequentialSwitchModuleProcessor::SequentialSwitchModuleProcessor()
     threshold2Param = apvts.getRawParameterValue(paramIdThreshold2);
     threshold3Param = apvts.getRawParameterValue(paramIdThreshold3);
     threshold4Param = apvts.getRawParameterValue(paramIdThreshold4);
+    
+    // Initialize lastOutputValues for cable inspector (4 outputs)
+    for (int i = 0; i < 4; ++i)
+        lastOutputValues.push_back(std::make_unique<std::atomic<float>>(0.0f));
 }
 
 juce::AudioProcessorValueTreeState::ParameterLayout SequentialSwitchModuleProcessor::createParameterLayout()

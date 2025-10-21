@@ -115,6 +115,16 @@ void RandomModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce:
     lastCvOutputValue.store(cvOut[numSamples - 1]);
     lastBoolOutputValue.store(boolOut[numSamples - 1]);
     lastTrigOutputValue.store(trigOut[numSamples - 1]);
+    
+    // Update lastOutputValues for cable inspector
+    if (lastOutputValues.size() >= 5)
+    {
+        if (lastOutputValues[0]) lastOutputValues[0]->store(normOut[numSamples - 1]);
+        if (lastOutputValues[1]) lastOutputValues[1]->store(rawOut[numSamples - 1]);
+        if (lastOutputValues[2]) lastOutputValues[2]->store(cvOut[numSamples - 1]);
+        if (lastOutputValues[3]) lastOutputValues[3]->store(boolOut[numSamples - 1]);
+        if (lastOutputValues[4]) lastOutputValues[4]->store(trigOut[numSamples - 1]);
+    }
 }
 
 #if defined(PRESET_CREATOR_UI)

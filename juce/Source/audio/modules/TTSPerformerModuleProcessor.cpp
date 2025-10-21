@@ -1134,7 +1134,7 @@ void TTSPerformerModuleProcessor::SynthesisThread::run()
                 }
                 owner.playbackPosition = 0;
                 owner.isPlaying = false; // Don't auto-play, wait for trigger
-                DBG("[TTS Performer] Clip ready: " + juce::String(clip->audio.getNumSamples()) + " samples")
+                DBG("[TTS Performer] Clip ready: " + juce::String(owner.selectedClip ? owner.selectedClip->audio.getNumSamples() : 0) + " samples");
                 
                 DBG("[TTS Performer] Audio resampling complete, ready for playback");
                 juce::Logger::writeToLog("[TTS Performer] Audio resampling complete, ready for playback");

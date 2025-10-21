@@ -273,6 +273,20 @@ void RecordModuleProcessor::updateSuggestedFilename(const juce::String& sourceNa
     }
 }
 
+void RecordModuleProcessor::setPropertiesFile(juce::PropertiesFile* props)
+{
+    propertiesFile = props;
+    if (propertiesFile != nullptr)
+    {
+        // On initialization, load the last path from settings
+        juce::String lastPath = propertiesFile->getValue("lastRecorderPath");
+        if (juce::File(lastPath).isDirectory())
+        {
+            saveDirectory = juce::File(lastPath);
+        }
+    }
+}
+
 void RecordModuleProcessor::drawParametersInNode(float /*itemWidth*/, const std::function<bool(const juce::String&)>&, const std::function<void()>&)
 {
     // Use a wider, fixed width for this node to ensure everything fits
@@ -342,6 +356,16 @@ void RecordModuleProcessor::drawParametersInNode(float /*itemWidth*/, const std:
     }
     else // --- NEW, SIMPLIFIED IDLE STATE UI ---
     {
+        // Load the last saved directory if available
+        if (propertiesFile && saveDirectory == juce::File::getSpecialLocation(juce::File::userMusicDirectory))
+        {
+            juce::String lastPath = propertiesFile->getValue("lastRecorderPath");
+            if (lastPath.isNotEmpty() && juce::File(lastPath).isDirectory())
+            {
+                saveDirectory = juce::File(lastPath);
+            }
+        }
+        
         // This layout provides more space as requested
         ImGui::Text("Save Location:");
         ImGui::TextWrapped("%s", saveDirectory.getFullPathName().toRawUTF8());
@@ -354,6 +378,9 @@ void RecordModuleProcessor::drawParametersInNode(float /*itemWidth*/, const std:
                 if (dir.isDirectory())
                 {
                     saveDirectory = dir;
+                    // Save the path for next time
+                    if (propertiesFile)
+                        propertiesFile->setValue("lastRecorderPath", dir.getFullPathName());
                 }
             });
         }

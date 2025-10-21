@@ -17,6 +17,11 @@ TrackMixerModuleProcessor::TrackMixerModuleProcessor()
         trackGainParams[i] = apvts.getRawParameterValue("track_gain_" + juce::String(i + 1));
         trackPanParams[i]  = apvts.getRawParameterValue("track_pan_" + juce::String(i + 1));
     }
+    
+    // Initialize lastOutputValues for cable inspector
+    lastOutputValues.push_back(std::make_unique<std::atomic<float>>(0.0f)); // Out L
+    lastOutputValues.push_back(std::make_unique<std::atomic<float>>(0.0f)); // Out R
+    
   // Initialize effective track count for UI
   if (numTracksParam != nullptr)
       lastActiveTracks.store(numTracksParam->get());

@@ -107,6 +107,9 @@ void VCOModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::Mi
         
         // Apply gate with click-free smoothing
         float targetGate = gateActive ? gateCV[i] : 1.0f;
+        // Treat near-zero magnitudes as zero to avoid flutter from denormals or noise
+        if (std::abs(targetGate) < 1.0e-4f) targetGate = 0.0f;
+        if (targetGate > 1.0f) targetGate = 1.0f;
         smoothedGate += (targetGate - smoothedGate) * GATE_SMOOTHING_FACTOR;
         const float finalSample = s * smoothedGate;
         
@@ -117,6 +120,12 @@ void VCOModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::Mi
             setLiveParamValue(paramIdFrequency, freq);
             setLiveParamValue(paramIdWaveform, (float) waveform);
         }
+    }
+    
+    // Update inspector value for the single output channel
+    if (!lastOutputValues.empty() && lastOutputValues[0])
+    {
+        lastOutputValues[0]->store(outBus.getSample(0, buffer.getNumSamples() - 1));
     }
 }
 

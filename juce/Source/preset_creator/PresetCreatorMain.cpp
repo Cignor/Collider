@@ -46,6 +46,14 @@ void PresetCreatorApplication::initialise(const juce::String&)
         // Initialize plugin management
         pluginFormatManager.addDefaultFormats();
         
+        // Initialize application properties
+        juce::PropertiesFile::Options options;
+        options.applicationName = getApplicationName();
+        options.filenameSuffix = ".settings";
+        options.osxLibrarySubFolder = "Application Support";
+        options.folderName = appDataDir.getFullPathName();
+        appProperties = std::make_unique<juce::PropertiesFile>(options);
+        
         // Define where to save the plugin list XML
         auto deadMansPedalFile = appDataDir.getChildFile("blacklisted_plugins.txt");
         pluginScanListFile = appDataDir.getChildFile("known_plugins.xml");
@@ -104,6 +112,10 @@ void PresetCreatorApplication::shutdown()
                 juce::Logger::writeToLog("Plugin list saved to: " + pluginScanListFile.getFullPathName());
             }
         }
+        
+        // Save application properties
+        if (appProperties)
+            appProperties->saveIfNeeded();
         
         RtLogger::shutdown(); 
         mainWindow = nullptr; 

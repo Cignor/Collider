@@ -40,11 +40,35 @@ void DriveModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::
     const float mixAmount = mixParam->load();
 
     // Copy input to output
-    const int numChannels = juce::jmin(inBus.getNumChannels(), outBus.getNumChannels());
-    for (int ch = 0; ch < numChannels; ++ch)
+    const int numInputChannels = inBus.getNumChannels();
+    const int numOutputChannels = outBus.getNumChannels();
+    const int numSamples = buffer.getNumSamples();
+
+    if (numInputChannels > 0)
     {
-        outBus.copyFrom(ch, 0, inBus, ch, 0, buffer.getNumSamples());
+        // If input is mono, copy it to both left and right outputs.
+        if (numInputChannels == 1 && numOutputChannels > 1)
+        {
+            outBus.copyFrom(0, 0, inBus, 0, 0, numSamples);
+            outBus.copyFrom(1, 0, inBus, 0, 0, numSamples);
+        }
+        // Otherwise, perform a standard stereo copy.
+        else
+        {
+            const int channelsToCopy = juce::jmin(numInputChannels, numOutputChannels);
+            for (int ch = 0; ch < channelsToCopy; ++ch)
+            {
+                outBus.copyFrom(ch, 0, inBus, ch, 0, numSamples);
+            }
+        }
     }
+    else
+    {
+        // If no input is connected, ensure the output is silent.
+        outBus.clear();
+    }
+    
+    const int numChannels = juce::jmin(numInputChannels, numOutputChannels);
 
     // If drive is zero and mix is fully dry, we can skip processing entirely.
     if (driveAmount <= 0.001f && mixAmount <= 0.001f)
