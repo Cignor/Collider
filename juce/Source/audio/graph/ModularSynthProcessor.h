@@ -1,6 +1,9 @@
 #pragma once
 
 #include <juce_audio_processors/juce_audio_processors.h>
+#include <atomic>
+#include <vector>
+#include <memory>
 #include "../modules/ModuleProcessor.h"
 #include "../modules/InputDebugModuleProcessor.h"
 
@@ -34,7 +37,7 @@ public:
     using Node = juce::AudioProcessorGraph::Node;
     using NodeID = juce::AudioProcessorGraph::NodeID;
 
-    NodeID addModule(const juce::String& moduleType);
+    NodeID addModule(const juce::String& moduleType, bool commit = true);
     NodeID addVstModule(juce::AudioPluginFormatManager& formatManager, const juce::PluginDescription& vstDesc);
     NodeID addVstModule(juce::AudioPluginFormatManager& formatManager, const juce::PluginDescription& vstDesc, juce::uint32 logicalIdToAssign);
     void removeModule(const NodeID& nodeID);
@@ -67,6 +70,29 @@ public:
     // Access a module processor for UI parameter editing
     ModuleProcessor* getModuleForLogical (juce::uint32 logicalId) const;
     
+    // === GLOBAL TRANSPORT & TIMING ===
+    // (TransportState struct is defined in ModuleProcessor.h)
+    
+    TransportState getTransportState() const { return m_transportState; }
+    void setPlaying(bool playing) { m_transportState.isPlaying = playing; }
+    void setBPM(double bpm) { m_transportState.bpm = juce::jlimit(20.0, 999.0, bpm); }
+    void resetTransportPosition() { m_samplePosition = 0; m_transportState.songPositionBeats = 0.0; m_transportState.songPositionSeconds = 0.0; }
+    
+    // === VOICE MANAGEMENT FOR POLYPHONY ===
+    struct Voice {
+        bool isActive = false;
+        int noteNumber = -1;
+        float velocity = 0.0f;
+        juce::uint32 age = 0;  // Used for note stealing (oldest voice)
+        juce::uint32 targetModuleLogicalId = 0;  // Which PolyVCO this voice is assigned to
+    };
+    
+    void setVoiceManagerEnabled(bool enabled) { m_voiceManagerEnabled = enabled; }
+    bool isVoiceManagerEnabled() const { return m_voiceManagerEnabled; }
+    void setMaxVoices(int numVoices) { m_voices.resize(numVoices); }
+    int getMaxVoices() const { return static_cast<int>(m_voices.size()); }
+    const std::vector<Voice>& getVoices() const { return m_voices; }
+    
     // === COMPREHENSIVE DIAGNOSTICS SYSTEM ===
     
     // Get system-wide diagnostics
@@ -95,6 +121,12 @@ public:
     // Plugin format manager for VST support (optional, set by application)
     void setPluginFormatManager(juce::AudioPluginFormatManager* manager) { pluginFormatManager = manager; }
     void setKnownPluginList(juce::KnownPluginList* list) { knownPluginList = list; }
+    
+    // === PROBE TOOL API ===
+    // Probe system for instant signal debugging without manual patching
+    void setProbeConnection(const NodeID& sourceNodeID, int sourceChannel);
+    void clearProbeConnection();
+    ModuleProcessor* getProbeScopeProcessor() const;
 
 private:
     // The internal graph that represents the modular patch
@@ -107,6 +139,10 @@ private:
 
     // The APVTS that will expose proxy parameters to the host/AudioEngine
     juce::AudioProcessorValueTreeState apvts;
+
+    // Thread-safe module access for audio thread
+    mutable juce::CriticalSection moduleLock;
+    std::atomic<std::shared_ptr<const std::vector<std::shared_ptr<ModuleProcessor>>>> activeAudioProcessors;
 
     // Manage module nodes (legacy map by NodeID.uid)
     std::map<juce::uint32, Node::Ptr> modules; // keyed by NodeID.uid
@@ -122,8 +158,25 @@ private:
     // Optional pointers for VST support
     juce::AudioPluginFormatManager* pluginFormatManager { nullptr };
     juce::KnownPluginList* knownPluginList { nullptr };
+    
+    // Probe scope for instant signal debugging (hidden from user, not saved in presets)
+    Node::Ptr probeScopeNode;
+    NodeID probeScopeNodeId;
+    
+    // Transport state
+    TransportState m_transportState;
+    juce::uint64 m_samplePosition { 0 };
+    
+    // Voice management state
+    std::vector<Voice> m_voices;
+    bool m_voiceManagerEnabled { false };
+    juce::uint32 m_globalVoiceAge { 0 };  // Incremented for each note-on
+    
+    // Voice management helper methods
+    int findFreeVoice();
+    int findOldestVoice();
+    void assignNoteToVoice(int voiceIndex, const juce::MidiMessage& noteOn);
+    void releaseVoice(const juce::MidiMessage& noteOff);
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (ModularSynthProcessor)
 };
-
-

@@ -8,7 +8,7 @@
 
 struct Command
 {
-    enum class Type { Create, Destroy, Update, DebugDump, LoadPreset, ResetFx, RandomizePitch, RandomizeTime, SetChaosMode };
+    enum class Type { Create, Destroy, Update, DebugDump, LoadPreset, ResetFx, RandomizePitch, RandomizeTime, SetChaosMode, LoadPatchState };
     Type type { Type::Update };
     juce::uint64 voiceId { 0 };
     // Create
@@ -21,12 +21,14 @@ struct Command
     int   initialPitchOnGrid { -1 }; // -1 unknown, 0 false, 1 true
     int   initialLooping     { -1 }; // -1 unknown, 0 false, 1 true
     float initialVolume      { std::numeric_limits<float>::quiet_NaN() };
-    juce::String presetData; // ADD THIS LINE
+    juce::String presetData; // For LoadPreset command
     // Update
     juce::String paramName;    // e.g. "pan", "gain", "cutoff"
     float paramValue { 0.0f };
     // Chaos Mode
     bool chaosModeEnabled { false };
+    // Patch State (for LoadPatchState command from Snapshot Sequencer)
+    juce::MemoryBlock patchState;
 };
 
 class CommandBus

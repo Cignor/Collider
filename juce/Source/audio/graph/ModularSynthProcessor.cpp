@@ -54,6 +54,11 @@
 #include "../modules/LimiterModuleProcessor.h"
 #include "../modules/GateModuleProcessor.h"
 #include "../modules/DriveModuleProcessor.h"
+#include "../modules/SnapshotSequencerModuleProcessor.h"
+#include "../modules/MIDICVModuleProcessor.h"
+#include "../modules/InletModuleProcessor.h"
+#include "../modules/OutletModuleProcessor.h"
+#include "../modules/MetaModuleProcessor.h"
 
 ModularSynthProcessor::ModularSynthProcessor()
     : juce::AudioProcessor(BusesProperties()
@@ -68,22 +73,32 @@ ModularSynthProcessor::ModularSynthProcessor()
     audioOutputNode = internalGraph->addNode(std::make_unique<IOProcessor>(IOProcessor::audioOutputNode));
     midiInputNode  = internalGraph->addNode(std::make_unique<IOProcessor>(IOProcessor::midiInputNode));
 
-    // Intentionally do NOT connect audio input -> output.
-    // The modular container acts as a source; connections are created programmatically.
-
     internalGraph->addConnection({ { midiInputNode->nodeID, juce::AudioProcessorGraph::midiChannelIndex },
                                    { audioOutputNode->nodeID, juce::AudioProcessorGraph::midiChannelIndex } });
+    
+    probeScopeNode = internalGraph->addNode(std::make_unique<ScopeModuleProcessor>());
+    probeScopeNodeId = probeScopeNode->nodeID;
+    juce::Logger::writeToLog("[ModularSynth] Initialized probe scope with nodeID: " + juce::String(probeScopeNodeId.uid));
+    
+    activeAudioProcessors.store(std::make_shared<const std::vector<std::shared_ptr<ModuleProcessor>>>());
+    
+    m_voices.resize(8);
+    for (auto& voice : m_voices)
+    {
+        voice.isActive = false;
+        voice.noteNumber = -1;
+        voice.velocity = 0.0f;
+        voice.age = 0;
+        voice.targetModuleLogicalId = 0;
+    }
 }
 
 ModularSynthProcessor::~ModularSynthProcessor() {}
 
 void ModularSynthProcessor::prepareToPlay(double sampleRate, int samplesPerBlock)
 {
-    // Ensure the internal graph has matching I/O channel counts before preparation
     internalGraph->setPlayConfigDetails(getTotalNumInputChannels(), getTotalNumOutputChannels(), sampleRate, samplesPerBlock);
     internalGraph->prepareToPlay(sampleRate, samplesPerBlock);
-
-    // REPLACED: Do not rebuild here. It invalidates the preparation.
 }
 
 void ModularSynthProcessor::releaseResources()
@@ -94,8 +109,66 @@ void ModularSynthProcessor::releaseResources()
 void ModularSynthProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midiMessages)
 {
     try {
+        if (m_transportState.isPlaying)
+        {
+            m_samplePosition += buffer.getNumSamples();
+            m_transportState.songPositionSeconds = m_samplePosition / getSampleRate();
+            m_transportState.songPositionBeats = (m_transportState.songPositionSeconds / 60.0) * m_transportState.bpm;
+        }
+
+        // --- FINAL THREAD-SAFE FIX ---
+        auto currentProcessors = activeAudioProcessors.load();
+        if (currentProcessors)
+        {
+            // Iterate over the safe, shared list.
+            for (const auto& modulePtr : *currentProcessors)
+            {
+                // SAFETY NET + GRANULAR LOGGING
+                if (modulePtr != nullptr)
+                {
+                    // Log the memory address before calling the function
+                    // juce::Logger::writeToLog("[AudioThread] Ticking module at 0x" + juce::String::toHexString((juce::pointer_sized_int)modulePtr.get()));
+                    modulePtr->setTimingInfo(m_transportState);
+                }
+                else
+                {
+                    // This should never happen with the shared_ptr fix, but if it does, it's critical info.
+                    juce::Logger::writeToLog("[AudioThread] CRITICAL WARNING: Encountered nullptr in active processor list!");
+                }
+            }
+        }
+        // --- END OF FIX ---
+        
+        if (m_voiceManagerEnabled && !m_voices.empty())
+        {
+            juce::MidiBuffer processedMidi;
+            for (const auto metadata : midiMessages)
+            {
+                const auto msg = metadata.getMessage();
+                if (msg.isNoteOn())
+                {
+                    int voiceIndex = findFreeVoice();
+                    if (voiceIndex < 0) voiceIndex = findOldestVoice();
+                    if (voiceIndex >= 0)
+                    {
+                        assignNoteToVoice(voiceIndex, msg);
+                        processedMidi.addEvent(msg, metadata.samplePosition);
+                    }
+                }
+                else if (msg.isNoteOff())
+                {
+                    releaseVoice(msg);
+                    processedMidi.addEvent(msg, metadata.samplePosition);
+                }
+                else
+                {
+                    processedMidi.addEvent(msg, metadata.samplePosition);
+                }
+            }
+            midiMessages.swapWith(processedMidi);
+        }
+        
         internalGraph->processBlock(buffer, midiMessages);
-        // Diagnostics: if internal graph produced silence for a while, log it
         static int silentCtr = 0;
         if (buffer.getMagnitude(0, buffer.getNumSamples()) < 1.0e-6f)
         {
@@ -115,17 +188,15 @@ void ModularSynthProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce:
         buffer.clear();
         return;
     }
-
 }
 
 void ModularSynthProcessor::getStateInformation(juce::MemoryBlock& destData)
 {
+    const juce::ScopedLock lock (moduleLock);
     juce::ValueTree root("ModularSynthPreset");
     root.setProperty("version", 1, nullptr);
 
-    // Modules
     juce::ValueTree modsVT("modules");
-    // Build reverse lookup NodeID.uid -> logicalId
     std::map<juce::uint32, juce::uint32> nodeUidToLogical;
     for (const auto& kv : logicalIdToModule)
     {
@@ -136,17 +207,13 @@ void ModularSynthProcessor::getStateInformation(juce::MemoryBlock& destData)
         juce::ValueTree mv("module");
         mv.setProperty("logicalId", (int) logicalId, nullptr);
         mv.setProperty("type", kv.second.type, nullptr);
-        // Attach params as child using the module's APVTS state
         auto itNode = modules.find(nodeUID);
         if (itNode != modules.end())
         {
             if (auto* modProc = dynamic_cast<ModuleProcessor*>(itNode->second->getProcessor()))
             {
-                // For VST modules, save the full processor state via extra state
                 if (auto* vstHost = dynamic_cast<VstHostModuleProcessor*>(modProc))
                 {
-                    // VST Module Saving Path
-                    // The extra state tree contains both the plugin identity and its binary state
                     if (auto extra = vstHost->getExtraStateTree(); extra.isValid())
                     {
                         juce::ValueTree extraWrapper("extra");
@@ -156,14 +223,11 @@ void ModularSynthProcessor::getStateInformation(juce::MemoryBlock& destData)
                 }
                 else
                 {
-                    // Regular Module Saving Path
-                    // 1. Save APVTS parameters
                     juce::ValueTree params = modProc->getAPVTS().copyState();
                     juce::ValueTree paramsWrapper("params");
                     paramsWrapper.addChild(params, -1, nullptr);
                     mv.addChild(paramsWrapper, -1, nullptr);
 
-                    // 2. Append optional extra state (like sample paths, etc.)
                     if (auto extra = modProc->getExtraStateTree(); extra.isValid())
                     {
                         juce::ValueTree extraWrapper("extra");
@@ -177,7 +241,6 @@ void ModularSynthProcessor::getStateInformation(juce::MemoryBlock& destData)
     }
     root.addChild(modsVT, -1, nullptr);
 
-    // Connections
     juce::ValueTree connsVT("connections");
     for (const auto& c : internalGraph->getConnections())
     {
@@ -202,14 +265,12 @@ void ModularSynthProcessor::getStateInformation(juce::MemoryBlock& destData)
         }
         else
         {
-            continue; // skip non-module connections
+            continue;
         }
         connsVT.addChild(cv, -1, nullptr);
     }
     root.addChild(connsVT, -1, nullptr);
 
-
-    // Serialize to XML
     if (auto xml = root.createXml())
     {
         juce::MemoryOutputStream mos(destData, false);
@@ -227,9 +288,6 @@ void ModularSynthProcessor::setStateInformation(const void* data, int sizeInByte
         return;
     }
 
-    // --- THIS IS THE NEW, CORRECTED LOGIC ---
-
-    // 1. Clear the entire existing state first.
     clearAll();
     juce::Logger::writeToLog("[STATE] Cleared existing state.");
 
@@ -242,8 +300,6 @@ void ModularSynthProcessor::setStateInformation(const void* data, int sizeInByte
     }
     
     juce::Logger::writeToLog("[STATE] Found <modules> block with " + juce::String(modsVT.getNumChildren()) + " children.");
-
-    // 2. First pass: Find the maximum logical ID in the preset to prevent future collisions.
     juce::uint32 maxId = 0;
     for (int i = 0; i < modsVT.getNumChildren(); ++i)
     {
@@ -253,9 +309,8 @@ void ModularSynthProcessor::setStateInformation(const void* data, int sizeInByte
             maxId = juce::jmax(maxId, (juce::uint32)(int)mv.getProperty("logicalId", 0));
         }
     }
-    nextLogicalId = maxId + 1; // Set the counter to be safely above the highest loaded ID.
+    nextLogicalId = maxId + 1;
 
-    // 3. Second pass: Recreate all modules and map their logical IDs.
     std::map<juce::uint32, NodeID> logicalToNodeId;
     juce::Logger::writeToLog("[STATE] Starting module recreation pass...");
     
@@ -277,7 +332,6 @@ void ModularSynthProcessor::setStateInformation(const void* data, int sizeInByte
         {
             NodeID nodeId;
             
-            // Check if this is a VST module by looking for the extra state
             auto extraWrapper = mv.getChildWithName("extra");
             bool isVstModule = false;
             
@@ -289,12 +343,10 @@ void ModularSynthProcessor::setStateInformation(const void* data, int sizeInByte
                     isVstModule = true;
                     juce::Logger::writeToLog("[STATE]   Loading VST module...");
                     
-                    // Get the plugin identifier from the extra state
                     juce::String identifier = extraState.getProperty("fileOrIdentifier", "").toString();
                     
                     if (identifier.isNotEmpty() && pluginFormatManager != nullptr && knownPluginList != nullptr)
                     {
-                        // Find the plugin in the known plugins list
                         bool found = false;
                         for (const auto& desc : knownPluginList->getTypes())
                         {
@@ -327,9 +379,8 @@ void ModularSynthProcessor::setStateInformation(const void* data, int sizeInByte
             
             if (!isVstModule)
             {
-                // Create regular module using the existing addModule function
                 juce::Logger::writeToLog("[STATE]   Calling addModule('" + type + "')...");
-                nodeId = addModule(type);
+                nodeId = addModule(type, false);
                 juce::Logger::writeToLog("[STATE]   addModule returned nodeId.uid=" + juce::String(nodeId.uid));
             }
             
@@ -339,11 +390,8 @@ void ModularSynthProcessor::setStateInformation(const void* data, int sizeInByte
             {
                 juce::Logger::writeToLog("[STATE]   Node created successfully.");
                 
-                // For VST modules, the logical ID was already assigned in addVstModule
-                // For regular modules, we need to update the mapping
                 if (!isVstModule)
                 {
-                    // Remove the auto-assigned logical mapping and assign the correct one
                     for (auto it = logicalIdToModule.begin(); it != logicalIdToModule.end(); )
                     {
                         if (it->second.nodeID == nodeId)
@@ -357,7 +405,6 @@ void ModularSynthProcessor::setStateInformation(const void* data, int sizeInByte
                 logicalToNodeId[logicalId] = nodeId;
                 juce::Logger::writeToLog("[STATE]   Mapped logicalId " + juce::String(logicalId) + " to nodeId.uid " + juce::String(nodeId.uid));
 
-                // Restore parameters for all modules
                 auto paramsWrapper = mv.getChildWithName("params");
                 if (paramsWrapper.isValid() && paramsWrapper.getNumChildren() > 0)
                 {
@@ -369,7 +416,6 @@ void ModularSynthProcessor::setStateInformation(const void* data, int sizeInByte
                     }
                 }
 
-                // Restore optional extra state (e.g., VST plugin state, file paths)
                 auto extraWrapper = mv.getChildWithName("extra");
                 if (extraWrapper.isValid() && extraWrapper.getNumChildren() > 0)
                 {
@@ -394,7 +440,6 @@ void ModularSynthProcessor::setStateInformation(const void* data, int sizeInByte
     
     juce::Logger::writeToLog("[STATE] Module recreation complete. Created " + juce::String(logicalToNodeId.size()) + " modules.");
 
-    // 4. Recreate connections using the now-populated logical ID map.
     auto connsVT = root.getChildWithName("connections");
     if (connsVT.isValid())
     {
@@ -440,7 +485,6 @@ void ModularSynthProcessor::setStateInformation(const void* data, int sizeInByte
     }
 
 
-    // 6. Finalize all changes.
     juce::Logger::writeToLog("[STATE] Calling commitChanges()...");
     commitChanges();
     juce::Logger::writeToLog("[STATE] Restore complete.");
@@ -498,10 +542,8 @@ namespace {
             reg("input debug", []{ return std::make_unique<InputDebugModuleProcessor>(); });
             reg("vocal tract filter", []{ return std::make_unique<VocalTractFilterModuleProcessor>(); });
             reg("value", []{ return std::make_unique<ValueModuleProcessor>(); });
-            // obsolete simple TTS removed; keep performer
             reg("tts performer", []{ return std::make_unique<TTSPerformerModuleProcessor>(); });
             reg("sample loader", []{ return std::make_unique<SampleLoaderModuleProcessor>(); });
-            // Canonicalize Curve Drawer module key
             reg("function generator", []{ return std::make_unique<FunctionGeneratorModuleProcessor>(); });
             reg("timepitch", []{ return std::make_unique<TimePitchModuleProcessor>(); });
             reg("midi player", []{ return std::make_unique<MIDIPlayerModuleProcessor>(); });
@@ -521,6 +563,15 @@ namespace {
             reg("gate", []{ return std::make_unique<GateModuleProcessor>(); });
             reg("drive", []{ return std::make_unique<DriveModuleProcessor>(); });
             reg("comment", []{ return std::make_unique<CommentModuleProcessor>(); });
+            reg("snapshot sequencer", []{ return std::make_unique<SnapshotSequencerModuleProcessor>(); });
+            reg("snapshotsequencer", []{ return std::make_unique<SnapshotSequencerModuleProcessor>(); });
+            reg("midi cv", []{ return std::make_unique<MIDICVModuleProcessor>(); });
+            reg("midicv", []{ return std::make_unique<MIDICVModuleProcessor>(); });
+            
+            reg("meta module", []{ return std::make_unique<MetaModuleProcessor>(); });
+            reg("metamodule", []{ return std::make_unique<MetaModuleProcessor>(); });
+            reg("inlet", []{ return std::make_unique<InletModuleProcessor>(); });
+            reg("outlet", []{ return std::make_unique<OutletModuleProcessor>(); });
 
             initialised = true;
         }
@@ -528,8 +579,9 @@ namespace {
     }
 }
 
-ModularSynthProcessor::NodeID ModularSynthProcessor::addModule(const juce::String& moduleType)
+ModularSynthProcessor::NodeID ModularSynthProcessor::addModule(const juce::String& moduleType, bool commit)
 {
+    const juce::ScopedLock lock (moduleLock);
     auto& factory = getModuleFactory();
     const juce::String key = moduleType.toLowerCase();
     std::unique_ptr<juce::AudioProcessor> processor;
@@ -560,8 +612,11 @@ ModularSynthProcessor::NodeID ModularSynthProcessor::addModule(const juce::Strin
             setAudioInputChannelMapping(node->nodeID, defaultMapping);
         }
         
-        // Ensure the new module is immediately active
-        commitChanges();
+        if (commit)
+        {
+            // Ensure the new module is immediately active
+            commitChanges();
+        }
         
         return node->nodeID;
     }
@@ -570,7 +625,6 @@ ModularSynthProcessor::NodeID ModularSynthProcessor::addModule(const juce::Strin
     return {};
 }
 
-// This overload is used when loading from presets (with a specific logical ID)
 ModularSynthProcessor::NodeID ModularSynthProcessor::addVstModule(
     juce::AudioPluginFormatManager& formatManager,
     const juce::PluginDescription& vstDesc,
@@ -586,10 +640,8 @@ ModularSynthProcessor::NodeID ModularSynthProcessor::addVstModule(
         return {};
     }
 
-    // 1. Create the wrapper - its constructor automatically configures the correct bus layout
     auto wrapper = std::make_unique<VstHostModuleProcessor>(std::move(instance), vstDesc);
     
-    // 2. Add the fully configured node to the graph
     auto node = internalGraph->addNode(std::move(wrapper), {}, juce::AudioProcessorGraph::UpdateKind::none);
 
     if (auto* mp = dynamic_cast<ModuleProcessor*>(node->getProcessor()))
@@ -597,7 +649,6 @@ ModularSynthProcessor::NodeID ModularSynthProcessor::addVstModule(
     
     modules[(juce::uint32) node->nodeID.uid] = node;
     
-    // Use the assigned logical ID (important for preset loading)
     logicalIdToModule[logicalIdToAssign] = LogicalModule{ node->nodeID, vstDesc.name };
     
     if (auto* mp = dynamic_cast<ModuleProcessor*>(node->getProcessor()))
@@ -607,16 +658,13 @@ ModularSynthProcessor::NodeID ModularSynthProcessor::addVstModule(
     return node->nodeID;
 }
 
-// This overload is used for interactive adding (generates a new logical ID)
 ModularSynthProcessor::NodeID ModularSynthProcessor::addVstModule(
     juce::AudioPluginFormatManager& formatManager,
     const juce::PluginDescription& vstDesc)
 {
-    // Call the overload with a fresh ID
     const juce::uint32 logicalId = nextLogicalId++;
     auto nodeId = addVstModule(formatManager, vstDesc, logicalId);
     
-    // Commit changes for interactive adding
     if (nodeId.uid != 0)
         commitChanges();
     
@@ -626,13 +674,23 @@ ModularSynthProcessor::NodeID ModularSynthProcessor::addVstModule(
 void ModularSynthProcessor::removeModule(const NodeID& nodeID)
 {
     if (nodeID.uid == 0) return;
+    const juce::ScopedLock lock(moduleLock); // Ensure thread-safe access
+
+    // --- LOGGING ---
+    if (auto* node = internalGraph->getNodeForId(nodeID))
+    {
+        if (auto* proc = node->getProcessor())
+        {
+            juce::Logger::writeToLog("[GraphSync] Deleting module L-ID " + juce::String(getLogicalIdForNode(nodeID)) + 
+                                   " (ptr: 0x" + juce::String::toHexString((int64_t)proc) + ")");
+        }
+    }
+    // --- END LOGGING ---
 
     const juce::uint32 logicalId = getLogicalIdForNode(nodeID);
 
-    // --- 2. Remove the main module node (JUCE will handle audio connections automatically) ---
     internalGraph->removeNode(nodeID, juce::AudioProcessorGraph::UpdateKind::none);
     
-    // --- 3. Clean up internal tracking maps ---
     modules.erase((juce::uint32) nodeID.uid);
     if (logicalId != 0)
     {
@@ -647,7 +705,6 @@ bool ModularSynthProcessor::connect(const NodeID& sourceNodeID, int sourceChanne
         { destNodeID, destChannel }
     };
 
-    // Dedupe: avoid duplicate connections which can cause double-driving/stutter
     for (const auto& existing : internalGraph->getConnections())
     {
         if (existing.source.nodeID == sourceNodeID &&
@@ -657,7 +714,7 @@ bool ModularSynthProcessor::connect(const NodeID& sourceNodeID, int sourceChanne
         {
             juce::Logger::writeToLog("[ModSynth][INFO] Skipping duplicate connection [" + juce::String(sourceNodeID.uid) + ":" + juce::String(sourceChannel)
                                      + "] -> [" + juce::String(destNodeID.uid) + ":" + juce::String(destChannel) + "]");
-            return true; // treat as success
+            return true;
         }
     }
 
@@ -674,13 +731,11 @@ void ModularSynthProcessor::commitChanges()
 {
     internalGraph->rebuild();
     
-    // CRITICAL FIX: Force graph to re-prepare after topology changes. This makes the "Silent Wire" carry audio.
     if (getSampleRate() > 0 && getBlockSize() > 0)
     {
         internalGraph->prepareToPlay(getSampleRate(), getBlockSize());
     }
 
-    // --- SANE, ON-DEMAND DIAGNOSTICS (NO MORE LOG FLOOD) ---
     juce::Logger::writeToLog("--- Modular Synth Internal Patch State ---");
     juce::Logger::writeToLog("Num Nodes: " + juce::String(internalGraph->getNodes().size()));
     juce::Logger::writeToLog("Num Connections: " + juce::String(internalGraph->getConnections().size()));
@@ -699,7 +754,6 @@ void ModularSynthProcessor::commitChanges()
     }
     juce::Logger::writeToLog("-----------------------------------------");
     
-    // CRITICAL FIX: Always sync logical IDs to module processors to fix preset loading.
     for (const auto& kv : logicalIdToModule)
     {
         if (ModuleProcessor* mp = getModuleForLogical(kv.first))
@@ -707,34 +761,63 @@ void ModularSynthProcessor::commitChanges()
             mp->setLogicalId(kv.first);
         }
     }
+    
+    // --- FINAL THREAD-SAFE FIX: Rebuild the list of active processors for the audio thread ---
+    auto newProcessors = std::make_shared<std::vector<std::shared_ptr<ModuleProcessor>>>();
+    {
+        const juce::ScopedLock lock(moduleLock);
+        newProcessors->reserve(logicalIdToModule.size());
+        juce::Logger::writeToLog("[GraphSync] Building new processor list...");
+        for (const auto& pair : logicalIdToModule)
+        {
+            // Find the Node::Ptr from the modules map
+            auto modIt = modules.find((juce::uint32)pair.second.nodeID.uid);
+            if (modIt != modules.end())
+            {
+                auto nodePtr = modIt->second; // This is a Node::Ptr (shared_ptr<Node>)
+                if (auto* proc = dynamic_cast<ModuleProcessor*>(nodePtr->getProcessor()))
+                {
+                    // Create a shared_ptr to the processor with a custom deleter that keeps the Node alive
+                    auto processor = std::shared_ptr<ModuleProcessor>(proc, [nodePtr](ModuleProcessor*) {
+                        // Custom deleter: just hold the nodePtr, don't actually delete the processor
+                        // When this shared_ptr is destroyed, the nodePtr will be released
+                    });
+                    newProcessors->push_back(processor);
+                    juce::Logger::writeToLog("  [+] Adding module L-ID " + juce::String(pair.first) + 
+                                           " (ptr: 0x" + juce::String::toHexString((int64_t)proc) + ")");
+                }
+            }
+        }
+    }
+    activeAudioProcessors.store(newProcessors);
+    juce::Logger::writeToLog("[GraphSync] Updated active processor list for audio thread with " + juce::String(newProcessors->size()) + " modules.");
 }
 
 void ModularSynthProcessor::clearAll()
 {
-
-    // Remove all module nodes
+    const juce::ScopedLock lock (moduleLock);
+    
+    // --- LOGGING ---
+    juce::Logger::writeToLog("[GraphSync] clearAll() initiated - removing " + juce::String(logicalIdToModule.size()) + " modules");
+    // --- END LOGGING ---
+    
     for (const auto& kv : logicalIdToModule)
     {
         internalGraph->removeNode(kv.second.nodeID, juce::AudioProcessorGraph::UpdateKind::none);
     }
 
-    // Clear tracking maps and reset ID counter
     modules.clear();
     logicalIdToModule.clear();
     nextLogicalId = 1;
 
-    // Rebuild the graph to apply changes
     commitChanges();
 }
 
 void ModularSynthProcessor::clearAllConnections()
 {
-
-    // Remove all audio connections, except for the internal MIDI connection
     auto connections = internalGraph->getConnections();
     for (const auto& conn : connections)
     {
-        // Check if this is a MIDI connection by comparing with MIDI channel index
         if (conn.source.channelIndex != juce::AudioProcessorGraph::midiChannelIndex && 
             conn.destination.channelIndex != juce::AudioProcessorGraph::midiChannelIndex)
         {
@@ -764,13 +847,11 @@ void ModularSynthProcessor::clearConnectionsForNode(const NodeID& nodeID)
 {
     if (nodeID.uid == 0) return;
 
-    // --- 1. Remove Audio Connections ---
     auto connections = internalGraph->getConnections();
     for (const auto& conn : connections)
     {
         if (conn.source.nodeID == nodeID || conn.destination.nodeID == nodeID)
         {
-            // Don't remove the internal MIDI pass-through connection
             if (conn.source.channelIndex != juce::AudioProcessorGraph::midiChannelIndex)
             {
                 internalGraph->removeConnection(conn, juce::AudioProcessorGraph::UpdateKind::none);
@@ -780,7 +861,6 @@ void ModularSynthProcessor::clearConnectionsForNode(const NodeID& nodeID)
 
     const juce::uint32 logicalId = getLogicalIdForNode(nodeID);
 
-    // --- 3. Apply all changes ---
     commitChanges();
 }
 
@@ -801,7 +881,6 @@ void ModularSynthProcessor::setAudioInputChannelMapping(const NodeID& audioInput
     juce::Logger::writeToLog("[ModSynth] Remapping Audio Input Module " + juce::String(audioInputNodeId.uid) +
                              " to channels: [" + mapStr + "]");
 
-    // 1. Remove all existing connections from hardware input to this module
     auto connections = internalGraph->getConnections();
     for (const auto& conn : connections)
     {
@@ -811,7 +890,6 @@ void ModularSynthProcessor::setAudioInputChannelMapping(const NodeID& audioInput
         }
     }
 
-    // 2. Add new connections based on the map
     for (int moduleChannel = 0; moduleChannel < (int)channelMap.size(); ++moduleChannel)
     {
         int hardwareChannel = channelMap[moduleChannel];
@@ -819,12 +897,12 @@ void ModularSynthProcessor::setAudioInputChannelMapping(const NodeID& audioInput
                                      juce::AudioProcessorGraph::UpdateKind::none);
     }
 
-    // 3. Rebuild the graph to apply the changes
     commitChanges();
 }
 
 std::vector<std::pair<juce::uint32, juce::String>> ModularSynthProcessor::getModulesInfo() const
 {
+    const juce::ScopedLock lock (moduleLock);
     std::vector<std::pair<juce::uint32, juce::String>> out;
     out.reserve(logicalIdToModule.size());
     for (const auto& kv : logicalIdToModule)
@@ -834,6 +912,7 @@ std::vector<std::pair<juce::uint32, juce::String>> ModularSynthProcessor::getMod
 
 juce::AudioProcessorGraph::NodeID ModularSynthProcessor::getNodeIdForLogical (juce::uint32 logicalId) const
 {
+    const juce::ScopedLock lock (moduleLock);
     auto it = logicalIdToModule.find(logicalId);
     if (it == logicalIdToModule.end()) return {};
     return it->second.nodeID;
@@ -841,6 +920,7 @@ juce::AudioProcessorGraph::NodeID ModularSynthProcessor::getNodeIdForLogical (ju
 
 juce::uint32 ModularSynthProcessor::getLogicalIdForNode (const NodeID& nodeId) const
 {
+    const juce::ScopedLock lock (moduleLock);
     for (const auto& kv : logicalIdToModule)
         if (kv.second.nodeID == nodeId)
             return kv.first;
@@ -876,16 +956,13 @@ std::vector<ModularSynthProcessor::ConnectionInfo> ModularSynthProcessor::getCon
 
 ModuleProcessor* ModularSynthProcessor::getModuleForLogical (juce::uint32 logicalId) const
 {
+    const juce::ScopedLock lock (moduleLock);
     auto it = logicalIdToModule.find(logicalId);
     if (it == logicalIdToModule.end()) return nullptr;
     if (auto* node = internalGraph->getNodeForId(it->second.nodeID))
         return dynamic_cast<ModuleProcessor*>(node->getProcessor());
     return nullptr;
 }
-
-
-
-
 
 juce::String ModularSynthProcessor::getModuleTypeForLogical(juce::uint32 logicalId) const
 {
@@ -903,11 +980,9 @@ juce::String ModularSynthProcessor::getSystemDiagnostics() const
 {
     juce::String result = "=== MODULAR SYNTH SYSTEM DIAGNOSTICS ===\n\n";
     
-    // Overall system info
     result += "Total Modules: " + juce::String((int)logicalIdToModule.size()) + "\n";
     result += "Next Logical ID: " + juce::String((int)nextLogicalId) + "\n\n";
     
-    // Module list
     result += "=== MODULES ===\n";
     for (const auto& pair : logicalIdToModule)
     {
@@ -916,13 +991,10 @@ juce::String ModularSynthProcessor::getSystemDiagnostics() const
     }
     result += "\n";
     
-    // Connection info
     result += getConnectionDiagnostics() + "\n";
     
-    // Graph info
     result += "=== GRAPH STATE ===\n";
     result += "Total Nodes: " + juce::String(internalGraph->getNumNodes()) + "\n";
-    // Note: AudioProcessorGraph doesn't have getNumConnections() method
     result += "Total Connections: (not available)\n";
     
     return result;
@@ -952,7 +1024,6 @@ juce::String ModularSynthProcessor::getModuleParameterRoutingDiagnostics(juce::u
     juce::String result = "=== PARAMETER ROUTING DIAGNOSTICS ===\n";
     result += "Module: " + module->getName() + "\n\n";
     
-    // Get parameters from the AudioProcessor directly
     auto params = module->getParameters();
     
     for (int i = 0; i < params.size(); ++i)
@@ -1063,4 +1134,135 @@ void ModularSynthProcessor::stopAllRecorders()
     }
 }
 
+// === VOICE MANAGEMENT IMPLEMENTATION ===
 
+int ModularSynthProcessor::findFreeVoice()
+{
+    for (int i = 0; i < static_cast<int>(m_voices.size()); ++i)
+    {
+        if (!m_voices[i].isActive)
+            return i;
+    }
+    return -1;
+}
+
+int ModularSynthProcessor::findOldestVoice()
+{
+    if (m_voices.empty())
+        return -1;
+    
+    int oldestIndex = 0;
+    juce::uint32 oldestAge = m_voices[0].age;
+    
+    for (int i = 1; i < static_cast<int>(m_voices.size()); ++i)
+    {
+        if (m_voices[i].age < oldestAge)
+        {
+            oldestAge = m_voices[i].age;
+            oldestIndex = i;
+        }
+    }
+    
+    return oldestIndex;
+}
+
+void ModularSynthProcessor::assignNoteToVoice(int voiceIndex, const juce::MidiMessage& noteOn)
+{
+    if (voiceIndex < 0 || voiceIndex >= static_cast<int>(m_voices.size()))
+        return;
+    
+    Voice& voice = m_voices[voiceIndex];
+    voice.isActive = true;
+    voice.noteNumber = noteOn.getNoteNumber();
+    voice.velocity = noteOn.getFloatVelocity();
+    voice.age = m_globalVoiceAge++;
+    
+    juce::Logger::writeToLog("[VoiceManager] Assigned note " + juce::String(voice.noteNumber) + 
+                            " to voice " + juce::String(voiceIndex));
+}
+
+void ModularSynthProcessor::releaseVoice(const juce::MidiMessage& noteOff)
+{
+    int noteNumber = noteOff.getNoteNumber();
+    
+    for (auto& voice : m_voices)
+    {
+        if (voice.isActive && voice.noteNumber == noteNumber)
+        {
+            voice.isActive = false;
+            voice.noteNumber = -1;
+            juce::Logger::writeToLog("[VoiceManager] Released note " + juce::String(noteNumber));
+            return;
+        }
+    }
+}
+
+// === PROBE TOOL IMPLEMENTATION ===
+
+void ModularSynthProcessor::setProbeConnection(const NodeID& sourceNodeID, int sourceChannel)
+{
+    if (!probeScopeNode || probeScopeNodeId.uid == 0)
+    {
+        juce::Logger::writeToLog("[PROBE] ERROR: Probe scope not initialized!");
+        return;
+    }
+    
+    juce::Logger::writeToLog("[PROBE] setProbeConnection called. Source NodeID: " + juce::String(sourceNodeID.uid) + ", Channel: " + juce::String(sourceChannel));
+    
+    auto connections = internalGraph->getConnections();
+    for (const auto& conn : connections)
+    {
+        if (conn.destination.nodeID == probeScopeNodeId)
+        {
+            internalGraph->removeConnection(conn, juce::AudioProcessorGraph::UpdateKind::none);
+            juce::Logger::writeToLog("[PROBE] Cleared old probe connection.");
+        }
+    }
+    
+    bool success = connect(sourceNodeID, sourceChannel, probeScopeNodeId, 0);
+    juce::Logger::writeToLog("[PROBE] New connection attempt " + juce::String(success ? "succeeded." : "FAILED."));
+    if (success)
+    {
+        juce::Logger::writeToLog("[Probe] Successfully connected to probe scope");
+    }
+    else
+    {
+        juce::Logger::writeToLog("[Probe] ERROR: Failed to connect to probe scope");
+    }
+    
+    commitChanges();
+}
+
+void ModularSynthProcessor::clearProbeConnection()
+{
+    if (!probeScopeNode || probeScopeNodeId.uid == 0)
+        return;
+    
+    juce::Logger::writeToLog("[PROBE] clearProbeConnection called.");
+    bool cleared = false;
+    
+    auto connections = internalGraph->getConnections();
+    for (const auto& conn : connections)
+    {
+        if (conn.destination.nodeID == probeScopeNodeId)
+        {
+            internalGraph->removeConnection(conn, juce::AudioProcessorGraph::UpdateKind::none);
+            cleared = true;
+        }
+    }
+    
+    if (cleared) {
+        juce::Logger::writeToLog("[PROBE] Cleared active probe connection.");
+        commitChanges();
+    } else {
+        juce::Logger::writeToLog("[PROBE] No active probe connection to clear.");
+    }
+}
+
+ModuleProcessor* ModularSynthProcessor::getProbeScopeProcessor() const
+{
+    if (!probeScopeNode)
+        return nullptr;
+    
+    return dynamic_cast<ModuleProcessor*>(probeScopeNode->getProcessor());
+}

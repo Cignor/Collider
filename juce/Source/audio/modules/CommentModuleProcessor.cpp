@@ -46,8 +46,6 @@ void CommentModuleProcessor::setExtraStateTree(const juce::ValueTree& vt) {
 #if defined(PRESET_CREATOR_UI)
 void CommentModuleProcessor::drawParametersInNode(float, const std::function<bool(const juce::String&)>&, const std::function<void()>& onModificationEnded)
 {
-    // Comment node is fully self-owned - no ImNodes dependencies
-
     // Clamp to reasonable bounds (defensive)
     nodeWidth = juce::jlimit(150.0f, 800.0f, nodeWidth);
     nodeHeight = juce::jlimit(100.0f, 600.0f, nodeHeight);
@@ -58,43 +56,26 @@ void CommentModuleProcessor::drawParametersInNode(float, const std::function<boo
 
     // Title Input - ensure null termination
     titleBuffer[sizeof(titleBuffer) - 1] = '\0';
-    const bool titleChanged = ImGui::InputText("##title", titleBuffer, sizeof(titleBuffer));
-    if (titleChanged || ImGui::IsItemDeactivatedAfterEdit())
+    if (ImGui::InputText("##title", titleBuffer, sizeof(titleBuffer)))
     {
-        // Debounce: only call onModificationEnded if user stopped editing
-        static bool wasEditingTitle = false;
-        if (ImGui::IsItemDeactivatedAfterEdit() && !wasEditingTitle)
-        {
-            onModificationEnded();
-        }
-        wasEditingTitle = ImGui::IsItemActive();
+        if (ImGui::IsItemDeactivatedAfterEdit()) onModificationEnded();
     }
 
     // Body Input - ensure null termination and use our exact size
     textBuffer[sizeof(textBuffer) - 1] = '\0';
     const ImVec2 textAreaSize(nodeWidth - 16.0f, nodeHeight - 70.0f);
-    const bool textChanged = ImGui::InputTextMultiline("##text", textBuffer, sizeof(textBuffer), textAreaSize);
-    if (textChanged || ImGui::IsItemDeactivatedAfterEdit())
+    if (ImGui::InputTextMultiline("##text", textBuffer, sizeof(textBuffer), textAreaSize))
     {
-        // Debounce: only call onModificationEnded if user stopped editing
-        static bool wasEditingText = false;
-        if (ImGui::IsItemDeactivatedAfterEdit() && !wasEditingText)
-        {
-            onModificationEnded();
-        }
-        wasEditingText = ImGui::IsItemActive();
+        if (ImGui::IsItemDeactivatedAfterEdit()) onModificationEnded();
     }
 
-    // Draw resize handle in bottom-right corner (clamped to content region)
+    // Draw resize handle in bottom-right corner
     const ImVec2 resizeHandleSize(16.0f, 16.0f);
-    ImVec2 crMin = ImGui::GetWindowContentRegionMin();
     ImVec2 crMax = ImGui::GetWindowContentRegionMax();
     ImVec2 winPos = ImGui::GetWindowPos();
-    // Compute screen-space position at bottom-right inside the content region
-    ImVec2 handleScreenPos;
-    handleScreenPos.x = winPos.x + juce::jlimit(crMin.x, crMax.x - resizeHandleSize.x, crMax.x - resizeHandleSize.x);
-    handleScreenPos.y = winPos.y + juce::jlimit(crMin.y, crMax.y - resizeHandleSize.y, crMax.y - resizeHandleSize.y);
-    ImGui::SetCursorScreenPos(handleScreenPos);
+    ImVec2 handleScreenPos = ImVec2(winPos.x + crMax.x - resizeHandleSize.x, winPos.y + crMax.y - resizeHandleSize.y);
+    
+    ImGui::SetCursorScreenPos(handleScreenPos); // <<< THIS IS THE PROBLEMATIC CALL
     ImGui::InvisibleButton("##resize", resizeHandleSize);
     const bool isResizing = ImGui::IsItemActive() && ImGui::IsMouseDragging(ImGuiMouseButton_Left);
 
@@ -108,23 +89,24 @@ void CommentModuleProcessor::drawParametersInNode(float, const std::function<boo
     }
     else if (wasBeingResizedLastFrame)
     {
-        // Just finished resizing
+        // Just finished resizing, trigger undo snapshot
         wasBeingResizedLastFrame = false;
         onModificationEnded();
     }
 
-    // Draw resize handle indicator (small triangle in bottom-right)
+    // Draw resize handle indicator
     const ImVec2 handleStart(handleScreenPos.x + 4, handleScreenPos.y + 4);
     const ImVec2 handleEnd(handleScreenPos.x + resizeHandleSize.x - 4, handleScreenPos.y + resizeHandleSize.y - 4);
     ImGui::GetWindowDrawList()->AddTriangleFilled(
-        ImVec2(handleStart.x, handleEnd.y),      // Bottom-left
-        ImVec2(handleEnd.x, handleEnd.y),        // Bottom-right
-        ImVec2(handleEnd.x, handleStart.y),      // Top-right
+        ImVec2(handleStart.x, handleEnd.y),
+        ImVec2(handleEnd.x, handleEnd.y),
+        ImVec2(handleEnd.x, handleStart.y),
         ImGui::GetColorU32(ImGuiCol_ResizeGrip));
 
-    // Grow parent boundaries in case SetCursorPos reached the edge (fixes ImGui assertion)
+    // <<< FIX 1: Satisfy the assertion by forcing ImGui to update its boundaries >>>
     ImGui::Dummy(ImVec2(1.0f, 1.0f));
 
+    // <<< FIX 2: Correctly end the child window we started >>>
     ImGui::EndChild();
 }
 #endif

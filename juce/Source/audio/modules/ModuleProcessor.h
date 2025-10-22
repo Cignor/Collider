@@ -12,6 +12,15 @@
 #include <cmath>
 #endif
 
+// <<< TRANSPORT STATE FOR GLOBAL CLOCK >>>
+// Transport state struct shared by all modules
+struct TransportState {
+    bool isPlaying = false;
+    double bpm = 120.0;
+    double songPositionBeats = 0.0;
+    double songPositionSeconds = 0.0;
+};
+
 // <<< ALL PIN-RELATED DEFINITIONS ARE NOW CENTRALIZED HERE >>>
 
 // Defines the data type of a modulation or audio signal
@@ -91,12 +100,28 @@ public:
     virtual void drawIoPins(const NodePinHelpers& /*helpers*/) {}
 
 
-    // ADD THIS NEW VIRTUAL METHOD
+    // Get the current output value for a channel (for visualization)
     virtual float getOutputChannelValue(int channel) const
     {
         if (juce::isPositiveAndBelow(channel, (int)lastOutputValues.size()) && lastOutputValues[channel])
             return lastOutputValues[channel]->load();
         return 0.0f;
+    }
+    
+    // Helper method to update output telemetry with peak magnitude
+    // Call this at the end of processBlock to update visualization values
+    void updateOutputTelemetry(const juce::AudioBuffer<float>& buffer)
+    {
+        const int numChannels = juce::jmin(buffer.getNumChannels(), (int)lastOutputValues.size());
+        for (int ch = 0; ch < numChannels; ++ch)
+        {
+            if (lastOutputValues[ch])
+            {
+                // Use peak magnitude (max absolute value) for better visualization
+                const float peak = buffer.getMagnitude(ch, 0, buffer.getNumSamples());
+                lastOutputValues[ch]->store(peak, std::memory_order_relaxed);
+            }
+        }
     }
 
     // Standardized labels for module audio I/O channels (override per module if needed)
@@ -251,6 +276,10 @@ public:
     // Default: return invalid tree / ignore.
     virtual juce::ValueTree getExtraStateTree() const { return {}; }
     virtual void setExtraStateTree(const juce::ValueTree&) {}
+    
+    // Optional timing info hook for modules that need global clock/transport
+    // Default: ignore (modules that don't need timing can skip implementing this)
+    virtual void setTimingInfo(const TransportState& state) { juce::ignoreUnused(state); }
 
 public:
     // OPTION 9: Make public for TTS debugging

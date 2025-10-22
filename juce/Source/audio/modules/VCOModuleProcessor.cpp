@@ -122,11 +122,8 @@ void VCOModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::Mi
         }
     }
     
-    // Update inspector value for the single output channel
-    if (!lastOutputValues.empty() && lastOutputValues[0])
-    {
-        lastOutputValues[0]->store(outBus.getSample(0, buffer.getNumSamples() - 1));
-    }
+    // Update inspector value for visualization (peak magnitude)
+    updateOutputTelemetry(buffer);
 }
 
 bool VCOModuleProcessor::getParamRouting(const juce::String& paramId, int& outBusIndex, int& outChannelIndexInBus) const

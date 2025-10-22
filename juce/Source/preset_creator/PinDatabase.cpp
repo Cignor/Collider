@@ -753,6 +753,25 @@ db["random"] = ModulePinInfo(
         {}
     );
 
+    db["snapshot sequencer"] = ModulePinInfo(
+        { AudioPin("Clock In", 0, PinDataType::Gate), AudioPin("Reset In", 1, PinDataType::Gate) },
+        {}, // No audio outputs
+        {}
+    );
+
+    db["midi cv"] = ModulePinInfo(
+        {}, // No inputs - receives MIDI messages
+        {
+            AudioPin("Pitch", 0, PinDataType::CV),
+            AudioPin("Gate", 1, PinDataType::Gate),
+            AudioPin("Velocity", 2, PinDataType::CV),
+            AudioPin("Mod Wheel", 3, PinDataType::CV),
+            AudioPin("Pitch Bend", 4, PinDataType::CV),
+            AudioPin("Aftertouch", 5, PinDataType::CV)
+        },
+        {}
+    );
+
     db["Debug"] = ModulePinInfo(
         { AudioPin("In", 0, PinDataType::Audio) },
         {}, // No outputs

@@ -261,6 +261,16 @@ target_sources(ColliderApp PRIVATE
     Source/audio/modules/VstHostModuleProcessor.cpp
     Source/audio/modules/ShapingOscillatorModuleProcessor.h
     Source/audio/modules/ShapingOscillatorModuleProcessor.cpp
+    Source/audio/modules/InletModuleProcessor.h
+    Source/audio/modules/InletModuleProcessor.cpp
+    Source/audio/modules/OutletModuleProcessor.h
+    Source/audio/modules/OutletModuleProcessor.cpp
+    Source/audio/modules/MetaModuleProcessor.h
+    Source/audio/modules/MetaModuleProcessor.cpp
+    Source/audio/modules/SnapshotSequencerModuleProcessor.h
+    Source/audio/modules/SnapshotSequencerModuleProcessor.cpp
+    Source/audio/modules/MIDICVModuleProcessor.h
+    Source/audio/modules/MIDICVModuleProcessor.cpp
     Source/ipc/IpcServer.cpp
     Source/ipc/IpcServer.h
     Source/ipc/OscClient.h
@@ -459,6 +469,16 @@ target_sources(PresetCreatorApp PRIVATE
     Source/audio/modules/GateModuleProcessor.cpp
     Source/audio/modules/DriveModuleProcessor.h
     Source/audio/modules/DriveModuleProcessor.cpp
+    Source/audio/modules/InletModuleProcessor.h
+    Source/audio/modules/InletModuleProcessor.cpp
+    Source/audio/modules/OutletModuleProcessor.h
+    Source/audio/modules/OutletModuleProcessor.cpp
+    Source/audio/modules/MetaModuleProcessor.h
+    Source/audio/modules/MetaModuleProcessor.cpp
+    Source/audio/modules/SnapshotSequencerModuleProcessor.h
+    Source/audio/modules/SnapshotSequencerModuleProcessor.cpp
+    Source/audio/modules/MIDICVModuleProcessor.h
+    Source/audio/modules/MIDICVModuleProcessor.cpp
 )
 
 # This target now needs to know where to find all the headers

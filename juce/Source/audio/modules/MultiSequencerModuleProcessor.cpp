@@ -119,6 +119,12 @@ void MultiSequencerModuleProcessor::processBlock (juce::AudioBuffer<float>& buff
     const int boundMax = stepsModMaxParam != nullptr ? juce::jlimit (1, MAX_STEPS, (int) stepsModMaxParam->load()) : MAX_STEPS;
     const float gateThreshold = gateThresholdParam != nullptr ? juce::jlimit(0.0f, 1.0f, gateThresholdParam->load()) : 0.5f;
 
+    // Start of Logging Block
+    static int logCounter = 0;
+    const bool shouldLog = (logCounter++ % 300 == 0);
+    if (shouldLog) juce::Logger::writeToLog("--- MultiSequencer::processBlock ---");
+    // End of Logging Block
+
     // --- UI Telemetry Bootstrap (from old StepSequencer) ---
     // Publish per-step live values for ALL steps this block (use first-sample snapshot)
     {
@@ -209,6 +215,7 @@ void MultiSequencerModuleProcessor::processBlock (juce::AudioBuffer<float>& buff
 		{
             phase -= 1.0;
             const int next = (currentStep.load() + 1) % juce::jlimit (1, MAX_STEPS, activeSteps);
+            if (shouldLog) juce::Logger::writeToLog("[M-SEQ LOG] Step Advanced: " + juce::String(currentStep.load()) + " -> " + juce::String(next));
             currentStep.store(next);
             stepAdvanced = true;
         }
@@ -267,6 +274,7 @@ void MultiSequencerModuleProcessor::processBlock (juce::AudioBuffer<float>& buff
         }
         
         if (stepAdvanced) {
+            if (shouldLog && trigActive) juce::Logger::writeToLog("[M-SEQ LOG] Trigger pulse armed for step " + juce::String(currentStepIndex));
             pendingTriggerSamples = trigActive ? (int) std::round (0.001 * sampleRate) : 0;
             stepAdvanced = false;
         }
@@ -281,6 +289,12 @@ void MultiSequencerModuleProcessor::processBlock (juce::AudioBuffer<float>& buff
             if (pendingTriggerSamples > 0) --pendingTriggerSamples;
         }
     }
+    if (shouldLog)
+    {
+        juce::Logger::writeToLog("[M-SEQ LOG] Rate: " + juce::String(lastRateLive, 2) + "Hz | Steps: " + juce::String(lastStepsLive));
+        juce::Logger::writeToLog("[M-SEQ LOG] Final Output (last sample): Pitch=" + juce::String(pitchOut[numSamples-1], 3) + ", Gate=" + juce::String(gateOut ? gateOut[numSamples-1] : -1.0f, 3));
+    }
+    
     setLiveParamValue("rate_live", lastRateLive);
     setLiveParamValue("gateLength_live", lastGateLive);
     setLiveParamValue("gateThreshold_live", lastGateThresholdLive);

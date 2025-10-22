@@ -108,11 +108,8 @@ void NoiseModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::
         }
     }
 
-    // --- Update Inspector Values ---
-    if (lastOutputValues.size() >= 1)
-    {
-        if (lastOutputValues[0]) lastOutputValues[0]->store(outBus.getSample(0, numSamples - 1));
-    }
+    // --- Update Inspector Values (peak magnitude) ---
+    updateOutputTelemetry(buffer);
 }
 
 bool NoiseModuleProcessor::getParamRouting(const juce::String& paramId, int& outBusIndex, int& outChannelIndexInBus) const

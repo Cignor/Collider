@@ -11,6 +11,8 @@ LFOModuleProcessor::LFOModuleProcessor()
     depthParam = apvts.getRawParameterValue(paramIdDepth);
     bipolarParam = apvts.getRawParameterValue(paramIdBipolar);
     waveParam = apvts.getRawParameterValue(paramIdWave);
+    syncParam = apvts.getRawParameterValue(paramIdSync);
+    rateDivisionParam = apvts.getRawParameterValue(paramIdRateDivision);
     
     lastOutputValues.push_back(std::make_unique<std::atomic<float>>(0.0f));
     
@@ -24,6 +26,9 @@ juce::AudioProcessorValueTreeState::ParameterLayout LFOModuleProcessor::createPa
     p.push_back(std::make_unique<juce::AudioParameterFloat>(paramIdDepth, "Depth", juce::NormalisableRange<float>(0.0f, 1.0f), 0.5f));
     p.push_back(std::make_unique<juce::AudioParameterBool>(paramIdBipolar, "Bipolar", true));
     p.push_back(std::make_unique<juce::AudioParameterChoice>(paramIdWave, "Wave", juce::StringArray{ "Sine", "Tri", "Saw" }, 0));
+    p.push_back(std::make_unique<juce::AudioParameterBool>(paramIdSync, "Sync", false));
+    p.push_back(std::make_unique<juce::AudioParameterChoice>(paramIdRateDivision, "Division", 
+        juce::StringArray{ "1/32", "1/16", "1/8", "1/4", "1/2", "1", "2", "4", "8" }, 3)); // Default: 1/4 note
     return { p.begin(), p.end() };
 }
 
@@ -31,6 +36,11 @@ void LFOModuleProcessor::prepareToPlay(double sampleRate, int samplesPerBlock)
 {
     juce::dsp::ProcessSpec spec{ sampleRate, (juce::uint32)samplesPerBlock, 2 };
     osc.prepare(spec);
+}
+
+void LFOModuleProcessor::setTimingInfo(const TransportState& state)
+{
+    m_currentTransport = state;
 }
 
 void LFOModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midi)
@@ -55,6 +65,12 @@ void LFOModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::Mi
     const float baseDepth = depthParam->load();
     const int baseWave = static_cast<int>(waveParam->load());
     const bool bipolar = bipolarParam->load() > 0.5f;
+    const bool syncEnabled = syncParam->load() > 0.5f;
+    const int rateDivisionIndex = static_cast<int>(rateDivisionParam->load());
+
+    // Rate division map: 1/32, 1/16, 1/8, 1/4, 1/2, 1, 2, 4, 8
+    static const double divisions[] = { 1.0/32.0, 1.0/16.0, 1.0/8.0, 1.0/4.0, 1.0/2.0, 1.0, 2.0, 4.0, 8.0 };
+    const double beatDivision = divisions[juce::jlimit(0, 8, rateDivisionIndex)];
 
     float lastRate = baseRate, lastDepth = baseDepth;
     int lastWave = baseWave;
@@ -90,18 +106,36 @@ void LFOModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::Mi
             currentWaveform = w;
         }
         
-        osc.setFrequency(finalRate);
-        const float lfoSample = osc.processSample(0.0f);
+        float lfoSample = 0.0f;
+        
+        if (syncEnabled && m_currentTransport.isPlaying)
+        {
+            // Transport-synced mode: calculate phase directly from song position
+            double phase = std::fmod(m_currentTransport.songPositionBeats * beatDivision, 1.0);
+            double phaseRadians = phase * juce::MathConstants<double>::twoPi;
+            
+            // Generate waveform based on phase
+            if (w == 0) // Sine
+                lfoSample = std::sin(phaseRadians);
+            else if (w == 1) // Triangle
+                lfoSample = 2.0f / juce::MathConstants<float>::pi * std::asin(std::sin(phaseRadians));
+            else // Saw
+                lfoSample = (phaseRadians / juce::MathConstants<float>::pi);
+        }
+        else
+        {
+            // Free-running mode: use internal oscillator
+            osc.setFrequency(finalRate);
+            lfoSample = osc.processSample(0.0f);
+        }
+        
         const float finalSample = (bipolar ? lfoSample : (lfoSample * 0.5f + 0.5f)) * depth;
 
         out.setSample(0, i, finalSample);
     }
     
     // Update inspector values
-    if (lastOutputValues.size() >= 1)
-    {
-        if (lastOutputValues[0]) lastOutputValues[0]->store(out.getSample(0, out.getNumSamples() - 1));
-    }
+    updateOutputTelemetry(out);
 
     // Store live modulated values for UI display
     setLiveParamValue("rate_live", lastRate);
@@ -125,12 +159,10 @@ void LFOModuleProcessor::drawParametersInNode(float itemWidth, const std::functi
 {
     auto& ap = getAPVTS();
     
-    // CORRECTED: Use the _mod IDs to check modulation status
-    bool isRateModulated = isParamModulated(paramIdRateMod);
-    bool isDepthModulated = isParamModulated(paramIdDepthMod);
-    bool isWaveModulated = isParamModulated(paramIdWaveMod);
+    bool isRateModulated = isParamInputConnected(paramIdRateMod);
+    bool isDepthModulated = isParamInputConnected(paramIdDepthMod);
+    bool isWaveModulated = isParamInputConnected(paramIdWaveMod);
     
-    // CORRECTED: Use _mod IDs as the first argument to getLiveParamValueFor
     float rate = isRateModulated ? getLiveParamValueFor(paramIdRateMod, "rate_live", rateParam->load()) : rateParam->load();
     float depth = isDepthModulated ? getLiveParamValueFor(paramIdDepthMod, "depth_live", depthParam->load()) : depthParam->load();
     int wave = isWaveModulated ? (int)getLiveParamValueFor(paramIdWaveMod, "wave_live", (float)static_cast<int>(waveParam->load())) : static_cast<int>(waveParam->load());
@@ -155,6 +187,19 @@ void LFOModuleProcessor::drawParametersInNode(float itemWidth, const std::functi
 
     if (ImGui::Checkbox("Bipolar", &bipolar)) *dynamic_cast<juce::AudioParameterBool*>(ap.getParameter(paramIdBipolar)) = bipolar;
     if (ImGui::IsItemDeactivatedAfterEdit()) onModificationEnded();
+
+    // Transport sync controls
+    bool sync = syncParam->load() > 0.5f;
+    if (ImGui::Checkbox("Sync to Transport", &sync)) *dynamic_cast<juce::AudioParameterBool*>(ap.getParameter(paramIdSync)) = sync;
+    if (ImGui::IsItemDeactivatedAfterEdit()) onModificationEnded();
+    
+    if (sync)
+    {
+        int division = static_cast<int>(rateDivisionParam->load());
+        if (ImGui::Combo("Division", &division, "1/32\01/16\01/8\01/4\01/2\01\02\04\08\0\0")) 
+            *dynamic_cast<juce::AudioParameterChoice*>(ap.getParameter(paramIdRateDivision)) = division;
+        if (ImGui::IsItemDeactivatedAfterEdit()) onModificationEnded();
+    }
 
     ImGui::PopItemWidth();
 }

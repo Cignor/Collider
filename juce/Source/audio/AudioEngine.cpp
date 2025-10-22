@@ -249,6 +249,24 @@ void AudioEngine::timerCallback()
                 }
             }
         }
+        else if (c.type == Command::Type::LoadPatchState)
+        {
+            // Load a snapshot from the Snapshot Sequencer
+            auto it = activeVoices.find(c.voiceId);
+            if (it != activeVoices.end())
+            {
+                if (auto* mv = dynamic_cast<ModularVoice*>(it->second->getProcessor()))
+                {
+                    if (auto* msp = mv->getModularSynth())
+                    {
+                        // The patchState is already a MemoryBlock, ready to load
+                        msp->setStateInformation(c.patchState.getData(), (int)c.patchState.getSize());
+                        appendLog("[SnapshotSeq] Loaded patch state for voice ID: " + juce::String((juce::int64)c.voiceId) +
+                                " (size: " + juce::String((int)c.patchState.getSize()) + " bytes)");
+                    }
+                }
+            }
+        }
         else if (c.type == Command::Type::ResetFx)
         {
             auto it = activeVoices.find(c.voiceId);

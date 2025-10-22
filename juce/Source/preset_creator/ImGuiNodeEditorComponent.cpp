@@ -36,6 +36,12 @@
 #include "../audio/modules/GateModuleProcessor.h"
 #include "../audio/modules/DriveModuleProcessor.h"
 #include "../audio/modules/VstHostModuleProcessor.h"
+// #include "../audio/modules/SnapshotSequencerModuleProcessor.h"  // Commented out - causing build errors
+#include "../audio/modules/MIDICVModuleProcessor.h"
+#include "../audio/modules/ScopeModuleProcessor.h"
+#include "../audio/modules/MetaModuleProcessor.h"
+#include "../audio/modules/InletModuleProcessor.h"
+#include "../audio/modules/OutletModuleProcessor.h"
 #include "PresetCreatorApplication.h"
 #include <juce_audio_processors/juce_audio_processors.h>
 #include <imgui_impl_juce/imgui_impl_juce.h>
@@ -361,6 +367,63 @@ void ImGuiNodeEditorComponent::renderImGui()
 
     ImGui::End();
     // --- END OF OVERLAY ---
+    
+    // === PROBE SCOPE OVERLAY ===
+    if (synth != nullptr && showProbeScope)
+    {
+        if (auto* scope = dynamic_cast<ScopeModuleProcessor*>(synth->getProbeScopeProcessor()))
+        {
+            ImGui::SetNextWindowPos(ImVec2((float)getWidth() - 270.0f, menuBarHeight + padding), ImGuiCond_FirstUseEver);
+            ImGui::SetNextWindowSize(ImVec2(260, 180), ImGuiCond_FirstUseEver);
+            ImGui::SetNextWindowBgAlpha(0.85f);
+            
+            if (ImGui::Begin("🔬 Probe Scope", &showProbeScope, ImGuiWindowFlags_NoFocusOnAppearing))
+            {
+                ImGui::Text("Signal Probe");
+                ImGui::Separator();
+                
+                // Get scope buffer
+                const auto& buffer = scope->getScopeBuffer();
+                
+                if (buffer.getNumSamples() > 0)
+                {
+                    // Create a simple waveform display
+                    const int numSamples = buffer.getNumSamples();
+                    const float* samples = buffer.getReadPointer(0);
+                    
+                    // Calculate min/max for this buffer
+                    float minVal = 0.0f, maxVal = 0.0f;
+                    for (int i = 0; i < numSamples; ++i)
+                    {
+                        minVal = juce::jmin(minVal, samples[i]);
+                        maxVal = juce::jmax(maxVal, samples[i]);
+                    }
+                    
+                    // Display stats
+                    ImGui::Text("Min: %.3f  Max: %.3f", minVal, maxVal);
+                    ImGui::Text("Peak: %.3f", juce::jmax(std::abs(minVal), std::abs(maxVal)));
+                    
+                    // Draw waveform
+                    ImVec2 plotSize = ImVec2(-1, 100);
+                    ImGui::PlotLines("##Waveform", samples, numSamples, 0, nullptr, -1.0f, 1.0f, plotSize);
+                    
+                    // Button to clear probe connection
+                    if (ImGui::Button("Clear Probe"))
+                    {
+                        synth->clearProbeConnection();
+                    }
+                }
+                else
+                {
+                    ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1.0f), "No signal probed");
+                    ImGui::Text("Right-click > Probe Signal");
+                    ImGui::Text("Then click any output pin");
+                }
+            }
+            ImGui::End();
+        }
+    }
+    // === END OF PROBE SCOPE OVERLAY ===
 
     // Clean up textures for deleted sample loaders
     if (synth != nullptr)
@@ -525,9 +588,17 @@ void ImGuiNodeEditorComponent::renderImGui()
         {
             // This item should only be enabled if at least one node is selected
             bool anyNodesSelected = ImNodes::NumSelectedNodes() > 0;
+            bool multipleNodesSelected = ImNodes::NumSelectedNodes() > 1;
+            
             if (ImGui::MenuItem("Connect Selected to Track Mixer", nullptr, false, anyNodesSelected))
             {
                 handleConnectSelectedToTrackMixer();
+            }
+            
+            // Meta Module: Collapse selected nodes into a reusable sub-patch
+            if (ImGui::MenuItem("Collapse to Meta Module", "Ctrl+Shift+M", false, multipleNodesSelected))
+            {
+                handleCollapseToMetaModule();
             }
             
             if (ImGui::MenuItem("Record Output", "Ctrl+R"))
@@ -658,6 +729,51 @@ void ImGuiNodeEditorComponent::renderImGui()
             ImGui::EndMenu();
         }
         
+        // === TRANSPORT CONTROLS ===
+        if (synth != nullptr)
+        {
+            // Get current transport state
+            auto transportState = synth->getTransportState();
+            
+            // Add some spacing before transport controls
+            ImGui::Separator();
+            ImGui::Spacing();
+            
+            // Play/Pause button
+            if (transportState.isPlaying)
+            {
+                if (ImGui::Button("Pause"))
+                    synth->setPlaying(false);
+            }
+            else
+            {
+                if (ImGui::Button("Play"))
+                    synth->setPlaying(true);
+            }
+            
+            ImGui::SameLine();
+            
+            // Stop button (resets position)
+            if (ImGui::Button("Stop"))
+            {
+                synth->setPlaying(false);
+                synth->resetTransportPosition();
+            }
+            
+            ImGui::SameLine();
+            
+            // BPM control
+            float bpm = static_cast<float>(transportState.bpm);
+            ImGui::SetNextItemWidth(80.0f);
+            if (ImGui::DragFloat("BPM", &bpm, 0.1f, 20.0f, 999.0f, "%.1f"))
+                synth->setBPM(static_cast<double>(bpm));
+            
+            ImGui::SameLine();
+            
+            // Position display
+            ImGui::Text("%.2f beats", transportState.songPositionBeats);
+        }
+        
         ImGui::EndMainMenuBar();
     }
 
@@ -692,11 +808,113 @@ void ImGuiNodeEditorComponent::renderImGui()
     // Zoom removed
 
     // ADD THIS BLOCK:
-    ImGui::Text("Module Browser");
+    ImGui::Text("Browser");
     
-    // Create a scrolling child window to contain the entire module list
-    // This prevents the plugin list from expanding over the node editor
-    ImGui::BeginChild("ModuleBrowserScrollRegion", ImVec2(0, 0), true);
+    // Create a scrolling child window to contain the entire browser
+    ImGui::BeginChild("BrowserScrollRegion", ImVec2(0, 0), true);
+    
+    // === PRESET BROWSER ===
+    if (ImGui::CollapsingHeader("Presets"))
+    {
+        // Search box
+        char searchBuf[256] = {};
+        strncpy(searchBuf, m_presetSearchTerm.toRawUTF8(), sizeof(searchBuf) - 1);
+        if (ImGui::InputText("##presetsearch", searchBuf, sizeof(searchBuf)))
+            m_presetSearchTerm = juce::String(searchBuf);
+        
+        ImGui::SameLine();
+        if (ImGui::Button("Scan##presets"))
+        {
+            // Scan the default preset directory
+            juce::File presetDir = juce::File::getSpecialLocation(juce::File::userDocumentsDirectory)
+                                   .getChildFile("PresetCreator")
+                                   .getChildFile("Presets");
+            if (presetDir.exists())
+            {
+                m_presetManager.clearCache();
+                m_presetManager.scanDirectory(presetDir);
+            }
+        }
+        
+        // Display filtered presets
+        auto presets = m_presetManager.searchPresets(m_presetSearchTerm);
+        for (const auto& preset : presets)
+        {
+            if (ImGui::Selectable(preset.name.toRawUTF8()))
+            {
+                // Load this preset
+                if (auto* xml = m_presetManager.loadPreset(preset.file))
+                {
+                    juce::MemoryBlock block;
+                    juce::MemoryOutputStream stream(block, false);
+                    xml->writeTo(stream);
+                    
+                    if (synth)
+                        synth->setStateInformation(block.getData(), static_cast<int>(block.getSize()));
+                    
+                    delete xml;
+                }
+            }
+            
+            if (ImGui::IsItemHovered() && preset.description.isNotEmpty())
+            {
+                ImGui::BeginTooltip();
+                ImGui::TextUnformatted(preset.description.toRawUTF8());
+                if (!preset.tags.isEmpty())
+                    ImGui::Text("Tags: %s", preset.tags.joinIntoString(", ").toRawUTF8());
+                ImGui::EndTooltip();
+            }
+        }
+    }
+    
+    // === SAMPLE BROWSER ===
+    if (ImGui::CollapsingHeader("Samples"))
+    {
+        // Search box
+        char searchBuf[256] = {};
+        strncpy(searchBuf, m_sampleSearchTerm.toRawUTF8(), sizeof(searchBuf) - 1);
+        if (ImGui::InputText("##samplesearch", searchBuf, sizeof(searchBuf)))
+            m_sampleSearchTerm = juce::String(searchBuf);
+        
+        ImGui::SameLine();
+        if (ImGui::Button("Scan##samples"))
+        {
+            // Scan the default sample directory
+            juce::File sampleDir = juce::File::getSpecialLocation(juce::File::userMusicDirectory)
+                                   .getChildFile("Samples");
+            if (sampleDir.exists())
+            {
+                m_sampleManager.clearCache();
+                m_sampleManager.scanDirectory(sampleDir, true);
+            }
+        }
+        
+        // Display filtered samples
+        auto samples = m_sampleManager.searchSamples(m_sampleSearchTerm);
+        for (const auto& sample : samples)
+        {
+            if (ImGui::Selectable(sample.name.toRawUTF8()))
+            {
+                // TODO: Could auto-create a Sample Loader module with this sample
+                juce::Logger::writeToLog("Selected sample: " + sample.file.getFullPathName());
+            }
+            
+            if (ImGui::IsItemHovered())
+            {
+                ImGui::BeginTooltip();
+                ImGui::Text("Duration: %.2f s", sample.durationSeconds);
+                ImGui::Text("Sample Rate: %d Hz", sample.sampleRate);
+                ImGui::Text("Channels: %d", sample.numChannels);
+                ImGui::EndTooltip();
+            }
+        }
+    }
+    
+    ImGui::Separator();
+    
+    // === MODULE BROWSER ===
+    if (ImGui::CollapsingHeader("Modules", ImGuiTreeNodeFlags_DefaultOpen))
+    {
     
     auto addModuleButton = [this](const char* label, const char* type)
     {
@@ -748,6 +966,7 @@ void ImGuiNodeEditorComponent::renderImGui()
         addModuleButton("Sequencer", "Sequencer");
         addModuleButton("Multi Sequencer", "multi sequencer");
         addModuleButton("MIDI Player", "midi player");
+        addModuleButton("MIDI CV", "midi cv");
         addModuleButton("Value", "Value");
         addModuleButton("Sample Loader", "sample loader");
     }
@@ -800,6 +1019,7 @@ void ImGuiNodeEditorComponent::renderImGui()
         addModuleButton("Logic", "Logic");
         addModuleButton("Clock Divider", "ClockDivider");
         addModuleButton("Sequential Switch", "SequentialSwitch");
+        addModuleButton("Snapshot Sequencer", "snapshot sequencer");
         addModuleButton("Best Practice", "best practice");
     }
     if (ImGui::CollapsingHeader("Analysis", ImGuiTreeNodeFlags_DefaultOpen)) {
@@ -808,6 +1028,8 @@ void ImGuiNodeEditorComponent::renderImGui()
         addModuleButton("Input Debug", "input debug");
         addModuleButton("Frequency Graph", "Frequency Graph");
     }
+    
+    } // End of Modules collapsing header
     
     // VST Plugins section
     if (ImGui::CollapsingHeader("Plugins", ImGuiTreeNodeFlags_DefaultOpen)) {
@@ -1280,6 +1502,65 @@ if (auto* mp = synth->getModuleForLogical (lid))
             }
         }
     }
+    // --- SPECIAL RENDERING FOR SNAPSHOT SEQUENCER ---
+    // Commented out - SnapshotSequencerModuleProcessor causing build errors
+    /*else if (auto* snapshotSeq = dynamic_cast<SnapshotSequencerModuleProcessor*>(mp))
+    {
+        // First, draw the standard parameters (number of steps, etc.)
+        snapshotSeq->drawParametersInNode(nodeContentWidth, isParamModulated, onModificationEnded);
+        
+        ImGui::Separator();
+        ImGui::Text("Snapshot Management:");
+        
+        const int numSteps = 8; // Default, could read from parameter
+        const int currentStepIndex = 0; // TODO: Get from module if exposed
+        
+        // Draw capture/clear buttons for each step
+        for (int i = 0; i < numSteps; ++i)
+        {
+            ImGui::PushID(i);
+            
+            bool stored = snapshotSeq->isSnapshotStored(i);
+            
+            // Capture button
+            if (ImGui::Button("Capture"))
+            {
+                // Get the current state of the whole synth
+                juce::MemoryBlock currentState;
+                synth->getStateInformation(currentState);
+                
+                // Store it in the snapshot sequencer
+                snapshotSeq->setSnapshotForStep(i, currentState);
+                
+                // Create undo state
+                pushSnapshot();
+                
+                juce::Logger::writeToLog("[SnapshotSeq UI] Captured snapshot for step " + juce::String(i));
+            }
+            
+            ImGui::SameLine();
+            
+            // Clear button (only enabled if snapshot exists)
+            if (!stored)
+            {
+                ImGui::BeginDisabled();
+            }
+            
+            if (ImGui::Button("Clear"))
+            {
+                snapshotSeq->clearSnapshotForStep(i);
+                pushSnapshot();
+                juce::Logger::writeToLog("[SnapshotSeq UI] Cleared snapshot for step " + juce::String(i));
+            }
+            
+            if (!stored)
+            {
+                ImGui::EndDisabled();
+            }
+            
+            ImGui::PopID();
+        }
+    }*/
     else
     {
         mp->drawParametersInNode (nodeContentWidth, isParamModulated, onModificationEnded);
@@ -1922,6 +2203,77 @@ if (auto* mp = synth->getModuleForLogical (lid))
     ImNodes::MiniMap (0.2f, ImNodesMiniMapLocation_BottomRight);
 
     ImNodes::EndNodeEditor();
+    
+    // ================== META MODULE EDITING LOGIC ==================
+    // Check if any Meta Module has requested to be edited
+    if (synth != nullptr && metaModuleToEditLid == 0) // Only check if not already editing one
+    {
+        for (const auto& modInfo : synth->getModulesInfo())
+        {
+            if (auto* metaModule = dynamic_cast<MetaModuleProcessor*>(synth->getModuleForLogical(modInfo.first)))
+            {
+                // Atomically check and reset the flag
+                if (metaModule->editRequested.exchange(false))
+                {
+                    metaModuleToEditLid = modInfo.first;
+                    juce::Logger::writeToLog("[MetaEdit] Opening editor for Meta Module L-ID " + juce::String((int)metaModuleToEditLid));
+                    ImGui::OpenPopup("Edit Meta Module");
+                    break; // Only handle one request per frame
+                }
+            }
+        }
+    }
+    
+    // Draw the modal popup for the internal editor if one is selected
+    if (metaModuleToEditLid != 0)
+    {
+        ImGui::SetNextWindowSize(ImVec2(1200, 800), ImGuiCond_FirstUseEver);
+        if (ImGui::BeginPopupModal("Edit Meta Module", nullptr, ImGuiWindowFlags_MenuBar))
+        {
+            // Get the internal synth processor from the meta module
+            auto* metaModule = dynamic_cast<MetaModuleProcessor*>(synth->getModuleForLogical(metaModuleToEditLid));
+            if (metaModule && metaModule->getInternalGraph())
+            {
+                // Display a placeholder for now
+                // TODO: Full recursive editor implementation would go here
+                ImGui::Text("Editing internal graph of Meta Module %d", (int)metaModuleToEditLid);
+                ImGui::Separator();
+                
+                auto* internalGraph = metaModule->getInternalGraph();
+                auto modules = internalGraph->getModulesInfo();
+                
+                ImGui::Text("Internal modules: %d", (int)modules.size());
+                if (ImGui::BeginChild("ModuleList", ImVec2(0, -30), true))
+                {
+                    for (const auto& [lid, type] : modules)
+                    {
+                        ImGui::Text("  [%d] %s", (int)lid, type.toRawUTF8());
+                    }
+                }
+                ImGui::EndChild();
+                
+                ImGui::Text("NOTE: Full nested editor UI is a TODO");
+                ImGui::Text("For now, you can inspect the internal graph structure above.");
+            }
+            
+            if (ImGui::Button("Close"))
+            {
+                ImGui::CloseCurrentPopup();
+                metaModuleToEditLid = 0;
+                // When closing, the meta module might have new/removed inlets/outlets,
+                // so we need to rebuild the main graph to update its pins
+                graphNeedsRebuild = true;
+            }
+            ImGui::EndPopup();
+        }
+        else
+        {
+            // If the popup was closed by the user (e.g., pressing ESC)
+            metaModuleToEditLid = 0;
+            graphNeedsRebuild = true;
+        }
+    }
+    // ======================= END OF META MODULE LOGIC =======================
 
     // --- CONSOLIDATED HOVERED LINK DETECTION ---
     // Declare these variables ONCE, immediately after the editor has ended.
@@ -1931,6 +2283,178 @@ if (auto* mp = synth->getModuleForLogical (lid))
     int hoveredLinkId = -1;
     bool isLinkHovered = ImNodes::IsLinkHovered(&hoveredLinkId);
     // --- END OF CONSOLIDATED DECLARATION ---
+    
+    // === SMART CABLE VISUALIZATION ===
+    // Draw animated pulses on active cables to show signal flow
+    {
+        ImDrawList* drawList = ImGui::GetForegroundDrawList();
+        const float currentTime = (float)ImGui::GetTime();
+        
+        // Iterate through all visible links
+        for (const auto& linkPair : linkIdToAttrs)
+        {
+            int linkId = linkPair.first;
+            int srcAttr = linkPair.second.first;
+            int dstAttr = linkPair.second.second;
+            
+            // Decode the source pin to get module and channel info
+            auto srcPin = decodePinId(srcAttr);
+            
+            // Skip mod pins and invalid pins
+            if (srcPin.isMod || srcPin.logicalId == 0)
+                continue;
+            
+            // Get the source module to read its output magnitude
+            if (auto* srcModule = synth->getModuleForLogical(srcPin.logicalId))
+            {
+                // Read the peak magnitude for this channel
+                float magnitude = srcModule->getOutputChannelValue(srcPin.channel);
+                
+                // Only draw visualization if there's a significant signal (> 0.01)
+                if (magnitude > 0.01f)
+                {
+                    // Get the link's color based on pin type
+                    PinDataType pinType = getPinDataTypeForPin(srcPin);
+                    ImU32 baseColor = getImU32ForType(pinType);
+                    
+                    // Extract RGB components
+                    float r = ((baseColor >> IM_COL32_R_SHIFT) & 0xFF) / 255.0f;
+                    float g = ((baseColor >> IM_COL32_G_SHIFT) & 0xFF) / 255.0f;
+                    float b = ((baseColor >> IM_COL32_B_SHIFT) & 0xFF) / 255.0f;
+                    
+                    // Get pin screen positions from our cached positions
+                    auto srcPosIt = attrPositions.find(srcAttr);
+                    auto dstPosIt = attrPositions.find(dstAttr);
+                    
+                    if (srcPosIt != attrPositions.end() && dstPosIt != attrPositions.end())
+                    {
+                        ImVec2 srcPos = srcPosIt->second;
+                        ImVec2 dstPos = dstPosIt->second;
+                        
+                        // Calculate line midpoint
+                        ImVec2 midpoint = ImVec2(
+                            (srcPos.x + dstPos.x) * 0.5f,
+                            (srcPos.y + dstPos.y) * 0.5f
+                        );
+                        
+                        // Animate pulse position along the line
+                        const float pulseSpeed = 200.0f; // pixels per second
+                        const float lineLength = std::sqrt(
+                            (dstPos.x - srcPos.x) * (dstPos.x - srcPos.x) +
+                            (dstPos.y - srcPos.y) * (dstPos.y - srcPos.y)
+                        );
+                        
+                        if (lineLength > 1.0f)
+                        {
+                            // Calculate pulse travel (loops from 0 to lineLength)
+                            float travel = std::fmod(currentTime * pulseSpeed, lineLength);
+                            float t = travel / lineLength; // 0 to 1
+                            
+                            // Calculate pulse position
+                            ImVec2 pulsePos = ImVec2(
+                                srcPos.x + (dstPos.x - srcPos.x) * t,
+                                srcPos.y + (dstPos.y - srcPos.y) * t
+                            );
+                            
+                            // Calculate pulse size based on magnitude (2-8 pixels)
+                            float pulseRadius = 2.0f + magnitude * 6.0f;
+                            
+                            // Draw outer glow
+                            drawList->AddCircleFilled(
+                                pulsePos,
+                                pulseRadius + 2.0f,
+                                IM_COL32(
+                                    (int)(r * 255),
+                                    (int)(g * 255),
+                                    (int)(b * 255),
+                                    (int)(magnitude * 60)
+                                ),
+                                12
+                            );
+                            
+                            // Draw main pulse
+                            drawList->AddCircleFilled(
+                                pulsePos,
+                                pulseRadius,
+                                IM_COL32(
+                                    (int)(r * 255),
+                                    (int)(g * 255),
+                                    (int)(b * 255),
+                                    (int)(magnitude * 200)
+                                ),
+                                12
+                            );
+                            
+                            // Draw bright center
+                            drawList->AddCircleFilled(
+                                pulsePos,
+                                pulseRadius * 0.5f,
+                                IM_COL32(255, 255, 255, (int)(magnitude * 255)),
+                                8
+                            );
+                        }
+                    }
+                }
+            }
+        }
+    }
+    // === END SMART CABLE VISUALIZATION ===
+    
+    // === PROBE TOOL MODE HANDLING ===
+    if (isProbeModeActive)
+    {
+        // Change cursor to indicate probe mode is active
+        ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
+        
+        // Draw "PROBE ACTIVE" indicator at mouse position
+        auto* drawList = ImGui::GetForegroundDrawList();
+        ImVec2 mousePos = ImGui::GetMousePos();
+        const char* text = "PROBE MODE: Click output pin";
+        auto textSize = ImGui::CalcTextSize(text);
+        ImVec2 textPos = ImVec2(mousePos.x + 20, mousePos.y - 20);
+        drawList->AddRectFilled(
+            ImVec2(textPos.x - 5, textPos.y - 2),
+            ImVec2(textPos.x + textSize.x + 5, textPos.y + textSize.y + 2),
+            IM_COL32(50, 50, 50, 200)
+        );
+        drawList->AddText(textPos, IM_COL32(255, 255, 100, 255), text);
+        
+        // Check for pin clicks
+        if (ImGui::IsMouseClicked(ImGuiMouseButton_Left))
+        {
+            int hoveredPinId = -1;
+            if (ImNodes::IsPinHovered(&hoveredPinId) && hoveredPinId != -1)
+            {
+                auto pinId = decodePinId(hoveredPinId);
+                // Check if it's an output pin (not input, not mod)
+                if (!pinId.isInput && !pinId.isMod && pinId.logicalId != 0)
+                {
+                    juce::Logger::writeToLog("[PROBE_UI] Probe clicked on valid output pin. LogicalID: " + juce::String(pinId.logicalId) + ", Channel: " + juce::String(pinId.channel));
+                    auto nodeId = synth->getNodeIdForLogical(pinId.logicalId);
+                    synth->setProbeConnection(nodeId, pinId.channel);
+                    isProbeModeActive = false; // Deactivate after probing
+                }
+                else
+                {
+                    juce::Logger::writeToLog("[PROBE_UI] Probe clicked on an invalid pin (input or output node). Cancelling.");
+                    isProbeModeActive = false;
+                }
+            }
+            else
+            {
+                // Clicked on empty space, cancel probe mode
+                juce::Logger::writeToLog("[PROBE_UI] Probe clicked on empty space. Cancelling.");
+                isProbeModeActive = false;
+            }
+        }
+        
+        // Allow ESC to cancel probe mode
+        if (ImGui::IsKeyPressed(ImGuiKey_Escape))
+        {
+            isProbeModeActive = false;
+            juce::Logger::writeToLog("[PROBE_UI] Cancelled with ESC");
+        }
+    }
 
     // --- CONTEXTUAL RIGHT-CLICK HANDLER ---
     // A cable was right-clicked. Store its info and open the insert popup.
@@ -2291,6 +2815,18 @@ if (auto* mp = synth->getModuleForLogical (lid))
             }
             ImGui::PopItemWidth();
             ImGui::Separator();
+            
+            // --- PROBE TOOL ---
+            if (ImGui::MenuItem("🔬 Probe Signal (Click any output pin)"))
+            {
+                isProbeModeActive = true;
+                ImGui::CloseCurrentPopup();
+            }
+            if (ImGui::IsItemHovered())
+            {
+                ImGui::SetTooltip("Activate probe mode to instantly visualize any signal without manual patching.\nClick on any output pin to route it to the probe scope.");
+            }
+            ImGui::Separator();
 
             auto addAtMouse = [this](const char* type) {
                 auto nodeId = synth->addModule(type);
@@ -2331,6 +2867,7 @@ if (auto* mp = synth->getModuleForLogical (lid))
                     if (ImGui::MenuItem("Noise")) addAtMouse("Noise");
                     if (ImGui::MenuItem("Sequencer")) addAtMouse("Sequencer");
                     if (ImGui::MenuItem("Multi Sequencer")) addAtMouse("multi sequencer");
+                    if (ImGui::MenuItem("Snapshot Sequencer")) addAtMouse("snapshot sequencer");
                     if (ImGui::MenuItem("MIDI Player")) addAtMouse("midi player");
                     if (ImGui::MenuItem("Value")) addAtMouse("Value");
                     if (ImGui::MenuItem("Sample Loader")) addAtMouse("sample loader");
@@ -2885,46 +3422,63 @@ if (auto* mp = synth->getModuleForLogical (lid))
     {
         ImGui::Begin("Keyboard Shortcuts", &showShortcutsWindow, ImGuiWindowFlags_AlwaysAutoResize);
         
-        ImGui::Text("Node & Patch Management");
-        ImGui::Separator();
-        ImGui::BulletText("M: Mute/Bypass selected node(s).");
-        ImGui::BulletText("Ctrl + A: Select all nodes.");
-        ImGui::BulletText("Ctrl + R: Insert a Recorder tapped into the Main Output.");
-        
-        ImGui::Spacing();
-        ImGui::Text("Connection & Signal Flow");
-        ImGui::Separator();
-        ImGui::BulletText("O: Connect selected node's first output to Main Output.");
-        ImGui::BulletText("Alt + D: Disconnect all cables from selected node(s).");
+        // --- NEW, COMPREHENSIVE SHORTCUT LIST ---
 
-        ImGui::Spacing();
-        ImGui::Text("Navigation & View");
-        ImGui::Separator();
-        ImGui::BulletText("F: Frame selected nodes.");
-        ImGui::BulletText("Home: Frame all nodes.");
-
-        ImGui::Spacing();
-        ImGui::Text("Patch Actions");
-        ImGui::Separator();
-        ImGui::BulletText("Ctrl + P: Randomize Patch.");
-        ImGui::BulletText("Ctrl + M: Randomize Connections.");
-        ImGui::BulletText("Ctrl + B: Beautify Layout.");
-
-        ImGui::Spacing();
-        ImGui::Text("Parameter & Data");
-        ImGui::Separator();
-        ImGui::BulletText("Ctrl + Click (on a slider): Instantly edit the value with the keyboard.");
-        ImGui::BulletText("Ctrl + Shift + C: Copy selected node's settings.");
-        ImGui::BulletText("Ctrl + Shift + V: Paste settings to selected node (of same type).");
-
-        ImGui::Spacing();
-        ImGui::Text("General");
+        ImGui::Text("Patch & File Management");
         ImGui::Separator();
         ImGui::BulletText("Ctrl + S: Save Preset.");
         ImGui::BulletText("Ctrl + O: Load Preset.");
-        ImGui::BulletText("Ctrl + Z: Undo.");
-        ImGui::BulletText("Ctrl + Y: Redo.");
-        ImGui::BulletText("Delete: Delete selected nodes/links.");
+        ImGui::BulletText("Ctrl + Z: Undo last action.");
+        ImGui::BulletText("Ctrl + Y: Redo last action.");
+        ImGui::BulletText("Ctrl + P: Generate a new random patch.");
+
+        ImGui::Spacing();
+        ImGui::Text("Node Creation & Deletion");
+        ImGui::Separator();
+        ImGui::BulletText("Right-click canvas: Open Quick Add menu to create a node.");
+        ImGui::BulletText("Delete: Delete selected nodes and links.");
+        ImGui::BulletText("Shift + Delete: Bypass-delete selected node(s), preserving signal chain.");
+        ImGui::BulletText("Ctrl + D: Duplicate selected node(s).");
+        ImGui::BulletText("Shift + D: Duplicate selected node(s) with their connections.");
+        ImGui::BulletText("Ctrl + Shift + M: Collapse selected nodes into a new 'Meta Module'.");
+
+        ImGui::Spacing();
+        ImGui::Text("Connections & Signal Flow");
+        ImGui::Separator();
+        ImGui::BulletText("Right-click canvas -> Probe Signal: Enter Probe Mode.");
+        ImGui::BulletText("  (In Probe Mode) Left-click output pin: Instantly view signal in the Probe Scope.");
+        ImGui::BulletText("Right-click link: Open menu to insert a node on that cable.");
+        ImGui::BulletText("I key (while hovering link): Open 'Insert Node' menu for that cable.");
+        ImGui::BulletText("Ctrl + Middle-click link: Split a new cable from a connected output pin.");
+        ImGui::BulletText("O key (with one node selected): Connect node's output to the Main Output.");
+        ImGui::BulletText("Alt + D: Disconnect all cables from selected node(s).");
+        ImGui::BulletText("Ctrl + M: Randomize connections between existing nodes.");
+        ImGui::BulletText("C key (multi-select): Chain selected nodes (L->L, R->R).");
+        ImGui::BulletText("G, B, Y, R keys (multi-select): Chain pins by type (Audio, CV, Gate, Raw).");
+        
+        ImGui::Spacing();
+        ImGui::Text("Navigation & View");
+        ImGui::Separator();
+        ImGui::BulletText("F: Frame (zoom to fit) selected nodes.");
+        ImGui::BulletText("Home: Frame all nodes in the patch.");
+        ImGui::BulletText("Ctrl + Home: Reset view panning to the origin (0,0).");
+        ImGui::BulletText("Ctrl + B: Automatically arrange nodes for a clean layout ('Beautify').");
+        ImGui::BulletText("Ctrl + A: Select all nodes.");
+
+        ImGui::Spacing();
+        ImGui::Text("Parameter & Settings");
+        ImGui::Separator();
+        ImGui::BulletText("M key (with node(s) selected): Mute or Bypass the selected node(s).");
+        ImGui::BulletText("Ctrl + R (with node(s) selected): Reset parameters of selected node(s) to default.");
+        ImGui::BulletText("Ctrl + Shift + C: Copy selected node's settings to clipboard.");
+        ImGui::BulletText("Ctrl + Shift + V: Paste settings to selected node (must be same type).");
+        ImGui::BulletText("Mouse Wheel (on slider): Fine-tune parameter value.");
+
+        ImGui::Spacing();
+        ImGui::Text("General & Debugging");
+        ImGui::Separator();
+        ImGui::BulletText("Ctrl + R (no node selected): Insert a Recorder tapped into the Main Output.");
+        ImGui::BulletText("Ctrl + Shift + D: Show System Diagnostics window.");
         ImGui::BulletText("F1: Toggle this help window.");
         
         ImGui::End();
@@ -3074,12 +3628,12 @@ juce::ValueTree ImGuiNodeEditorComponent::getUiValueTree()
 
 void ImGuiNodeEditorComponent::applyUiValueTreeNow (const juce::ValueTree& uiState)
 {
-    if (! uiState.isValid()) return;
+    if (! uiState.isValid() || synth == nullptr) return;
     
-    // --- FIX: Clear stale UI state ---
-    // The underlying synth graph has already been completely rebuilt by setStateInformation,
-    // so we just need to clear our stale UI data before applying the new state from the preset.
-    // Attempting to unmute old nodes would operate on invalid logical IDs from the previous graph.
+    juce::Logger::writeToLog("[UI_RESTORE] Applying UI ValueTree now...");
+
+    // This is the core of the crash: the synth graph has already been rebuilt by setStateInformation.
+    // We must clear our stale UI data (like muted nodes) before applying the new state from the preset.
     mutedNodeStates.clear();
     
     auto nodes = uiState; // expect tag NodeEditorUI
@@ -3089,17 +3643,39 @@ void ImGuiNodeEditorComponent::applyUiValueTreeNow (const juce::ValueTree& uiSta
         
         if (! n.hasType ("node")) continue;
         const int nid = (int) n.getProperty ("id", 0);
+
+        // ========================= THE FIX STARTS HERE =========================
+        //
+        // Before applying any property, VERIFY that this node ID actually exists
+        // in the synth. This prevents crashes when loading presets that contain
+        // modules which are not available in the current build.
+        //
+        bool nodeExistsInSynth = (nid == 0); // Node 0 is always the output node.
+        if (!nodeExistsInSynth) {
+            for (const auto& modInfo : synth->getModulesInfo()) {
+                if ((int)modInfo.first == nid) {
+                    nodeExistsInSynth = true;
+                    break;
+                }
+            }
+        }
+
+        if (!nodeExistsInSynth)
+        {
+            juce::Logger::writeToLog("[UI_RESTORE] WARNING: Skipping UI properties for non-existent node ID " + juce::String(nid) + ". The module may be missing or failed to load.");
+            continue; // Skip to the next node in the preset.
+        }
+        // ========================== END OF FIX ==========================
+
         const float x = (float) n.getProperty ("x", 0.0f);
         const float y = (float) n.getProperty ("y", 0.0f);
-        // Avoid forcing nodes to origin when snapshot contained (0,0)
         if (!(x == 0.0f && y == 0.0f))
         {
             pendingNodePositions[nid] = ImVec2(x, y);
-            juce::Logger::writeToLog("[applyUiValueTreeNow] Queued position for node " + juce::String(nid) + ": (" + juce::String(x) + ", " + juce::String(y) + ")");
+            juce::Logger::writeToLog("[UI_RESTORE] Queued position for node " + juce::String(nid) + ": (" + juce::String(x) + ", " + juce::String(y) + ")");
         }
         
-        // --- FIX: Read and apply muted state from preset ---
-        // When loading a preset, we need to mark nodes as muted and create bypass connections.
+        // Read and apply muted state from preset for existing nodes.
         if ((bool) n.getProperty("muted", false))
         {
             // Use muteNodeSilent to store the original connections first,
@@ -3109,13 +3685,10 @@ void ImGuiNodeEditorComponent::applyUiValueTreeNow (const juce::ValueTree& uiSta
         }
     }
     
-    // --- FIX: Trigger graph rebuild after mute state changes ---
-    // 3. Muting/unmuting modifies graph connections, so we must tell the
-    //    synth to rebuild its processing order
-    if (synth)
-    {
-        graphNeedsRebuild = true;
-    }
+    // Muting/unmuting modifies graph connections, so we must tell the
+    // synth to rebuild its processing order.
+    graphNeedsRebuild = true;
+    juce::Logger::writeToLog("[UI_RESTORE] UI state applied. Flagging for graph rebuild.");
 }
 
 void ImGuiNodeEditorComponent::applyUiValueTree (const juce::ValueTree& uiState)
@@ -5495,6 +6068,328 @@ void ImGuiNodeEditorComponent::addPluginModules()
             ImGui::EndTooltip();
         }
     }
+}
+
+void ImGuiNodeEditorComponent::handleCollapseToMetaModule()
+{
+    if (!synth)
+        return;
+    
+    juce::Logger::writeToLog("[Meta Module] Starting collapse operation...");
+    
+    // 1. Get selected nodes
+    const int numSelected = ImNodes::NumSelectedNodes();
+    if (numSelected < 2)
+    {
+        juce::Logger::writeToLog("[Meta Module] ERROR: Need at least 2 nodes selected");
+        return;
+    }
+    
+    std::vector<int> selectedNodeIds(numSelected);
+    ImNodes::GetSelectedNodes(selectedNodeIds.data());
+    
+    // Convert to logical IDs
+    std::set<juce::uint32> selectedLogicalIds;
+    for (int nodeId : selectedNodeIds)
+    {
+        selectedLogicalIds.insert((juce::uint32)nodeId);
+    }
+    
+    juce::Logger::writeToLog("[Meta Module] Selected " + juce::String(numSelected) + " nodes");
+    
+    // 2. Analyze boundary connections
+    struct BoundaryConnection
+    {
+        juce::uint32 externalLogicalId;
+        int externalChannel;
+        juce::uint32 internalLogicalId;
+        int internalChannel;
+        bool isInput; // true = external -> internal, false = internal -> external
+    };
+    
+    std::vector<BoundaryConnection> boundaries;
+    auto allConnections = synth->getConnectionsInfo();
+    
+    for (const auto& conn : allConnections)
+    {
+        bool srcIsSelected = selectedLogicalIds.count(conn.srcLogicalId) > 0;
+        bool dstIsSelected = selectedLogicalIds.count(conn.dstLogicalId) > 0 && !conn.dstIsOutput;
+        bool dstIsOutput = conn.dstIsOutput;
+        
+        // Inlet: external -> selected
+        if (!srcIsSelected && dstIsSelected)
+        {
+            BoundaryConnection bc;
+            bc.externalLogicalId = conn.srcLogicalId;
+            bc.externalChannel = conn.srcChan;
+            bc.internalLogicalId = conn.dstLogicalId;
+            bc.internalChannel = conn.dstChan;
+            bc.isInput = true;
+            boundaries.push_back(bc);
+            juce::Logger::writeToLog("[Meta Module] Found inlet: " + juce::String(bc.externalLogicalId) + 
+                                    " -> " + juce::String(bc.internalLogicalId));
+        }
+        // Outlet: selected -> external or output
+        else if (srcIsSelected && (!dstIsSelected || dstIsOutput))
+        {
+            BoundaryConnection bc;
+            bc.externalLogicalId = dstIsOutput ? 0 : conn.dstLogicalId;
+            bc.externalChannel = conn.dstChan;
+            bc.internalLogicalId = conn.srcLogicalId;
+            bc.internalChannel = conn.srcChan;
+            bc.isInput = false;
+            boundaries.push_back(bc);
+            juce::Logger::writeToLog("[Meta Module] Found outlet: " + juce::String(bc.internalLogicalId) + 
+                                    " -> " + (dstIsOutput ? "OUTPUT" : juce::String(bc.externalLogicalId)));
+        }
+    }
+    
+    // Count inlets and outlets
+    int numInlets = 0;
+    int numOutlets = 0;
+    for (const auto& bc : boundaries)
+    {
+        if (bc.isInput)
+            numInlets++;
+        else
+            numOutlets++;
+    }
+    
+    juce::Logger::writeToLog("[META] Boundary Detection: Found " + juce::String(numInlets) + " inlets and " + juce::String(numOutlets) + " outlets.");
+    juce::Logger::writeToLog("[META] Found " + juce::String(boundaries.size()) + " boundary connections");
+    
+    if (boundaries.empty())
+    {
+        juce::Logger::writeToLog("[META] WARNING: No boundary connections - creating isolated meta module");
+    }
+    
+    // 3. Create the internal graph state
+    pushSnapshot(); // Make undoable
+    
+    // Save the state of selected nodes
+    juce::MemoryBlock internalState;
+    {
+        // Create a temporary state containing only selected nodes
+        juce::ValueTree internalRoot("ModularSynthPreset");
+        internalRoot.setProperty("version", 1, nullptr);
+        
+        juce::ValueTree modsVT("modules");
+        juce::ValueTree connsVT("connections");
+        
+        // Add selected modules
+        std::map<juce::uint32, juce::uint32> oldToNewLogicalId;
+        juce::uint32 newLogicalId = 1;
+        
+        for (juce::uint32 oldId : selectedLogicalIds)
+        {
+            oldToNewLogicalId[oldId] = newLogicalId++;
+            
+            auto* module = synth->getModuleForLogical(oldId);
+            if (!module)
+                continue;
+            
+            juce::String moduleType = synth->getModuleTypeForLogical(oldId);
+            
+            juce::ValueTree mv("module");
+            mv.setProperty("logicalId", (int)oldToNewLogicalId[oldId], nullptr);
+            mv.setProperty("type", moduleType, nullptr);
+            
+            // Save parameters
+            juce::ValueTree params = module->getAPVTS().copyState();
+            juce::ValueTree paramsWrapper("params");
+            paramsWrapper.addChild(params, -1, nullptr);
+            mv.addChild(paramsWrapper, -1, nullptr);
+            
+            // Save extra state
+            if (auto extra = module->getExtraStateTree(); extra.isValid())
+            {
+                juce::ValueTree extraWrapper("extra");
+                extraWrapper.addChild(extra, -1, nullptr);
+                mv.addChild(extraWrapper, -1, nullptr);
+            }
+            
+            modsVT.addChild(mv, -1, nullptr);
+        }
+        
+        // Add inlet modules for each unique input
+        std::map<std::pair<juce::uint32, int>, juce::uint32> inletMap; // (extId, extCh) -> inletLogicalId
+        for (const auto& bc : boundaries)
+        {
+            if (bc.isInput)
+            {
+                auto key = std::make_pair(bc.externalLogicalId, bc.externalChannel);
+                if (inletMap.find(key) == inletMap.end())
+                {
+                    juce::uint32 inletId = newLogicalId++;
+                    inletMap[key] = inletId;
+                    
+                    juce::ValueTree mv("module");
+                    mv.setProperty("logicalId", (int)inletId, nullptr);
+                    mv.setProperty("type", "inlet", nullptr);
+                    modsVT.addChild(mv, -1, nullptr);
+                    
+                    juce::Logger::writeToLog("[Meta Module] Created inlet node ID=" + juce::String(inletId));
+                }
+            }
+        }
+        
+        // Add outlet modules for each unique output
+        std::map<std::pair<juce::uint32, int>, juce::uint32> outletMap; // (intId, intCh) -> outletLogicalId
+        for (const auto& bc : boundaries)
+        {
+            if (!bc.isInput)
+            {
+                auto key = std::make_pair(bc.internalLogicalId, bc.internalChannel);
+                if (outletMap.find(key) == outletMap.end())
+                {
+                    juce::uint32 outletId = newLogicalId++;
+                    outletMap[key] = outletId;
+                    
+                    juce::ValueTree mv("module");
+                    mv.setProperty("logicalId", (int)outletId, nullptr);
+                    mv.setProperty("type", "outlet", nullptr);
+                    modsVT.addChild(mv, -1, nullptr);
+                    
+                    juce::Logger::writeToLog("[Meta Module] Created outlet node ID=" + juce::String(outletId));
+                }
+            }
+        }
+        
+        // Add internal connections (between selected nodes)
+        for (const auto& conn : allConnections)
+        {
+            bool srcIsSelected = selectedLogicalIds.count(conn.srcLogicalId) > 0;
+            bool dstIsSelected = selectedLogicalIds.count(conn.dstLogicalId) > 0;
+            
+            if (srcIsSelected && dstIsSelected)
+            {
+                juce::ValueTree cv("connection");
+                cv.setProperty("srcId", (int)oldToNewLogicalId[conn.srcLogicalId], nullptr);
+                cv.setProperty("srcChan", conn.srcChan, nullptr);
+                cv.setProperty("dstId", (int)oldToNewLogicalId[conn.dstLogicalId], nullptr);
+                cv.setProperty("dstChan", conn.dstChan, nullptr);
+                connsVT.addChild(cv, -1, nullptr);
+            }
+        }
+        
+        // Add connections from inlets to internal nodes
+        for (const auto& bc : boundaries)
+        {
+            if (bc.isInput)
+            {
+                auto key = std::make_pair(bc.externalLogicalId, bc.externalChannel);
+                juce::uint32 inletId = inletMap[key];
+                
+                juce::ValueTree cv("connection");
+                cv.setProperty("srcId", (int)inletId, nullptr);
+                cv.setProperty("srcChan", 0, nullptr); // Inlets output on channel 0
+                cv.setProperty("dstId", (int)oldToNewLogicalId[bc.internalLogicalId], nullptr);
+                cv.setProperty("dstChan", bc.internalChannel, nullptr);
+                connsVT.addChild(cv, -1, nullptr);
+            }
+        }
+        
+        // Add connections from internal nodes to outlets
+        for (const auto& bc : boundaries)
+        {
+            if (!bc.isInput)
+            {
+                auto key = std::make_pair(bc.internalLogicalId, bc.internalChannel);
+                juce::uint32 outletId = outletMap[key];
+                
+                juce::ValueTree cv("connection");
+                cv.setProperty("srcId", (int)oldToNewLogicalId[bc.internalLogicalId], nullptr);
+                cv.setProperty("srcChan", bc.internalChannel, nullptr);
+                cv.setProperty("dstId", (int)outletId, nullptr);
+                cv.setProperty("dstChan", 0, nullptr); // Outlets input on channel 0
+                connsVT.addChild(cv, -1, nullptr);
+            }
+        }
+        
+        internalRoot.addChild(modsVT, -1, nullptr);
+        internalRoot.addChild(connsVT, -1, nullptr);
+        
+        // Serialize to memory block
+        if (auto xml = internalRoot.createXml())
+        {
+            juce::MemoryOutputStream mos(internalState, false);
+            xml->writeTo(mos);
+            juce::Logger::writeToLog("[META] Generated state for sub-patch.");
+        }
+    }
+    
+    // 4. Calculate average position for the meta module
+    ImVec2 avgPos(0.0f, 0.0f);
+    int posCount = 0;
+    for (juce::uint32 logicalId : selectedLogicalIds)
+    {
+        ImVec2 pos = ImNodes::GetNodeGridSpacePos((int)logicalId);
+        avgPos.x += pos.x;
+        avgPos.y += pos.y;
+        posCount++;
+    }
+    if (posCount > 0)
+    {
+        avgPos.x /= posCount;
+        avgPos.y /= posCount;
+    }
+    
+    // 5. Delete selected nodes
+    for (juce::uint32 logicalId : selectedLogicalIds)
+    {
+        auto nodeId = synth->getNodeIdForLogical(logicalId);
+        synth->removeModule(nodeId);
+    }
+    
+    // 6. Create meta module
+    auto metaNodeId = synth->addModule("meta module");
+    auto metaLogicalId = synth->getLogicalIdForNode(metaNodeId);
+    pendingNodePositions[(int)metaLogicalId] = avgPos;
+    
+    juce::Logger::writeToLog("[META] Created new MetaModule with logical ID: " + juce::String((int)metaLogicalId));
+    
+    auto* metaModule = dynamic_cast<MetaModuleProcessor*>(synth->getModuleForLogical(metaLogicalId));
+    if (metaModule)
+    {
+        // Load the internal state
+        metaModule->setStateInformation(internalState.getData(), (int)internalState.getSize());
+        juce::Logger::writeToLog("[META] Loaded internal state into meta module");
+    }
+    else
+    {
+        juce::Logger::writeToLog("[META] ERROR: Failed to create meta module");
+        return;
+    }
+    
+    // 7. Reconnect external connections
+    // Note: This is a simplified implementation - in production, you'd need to map
+    // inlet/outlet indices to meta module input/output channels properly
+    for (const auto& bc : boundaries)
+    {
+        if (bc.isInput)
+        {
+            // Connect external source to meta module input
+            auto extNodeId = synth->getNodeIdForLogical(bc.externalLogicalId);
+            synth->connect(extNodeId, bc.externalChannel, metaNodeId, 0);
+        }
+        else if (bc.externalLogicalId != 0)
+        {
+            // Connect meta module output to external destination
+            auto extNodeId = synth->getNodeIdForLogical(bc.externalLogicalId);
+            synth->connect(metaNodeId, 0, extNodeId, bc.externalChannel);
+        }
+        else
+        {
+            // Connect meta module output to main output
+            auto outputNodeId = synth->getOutputNodeID();
+            synth->connect(metaNodeId, 0, outputNodeId, bc.externalChannel);
+        }
+    }
+    
+    graphNeedsRebuild = true;
+    synth->commitChanges();
+    
+    juce::Logger::writeToLog("[META] Reconnected external cables. Collapse complete!");
 }
 
 

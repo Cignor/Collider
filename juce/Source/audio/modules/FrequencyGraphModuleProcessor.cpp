@@ -58,26 +58,46 @@ void FrequencyGraphModuleProcessor::prepareToPlay(double sampleRate, int /*sampl
 
 void FrequencyGraphModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffer& /*midi*/)
 {
+    juce::ScopedNoDenormals noDenormals;
+
     auto inBus = getBusBuffer(buffer, true, 0);
-    auto audioOutBus = getBusBuffer(buffer, false, 0);
-    auto cvOutBus = getBusBuffer(buffer, false, 1);
-    
+    auto audioOutBus = getBusBuffer(buffer, false, 0); // Audio is on bus 0
+    auto cvOutBus = getBusBuffer(buffer, false, 1);    // CV is on bus 1
+
     const int numSamples = buffer.getNumSamples();
-    const double sampleRate = getSampleRate();
+    if (numSamples <= 0) return;
 
-    const float* inputData = inBus.getNumChannels() > 0 ? inBus.getReadPointer(0) : nullptr;
+    // --- Logging Setup ---
+    static int debugCounter = 0;
+    const bool shouldLog = ((debugCounter++ % 100) == 0);
 
-    // --- DEBUG-INPLACE: Check if clearing/writing would nuke inputs (shared buffer case) ---
-    float rmsBefore = 0.0f, rmsAfter = 0.0f;
+    if (shouldLog && inBus.getNumChannels() > 0)
+    {
+        float inputRms = inBus.getRMSLevel(0, 0, numSamples);
+        juce::Logger::writeToLog("[GraphicEQ Debug] At Entry - Input RMS: " + juce::String(inputRms, 6));
+    }
+
+    // --- CRITICAL FIX: Capture input audio BEFORE any write operations ---
+    juce::AudioBuffer<float> inputCopy(2, numSamples);
     if (inBus.getNumChannels() > 0)
-        rmsBefore = inBus.getRMSLevel(0, 0, numSamples);
+    {
+        inputCopy.copyFrom(0, 0, inBus, 0, 0, numSamples);
+        if (inBus.getNumChannels() > 1)
+            inputCopy.copyFrom(1, 0, inBus, 1, 0, numSamples);
+        else
+            inputCopy.copyFrom(1, 0, inBus, 0, 0, numSamples); // duplicate mono to R
+    }
+    else
+    {
+        inputCopy.clear();
+    }
+    // --- END OF CRITICAL FIX ---
 
-    // --- REAL-TIME SAFE FFT PROCESSING ---
-    // Instead of looping through every sample individually, we process the buffer in chunks.
-    // This prevents the expensive FFT from blocking individual sample processing.
+    // --- FFT Processing (uses its own safe buffer) ---
+    const double sampleRate = getSampleRate();
+    const float* inputData = inputCopy.getReadPointer(0); // Analyze the mono sum from our safe copy
     if (inputData)
     {
-        // Update threshold values from parameters
         bandAnalysers[0].thresholdDb = subThresholdParam->load();
         bandAnalysers[1].thresholdDb = bassThresholdParam->load();
         bandAnalysers[2].thresholdDb = midThresholdParam->load();
@@ -85,14 +105,10 @@ void FrequencyGraphModuleProcessor::processBlock(juce::AudioBuffer<float>& buffe
         
         int inputSamplesConsumed = 0;
         
-        // Process the incoming buffer in chunks
         while (inputSamplesConsumed < numSamples)
         {
-            // Calculate how many samples we can copy before the FFT buffer is full
-            const int samplesToCopy = std::min(numSamples - inputSamplesConsumed, 
-                                               fftSize - samplesAccumulated);
+            const int samplesToCopy = std::min(numSamples - inputSamplesConsumed, fftSize - samplesAccumulated);
             
-            // Quickly copy the available data into our FFT buffer
             std::copy(inputData + inputSamplesConsumed,
                       inputData + inputSamplesConsumed + samplesToCopy,
                       fftInputBuffer.begin() + samplesAccumulated);
@@ -100,17 +116,13 @@ void FrequencyGraphModuleProcessor::processBlock(juce::AudioBuffer<float>& buffe
             samplesAccumulated += samplesToCopy;
             inputSamplesConsumed += samplesToCopy;
 
-            // If the FFT buffer is full, process it now
-            // This happens outside the per-sample loop, preventing stalls
             if (samplesAccumulated >= fftSize)
             {
-                // 1. Perform FFT
                 std::fill(fftData.begin(), fftData.end(), 0.0f);
                 std::copy(fftInputBuffer.begin(), fftInputBuffer.end(), fftData.begin());
                 window.multiplyWithWindowingTable(fftData.data(), fftSize);
                 fft.performFrequencyOnlyForwardTransform(fftData.data());
 
-                // 2. Analyze frequency bands and update gate/trigger states
                 float bandEnergyDb[4] = { -100.0f, -100.0f, -100.0f, -100.0f };
                 const float bandRanges[] = { 60, 250, 2000, 8000, 22000 };
                 int currentBand = 0;
@@ -121,7 +133,6 @@ void FrequencyGraphModuleProcessor::processBlock(juce::AudioBuffer<float>& buffe
                     float freq = (float)bin * (float)sampleRate / (float)fftSize;
                     if (freq > bandRanges[currentBand])
                     {
-                        // FIX: Correctly normalize FFT magnitude before converting to dB
                         float normalizedMagnitude = maxInBand / (float)fftSize;
                         bandEnergyDb[currentBand] = juce::Decibels::gainToDecibels(normalizedMagnitude, -100.0f);
                         currentBand++;
@@ -131,7 +142,6 @@ void FrequencyGraphModuleProcessor::processBlock(juce::AudioBuffer<float>& buffe
                     maxInBand = std::max(maxInBand, fftData[bin]);
                 }
 
-                // Update gate/trigger states for each band
                 for (int band = 0; band < 4; ++band)
                 {
                     bool gateState = bandEnergyDb[band] > bandAnalysers[band].thresholdDb;
@@ -142,53 +152,37 @@ void FrequencyGraphModuleProcessor::processBlock(juce::AudioBuffer<float>& buffe
                     bandAnalysers[band].lastGateState = gateState;
                 }
 
-                // 3. Push data to UI thread via lock-free FIFO
                 int start1, size1, start2, size2;
                 abstractFifo.prepareToWrite(1, start1, size1, start2, size2);
                 if (size1 > 0)
                 {
                     for (int bin = 0; bin < fftSize / 2 + 1; ++bin)
                     {
-                        // FIX: Correctly normalize FFT magnitude before converting to dB
                         float magnitude = fftData[bin] / (float)fftSize;
                         fifoBuffer[start1][bin] = juce::Decibels::gainToDecibels(magnitude, -100.0f);
                     }
                     abstractFifo.finishedWrite(1);
                 }
 
-                // 4. Shift buffer for overlap-add (hop size)
                 std::move(fftInputBuffer.begin() + hopSize, fftInputBuffer.end(), fftInputBuffer.begin());
                 samplesAccumulated -= hopSize;
             }
         }
     }
-
-    // --- HANDLE AUDIO PASSTHROUGH ---
-    // The analysis is done. Now we can safely write to our output buffers.
-    if (inBus.getNumChannels() > 0 && audioOutBus.getNumChannels() > 0)
+    
+    // --- Copy Captured Input to AUDIO Output Bus for Passthrough ---
+    if (audioOutBus.getNumChannels() > 0)
     {
-        audioOutBus.copyFrom(0, 0, inBus, 0, 0, numSamples); // L channel
+        audioOutBus.copyFrom(0, 0, inputCopy, 0, 0, numSamples);
         if (audioOutBus.getNumChannels() > 1)
-        {
-            audioOutBus.copyFrom(1, 0, inBus, 0, 0, numSamples); // R channel (duplicate mono)
-        }
+            audioOutBus.copyFrom(1, 0, inputCopy, 1, 0, numSamples);
     }
     else
     {
         audioOutBus.clear();
     }
-
-    if (inBus.getNumChannels() > 0)
-    {
-        rmsAfter = inBus.getRMSLevel(0, 0, numSamples);
-        static int dbgCtr = 0;
-        if ((++dbgCtr % 200) == 0 && rmsBefore > 1.0e-5f)
-            juce::Logger::writeToLog("[DEBUG-INPLACE] FreqGraph RMS before/after output ops: " + juce::String(rmsBefore, 6) + " / " + juce::String(rmsAfter, 6));
-    }
-
+    
     // --- WRITE CV/GATE OUTPUTS ---
-    // This loop uses the gate/trigger states that were last updated by the FFT block.
-    // The state is held constant between FFT calculations, which is the correct behavior.
     cvOutBus.clear();
     for (int i = 0; i < numSamples; ++i)
     {
@@ -203,7 +197,6 @@ void FrequencyGraphModuleProcessor::processBlock(juce::AudioBuffer<float>& buffe
             }
         }
         
-        // Decrement trigger counters once per sample for all bands
         for (auto& analyser : bandAnalysers)
         {
             if (analyser.triggerSamplesRemaining > 0)

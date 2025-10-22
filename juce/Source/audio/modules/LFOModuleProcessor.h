@@ -14,6 +14,8 @@ public:
     static constexpr auto paramIdRateMod = "rate_mod";
     static constexpr auto paramIdDepthMod = "depth_mod";
     static constexpr auto paramIdWaveMod = "wave_mod";
+    static constexpr auto paramIdSync = "sync";
+    static constexpr auto paramIdRateDivision = "rate_division";
 
     LFOModuleProcessor();
     ~LFOModuleProcessor() override = default;
@@ -23,6 +25,9 @@ public:
     void prepareToPlay(double sampleRate, int samplesPerBlock) override;
     void releaseResources() override {}
     void processBlock(juce::AudioBuffer<float>&, juce::MidiBuffer&) override;
+    
+    // Transport sync support
+    void setTimingInfo(const TransportState& state) override;
 
     juce::AudioProcessorValueTreeState& getAPVTS() override { return apvts; }
     
@@ -47,6 +52,9 @@ private:
     std::atomic<float>* depthParam{ nullptr };
     std::atomic<float>* bipolarParam{ nullptr };
     std::atomic<float>* waveParam{ nullptr };
+    std::atomic<float>* syncParam{ nullptr };
+    std::atomic<float>* rateDivisionParam{ nullptr };
     
     int currentWaveform = -1;
+    TransportState m_currentTransport;
 };

@@ -9,6 +9,8 @@
 #include <imgui.h>
 #include "../audio/modules/ModuleProcessor.h"
 #include "../audio/graph/ModularSynthProcessor.h"
+#include "PresetManager.h"
+#include "SampleManager.h"
 
 // Forward declarations from Dear ImGui / imnodes
 struct ImGuiContext; struct ImGuiIO; struct ImNodesContext;
@@ -173,6 +175,15 @@ public:
     juce::ValueTree uiPending; // applied at next render before drawing nodes
     std::atomic<bool> graphNeedsRebuild { false };
     
+    // Preset and sample management
+    PresetManager m_presetManager;
+    SampleManager m_sampleManager;
+    juce::String m_presetSearchTerm;
+    juce::String m_sampleSearchTerm;
+    
+    // Meta module editing state
+    juce::uint32 metaModuleToEditLid = 0;
+    
     // Cache of last-known valid node positions (used when graphNeedsRebuild prevents rendering)
     std::unordered_map<int, ImVec2> lastKnownNodePositions;
 
@@ -263,6 +274,10 @@ public:
     bool showDebugMenu { false };
     int pendingInsertLinkId { -1 };
     
+    // Probe tool state
+    bool isProbeModeActive { false };
+    bool showProbeScope { true };
+    
     // Insert node on link state
     struct LinkInfo
     {
@@ -309,6 +324,9 @@ public:
     // --- Recorder Output Shortcut ---
     void handleRecordOutput();
     
+    // --- Meta Module (Sub-Patching) Support ---
+    void handleCollapseToMetaModule();
+    
     // --- Module Category Color Coding ---
     enum class ModuleCategory { Source, Effect, Modulator, Utility, Analysis, Comment, Plugin };
     ModuleCategory getModuleCategory(const juce::String& moduleType);
@@ -321,6 +339,3 @@ public:
     // --- VST Plugin Support ---
     void addPluginModules();
 };
-
-
-

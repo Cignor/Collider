@@ -7,6 +7,9 @@ FILE: juce\Source\audio\graph\ModularSynthProcessor.h
 #pragma once
 
 #include <juce_audio_processors/juce_audio_processors.h>
+#include <atomic>
+#include <vector>
+#include <memory>
 #include "../modules/ModuleProcessor.h"
 #include "../modules/InputDebugModuleProcessor.h"
 
@@ -40,7 +43,7 @@ public:
     using Node = juce::AudioProcessorGraph::Node;
     using NodeID = juce::AudioProcessorGraph::NodeID;
 
-    NodeID addModule(const juce::String& moduleType);
+    NodeID addModule(const juce::String& moduleType, bool commit = true);
     NodeID addVstModule(juce::AudioPluginFormatManager& formatManager, const juce::PluginDescription& vstDesc);
     NodeID addVstModule(juce::AudioPluginFormatManager& formatManager, const juce::PluginDescription& vstDesc, juce::uint32 logicalIdToAssign);
     void removeModule(const NodeID& nodeID);
@@ -73,6 +76,29 @@ public:
     // Access a module processor for UI parameter editing
     ModuleProcessor* getModuleForLogical (juce::uint32 logicalId) const;
     
+    // === GLOBAL TRANSPORT & TIMING ===
+    // (TransportState struct is defined in ModuleProcessor.h)
+    
+    TransportState getTransportState() const { return m_transportState; }
+    void setPlaying(bool playing) { m_transportState.isPlaying = playing; }
+    void setBPM(double bpm) { m_transportState.bpm = juce::jlimit(20.0, 999.0, bpm); }
+    void resetTransportPosition() { m_samplePosition = 0; m_transportState.songPositionBeats = 0.0; m_transportState.songPositionSeconds = 0.0; }
+    
+    // === VOICE MANAGEMENT FOR POLYPHONY ===
+    struct Voice {
+        bool isActive = false;
+        int noteNumber = -1;
+        float velocity = 0.0f;
+        juce::uint32 age = 0;  // Used for note stealing (oldest voice)
+        juce::uint32 targetModuleLogicalId = 0;  // Which PolyVCO this voice is assigned to
+    };
+    
+    void setVoiceManagerEnabled(bool enabled) { m_voiceManagerEnabled = enabled; }
+    bool isVoiceManagerEnabled() const { return m_voiceManagerEnabled; }
+    void setMaxVoices(int numVoices) { m_voices.resize(numVoices); }
+    int getMaxVoices() const { return static_cast<int>(m_voices.size()); }
+    const std::vector<Voice>& getVoices() const { return m_voices; }
+    
     // === COMPREHENSIVE DIAGNOSTICS SYSTEM ===
     
     // Get system-wide diagnostics
@@ -101,6 +127,12 @@ public:
     // Plugin format manager for VST support (optional, set by application)
     void setPluginFormatManager(juce::AudioPluginFormatManager* manager) { pluginFormatManager = manager; }
     void setKnownPluginList(juce::KnownPluginList* list) { knownPluginList = list; }
+    
+    // === PROBE TOOL API ===
+    // Probe system for instant signal debugging without manual patching
+    void setProbeConnection(const NodeID& sourceNodeID, int sourceChannel);
+    void clearProbeConnection();
+    ModuleProcessor* getProbeScopeProcessor() const;
 
 private:
     // The internal graph that represents the modular patch
@@ -113,6 +145,10 @@ private:
 
     // The APVTS that will expose proxy parameters to the host/AudioEngine
     juce::AudioProcessorValueTreeState apvts;
+
+    // Thread-safe module access for audio thread
+    mutable juce::CriticalSection moduleLock;
+    std::atomic<std::shared_ptr<const std::vector<std::shared_ptr<ModuleProcessor>>>> activeAudioProcessors;
 
     // Manage module nodes (legacy map by NodeID.uid)
     std::map<juce::uint32, Node::Ptr> modules; // keyed by NodeID.uid
@@ -128,12 +164,28 @@ private:
     // Optional pointers for VST support
     juce::AudioPluginFormatManager* pluginFormatManager { nullptr };
     juce::KnownPluginList* knownPluginList { nullptr };
+    
+    // Probe scope for instant signal debugging (hidden from user, not saved in presets)
+    Node::Ptr probeScopeNode;
+    NodeID probeScopeNodeId;
+    
+    // Transport state
+    TransportState m_transportState;
+    juce::uint64 m_samplePosition { 0 };
+    
+    // Voice management state
+    std::vector<Voice> m_voices;
+    bool m_voiceManagerEnabled { false };
+    juce::uint32 m_globalVoiceAge { 0 };  // Incremented for each note-on
+    
+    // Voice management helper methods
+    int findFreeVoice();
+    int findOldestVoice();
+    void assignNoteToVoice(int voiceIndex, const juce::MidiMessage& noteOn);
+    void releaseVoice(const juce::MidiMessage& noteOff);
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (ModularSynthProcessor)
 };
-
-
-
 
 ================================================================================
 FILE: juce\Source\audio\graph\ModularSynthProcessor.cpp
@@ -196,6 +248,11 @@ FILE: juce\Source\audio\graph\ModularSynthProcessor.cpp
 #include "../modules/LimiterModuleProcessor.h"
 #include "../modules/GateModuleProcessor.h"
 #include "../modules/DriveModuleProcessor.h"
+#include "../modules/SnapshotSequencerModuleProcessor.h"
+#include "../modules/MIDICVModuleProcessor.h"
+#include "../modules/InletModuleProcessor.h"
+#include "../modules/OutletModuleProcessor.h"
+#include "../modules/MetaModuleProcessor.h"
 
 ModularSynthProcessor::ModularSynthProcessor()
     : juce::AudioProcessor(BusesProperties()
@@ -210,22 +267,32 @@ ModularSynthProcessor::ModularSynthProcessor()
     audioOutputNode = internalGraph->addNode(std::make_unique<IOProcessor>(IOProcessor::audioOutputNode));
     midiInputNode  = internalGraph->addNode(std::make_unique<IOProcessor>(IOProcessor::midiInputNode));
 
-    // Intentionally do NOT connect audio input -> output.
-    // The modular container acts as a source; connections are created programmatically.
-
     internalGraph->addConnection({ { midiInputNode->nodeID, juce::AudioProcessorGraph::midiChannelIndex },
                                    { audioOutputNode->nodeID, juce::AudioProcessorGraph::midiChannelIndex } });
+    
+    probeScopeNode = internalGraph->addNode(std::make_unique<ScopeModuleProcessor>());
+    probeScopeNodeId = probeScopeNode->nodeID;
+    juce::Logger::writeToLog("[ModularSynth] Initialized probe scope with nodeID: " + juce::String(probeScopeNodeId.uid));
+    
+    activeAudioProcessors.store(std::make_shared<const std::vector<std::shared_ptr<ModuleProcessor>>>());
+    
+    m_voices.resize(8);
+    for (auto& voice : m_voices)
+    {
+        voice.isActive = false;
+        voice.noteNumber = -1;
+        voice.velocity = 0.0f;
+        voice.age = 0;
+        voice.targetModuleLogicalId = 0;
+    }
 }
 
 ModularSynthProcessor::~ModularSynthProcessor() {}
 
 void ModularSynthProcessor::prepareToPlay(double sampleRate, int samplesPerBlock)
 {
-    // Ensure the internal graph has matching I/O channel counts before preparation
     internalGraph->setPlayConfigDetails(getTotalNumInputChannels(), getTotalNumOutputChannels(), sampleRate, samplesPerBlock);
     internalGraph->prepareToPlay(sampleRate, samplesPerBlock);
-
-    // REPLACED: Do not rebuild here. It invalidates the preparation.
 }
 
 void ModularSynthProcessor::releaseResources()
@@ -236,8 +303,66 @@ void ModularSynthProcessor::releaseResources()
 void ModularSynthProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midiMessages)
 {
     try {
+        if (m_transportState.isPlaying)
+        {
+            m_samplePosition += buffer.getNumSamples();
+            m_transportState.songPositionSeconds = m_samplePosition / getSampleRate();
+            m_transportState.songPositionBeats = (m_transportState.songPositionSeconds / 60.0) * m_transportState.bpm;
+        }
+
+        // --- FINAL THREAD-SAFE FIX ---
+        auto currentProcessors = activeAudioProcessors.load();
+        if (currentProcessors)
+        {
+            // Iterate over the safe, shared list.
+            for (const auto& modulePtr : *currentProcessors)
+            {
+                // SAFETY NET + GRANULAR LOGGING
+                if (modulePtr != nullptr)
+                {
+                    // Log the memory address before calling the function
+                    // juce::Logger::writeToLog("[AudioThread] Ticking module at 0x" + juce::String::toHexString((juce::pointer_sized_int)modulePtr.get()));
+                    modulePtr->setTimingInfo(m_transportState);
+                }
+                else
+                {
+                    // This should never happen with the shared_ptr fix, but if it does, it's critical info.
+                    juce::Logger::writeToLog("[AudioThread] CRITICAL WARNING: Encountered nullptr in active processor list!");
+                }
+            }
+        }
+        // --- END OF FIX ---
+        
+        if (m_voiceManagerEnabled && !m_voices.empty())
+        {
+            juce::MidiBuffer processedMidi;
+            for (const auto metadata : midiMessages)
+            {
+                const auto msg = metadata.getMessage();
+                if (msg.isNoteOn())
+                {
+                    int voiceIndex = findFreeVoice();
+                    if (voiceIndex < 0) voiceIndex = findOldestVoice();
+                    if (voiceIndex >= 0)
+                    {
+                        assignNoteToVoice(voiceIndex, msg);
+                        processedMidi.addEvent(msg, metadata.samplePosition);
+                    }
+                }
+                else if (msg.isNoteOff())
+                {
+                    releaseVoice(msg);
+                    processedMidi.addEvent(msg, metadata.samplePosition);
+                }
+                else
+                {
+                    processedMidi.addEvent(msg, metadata.samplePosition);
+                }
+            }
+            midiMessages.swapWith(processedMidi);
+        }
+        
         internalGraph->processBlock(buffer, midiMessages);
-        // Diagnostics: if internal graph produced silence for a while, log it
         static int silentCtr = 0;
         if (buffer.getMagnitude(0, buffer.getNumSamples()) < 1.0e-6f)
         {
@@ -257,17 +382,15 @@ void ModularSynthProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce:
         buffer.clear();
         return;
     }
-
 }
 
 void ModularSynthProcessor::getStateInformation(juce::MemoryBlock& destData)
 {
+    const juce::ScopedLock lock (moduleLock);
     juce::ValueTree root("ModularSynthPreset");
     root.setProperty("version", 1, nullptr);
 
-    // Modules
     juce::ValueTree modsVT("modules");
-    // Build reverse lookup NodeID.uid -> logicalId
     std::map<juce::uint32, juce::uint32> nodeUidToLogical;
     for (const auto& kv : logicalIdToModule)
     {
@@ -278,17 +401,13 @@ void ModularSynthProcessor::getStateInformation(juce::MemoryBlock& destData)
         juce::ValueTree mv("module");
         mv.setProperty("logicalId", (int) logicalId, nullptr);
         mv.setProperty("type", kv.second.type, nullptr);
-        // Attach params as child using the module's APVTS state
         auto itNode = modules.find(nodeUID);
         if (itNode != modules.end())
         {
             if (auto* modProc = dynamic_cast<ModuleProcessor*>(itNode->second->getProcessor()))
             {
-                // For VST modules, save the full processor state via extra state
                 if (auto* vstHost = dynamic_cast<VstHostModuleProcessor*>(modProc))
                 {
-                    // VST Module Saving Path
-                    // The extra state tree contains both the plugin identity and its binary state
                     if (auto extra = vstHost->getExtraStateTree(); extra.isValid())
                     {
                         juce::ValueTree extraWrapper("extra");
@@ -298,14 +417,11 @@ void ModularSynthProcessor::getStateInformation(juce::MemoryBlock& destData)
                 }
                 else
                 {
-                    // Regular Module Saving Path
-                    // 1. Save APVTS parameters
                     juce::ValueTree params = modProc->getAPVTS().copyState();
                     juce::ValueTree paramsWrapper("params");
                     paramsWrapper.addChild(params, -1, nullptr);
                     mv.addChild(paramsWrapper, -1, nullptr);
 
-                    // 2. Append optional extra state (like sample paths, etc.)
                     if (auto extra = modProc->getExtraStateTree(); extra.isValid())
                     {
                         juce::ValueTree extraWrapper("extra");
@@ -319,7 +435,6 @@ void ModularSynthProcessor::getStateInformation(juce::MemoryBlock& destData)
     }
     root.addChild(modsVT, -1, nullptr);
 
-    // Connections
     juce::ValueTree connsVT("connections");
     for (const auto& c : internalGraph->getConnections())
     {
@@ -344,14 +459,12 @@ void ModularSynthProcessor::getStateInformation(juce::MemoryBlock& destData)
         }
         else
         {
-            continue; // skip non-module connections
+            continue;
         }
         connsVT.addChild(cv, -1, nullptr);
     }
     root.addChild(connsVT, -1, nullptr);
 
-
-    // Serialize to XML
     if (auto xml = root.createXml())
     {
         juce::MemoryOutputStream mos(destData, false);
@@ -369,9 +482,6 @@ void ModularSynthProcessor::setStateInformation(const void* data, int sizeInByte
         return;
     }
 
-    // --- THIS IS THE NEW, CORRECTED LOGIC ---
-
-    // 1. Clear the entire existing state first.
     clearAll();
     juce::Logger::writeToLog("[STATE] Cleared existing state.");
 
@@ -384,8 +494,6 @@ void ModularSynthProcessor::setStateInformation(const void* data, int sizeInByte
     }
     
     juce::Logger::writeToLog("[STATE] Found <modules> block with " + juce::String(modsVT.getNumChildren()) + " children.");
-
-    // 2. First pass: Find the maximum logical ID in the preset to prevent future collisions.
     juce::uint32 maxId = 0;
     for (int i = 0; i < modsVT.getNumChildren(); ++i)
     {
@@ -395,9 +503,8 @@ void ModularSynthProcessor::setStateInformation(const void* data, int sizeInByte
             maxId = juce::jmax(maxId, (juce::uint32)(int)mv.getProperty("logicalId", 0));
         }
     }
-    nextLogicalId = maxId + 1; // Set the counter to be safely above the highest loaded ID.
+    nextLogicalId = maxId + 1;
 
-    // 3. Second pass: Recreate all modules and map their logical IDs.
     std::map<juce::uint32, NodeID> logicalToNodeId;
     juce::Logger::writeToLog("[STATE] Starting module recreation pass...");
     
@@ -419,7 +526,6 @@ void ModularSynthProcessor::setStateInformation(const void* data, int sizeInByte
         {
             NodeID nodeId;
             
-            // Check if this is a VST module by looking for the extra state
             auto extraWrapper = mv.getChildWithName("extra");
             bool isVstModule = false;
             
@@ -431,12 +537,10 @@ void ModularSynthProcessor::setStateInformation(const void* data, int sizeInByte
                     isVstModule = true;
                     juce::Logger::writeToLog("[STATE]   Loading VST module...");
                     
-                    // Get the plugin identifier from the extra state
                     juce::String identifier = extraState.getProperty("fileOrIdentifier", "").toString();
                     
                     if (identifier.isNotEmpty() && pluginFormatManager != nullptr && knownPluginList != nullptr)
                     {
-                        // Find the plugin in the known plugins list
                         bool found = false;
                         for (const auto& desc : knownPluginList->getTypes())
                         {
@@ -469,9 +573,8 @@ void ModularSynthProcessor::setStateInformation(const void* data, int sizeInByte
             
             if (!isVstModule)
             {
-                // Create regular module using the existing addModule function
                 juce::Logger::writeToLog("[STATE]   Calling addModule('" + type + "')...");
-                nodeId = addModule(type);
+                nodeId = addModule(type, false);
                 juce::Logger::writeToLog("[STATE]   addModule returned nodeId.uid=" + juce::String(nodeId.uid));
             }
             
@@ -481,11 +584,8 @@ void ModularSynthProcessor::setStateInformation(const void* data, int sizeInByte
             {
                 juce::Logger::writeToLog("[STATE]   Node created successfully.");
                 
-                // For VST modules, the logical ID was already assigned in addVstModule
-                // For regular modules, we need to update the mapping
                 if (!isVstModule)
                 {
-                    // Remove the auto-assigned logical mapping and assign the correct one
                     for (auto it = logicalIdToModule.begin(); it != logicalIdToModule.end(); )
                     {
                         if (it->second.nodeID == nodeId)
@@ -499,7 +599,6 @@ void ModularSynthProcessor::setStateInformation(const void* data, int sizeInByte
                 logicalToNodeId[logicalId] = nodeId;
                 juce::Logger::writeToLog("[STATE]   Mapped logicalId " + juce::String(logicalId) + " to nodeId.uid " + juce::String(nodeId.uid));
 
-                // Restore parameters for all modules
                 auto paramsWrapper = mv.getChildWithName("params");
                 if (paramsWrapper.isValid() && paramsWrapper.getNumChildren() > 0)
                 {
@@ -511,7 +610,6 @@ void ModularSynthProcessor::setStateInformation(const void* data, int sizeInByte
                     }
                 }
 
-                // Restore optional extra state (e.g., VST plugin state, file paths)
                 auto extraWrapper = mv.getChildWithName("extra");
                 if (extraWrapper.isValid() && extraWrapper.getNumChildren() > 0)
                 {
@@ -536,7 +634,6 @@ void ModularSynthProcessor::setStateInformation(const void* data, int sizeInByte
     
     juce::Logger::writeToLog("[STATE] Module recreation complete. Created " + juce::String(logicalToNodeId.size()) + " modules.");
 
-    // 4. Recreate connections using the now-populated logical ID map.
     auto connsVT = root.getChildWithName("connections");
     if (connsVT.isValid())
     {
@@ -582,7 +679,6 @@ void ModularSynthProcessor::setStateInformation(const void* data, int sizeInByte
     }
 
 
-    // 6. Finalize all changes.
     juce::Logger::writeToLog("[STATE] Calling commitChanges()...");
     commitChanges();
     juce::Logger::writeToLog("[STATE] Restore complete.");
@@ -640,10 +736,8 @@ namespace {
             reg("input debug", []{ return std::make_unique<InputDebugModuleProcessor>(); });
             reg("vocal tract filter", []{ return std::make_unique<VocalTractFilterModuleProcessor>(); });
             reg("value", []{ return std::make_unique<ValueModuleProcessor>(); });
-            // obsolete simple TTS removed; keep performer
             reg("tts performer", []{ return std::make_unique<TTSPerformerModuleProcessor>(); });
             reg("sample loader", []{ return std::make_unique<SampleLoaderModuleProcessor>(); });
-            // Canonicalize Curve Drawer module key
             reg("function generator", []{ return std::make_unique<FunctionGeneratorModuleProcessor>(); });
             reg("timepitch", []{ return std::make_unique<TimePitchModuleProcessor>(); });
             reg("midi player", []{ return std::make_unique<MIDIPlayerModuleProcessor>(); });
@@ -663,6 +757,15 @@ namespace {
             reg("gate", []{ return std::make_unique<GateModuleProcessor>(); });
             reg("drive", []{ return std::make_unique<DriveModuleProcessor>(); });
             reg("comment", []{ return std::make_unique<CommentModuleProcessor>(); });
+            reg("snapshot sequencer", []{ return std::make_unique<SnapshotSequencerModuleProcessor>(); });
+            reg("snapshotsequencer", []{ return std::make_unique<SnapshotSequencerModuleProcessor>(); });
+            reg("midi cv", []{ return std::make_unique<MIDICVModuleProcessor>(); });
+            reg("midicv", []{ return std::make_unique<MIDICVModuleProcessor>(); });
+            
+            reg("meta module", []{ return std::make_unique<MetaModuleProcessor>(); });
+            reg("metamodule", []{ return std::make_unique<MetaModuleProcessor>(); });
+            reg("inlet", []{ return std::make_unique<InletModuleProcessor>(); });
+            reg("outlet", []{ return std::make_unique<OutletModuleProcessor>(); });
 
             initialised = true;
         }
@@ -670,8 +773,9 @@ namespace {
     }
 }
 
-ModularSynthProcessor::NodeID ModularSynthProcessor::addModule(const juce::String& moduleType)
+ModularSynthProcessor::NodeID ModularSynthProcessor::addModule(const juce::String& moduleType, bool commit)
 {
+    const juce::ScopedLock lock (moduleLock);
     auto& factory = getModuleFactory();
     const juce::String key = moduleType.toLowerCase();
     std::unique_ptr<juce::AudioProcessor> processor;
@@ -702,8 +806,11 @@ ModularSynthProcessor::NodeID ModularSynthProcessor::addModule(const juce::Strin
             setAudioInputChannelMapping(node->nodeID, defaultMapping);
         }
         
-        // Ensure the new module is immediately active
-        commitChanges();
+        if (commit)
+        {
+            // Ensure the new module is immediately active
+            commitChanges();
+        }
         
         return node->nodeID;
     }
@@ -712,7 +819,6 @@ ModularSynthProcessor::NodeID ModularSynthProcessor::addModule(const juce::Strin
     return {};
 }
 
-// This overload is used when loading from presets (with a specific logical ID)
 ModularSynthProcessor::NodeID ModularSynthProcessor::addVstModule(
     juce::AudioPluginFormatManager& formatManager,
     const juce::PluginDescription& vstDesc,
@@ -728,10 +834,8 @@ ModularSynthProcessor::NodeID ModularSynthProcessor::addVstModule(
         return {};
     }
 
-    // 1. Create the wrapper - its constructor automatically configures the correct bus layout
     auto wrapper = std::make_unique<VstHostModuleProcessor>(std::move(instance), vstDesc);
     
-    // 2. Add the fully configured node to the graph
     auto node = internalGraph->addNode(std::move(wrapper), {}, juce::AudioProcessorGraph::UpdateKind::none);
 
     if (auto* mp = dynamic_cast<ModuleProcessor*>(node->getProcessor()))
@@ -739,7 +843,6 @@ ModularSynthProcessor::NodeID ModularSynthProcessor::addVstModule(
     
     modules[(juce::uint32) node->nodeID.uid] = node;
     
-    // Use the assigned logical ID (important for preset loading)
     logicalIdToModule[logicalIdToAssign] = LogicalModule{ node->nodeID, vstDesc.name };
     
     if (auto* mp = dynamic_cast<ModuleProcessor*>(node->getProcessor()))
@@ -749,16 +852,13 @@ ModularSynthProcessor::NodeID ModularSynthProcessor::addVstModule(
     return node->nodeID;
 }
 
-// This overload is used for interactive adding (generates a new logical ID)
 ModularSynthProcessor::NodeID ModularSynthProcessor::addVstModule(
     juce::AudioPluginFormatManager& formatManager,
     const juce::PluginDescription& vstDesc)
 {
-    // Call the overload with a fresh ID
     const juce::uint32 logicalId = nextLogicalId++;
     auto nodeId = addVstModule(formatManager, vstDesc, logicalId);
     
-    // Commit changes for interactive adding
     if (nodeId.uid != 0)
         commitChanges();
     
@@ -768,13 +868,23 @@ ModularSynthProcessor::NodeID ModularSynthProcessor::addVstModule(
 void ModularSynthProcessor::removeModule(const NodeID& nodeID)
 {
     if (nodeID.uid == 0) return;
+    const juce::ScopedLock lock(moduleLock); // Ensure thread-safe access
+
+    // --- LOGGING ---
+    if (auto* node = internalGraph->getNodeForId(nodeID))
+    {
+        if (auto* proc = node->getProcessor())
+        {
+            juce::Logger::writeToLog("[GraphSync] Deleting module L-ID " + juce::String(getLogicalIdForNode(nodeID)) + 
+                                   " (ptr: " + juce::String::toHexString((juce::pointer_sized_int)proc) + ")");
+        }
+    }
+    // --- END LOGGING ---
 
     const juce::uint32 logicalId = getLogicalIdForNode(nodeID);
 
-    // --- 2. Remove the main module node (JUCE will handle audio connections automatically) ---
     internalGraph->removeNode(nodeID, juce::AudioProcessorGraph::UpdateKind::none);
     
-    // --- 3. Clean up internal tracking maps ---
     modules.erase((juce::uint32) nodeID.uid);
     if (logicalId != 0)
     {
@@ -789,7 +899,6 @@ bool ModularSynthProcessor::connect(const NodeID& sourceNodeID, int sourceChanne
         { destNodeID, destChannel }
     };
 
-    // Dedupe: avoid duplicate connections which can cause double-driving/stutter
     for (const auto& existing : internalGraph->getConnections())
     {
         if (existing.source.nodeID == sourceNodeID &&
@@ -799,7 +908,7 @@ bool ModularSynthProcessor::connect(const NodeID& sourceNodeID, int sourceChanne
         {
             juce::Logger::writeToLog("[ModSynth][INFO] Skipping duplicate connection [" + juce::String(sourceNodeID.uid) + ":" + juce::String(sourceChannel)
                                      + "] -> [" + juce::String(destNodeID.uid) + ":" + juce::String(destChannel) + "]");
-            return true; // treat as success
+            return true;
         }
     }
 
@@ -816,13 +925,11 @@ void ModularSynthProcessor::commitChanges()
 {
     internalGraph->rebuild();
     
-    // CRITICAL FIX: Force graph to re-prepare after topology changes. This makes the "Silent Wire" carry audio.
     if (getSampleRate() > 0 && getBlockSize() > 0)
     {
         internalGraph->prepareToPlay(getSampleRate(), getBlockSize());
     }
 
-    // --- SANE, ON-DEMAND DIAGNOSTICS (NO MORE LOG FLOOD) ---
     juce::Logger::writeToLog("--- Modular Synth Internal Patch State ---");
     juce::Logger::writeToLog("Num Nodes: " + juce::String(internalGraph->getNodes().size()));
     juce::Logger::writeToLog("Num Connections: " + juce::String(internalGraph->getConnections().size()));
@@ -841,7 +948,6 @@ void ModularSynthProcessor::commitChanges()
     }
     juce::Logger::writeToLog("-----------------------------------------");
     
-    // CRITICAL FIX: Always sync logical IDs to module processors to fix preset loading.
     for (const auto& kv : logicalIdToModule)
     {
         if (ModuleProcessor* mp = getModuleForLogical(kv.first))
@@ -849,34 +955,55 @@ void ModularSynthProcessor::commitChanges()
             mp->setLogicalId(kv.first);
         }
     }
+    
+    // --- FINAL THREAD-SAFE FIX: Rebuild the list of active processors for the audio thread ---
+    auto newProcessors = std::make_shared<std::vector<std::shared_ptr<ModuleProcessor>>>();
+    {
+        const juce::ScopedLock lock(moduleLock);
+        newProcessors->reserve(logicalIdToModule.size());
+        juce::Logger::writeToLog("[GraphSync] Building new processor list...");
+        for (const auto& pair : logicalIdToModule)
+        {
+            if (auto* node = internalGraph->getNodeForId(pair.second.nodeID))
+            {
+                if (auto processor = std::dynamic_pointer_cast<ModuleProcessor>(node->getProcessorPtr()))
+                {
+                    newProcessors->push_back(processor);
+                    juce::Logger::writeToLog("  [+] Adding module L-ID " + juce::String(pair.first) + 
+                                           " (ptr: " + juce::String::toHexString((juce::pointer_sized_int)processor.get()) + ")");
+                }
+            }
+        }
+    }
+    activeAudioProcessors.store(newProcessors);
+    juce::Logger::writeToLog("[GraphSync] Updated active processor list for audio thread with " + juce::String(newProcessors->size()) + " modules.");
 }
 
 void ModularSynthProcessor::clearAll()
 {
-
-    // Remove all module nodes
+    const juce::ScopedLock lock (moduleLock);
+    
+    // --- LOGGING ---
+    juce::Logger::writeToLog("[GraphSync] clearAll() initiated - removing " + juce::String(logicalIdToModule.size()) + " modules");
+    // --- END LOGGING ---
+    
     for (const auto& kv : logicalIdToModule)
     {
         internalGraph->removeNode(kv.second.nodeID, juce::AudioProcessorGraph::UpdateKind::none);
     }
 
-    // Clear tracking maps and reset ID counter
     modules.clear();
     logicalIdToModule.clear();
     nextLogicalId = 1;
 
-    // Rebuild the graph to apply changes
     commitChanges();
 }
 
 void ModularSynthProcessor::clearAllConnections()
 {
-
-    // Remove all audio connections, except for the internal MIDI connection
     auto connections = internalGraph->getConnections();
     for (const auto& conn : connections)
     {
-        // Check if this is a MIDI connection by comparing with MIDI channel index
         if (conn.source.channelIndex != juce::AudioProcessorGraph::midiChannelIndex && 
             conn.destination.channelIndex != juce::AudioProcessorGraph::midiChannelIndex)
         {
@@ -906,13 +1033,11 @@ void ModularSynthProcessor::clearConnectionsForNode(const NodeID& nodeID)
 {
     if (nodeID.uid == 0) return;
 
-    // --- 1. Remove Audio Connections ---
     auto connections = internalGraph->getConnections();
     for (const auto& conn : connections)
     {
         if (conn.source.nodeID == nodeID || conn.destination.nodeID == nodeID)
         {
-            // Don't remove the internal MIDI pass-through connection
             if (conn.source.channelIndex != juce::AudioProcessorGraph::midiChannelIndex)
             {
                 internalGraph->removeConnection(conn, juce::AudioProcessorGraph::UpdateKind::none);
@@ -922,7 +1047,6 @@ void ModularSynthProcessor::clearConnectionsForNode(const NodeID& nodeID)
 
     const juce::uint32 logicalId = getLogicalIdForNode(nodeID);
 
-    // --- 3. Apply all changes ---
     commitChanges();
 }
 
@@ -943,7 +1067,6 @@ void ModularSynthProcessor::setAudioInputChannelMapping(const NodeID& audioInput
     juce::Logger::writeToLog("[ModSynth] Remapping Audio Input Module " + juce::String(audioInputNodeId.uid) +
                              " to channels: [" + mapStr + "]");
 
-    // 1. Remove all existing connections from hardware input to this module
     auto connections = internalGraph->getConnections();
     for (const auto& conn : connections)
     {
@@ -953,7 +1076,6 @@ void ModularSynthProcessor::setAudioInputChannelMapping(const NodeID& audioInput
         }
     }
 
-    // 2. Add new connections based on the map
     for (int moduleChannel = 0; moduleChannel < (int)channelMap.size(); ++moduleChannel)
     {
         int hardwareChannel = channelMap[moduleChannel];
@@ -961,12 +1083,12 @@ void ModularSynthProcessor::setAudioInputChannelMapping(const NodeID& audioInput
                                      juce::AudioProcessorGraph::UpdateKind::none);
     }
 
-    // 3. Rebuild the graph to apply the changes
     commitChanges();
 }
 
 std::vector<std::pair<juce::uint32, juce::String>> ModularSynthProcessor::getModulesInfo() const
 {
+    const juce::ScopedLock lock (moduleLock);
     std::vector<std::pair<juce::uint32, juce::String>> out;
     out.reserve(logicalIdToModule.size());
     for (const auto& kv : logicalIdToModule)
@@ -976,6 +1098,7 @@ std::vector<std::pair<juce::uint32, juce::String>> ModularSynthProcessor::getMod
 
 juce::AudioProcessorGraph::NodeID ModularSynthProcessor::getNodeIdForLogical (juce::uint32 logicalId) const
 {
+    const juce::ScopedLock lock (moduleLock);
     auto it = logicalIdToModule.find(logicalId);
     if (it == logicalIdToModule.end()) return {};
     return it->second.nodeID;
@@ -983,6 +1106,7 @@ juce::AudioProcessorGraph::NodeID ModularSynthProcessor::getNodeIdForLogical (ju
 
 juce::uint32 ModularSynthProcessor::getLogicalIdForNode (const NodeID& nodeId) const
 {
+    const juce::ScopedLock lock (moduleLock);
     for (const auto& kv : logicalIdToModule)
         if (kv.second.nodeID == nodeId)
             return kv.first;
@@ -1018,16 +1142,13 @@ std::vector<ModularSynthProcessor::ConnectionInfo> ModularSynthProcessor::getCon
 
 ModuleProcessor* ModularSynthProcessor::getModuleForLogical (juce::uint32 logicalId) const
 {
+    const juce::ScopedLock lock (moduleLock);
     auto it = logicalIdToModule.find(logicalId);
     if (it == logicalIdToModule.end()) return nullptr;
     if (auto* node = internalGraph->getNodeForId(it->second.nodeID))
         return dynamic_cast<ModuleProcessor*>(node->getProcessor());
     return nullptr;
 }
-
-
-
-
 
 juce::String ModularSynthProcessor::getModuleTypeForLogical(juce::uint32 logicalId) const
 {
@@ -1045,11 +1166,9 @@ juce::String ModularSynthProcessor::getSystemDiagnostics() const
 {
     juce::String result = "=== MODULAR SYNTH SYSTEM DIAGNOSTICS ===\n\n";
     
-    // Overall system info
     result += "Total Modules: " + juce::String((int)logicalIdToModule.size()) + "\n";
     result += "Next Logical ID: " + juce::String((int)nextLogicalId) + "\n\n";
     
-    // Module list
     result += "=== MODULES ===\n";
     for (const auto& pair : logicalIdToModule)
     {
@@ -1058,13 +1177,10 @@ juce::String ModularSynthProcessor::getSystemDiagnostics() const
     }
     result += "\n";
     
-    // Connection info
     result += getConnectionDiagnostics() + "\n";
     
-    // Graph info
     result += "=== GRAPH STATE ===\n";
     result += "Total Nodes: " + juce::String(internalGraph->getNumNodes()) + "\n";
-    // Note: AudioProcessorGraph doesn't have getNumConnections() method
     result += "Total Connections: (not available)\n";
     
     return result;
@@ -1094,7 +1210,6 @@ juce::String ModularSynthProcessor::getModuleParameterRoutingDiagnostics(juce::u
     juce::String result = "=== PARAMETER ROUTING DIAGNOSTICS ===\n";
     result += "Module: " + module->getName() + "\n\n";
     
-    // Get parameters from the AudioProcessor directly
     auto params = module->getParameters();
     
     for (int i = 0; i < params.size(); ++i)
@@ -1205,8 +1320,138 @@ void ModularSynthProcessor::stopAllRecorders()
     }
 }
 
+// === VOICE MANAGEMENT IMPLEMENTATION ===
 
+int ModularSynthProcessor::findFreeVoice()
+{
+    for (int i = 0; i < static_cast<int>(m_voices.size()); ++i)
+    {
+        if (!m_voices[i].isActive)
+            return i;
+    }
+    return -1;
+}
 
+int ModularSynthProcessor::findOldestVoice()
+{
+    if (m_voices.empty())
+        return -1;
+    
+    int oldestIndex = 0;
+    juce::uint32 oldestAge = m_voices[0].age;
+    
+    for (int i = 1; i < static_cast<int>(m_voices.size()); ++i)
+    {
+        if (m_voices[i].age < oldestAge)
+        {
+            oldestAge = m_voices[i].age;
+            oldestIndex = i;
+        }
+    }
+    
+    return oldestIndex;
+}
+
+void ModularSynthProcessor::assignNoteToVoice(int voiceIndex, const juce::MidiMessage& noteOn)
+{
+    if (voiceIndex < 0 || voiceIndex >= static_cast<int>(m_voices.size()))
+        return;
+    
+    Voice& voice = m_voices[voiceIndex];
+    voice.isActive = true;
+    voice.noteNumber = noteOn.getNoteNumber();
+    voice.velocity = noteOn.getFloatVelocity();
+    voice.age = m_globalVoiceAge++;
+    
+    juce::Logger::writeToLog("[VoiceManager] Assigned note " + juce::String(voice.noteNumber) + 
+                            " to voice " + juce::String(voiceIndex));
+}
+
+void ModularSynthProcessor::releaseVoice(const juce::MidiMessage& noteOff)
+{
+    int noteNumber = noteOff.getNoteNumber();
+    
+    for (auto& voice : m_voices)
+    {
+        if (voice.isActive && voice.noteNumber == noteNumber)
+        {
+            voice.isActive = false;
+            voice.noteNumber = -1;
+            juce::Logger::writeToLog("[VoiceManager] Released note " + juce::String(noteNumber));
+            return;
+        }
+    }
+}
+
+// === PROBE TOOL IMPLEMENTATION ===
+
+void ModularSynthProcessor::setProbeConnection(const NodeID& sourceNodeID, int sourceChannel)
+{
+    if (!probeScopeNode || probeScopeNodeId.uid == 0)
+    {
+        juce::Logger::writeToLog("[PROBE] ERROR: Probe scope not initialized!");
+        return;
+    }
+    
+    juce::Logger::writeToLog("[PROBE] setProbeConnection called. Source NodeID: " + juce::String(sourceNodeID.uid) + ", Channel: " + juce::String(sourceChannel));
+    
+    auto connections = internalGraph->getConnections();
+    for (const auto& conn : connections)
+    {
+        if (conn.destination.nodeID == probeScopeNodeId)
+        {
+            internalGraph->removeConnection(conn, juce::AudioProcessorGraph::UpdateKind::none);
+            juce::Logger::writeToLog("[PROBE] Cleared old probe connection.");
+        }
+    }
+    
+    bool success = connect(sourceNodeID, sourceChannel, probeScopeNodeId, 0);
+    juce::Logger::writeToLog("[PROBE] New connection attempt " + juce::String(success ? "succeeded." : "FAILED."));
+    if (success)
+    {
+        juce::Logger::writeToLog("[Probe] Successfully connected to probe scope");
+    }
+    else
+    {
+        juce::Logger::writeToLog("[Probe] ERROR: Failed to connect to probe scope");
+    }
+    
+    commitChanges();
+}
+
+void ModularSynthProcessor::clearProbeConnection()
+{
+    if (!probeScopeNode || probeScopeNodeId.uid == 0)
+        return;
+    
+    juce::Logger::writeToLog("[PROBE] clearProbeConnection called.");
+    bool cleared = false;
+    
+    auto connections = internalGraph->getConnections();
+    for (const auto& conn : connections)
+    {
+        if (conn.destination.nodeID == probeScopeNodeId)
+        {
+            internalGraph->removeConnection(conn, juce::AudioProcessorGraph::UpdateKind::none);
+            cleared = true;
+        }
+    }
+    
+    if (cleared) {
+        juce::Logger::writeToLog("[PROBE] Cleared active probe connection.");
+        commitChanges();
+    } else {
+        juce::Logger::writeToLog("[PROBE] No active probe connection to clear.");
+    }
+}
+
+ModuleProcessor* ModularSynthProcessor::getProbeScopeProcessor() const
+{
+    if (!probeScopeNode)
+        return nullptr;
+    
+    return dynamic_cast<ModuleProcessor*>(probeScopeNode->getProcessor());
+}
 
 ================================================================================
 FILE: juce\Source\audio\graph\VoiceProcessor.cpp
@@ -2081,6 +2326,24 @@ void AudioEngine::timerCallback()
                         juce::MemoryBlock mb(c.presetData.toRawUTF8(), c.presetData.getNumBytesAsUTF8());
                         msp->setStateInformation(mb.getData(), (int)mb.getSize());
                         appendLog("Loaded preset onto Modular Synth voice ID: " + juce::String((juce::int64)c.voiceId));
+                    }
+                }
+            }
+        }
+        else if (c.type == Command::Type::LoadPatchState)
+        {
+            // Load a snapshot from the Snapshot Sequencer
+            auto it = activeVoices.find(c.voiceId);
+            if (it != activeVoices.end())
+            {
+                if (auto* mv = dynamic_cast<ModularVoice*>(it->second->getProcessor()))
+                {
+                    if (auto* msp = mv->getModularSynth())
+                    {
+                        // The patchState is already a MemoryBlock, ready to load
+                        msp->setStateInformation(c.patchState.getData(), (int)c.patchState.getSize());
+                        appendLog("[SnapshotSeq] Loaded patch state for voice ID: " + juce::String((juce::int64)c.voiceId) +
+                                " (size: " + juce::String((int)c.patchState.getSize()) + " bytes)");
                     }
                 }
             }
@@ -4693,8 +4956,6 @@ void CommentModuleProcessor::setExtraStateTree(const juce::ValueTree& vt) {
 #if defined(PRESET_CREATOR_UI)
 void CommentModuleProcessor::drawParametersInNode(float, const std::function<bool(const juce::String&)>&, const std::function<void()>& onModificationEnded)
 {
-    // Comment node is fully self-owned - no ImNodes dependencies
-
     // Clamp to reasonable bounds (defensive)
     nodeWidth = juce::jlimit(150.0f, 800.0f, nodeWidth);
     nodeHeight = juce::jlimit(100.0f, 600.0f, nodeHeight);
@@ -4705,43 +4966,26 @@ void CommentModuleProcessor::drawParametersInNode(float, const std::function<boo
 
     // Title Input - ensure null termination
     titleBuffer[sizeof(titleBuffer) - 1] = '\0';
-    const bool titleChanged = ImGui::InputText("##title", titleBuffer, sizeof(titleBuffer));
-    if (titleChanged || ImGui::IsItemDeactivatedAfterEdit())
+    if (ImGui::InputText("##title", titleBuffer, sizeof(titleBuffer)))
     {
-        // Debounce: only call onModificationEnded if user stopped editing
-        static bool wasEditingTitle = false;
-        if (ImGui::IsItemDeactivatedAfterEdit() && !wasEditingTitle)
-        {
-            onModificationEnded();
-        }
-        wasEditingTitle = ImGui::IsItemActive();
+        if (ImGui::IsItemDeactivatedAfterEdit()) onModificationEnded();
     }
 
     // Body Input - ensure null termination and use our exact size
     textBuffer[sizeof(textBuffer) - 1] = '\0';
     const ImVec2 textAreaSize(nodeWidth - 16.0f, nodeHeight - 70.0f);
-    const bool textChanged = ImGui::InputTextMultiline("##text", textBuffer, sizeof(textBuffer), textAreaSize);
-    if (textChanged || ImGui::IsItemDeactivatedAfterEdit())
+    if (ImGui::InputTextMultiline("##text", textBuffer, sizeof(textBuffer), textAreaSize))
     {
-        // Debounce: only call onModificationEnded if user stopped editing
-        static bool wasEditingText = false;
-        if (ImGui::IsItemDeactivatedAfterEdit() && !wasEditingText)
-        {
-            onModificationEnded();
-        }
-        wasEditingText = ImGui::IsItemActive();
+        if (ImGui::IsItemDeactivatedAfterEdit()) onModificationEnded();
     }
 
-    // Draw resize handle in bottom-right corner (clamped to content region)
+    // Draw resize handle in bottom-right corner
     const ImVec2 resizeHandleSize(16.0f, 16.0f);
-    ImVec2 crMin = ImGui::GetWindowContentRegionMin();
     ImVec2 crMax = ImGui::GetWindowContentRegionMax();
     ImVec2 winPos = ImGui::GetWindowPos();
-    // Compute screen-space position at bottom-right inside the content region
-    ImVec2 handleScreenPos;
-    handleScreenPos.x = winPos.x + juce::jlimit(crMin.x, crMax.x - resizeHandleSize.x, crMax.x - resizeHandleSize.x);
-    handleScreenPos.y = winPos.y + juce::jlimit(crMin.y, crMax.y - resizeHandleSize.y, crMax.y - resizeHandleSize.y);
-    ImGui::SetCursorScreenPos(handleScreenPos);
+    ImVec2 handleScreenPos = ImVec2(winPos.x + crMax.x - resizeHandleSize.x, winPos.y + crMax.y - resizeHandleSize.y);
+    
+    ImGui::SetCursorScreenPos(handleScreenPos); // <<< THIS IS THE PROBLEMATIC CALL
     ImGui::InvisibleButton("##resize", resizeHandleSize);
     const bool isResizing = ImGui::IsItemActive() && ImGui::IsMouseDragging(ImGuiMouseButton_Left);
 
@@ -4755,23 +4999,24 @@ void CommentModuleProcessor::drawParametersInNode(float, const std::function<boo
     }
     else if (wasBeingResizedLastFrame)
     {
-        // Just finished resizing
+        // Just finished resizing, trigger undo snapshot
         wasBeingResizedLastFrame = false;
         onModificationEnded();
     }
 
-    // Draw resize handle indicator (small triangle in bottom-right)
+    // Draw resize handle indicator
     const ImVec2 handleStart(handleScreenPos.x + 4, handleScreenPos.y + 4);
     const ImVec2 handleEnd(handleScreenPos.x + resizeHandleSize.x - 4, handleScreenPos.y + resizeHandleSize.y - 4);
     ImGui::GetWindowDrawList()->AddTriangleFilled(
-        ImVec2(handleStart.x, handleEnd.y),      // Bottom-left
-        ImVec2(handleEnd.x, handleEnd.y),        // Bottom-right
-        ImVec2(handleEnd.x, handleStart.y),      // Top-right
+        ImVec2(handleStart.x, handleEnd.y),
+        ImVec2(handleEnd.x, handleEnd.y),
+        ImVec2(handleEnd.x, handleStart.y),
         ImGui::GetColorU32(ImGuiCol_ResizeGrip));
 
-    // Grow parent boundaries in case SetCursorPos reached the edge (fixes ImGui assertion)
+    // <<< FIX 1: Satisfy the assertion by forcing ImGui to update its boundaries >>>
     ImGui::Dummy(ImVec2(1.0f, 1.0f));
 
+    // <<< FIX 2: Correctly end the child window we started >>>
     ImGui::EndChild();
 }
 #endif
@@ -8648,26 +8893,46 @@ void FrequencyGraphModuleProcessor::prepareToPlay(double sampleRate, int /*sampl
 
 void FrequencyGraphModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffer& /*midi*/)
 {
+    juce::ScopedNoDenormals noDenormals;
+
     auto inBus = getBusBuffer(buffer, true, 0);
-    auto audioOutBus = getBusBuffer(buffer, false, 0);
-    auto cvOutBus = getBusBuffer(buffer, false, 1);
-    
+    auto audioOutBus = getBusBuffer(buffer, false, 0); // Audio is on bus 0
+    auto cvOutBus = getBusBuffer(buffer, false, 1);    // CV is on bus 1
+
     const int numSamples = buffer.getNumSamples();
-    const double sampleRate = getSampleRate();
+    if (numSamples <= 0) return;
 
-    const float* inputData = inBus.getNumChannels() > 0 ? inBus.getReadPointer(0) : nullptr;
+    // --- Logging Setup ---
+    static int debugCounter = 0;
+    const bool shouldLog = ((debugCounter++ % 100) == 0);
 
-    // --- DEBUG-INPLACE: Check if clearing/writing would nuke inputs (shared buffer case) ---
-    float rmsBefore = 0.0f, rmsAfter = 0.0f;
+    if (shouldLog && inBus.getNumChannels() > 0)
+    {
+        float inputRms = inBus.getRMSLevel(0, 0, numSamples);
+        juce::Logger::writeToLog("[GraphicEQ Debug] At Entry - Input RMS: " + juce::String(inputRms, 6));
+    }
+
+    // --- CRITICAL FIX: Capture input audio BEFORE any write operations ---
+    juce::AudioBuffer<float> inputCopy(2, numSamples);
     if (inBus.getNumChannels() > 0)
-        rmsBefore = inBus.getRMSLevel(0, 0, numSamples);
+    {
+        inputCopy.copyFrom(0, 0, inBus, 0, 0, numSamples);
+        if (inBus.getNumChannels() > 1)
+            inputCopy.copyFrom(1, 0, inBus, 1, 0, numSamples);
+        else
+            inputCopy.copyFrom(1, 0, inBus, 0, 0, numSamples); // duplicate mono to R
+    }
+    else
+    {
+        inputCopy.clear();
+    }
+    // --- END OF CRITICAL FIX ---
 
-    // --- REAL-TIME SAFE FFT PROCESSING ---
-    // Instead of looping through every sample individually, we process the buffer in chunks.
-    // This prevents the expensive FFT from blocking individual sample processing.
+    // --- FFT Processing (uses its own safe buffer) ---
+    const double sampleRate = getSampleRate();
+    const float* inputData = inputCopy.getReadPointer(0); // Analyze the mono sum from our safe copy
     if (inputData)
     {
-        // Update threshold values from parameters
         bandAnalysers[0].thresholdDb = subThresholdParam->load();
         bandAnalysers[1].thresholdDb = bassThresholdParam->load();
         bandAnalysers[2].thresholdDb = midThresholdParam->load();
@@ -8675,14 +8940,10 @@ void FrequencyGraphModuleProcessor::processBlock(juce::AudioBuffer<float>& buffe
         
         int inputSamplesConsumed = 0;
         
-        // Process the incoming buffer in chunks
         while (inputSamplesConsumed < numSamples)
         {
-            // Calculate how many samples we can copy before the FFT buffer is full
-            const int samplesToCopy = std::min(numSamples - inputSamplesConsumed, 
-                                               fftSize - samplesAccumulated);
+            const int samplesToCopy = std::min(numSamples - inputSamplesConsumed, fftSize - samplesAccumulated);
             
-            // Quickly copy the available data into our FFT buffer
             std::copy(inputData + inputSamplesConsumed,
                       inputData + inputSamplesConsumed + samplesToCopy,
                       fftInputBuffer.begin() + samplesAccumulated);
@@ -8690,17 +8951,13 @@ void FrequencyGraphModuleProcessor::processBlock(juce::AudioBuffer<float>& buffe
             samplesAccumulated += samplesToCopy;
             inputSamplesConsumed += samplesToCopy;
 
-            // If the FFT buffer is full, process it now
-            // This happens outside the per-sample loop, preventing stalls
             if (samplesAccumulated >= fftSize)
             {
-                // 1. Perform FFT
                 std::fill(fftData.begin(), fftData.end(), 0.0f);
                 std::copy(fftInputBuffer.begin(), fftInputBuffer.end(), fftData.begin());
                 window.multiplyWithWindowingTable(fftData.data(), fftSize);
                 fft.performFrequencyOnlyForwardTransform(fftData.data());
 
-                // 2. Analyze frequency bands and update gate/trigger states
                 float bandEnergyDb[4] = { -100.0f, -100.0f, -100.0f, -100.0f };
                 const float bandRanges[] = { 60, 250, 2000, 8000, 22000 };
                 int currentBand = 0;
@@ -8711,7 +8968,6 @@ void FrequencyGraphModuleProcessor::processBlock(juce::AudioBuffer<float>& buffe
                     float freq = (float)bin * (float)sampleRate / (float)fftSize;
                     if (freq > bandRanges[currentBand])
                     {
-                        // FIX: Correctly normalize FFT magnitude before converting to dB
                         float normalizedMagnitude = maxInBand / (float)fftSize;
                         bandEnergyDb[currentBand] = juce::Decibels::gainToDecibels(normalizedMagnitude, -100.0f);
                         currentBand++;
@@ -8721,7 +8977,6 @@ void FrequencyGraphModuleProcessor::processBlock(juce::AudioBuffer<float>& buffe
                     maxInBand = std::max(maxInBand, fftData[bin]);
                 }
 
-                // Update gate/trigger states for each band
                 for (int band = 0; band < 4; ++band)
                 {
                     bool gateState = bandEnergyDb[band] > bandAnalysers[band].thresholdDb;
@@ -8732,53 +8987,37 @@ void FrequencyGraphModuleProcessor::processBlock(juce::AudioBuffer<float>& buffe
                     bandAnalysers[band].lastGateState = gateState;
                 }
 
-                // 3. Push data to UI thread via lock-free FIFO
                 int start1, size1, start2, size2;
                 abstractFifo.prepareToWrite(1, start1, size1, start2, size2);
                 if (size1 > 0)
                 {
                     for (int bin = 0; bin < fftSize / 2 + 1; ++bin)
                     {
-                        // FIX: Correctly normalize FFT magnitude before converting to dB
                         float magnitude = fftData[bin] / (float)fftSize;
                         fifoBuffer[start1][bin] = juce::Decibels::gainToDecibels(magnitude, -100.0f);
                     }
                     abstractFifo.finishedWrite(1);
                 }
 
-                // 4. Shift buffer for overlap-add (hop size)
                 std::move(fftInputBuffer.begin() + hopSize, fftInputBuffer.end(), fftInputBuffer.begin());
                 samplesAccumulated -= hopSize;
             }
         }
     }
-
-    // --- HANDLE AUDIO PASSTHROUGH ---
-    // The analysis is done. Now we can safely write to our output buffers.
-    if (inBus.getNumChannels() > 0 && audioOutBus.getNumChannels() > 0)
+    
+    // --- Copy Captured Input to AUDIO Output Bus for Passthrough ---
+    if (audioOutBus.getNumChannels() > 0)
     {
-        audioOutBus.copyFrom(0, 0, inBus, 0, 0, numSamples); // L channel
+        audioOutBus.copyFrom(0, 0, inputCopy, 0, 0, numSamples);
         if (audioOutBus.getNumChannels() > 1)
-        {
-            audioOutBus.copyFrom(1, 0, inBus, 0, 0, numSamples); // R channel (duplicate mono)
-        }
+            audioOutBus.copyFrom(1, 0, inputCopy, 1, 0, numSamples);
     }
     else
     {
         audioOutBus.clear();
     }
-
-    if (inBus.getNumChannels() > 0)
-    {
-        rmsAfter = inBus.getRMSLevel(0, 0, numSamples);
-        static int dbgCtr = 0;
-        if ((++dbgCtr % 200) == 0 && rmsBefore > 1.0e-5f)
-            juce::Logger::writeToLog("[DEBUG-INPLACE] FreqGraph RMS before/after output ops: " + juce::String(rmsBefore, 6) + " / " + juce::String(rmsAfter, 6));
-    }
-
+    
     // --- WRITE CV/GATE OUTPUTS ---
-    // This loop uses the gate/trigger states that were last updated by the FFT block.
-    // The state is held constant between FFT calculations, which is the correct behavior.
     cvOutBus.clear();
     for (int i = 0; i < numSamples; ++i)
     {
@@ -8793,7 +9032,6 @@ void FrequencyGraphModuleProcessor::processBlock(juce::AudioBuffer<float>& buffe
             }
         }
         
-        // Decrement trigger counters once per sample for all bands
         for (auto& analyser : bandAnalysers)
         {
             if (analyser.triggerSamplesRemaining > 0)
@@ -10176,6 +10414,8 @@ LFOModuleProcessor::LFOModuleProcessor()
     depthParam = apvts.getRawParameterValue(paramIdDepth);
     bipolarParam = apvts.getRawParameterValue(paramIdBipolar);
     waveParam = apvts.getRawParameterValue(paramIdWave);
+    syncParam = apvts.getRawParameterValue(paramIdSync);
+    rateDivisionParam = apvts.getRawParameterValue(paramIdRateDivision);
     
     lastOutputValues.push_back(std::make_unique<std::atomic<float>>(0.0f));
     
@@ -10189,6 +10429,9 @@ juce::AudioProcessorValueTreeState::ParameterLayout LFOModuleProcessor::createPa
     p.push_back(std::make_unique<juce::AudioParameterFloat>(paramIdDepth, "Depth", juce::NormalisableRange<float>(0.0f, 1.0f), 0.5f));
     p.push_back(std::make_unique<juce::AudioParameterBool>(paramIdBipolar, "Bipolar", true));
     p.push_back(std::make_unique<juce::AudioParameterChoice>(paramIdWave, "Wave", juce::StringArray{ "Sine", "Tri", "Saw" }, 0));
+    p.push_back(std::make_unique<juce::AudioParameterBool>(paramIdSync, "Sync", false));
+    p.push_back(std::make_unique<juce::AudioParameterChoice>(paramIdRateDivision, "Division", 
+        juce::StringArray{ "1/32", "1/16", "1/8", "1/4", "1/2", "1", "2", "4", "8" }, 3)); // Default: 1/4 note
     return { p.begin(), p.end() };
 }
 
@@ -10196,6 +10439,11 @@ void LFOModuleProcessor::prepareToPlay(double sampleRate, int samplesPerBlock)
 {
     juce::dsp::ProcessSpec spec{ sampleRate, (juce::uint32)samplesPerBlock, 2 };
     osc.prepare(spec);
+}
+
+void LFOModuleProcessor::setTimingInfo(const TransportState& state)
+{
+    m_currentTransport = state;
 }
 
 void LFOModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midi)
@@ -10220,6 +10468,12 @@ void LFOModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::Mi
     const float baseDepth = depthParam->load();
     const int baseWave = static_cast<int>(waveParam->load());
     const bool bipolar = bipolarParam->load() > 0.5f;
+    const bool syncEnabled = syncParam->load() > 0.5f;
+    const int rateDivisionIndex = static_cast<int>(rateDivisionParam->load());
+
+    // Rate division map: 1/32, 1/16, 1/8, 1/4, 1/2, 1, 2, 4, 8
+    static const double divisions[] = { 1.0/32.0, 1.0/16.0, 1.0/8.0, 1.0/4.0, 1.0/2.0, 1.0, 2.0, 4.0, 8.0 };
+    const double beatDivision = divisions[juce::jlimit(0, 8, rateDivisionIndex)];
 
     float lastRate = baseRate, lastDepth = baseDepth;
     int lastWave = baseWave;
@@ -10255,18 +10509,36 @@ void LFOModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::Mi
             currentWaveform = w;
         }
         
-        osc.setFrequency(finalRate);
-        const float lfoSample = osc.processSample(0.0f);
+        float lfoSample = 0.0f;
+        
+        if (syncEnabled && m_currentTransport.isPlaying)
+        {
+            // Transport-synced mode: calculate phase directly from song position
+            double phase = std::fmod(m_currentTransport.songPositionBeats * beatDivision, 1.0);
+            double phaseRadians = phase * juce::MathConstants<double>::twoPi;
+            
+            // Generate waveform based on phase
+            if (w == 0) // Sine
+                lfoSample = std::sin(phaseRadians);
+            else if (w == 1) // Triangle
+                lfoSample = 2.0f / juce::MathConstants<float>::pi * std::asin(std::sin(phaseRadians));
+            else // Saw
+                lfoSample = (phaseRadians / juce::MathConstants<float>::pi);
+        }
+        else
+        {
+            // Free-running mode: use internal oscillator
+            osc.setFrequency(finalRate);
+            lfoSample = osc.processSample(0.0f);
+        }
+        
         const float finalSample = (bipolar ? lfoSample : (lfoSample * 0.5f + 0.5f)) * depth;
 
         out.setSample(0, i, finalSample);
     }
     
     // Update inspector values
-    if (lastOutputValues.size() >= 1)
-    {
-        if (lastOutputValues[0]) lastOutputValues[0]->store(out.getSample(0, out.getNumSamples() - 1));
-    }
+    updateOutputTelemetry(out);
 
     // Store live modulated values for UI display
     setLiveParamValue("rate_live", lastRate);
@@ -10290,12 +10562,10 @@ void LFOModuleProcessor::drawParametersInNode(float itemWidth, const std::functi
 {
     auto& ap = getAPVTS();
     
-    // CORRECTED: Use the _mod IDs to check modulation status
-    bool isRateModulated = isParamModulated(paramIdRateMod);
-    bool isDepthModulated = isParamModulated(paramIdDepthMod);
-    bool isWaveModulated = isParamModulated(paramIdWaveMod);
+    bool isRateModulated = isParamInputConnected(paramIdRateMod);
+    bool isDepthModulated = isParamInputConnected(paramIdDepthMod);
+    bool isWaveModulated = isParamInputConnected(paramIdWaveMod);
     
-    // CORRECTED: Use _mod IDs as the first argument to getLiveParamValueFor
     float rate = isRateModulated ? getLiveParamValueFor(paramIdRateMod, "rate_live", rateParam->load()) : rateParam->load();
     float depth = isDepthModulated ? getLiveParamValueFor(paramIdDepthMod, "depth_live", depthParam->load()) : depthParam->load();
     int wave = isWaveModulated ? (int)getLiveParamValueFor(paramIdWaveMod, "wave_live", (float)static_cast<int>(waveParam->load())) : static_cast<int>(waveParam->load());
@@ -10320,6 +10590,19 @@ void LFOModuleProcessor::drawParametersInNode(float itemWidth, const std::functi
 
     if (ImGui::Checkbox("Bipolar", &bipolar)) *dynamic_cast<juce::AudioParameterBool*>(ap.getParameter(paramIdBipolar)) = bipolar;
     if (ImGui::IsItemDeactivatedAfterEdit()) onModificationEnded();
+
+    // Transport sync controls
+    bool sync = syncParam->load() > 0.5f;
+    if (ImGui::Checkbox("Sync to Transport", &sync)) *dynamic_cast<juce::AudioParameterBool*>(ap.getParameter(paramIdSync)) = sync;
+    if (ImGui::IsItemDeactivatedAfterEdit()) onModificationEnded();
+    
+    if (sync)
+    {
+        int division = static_cast<int>(rateDivisionParam->load());
+        if (ImGui::Combo("Division", &division, "1/32\01/16\01/8\01/4\01/2\01\02\04\08\0\0")) 
+            *dynamic_cast<juce::AudioParameterChoice*>(ap.getParameter(paramIdRateDivision)) = division;
+        if (ImGui::IsItemDeactivatedAfterEdit()) onModificationEnded();
+    }
 
     ImGui::PopItemWidth();
 }
@@ -10374,6 +10657,8 @@ public:
     static constexpr auto paramIdRateMod = "rate_mod";
     static constexpr auto paramIdDepthMod = "depth_mod";
     static constexpr auto paramIdWaveMod = "wave_mod";
+    static constexpr auto paramIdSync = "sync";
+    static constexpr auto paramIdRateDivision = "rate_division";
 
     LFOModuleProcessor();
     ~LFOModuleProcessor() override = default;
@@ -10383,6 +10668,9 @@ public:
     void prepareToPlay(double sampleRate, int samplesPerBlock) override;
     void releaseResources() override {}
     void processBlock(juce::AudioBuffer<float>&, juce::MidiBuffer&) override;
+    
+    // Transport sync support
+    void setTimingInfo(const TransportState& state) override;
 
     juce::AudioProcessorValueTreeState& getAPVTS() override { return apvts; }
     
@@ -10407,8 +10695,11 @@ private:
     std::atomic<float>* depthParam{ nullptr };
     std::atomic<float>* bipolarParam{ nullptr };
     std::atomic<float>* waveParam{ nullptr };
+    std::atomic<float>* syncParam{ nullptr };
+    std::atomic<float>* rateDivisionParam{ nullptr };
     
     int currentWaveform = -1;
+    TransportState m_currentTransport;
 };
 
 ================================================================================
@@ -12441,6 +12732,211 @@ private:
 
 
 ================================================================================
+FILE: juce\Source\audio\modules\MIDICVModuleProcessor.cpp
+================================================================================
+
+
+#include "MIDICVModuleProcessor.h"
+
+MIDICVModuleProcessor::MIDICVModuleProcessor()
+    : ModuleProcessor(
+        juce::AudioProcessor::BusesProperties()
+            .withOutput("Main", juce::AudioChannelSet::discreteChannels(6), true)
+            .withOutput("Mod", juce::AudioChannelSet::discreteChannels(64), true)
+    ),
+      dummyApvts(*this, nullptr, "DummyParams", createParameterLayout())
+{
+    // No parameters needed - this module is purely MIDI->CV conversion
+    
+    // Initialize last output values for telemetry
+    lastOutputValues.resize(6);
+    for (auto& val : lastOutputValues)
+        val = std::make_unique<std::atomic<float>>(0.0f);
+}
+
+void MIDICVModuleProcessor::prepareToPlay(double sampleRate, int samplesPerBlock)
+{
+    // Reset MIDI state
+    midiState = MIDIState();
+    
+    juce::Logger::writeToLog("[MIDI CV] Prepared to play at " + juce::String(sampleRate) + " Hz");
+}
+
+void MIDICVModuleProcessor::releaseResources()
+{
+}
+
+void MIDICVModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midiMessages)
+{
+    // Ensure we have enough output channels
+    if (buffer.getNumChannels() < 6)
+    {
+        buffer.clear();
+        return;
+    }
+    
+    // Process all MIDI messages in this block
+    for (const auto metadata : midiMessages)
+    {
+        const auto msg = metadata.getMessage();
+        
+        if (msg.isNoteOn())
+        {
+            midiState.currentNote = msg.getNoteNumber();
+            midiState.currentVelocity = msg.getVelocity() / 127.0f;
+            midiState.gateHigh = true;
+            
+            juce::Logger::writeToLog("[MIDI CV] Note On: " + juce::String(midiState.currentNote) + 
+                                   " Velocity: " + juce::String(midiState.currentVelocity));
+        }
+        else if (msg.isNoteOff())
+        {
+            if (msg.getNoteNumber() == midiState.currentNote)
+            {
+                midiState.gateHigh = false;
+                juce::Logger::writeToLog("[MIDI CV] Note Off: " + juce::String(midiState.currentNote));
+            }
+        }
+        else if (msg.isController())
+        {
+            const int ccNumber = msg.getControllerNumber();
+            const float ccValue = msg.getControllerValue() / 127.0f;
+            
+            if (ccNumber == 1) // Mod Wheel
+            {
+                midiState.modWheel = ccValue;
+            }
+        }
+        else if (msg.isPitchWheel())
+        {
+            // Convert 14-bit pitch wheel (0-16383) to -1 to +1 range
+            const int pitchValue = msg.getPitchWheelValue();
+            midiState.pitchBend = (pitchValue - 8192) / 8192.0f;
+        }
+        else if (msg.isAftertouch())
+        {
+            midiState.aftertouch = msg.getAfterTouchValue() / 127.0f;
+        }
+    }
+    
+    // Generate CV outputs for the entire block
+    // Channel 0: Pitch CV (1V/octave)
+    // Channel 1: Gate (0 or 1)
+    // Channel 2: Velocity (0-1)
+    // Channel 3: Mod Wheel (0-1)
+    // Channel 4: Pitch Bend (-1 to +1)
+    // Channel 5: Aftertouch (0-1)
+    
+    const int numSamples = buffer.getNumSamples();
+    
+    // Pitch CV
+    const float pitchCv = midiState.currentNote >= 0 ? midiNoteToCv(midiState.currentNote) : 0.0f;
+    buffer.getWritePointer(0)[0] = pitchCv;
+    for (int i = 1; i < numSamples; ++i)
+        buffer.getWritePointer(0)[i] = pitchCv;
+    
+    // Gate
+    const float gateValue = midiState.gateHigh ? 1.0f : 0.0f;
+    buffer.getWritePointer(1)[0] = gateValue;
+    for (int i = 1; i < numSamples; ++i)
+        buffer.getWritePointer(1)[i] = gateValue;
+    
+    // Velocity
+    buffer.getWritePointer(2)[0] = midiState.currentVelocity;
+    for (int i = 1; i < numSamples; ++i)
+        buffer.getWritePointer(2)[i] = midiState.currentVelocity;
+    
+    // Mod Wheel
+    buffer.getWritePointer(3)[0] = midiState.modWheel;
+    for (int i = 1; i < numSamples; ++i)
+        buffer.getWritePointer(3)[i] = midiState.modWheel;
+    
+    // Pitch Bend
+    buffer.getWritePointer(4)[0] = midiState.pitchBend;
+    for (int i = 1; i < numSamples; ++i)
+        buffer.getWritePointer(4)[i] = midiState.pitchBend;
+    
+    // Aftertouch
+    buffer.getWritePointer(5)[0] = midiState.aftertouch;
+    for (int i = 1; i < numSamples; ++i)
+        buffer.getWritePointer(5)[i] = midiState.aftertouch;
+    
+    // Update telemetry
+    if (lastOutputValues.size() >= 6)
+    {
+        lastOutputValues[0]->store(pitchCv);
+        lastOutputValues[1]->store(gateValue);
+        lastOutputValues[2]->store(midiState.currentVelocity);
+        lastOutputValues[3]->store(midiState.modWheel);
+        lastOutputValues[4]->store(midiState.pitchBend);
+        lastOutputValues[5]->store(midiState.aftertouch);
+    }
+}
+
+float MIDICVModuleProcessor::midiNoteToCv(int noteNumber) const
+{
+    // 1V/octave standard: C4 (MIDI note 60) = 0V
+    // Each semitone = 1/12 V
+    return (noteNumber - 60) / 12.0f;
+}
+
+================================================================================
+FILE: juce\Source\audio\modules\MIDICVModuleProcessor.h
+================================================================================
+
+
+#pragma once
+#include "ModuleProcessor.h"
+#include <juce_audio_basics/juce_audio_basics.h>
+
+/**
+ * @brief MIDI to CV/Gate Converter Module
+ * * Converts incoming MIDI messages to CV and Gate signals:
+ * - Pitch: MIDI note number converted to 1V/octave standard
+ * - Gate: High when note is held, low when released
+ * - Velocity: MIDI velocity normalized to 0-1
+ * - Mod Wheel: CC#1 normalized to 0-1
+ * - Pitch Bend: Pitch bend wheel normalized to -1 to +1
+ * - Aftertouch: Channel pressure normalized to 0-1
+ * * This module allows MIDI keyboards and controllers to drive the modular synth.
+ */
+class MIDICVModuleProcessor : public ModuleProcessor
+{
+public:
+    MIDICVModuleProcessor();
+    ~MIDICVModuleProcessor() override = default;
+
+    void processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midiMessages) override;
+    void prepareToPlay(double sampleRate, int samplesPerBlock) override;
+    void releaseResources() override;
+
+    const juce::String getName() const override { return "MIDI CV"; }
+    
+    juce::AudioProcessorValueTreeState& getAPVTS() override { return dummyApvts; }
+
+private:
+    // Current MIDI state
+    struct MIDIState
+    {
+        int currentNote = -1;        // -1 = no note playing
+        float currentVelocity = 0.0f;
+        float modWheel = 0.0f;
+        float pitchBend = 0.0f;      // -1 to +1
+        float aftertouch = 0.0f;
+        bool gateHigh = false;
+    } midiState;
+
+    // Dummy APVTS to satisfy base class requirement
+    juce::AudioProcessorValueTreeState dummyApvts;
+    static juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout() { return {}; }
+
+    // Convert MIDI note number to CV (1V/octave, where C4 = 60 = 0V)
+    float midiNoteToCv(int noteNumber) const;
+
+    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(MIDICVModuleProcessor)
+};
+
+================================================================================
 FILE: juce\Source\audio\modules\MixerModuleProcessor.cpp
 ================================================================================
 
@@ -12843,6 +13339,15 @@ FILE: juce\Source\audio\modules\ModuleProcessor.h
 #include <cmath>
 #endif
 
+// <<< TRANSPORT STATE FOR GLOBAL CLOCK >>>
+// Transport state struct shared by all modules
+struct TransportState {
+    bool isPlaying = false;
+    double bpm = 120.0;
+    double songPositionBeats = 0.0;
+    double songPositionSeconds = 0.0;
+};
+
 // <<< ALL PIN-RELATED DEFINITIONS ARE NOW CENTRALIZED HERE >>>
 
 // Defines the data type of a modulation or audio signal
@@ -12922,12 +13427,28 @@ public:
     virtual void drawIoPins(const NodePinHelpers& /*helpers*/) {}
 
 
-    // ADD THIS NEW VIRTUAL METHOD
+    // Get the current output value for a channel (for visualization)
     virtual float getOutputChannelValue(int channel) const
     {
         if (juce::isPositiveAndBelow(channel, (int)lastOutputValues.size()) && lastOutputValues[channel])
             return lastOutputValues[channel]->load();
         return 0.0f;
+    }
+    
+    // Helper method to update output telemetry with peak magnitude
+    // Call this at the end of processBlock to update visualization values
+    void updateOutputTelemetry(const juce::AudioBuffer<float>& buffer)
+    {
+        const int numChannels = juce::jmin(buffer.getNumChannels(), (int)lastOutputValues.size());
+        for (int ch = 0; ch < numChannels; ++ch)
+        {
+            if (lastOutputValues[ch])
+            {
+                // Use peak magnitude (max absolute value) for better visualization
+                const float peak = buffer.getMagnitude(ch, 0, buffer.getNumSamples());
+                lastOutputValues[ch]->store(peak, std::memory_order_relaxed);
+            }
+        }
     }
 
     // Standardized labels for module audio I/O channels (override per module if needed)
@@ -13082,6 +13603,10 @@ public:
     // Default: return invalid tree / ignore.
     virtual juce::ValueTree getExtraStateTree() const { return {}; }
     virtual void setExtraStateTree(const juce::ValueTree&) {}
+    
+    // Optional timing info hook for modules that need global clock/transport
+    // Default: ignore (modules that don't need timing can skip implementing this)
+    virtual void setTimingInfo(const TransportState& state) { juce::ignoreUnused(state); }
 
 public:
     // OPTION 9: Make public for TTS debugging
@@ -13701,6 +14226,12 @@ void MultiSequencerModuleProcessor::processBlock (juce::AudioBuffer<float>& buff
     const int boundMax = stepsModMaxParam != nullptr ? juce::jlimit (1, MAX_STEPS, (int) stepsModMaxParam->load()) : MAX_STEPS;
     const float gateThreshold = gateThresholdParam != nullptr ? juce::jlimit(0.0f, 1.0f, gateThresholdParam->load()) : 0.5f;
 
+    // Start of Logging Block
+    static int logCounter = 0;
+    const bool shouldLog = (logCounter++ % 300 == 0);
+    if (shouldLog) juce::Logger::writeToLog("--- MultiSequencer::processBlock ---");
+    // End of Logging Block
+
     // --- UI Telemetry Bootstrap (from old StepSequencer) ---
     // Publish per-step live values for ALL steps this block (use first-sample snapshot)
     {
@@ -13791,6 +14322,7 @@ void MultiSequencerModuleProcessor::processBlock (juce::AudioBuffer<float>& buff
 		{
             phase -= 1.0;
             const int next = (currentStep.load() + 1) % juce::jlimit (1, MAX_STEPS, activeSteps);
+            if (shouldLog) juce::Logger::writeToLog("[M-SEQ LOG] Step Advanced: " + juce::String(currentStep.load()) + " -> " + juce::String(next));
             currentStep.store(next);
             stepAdvanced = true;
         }
@@ -13849,6 +14381,7 @@ void MultiSequencerModuleProcessor::processBlock (juce::AudioBuffer<float>& buff
         }
         
         if (stepAdvanced) {
+            if (shouldLog && trigActive) juce::Logger::writeToLog("[M-SEQ LOG] Trigger pulse armed for step " + juce::String(currentStepIndex));
             pendingTriggerSamples = trigActive ? (int) std::round (0.001 * sampleRate) : 0;
             stepAdvanced = false;
         }
@@ -13863,6 +14396,12 @@ void MultiSequencerModuleProcessor::processBlock (juce::AudioBuffer<float>& buff
             if (pendingTriggerSamples > 0) --pendingTriggerSamples;
         }
     }
+    if (shouldLog)
+    {
+        juce::Logger::writeToLog("[M-SEQ LOG] Rate: " + juce::String(lastRateLive, 2) + "Hz | Steps: " + juce::String(lastStepsLive));
+        juce::Logger::writeToLog("[M-SEQ LOG] Final Output (last sample): Pitch=" + juce::String(pitchOut[numSamples-1], 3) + ", Gate=" + juce::String(gateOut ? gateOut[numSamples-1] : -1.0f, 3));
+    }
+    
     setLiveParamValue("rate_live", lastRateLive);
     setLiveParamValue("gateLength_live", lastGateLive);
     setLiveParamValue("gateThreshold_live", lastGateThresholdLive);
@@ -14338,11 +14877,8 @@ void NoiseModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::
         }
     }
 
-    // --- Update Inspector Values ---
-    if (lastOutputValues.size() >= 1)
-    {
-        if (lastOutputValues[0]) lastOutputValues[0]->store(outBus.getSample(0, numSamples - 1));
-    }
+    // --- Update Inspector Values (peak magnitude) ---
+    updateOutputTelemetry(buffer);
 }
 
 bool NoiseModuleProcessor::getParamRouting(const juce::String& paramId, int& outBusIndex, int& outChannelIndexInBus) const
@@ -19257,6 +19793,12 @@ void StepSequencerModuleProcessor::processBlock (juce::AudioBuffer<float>& buffe
     const int boundMax = stepsModMaxParam != nullptr ? juce::jlimit (1, MAX_STEPS, (int) stepsModMaxParam->load()) : MAX_STEPS;
     const float gateThreshold = gateThresholdParam != nullptr ? juce::jlimit(0.0f, 1.0f, gateThresholdParam->load()) : 0.5f;
 
+    // Start of Logging Block
+    static int logCounter = 0;
+    const bool shouldLog = (logCounter++ % 300 == 0); // Log roughly every 10 seconds
+    if (shouldLog) juce::Logger::writeToLog("--- StepSequencer::processBlock ---");
+    // End of Logging Block
+
     // --- UI Telemetry Bootstrap ---
     // Publish per-step live values for ALL steps this block (use first-sample snapshot)
     {
@@ -19349,6 +19891,7 @@ void StepSequencerModuleProcessor::processBlock (juce::AudioBuffer<float>& buffe
         {
             phase -= 1.0;
             const int next = (currentStep.load() + 1) % juce::jlimit (1, MAX_STEPS, activeSteps);
+            if (shouldLog) juce::Logger::writeToLog("[SEQ LOG] Step Advanced: " + juce::String(currentStep.load()) + " -> " + juce::String(next));
             currentStep.store(next);
             stepAdvanced = true;
         }
@@ -19441,6 +19984,7 @@ void StepSequencerModuleProcessor::processBlock (juce::AudioBuffer<float>& buffe
         // If we advanced to this step, only emit a pulse if this step is enabled (checkbox or connected mod>0.5)
         if (stepAdvanced)
         {
+            if (shouldLog && trigActive) juce::Logger::writeToLog("[SEQ LOG] Trigger pulse armed for step " + juce::String(currentStepIndex));
             pendingTriggerSamples = trigActive ? (int) std::round (0.001 * sampleRate) : 0;
             stepAdvanced = false;
         }
@@ -19464,6 +20008,13 @@ void StepSequencerModuleProcessor::processBlock (juce::AudioBuffer<float>& buffe
             trigOut[i] = pulse;
         }
     }
+    if (shouldLog)
+    {
+        juce::Logger::writeToLog("[SEQ LOG] Rate: " + juce::String(lastRateLive, 2) + "Hz | Steps: " + juce::String(lastStepsLive));
+        juce::Logger::writeToLog("[SEQ LOG] Gate Length: " + juce::String(lastGateLive, 2) + " | Gate Threshold: " + juce::String(lastGateThresholdLive, 2));
+        juce::Logger::writeToLog("[SEQ LOG] Final Output (last sample): Pitch=" + juce::String(pitchOut[numSamples-1], 3) + ", Gate=" + juce::String(gateOut ? gateOut[numSamples-1] : -1.0f, 3));
+    }
+
     // Publish block-level live telemetry for UI reflection
     setLiveParamValue("rate_live", lastRateLive);
     setLiveParamValue("gateLength_live", lastGateLive);
@@ -25298,11 +25849,8 @@ void VCOModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::Mi
         }
     }
     
-    // Update inspector value for the single output channel
-    if (!lastOutputValues.empty() && lastOutputValues[0])
-    {
-        lastOutputValues[0]->store(outBus.getSample(0, buffer.getNumSamples() - 1));
-    }
+    // Update inspector value for visualization (peak magnitude)
+    updateOutputTelemetry(buffer);
 }
 
 bool VCOModuleProcessor::getParamRouting(const juce::String& paramId, int& outBusIndex, int& outChannelIndexInBus) const
@@ -27289,6 +27837,8 @@ FILE: juce\Source\preset_creator\ImGuiNodeEditorComponent.h
 #include <imgui.h>
 #include "../audio/modules/ModuleProcessor.h"
 #include "../audio/graph/ModularSynthProcessor.h"
+#include "PresetManager.h"
+#include "SampleManager.h"
 
 // Forward declarations from Dear ImGui / imnodes
 struct ImGuiContext; struct ImGuiIO; struct ImNodesContext;
@@ -27453,6 +28003,15 @@ public:
     juce::ValueTree uiPending; // applied at next render before drawing nodes
     std::atomic<bool> graphNeedsRebuild { false };
     
+    // Preset and sample management
+    PresetManager m_presetManager;
+    SampleManager m_sampleManager;
+    juce::String m_presetSearchTerm;
+    juce::String m_sampleSearchTerm;
+    
+    // Meta module editing state
+    juce::uint32 metaModuleToEditLid = 0;
+    
     // Cache of last-known valid node positions (used when graphNeedsRebuild prevents rendering)
     std::unordered_map<int, ImVec2> lastKnownNodePositions;
 
@@ -27543,6 +28102,10 @@ public:
     bool showDebugMenu { false };
     int pendingInsertLinkId { -1 };
     
+    // Probe tool state
+    bool isProbeModeActive { false };
+    bool showProbeScope { true };
+    
     // Insert node on link state
     struct LinkInfo
     {
@@ -27589,6 +28152,9 @@ public:
     // --- Recorder Output Shortcut ---
     void handleRecordOutput();
     
+    // --- Meta Module (Sub-Patching) Support ---
+    void handleCollapseToMetaModule();
+    
     // --- Module Category Color Coding ---
     enum class ModuleCategory { Source, Effect, Modulator, Utility, Analysis, Comment, Plugin };
     ModuleCategory getModuleCategory(const juce::String& moduleType);
@@ -27601,9 +28167,6 @@ public:
     // --- VST Plugin Support ---
     void addPluginModules();
 };
-
-
-
 
 
 ================================================================================
@@ -27649,6 +28212,12 @@ FILE: juce\Source\preset_creator\ImGuiNodeEditorComponent.cpp
 #include "../audio/modules/GateModuleProcessor.h"
 #include "../audio/modules/DriveModuleProcessor.h"
 #include "../audio/modules/VstHostModuleProcessor.h"
+// #include "../audio/modules/SnapshotSequencerModuleProcessor.h"  // Commented out - causing build errors
+#include "../audio/modules/MIDICVModuleProcessor.h"
+#include "../audio/modules/ScopeModuleProcessor.h"
+#include "../audio/modules/MetaModuleProcessor.h"
+#include "../audio/modules/InletModuleProcessor.h"
+#include "../audio/modules/OutletModuleProcessor.h"
 #include "PresetCreatorApplication.h"
 #include <juce_audio_processors/juce_audio_processors.h>
 #include <imgui_impl_juce/imgui_impl_juce.h>
@@ -27900,6 +28469,33 @@ void ImGuiNodeEditorComponent::renderImGui()
 {
     static int frameCounter = 0;
     frameCounter++;
+
+    // ========================= THE DEFINITIVE FIX =========================
+    //
+    // Rebuild the audio graph at the START of the frame if a change is pending.
+    // This ensures that the synth model is in a consistent state BEFORE we try
+    // to draw the UI, eliminating the "lost frame" that caused nodes to jump.
+    //
+    if (graphNeedsRebuild.load())
+    {
+        juce::Logger::writeToLog("[GraphSync] Rebuild flag is set. Committing changes now...");
+        if (synth)
+        {
+            synth->commitChanges();
+        }
+        graphNeedsRebuild = false; // Reset the flag immediately after committing.
+        
+        // CRITICAL: Invalidate hover state to prevent cable inspector from accessing
+        // modules that were just deleted/recreated during commitChanges()
+        lastHoveredLinkId = -1;
+        lastHoveredNodeId = -1;
+        hoveredLinkSrcId = 0;
+        hoveredLinkDstId = 0;
+        
+        juce::Logger::writeToLog("[GraphSync] Graph rebuild complete.");
+    }
+    // ========================== END OF FIX ==========================
+
     // Frame start
     
     // --- Stateless Frame Rendering ---
@@ -27947,6 +28543,63 @@ void ImGuiNodeEditorComponent::renderImGui()
 
     ImGui::End();
     // --- END OF OVERLAY ---
+    
+    // === PROBE SCOPE OVERLAY ===
+    if (synth != nullptr && showProbeScope)
+    {
+        if (auto* scope = dynamic_cast<ScopeModuleProcessor*>(synth->getProbeScopeProcessor()))
+        {
+            ImGui::SetNextWindowPos(ImVec2((float)getWidth() - 270.0f, menuBarHeight + padding), ImGuiCond_FirstUseEver);
+            ImGui::SetNextWindowSize(ImVec2(260, 180), ImGuiCond_FirstUseEver);
+            ImGui::SetNextWindowBgAlpha(0.85f);
+            
+            if (ImGui::Begin("🔬 Probe Scope", &showProbeScope, ImGuiWindowFlags_NoFocusOnAppearing))
+            {
+                ImGui::Text("Signal Probe");
+                ImGui::Separator();
+                
+                // Get scope buffer
+                const auto& buffer = scope->getScopeBuffer();
+                
+                if (buffer.getNumSamples() > 0)
+                {
+                    // Create a simple waveform display
+                    const int numSamples = buffer.getNumSamples();
+                    const float* samples = buffer.getReadPointer(0);
+                    
+                    // Calculate min/max for this buffer
+                    float minVal = 0.0f, maxVal = 0.0f;
+                    for (int i = 0; i < numSamples; ++i)
+                    {
+                        minVal = juce::jmin(minVal, samples[i]);
+                        maxVal = juce::jmax(maxVal, samples[i]);
+                    }
+                    
+                    // Display stats
+                    ImGui::Text("Min: %.3f  Max: %.3f", minVal, maxVal);
+                    ImGui::Text("Peak: %.3f", juce::jmax(std::abs(minVal), std::abs(maxVal)));
+                    
+                    // Draw waveform
+                    ImVec2 plotSize = ImVec2(-1, 100);
+                    ImGui::PlotLines("##Waveform", samples, numSamples, 0, nullptr, -1.0f, 1.0f, plotSize);
+                    
+                    // Button to clear probe connection
+                    if (ImGui::Button("Clear Probe"))
+                    {
+                        synth->clearProbeConnection();
+                    }
+                }
+                else
+                {
+                    ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1.0f), "No signal probed");
+                    ImGui::Text("Right-click > Probe Signal");
+                    ImGui::Text("Then click any output pin");
+                }
+            }
+            ImGui::End();
+        }
+    }
+    // === END OF PROBE SCOPE OVERLAY ===
 
     // Clean up textures for deleted sample loaders
     if (synth != nullptr)
@@ -28111,9 +28764,17 @@ void ImGuiNodeEditorComponent::renderImGui()
         {
             // This item should only be enabled if at least one node is selected
             bool anyNodesSelected = ImNodes::NumSelectedNodes() > 0;
+            bool multipleNodesSelected = ImNodes::NumSelectedNodes() > 1;
+            
             if (ImGui::MenuItem("Connect Selected to Track Mixer", nullptr, false, anyNodesSelected))
             {
                 handleConnectSelectedToTrackMixer();
+            }
+            
+            // Meta Module: Collapse selected nodes into a reusable sub-patch
+            if (ImGui::MenuItem("Collapse to Meta Module", "Ctrl+Shift+M", false, multipleNodesSelected))
+            {
+                handleCollapseToMetaModule();
             }
             
             if (ImGui::MenuItem("Record Output", "Ctrl+R"))
@@ -28244,6 +28905,51 @@ void ImGuiNodeEditorComponent::renderImGui()
             ImGui::EndMenu();
         }
         
+        // === TRANSPORT CONTROLS ===
+        if (synth != nullptr)
+        {
+            // Get current transport state
+            auto transportState = synth->getTransportState();
+            
+            // Add some spacing before transport controls
+            ImGui::Separator();
+            ImGui::Spacing();
+            
+            // Play/Pause button
+            if (transportState.isPlaying)
+            {
+                if (ImGui::Button("Pause"))
+                    synth->setPlaying(false);
+            }
+            else
+            {
+                if (ImGui::Button("Play"))
+                    synth->setPlaying(true);
+            }
+            
+            ImGui::SameLine();
+            
+            // Stop button (resets position)
+            if (ImGui::Button("Stop"))
+            {
+                synth->setPlaying(false);
+                synth->resetTransportPosition();
+            }
+            
+            ImGui::SameLine();
+            
+            // BPM control
+            float bpm = static_cast<float>(transportState.bpm);
+            ImGui::SetNextItemWidth(80.0f);
+            if (ImGui::DragFloat("BPM", &bpm, 0.1f, 20.0f, 999.0f, "%.1f"))
+                synth->setBPM(static_cast<double>(bpm));
+            
+            ImGui::SameLine();
+            
+            // Position display
+            ImGui::Text("%.2f beats", transportState.songPositionBeats);
+        }
+        
         ImGui::EndMainMenuBar();
     }
 
@@ -28278,11 +28984,113 @@ void ImGuiNodeEditorComponent::renderImGui()
     // Zoom removed
 
     // ADD THIS BLOCK:
-    ImGui::Text("Module Browser");
+    ImGui::Text("Browser");
     
-    // Create a scrolling child window to contain the entire module list
-    // This prevents the plugin list from expanding over the node editor
-    ImGui::BeginChild("ModuleBrowserScrollRegion", ImVec2(0, 0), true);
+    // Create a scrolling child window to contain the entire browser
+    ImGui::BeginChild("BrowserScrollRegion", ImVec2(0, 0), true);
+    
+    // === PRESET BROWSER ===
+    if (ImGui::CollapsingHeader("Presets"))
+    {
+        // Search box
+        char searchBuf[256] = {};
+        strncpy(searchBuf, m_presetSearchTerm.toRawUTF8(), sizeof(searchBuf) - 1);
+        if (ImGui::InputText("##presetsearch", searchBuf, sizeof(searchBuf)))
+            m_presetSearchTerm = juce::String(searchBuf);
+        
+        ImGui::SameLine();
+        if (ImGui::Button("Scan##presets"))
+        {
+            // Scan the default preset directory
+            juce::File presetDir = juce::File::getSpecialLocation(juce::File::userDocumentsDirectory)
+                                   .getChildFile("PresetCreator")
+                                   .getChildFile("Presets");
+            if (presetDir.exists())
+            {
+                m_presetManager.clearCache();
+                m_presetManager.scanDirectory(presetDir);
+            }
+        }
+        
+        // Display filtered presets
+        auto presets = m_presetManager.searchPresets(m_presetSearchTerm);
+        for (const auto& preset : presets)
+        {
+            if (ImGui::Selectable(preset.name.toRawUTF8()))
+            {
+                // Load this preset
+                if (auto* xml = m_presetManager.loadPreset(preset.file))
+                {
+                    juce::MemoryBlock block;
+                    juce::MemoryOutputStream stream(block, false);
+                    xml->writeTo(stream);
+                    
+                    if (synth)
+                        synth->setStateInformation(block.getData(), static_cast<int>(block.getSize()));
+                    
+                    delete xml;
+                }
+            }
+            
+            if (ImGui::IsItemHovered() && preset.description.isNotEmpty())
+            {
+                ImGui::BeginTooltip();
+                ImGui::TextUnformatted(preset.description.toRawUTF8());
+                if (!preset.tags.isEmpty())
+                    ImGui::Text("Tags: %s", preset.tags.joinIntoString(", ").toRawUTF8());
+                ImGui::EndTooltip();
+            }
+        }
+    }
+    
+    // === SAMPLE BROWSER ===
+    if (ImGui::CollapsingHeader("Samples"))
+    {
+        // Search box
+        char searchBuf[256] = {};
+        strncpy(searchBuf, m_sampleSearchTerm.toRawUTF8(), sizeof(searchBuf) - 1);
+        if (ImGui::InputText("##samplesearch", searchBuf, sizeof(searchBuf)))
+            m_sampleSearchTerm = juce::String(searchBuf);
+        
+        ImGui::SameLine();
+        if (ImGui::Button("Scan##samples"))
+        {
+            // Scan the default sample directory
+            juce::File sampleDir = juce::File::getSpecialLocation(juce::File::userMusicDirectory)
+                                   .getChildFile("Samples");
+            if (sampleDir.exists())
+            {
+                m_sampleManager.clearCache();
+                m_sampleManager.scanDirectory(sampleDir, true);
+            }
+        }
+        
+        // Display filtered samples
+        auto samples = m_sampleManager.searchSamples(m_sampleSearchTerm);
+        for (const auto& sample : samples)
+        {
+            if (ImGui::Selectable(sample.name.toRawUTF8()))
+            {
+                // TODO: Could auto-create a Sample Loader module with this sample
+                juce::Logger::writeToLog("Selected sample: " + sample.file.getFullPathName());
+            }
+            
+            if (ImGui::IsItemHovered())
+            {
+                ImGui::BeginTooltip();
+                ImGui::Text("Duration: %.2f s", sample.durationSeconds);
+                ImGui::Text("Sample Rate: %d Hz", sample.sampleRate);
+                ImGui::Text("Channels: %d", sample.numChannels);
+                ImGui::EndTooltip();
+            }
+        }
+    }
+    
+    ImGui::Separator();
+    
+    // === MODULE BROWSER ===
+    if (ImGui::CollapsingHeader("Modules", ImGuiTreeNodeFlags_DefaultOpen))
+    {
     
     auto addModuleButton = [this](const char* label, const char* type)
     {
@@ -28334,6 +29142,7 @@ void ImGuiNodeEditorComponent::renderImGui()
         addModuleButton("Sequencer", "Sequencer");
         addModuleButton("Multi Sequencer", "multi sequencer");
         addModuleButton("MIDI Player", "midi player");
+        addModuleButton("MIDI CV", "midi cv");
         addModuleButton("Value", "Value");
         addModuleButton("Sample Loader", "sample loader");
     }
@@ -28386,6 +29195,7 @@ void ImGuiNodeEditorComponent::renderImGui()
         addModuleButton("Logic", "Logic");
         addModuleButton("Clock Divider", "ClockDivider");
         addModuleButton("Sequential Switch", "SequentialSwitch");
+        addModuleButton("Snapshot Sequencer", "snapshot sequencer");
         addModuleButton("Best Practice", "best practice");
     }
     if (ImGui::CollapsingHeader("Analysis", ImGuiTreeNodeFlags_DefaultOpen)) {
@@ -28394,6 +29204,8 @@ void ImGuiNodeEditorComponent::renderImGui()
         addModuleButton("Input Debug", "input debug");
         addModuleButton("Frequency Graph", "Frequency Graph");
     }
+    
+    } // End of Modules collapsing header
     
     // VST Plugins section
     if (ImGui::CollapsingHeader("Plugins", ImGuiTreeNodeFlags_DefaultOpen)) {
@@ -28546,11 +29358,9 @@ const float y = (float) n.getProperty("y", 0.0f);
             uiPending = {};
 }
 
-        // CRITICAL: Skip node rendering if graph rebuild is pending to avoid accessing deleted nodes
-        if (!graphNeedsRebuild.load())
-        {
-            // Draw module nodes (exactly once per logical module)
-            std::unordered_set<int> drawnNodes;
+        // Draw module nodes (exactly once per logical module)
+        // Graph is now always in consistent state since we rebuild at frame start
+        std::unordered_set<int> drawnNodes;
         for (const auto& mod : synth->getModulesInfo())
         {
             const juce::uint32 lid = mod.first;
@@ -28868,6 +29678,65 @@ if (auto* mp = synth->getModuleForLogical (lid))
             }
         }
     }
+    // --- SPECIAL RENDERING FOR SNAPSHOT SEQUENCER ---
+    // Commented out - SnapshotSequencerModuleProcessor causing build errors
+    /*else if (auto* snapshotSeq = dynamic_cast<SnapshotSequencerModuleProcessor*>(mp))
+    {
+        // First, draw the standard parameters (number of steps, etc.)
+        snapshotSeq->drawParametersInNode(nodeContentWidth, isParamModulated, onModificationEnded);
+        
+        ImGui::Separator();
+        ImGui::Text("Snapshot Management:");
+        
+        const int numSteps = 8; // Default, could read from parameter
+        const int currentStepIndex = 0; // TODO: Get from module if exposed
+        
+        // Draw capture/clear buttons for each step
+        for (int i = 0; i < numSteps; ++i)
+        {
+            ImGui::PushID(i);
+            
+            bool stored = snapshotSeq->isSnapshotStored(i);
+            
+            // Capture button
+            if (ImGui::Button("Capture"))
+            {
+                // Get the current state of the whole synth
+                juce::MemoryBlock currentState;
+                synth->getStateInformation(currentState);
+                
+                // Store it in the snapshot sequencer
+                snapshotSeq->setSnapshotForStep(i, currentState);
+                
+                // Create undo state
+                pushSnapshot();
+                
+                juce::Logger::writeToLog("[SnapshotSeq UI] Captured snapshot for step " + juce::String(i));
+            }
+            
+            ImGui::SameLine();
+            
+            // Clear button (only enabled if snapshot exists)
+            if (!stored)
+            {
+                ImGui::BeginDisabled();
+            }
+            
+            if (ImGui::Button("Clear"))
+            {
+                snapshotSeq->clearSnapshotForStep(i);
+                pushSnapshot();
+                juce::Logger::writeToLog("[SnapshotSeq UI] Cleared snapshot for step " + juce::String(i));
+            }
+            
+            if (!stored)
+            {
+                ImGui::EndDisabled();
+            }
+            
+            ImGui::PopID();
+        }
+    }*/
     else
     {
         mp->drawParametersInNode (nodeContentWidth, isParamModulated, onModificationEnded);
@@ -29113,10 +29982,9 @@ if (auto* mp = synth->getModuleForLogical (lid))
 
             ImNodes::EndNode();
             
-            // Cache position for snapshot safety (in case graph rebuild skips rendering)
-            // Only update cache when editor is stable; avoid writing (0,0) during rebuild
-            if (!graphNeedsRebuild.load())
-                lastKnownNodePositions[(int)lid] = ImNodes::GetNodeGridSpacePos((int)lid);
+            // Cache position for snapshot safety
+            // Graph is always in consistent state since we rebuild at frame start
+            lastKnownNodePositions[(int)lid] = ImNodes::GetNodeGridSpacePos((int)lid);
             
             // Pop muted node styles (in reverse order of push)
             if (isMuted) {
@@ -29145,7 +30013,10 @@ if (auto* mp = synth->getModuleForLogical (lid))
             // Apply saved position once; do not write (0,0) defaults
             const ImVec2 p = it->second;
             if (!(p.x == 0.0f && p.y == 0.0f))
+            {
                 ImNodes::SetNodeGridSpacePos((int) lid, p);
+                juce::Logger::writeToLog("[PositionRestore] Applied pending position for node " + juce::String((int)lid) + ": (" + juce::String(p.x) + ", " + juce::String(p.y) + ")");
+            }
             pendingNodePositions.erase(it);
         }
             // Apply pending size if queued (for Comment nodes to prevent feedback loop)
@@ -29383,12 +30254,13 @@ if (auto* mp = synth->getModuleForLogical (lid))
         ImNodes::EndNode();
         
         // Cache output node position for snapshot safety
-        if (!graphNeedsRebuild.load())
-            lastKnownNodePositions[0] = ImNodes::GetNodeGridSpacePos(0);
+        // Graph is always in consistent state since we rebuild at frame start
+        lastKnownNodePositions[0] = ImNodes::GetNodeGridSpacePos(0);
         
         if (auto it = pendingNodePositions.find(0); it != pendingNodePositions.end())
         {
             ImNodes::SetNodeGridSpacePos(0, it->second);
+            juce::Logger::writeToLog("[PositionRestore] Applied pending position for output node 0: (" + juce::String(it->second.x) + ", " + juce::String(it->second.y) + ")");
             pendingNodePositions.erase(it);
         }
         drawnNodes.insert(0);
@@ -29499,7 +30371,6 @@ if (auto* mp = synth->getModuleForLogical (lid))
                 pushSnapshot(); // Make the entire operation undoable
             }
         }
-        } // End of graph rebuild protection
     }
 
     // --- Handle Auto-Connect Requests using new intelligent system ---
@@ -29508,19 +30379,258 @@ if (auto* mp = synth->getModuleForLogical (lid))
     ImNodes::MiniMap (0.2f, ImNodesMiniMapLocation_BottomRight);
 
     ImNodes::EndNodeEditor();
+    
+    // ================== META MODULE EDITING LOGIC ==================
+    // Check if any Meta Module has requested to be edited
+    if (synth != nullptr && metaModuleToEditLid == 0) // Only check if not already editing one
+    {
+        for (const auto& modInfo : synth->getModulesInfo())
+        {
+            if (auto* metaModule = dynamic_cast<MetaModuleProcessor*>(synth->getModuleForLogical(modInfo.first)))
+            {
+                // Atomically check and reset the flag
+                if (metaModule->editRequested.exchange(false))
+                {
+                    metaModuleToEditLid = modInfo.first;
+                    juce::Logger::writeToLog("[MetaEdit] Opening editor for Meta Module L-ID " + juce::String((int)metaModuleToEditLid));
+                    ImGui::OpenPopup("Edit Meta Module");
+                    break; // Only handle one request per frame
+                }
+            }
+        }
+    }
+    
+    // Draw the modal popup for the internal editor if one is selected
+    if (metaModuleToEditLid != 0)
+    {
+        ImGui::SetNextWindowSize(ImVec2(1200, 800), ImGuiCond_FirstUseEver);
+        if (ImGui::BeginPopupModal("Edit Meta Module", nullptr, ImGuiWindowFlags_MenuBar))
+        {
+            // Get the internal synth processor from the meta module
+            auto* metaModule = dynamic_cast<MetaModuleProcessor*>(synth->getModuleForLogical(metaModuleToEditLid));
+            if (metaModule && metaModule->getInternalGraph())
+            {
+                // Display a placeholder for now
+                // TODO: Full recursive editor implementation would go here
+                ImGui::Text("Editing internal graph of Meta Module %d", (int)metaModuleToEditLid);
+                ImGui::Separator();
+                
+                auto* internalGraph = metaModule->getInternalGraph();
+                auto modules = internalGraph->getModulesInfo();
+                
+                ImGui::Text("Internal modules: %d", (int)modules.size());
+                if (ImGui::BeginChild("ModuleList", ImVec2(0, -30), true))
+                {
+                    for (const auto& [lid, type] : modules)
+                    {
+                        ImGui::Text("  [%d] %s", (int)lid, type.toRawUTF8());
+                    }
+                }
+                ImGui::EndChild();
+                
+                ImGui::Text("NOTE: Full nested editor UI is a TODO");
+                ImGui::Text("For now, you can inspect the internal graph structure above.");
+            }
+            
+            if (ImGui::Button("Close"))
+            {
+                ImGui::CloseCurrentPopup();
+                metaModuleToEditLid = 0;
+                // When closing, the meta module might have new/removed inlets/outlets,
+                // so we need to rebuild the main graph to update its pins
+                graphNeedsRebuild = true;
+            }
+            ImGui::EndPopup();
+        }
+        else
+        {
+            // If the popup was closed by the user (e.g., pressing ESC)
+            metaModuleToEditLid = 0;
+            graphNeedsRebuild = true;
+        }
+    }
+    // ======================= END OF META MODULE LOGIC =======================
 
     // --- CONSOLIDATED HOVERED LINK DETECTION ---
     // Declare these variables ONCE, immediately after the editor has ended.
     // All subsequent features that need to know about hovered links can now
     // safely reuse these results without causing redefinition or scope errors.
-    // CRITICAL: Skip if graph rebuild is pending to avoid accessing deleted nodes
+    // Graph is always in consistent state since we rebuild at frame start
     int hoveredLinkId = -1;
-    bool isLinkHovered = false;
-    if (!graphNeedsRebuild.load())
-    {
-        isLinkHovered = ImNodes::IsLinkHovered(&hoveredLinkId);
-    }
+    bool isLinkHovered = ImNodes::IsLinkHovered(&hoveredLinkId);
     // --- END OF CONSOLIDATED DECLARATION ---
+    
+    // === SMART CABLE VISUALIZATION ===
+    // Draw animated pulses on active cables to show signal flow
+    {
+        ImDrawList* drawList = ImGui::GetForegroundDrawList();
+        const float currentTime = (float)ImGui::GetTime();
+        
+        // Iterate through all visible links
+        for (const auto& linkPair : linkIdToAttrs)
+        {
+            int linkId = linkPair.first;
+            int srcAttr = linkPair.second.first;
+            int dstAttr = linkPair.second.second;
+            
+            // Decode the source pin to get module and channel info
+            auto srcPin = decodePinId(srcAttr);
+            
+            // Skip mod pins and invalid pins
+            if (srcPin.isMod || srcPin.logicalId == 0)
+                continue;
+            
+            // Get the source module to read its output magnitude
+            if (auto* srcModule = synth->getModuleForLogical(srcPin.logicalId))
+            {
+                // Read the peak magnitude for this channel
+                float magnitude = srcModule->getOutputChannelValue(srcPin.channel);
+                
+                // Only draw visualization if there's a significant signal (> 0.01)
+                if (magnitude > 0.01f)
+                {
+                    // Get the link's color based on pin type
+                    PinDataType pinType = getPinDataTypeForPin(srcPin);
+                    ImU32 baseColor = getImU32ForType(pinType);
+                    
+                    // Extract RGB components
+                    float r = ((baseColor >> IM_COL32_R_SHIFT) & 0xFF) / 255.0f;
+                    float g = ((baseColor >> IM_COL32_G_SHIFT) & 0xFF) / 255.0f;
+                    float b = ((baseColor >> IM_COL32_B_SHIFT) & 0xFF) / 255.0f;
+                    
+                    // Get pin screen positions from our cached positions
+                    auto srcPosIt = attrPositions.find(srcAttr);
+                    auto dstPosIt = attrPositions.find(dstAttr);
+                    
+                    if (srcPosIt != attrPositions.end() && dstPosIt != attrPositions.end())
+                    {
+                        ImVec2 srcPos = srcPosIt->second;
+                        ImVec2 dstPos = dstPosIt->second;
+                        
+                        // Calculate line midpoint
+                        ImVec2 midpoint = ImVec2(
+                            (srcPos.x + dstPos.x) * 0.5f,
+                            (srcPos.y + dstPos.y) * 0.5f
+                        );
+                        
+                        // Animate pulse position along the line
+                        const float pulseSpeed = 200.0f; // pixels per second
+                        const float lineLength = std::sqrt(
+                            (dstPos.x - srcPos.x) * (dstPos.x - srcPos.x) +
+                            (dstPos.y - srcPos.y) * (dstPos.y - srcPos.y)
+                        );
+                        
+                        if (lineLength > 1.0f)
+                        {
+                            // Calculate pulse travel (loops from 0 to lineLength)
+                            float travel = std::fmod(currentTime * pulseSpeed, lineLength);
+                            float t = travel / lineLength; // 0 to 1
+                            
+                            // Calculate pulse position
+                            ImVec2 pulsePos = ImVec2(
+                                srcPos.x + (dstPos.x - srcPos.x) * t,
+                                srcPos.y + (dstPos.y - srcPos.y) * t
+                            );
+                            
+                            // Calculate pulse size based on magnitude (2-8 pixels)
+                            float pulseRadius = 2.0f + magnitude * 6.0f;
+                            
+                            // Draw outer glow
+                            drawList->AddCircleFilled(
+                                pulsePos,
+                                pulseRadius + 2.0f,
+                                IM_COL32(
+                                    (int)(r * 255),
+                                    (int)(g * 255),
+                                    (int)(b * 255),
+                                    (int)(magnitude * 60)
+                                ),
+                                12
+                            );
+                            
+                            // Draw main pulse
+                            drawList->AddCircleFilled(
+                                pulsePos,
+                                pulseRadius,
+                                IM_COL32(
+                                    (int)(r * 255),
+                                    (int)(g * 255),
+                                    (int)(b * 255),
+                                    (int)(magnitude * 200)
+                                ),
+                                12
+                            );
+                            
+                            // Draw bright center
+                            drawList->AddCircleFilled(
+                                pulsePos,
+                                pulseRadius * 0.5f,
+                                IM_COL32(255, 255, 255, (int)(magnitude * 255)),
+                                8
+                            );
+                        }
+                    }
+                }
+            }
+        }
+    }
+    // === END SMART CABLE VISUALIZATION ===
+    
+    // === PROBE TOOL MODE HANDLING ===
+    if (isProbeModeActive)
+    {
+        // Change cursor to indicate probe mode is active
+        ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
+        
+        // Draw "PROBE ACTIVE" indicator at mouse position
+        auto* drawList = ImGui::GetForegroundDrawList();
+        ImVec2 mousePos = ImGui::GetMousePos();
+        const char* text = "PROBE MODE: Click output pin";
+        auto textSize = ImGui::CalcTextSize(text);
+        ImVec2 textPos = ImVec2(mousePos.x + 20, mousePos.y - 20);
+        drawList->AddRectFilled(
+            ImVec2(textPos.x - 5, textPos.y - 2),
+            ImVec2(textPos.x + textSize.x + 5, textPos.y + textSize.y + 2),
+            IM_COL32(50, 50, 50, 200)
+        );
+        drawList->AddText(textPos, IM_COL32(255, 255, 100, 255), text);
+        
+        // Check for pin clicks
+        if (ImGui::IsMouseClicked(ImGuiMouseButton_Left))
+        {
+            int hoveredPinId = -1;
+            if (ImNodes::IsPinHovered(&hoveredPinId) && hoveredPinId != -1)
+            {
+                auto pinId = decodePinId(hoveredPinId);
+                // Check if it's an output pin (not input, not mod)
+                if (!pinId.isInput && !pinId.isMod && pinId.logicalId != 0)
+                {
+                    juce::Logger::writeToLog("[PROBE_UI] Probe clicked on valid output pin. LogicalID: " + juce::String(pinId.logicalId) + ", Channel: " + juce::String(pinId.channel));
+                    auto nodeId = synth->getNodeIdForLogical(pinId.logicalId);
+                    synth->setProbeConnection(nodeId, pinId.channel);
+                    isProbeModeActive = false; // Deactivate after probing
+                }
+                else
+                {
+                    juce::Logger::writeToLog("[PROBE_UI] Probe clicked on an invalid pin (input or output node). Cancelling.");
+                    isProbeModeActive = false;
+                }
+            }
+            else
+            {
+                // Clicked on empty space, cancel probe mode
+                juce::Logger::writeToLog("[PROBE_UI] Probe clicked on empty space. Cancelling.");
+                isProbeModeActive = false;
+            }
+        }
+        
+        // Allow ESC to cancel probe mode
+        if (ImGui::IsKeyPressed(ImGuiKey_Escape))
+        {
+            isProbeModeActive = false;
+            juce::Logger::writeToLog("[PROBE_UI] Cancelled with ESC");
+        }
+    }
 
     // --- CONTEXTUAL RIGHT-CLICK HANDLER ---
     // A cable was right-clicked. Store its info and open the insert popup.
@@ -29747,12 +30857,11 @@ if (auto* mp = synth->getModuleForLogical (lid))
     hoveredLinkSrcId = 0;
     hoveredLinkDstId = 0;
 
-    // Skip inspector if graph rebuild is pending or popups are open
-    const bool skipInspectorDueToRebuild = graphNeedsRebuild.load();
+    // Skip inspector if popups are open (graph is always in consistent state now)
     const bool anyPopupOpen = ImGui::IsPopupOpen("InsertNodeOnLinkPopup") || ImGui::IsPopupOpen("AddModulePopup");
     // Do not early-return here; we still need to finish the frame and close any ImGui scopes.
 
-    if (!skipInspectorDueToRebuild && !anyPopupOpen && isLinkHovered && hoveredLinkId != -1 && synth != nullptr)
+    if (!anyPopupOpen && isLinkHovered && hoveredLinkId != -1 && synth != nullptr)
     {
         // Safety: Re-verify link still exists in our mapping
         auto it = linkIdToAttrs.find(hoveredLinkId);
@@ -29791,41 +30900,13 @@ if (auto* mp = synth->getModuleForLogical (lid))
     }
     
 
-    // Deferred graph rebuild (once per frame)
-    bool graphWasRebuilt = false;
-    if (graphNeedsRebuild.load())
-    {
-        if (synth)
-        {
-            synth->commitChanges();
-        }
-        graphNeedsRebuild = false;
-        graphWasRebuilt = true;
-        
-        // CRITICAL: Invalidate hover state to prevent cable inspector from accessing
-        // modules that were just deleted/recreated during commitChanges()
-        lastHoveredLinkId = -1;
-        lastHoveredNodeId = -1;
-        hoveredLinkSrcId = 0;
-        hoveredLinkDstId = 0;
-        juce::Logger::writeToLog("[GraphRebuild] Invalidated hover state to prevent stale access");
-    }
-
-    
     // Update hovered node/link id for next frame (must be called outside editor scope)
-    // SKIP this update if we just rebuilt the graph to avoid re-populating with stale IDs
-    if (!graphWasRebuilt)
-    {
-        int hv = -1;
-        if (ImNodes::IsNodeHovered(&hv)) lastHoveredNodeId = hv; else lastHoveredNodeId = -1;
-        
-        int hl = -1;
-        if (ImNodes::IsLinkHovered(&hl)) lastHoveredLinkId = hl; else lastHoveredLinkId = -1;
-    }
-    else
-    {
-        juce::Logger::writeToLog("[GraphRebuild] Skipping hover update this frame to prevent stale references");
-    }
+    // Graph is always in consistent state since we rebuild at frame start
+    int hv = -1;
+    if (ImNodes::IsNodeHovered(&hv)) lastHoveredNodeId = hv; else lastHoveredNodeId = -1;
+    
+    int hl = -1;
+    if (ImNodes::IsLinkHovered(&hl)) lastHoveredLinkId = hl; else lastHoveredLinkId = -1;
     
 
     // Shortcut: press 'I' while hovering a link to open Insert-on-Link popup (bypasses mouse handling)
@@ -29910,6 +30991,18 @@ if (auto* mp = synth->getModuleForLogical (lid))
             }
             ImGui::PopItemWidth();
             ImGui::Separator();
+            
+            // --- PROBE TOOL ---
+            if (ImGui::MenuItem("🔬 Probe Signal (Click any output pin)"))
+            {
+                isProbeModeActive = true;
+                ImGui::CloseCurrentPopup();
+            }
+            if (ImGui::IsItemHovered())
+            {
+                ImGui::SetTooltip("Activate probe mode to instantly visualize any signal without manual patching.\nClick on any output pin to route it to the probe scope.");
+            }
+            ImGui::Separator();
 
             auto addAtMouse = [this](const char* type) {
                 auto nodeId = synth->addModule(type);
@@ -29950,6 +31043,7 @@ if (auto* mp = synth->getModuleForLogical (lid))
                     if (ImGui::MenuItem("Noise")) addAtMouse("Noise");
                     if (ImGui::MenuItem("Sequencer")) addAtMouse("Sequencer");
                     if (ImGui::MenuItem("Multi Sequencer")) addAtMouse("multi sequencer");
+                    if (ImGui::MenuItem("Snapshot Sequencer")) addAtMouse("snapshot sequencer");
                     if (ImGui::MenuItem("MIDI Player")) addAtMouse("midi player");
                     if (ImGui::MenuItem("Value")) addAtMouse("Value");
                     if (ImGui::MenuItem("Sample Loader")) addAtMouse("sample loader");
@@ -30105,8 +31199,8 @@ if (auto* mp = synth->getModuleForLogical (lid))
                     auto dstNode = (dstPin.logicalId == 0) ? synth->getOutputNodeID() : synth->getNodeIdForLogical(dstPin.logicalId);
 
                     synth->connect(srcNode, srcPin.channel, dstNode, dstPin.channel);
+                    // Immediate commit for RecordModuleProcessor filename update
                     synth->commitChanges();
-                    graphNeedsRebuild = false;
 
                     if (auto* dstModule = synth->getModuleForLogical(dstPin.logicalId)) {
                         if (auto* recorder = dynamic_cast<RecordModuleProcessor*>(dstModule)) {
@@ -30142,9 +31236,8 @@ if (auto* mp = synth->getModuleForLogical (lid))
 
                 synth->disconnect(srcNode, srcPin.channel, dstNode, dstPin.channel);
                 
-                // CORRECTED ORDER: Commit changes first
+                // Immediate commit for RecordModuleProcessor filename update
                 synth->commitChanges();
-                graphNeedsRebuild = false; // The rebuild is no longer pending
                 
                 // After disconnecting, tell the recorder to update (pass empty string for unconnected)
                 if (auto* dstModule = synth->getModuleForLogical(dstPin.logicalId))
@@ -30505,46 +31598,63 @@ if (auto* mp = synth->getModuleForLogical (lid))
     {
         ImGui::Begin("Keyboard Shortcuts", &showShortcutsWindow, ImGuiWindowFlags_AlwaysAutoResize);
         
-        ImGui::Text("Node & Patch Management");
-        ImGui::Separator();
-        ImGui::BulletText("M: Mute/Bypass selected node(s).");
-        ImGui::BulletText("Ctrl + A: Select all nodes.");
-        ImGui::BulletText("Ctrl + R: Insert a Recorder tapped into the Main Output.");
-        
-        ImGui::Spacing();
-        ImGui::Text("Connection & Signal Flow");
-        ImGui::Separator();
-        ImGui::BulletText("O: Connect selected node's first output to Main Output.");
-        ImGui::BulletText("Alt + D: Disconnect all cables from selected node(s).");
+        // --- NEW, COMPREHENSIVE SHORTCUT LIST ---
 
-        ImGui::Spacing();
-        ImGui::Text("Navigation & View");
-        ImGui::Separator();
-        ImGui::BulletText("F: Frame selected nodes.");
-        ImGui::BulletText("Home: Frame all nodes.");
-
-        ImGui::Spacing();
-        ImGui::Text("Patch Actions");
-        ImGui::Separator();
-        ImGui::BulletText("Ctrl + P: Randomize Patch.");
-        ImGui::BulletText("Ctrl + M: Randomize Connections.");
-        ImGui::BulletText("Ctrl + B: Beautify Layout.");
-
-        ImGui::Spacing();
-        ImGui::Text("Parameter & Data");
-        ImGui::Separator();
-        ImGui::BulletText("Ctrl + Click (on a slider): Instantly edit the value with the keyboard.");
-        ImGui::BulletText("Ctrl + Shift + C: Copy selected node's settings.");
-        ImGui::BulletText("Ctrl + Shift + V: Paste settings to selected node (of same type).");
-
-        ImGui::Spacing();
-        ImGui::Text("General");
+        ImGui::Text("Patch & File Management");
         ImGui::Separator();
         ImGui::BulletText("Ctrl + S: Save Preset.");
         ImGui::BulletText("Ctrl + O: Load Preset.");
-        ImGui::BulletText("Ctrl + Z: Undo.");
-        ImGui::BulletText("Ctrl + Y: Redo.");
-        ImGui::BulletText("Delete: Delete selected nodes/links.");
+        ImGui::BulletText("Ctrl + Z: Undo last action.");
+        ImGui::BulletText("Ctrl + Y: Redo last action.");
+        ImGui::BulletText("Ctrl + P: Generate a new random patch.");
+
+        ImGui::Spacing();
+        ImGui::Text("Node Creation & Deletion");
+        ImGui::Separator();
+        ImGui::BulletText("Right-click canvas: Open Quick Add menu to create a node.");
+        ImGui::BulletText("Delete: Delete selected nodes and links.");
+        ImGui::BulletText("Shift + Delete: Bypass-delete selected node(s), preserving signal chain.");
+        ImGui::BulletText("Ctrl + D: Duplicate selected node(s).");
+        ImGui::BulletText("Shift + D: Duplicate selected node(s) with their connections.");
+        ImGui::BulletText("Ctrl + Shift + M: Collapse selected nodes into a new 'Meta Module'.");
+
+        ImGui::Spacing();
+        ImGui::Text("Connections & Signal Flow");
+        ImGui::Separator();
+        ImGui::BulletText("Right-click canvas -> Probe Signal: Enter Probe Mode.");
+        ImGui::BulletText("  (In Probe Mode) Left-click output pin: Instantly view signal in the Probe Scope.");
+        ImGui::BulletText("Right-click link: Open menu to insert a node on that cable.");
+        ImGui::BulletText("I key (while hovering link): Open 'Insert Node' menu for that cable.");
+        ImGui::BulletText("Ctrl + Middle-click link: Split a new cable from a connected output pin.");
+        ImGui::BulletText("O key (with one node selected): Connect node's output to the Main Output.");
+        ImGui::BulletText("Alt + D: Disconnect all cables from selected node(s).");
+        ImGui::BulletText("Ctrl + M: Randomize connections between existing nodes.");
+        ImGui::BulletText("C key (multi-select): Chain selected nodes (L->L, R->R).");
+        ImGui::BulletText("G, B, Y, R keys (multi-select): Chain pins by type (Audio, CV, Gate, Raw).");
+        
+        ImGui::Spacing();
+        ImGui::Text("Navigation & View");
+        ImGui::Separator();
+        ImGui::BulletText("F: Frame (zoom to fit) selected nodes.");
+        ImGui::BulletText("Home: Frame all nodes in the patch.");
+        ImGui::BulletText("Ctrl + Home: Reset view panning to the origin (0,0).");
+        ImGui::BulletText("Ctrl + B: Automatically arrange nodes for a clean layout ('Beautify').");
+        ImGui::BulletText("Ctrl + A: Select all nodes.");
+
+        ImGui::Spacing();
+        ImGui::Text("Parameter & Settings");
+        ImGui::Separator();
+        ImGui::BulletText("M key (with node(s) selected): Mute or Bypass the selected node(s).");
+        ImGui::BulletText("Ctrl + R (with node(s) selected): Reset parameters of selected node(s) to default.");
+        ImGui::BulletText("Ctrl + Shift + C: Copy selected node's settings to clipboard.");
+        ImGui::BulletText("Ctrl + Shift + V: Paste settings to selected node (must be same type).");
+        ImGui::BulletText("Mouse Wheel (on slider): Fine-tune parameter value.");
+
+        ImGui::Spacing();
+        ImGui::Text("General & Debugging");
+        ImGui::Separator();
+        ImGui::BulletText("Ctrl + R (no node selected): Insert a Recorder tapped into the Main Output.");
+        ImGui::BulletText("Ctrl + Shift + D: Show System Diagnostics window.");
         ImGui::BulletText("F1: Toggle this help window.");
         
         ImGui::End();
@@ -30694,12 +31804,12 @@ juce::ValueTree ImGuiNodeEditorComponent::getUiValueTree()
 
 void ImGuiNodeEditorComponent::applyUiValueTreeNow (const juce::ValueTree& uiState)
 {
-    if (! uiState.isValid()) return;
+    if (! uiState.isValid() || synth == nullptr) return;
     
-    // --- FIX: Clear stale UI state ---
-    // The underlying synth graph has already been completely rebuilt by setStateInformation,
-    // so we just need to clear our stale UI data before applying the new state from the preset.
-    // Attempting to unmute old nodes would operate on invalid logical IDs from the previous graph.
+    juce::Logger::writeToLog("[UI_RESTORE] Applying UI ValueTree now...");
+
+    // This is the core of the crash: the synth graph has already been rebuilt by setStateInformation.
+    // We must clear our stale UI data (like muted nodes) before applying the new state from the preset.
     mutedNodeStates.clear();
     
     auto nodes = uiState; // expect tag NodeEditorUI
@@ -30709,17 +31819,39 @@ void ImGuiNodeEditorComponent::applyUiValueTreeNow (const juce::ValueTree& uiSta
         
         if (! n.hasType ("node")) continue;
         const int nid = (int) n.getProperty ("id", 0);
+
+        // ========================= THE FIX STARTS HERE =========================
+        //
+        // Before applying any property, VERIFY that this node ID actually exists
+        // in the synth. This prevents crashes when loading presets that contain
+        // modules which are not available in the current build.
+        //
+        bool nodeExistsInSynth = (nid == 0); // Node 0 is always the output node.
+        if (!nodeExistsInSynth) {
+            for (const auto& modInfo : synth->getModulesInfo()) {
+                if ((int)modInfo.first == nid) {
+                    nodeExistsInSynth = true;
+                    break;
+                }
+            }
+        }
+
+        if (!nodeExistsInSynth)
+        {
+            juce::Logger::writeToLog("[UI_RESTORE] WARNING: Skipping UI properties for non-existent node ID " + juce::String(nid) + ". The module may be missing or failed to load.");
+            continue; // Skip to the next node in the preset.
+        }
+        // ========================== END OF FIX ==========================
+
         const float x = (float) n.getProperty ("x", 0.0f);
         const float y = (float) n.getProperty ("y", 0.0f);
-        // Avoid forcing nodes to origin when snapshot contained (0,0)
         if (!(x == 0.0f && y == 0.0f))
         {
             pendingNodePositions[nid] = ImVec2(x, y);
-            juce::Logger::writeToLog("[applyUiValueTreeNow] Queued position for node " + juce::String(nid) + ": (" + juce::String(x) + ", " + juce::String(y) + ")");
+            juce::Logger::writeToLog("[UI_RESTORE] Queued position for node " + juce::String(nid) + ": (" + juce::String(x) + ", " + juce::String(y) + ")");
         }
         
-        // --- FIX: Read and apply muted state from preset ---
-        // When loading a preset, we need to mark nodes as muted and create bypass connections.
+        // Read and apply muted state from preset for existing nodes.
         if ((bool) n.getProperty("muted", false))
         {
             // Use muteNodeSilent to store the original connections first,
@@ -30729,13 +31861,10 @@ void ImGuiNodeEditorComponent::applyUiValueTreeNow (const juce::ValueTree& uiSta
         }
     }
     
-    // --- FIX: Trigger graph rebuild after mute state changes ---
-    // 3. Muting/unmuting modifies graph connections, so we must tell the
-    //    synth to rebuild its processing order
-    if (synth)
-    {
-        graphNeedsRebuild = true;
-    }
+    // Muting/unmuting modifies graph connections, so we must tell the
+    // synth to rebuild its processing order.
+    graphNeedsRebuild = true;
+    juce::Logger::writeToLog("[UI_RESTORE] UI state applied. Flagging for graph rebuild.");
 }
 
 void ImGuiNodeEditorComponent::applyUiValueTree (const juce::ValueTree& uiState)
@@ -31342,13 +32471,7 @@ void ImGuiNodeEditorComponent::handleBeautifyLayout()
 {
     if (synth == nullptr) return;
 
-    // CRITICAL: Skip if graph rebuild is pending to avoid accessing deleted nodes
-    if (graphNeedsRebuild.load())
-    {
-        juce::Logger::writeToLog("[Beautify] Skipping due to pending graph rebuild");
-        return;
-    }
-
+    // Graph is always in consistent state since we rebuild at frame start
     // Create an undo state so the action can be reversed
     pushSnapshot();
     juce::Logger::writeToLog("--- [Beautify Layout] Starting ---");
@@ -33123,6 +34246,328 @@ void ImGuiNodeEditorComponent::addPluginModules()
     }
 }
 
+void ImGuiNodeEditorComponent::handleCollapseToMetaModule()
+{
+    if (!synth)
+        return;
+    
+    juce::Logger::writeToLog("[Meta Module] Starting collapse operation...");
+    
+    // 1. Get selected nodes
+    const int numSelected = ImNodes::NumSelectedNodes();
+    if (numSelected < 2)
+    {
+        juce::Logger::writeToLog("[Meta Module] ERROR: Need at least 2 nodes selected");
+        return;
+    }
+    
+    std::vector<int> selectedNodeIds(numSelected);
+    ImNodes::GetSelectedNodes(selectedNodeIds.data());
+    
+    // Convert to logical IDs
+    std::set<juce::uint32> selectedLogicalIds;
+    for (int nodeId : selectedNodeIds)
+    {
+        selectedLogicalIds.insert((juce::uint32)nodeId);
+    }
+    
+    juce::Logger::writeToLog("[Meta Module] Selected " + juce::String(numSelected) + " nodes");
+    
+    // 2. Analyze boundary connections
+    struct BoundaryConnection
+    {
+        juce::uint32 externalLogicalId;
+        int externalChannel;
+        juce::uint32 internalLogicalId;
+        int internalChannel;
+        bool isInput; // true = external -> internal, false = internal -> external
+    };
+    
+    std::vector<BoundaryConnection> boundaries;
+    auto allConnections = synth->getConnectionsInfo();
+    
+    for (const auto& conn : allConnections)
+    {
+        bool srcIsSelected = selectedLogicalIds.count(conn.srcLogicalId) > 0;
+        bool dstIsSelected = selectedLogicalIds.count(conn.dstLogicalId) > 0 && !conn.dstIsOutput;
+        bool dstIsOutput = conn.dstIsOutput;
+        
+        // Inlet: external -> selected
+        if (!srcIsSelected && dstIsSelected)
+        {
+            BoundaryConnection bc;
+            bc.externalLogicalId = conn.srcLogicalId;
+            bc.externalChannel = conn.srcChan;
+            bc.internalLogicalId = conn.dstLogicalId;
+            bc.internalChannel = conn.dstChan;
+            bc.isInput = true;
+            boundaries.push_back(bc);
+            juce::Logger::writeToLog("[Meta Module] Found inlet: " + juce::String(bc.externalLogicalId) + 
+                                    " -> " + juce::String(bc.internalLogicalId));
+        }
+        // Outlet: selected -> external or output
+        else if (srcIsSelected && (!dstIsSelected || dstIsOutput))
+        {
+            BoundaryConnection bc;
+            bc.externalLogicalId = dstIsOutput ? 0 : conn.dstLogicalId;
+            bc.externalChannel = conn.dstChan;
+            bc.internalLogicalId = conn.srcLogicalId;
+            bc.internalChannel = conn.srcChan;
+            bc.isInput = false;
+            boundaries.push_back(bc);
+            juce::Logger::writeToLog("[Meta Module] Found outlet: " + juce::String(bc.internalLogicalId) + 
+                                    " -> " + (dstIsOutput ? "OUTPUT" : juce::String(bc.externalLogicalId)));
+        }
+    }
+    
+    // Count inlets and outlets
+    int numInlets = 0;
+    int numOutlets = 0;
+    for (const auto& bc : boundaries)
+    {
+        if (bc.isInput)
+            numInlets++;
+        else
+            numOutlets++;
+    }
+    
+    juce::Logger::writeToLog("[META] Boundary Detection: Found " + juce::String(numInlets) + " inlets and " + juce::String(numOutlets) + " outlets.");
+    juce::Logger::writeToLog("[META] Found " + juce::String(boundaries.size()) + " boundary connections");
+    
+    if (boundaries.empty())
+    {
+        juce::Logger::writeToLog("[META] WARNING: No boundary connections - creating isolated meta module");
+    }
+    
+    // 3. Create the internal graph state
+    pushSnapshot(); // Make undoable
+    
+    // Save the state of selected nodes
+    juce::MemoryBlock internalState;
+    {
+        // Create a temporary state containing only selected nodes
+        juce::ValueTree internalRoot("ModularSynthPreset");
+        internalRoot.setProperty("version", 1, nullptr);
+        
+        juce::ValueTree modsVT("modules");
+        juce::ValueTree connsVT("connections");
+        
+        // Add selected modules
+        std::map<juce::uint32, juce::uint32> oldToNewLogicalId;
+        juce::uint32 newLogicalId = 1;
+        
+        for (juce::uint32 oldId : selectedLogicalIds)
+        {
+            oldToNewLogicalId[oldId] = newLogicalId++;
+            
+            auto* module = synth->getModuleForLogical(oldId);
+            if (!module)
+                continue;
+            
+            juce::String moduleType = synth->getModuleTypeForLogical(oldId);
+            
+            juce::ValueTree mv("module");
+            mv.setProperty("logicalId", (int)oldToNewLogicalId[oldId], nullptr);
+            mv.setProperty("type", moduleType, nullptr);
+            
+            // Save parameters
+            juce::ValueTree params = module->getAPVTS().copyState();
+            juce::ValueTree paramsWrapper("params");
+            paramsWrapper.addChild(params, -1, nullptr);
+            mv.addChild(paramsWrapper, -1, nullptr);
+            
+            // Save extra state
+            if (auto extra = module->getExtraStateTree(); extra.isValid())
+            {
+                juce::ValueTree extraWrapper("extra");
+                extraWrapper.addChild(extra, -1, nullptr);
+                mv.addChild(extraWrapper, -1, nullptr);
+            }
+            
+            modsVT.addChild(mv, -1, nullptr);
+        }
+        
+        // Add inlet modules for each unique input
+        std::map<std::pair<juce::uint32, int>, juce::uint32> inletMap; // (extId, extCh) -> inletLogicalId
+        for (const auto& bc : boundaries)
+        {
+            if (bc.isInput)
+            {
+                auto key = std::make_pair(bc.externalLogicalId, bc.externalChannel);
+                if (inletMap.find(key) == inletMap.end())
+                {
+                    juce::uint32 inletId = newLogicalId++;
+                    inletMap[key] = inletId;
+                    
+                    juce::ValueTree mv("module");
+                    mv.setProperty("logicalId", (int)inletId, nullptr);
+                    mv.setProperty("type", "inlet", nullptr);
+                    modsVT.addChild(mv, -1, nullptr);
+                    
+                    juce::Logger::writeToLog("[Meta Module] Created inlet node ID=" + juce::String(inletId));
+                }
+            }
+        }
+        
+        // Add outlet modules for each unique output
+        std::map<std::pair<juce::uint32, int>, juce::uint32> outletMap; // (intId, intCh) -> outletLogicalId
+        for (const auto& bc : boundaries)
+        {
+            if (!bc.isInput)
+            {
+                auto key = std::make_pair(bc.internalLogicalId, bc.internalChannel);
+                if (outletMap.find(key) == outletMap.end())
+                {
+                    juce::uint32 outletId = newLogicalId++;
+                    outletMap[key] = outletId;
+                    
+                    juce::ValueTree mv("module");
+                    mv.setProperty("logicalId", (int)outletId, nullptr);
+                    mv.setProperty("type", "outlet", nullptr);
+                    modsVT.addChild(mv, -1, nullptr);
+                    
+                    juce::Logger::writeToLog("[Meta Module] Created outlet node ID=" + juce::String(outletId));
+                }
+            }
+        }
+        
+        // Add internal connections (between selected nodes)
+        for (const auto& conn : allConnections)
+        {
+            bool srcIsSelected = selectedLogicalIds.count(conn.srcLogicalId) > 0;
+            bool dstIsSelected = selectedLogicalIds.count(conn.dstLogicalId) > 0;
+            
+            if (srcIsSelected && dstIsSelected)
+            {
+                juce::ValueTree cv("connection");
+                cv.setProperty("srcId", (int)oldToNewLogicalId[conn.srcLogicalId], nullptr);
+                cv.setProperty("srcChan", conn.srcChan, nullptr);
+                cv.setProperty("dstId", (int)oldToNewLogicalId[conn.dstLogicalId], nullptr);
+                cv.setProperty("dstChan", conn.dstChan, nullptr);
+                connsVT.addChild(cv, -1, nullptr);
+            }
+        }
+        
+        // Add connections from inlets to internal nodes
+        for (const auto& bc : boundaries)
+        {
+            if (bc.isInput)
+            {
+                auto key = std::make_pair(bc.externalLogicalId, bc.externalChannel);
+                juce::uint32 inletId = inletMap[key];
+                
+                juce::ValueTree cv("connection");
+                cv.setProperty("srcId", (int)inletId, nullptr);
+                cv.setProperty("srcChan", 0, nullptr); // Inlets output on channel 0
+                cv.setProperty("dstId", (int)oldToNewLogicalId[bc.internalLogicalId], nullptr);
+                cv.setProperty("dstChan", bc.internalChannel, nullptr);
+                connsVT.addChild(cv, -1, nullptr);
+            }
+        }
+        
+        // Add connections from internal nodes to outlets
+        for (const auto& bc : boundaries)
+        {
+            if (!bc.isInput)
+            {
+                auto key = std::make_pair(bc.internalLogicalId, bc.internalChannel);
+                juce::uint32 outletId = outletMap[key];
+                
+                juce::ValueTree cv("connection");
+                cv.setProperty("srcId", (int)oldToNewLogicalId[bc.internalLogicalId], nullptr);
+                cv.setProperty("srcChan", bc.internalChannel, nullptr);
+                cv.setProperty("dstId", (int)outletId, nullptr);
+                cv.setProperty("dstChan", 0, nullptr); // Outlets input on channel 0
+                connsVT.addChild(cv, -1, nullptr);
+            }
+        }
+        
+        internalRoot.addChild(modsVT, -1, nullptr);
+        internalRoot.addChild(connsVT, -1, nullptr);
+        
+        // Serialize to memory block
+        if (auto xml = internalRoot.createXml())
+        {
+            juce::MemoryOutputStream mos(internalState, false);
+            xml->writeTo(mos);
+            juce::Logger::writeToLog("[META] Generated state for sub-patch.");
+        }
+    }
+    
+    // 4. Calculate average position for the meta module
+    ImVec2 avgPos(0.0f, 0.0f);
+    int posCount = 0;
+    for (juce::uint32 logicalId : selectedLogicalIds)
+    {
+        ImVec2 pos = ImNodes::GetNodeGridSpacePos((int)logicalId);
+        avgPos.x += pos.x;
+        avgPos.y += pos.y;
+        posCount++;
+    }
+    if (posCount > 0)
+    {
+        avgPos.x /= posCount;
+        avgPos.y /= posCount;
+    }
+    
+    // 5. Delete selected nodes
+    for (juce::uint32 logicalId : selectedLogicalIds)
+    {
+        auto nodeId = synth->getNodeIdForLogical(logicalId);
+        synth->removeModule(nodeId);
+    }
+    
+    // 6. Create meta module
+    auto metaNodeId = synth->addModule("meta module");
+    auto metaLogicalId = synth->getLogicalIdForNode(metaNodeId);
+    pendingNodePositions[(int)metaLogicalId] = avgPos;
+    
+    juce::Logger::writeToLog("[META] Created new MetaModule with logical ID: " + juce::String((int)metaLogicalId));
+    
+    auto* metaModule = dynamic_cast<MetaModuleProcessor*>(synth->getModuleForLogical(metaLogicalId));
+    if (metaModule)
+    {
+        // Load the internal state
+        metaModule->setStateInformation(internalState.getData(), (int)internalState.getSize());
+        juce::Logger::writeToLog("[META] Loaded internal state into meta module");
+    }
+    else
+    {
+        juce::Logger::writeToLog("[META] ERROR: Failed to create meta module");
+        return;
+    }
+    
+    // 7. Reconnect external connections
+    // Note: This is a simplified implementation - in production, you'd need to map
+    // inlet/outlet indices to meta module input/output channels properly
+    for (const auto& bc : boundaries)
+    {
+        if (bc.isInput)
+        {
+            // Connect external source to meta module input
+            auto extNodeId = synth->getNodeIdForLogical(bc.externalLogicalId);
+            synth->connect(extNodeId, bc.externalChannel, metaNodeId, 0);
+        }
+        else if (bc.externalLogicalId != 0)
+        {
+            // Connect meta module output to external destination
+            auto extNodeId = synth->getNodeIdForLogical(bc.externalLogicalId);
+            synth->connect(metaNodeId, 0, extNodeId, bc.externalChannel);
+        }
+        else
+        {
+            // Connect meta module output to main output
+            auto outputNodeId = synth->getOutputNodeID();
+            synth->connect(metaNodeId, 0, outputNodeId, bc.externalChannel);
+        }
+    }
+    
+    graphNeedsRebuild = true;
+    synth->commitChanges();
+    
+    juce::Logger::writeToLog("[META] Reconnected external cables. Collapse complete!");
+}
+
 
 
 
@@ -33920,6 +35365,25 @@ db["random"] = ModulePinInfo(
         {}
     );
 
+    db["snapshot sequencer"] = ModulePinInfo(
+        { AudioPin("Clock In", 0, PinDataType::Gate), AudioPin("Reset In", 1, PinDataType::Gate) },
+        {}, // No audio outputs
+        {}
+    );
+
+    db["midi cv"] = ModulePinInfo(
+        {}, // No inputs - receives MIDI messages
+        {
+            AudioPin("Pitch", 0, PinDataType::CV),
+            AudioPin("Gate", 1, PinDataType::Gate),
+            AudioPin("Velocity", 2, PinDataType::CV),
+            AudioPin("Mod Wheel", 3, PinDataType::CV),
+            AudioPin("Pitch Bend", 4, PinDataType::CV),
+            AudioPin("Aftertouch", 5, PinDataType::CV)
+        },
+        {}
+    );
+
     db["Debug"] = ModulePinInfo(
         { AudioPin("In", 0, PinDataType::Audio) },
         {}, // No outputs
@@ -33935,6 +35399,498 @@ db["random"] = ModulePinInfo(
 }
 
 
+
+
+
+================================================================================
+FILE: juce\Source\preset_creator\PresetManager.h
+================================================================================
+
+
+#pragma once
+
+#include <juce_core/juce_core.h>
+#include <vector>
+
+/**
+ * PresetManager - Manages preset file scanning, caching, and loading
+ * * This class provides preset browsing functionality for the node editor.
+ * It scans directories for .xml preset files and provides search/filtering.
+ */
+class PresetManager
+{
+public:
+    struct PresetInfo
+    {
+        juce::String name;
+        juce::File file;
+        juce::String description;
+        juce::StringArray tags;
+        juce::Time lastModified;
+    };
+    
+    PresetManager() = default;
+    ~PresetManager() = default;
+    
+    /**
+     * Scan a directory for preset files (.xml)
+     * @param directory The directory to scan
+     * @param recursive Whether to scan subdirectories
+     */
+    void scanDirectory(const juce::File& directory, bool recursive = true)
+    {
+        if (!directory.exists() || !directory.isDirectory())
+            return;
+        
+        auto files = directory.findChildFiles(
+            recursive ? juce::File::findFiles : juce::File::findFilesAndDirectories,
+            recursive,
+            "*.xml"
+        );
+        
+        for (const auto& file : files)
+        {
+            if (file.existsAsFile())
+            {
+                PresetInfo info;
+                info.name = file.getFileNameWithoutExtension();
+                info.file = file;
+                info.lastModified = file.getLastModificationTime();
+                
+                // Try to extract description and tags from XML
+                if (auto xml = juce::parseXML(file))
+                {
+                    info.description = xml->getStringAttribute("description", "");
+                    info.tags = juce::StringArray::fromTokens(
+                        xml->getStringAttribute("tags", ""),
+                        ",",
+                        ""
+                    );
+                }
+                
+                presets.add(info);
+            }
+        }
+    }
+    
+    /**
+     * Search for presets matching a query
+     * @param query The search term (searches name, description, and tags)
+     * @return Vector of matching presets
+     */
+    std::vector<PresetInfo> searchPresets(const juce::String& query) const
+    {
+        std::vector<PresetInfo> results;
+        
+        juce::String lowerQuery = query.toLowerCase();
+        
+        for (const auto& preset : presets)
+        {
+            if (query.isEmpty() ||
+                preset.name.toLowerCase().contains(lowerQuery) ||
+                preset.description.toLowerCase().contains(lowerQuery) ||
+                containsTag(preset.tags, lowerQuery))
+            {
+                results.push_back(preset);
+            }
+        }
+        
+        return results;
+    }
+    
+    /**
+     * Load a preset file and return its XML
+     * @param file The preset file to load
+     * @return The XML element (caller must delete), or nullptr on failure
+     */
+    juce::XmlElement* loadPreset(const juce::File& file) const
+    {
+        if (!file.existsAsFile())
+            return nullptr;
+        
+        return juce::parseXML(file).release();
+    }
+    
+    /**
+     * Clear the preset cache
+     */
+    void clearCache()
+    {
+        presets.clear();
+    }
+    
+    /**
+     * Get the number of cached presets
+     */
+    int getNumPresets() const { return presets.size(); }
+    
+private:
+    bool containsTag(const juce::StringArray& tags, const juce::String& query) const
+    {
+        for (const auto& tag : tags)
+        {
+            if (tag.toLowerCase().contains(query))
+                return true;
+        }
+        return false;
+    }
+    
+    juce::Array<PresetInfo> presets;
+    
+    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(PresetManager)
+};
+
+================================================================================
+FILE: juce\Source\preset_creator\PresetManager.cpp
+================================================================================
+
+
+#include "PresetManager.h"
+
+PresetManager::PresetManager()
+{
+}
+
+void PresetManager::scanDirectory(const juce::File& directory)
+{
+    if (!directory.exists() || !directory.isDirectory())
+        return;
+    
+    // Find all .xml preset files
+    juce::Array<juce::File> presetFiles;
+    directory.findChildFiles(presetFiles, juce::File::findFiles, false, "*.xml");
+    
+    for (const auto& file : presetFiles)
+    {
+        PresetInfo info = extractMetadata(file);
+        m_presets.push_back(info);
+    }
+    
+    juce::Logger::writeToLog("[PresetManager] Scanned " + juce::String(m_presets.size()) + 
+                            " presets from: " + directory.getFullPathName());
+}
+
+std::vector<PresetManager::PresetInfo> PresetManager::searchPresets(const juce::String& searchTerm) const
+{
+    std::vector<PresetInfo> results;
+    
+    for (const auto& preset : m_presets)
+    {
+        if (preset.matchesSearch(searchTerm))
+            results.push_back(preset);
+    }
+    
+    return results;
+}
+
+std::vector<PresetManager::PresetInfo> PresetManager::getPresetsByTag(const juce::String& tag) const
+{
+    std::vector<PresetInfo> results;
+    
+    for (const auto& preset : m_presets)
+    {
+        if (preset.tags.contains(tag))
+            results.push_back(preset);
+    }
+    
+    return results;
+}
+
+juce::StringArray PresetManager::getAllTags() const
+{
+    juce::StringArray allTags;
+    
+    for (const auto& preset : m_presets)
+    {
+        for (const auto& tag : preset.tags)
+        {
+            if (!allTags.contains(tag))
+                allTags.add(tag);
+        }
+    }
+    
+    allTags.sort(true);
+    return allTags;
+}
+
+juce::XmlElement* PresetManager::loadPreset(const juce::File& file)
+{
+    if (!file.exists())
+        return nullptr;
+    
+    return juce::XmlDocument::parse(file).release();
+}
+
+bool PresetManager::savePreset(const juce::File& file, 
+                               const juce::XmlElement& presetData,
+                               const juce::String& description,
+                               const juce::StringArray& tags)
+{
+    // Create a copy of the preset data and add metadata
+    std::unique_ptr<juce::XmlElement> presetCopy(new juce::XmlElement(presetData));
+    
+    // Add metadata properties to the root element
+    if (description.isNotEmpty())
+        presetCopy->setAttribute("description", description);
+    
+    if (!tags.isEmpty())
+        presetCopy->setAttribute("tags", tags.joinIntoString(","));
+    
+    // Write to file
+    if (presetCopy->writeTo(file))
+    {
+        // Update cache
+        PresetInfo info = extractMetadata(file);
+        
+        // Remove old entry if exists
+        m_presets.erase(std::remove_if(m_presets.begin(), m_presets.end(),
+            [&file](const PresetInfo& p) { return p.file == file; }), m_presets.end());
+        
+        // Add new entry
+        m_presets.push_back(info);
+        
+        return true;
+    }
+    
+    return false;
+}
+
+PresetManager::PresetInfo PresetManager::extractMetadata(const juce::File& file)
+{
+    PresetInfo info;
+    info.file = file;
+    info.name = file.getFileNameWithoutExtension();
+    info.lastModified = file.getLastModificationTime();
+    
+    // Parse the XML to extract metadata
+    std::unique_ptr<juce::XmlElement> xml = juce::XmlDocument::parse(file);
+    
+    if (xml != nullptr)
+    {
+        // Extract description
+        info.description = xml->getStringAttribute("description", "");
+        
+        // Extract tags
+        juce::String tagsStr = xml->getStringAttribute("tags", "");
+        if (tagsStr.isNotEmpty())
+        {
+            info.tags.addTokens(tagsStr, ",", "");
+            info.tags.trim();
+        }
+    }
+    
+    return info;
+}
+
+
+
+================================================================================
+FILE: juce\Source\preset_creator\SampleManager.h
+================================================================================
+
+
+#pragma once
+
+#include <juce_core/juce_core.h>
+#include <juce_audio_formats/juce_audio_formats.h>
+#include <vector>
+
+/**
+ * SampleManager - Manages audio sample file scanning, caching, and metadata
+ * * This class provides sample browsing functionality for the node editor.
+ * It scans directories for audio files and extracts metadata (duration, sample rate, etc.)
+ */
+class SampleManager
+{
+public:
+    struct SampleInfo
+    {
+        juce::String name;
+        juce::File file;
+        double durationSeconds;
+        int sampleRate;
+        int numChannels;
+        juce::int64 fileSizeBytes;
+        juce::Time lastModified;
+    };
+    
+    SampleManager()
+    {
+        formatManager.registerBasicFormats();
+    }
+    
+    ~SampleManager() = default;
+    
+    /**
+     * Scan a directory for audio sample files
+     * @param directory The directory to scan
+     * @param recursive Whether to scan subdirectories
+     */
+    void scanDirectory(const juce::File& directory, bool recursive = true)
+    {
+        if (!directory.exists() || !directory.isDirectory())
+            return;
+        
+        // Supported audio formats
+        juce::String wildcards = "*.wav;*.aif;*.aiff;*.flac;*.ogg;*.mp3";
+        
+        auto files = directory.findChildFiles(
+            juce::File::findFiles,
+            recursive,
+            wildcards
+        );
+        
+        for (const auto& file : files)
+        {
+            if (file.existsAsFile())
+            {
+                SampleInfo info;
+                info.name = file.getFileNameWithoutExtension();
+                info.file = file;
+                info.fileSizeBytes = file.getSize();
+                info.lastModified = file.getLastModificationTime();
+                
+                // Try to read audio file metadata
+                std::unique_ptr<juce::AudioFormatReader> reader(
+                    formatManager.createReaderFor(file)
+                );
+                
+                if (reader)
+                {
+                    info.durationSeconds = reader->lengthInSamples / reader->sampleRate;
+                    info.sampleRate = (int)reader->sampleRate;
+                    info.numChannels = (int)reader->numChannels;
+                }
+                else
+                {
+                    // Couldn't read file - use defaults
+                    info.durationSeconds = 0.0;
+                    info.sampleRate = 0;
+                    info.numChannels = 0;
+                }
+                
+                samples.add(info);
+            }
+        }
+    }
+    
+    /**
+     * Search for samples matching a query
+     * @param query The search term (searches name only)
+     * @return Vector of matching samples
+     */
+    std::vector<SampleInfo> searchSamples(const juce::String& query) const
+    {
+        std::vector<SampleInfo> results;
+        
+        juce::String lowerQuery = query.toLowerCase();
+        
+        for (const auto& sample : samples)
+        {
+            if (query.isEmpty() ||
+                sample.name.toLowerCase().contains(lowerQuery))
+            {
+                results.push_back(sample);
+            }
+        }
+        
+        return results;
+    }
+    
+    /**
+     * Clear the sample cache
+     */
+    void clearCache()
+    {
+        samples.clear();
+    }
+    
+    /**
+     * Get the number of cached samples
+     */
+    int getNumSamples() const { return samples.size(); }
+    
+private:
+    juce::AudioFormatManager formatManager;
+    juce::Array<SampleInfo> samples;
+    
+    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(SampleManager)
+};
+
+================================================================================
+FILE: juce\Source\preset_creator\SampleManager.cpp
+================================================================================
+
+
+#include "SampleManager.h"
+
+SampleManager::SampleManager()
+{
+    // Register common audio formats
+    m_formatManager.registerBasicFormats();
+}
+
+void SampleManager::scanDirectory(const juce::File& directory, bool recursive)
+{
+    if (!directory.exists() || !directory.isDirectory())
+        return;
+    
+    // Supported audio file extensions
+    juce::String wildcardPattern = "*.wav;*.mp3;*.aif;*.aiff;*.flac;*.ogg";
+    
+    // Find all audio files
+    juce::Array<juce::File> audioFiles;
+    directory.findChildFiles(audioFiles, 
+                             juce::File::findFiles, 
+                             recursive, 
+                             wildcardPattern);
+    
+    for (const auto& file : audioFiles)
+    {
+        SampleInfo info = extractMetadata(file);
+        if (info.sampleRate > 0) // Valid audio file
+            m_samples.push_back(info);
+    }
+    
+    juce::Logger::writeToLog("[SampleManager] Scanned " + juce::String(m_samples.size()) + 
+                            " samples from: " + directory.getFullPathName());
+}
+
+std::vector<SampleManager::SampleInfo> SampleManager::searchSamples(const juce::String& searchTerm) const
+{
+    std::vector<SampleInfo> results;
+    
+    for (const auto& sample : m_samples)
+    {
+        if (sample.matchesSearch(searchTerm))
+            results.push_back(sample);
+    }
+    
+    return results;
+}
+
+SampleManager::SampleInfo SampleManager::extractMetadata(const juce::File& file)
+{
+    SampleInfo info;
+    info.file = file;
+    info.name = file.getFileNameWithoutExtension();
+    info.lastModified = file.getLastModificationTime();
+    
+    // Try to read audio file metadata
+    std::unique_ptr<juce::AudioFormatReader> reader(m_formatManager.createReaderFor(file));
+    
+    if (reader != nullptr)
+    {
+        info.sampleRate = static_cast<int>(reader->sampleRate);
+        info.numChannels = static_cast<int>(reader->numChannels);
+        info.lengthInSamples = reader->lengthInSamples;
+        
+        if (info.sampleRate > 0)
+            info.durationSeconds = info.lengthInSamples / static_cast<double>(info.sampleRate);
+    }
+    
+    return info;
+}
 
 
 
@@ -34759,6 +36715,16 @@ target_sources(ColliderApp PRIVATE
     Source/audio/modules/VstHostModuleProcessor.cpp
     Source/audio/modules/ShapingOscillatorModuleProcessor.h
     Source/audio/modules/ShapingOscillatorModuleProcessor.cpp
+    Source/audio/modules/InletModuleProcessor.h
+    Source/audio/modules/InletModuleProcessor.cpp
+    Source/audio/modules/OutletModuleProcessor.h
+    Source/audio/modules/OutletModuleProcessor.cpp
+    Source/audio/modules/MetaModuleProcessor.h
+    Source/audio/modules/MetaModuleProcessor.cpp
+    Source/audio/modules/SnapshotSequencerModuleProcessor.h
+    Source/audio/modules/SnapshotSequencerModuleProcessor.cpp
+    Source/audio/modules/MIDICVModuleProcessor.h
+    Source/audio/modules/MIDICVModuleProcessor.cpp
     Source/ipc/IpcServer.cpp
     Source/ipc/IpcServer.h
     Source/ipc/OscClient.h
@@ -34957,6 +36923,16 @@ target_sources(PresetCreatorApp PRIVATE
     Source/audio/modules/GateModuleProcessor.cpp
     Source/audio/modules/DriveModuleProcessor.h
     Source/audio/modules/DriveModuleProcessor.cpp
+    Source/audio/modules/InletModuleProcessor.h
+    Source/audio/modules/InletModuleProcessor.cpp
+    Source/audio/modules/OutletModuleProcessor.h
+    Source/audio/modules/OutletModuleProcessor.cpp
+    Source/audio/modules/MetaModuleProcessor.h
+    Source/audio/modules/MetaModuleProcessor.cpp
+    Source/audio/modules/SnapshotSequencerModuleProcessor.h
+    Source/audio/modules/SnapshotSequencerModuleProcessor.cpp
+    Source/audio/modules/MIDICVModuleProcessor.h
+    Source/audio/modules/MIDICVModuleProcessor.cpp
 )
 
 # This target now needs to know where to find all the headers
