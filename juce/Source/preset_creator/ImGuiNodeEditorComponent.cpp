@@ -1572,14 +1572,17 @@ if (auto* mp = synth->getModuleForLogical (lid))
 
             // IO per module type via helpers
             NodePinHelpers helpers;
-                auto rightLabelWithinWidth = [&](const char* txt)
-                {
-                    const float startX = ImGui::GetCursorPosX();
-                    const ImVec2 ts = ImGui::CalcTextSize(txt);
-                    float x = startX + juce::jmax (0.0f, nodeContentWidth - ts.x - 8.0f);
-                    ImGui::SetCursorPosX(x);
-                    ImGui::TextUnformatted(txt);
-                };
+            
+            // Helper to draw right-aligned text within a node's content width
+            auto rightLabelWithinWidth = [&](const char* txt, float nodeContentWidth)
+            {
+                const float startX = ImGui::GetCursorPosX();
+                const ImVec2 ts = ImGui::CalcTextSize(txt);
+                // Calculate the new X position to right-align the text, with 8px of padding.
+                float x = startX + juce::jmax(0.0f, nodeContentWidth - ts.x - 8.0f);
+                ImGui::SetCursorPosX(x);
+                ImGui::TextUnformatted(txt);
+            };
             helpers.drawAudioInputPin = [&](const char* label, int channel)
             {
                 // +++ ADD THIS BLOCK FOR ONE-TIME DIAGNOSTIC LOGGING +++
@@ -1647,18 +1650,23 @@ if (auto* mp = synth->getModuleForLogical (lid))
             };
             helpers.drawAudioOutputPin = [&](const char* label, int channel)
             {
-                int attr = encodePinId({lid, channel, false});
+                const int attr = encodePinId({(juce::uint32)lid, channel, false});
                 seenAttrs.insert(attr);
                 availableAttrs.insert(attr);
 
-                PinID pinId = { lid, channel, false, false, "" };
+                PinID pinId = {(juce::uint32)lid, channel, false, false, ""};
                 PinDataType pinType = this->getPinDataTypeForPin(pinId);
                 unsigned int pinColor = this->getImU32ForType(pinType);
                 bool isConnected = connectedOutputAttrs.count(attr) > 0;
 
-                // CORRECTED LOGIC: Use colPinConnected for any connected output pin.
                 ImNodes::PushColorStyle(ImNodesCol_Pin, isConnected ? colPinConnected : pinColor);
-                ImNodes::BeginOutputAttribute(attr); rightLabelWithinWidth(label); ImNodes::EndOutputAttribute();
+                
+                // --- THIS IS THE FIX ---
+                // Let ImNodes position the pin, then we draw the right-aligned text inside it.
+                ImNodes::BeginOutputAttribute(attr);
+                rightLabelWithinWidth(label, nodeContentWidth); // Use the new helper
+                ImNodes::EndOutputAttribute();
+                // --- END OF FIX ---
 
                 // +++ CACHE THE PIN'S TRUE CIRCLE POSITION +++
                 const float PIN_CIRCLE_OFFSET = 8.0f;
@@ -1754,36 +1762,31 @@ if (auto* mp = synth->getModuleForLogical (lid))
                     }
                 }
 
+                // --- THIS IS THE FIX ---
                 // Draw Output Pin (Right Side) - only if outLabel is provided
                 if (outLabel != nullptr)
                 {
+                    // Remove the ImGui::SameLine call and let the attribute handle positioning.
                     int attr = encodePinId({lid, outChannel, false});
                     seenAttrs.insert(attr);
                     availableAttrs.insert(attr);
-
-                    PinID pinId = { lid, outChannel, false, false, "" };
+                    PinID pinId = {lid, outChannel, false, false, ""};
                     PinDataType pinType = this->getPinDataTypeForPin(pinId);
                     unsigned int pinColor = this->getImU32ForType(pinType);
                     bool isConnected = connectedOutputAttrs.count(attr) > 0;
-
-                    // --- THIS IS THE FIX ---
-                    // Remove the ImGui::SameLine call and let the attribute handle positioning.
+                    
                     ImNodes::PushColorStyle(ImNodesCol_Pin, isConnected ? colPinConnected : pinColor);
                     ImNodes::BeginOutputAttribute(attr);
-                    rightLabelWithinWidth(outLabel); // Use the helper for consistent right-alignment
+                    rightLabelWithinWidth(outLabel, nodeContentWidth); // Use the new helper
                     ImNodes::EndOutputAttribute();
-                    // --- END OF FIX ---
-
-                    // +++ CACHE THE PIN'S TRUE CIRCLE POSITION +++
-                    const auto& style = ImNodes::GetStyle();
+                    
+                    const float PIN_CIRCLE_OFFSET = 8.0f;
                     ImVec2 pinMin = ImGui::GetItemRectMin();
                     ImVec2 pinMax = ImGui::GetItemRectMax();
                     float y_center = pinMin.y + (pinMax.y - pinMin.y) * 0.5f;
-                    // For output pins, the circle is to the right of the label.
-                    float x_pos = pinMax.x + style.PinOffset;
+                    float x_pos = pinMax.x + PIN_CIRCLE_OFFSET;
                     attrPositions[attr] = ImVec2(x_pos, y_center);
-                    // +++ END OF FIX +++
-
+                    
                     ImNodes::PopColorStyle();
 
                     if (ImGui::IsItemHovered())
@@ -1803,6 +1806,7 @@ if (auto* mp = synth->getModuleForLogical (lid))
                         ImGui::EndTooltip();
                     }
                 }
+                // --- END OF FIX ---
                 
                 // --- THE FIX ---
                 // Add a dummy item to advance the cursor to the next line.
