@@ -180,6 +180,10 @@ public:
     SampleManager m_sampleManager;
     juce::String m_presetSearchTerm;
     juce::String m_sampleSearchTerm;
+    juce::File m_presetScanPath;
+    juce::File m_sampleScanPath;
+    std::unique_ptr<juce::FileChooser> presetPathChooser;
+    std::unique_ptr<juce::FileChooser> samplePathChooser;
     
     // Meta module editing state
     juce::uint32 metaModuleToEditLid = 0;
@@ -323,6 +327,9 @@ public:
     
     // --- Recorder Output Shortcut ---
     void handleRecordOutput();
+    
+    // --- Unified Preset Loading ---
+    void loadPresetFromFile(const juce::File& file);
     
     // --- Meta Module (Sub-Patching) Support ---
     void handleCollapseToMetaModule();

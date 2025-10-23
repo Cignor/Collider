@@ -155,6 +155,27 @@ ImGuiNodeEditorComponent::ImGuiNodeEditorComponent(juce::AudioDeviceManager& dm)
     glContext.setComponentPaintingEnabled (false);
     glContext.attachTo (*this);
     setWantsKeyboardFocus (true);
+    
+    // Initialize browser paths (load from saved settings or use defaults)
+    if (auto* props = PresetCreatorApplication::getApp().getProperties())
+    {
+        // Load the last used paths, providing defaults if they don't exist
+        auto appFile = juce::File::getSpecialLocation(juce::File::currentApplicationFile);
+        juce::File defaultPresetPath = appFile.getParentDirectory().getChildFile("Presets");
+        juce::File defaultSamplePath = appFile.getParentDirectory().getChildFile("Samples");
+
+        m_presetScanPath = juce::File(props->getValue("presetScanPath", defaultPresetPath.getFullPathName()));
+        m_sampleScanPath = juce::File(props->getValue("sampleScanPath", defaultSamplePath.getFullPathName()));
+    }
+    
+    // Create these directories if they don't already exist
+    if (!m_presetScanPath.exists())
+        m_presetScanPath.createDirectory();
+    if (!m_sampleScanPath.exists())
+        m_sampleScanPath.createDirectory();
+    
+    juce::Logger::writeToLog("[UI] Preset path set to: " + m_presetScanPath.getFullPathName());
+    juce::Logger::writeToLog("[UI] Sample path set to: " + m_sampleScanPath.getFullPathName());
 }
 
 ImGuiNodeEditorComponent::~ImGuiNodeEditorComponent()
@@ -813,107 +834,248 @@ void ImGuiNodeEditorComponent::renderImGui()
     // Create a scrolling child window to contain the entire browser
     ImGui::BeginChild("BrowserScrollRegion", ImVec2(0, 0), true);
     
-    // === PRESET BROWSER ===
-    if (ImGui::CollapsingHeader("Presets"))
+    // Helper lambda to recursively draw the directory tree for presets
+    std::function<void(const PresetManager::DirectoryNode*)> drawPresetTree = 
+        [&](const PresetManager::DirectoryNode* node)
     {
-        // Search box
-        char searchBuf[256] = {};
-        strncpy(searchBuf, m_presetSearchTerm.toRawUTF8(), sizeof(searchBuf) - 1);
-        if (ImGui::InputText("##presetsearch", searchBuf, sizeof(searchBuf)))
-            m_presetSearchTerm = juce::String(searchBuf);
-        
-        ImGui::SameLine();
-        if (ImGui::Button("Scan##presets"))
+        if (!node || (node->presets.empty() && node->subdirectories.empty())) return;
+
+        // Draw subdirectories first
+        for (const auto& subdir : node->subdirectories)
         {
-            // Scan the default preset directory
-            juce::File presetDir = juce::File::getSpecialLocation(juce::File::userDocumentsDirectory)
-                                   .getChildFile("PresetCreator")
-                                   .getChildFile("Presets");
-            if (!presetDir.exists())
-                presetDir.createDirectory(); // Create the directory if it doesn't exist
-            
-            m_presetManager.clearCache();
-            m_presetManager.scanDirectory(presetDir);
+            if (ImGui::TreeNode(subdir->name.toRawUTF8()))
+            {
+                drawPresetTree(subdir.get());
+                ImGui::TreePop();
+            }
         }
         
-        // Display filtered presets
-        auto presets = m_presetManager.searchPresets(m_presetSearchTerm);
-        for (const auto& preset : presets)
+        // Then draw presets in this directory
+        for (const auto& preset : node->presets)
         {
-            if (ImGui::Selectable(preset.name.toRawUTF8()))
+            if (m_presetSearchTerm.isEmpty() || preset.name.containsIgnoreCase(m_presetSearchTerm))
             {
-                // Load this preset
-                if (auto* xml = m_presetManager.loadPreset(preset.file))
+                if (ImGui::Selectable(preset.name.toRawUTF8()))
                 {
-                    juce::MemoryBlock block;
-                    juce::MemoryOutputStream stream(block, false);
-                    xml->writeTo(stream);
-                    
-                    if (synth)
-                        synth->setStateInformation(block.getData(), static_cast<int>(block.getSize()));
-                    
-                    delete xml;
+                    loadPresetFromFile(preset.file);
+                }
+                
+                if (ImGui::IsItemHovered() && preset.description.isNotEmpty())
+                {
+                    ImGui::BeginTooltip();
+                    ImGui::TextUnformatted(preset.description.toRawUTF8());
+                    if (!preset.tags.isEmpty())
+                        ImGui::Text("Tags: %s", preset.tags.joinIntoString(", ").toRawUTF8());
+                    ImGui::EndTooltip();
                 }
             }
-            
-            if (ImGui::IsItemHovered() && preset.description.isNotEmpty())
-            {
-                ImGui::BeginTooltip();
-                ImGui::TextUnformatted(preset.description.toRawUTF8());
-                if (!preset.tags.isEmpty())
-                    ImGui::Text("Tags: %s", preset.tags.joinIntoString(", ").toRawUTF8());
-                ImGui::EndTooltip();
-            }
         }
+    };
+
+    // Helper to push category colors (used for all module category headers)
+    auto pushCategoryColor = [&](ModuleCategory cat) {
+        ImU32 color = getImU32ForCategory(cat);
+        ImVec4 c = ImGui::ColorConvertU32ToFloat4(color);
+        ImGui::PushStyleColor(ImGuiCol_Header, color);
+        ImGui::PushStyleColor(ImGuiCol_HeaderHovered, ImGui::ColorConvertFloat4ToU32(ImVec4(c.x*1.2f, c.y*1.2f, c.z*1.2f, 1.0f)));
+        ImGui::PushStyleColor(ImGuiCol_HeaderActive, ImGui::ColorConvertFloat4ToU32(ImVec4(c.x*1.4f, c.y*1.4f, c.z*1.4f, 1.0f)));
+    };
+
+    // === PRESET BROWSER ===
+    ImGui::PushStyleColor(ImGuiCol_Header, IM_COL32(218, 165, 32, 255)); // Gold
+    ImGui::PushStyleColor(ImGuiCol_HeaderHovered, IM_COL32(238, 185, 52, 255));
+    ImGui::PushStyleColor(ImGuiCol_HeaderActive, IM_COL32(255, 205, 72, 255));
+    bool presetsExpanded = ImGui::CollapsingHeader("Presets");
+    ImGui::PopStyleColor(3);
+    
+    if (presetsExpanded)
+    {
+        // 1. Path Display (read-only)
+        char pathBuf[1024];
+        strncpy(pathBuf, m_presetScanPath.getFullPathName().toRawUTF8(), sizeof(pathBuf) - 1);
+        ImGui::InputText("##presetpath", pathBuf, sizeof(pathBuf), ImGuiInputTextFlags_ReadOnly);
+
+        // 2. "Change Path" Button
+        if (ImGui::Button("Change Path##preset"))
+        {
+            presetPathChooser = std::make_unique<juce::FileChooser>("Select Preset Directory", m_presetScanPath);
+            presetPathChooser->launchAsync(juce::FileBrowserComponent::openMode | juce::FileBrowserComponent::canSelectDirectories,
+                [this](const juce::FileChooser& fc)
+                {
+                    auto dir = fc.getResult();
+                    if (dir.isDirectory())
+                    {
+                        m_presetScanPath = dir;
+                        // Save the new path to the properties file
+                        if (auto* props = PresetCreatorApplication::getApp().getProperties())
+                        {
+                            props->setValue("presetScanPath", m_presetScanPath.getFullPathName());
+                        }
+                    }
+                });
+        }
+        ImGui::SameLine();
+
+        // 3. "Scan" Button
+        if (ImGui::Button("Scan##preset"))
+        {
+            m_presetManager.clearCache();
+            m_presetManager.scanDirectory(m_presetScanPath);
+        }
+
+        // 4. Search bar for filtering results
+        char searchBuf[256] = {};
+        strncpy(searchBuf, m_presetSearchTerm.toRawUTF8(), sizeof(searchBuf) - 1);
+        if (ImGui::InputText("Search", searchBuf, sizeof(searchBuf)))
+            m_presetSearchTerm = juce::String(searchBuf);
+
+        ImGui::Separator();
+
+        // 5. Display hierarchical preset tree
+        drawPresetTree(m_presetManager.getRootNode());
     }
     
-    // === SAMPLE BROWSER ===
-    if (ImGui::CollapsingHeader("Samples"))
+    // Helper lambda to recursively draw the directory tree for samples
+    std::function<void(const SampleManager::DirectoryNode*)> drawSampleTree = 
+        [&](const SampleManager::DirectoryNode* node)
     {
-        // Search box
+        if (!node || (node->samples.empty() && node->subdirectories.empty())) return;
+
+        // Draw subdirectories first
+        for (const auto& subdir : node->subdirectories)
+        {
+            if (ImGui::TreeNode(subdir->name.toRawUTF8()))
+            {
+                drawSampleTree(subdir.get());
+                ImGui::TreePop();
+            }
+        }
+        
+        // Then draw samples in this directory with drag-and-drop support
+        for (const auto& sample : node->samples)
+        {
+            if (m_sampleSearchTerm.isEmpty() || sample.name.containsIgnoreCase(m_sampleSearchTerm))
+            {
+                // Draw the selectable item
+                ImGui::Selectable(sample.name.toRawUTF8());
+
+                // --- THIS IS THE FIX: Click vs. Drag Logic ---
+
+                // A. Check if the item is being dragged FIRST
+                if (ImGui::BeginDragDropSource(ImGuiDragDropFlags_None))
+                {
+                    // Set the payload to be the file path of the sample.
+                    // This is the "data" that gets transferred.
+                    const juce::String path = sample.file.getFullPathName();
+                    const std::string pathStr = path.toStdString();
+                    ImGui::SetDragDropPayload("DND_SAMPLE_PATH", pathStr.c_str(), pathStr.length() + 1);
+                    
+                    // Provide visual feedback while dragging.
+                    ImGui::Text("Dragging: %s", sample.name.toRawUTF8());
+                    ImGui::SetMouseCursor(ImGuiMouseCursor_Hand); // Change the cursor
+                    
+                    ImGui::EndDragDropSource();
+                }
+                // B. If not dragging, check if the item was just clicked
+                else if (ImGui::IsItemClicked())
+                {
+                    if (synth != nullptr)
+                    {
+                        // 1. Create the new module
+                        auto newNodeId = synth->addModule("sample loader");
+                        auto newLogicalId = synth->getLogicalIdForNode(newNodeId);
+                        
+                        // 2. Position it at the mouse cursor
+                        pendingNodeScreenPositions[(int)newLogicalId] = ImGui::GetMousePos();
+                        
+                        // 3. Get the processor and load the sample into it
+                        if (auto* sampleLoader = dynamic_cast<SampleLoaderModuleProcessor*>(synth->getModuleForLogical(newLogicalId)))
+                        {
+                            sampleLoader->loadSample(sample.file);
+                        }
+                        
+                        snapshotAfterEditor = true; // Create an undo state
+                    }
+                }
+                
+                // --- END OF FIX ---
+
+                // Tooltip for sample info (only shown when hovering, not dragging)
+                if (ImGui::IsItemHovered())
+                {
+                    ImGui::BeginTooltip();
+                    ImGui::Text("Duration: %.2f s", sample.durationSeconds);
+                    ImGui::Text("Rate: %d Hz", sample.sampleRate);
+                    ImGui::EndTooltip();
+                }
+            }
+        }
+    };
+
+    // === SAMPLE BROWSER ===
+    ImGui::PushStyleColor(ImGuiCol_Header, IM_COL32(0, 180, 180, 255)); // Cyan
+    ImGui::PushStyleColor(ImGuiCol_HeaderHovered, IM_COL32(20, 200, 200, 255));
+    ImGui::PushStyleColor(ImGuiCol_HeaderActive, IM_COL32(40, 220, 220, 255));
+    bool samplesExpanded = ImGui::CollapsingHeader("Samples");
+    ImGui::PopStyleColor(3);
+    
+    if (samplesExpanded)
+    {
+        // 1. Path Display (read-only)
+        char pathBuf[1024];
+        strncpy(pathBuf, m_sampleScanPath.getFullPathName().toRawUTF8(), sizeof(pathBuf) - 1);
+        ImGui::InputText("##samplepath", pathBuf, sizeof(pathBuf), ImGuiInputTextFlags_ReadOnly);
+
+        // 2. "Change Path" Button
+        if (ImGui::Button("Change Path##sample"))
+        {
+            samplePathChooser = std::make_unique<juce::FileChooser>("Select Sample Directory", m_sampleScanPath);
+            samplePathChooser->launchAsync(juce::FileBrowserComponent::openMode | juce::FileBrowserComponent::canSelectDirectories,
+                [this](const juce::FileChooser& fc)
+                {
+                    auto dir = fc.getResult();
+                    if (dir.isDirectory())
+                    {
+                        m_sampleScanPath = dir;
+                        // Save the new path to the properties file
+                        if (auto* props = PresetCreatorApplication::getApp().getProperties())
+                        {
+                            props->setValue("sampleScanPath", m_sampleScanPath.getFullPathName());
+                        }
+                    }
+                });
+        }
+        ImGui::SameLine();
+
+        // 3. "Scan" Button
+        if (ImGui::Button("Scan##sample"))
+        {
+            m_sampleManager.clearCache();
+            m_sampleManager.scanDirectory(m_sampleScanPath);
+        }
+
+        // 4. Search bar for filtering results
         char searchBuf[256] = {};
         strncpy(searchBuf, m_sampleSearchTerm.toRawUTF8(), sizeof(searchBuf) - 1);
-        if (ImGui::InputText("##samplesearch", searchBuf, sizeof(searchBuf)))
+        if (ImGui::InputText("Search", searchBuf, sizeof(searchBuf)))
             m_sampleSearchTerm = juce::String(searchBuf);
-        
-        ImGui::SameLine();
-        if (ImGui::Button("Scan##samples"))
-        {
-            // Scan the default sample directory
-            juce::File sampleDir = juce::File::getSpecialLocation(juce::File::userMusicDirectory)
-                                   .getChildFile("Samples");
-            if (!sampleDir.exists())
-                sampleDir.createDirectory(); // Create the directory if it doesn't exist
 
-            m_sampleManager.clearCache();
-            m_sampleManager.scanDirectory(sampleDir, true); // Scan recursively
-        }
-        
-        // Display filtered samples
-        auto samples = m_sampleManager.searchSamples(m_sampleSearchTerm);
-        for (const auto& sample : samples)
-        {
-            if (ImGui::Selectable(sample.name.toRawUTF8()))
-            {
-                // TODO: Could auto-create a Sample Loader module with this sample
-                juce::Logger::writeToLog("Selected sample: " + sample.file.getFullPathName());
-            }
-            
-            if (ImGui::IsItemHovered())
-            {
-                ImGui::BeginTooltip();
-                ImGui::Text("Duration: %.2f s", sample.durationSeconds);
-                ImGui::Text("Sample Rate: %d Hz", sample.sampleRate);
-                ImGui::Text("Channels: %d", sample.numChannels);
-                ImGui::EndTooltip();
-            }
-        }
+        ImGui::Separator();
+
+        // 5. Display hierarchical sample tree
+        drawSampleTree(m_sampleManager.getRootNode());
     }
     
     ImGui::Separator();
     
     // === MODULE BROWSER ===
-    if (ImGui::CollapsingHeader("Modules", ImGuiTreeNodeFlags_DefaultOpen))
+    ImGui::PushStyleColor(ImGuiCol_Header, IM_COL32(80, 80, 80, 255)); // Neutral Grey
+    ImGui::PushStyleColor(ImGuiCol_HeaderHovered, IM_COL32(100, 100, 100, 255));
+    ImGui::PushStyleColor(ImGuiCol_HeaderActive, IM_COL32(120, 120, 120, 255));
+    bool modulesExpanded = ImGui::CollapsingHeader("Modules", ImGuiTreeNodeFlags_DefaultOpen);
+    ImGui::PopStyleColor(3);
+    
+    if (modulesExpanded)
     {
     
     auto addModuleButton = [this](const char* label, const char* type)
@@ -958,7 +1120,11 @@ void ImGuiNodeEditorComponent::renderImGui()
             ImGui::EndTooltip();
         }
     };
-    if (ImGui::CollapsingHeader("Sources", ImGuiTreeNodeFlags_DefaultOpen)) {
+    
+    pushCategoryColor(ModuleCategory::Source);
+    bool sourcesExpanded = ImGui::CollapsingHeader("Sources", ImGuiTreeNodeFlags_DefaultOpen);
+    ImGui::PopStyleColor(3);
+    if (sourcesExpanded) {
     addModuleButton("Audio Input", "audio input");
     addModuleButton("VCO", "VCO");
     addModuleButton("Polyphonic VCO", "polyvco");
@@ -970,12 +1136,20 @@ void ImGuiNodeEditorComponent::renderImGui()
         addModuleButton("Value", "Value");
         addModuleButton("Sample Loader", "sample loader");
     }
-    if (ImGui::CollapsingHeader("TTS Family", ImGuiTreeNodeFlags_DefaultOpen)) {
+    
+    pushCategoryColor(ModuleCategory::Source);
+    bool ttsFamilyExpanded = ImGui::CollapsingHeader("TTS Family", ImGuiTreeNodeFlags_DefaultOpen);
+    ImGui::PopStyleColor(3);
+    if (ttsFamilyExpanded) {
 
         addModuleButton("TTS Performer", "TTS Performer");
         addModuleButton("Vocal Tract Filter", "Vocal Tract Filter");
     }
-    if (ImGui::CollapsingHeader("Effects", ImGuiTreeNodeFlags_DefaultOpen)) {
+    
+    pushCategoryColor(ModuleCategory::Effect);
+    bool effectsExpanded = ImGui::CollapsingHeader("Effects", ImGuiTreeNodeFlags_DefaultOpen);
+    ImGui::PopStyleColor(3);
+    if (effectsExpanded) {
         addModuleButton("VCF", "VCF");
         // addModuleButton("Vocal Tract Filter", "Vocal Tract Filter");
         addModuleButton("Delay", "Delay");
@@ -994,7 +1168,11 @@ void ImGuiNodeEditorComponent::renderImGui()
         addModuleButton("Granulator", "granulator");
         addModuleButton("Harmonic Shaper", "harmonic shaper");
     }
-    if (ImGui::CollapsingHeader("Modulators", ImGuiTreeNodeFlags_DefaultOpen)) {
+    
+    pushCategoryColor(ModuleCategory::Modulator);
+    bool modulatorsExpanded = ImGui::CollapsingHeader("Modulators", ImGuiTreeNodeFlags_DefaultOpen);
+    ImGui::PopStyleColor(3);
+    if (modulatorsExpanded) {
         addModuleButton("LFO", "LFO");
         addModuleButton("ADSR", "ADSR");
         addModuleButton("Random", "Random");
@@ -1003,7 +1181,11 @@ void ImGuiNodeEditorComponent::renderImGui()
         addModuleButton("Shaping Oscillator", "shaping oscillator");
 
     }
-    if (ImGui::CollapsingHeader("Utilities & Logic", ImGuiTreeNodeFlags_DefaultOpen)) {
+    
+    pushCategoryColor(ModuleCategory::Utility);
+    bool utilitiesExpanded = ImGui::CollapsingHeader("Utilities & Logic", ImGuiTreeNodeFlags_DefaultOpen);
+    ImGui::PopStyleColor(3);
+    if (utilitiesExpanded) {
         addModuleButton("VCA", "VCA");
         addModuleButton("Mixer", "Mixer");
         addModuleButton("CV Mixer", "cv mixer");
@@ -1022,7 +1204,11 @@ void ImGuiNodeEditorComponent::renderImGui()
         addModuleButton("Snapshot Sequencer", "snapshot sequencer");
         addModuleButton("Best Practice", "best practice");
     }
-    if (ImGui::CollapsingHeader("Analysis", ImGuiTreeNodeFlags_DefaultOpen)) {
+    
+    pushCategoryColor(ModuleCategory::Analysis);
+    bool analysisExpanded = ImGui::CollapsingHeader("Analysis", ImGuiTreeNodeFlags_DefaultOpen);
+    ImGui::PopStyleColor(3);
+    if (analysisExpanded) {
         addModuleButton("Scope", "Scope");
         addModuleButton("Debug", "debug");
         addModuleButton("Input Debug", "input debug");
@@ -1032,7 +1218,10 @@ void ImGuiNodeEditorComponent::renderImGui()
     } // End of Modules collapsing header
     
     // VST Plugins section
-    if (ImGui::CollapsingHeader("Plugins", ImGuiTreeNodeFlags_DefaultOpen)) {
+    pushCategoryColor(ModuleCategory::Plugin);
+    bool pluginsExpanded = ImGui::CollapsingHeader("Plugins", ImGuiTreeNodeFlags_DefaultOpen);
+    ImGui::PopStyleColor(3);
+    if (pluginsExpanded) {
         addPluginModules();
     }
 
@@ -4112,29 +4301,10 @@ void ImGuiNodeEditorComponent::startLoadDialog()
         [this] (const juce::FileChooser& fc)
     {
         auto f = fc.getResult();
-        if (! f.existsAsFile()) return;
-        juce::MemoryBlock mb; f.loadFileAsData (mb);
-        if (synth != nullptr)
-            synth->setStateInformation (mb.getData(), (int) mb.getSize());
-            juce::ValueTree ui;
-            if (auto xml = juce::XmlDocument::parse (mb.toString()))
-            {
-                auto vt = juce::ValueTree::fromXml (*xml);
-                ui = vt.getChildWithName ("NodeEditorUI");
-                if (ui.isValid())
-                    applyUiValueTree (ui);
+        if (f.existsAsFile())
+        {
+            loadPresetFromFile(f); // Use the unified loading function
         }
-        
-        // Post-state snapshot: capture loaded synth + the UI positions from file
-        Snapshot s;
-        if (synth != nullptr) synth->getStateInformation (s.synthState);
-        s.uiState = ui.isValid() ? ui : getUiValueTree();
-        undoStack.push_back (std::move (s));
-        redoStack.clear();
-        
-        // Update preset status tracking
-        isPatchDirty = false;
-        currentPresetFile = f.getFileName();
     });
 }
 
@@ -5913,39 +6083,57 @@ void ImGuiNodeEditorComponent::handleColorCodedChaining(PinDataType targetType)
 // Module Category Color Coding
 ImGuiNodeEditorComponent::ModuleCategory ImGuiNodeEditorComponent::getModuleCategory(const juce::String& moduleType)
 {
-    if (moduleType.containsIgnoreCase("vco") || moduleType.containsIgnoreCase("noise") || 
-        moduleType.containsIgnoreCase("sequencer") || moduleType.containsIgnoreCase("sample") || 
-        moduleType.containsIgnoreCase("midi") || moduleType.containsIgnoreCase("input") ||
-        moduleType.containsIgnoreCase("polyvco")) 
+    juce::String lower = moduleType.toLowerCase();
+    
+    // --- Sources (Green) ---
+    // Check specific matches first to avoid substring conflicts
+    if (lower == "shaping oscillator")  // Prevent "shaper" from matching Effect category
+        return ModuleCategory::Source;
+    if (lower == "tts performer")  // Explicit TTS categorization
         return ModuleCategory::Source;
     
-    if (moduleType.containsIgnoreCase("vcf") || moduleType.containsIgnoreCase("delay") || 
-        moduleType.containsIgnoreCase("reverb") || moduleType.containsIgnoreCase("chorus") || 
-        moduleType.containsIgnoreCase("phaser") || moduleType.containsIgnoreCase("compressor") || 
-        moduleType.containsIgnoreCase("drive") || moduleType.containsIgnoreCase("shaper") || 
-        moduleType.containsIgnoreCase("filter") || moduleType.containsIgnoreCase("waveshaper") ||
-        moduleType.containsIgnoreCase("limiter") || moduleType.containsIgnoreCase("gate") ||
-        moduleType.containsIgnoreCase("granulator") || moduleType.containsIgnoreCase("eq") ||
-        moduleType.containsIgnoreCase("crackle") || moduleType.containsIgnoreCase("timepitch") ||
-        moduleType.containsIgnoreCase("tract")) 
+    if (lower.contains("vco") || lower.contains("noise") || 
+        lower.contains("sequencer") || lower.contains("sample") || 
+        lower.contains("midi") || lower.contains("input") ||
+        lower.contains("polyvco") || lower.contains("value")) 
+        return ModuleCategory::Source;
+    
+    // --- Effects (Red) ---
+    // Check "Vocal Tract Filter" before general "filter" check
+    if (lower == "vocal tract filter")
         return ModuleCategory::Effect;
     
-    if (moduleType.containsIgnoreCase("lfo") || moduleType.containsIgnoreCase("adsr") || 
-        moduleType.containsIgnoreCase("random") || moduleType.containsIgnoreCase("s&h") || 
-        moduleType.containsIgnoreCase("function")) 
+    if (lower.contains("vcf") || lower.contains("delay") || 
+        lower.contains("reverb") || lower.contains("chorus") || 
+        lower.contains("phaser") || lower.contains("compressor") || 
+        lower.contains("drive") || lower.contains("shaper") ||  // Note: "shaping oscillator" handled above
+        lower.contains("filter") || lower.contains("waveshaper") ||
+        lower.contains("limiter") || lower.contains("gate") ||
+        lower.contains("granulator") || lower.contains("eq") ||
+        lower.contains("crackle") || lower.contains("timepitch") ||
+        lower.contains("recorder"))  // Moved from Analysis
+        return ModuleCategory::Effect;
+    
+    // --- Modulators (Blue) ---
+    if (lower.contains("lfo") || lower.contains("adsr") || 
+        lower.contains("random") || lower.contains("s&h") || 
+        lower.contains("function")) 
         return ModuleCategory::Modulator;
     
-    if (moduleType.containsIgnoreCase("comment")) 
-        return ModuleCategory::Comment;
-    
-    if (moduleType.containsIgnoreCase("scope") || moduleType.containsIgnoreCase("debug") || 
-        moduleType.containsIgnoreCase("graph") || moduleType.containsIgnoreCase("recorder")) 
+    // --- Analysis (Purple) ---
+    if (lower.contains("scope") || lower.contains("debug") || 
+        lower.contains("graph")) 
         return ModuleCategory::Analysis;
     
-    // Check for VST plugins
-    if (moduleType.containsIgnoreCase("vst") || moduleType.containsIgnoreCase("plugin"))
+    // --- Comment (Grey) ---
+    if (lower.contains("comment")) 
+        return ModuleCategory::Comment;
+    
+    // --- Plugins (Teal) ---
+    if (lower.contains("vst") || lower.contains("plugin"))
         return ModuleCategory::Plugin;
     
+    // --- Utilities & Logic (Orange) - Default ---
     return ModuleCategory::Utility;
 }
 
@@ -6444,6 +6632,46 @@ void ImGuiNodeEditorComponent::handleCollapseToMetaModule()
     synth->commitChanges();
     
     juce::Logger::writeToLog("[META] Reconnected external cables. Collapse complete!");
+}
+
+void ImGuiNodeEditorComponent::loadPresetFromFile(const juce::File& file)
+{
+    if (!file.existsAsFile() || synth == nullptr)
+        return;
+
+    // 1. Load the file content.
+    juce::MemoryBlock mb;
+    file.loadFileAsData(mb);
+
+    // 2. Set the synthesizer's state. This rebuilds the audio graph.
+    synth->setStateInformation(mb.getData(), (int)mb.getSize());
+
+    // 3. Parse the XML to find the UI state.
+    juce::ValueTree uiState;
+    if (auto xml = juce::XmlDocument::parse(mb.toString()))
+    {
+        auto vt = juce::ValueTree::fromXml(*xml);
+        uiState = vt.getChildWithName("NodeEditorUI");
+        if (uiState.isValid())
+        {
+            // 4. Apply the UI state (node positions, muted status, etc.).
+            // This queues the changes to be applied on the next frame.
+            applyUiValueTree(uiState);
+        }
+    }
+
+    // 5. Create an undo snapshot for this action.
+    Snapshot s;
+    synth->getStateInformation(s.synthState);
+    s.uiState = uiState.isValid() ? uiState : getUiValueTree();
+    undoStack.push_back(std::move(s));
+    redoStack.clear();
+
+    // 6. Update the UI status trackers.
+    isPatchDirty = false;
+    currentPresetFile = file.getFileName();
+    
+    juce::Logger::writeToLog("[Preset] Successfully loaded preset: " + file.getFullPathName());
 }
 
 

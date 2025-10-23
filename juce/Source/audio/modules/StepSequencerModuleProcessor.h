@@ -45,6 +45,7 @@ private:
     double sampleRate { 44100.0 };
 
     TransportState m_currentTransport;
+    bool wasPlaying = false;
 
     std::atomic<float>* rateParam { nullptr };
     std::atomic<float>* gateLengthParam { nullptr };

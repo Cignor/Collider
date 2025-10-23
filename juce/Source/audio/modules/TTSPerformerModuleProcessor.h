@@ -90,6 +90,7 @@ public:
     const std::vector<WordTiming>& getActiveTimings() const;
     int findFirstWordIndexAtOrAfter(double timeSec) const;
     int findLastWordIndexAtOrBefore(double timeSec) const;
+    int findWordIndexForTime(float timeSeconds) const;
     void clampWordIndexToTrim();
 
     // --- Phase 5: Waveform Visualization Methods (UI-only) ---
@@ -210,7 +211,6 @@ private:
 
     // --- Audio Storage and Playback ---
     juce::AudioBuffer<float> bakedAudioBuffer;
-    int playbackPosition { 0 };
     bool isPlaying { false };
     double phase { 0.0 }; // Phase accumulator for rate-based auto-advance
     bool lastTrigHigh { false }; // Trigger edge detection
@@ -338,6 +338,7 @@ private:
 
     TransportState m_currentTransport;
     double lastScaledBeats_tts{ 0.0 };
+    bool wasPlaying = false;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(TTSPerformerModuleProcessor);
 };

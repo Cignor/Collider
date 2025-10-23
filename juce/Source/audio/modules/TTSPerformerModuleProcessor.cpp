@@ -83,7 +83,7 @@ void TTSPerformerModuleProcessor::playSelectedClipFromTrim()
     const juce::ScopedLock lock(audioBufferLock);
     float trimStartNorm = apvts.getRawParameterValue("trimStart")->load();
     int trimStart = (int) std::floor(trimStartNorm * selectedClip->audio.getNumSamples());
-    playbackPosition = juce::jlimit(0, selectedClip->audio.getNumSamples()-1, trimStart);
+    readPosition = (double)juce::jlimit(0, selectedClip->audio.getNumSamples()-1, trimStart);
     isPlaying = true;
 }
 
@@ -165,13 +165,34 @@ juce::AudioProcessorValueTreeState::ParameterLayout TTSPerformerModuleProcessor:
     params.push_back(std::make_unique<juce::AudioParameterChoice>("engine", "Engine", juce::StringArray{ "RubberBand", "Naive" }, 1));
     
     // Transport sync parameters
-    params.push_back(std::make_unique<juce::AudioParameterBool>("mode", "Sync to Transport", false));
+    params.push_back(std::make_unique<juce::AudioParameterBool>("sync", "Sync to Transport", false));
     params.push_back(std::make_unique<juce::AudioParameterChoice>("rate_division", "Division",
         juce::StringArray{ "1/32", "1/16", "1/8", "1/4", "1/2", "1", "2", "4", "8" }, 3));
     
     // NOTE: Do NOT create APVTS parameters for modulation inputs. They are CV buses only.
     
     return { params.begin(), params.end() };
+}
+
+// Helper function to find the correct word index for a given time in seconds
+int TTSPerformerModuleProcessor::findWordIndexForTime(float timeSeconds) const
+{
+    if (!selectedClip)
+        return 0;
+    
+    const auto& timings = getActiveTimings();
+    if (timings.empty())
+        return 0;
+        
+    for (int i = 0; i < (int)timings.size(); ++i)
+    {
+        if (timings[i].startTimeSeconds >= timeSeconds)
+        {
+            return i; // Return the index of the first word at or after the time
+        }
+    }
+    
+    return (int)timings.size() - 1; // Not found, return the last word
 }
 
 TTSPerformerModuleProcessor::TTSPerformerModuleProcessor()
@@ -220,7 +241,42 @@ void TTSPerformerModuleProcessor::prepareToPlay(double sampleRate, int samplesPe
 
 void TTSPerformerModuleProcessor::setTimingInfo(const TransportState& state)
 {
+    // --- THIS IS THE DEFINITIVE FIX ---
+
+    // 1. Set the module's internal play state directly from the master transport.
+    // This is what "emulating the spacebar" means.
+    isPlaying = state.isPlaying;
+
+    // 2. Check if the transport has just started playing from a stopped state.
+    if (state.isPlaying && !wasPlaying)
+    {
+        juce::Logger::writeToLog("[TTS FIX] Play Toggled ON. Resetting playheads.");
+        if (selectedClip && getSampleRate() > 0)
+        {
+            // Calculate start time in seconds
+            const double clipDurationSeconds = selectedClip->audio.getNumSamples() / getSampleRate();
+            const double trimStartSeconds = apvts.getRawParameterValue("trimStart")->load() * clipDurationSeconds;
+            
+            // Find the correct starting word and reset both playheads
+            currentWordIndex = findWordIndexForTime((float)trimStartSeconds);
+            readPosition = trimStartSeconds * getSampleRate();
+
+            juce::Logger::writeToLog("[TTS FIX] Reset complete. Start Word: " + juce::String(currentWordIndex) +
+                                   ", Read Position: " + juce::String(readPosition));
+        }
+        
+        // Reset all internal schedulers and clocks.
+        stepAccumulatorSec = 0.0;
+        lastScaledBeats_tts = 0.0;
+    }
+    else if (!state.isPlaying && wasPlaying)
+    {
+         juce::Logger::writeToLog("[TTS FIX] Play Toggled OFF.");
+    }
+
+    wasPlaying = state.isPlaying;
     m_currentTransport = state;
+    // --- END OF FIX ---
 }
 
 void TTSPerformerModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffer&)
@@ -433,7 +489,6 @@ void TTSPerformerModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer,
                 // Reset to trim start
                 currentWordIndex = findFirstWordIndexAtOrAfter(trimStartNorm * (hasValidClip ? selectedClip->durationSeconds : 0.0));
                 readPosition = (double) trimStartSample;
-                playbackPosition = trimStartSample;
                 if (hasValidClip) isPlaying = true;
                 phase = 0.0;
             }
@@ -447,7 +502,6 @@ void TTSPerformerModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer,
             {
                 // Trigger starts at trim start
                 readPosition = (double) trimStartSample;
-                playbackPosition = trimStartSample;
                 currentWordIndex = findFirstWordIndexAtOrAfter(trimStartNorm * (hasValidClip ? selectedClip->durationSeconds : 0.0));
                 if (hasValidClip) isPlaying = true;
                 phase = 0.0;
@@ -500,7 +554,6 @@ void TTSPerformerModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer,
                         const auto& wordTiming = selectedClip->timings[w];
                         double jumpPos = juce::jlimit((double)trimStartSample, (double)trimEndSample, wordTiming.startTimeSeconds * sr);
                         readPosition = jumpPos;
-                        playbackPosition = (int) jumpPos;
                         isPlaying = true;
                         phase = 0.0;
                     }
@@ -510,7 +563,7 @@ void TTSPerformerModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer,
         }
         
         // Rate-based stepping scheduler (jump to word starts)
-        const bool syncEnabled = apvts.getRawParameterValue("mode")->load() > 0.5f;
+        const bool syncEnabled = apvts.getRawParameterValue("sync")->load() > 0.5f;
         if (hasValidClip && haveTimings)
         {
             bool advanceStep = false;
@@ -673,9 +726,6 @@ void TTSPerformerModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer,
                 readPosition += step;
                 if (readPosition >= endSamplePos)
                     readPosition = startSamplePos + (readPosition - endSamplePos);
-                
-                // Update playhead position for UI display
-                playbackPosition = (int) readPosition;
             }
             else // RubberBand via TimePitchProcessor
             {
@@ -762,9 +812,6 @@ void TTSPerformerModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer,
                     // Advance read head by the number of frames FED (1), not produced
                     // RubberBand can output >1 frames from 1 input frame; advancing by produced would starve input
                     readPosition += 1.0;
-                    
-                    // Update playhead position for UI display
-                    playbackPosition = (int) readPosition;
                 }
                 else
                 {
@@ -785,9 +832,6 @@ void TTSPerformerModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer,
                     }
                     if (audioOut) audioOut[i] = sampleFB * currentGate * volumeParam->load();
                     readPosition += stepFB;
-                    
-                    // Update playhead position for UI display
-                    playbackPosition = (int) readPosition;
                 }
                 if (readPosition >= endSamplePos)
                     readPosition = startSamplePos + (readPosition - endSamplePos);
@@ -1153,7 +1197,7 @@ void TTSPerformerModuleProcessor::SynthesisThread::run()
                     DBG("[TTS Performer] Audio copied to bakedAudioBuffer: " + juce::String(owner.bakedAudioBuffer.getNumSamples()) + " samples");
                     DBG("[TTS Performer] selectedClip audio: " + juce::String(clip->audio.getNumSamples()) + " samples");
                 }
-                owner.playbackPosition = 0;
+                owner.readPosition = 0.0;
                 owner.isPlaying = false; // Don't auto-play, wait for trigger
                 DBG("[TTS Performer] Clip ready: " + juce::String(owner.selectedClip ? owner.selectedClip->audio.getNumSamples() : 0) + " samples");
                 
@@ -1464,7 +1508,7 @@ void TTSPerformerModuleProcessor::selectClipByKey(const juce::String& key)
     if (clip)
     {
         selectedClip = clip;
-        playbackPosition = 0;
+        readPosition = 0.0;
         isPlaying = false;
         {
             const juce::ScopedLock lock(audioBufferLock);
@@ -1527,20 +1571,28 @@ void TTSPerformerModuleProcessor::loadClipsFromDisk()
             }
         }
         
-        	// choose latest .wav in folder if multiple exist
-        	juce::Array<juce::File> wavs;
-        	dir.findChildFiles(wavs, juce::File::findFiles, false, "*.wav");
-        	juce::File wav;
-        	if (wavs.size() > 0)
-        	{
-        		wav = wavs.getFirst();
-        		juce::Time newest = wav.getLastModificationTime();
-        		for (auto f : wavs) { if (f.getLastModificationTime() > newest) { newest = f.getLastModificationTime(); wav = f; } }
-        	}
-        if (!wav.existsAsFile()) continue;
+        // --- THIS IS THE FIX ---
+        // 1. Find all .wav files in the directory.
+        juce::Array<juce::File> wavs;
+        dir.findChildFiles(wavs, juce::File::findFiles, false, "*.wav");
+
+        // 2. If no .wav files are found, we cannot load this clip, so skip to the next directory.
+        if (wavs.isEmpty())
+            continue;
+
+        // 3. Find the newest .wav file in the directory.
+        juce::File wavToLoad = wavs.getFirst();
+        for (const auto& f : wavs)
+        {
+            if (f.getLastModificationTime() > wavToLoad.getLastModificationTime())
+            {
+                wavToLoad = f;
+            }
+        }
+        // --- END OF FIX ---
         
         // Look for XML/JSON timing files matching WAV stem
-        juce::String wavStem = wav.getFileNameWithoutExtension();
+        juce::String wavStem = wavToLoad.getFileNameWithoutExtension();
         auto timingXml = dir.getChildFile(wavStem + ".xml");
         auto timingJson = dir.getChildFile(wavStem + ".json");
         // Fallback to old naming scheme
@@ -1548,7 +1600,7 @@ void TTSPerformerModuleProcessor::loadClipsFromDisk()
         if (!timingJson.existsAsFile()) timingJson = dir.getChildFile("timing.json");
         
         juce::AudioFormatManager fm; fm.registerBasicFormats();
-        std::unique_ptr<juce::AudioFormatReader> r(fm.createReaderFor(wav));
+        std::unique_ptr<juce::AudioFormatReader> r(fm.createReaderFor(wavToLoad));
         if (!r) continue;
         juce::AudioBuffer<float> buf(1, (int) r->lengthInSamples);
         r->read(&buf, 0, buf.getNumSamples(), 0, true, false);
@@ -2051,10 +2103,10 @@ void TTSPerformerModuleProcessor::drawParametersInNode(float itemWidth, const st
     ImGui::PushItemWidth(itemWidth);
     
     // --- SYNC CONTROLS ---
-    bool sync = apvts.getRawParameterValue("mode")->load() > 0.5f;
+    bool sync = apvts.getRawParameterValue("sync")->load() > 0.5f;
     if (ImGui::Checkbox("Sync to Transport", &sync))
     {
-        if (auto* p = dynamic_cast<juce::AudioParameterBool*>(apvts.getParameter("mode")))
+        if (auto* p = dynamic_cast<juce::AudioParameterBool*>(apvts.getParameter("sync")))
             *p = sync;
         onModificationEnded();
     }
@@ -2392,7 +2444,7 @@ void TTSPerformerModuleProcessor::drawParametersInNode(float itemWidth, const st
             bool active = false;
             if (isPlaying)
             {
-                double curSec = (double)playbackPosition / juce::jmax(1.0, getSampleRate());
+                double curSec = readPosition / juce::jmax(1.0, getSampleRate());
                 active = (curSec >= w.startTimeSeconds && curSec < w.endTimeSeconds);
             }
             
@@ -2416,7 +2468,7 @@ void TTSPerformerModuleProcessor::drawParametersInNode(float itemWidth, const st
         // Draw playhead (red line if playing)
         if (isPlaying)
         {
-            double curTime = (double)playbackPosition / juce::jmax(1.0, getSampleRate());
+            double curTime = readPosition / juce::jmax(1.0, getSampleRate());
             float playX = canvas_p0.x + (float)(curTime / totalDur) * canvasWidth;
             dl->AddLine(ImVec2(playX, canvas_p0.y), ImVec2(playX, canvas_p1.y), IM_COL32(255, 50, 50, 255), 2.0f);
         }
@@ -2460,8 +2512,7 @@ void TTSPerformerModuleProcessor::drawParametersInNode(float itemWidth, const st
             else if (draggingScrub)
             {
                 const juce::ScopedLock lock2(audioBufferLock);
-                playbackPosition = (int)std::floor(t * getSampleRate());
-                playbackPosition = juce::jlimit(0, selectedClip->audio.getNumSamples() - 1, playbackPosition);
+                readPosition = juce::jlimit(0.0, (double)(selectedClip->audio.getNumSamples() - 1), t * getSampleRate());
             }
         }
         
@@ -2493,26 +2544,6 @@ void TTSPerformerModuleProcessor::drawParametersInNode(float itemWidth, const st
     
     if (isBusy)
         ImGui::EndDisabled();
-
-    // Spacebar gate (hold=play, release=stop)
-    if (selectedClip && selectedClip->audio.getNumSamples() > 0)
-    {
-        if (ImGui::IsKeyDown(ImGuiKey_Space)) // HELD
-        {
-            if (!isPlaying)
-            {
-                const juce::ScopedLock lock(audioBufferLock);
-                float trimStartNorm = apvts.getRawParameterValue("trimStart")->load();
-                int trimStart = (int) std::floor(trimStartNorm * selectedClip->audio.getNumSamples());
-                playbackPosition = juce::jlimit(0, selectedClip->audio.getNumSamples() - 1, trimStart);
-                isPlaying = true;
-            }
-        }
-        else if (isPlaying) // RELEASED
-        {
-            isPlaying = false;
-        }
-    }
 
     // Live input telemetry block (compact, minimal spacing)
     
@@ -2998,7 +3029,7 @@ void TTSPerformerModuleProcessor::drawPlayheadIndicator(void* drawListPtr, const
     if (numSamples == 0 || !isPlaying) return;
     
     // Calculate playhead position in pixels
-    const float playheadRatio = (float)playbackPosition / (float)numSamples;
+    const float playheadRatio = (float)readPosition / (float)numSamples;
     const float playheadX = pos.x + playheadRatio * size.x;
     
     // Only draw if playhead is within the visible area
@@ -3030,7 +3061,7 @@ void TTSPerformerModuleProcessor::drawPlayheadIndicator(void* drawListPtr, const
         drawList->AddTriangle(triangleTop, triangleLeft, triangleRight, IM_COL32(255, 255, 255, 200), 1.0f);
         
         // Draw time indicator text above the playhead
-        const double currentTimeSeconds = (double)playbackPosition / getSampleRate();
+        const double currentTimeSeconds = readPosition / getSampleRate();
         const juce::String timeText = juce::String::formatted("%.2fs", currentTimeSeconds);
         const char* timeCStr = timeText.toRawUTF8();
         const ImVec2 textSize = ImGui::CalcTextSize(timeCStr);
@@ -3185,8 +3216,8 @@ bool TTSPerformerModuleProcessor::handleWaveformInteraction(const ImVec2& pos, c
         const float normalizedPos = juce::jlimit(0.0f, 1.0f, (mousePos.x - pos.x) / size.x);
         const int newPosition = (int)(normalizedPos * numSamples);
         
-        // Update playback position
-        playbackPosition = newPosition;
+        // Update the AUDIO playhead directly
+        readPosition = (double)newPosition;
         
         // Release drag on mouse up
         if (ImGui::IsMouseReleased(0))

@@ -533,6 +533,19 @@ void SampleLoaderModuleProcessor::drawParametersInNode(float itemWidth, const st
 {
     ImGui::PushItemWidth(itemWidth);
 
+    // Make the node a drop target for samples
+    if (ImGui::BeginDragDropTarget())
+    {
+        if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("DND_SAMPLE_PATH"))
+        {
+            // A sample was dropped on this node
+            const char* path = (const char*)payload->Data;
+            loadSample(juce::File(path));
+            onModificationEnded(); // Create an undo state for the change
+        }
+        ImGui::EndDragDropTarget();
+    }
+
     if (hasSampleLoaded()) { ImGui::Text("Sample: %s", currentSampleName.toRawUTF8()); }
     else { ImGui::Text("No sample loaded"); }
 

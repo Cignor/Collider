@@ -1,14 +1,9 @@
 #pragma once
-
 #include <juce_core/juce_core.h>
 #include <juce_audio_formats/juce_audio_formats.h>
 #include <vector>
+#include <memory>
 
-/**
- * SampleManager - Manages audio sample file scanning, caching, and metadata
- * * This class provides sample browsing functionality for the node editor.
- * It scans directories for audio files and extracts metadata (duration, sample rate, etc.)
- */
 class SampleManager
 {
 public:
@@ -19,109 +14,70 @@ public:
         double durationSeconds;
         int sampleRate;
         int numChannels;
-        juce::int64 fileSizeBytes;
-        juce::Time lastModified;
     };
-    
-    SampleManager()
+
+    struct DirectoryNode
+    {
+        juce::String name;
+        juce::File directory;
+        std::vector<SampleInfo> samples;
+        std::vector<std::unique_ptr<DirectoryNode>> subdirectories;
+    };
+
+    SampleManager() : rootNode(std::make_unique<DirectoryNode>())
     {
         formatManager.registerBasicFormats();
     }
-    
-    ~SampleManager() = default;
-    
-    /**
-     * Scan a directory for audio sample files
-     * @param directory The directory to scan
-     * @param recursive Whether to scan subdirectories
-     */
-    void scanDirectory(const juce::File& directory, bool recursive = true)
+
+    DirectoryNode* getRootNode() const { return rootNode.get(); }
+
+    void scanDirectory(const juce::File& directory)
     {
-        if (!directory.exists() || !directory.isDirectory())
-            return;
-        
-        // Supported audio formats
-        juce::String wildcards = "*.wav;*.aif;*.aiff;*.flac;*.ogg;*.mp3";
-        
-        auto files = directory.findChildFiles(
-            juce::File::findFiles,
-            recursive,
-            wildcards
-        );
-        
-        for (const auto& file : files)
+        rootNode->name = directory.getFileName();
+        rootNode->directory = directory;
+        rootNode->samples.clear();
+        rootNode->subdirectories.clear();
+        scanRecursively(rootNode.get());
+    }
+
+    void clearCache()
+    {
+        rootNode = std::make_unique<DirectoryNode>();
+    }
+
+private:
+    void scanRecursively(DirectoryNode* node)
+    {
+        if (!node->directory.isDirectory()) return;
+
+        for (const auto& entry : juce::RangedDirectoryIterator(node->directory, false, "*", juce::File::findFilesAndDirectories))
         {
-            if (file.existsAsFile())
+            const auto& file = entry.getFile();
+            if (file.isDirectory())
+            {
+                auto subdir = std::make_unique<DirectoryNode>();
+                subdir->name = file.getFileName();
+                subdir->directory = file;
+                scanRecursively(subdir.get());
+                node->subdirectories.push_back(std::move(subdir));
+            }
+            else if (file.hasFileExtension(".wav") || file.hasFileExtension(".aif") || file.hasFileExtension(".flac") || file.hasFileExtension(".mp3") || file.hasFileExtension(".ogg"))
             {
                 SampleInfo info;
                 info.name = file.getFileNameWithoutExtension();
                 info.file = file;
-                info.fileSizeBytes = file.getSize();
-                info.lastModified = file.getLastModificationTime();
-                
-                // Try to read audio file metadata
-                std::unique_ptr<juce::AudioFormatReader> reader(
-                    formatManager.createReaderFor(file)
-                );
-                
-                if (reader)
+                if (auto* reader = formatManager.createReaderFor(file))
                 {
                     info.durationSeconds = reader->lengthInSamples / reader->sampleRate;
                     info.sampleRate = (int)reader->sampleRate;
                     info.numChannels = (int)reader->numChannels;
+                    delete reader;
                 }
-                else
-                {
-                    // Couldn't read file - use defaults
-                    info.durationSeconds = 0.0;
-                    info.sampleRate = 0;
-                    info.numChannels = 0;
-                }
-                
-                samples.add(info);
+                node->samples.push_back(info);
             }
         }
     }
     
-    /**
-     * Search for samples matching a query
-     * @param query The search term (searches name only)
-     * @return Vector of matching samples
-     */
-    std::vector<SampleInfo> searchSamples(const juce::String& query) const
-    {
-        std::vector<SampleInfo> results;
-        
-        juce::String lowerQuery = query.toLowerCase();
-        
-        for (const auto& sample : samples)
-        {
-            if (query.isEmpty() ||
-                sample.name.toLowerCase().contains(lowerQuery))
-            {
-                results.push_back(sample);
-            }
-        }
-        
-        return results;
-    }
-    
-    /**
-     * Clear the sample cache
-     */
-    void clearCache()
-    {
-        samples.clear();
-    }
-    
-    /**
-     * Get the number of cached samples
-     */
-    int getNumSamples() const { return samples.size(); }
-    
-private:
     juce::AudioFormatManager formatManager;
-    juce::Array<SampleInfo> samples;
-    
-    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(SampleManager)
+    std::unique_ptr<DirectoryNode> rootNode;
 };

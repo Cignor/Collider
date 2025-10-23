@@ -18,6 +18,10 @@ public:
 
     void paint (juce::Graphics&) override;
     void resized() override;
+    
+    // Unified playback control (audio engine + transport)
+    void setMasterPlayState(bool shouldBePlaying);
+    
     bool keyPressed (const juce::KeyPress& key) override;
     bool keyStateChanged (bool isKeyDown) override;
     void visibilityChanged() override;
@@ -67,6 +71,11 @@ private:
 
     std::unique_ptr<juce::FileChooser> saveChooser;
     std::unique_ptr<juce::FileChooser> loadChooser;
+
+    // Unified spacebar control (toggle and momentary gate mode)
+    juce::uint64 spacebarDownTime { 0 };
+    bool wasLongPress { false };
+    static constexpr int longPressThresholdMs = 250;
 
     juce::AudioDeviceManager& deviceManager;
     juce::AudioPluginFormatManager& pluginFormatManager;

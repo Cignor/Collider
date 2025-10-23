@@ -122,6 +122,33 @@ void PresetCreatorComponent::resized()
     log.setBounds (10, getHeight() - 160, getWidth() - 20, 150);
 }
 
+void PresetCreatorComponent::setMasterPlayState(bool shouldBePlaying)
+{
+    if (synth == nullptr)
+        return;
+
+    // 1. Control the Audio Engine (start/stop pulling audio)
+    if (shouldBePlaying)
+    {
+        if (!auditioning)
+        {
+            deviceManager.addAudioCallback(&processorPlayer);
+            auditioning = true;
+        }
+    }
+    else
+    {
+        if (auditioning)
+        {
+            deviceManager.removeAudioCallback(&processorPlayer);
+            auditioning = false;
+        }
+    }
+
+    // 2. Control the synth's internal transport clock
+    synth->setPlaying(shouldBePlaying);
+}
+
 PresetCreatorComponent::~PresetCreatorComponent()
 {
     stopAudition();
@@ -334,13 +361,11 @@ bool PresetCreatorComponent::keyPressed (const juce::KeyPress& key)
 {
     if (key.getKeyCode() == juce::KeyPress::spaceKey)
     {
-        if (!auditioning)
-            startAudition(); // Start audio engine if it's off
-
-        // If any recorder is active, this key press should resume it
-        if (synth->isAnyModuleRecording())
-            synth->resumeAllRecorders();
-        
+        if (spacebarDownTime == 0) // Only record time on the initial press
+        {
+            spacebarDownTime = juce::Time::getMillisecondCounter();
+            wasLongPress = false;
+        }
         return true;
     }
     return false;
@@ -350,20 +375,23 @@ bool PresetCreatorComponent::keyStateChanged (bool isKeyDown)
 {
     juce::ignoreUnused (isKeyDown);
 
-    // This triggers on spacebar RELEASE
-    if (! juce::KeyPress::isKeyCurrentlyDown (juce::KeyPress::spaceKey) && auditioning)
+    if (!juce::KeyPress::isKeyCurrentlyDown(juce::KeyPress::spaceKey))
     {
-        if (synth->isAnyModuleRecording())
+        if (spacebarDownTime != 0) // Key was just released
         {
-            // A recording is in progress, so PAUSE it instead of stopping the engine
-            synth->pauseAllRecorders();
+            auto pressDuration = juce::Time::getMillisecondCounter() - spacebarDownTime;
+            if (pressDuration < longPressThresholdMs && !wasLongPress)
+            {
+                // SHORT PRESS (TOGGLE)
+                if (synth)
+                {
+                    const bool isCurrentlyPlaying = synth->getTransportState().isPlaying;
+                    setMasterPlayState(!isCurrentlyPlaying); // Use the unified function
+                }
+            }
+            // If it was a long press, the timer callback will handle stopping.
         }
-        else
-        {
-            // No recording is active, so stop the engine like before
-            stopAudition();
-        }
-        return true;
+        spacebarDownTime = 0; // Reset for next press
     }
     return false;
 }
@@ -392,7 +420,29 @@ void PresetCreatorComponent::stopAudition()
 void PresetCreatorComponent::timerCallback()
 {
     RtLogger::flushToFileLogger();
-    // Keep a heartbeat to ensure log is alive
+    
+    if (synth != nullptr)
+    {
+        // Check for long press activation
+        if (spacebarDownTime != 0 && !wasLongPress)
+        {
+            auto pressDuration = juce::Time::getMillisecondCounter() - spacebarDownTime;
+            if (pressDuration >= longPressThresholdMs)
+            {
+                wasLongPress = true;
+                setMasterPlayState(true); // Use the unified function
+            }
+        }
+        
+        // Check for long press release
+        if (wasLongPress && !juce::KeyPress::isKeyCurrentlyDown(juce::KeyPress::spaceKey))
+        {
+            setMasterPlayState(false); // Use the unified function
+            wasLongPress = false;
+            spacebarDownTime = 0;
+        }
+    }
+
     static int counter = 0;
     if ((++counter % 60) == 0)
         juce::Logger::writeToLog ("[Heartbeat] UI alive");

@@ -1,0 +1,103 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<ModularSynthPreset version="1">
+  <modules>
+    <module logicalId="1" type="TTS Performer">
+      <params>
+        <TTSPerformerParams>
+          <PARAM id="engine" value="1.0"/>
+          <PARAM id="gate" value="1.0"/>
+          <PARAM id="pitch" value="-11.80000019073486"/>
+          <PARAM id="rate" value="2.0"/>
+          <PARAM id="speed" value="1.0"/>
+          <PARAM id="trimEnd" value="0.6290000081062317"/>
+          <PARAM id="trimStart" value="0.2949999868869781"/>
+          <PARAM id="volume" value="1.0"/>
+          <PARAM id="mode"/>
+          <PARAM id="rate_division"/>
+        </TTSPerformerParams>
+      </params>
+      <extra>
+        <TTSPerformerState selectedClipId="39418d85"/>
+      </extra>
+    </module>
+    <module logicalId="2" type="Random">
+      <params>
+        <RandomParams>
+          <PARAM id="boolThreshold" value="0.5"/>
+          <PARAM id="cvMax" value="1.0"/>
+          <PARAM id="cvMin" value="0.0"/>
+          <PARAM id="max" value="1.0"/>
+          <PARAM id="min" value="0.0"/>
+          <PARAM id="rate" value="10.0"/>
+          <PARAM id="slew" value="0.0"/>
+          <PARAM id="normMax"/>
+          <PARAM id="normMin"/>
+          <PARAM id="trigThreshold"/>
+          <PARAM id="rate_division"/>
+          <PARAM id="sync"/>
+        </RandomParams>
+      </params>
+    </module>
+    <module logicalId="3" type="Scope">
+      <params>
+        <ScopeParams>
+          <PARAM id="monitorSeconds" value="5.0"/>
+        </ScopeParams>
+      </params>
+    </module>
+    <module logicalId="4" type="debug">
+      <params>
+        <DebugParams/>
+      </params>
+    </module>
+    <module logicalId="9" type="VCO">
+      <params>
+        <VCOParams>
+          <PARAM id="frequency" value="236.0"/>
+          <PARAM id="waveform" value="0.0"/>
+        </VCOParams>
+      </params>
+    </module>
+    <module logicalId="10" type="Attenuverter">
+      <params>
+        <AttenuverterParams>
+          <PARAM id="amount" value="1.0"/>
+          <PARAM id="rectify" value="0.0"/>
+        </AttenuverterParams>
+      </params>
+    </module>
+    <module logicalId="17" type="Attenuverter">
+      <params>
+        <AttenuverterParams>
+          <PARAM id="amount" value="1.0"/>
+          <PARAM id="rectify" value="0.0"/>
+        </AttenuverterParams>
+      </params>
+    </module>
+  </modules>
+  <connections>
+    <connection srcId="1" srcChan="0" dstId="output" dstChan="0"/>
+    <connection srcId="1" srcChan="2" dstId="9" dstChan="2"/>
+    <connection srcId="1" srcChan="19" dstId="9" dstChan="2"/>
+    <connection srcId="1" srcChan="20" dstId="9" dstChan="2"/>
+    <connection srcId="1" srcChan="21" dstId="9" dstChan="1"/>
+    <connection srcId="1" srcChan="21" dstId="9" dstChan="2"/>
+    <connection srcId="1" srcChan="0" dstId="10" dstChan="0"/>
+    <connection srcId="1" srcChan="0" dstId="17" dstChan="0"/>
+    <connection srcId="2" srcChan="0" dstId="1" dstChan="0"/>
+    <connection srcId="2" srcChan="0" dstId="1" dstChan="7"/>
+    <connection srcId="9" srcChan="0" dstId="output" dstChan="1"/>
+    <connection srcId="17" srcChan="0" dstId="9" dstChan="0"/>
+  </connections>
+  <NodeEditorUI>
+    <node id="1" x="-737.0" y="148.0"/>
+    <node id="2" x="-1221.0" y="408.0"/>
+    <node id="3" x="667.0" y="786.0"/>
+    <node id="4" x="219.0" y="261.0"/>
+    <node id="9" x="84.0" y="1020.0"/>
+    <node id="10" x="-62.0" y="598.5"/>
+    <node id="17" x="-111.0" y="806.0"/>
+    <node id="0" x="822.1715698242188" y="736.3319091796875"/>
+  </NodeEditorUI>
+</ModularSynthPreset>

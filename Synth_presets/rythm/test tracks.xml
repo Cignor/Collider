@@ -1,0 +1,434 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<ModularSynthPreset version="1" bpm="260.0">
+  <modules>
+    <module logicalId="1" type="multi sequencer">
+      <params>
+        <SeqParams>
+          <PARAM id="gateLength" value="0.5"/>
+          <PARAM id="gateLength_mod" value="0.5"/>
+          <PARAM id="gateThreshold" value="0.5"/>
+          <PARAM id="numSteps" value="5.0"/>
+          <PARAM id="numSteps_max" value="16.0"/>
+          <PARAM id="numSteps_mod" value="0.5"/>
+          <PARAM id="rate" value="2.0"/>
+          <PARAM id="rate_division" value="6.0"/>
+          <PARAM id="rate_mod" value="0.0"/>
+          <PARAM id="step1" value="0.9772727489471436"/>
+          <PARAM id="step10" value="0.5"/>
+          <PARAM id="step10_gate" value="0.7999999523162842"/>
+          <PARAM id="step10_gate_mod" value="0.5"/>
+          <PARAM id="step10_mod" value="0.5"/>
+          <PARAM id="step10_trig" value="0.0"/>
+          <PARAM id="step10_trig_mod" value="0.5"/>
+          <PARAM id="step11" value="0.5"/>
+          <PARAM id="step11_gate" value="0.7999999523162842"/>
+          <PARAM id="step11_gate_mod" value="0.5"/>
+          <PARAM id="step11_mod" value="0.5"/>
+          <PARAM id="step11_trig" value="0.0"/>
+          <PARAM id="step11_trig_mod" value="0.5"/>
+          <PARAM id="step12" value="0.5"/>
+          <PARAM id="step12_gate" value="0.7999999523162842"/>
+          <PARAM id="step12_gate_mod" value="0.5"/>
+          <PARAM id="step12_mod" value="0.5"/>
+          <PARAM id="step12_trig" value="0.0"/>
+          <PARAM id="step12_trig_mod" value="0.5"/>
+          <PARAM id="step13" value="0.5"/>
+          <PARAM id="step13_gate" value="0.7999999523162842"/>
+          <PARAM id="step13_gate_mod" value="0.5"/>
+          <PARAM id="step13_mod" value="0.5"/>
+          <PARAM id="step13_trig" value="0.0"/>
+          <PARAM id="step13_trig_mod" value="0.5"/>
+          <PARAM id="step14" value="0.5"/>
+          <PARAM id="step14_gate" value="0.7999999523162842"/>
+          <PARAM id="step14_gate_mod" value="0.5"/>
+          <PARAM id="step14_mod" value="0.5"/>
+          <PARAM id="step14_trig" value="0.0"/>
+          <PARAM id="step14_trig_mod" value="0.5"/>
+          <PARAM id="step15" value="0.5"/>
+          <PARAM id="step15_gate" value="0.7999999523162842"/>
+          <PARAM id="step15_gate_mod" value="0.5"/>
+          <PARAM id="step15_mod" value="0.5"/>
+          <PARAM id="step15_trig" value="0.0"/>
+          <PARAM id="step15_trig_mod" value="0.5"/>
+          <PARAM id="step16" value="0.5"/>
+          <PARAM id="step16_gate" value="0.7999999523162842"/>
+          <PARAM id="step16_gate_mod" value="0.5"/>
+          <PARAM id="step16_mod" value="0.5"/>
+          <PARAM id="step16_trig" value="0.0"/>
+          <PARAM id="step16_trig_mod" value="0.5"/>
+          <PARAM id="step1_gate" value="0.6599999666213989"/>
+          <PARAM id="step1_gate_mod" value="0.5"/>
+          <PARAM id="step1_mod" value="0.5"/>
+          <PARAM id="step1_trig" value="0.0"/>
+          <PARAM id="step1_trig_mod" value="0.5"/>
+          <PARAM id="step2" value="0.2727272510528564"/>
+          <PARAM id="step2_gate" value="0.8899999856948853"/>
+          <PARAM id="step2_gate_mod" value="0.5"/>
+          <PARAM id="step2_mod" value="0.5"/>
+          <PARAM id="step2_trig" value="0.0"/>
+          <PARAM id="step2_trig_mod" value="0.5"/>
+          <PARAM id="step3" value="0.6818181872367859"/>
+          <PARAM id="step3_gate" value="0.6100000143051147"/>
+          <PARAM id="step3_gate_mod" value="0.5"/>
+          <PARAM id="step3_mod" value="0.5"/>
+          <PARAM id="step3_trig" value="0.0"/>
+          <PARAM id="step3_trig_mod" value="0.5"/>
+          <PARAM id="step4" value="0.7727272510528564"/>
+          <PARAM id="step4_gate" value="0.6899999976158142"/>
+          <PARAM id="step4_gate_mod" value="0.5"/>
+          <PARAM id="step4_mod" value="0.5"/>
+          <PARAM id="step4_trig" value="0.0"/>
+          <PARAM id="step4_trig_mod" value="0.5"/>
+          <PARAM id="step5" value="0.2045454382896423"/>
+          <PARAM id="step5_gate" value="0.7999999523162842"/>
+          <PARAM id="step5_gate_mod" value="0.5"/>
+          <PARAM id="step5_mod" value="0.5"/>
+          <PARAM id="step5_trig" value="0.0"/>
+          <PARAM id="step5_trig_mod" value="0.5"/>
+          <PARAM id="step6" value="0.5"/>
+          <PARAM id="step6_gate" value="0.7999999523162842"/>
+          <PARAM id="step6_gate_mod" value="0.5"/>
+          <PARAM id="step6_mod" value="0.5"/>
+          <PARAM id="step6_trig" value="0.0"/>
+          <PARAM id="step6_trig_mod" value="0.5"/>
+          <PARAM id="step7" value="0.5"/>
+          <PARAM id="step7_gate" value="0.7999999523162842"/>
+          <PARAM id="step7_gate_mod" value="0.5"/>
+          <PARAM id="step7_mod" value="0.5"/>
+          <PARAM id="step7_trig" value="0.0"/>
+          <PARAM id="step7_trig_mod" value="0.5"/>
+          <PARAM id="step8" value="0.5"/>
+          <PARAM id="step8_gate" value="0.7999999523162842"/>
+          <PARAM id="step8_gate_mod" value="0.5"/>
+          <PARAM id="step8_mod" value="0.5"/>
+          <PARAM id="step8_trig" value="0.0"/>
+          <PARAM id="step8_trig_mod" value="0.5"/>
+          <PARAM id="step9" value="0.5"/>
+          <PARAM id="step9_gate" value="0.7999999523162842"/>
+          <PARAM id="step9_gate_mod" value="0.5"/>
+          <PARAM id="step9_mod" value="0.5"/>
+          <PARAM id="step9_trig" value="0.0"/>
+          <PARAM id="step9_trig_mod" value="0.5"/>
+          <PARAM id="sync" value="1.0"/>
+        </SeqParams>
+      </params>
+      <extra>
+        <SequencerState sync="1.0" rate_division="6.0"/>
+      </extra>
+    </module>
+    <module logicalId="2" type="polyvco">
+      <params>
+        <PolyVCOParams>
+          <PARAM id="freq_1" value="440.0"/>
+          <PARAM id="freq_10" value="440.0"/>
+          <PARAM id="freq_11" value="440.0"/>
+          <PARAM id="freq_12" value="440.0"/>
+          <PARAM id="freq_13" value="440.0"/>
+          <PARAM id="freq_14" value="440.0"/>
+          <PARAM id="freq_15" value="440.0"/>
+          <PARAM id="freq_16" value="440.0"/>
+          <PARAM id="freq_17" value="440.0"/>
+          <PARAM id="freq_18" value="440.0"/>
+          <PARAM id="freq_19" value="440.0"/>
+          <PARAM id="freq_2" value="440.0"/>
+          <PARAM id="freq_20" value="440.0"/>
+          <PARAM id="freq_21" value="440.0"/>
+          <PARAM id="freq_22" value="440.0"/>
+          <PARAM id="freq_23" value="440.0"/>
+          <PARAM id="freq_24" value="440.0"/>
+          <PARAM id="freq_25" value="440.0"/>
+          <PARAM id="freq_26" value="440.0"/>
+          <PARAM id="freq_27" value="440.0"/>
+          <PARAM id="freq_28" value="440.0"/>
+          <PARAM id="freq_29" value="440.0"/>
+          <PARAM id="freq_3" value="440.0"/>
+          <PARAM id="freq_30" value="440.0"/>
+          <PARAM id="freq_31" value="440.0"/>
+          <PARAM id="freq_32" value="440.0"/>
+          <PARAM id="freq_4" value="440.0"/>
+          <PARAM id="freq_5" value="440.0"/>
+          <PARAM id="freq_6" value="440.0"/>
+          <PARAM id="freq_7" value="440.0"/>
+          <PARAM id="freq_8" value="440.0"/>
+          <PARAM id="freq_9" value="440.0"/>
+          <PARAM id="gate_1" value="1.0"/>
+          <PARAM id="gate_10" value="1.0"/>
+          <PARAM id="gate_11" value="1.0"/>
+          <PARAM id="gate_12" value="1.0"/>
+          <PARAM id="gate_13" value="1.0"/>
+          <PARAM id="gate_14" value="1.0"/>
+          <PARAM id="gate_15" value="1.0"/>
+          <PARAM id="gate_16" value="1.0"/>
+          <PARAM id="gate_17" value="1.0"/>
+          <PARAM id="gate_18" value="1.0"/>
+          <PARAM id="gate_19" value="1.0"/>
+          <PARAM id="gate_2" value="1.0"/>
+          <PARAM id="gate_20" value="1.0"/>
+          <PARAM id="gate_21" value="1.0"/>
+          <PARAM id="gate_22" value="1.0"/>
+          <PARAM id="gate_23" value="1.0"/>
+          <PARAM id="gate_24" value="1.0"/>
+          <PARAM id="gate_25" value="1.0"/>
+          <PARAM id="gate_26" value="1.0"/>
+          <PARAM id="gate_27" value="1.0"/>
+          <PARAM id="gate_28" value="1.0"/>
+          <PARAM id="gate_29" value="1.0"/>
+          <PARAM id="gate_3" value="1.0"/>
+          <PARAM id="gate_30" value="1.0"/>
+          <PARAM id="gate_31" value="1.0"/>
+          <PARAM id="gate_32" value="1.0"/>
+          <PARAM id="gate_4" value="1.0"/>
+          <PARAM id="gate_5" value="1.0"/>
+          <PARAM id="gate_6" value="1.0"/>
+          <PARAM id="gate_7" value="1.0"/>
+          <PARAM id="gate_8" value="1.0"/>
+          <PARAM id="gate_9" value="1.0"/>
+          <PARAM id="numVoices" value="5.0"/>
+          <PARAM id="wave_1" value="1.0"/>
+          <PARAM id="wave_10" value="0.0"/>
+          <PARAM id="wave_11" value="0.0"/>
+          <PARAM id="wave_12" value="0.0"/>
+          <PARAM id="wave_13" value="0.0"/>
+          <PARAM id="wave_14" value="0.0"/>
+          <PARAM id="wave_15" value="0.0"/>
+          <PARAM id="wave_16" value="0.0"/>
+          <PARAM id="wave_17" value="0.0"/>
+          <PARAM id="wave_18" value="0.0"/>
+          <PARAM id="wave_19" value="0.0"/>
+          <PARAM id="wave_2" value="2.0"/>
+          <PARAM id="wave_20" value="0.0"/>
+          <PARAM id="wave_21" value="0.0"/>
+          <PARAM id="wave_22" value="0.0"/>
+          <PARAM id="wave_23" value="0.0"/>
+          <PARAM id="wave_24" value="0.0"/>
+          <PARAM id="wave_25" value="0.0"/>
+          <PARAM id="wave_26" value="0.0"/>
+          <PARAM id="wave_27" value="0.0"/>
+          <PARAM id="wave_28" value="0.0"/>
+          <PARAM id="wave_29" value="0.0"/>
+          <PARAM id="wave_3" value="2.0"/>
+          <PARAM id="wave_30" value="0.0"/>
+          <PARAM id="wave_31" value="0.0"/>
+          <PARAM id="wave_32" value="0.0"/>
+          <PARAM id="wave_4" value="2.0"/>
+          <PARAM id="wave_5" value="1.0"/>
+          <PARAM id="wave_6" value="0.0"/>
+          <PARAM id="wave_7" value="0.0"/>
+          <PARAM id="wave_8" value="0.0"/>
+          <PARAM id="wave_9" value="0.0"/>
+        </PolyVCOParams>
+      </params>
+    </module>
+    <module logicalId="3" type="trackmixer">
+      <params>
+        <TrackMixerParams>
+          <PARAM id="numTracks" value="5.0"/>
+          <PARAM id="numTracks_max" value="64.0"/>
+          <PARAM id="track_gain_1" value="0.0"/>
+          <PARAM id="track_gain_10" value="0.0"/>
+          <PARAM id="track_gain_11" value="0.0"/>
+          <PARAM id="track_gain_12" value="0.0"/>
+          <PARAM id="track_gain_13" value="0.0"/>
+          <PARAM id="track_gain_14" value="0.0"/>
+          <PARAM id="track_gain_15" value="0.0"/>
+          <PARAM id="track_gain_16" value="0.0"/>
+          <PARAM id="track_gain_17" value="0.0"/>
+          <PARAM id="track_gain_18" value="0.0"/>
+          <PARAM id="track_gain_19" value="0.0"/>
+          <PARAM id="track_gain_2" value="0.0"/>
+          <PARAM id="track_gain_20" value="0.0"/>
+          <PARAM id="track_gain_21" value="0.0"/>
+          <PARAM id="track_gain_22" value="0.0"/>
+          <PARAM id="track_gain_23" value="0.0"/>
+          <PARAM id="track_gain_24" value="0.0"/>
+          <PARAM id="track_gain_25" value="0.0"/>
+          <PARAM id="track_gain_26" value="0.0"/>
+          <PARAM id="track_gain_27" value="0.0"/>
+          <PARAM id="track_gain_28" value="0.0"/>
+          <PARAM id="track_gain_29" value="0.0"/>
+          <PARAM id="track_gain_3" value="0.0"/>
+          <PARAM id="track_gain_30" value="0.0"/>
+          <PARAM id="track_gain_31" value="0.0"/>
+          <PARAM id="track_gain_32" value="0.0"/>
+          <PARAM id="track_gain_33" value="0.0"/>
+          <PARAM id="track_gain_34" value="0.0"/>
+          <PARAM id="track_gain_35" value="0.0"/>
+          <PARAM id="track_gain_36" value="0.0"/>
+          <PARAM id="track_gain_37" value="0.0"/>
+          <PARAM id="track_gain_38" value="0.0"/>
+          <PARAM id="track_gain_39" value="0.0"/>
+          <PARAM id="track_gain_4" value="0.0"/>
+          <PARAM id="track_gain_40" value="0.0"/>
+          <PARAM id="track_gain_41" value="0.0"/>
+          <PARAM id="track_gain_42" value="0.0"/>
+          <PARAM id="track_gain_43" value="0.0"/>
+          <PARAM id="track_gain_44" value="0.0"/>
+          <PARAM id="track_gain_45" value="0.0"/>
+          <PARAM id="track_gain_46" value="0.0"/>
+          <PARAM id="track_gain_47" value="0.0"/>
+          <PARAM id="track_gain_48" value="0.0"/>
+          <PARAM id="track_gain_49" value="0.0"/>
+          <PARAM id="track_gain_5" value="0.0"/>
+          <PARAM id="track_gain_50" value="0.0"/>
+          <PARAM id="track_gain_51" value="0.0"/>
+          <PARAM id="track_gain_52" value="0.0"/>
+          <PARAM id="track_gain_53" value="0.0"/>
+          <PARAM id="track_gain_54" value="0.0"/>
+          <PARAM id="track_gain_55" value="0.0"/>
+          <PARAM id="track_gain_56" value="0.0"/>
+          <PARAM id="track_gain_57" value="0.0"/>
+          <PARAM id="track_gain_58" value="0.0"/>
+          <PARAM id="track_gain_59" value="0.0"/>
+          <PARAM id="track_gain_6" value="0.0"/>
+          <PARAM id="track_gain_60" value="0.0"/>
+          <PARAM id="track_gain_61" value="0.0"/>
+          <PARAM id="track_gain_62" value="0.0"/>
+          <PARAM id="track_gain_63" value="0.0"/>
+          <PARAM id="track_gain_64" value="0.0"/>
+          <PARAM id="track_gain_7" value="0.0"/>
+          <PARAM id="track_gain_8" value="0.0"/>
+          <PARAM id="track_gain_9" value="0.0"/>
+          <PARAM id="track_pan_1" value="0.0"/>
+          <PARAM id="track_pan_10" value="0.0"/>
+          <PARAM id="track_pan_11" value="0.0"/>
+          <PARAM id="track_pan_12" value="0.0"/>
+          <PARAM id="track_pan_13" value="0.0"/>
+          <PARAM id="track_pan_14" value="0.0"/>
+          <PARAM id="track_pan_15" value="0.0"/>
+          <PARAM id="track_pan_16" value="0.0"/>
+          <PARAM id="track_pan_17" value="0.0"/>
+          <PARAM id="track_pan_18" value="0.0"/>
+          <PARAM id="track_pan_19" value="0.0"/>
+          <PARAM id="track_pan_2" value="0.0"/>
+          <PARAM id="track_pan_20" value="0.0"/>
+          <PARAM id="track_pan_21" value="0.0"/>
+          <PARAM id="track_pan_22" value="0.0"/>
+          <PARAM id="track_pan_23" value="0.0"/>
+          <PARAM id="track_pan_24" value="0.0"/>
+          <PARAM id="track_pan_25" value="0.0"/>
+          <PARAM id="track_pan_26" value="0.0"/>
+          <PARAM id="track_pan_27" value="0.0"/>
+          <PARAM id="track_pan_28" value="0.0"/>
+          <PARAM id="track_pan_29" value="0.0"/>
+          <PARAM id="track_pan_3" value="0.0"/>
+          <PARAM id="track_pan_30" value="0.0"/>
+          <PARAM id="track_pan_31" value="0.0"/>
+          <PARAM id="track_pan_32" value="0.0"/>
+          <PARAM id="track_pan_33" value="0.0"/>
+          <PARAM id="track_pan_34" value="0.0"/>
+          <PARAM id="track_pan_35" value="0.0"/>
+          <PARAM id="track_pan_36" value="0.0"/>
+          <PARAM id="track_pan_37" value="0.0"/>
+          <PARAM id="track_pan_38" value="0.0"/>
+          <PARAM id="track_pan_39" value="0.0"/>
+          <PARAM id="track_pan_4" value="0.0"/>
+          <PARAM id="track_pan_40" value="0.0"/>
+          <PARAM id="track_pan_41" value="0.0"/>
+          <PARAM id="track_pan_42" value="0.0"/>
+          <PARAM id="track_pan_43" value="0.0"/>
+          <PARAM id="track_pan_44" value="0.0"/>
+          <PARAM id="track_pan_45" value="0.0"/>
+          <PARAM id="track_pan_46" value="0.0"/>
+          <PARAM id="track_pan_47" value="0.0"/>
+          <PARAM id="track_pan_48" value="0.0"/>
+          <PARAM id="track_pan_49" value="0.0"/>
+          <PARAM id="track_pan_5" value="0.0"/>
+          <PARAM id="track_pan_50" value="0.0"/>
+          <PARAM id="track_pan_51" value="0.0"/>
+          <PARAM id="track_pan_52" value="0.0"/>
+          <PARAM id="track_pan_53" value="0.0"/>
+          <PARAM id="track_pan_54" value="0.0"/>
+          <PARAM id="track_pan_55" value="0.0"/>
+          <PARAM id="track_pan_56" value="0.0"/>
+          <PARAM id="track_pan_57" value="0.0"/>
+          <PARAM id="track_pan_58" value="0.0"/>
+          <PARAM id="track_pan_59" value="0.0"/>
+          <PARAM id="track_pan_6" value="0.0"/>
+          <PARAM id="track_pan_60" value="0.0"/>
+          <PARAM id="track_pan_61" value="0.0"/>
+          <PARAM id="track_pan_62" value="0.0"/>
+          <PARAM id="track_pan_63" value="0.0"/>
+          <PARAM id="track_pan_64" value="0.0"/>
+          <PARAM id="track_pan_7" value="0.0"/>
+          <PARAM id="track_pan_8" value="0.0"/>
+          <PARAM id="track_pan_9" value="0.0"/>
+        </TrackMixerParams>
+      </params>
+    </module>
+    <module logicalId="4" type="Random">
+      <params>
+        <RandomParams>
+          <PARAM id="cvMax" value="1.0"/>
+          <PARAM id="cvMin" value="0.0"/>
+          <PARAM id="max" value="1.0"/>
+          <PARAM id="min" value="0.0"/>
+          <PARAM id="normMax" value="1.0"/>
+          <PARAM id="normMin" value="0.0"/>
+          <PARAM id="rate" value="1.00000011920929"/>
+          <PARAM id="rate_division" value="6.0"/>
+          <PARAM id="slew" value="0.0"/>
+          <PARAM id="sync" value="1.0"/>
+          <PARAM id="trigThreshold" value="0.5"/>
+        </RandomParams>
+      </params>
+      <extra>
+        <RandomState sync="1.0" rate_division="6.0"/>
+      </extra>
+    </module>
+    <module logicalId="10" type="Things Texture">
+      <extra>
+        <VstHostState fileOrIdentifier="H:\0000_CODE\01_collider_pyo\juce\build\PresetCreatorApp_artefacts\Release\VST\ThingsTexture.vst3"
+                      name="Things Texture" manufacturerName="AudioThing" version="1.1.1"
+                      pluginFormatName="VST3" pluginState="751.VMjLgXt....O+fWarAhckI2bo8la8HRLt.iHfTlai8FYo41Y8HRUTYTK3HxO9.BOVMEUy.Ea0cVZtMEcgQWY9vSRC8Vav8lak4Fc9PyM43hUMczXWEjKt3hYt3hKt.kKt3hKt3BS5gEcyQjKtPjc2YTR5AkaA4hKtfjKiQ0YW0jKDAkKA4hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKAcCZUMTRSgDbC4hKtXWdOMCLFElYXcUV30zUZUGMV8DZDk1R1gjPHsFMwfUcQYkVzMlUOgFUEUkQvHjSncSZOYlcCUkaqwVXs0zQUs1YGMFLIcUVk0TUQQUTUIkSioGUloGUZoVSUokZUY0SnQTZKYGRBgDQqwVVrUkLh8FNrEFNHIESz4RZHYlKUokdMYjV3fjPLQmKogjYHQEVxUDagkVUV8DZtj1RvPUdLEiKCwjcDkGS3QUZMYmX4wDZtH0Tuc1UOglKosTLtLDS14xPLYGR4wzLPMESyPUdMQCRBgjPqcjXm0jLhgCRRwDctjFRlgUUYgWSWoUczX0SnQTZKc2LRwDZtHDU3UULhsVTW8DZpoVXuEUaHYlKUgEdEYUXqE0UYgGLogzcPkFRl4RUXgWQVE1ZQcUV3cmdgk1bV8DZHg2R43hKt3hKt3hKt3hKt3FUUMTUDQEdqw1XmE0UYQTQFM1YAAkKAgDUjYWQwHVdAAkKAwjKtLlKt3hKt3hKt3hYRUUSTEETIckVwTjQisVTTgkdEYDOujzPu0Fbu4VYtQmO77hUSQ0LPwVcmklaSQWXzUlO.."/>
+      </extra>
+    </module>
+    <module logicalId="11" type="Valves">
+      <extra>
+        <VstHostState fileOrIdentifier="H:\0000_CODE\01_collider_pyo\juce\build\PresetCreatorApp_artefacts\Release\VST\Valves.vst3"
+                      name="Valves" manufacturerName="AudioThing" version="1.0.3" pluginFormatName="VST3"
+                      pluginState="1243.VMjLgHMA...O+fWarAhckI2bo8la8HRLt.iHfTlai8FYo41Y8HRUTYTK3HxO9.BOVMEUy.Ea0cVZtMEcgQWY9vSRC8Vav8lak4Fc9fCM33hUMczXWEjKt3hYt3hKt.kKt3hKt3BS5gEcyQjKtvjKNYTR5AkaA4hKtfjYUIWVvHlKD4hKC4hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKB4BbUMTRSgTXI4hKtXWdOMCLFElYXcUV30zUZUGMV8DZDk1R1gjPHsFMwfUcQYkVzMlUOgFUEUkQvHjSncSZOYlcoU0Y2w1Xq0jLWMUUDUEUqo1TG0TQHYUQFEVLUYUTzUDaXIWUV8DZtj1R1gjPHYUQFEVLUY0T0EkUYgCRBwDctjFRlgUUXIWVWkEQIckVwTkUOglKosjLLMDS14xPLYGQS4jchkGS5YVZMkGRBgjUEYTXwTEaP8VQwHFNHIDSzQUZMYmKCwjctLDS3wzPNoGQC4DLlkFRlgUUXIWVWkEU3vVXqASZHY2Ln0jdpMkSzn1TNICVSwDLlMES5gzTLglK3A0YIYkVzUkQiUTQUEEcEwFVxUkUOglKosjcHIDRCUDaX8FMVkkdUQEUTs1QhsFLogjcyfGSvH1TLoGRC4TLTkVSvH1PNYGVC0DZtfGTmkjUZQWUFMVQEsFTm0jLhgCRBwDcPMDS14xPLYmKCwDLpkVS1AUZMoGUogjYLQEVnsFagsVTWEUTQslXqkjQgsFLogjcyHTSw3xPLYmKCwjclkGS5AUZMAiK4wDZtfVTucmQisVRWEEcEwFVxUkUOglKosjcHIDRFslQgoWUrIVS3XTVqASZHY2LBwDZtfVTucmQisVRGUEMAcUV3fjPLQGU40zcPkFSyP0TNEiZ40TdPMESzfTZHYFVTokbQcUV30DUioGNrkEavjFR1MiTNMiKCwjctLDS2o1PLICSC0zLXkGSn4BZQ81cFM1ZI0FUq0jLgQWQrEVZUY0Sn4RZKgmKo0jLXkVS3wTZLMCTC4zcXkWS5gjPHkDMFIFLQc0Sn4RZKACRBgzSUczX1U0QigCRBwDcTkFRloGUZMCLogzcyHDSn4BdTUWVFM1P2YkV1ASZHc2LBwDZtfFTzDzUXkWSW8DZDk1R1gjPH8TVWkEdMcEVyEzQgsFLogzcHIDRVUEahk2ZwDFcvjFR2MiPLQGSogjYtrlXq0zUYoGLogTRzXkV5kjPHAUQrI1YvXUV5UEahwDNwfUbvjFRn4BZTcFMFkUcvXzT00TLZgCRngjYLICVmE0QiUGLogDdHg2R43hKt3hKt3hKt3hKt3FUUMTUDQEdqw1XmE0UYQTQFM1YAAkKAgDUjYWQwHVdAAkKAwjKtLlKt3hKt3hKt3hYRUUSTEETIckVwTjQisVTTgkdEYDOujzPu0Fbu4VYtQmO77hUSQ0LPwVcmklaSQWXzUlO.."/>
+      </extra>
+    </module>
+  </modules>
+  <connections>
+    <connection srcId="1" srcChan="1" dstId="2" dstChan="65"/>
+    <connection srcId="1" srcChan="1" dstId="2" dstChan="66"/>
+    <connection srcId="1" srcChan="1" dstId="2" dstChan="67"/>
+    <connection srcId="1" srcChan="1" dstId="2" dstChan="68"/>
+    <connection srcId="1" srcChan="1" dstId="2" dstChan="69"/>
+    <connection srcId="1" srcChan="6" dstId="2" dstChan="0"/>
+    <connection srcId="1" srcChan="7" dstId="2" dstChan="1"/>
+    <connection srcId="1" srcChan="10" dstId="2" dstChan="2"/>
+    <connection srcId="1" srcChan="13" dstId="2" dstChan="3"/>
+    <connection srcId="1" srcChan="16" dstId="2" dstChan="4"/>
+    <connection srcId="1" srcChan="19" dstId="2" dstChan="5"/>
+    <connection srcId="1" srcChan="6" dstId="3" dstChan="64"/>
+    <connection srcId="2" srcChan="0" dstId="3" dstChan="0"/>
+    <connection srcId="2" srcChan="1" dstId="3" dstChan="1"/>
+    <connection srcId="2" srcChan="2" dstId="3" dstChan="2"/>
+    <connection srcId="2" srcChan="3" dstId="3" dstChan="3"/>
+    <connection srcId="2" srcChan="4" dstId="3" dstChan="4"/>
+    <connection srcId="3" srcChan="0" dstId="10" dstChan="0"/>
+    <connection srcId="3" srcChan="1" dstId="10" dstChan="1"/>
+    <connection srcId="4" srcChan="0" dstId="1" dstChan="3"/>
+    <connection srcId="4" srcChan="0" dstId="1" dstChan="6"/>
+    <connection srcId="4" srcChan="0" dstId="1" dstChan="7"/>
+    <connection srcId="4" srcChan="0" dstId="1" dstChan="8"/>
+    <connection srcId="4" srcChan="0" dstId="1" dstChan="9"/>
+    <connection srcId="4" srcChan="0" dstId="1" dstChan="10"/>
+    <connection srcId="10" srcChan="0" dstId="11" dstChan="0"/>
+    <connection srcId="10" srcChan="1" dstId="11" dstChan="1"/>
+    <connection srcId="11" srcChan="0" dstId="output" dstChan="0"/>
+    <connection srcId="11" srcChan="1" dstId="output" dstChan="1"/>
+  </connections>
+  <NodeEditorUI>
+    <node id="1" x="-500.0" y="129.0"/>
+    <node id="2" x="130.0" y="184.0"/>
+    <node id="3" x="643.0" y="219.0"/>
+    <node id="4" x="-1399.0" y="287.0"/>
+    <node id="10" x="1146.0" y="276.0"/>
+    <node id="11" x="1451.794067382812" y="279.7703552246094"/>
+    <node id="0" x="1896.0" y="365.0"/>
+  </NodeEditorUI>
+</ModularSynthPreset>

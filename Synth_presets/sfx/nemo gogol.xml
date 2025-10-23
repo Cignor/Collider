@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 
-<ModularSynthPreset version="1">
+<ModularSynthPreset version="1" bpm="120.0">
   <modules>
     <module logicalId="8" type="trackmixer">
       <params>
@@ -146,13 +146,15 @@
           <PARAM id="pitch" value="-11.80000019073486"/>
           <PARAM id="rate" value="9.610000610351562"/>
           <PARAM id="speed" value="2.190000057220459"/>
-          <PARAM id="trimEnd" value="0.9819999933242798"/>
+          <PARAM id="trimEnd" value="1.0"/>
           <PARAM id="trimStart" value="0.0"/>
           <PARAM id="volume" value="1.0"/>
+          <PARAM id="mode"/>
+          <PARAM id="rate_division"/>
         </TTSPerformerParams>
       </params>
       <extra>
-        <TTSPerformerState selectedClipId="5bde2cd0"/>
+        <TTSPerformerState selectedClipId="aebe531d"/>
       </extra>
     </module>
     <module logicalId="17" type="Reverb">
@@ -185,5 +187,6 @@
     <node id="14" x="-2017.0" y="-672.0"/>
     <node id="17" x="-983.0" y="-13.0"/>
     <node id="18" x="-1259.0" y="218.0"/>
+    <node id="0" x="822.1715698242188" y="736.3319091796875"/>
   </NodeEditorUI>
 </ModularSynthPreset>
