@@ -38,6 +38,9 @@ public:
     // --- Core functions ---
     void prepareToPlay(double sampleRate, int samplesPerBlock) override;
     void releaseResources() override {}
+    
+    void setTimingInfo(const TransportState& state) override;
+    
     void processBlock(juce::AudioBuffer<float>&, juce::MidiBuffer&) override;
 
     juce::AudioProcessorValueTreeState& getAPVTS() override { return apvts; }
@@ -94,6 +97,7 @@ private:
 
     // --- DSP State ---
     double phase{ 0.0 };
+    double lastPhase{ 0.0 };
     double sampleRate{ 44100.0 };
     bool lastTriggerState{ false };
     bool lastGateState{ false };
@@ -103,6 +107,8 @@ private:
     bool isRunning{ false };
     bool lastGateOut{ false };
     int eocPulseRemaining{ 0 };
+
+    TransportState m_currentTransport;
     
     // --- Smoothed values ---
     juce::SmoothedValue<float> smoothedSlew;

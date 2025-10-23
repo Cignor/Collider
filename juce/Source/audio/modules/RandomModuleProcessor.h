@@ -27,6 +27,10 @@ public:
 
     juce::AudioProcessorValueTreeState& getAPVTS() override { return apvts; }
 
+    // State management for transport settings
+    juce::ValueTree getExtraStateTree() const override;
+    void setExtraStateTree(const juce::ValueTree&) override;
+
     // UI Display Helpers
     float getLastOutputValue() const;
     float getLastNormalizedOutputValue() const;
@@ -44,9 +48,13 @@ public:
 
 private:
     static juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout();
+
+    void setTimingInfo(const TransportState& state) override;
     
     juce::AudioProcessorValueTreeState apvts;
     juce::Random rng;
+
+    TransportState m_currentTransport;
     
     // Parameter Pointers
     std::atomic<float>* minParam{ nullptr };
@@ -66,6 +74,7 @@ private:
     float targetValueCV{ 0.0f };
     double sampleRate{ 44100.0 };
     double phase{ 0.0 };
+    double lastScaledBeats{ 0.0 };
     int trigPulseRemaining { 0 };
     
     juce::SmoothedValue<float> smoothedSlew;

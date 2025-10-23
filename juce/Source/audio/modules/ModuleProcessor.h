@@ -36,6 +36,16 @@ struct AudioPin
     AudioPin(const juce::String& n, int ch, PinDataType t) : name(n), channel(ch), type(t) {}
 };
 
+// Renamed to avoid conflict with ImGuiNodeEditorComponent's PinInfo
+struct DynamicPinInfo {
+    juce::String name;
+    int channel;
+    PinDataType type;
+
+    // Constructor to allow brace-initialization
+    DynamicPinInfo(const juce::String& n, int c, PinDataType t) : name(n), channel(c), type(t) {}
+};
+
 // Describes a single modulation input pin targeting a parameter
 struct ModPin
 {
@@ -59,12 +69,16 @@ struct ModulePinInfo
         : audioIns(ins), audioOuts(outs), modIns(mods) {}
 };
 
+// Forward declaration for NodePinHelpers
+class ModuleProcessor;
+
 // Helper struct passed to modules for drawing their pins
 struct NodePinHelpers
 {
     std::function<void(const char* label, int channel)> drawAudioInputPin;
     std::function<void(const char* label, int channel)> drawAudioOutputPin;
     std::function<void(const char* inLabel, int inChannel, const char* outLabel, int outChannel)> drawParallelPins;
+    std::function<void(ModuleProcessor* module)> drawIoPins;
 };
 
 class ModularSynthProcessor; // forward declaration
@@ -280,6 +294,11 @@ public:
     // Optional timing info hook for modules that need global clock/transport
     // Default: ignore (modules that don't need timing can skip implementing this)
     virtual void setTimingInfo(const TransportState& state) { juce::ignoreUnused(state); }
+    
+    // Optional dynamic pin interface for modules with variable I/O (e.g., polyphonic modules)
+    // Default: return empty vector (no dynamic pins)
+    virtual std::vector<DynamicPinInfo> getDynamicInputPins() const { return {}; }
+    virtual std::vector<DynamicPinInfo> getDynamicOutputPins() const { return {}; }
 
 public:
     // OPTION 9: Make public for TTS debugging

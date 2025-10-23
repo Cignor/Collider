@@ -468,28 +468,29 @@ db["random"] = ModulePinInfo(
             AudioPin("Step 13 Trig Mod", 34, PinDataType::Gate), AudioPin("Step 14 Trig Mod", 35, PinDataType::Gate),
             AudioPin("Step 15 Trig Mod", 36, PinDataType::Gate), AudioPin("Step 16 Trig Mod", 37, PinDataType::Gate)
         },
-        { // Outputs: Live outputs (0-5) + Parallel step outputs (6+)
+        { // Outputs: Live outputs (0-6) + Parallel step outputs (7+)
             // Live Outputs
             AudioPin("Pitch", 0, PinDataType::CV), AudioPin("Gate", 1, PinDataType::Gate),
             AudioPin("Gate Nuanced", 2, PinDataType::CV), AudioPin("Velocity", 3, PinDataType::CV),
             AudioPin("Mod", 4, PinDataType::CV), AudioPin("Trigger", 5, PinDataType::Gate),
-            // Parallel Step Outputs (Corrected Names and Channels)
-            AudioPin("Pitch 1", 6, PinDataType::CV), AudioPin("Gate 1", 7, PinDataType::Gate), AudioPin("Trig 1", 8, PinDataType::Gate),
-            AudioPin("Pitch 2", 9, PinDataType::CV), AudioPin("Gate 2", 10, PinDataType::Gate), AudioPin("Trig 2", 11, PinDataType::Gate),
-            AudioPin("Pitch 3", 12, PinDataType::CV), AudioPin("Gate 3", 13, PinDataType::Gate), AudioPin("Trig 3", 14, PinDataType::Gate),
-            AudioPin("Pitch 4", 15, PinDataType::CV), AudioPin("Gate 4", 16, PinDataType::Gate), AudioPin("Trig 4", 17, PinDataType::Gate),
-            AudioPin("Pitch 5", 18, PinDataType::CV), AudioPin("Gate 5", 19, PinDataType::Gate), AudioPin("Trig 5", 20, PinDataType::Gate),
-            AudioPin("Pitch 6", 21, PinDataType::CV), AudioPin("Gate 6", 22, PinDataType::Gate), AudioPin("Trig 6", 23, PinDataType::Gate),
-            AudioPin("Pitch 7", 24, PinDataType::CV), AudioPin("Gate 7", 25, PinDataType::Gate), AudioPin("Trig 7", 26, PinDataType::Gate),
-            AudioPin("Pitch 8", 27, PinDataType::CV), AudioPin("Gate 8", 28, PinDataType::Gate), AudioPin("Trig 8", 29, PinDataType::Gate),
-            AudioPin("Pitch 9", 30, PinDataType::CV), AudioPin("Gate 9", 31, PinDataType::Gate), AudioPin("Trig 9", 32, PinDataType::Gate),
-            AudioPin("Pitch 10", 33, PinDataType::CV), AudioPin("Gate 10", 34, PinDataType::Gate), AudioPin("Trig 10", 35, PinDataType::Gate),
-            AudioPin("Pitch 11", 36, PinDataType::CV), AudioPin("Gate 11", 37, PinDataType::Gate), AudioPin("Trig 11", 38, PinDataType::Gate),
-            AudioPin("Pitch 12", 39, PinDataType::CV), AudioPin("Gate 12", 40, PinDataType::Gate), AudioPin("Trig 12", 41, PinDataType::Gate),
-            AudioPin("Pitch 13", 42, PinDataType::CV), AudioPin("Gate 13", 43, PinDataType::Gate), AudioPin("Trig 13", 44, PinDataType::Gate),
-            AudioPin("Pitch 14", 45, PinDataType::CV), AudioPin("Gate 14", 46, PinDataType::Gate), AudioPin("Trig 14", 47, PinDataType::Gate),
-            AudioPin("Pitch 15", 48, PinDataType::CV), AudioPin("Gate 15", 49, PinDataType::Gate), AudioPin("Trig 15", 50, PinDataType::Gate),
-            AudioPin("Pitch 16", 51, PinDataType::CV), AudioPin("Gate 16", 52, PinDataType::Gate), AudioPin("Trig 16", 53, PinDataType::Gate)
+            AudioPin("Num Steps", 6, PinDataType::Raw),
+            // Parallel Step Outputs (Corrected Names and Channels, shifted by +1 after Num Steps)
+            AudioPin("Pitch 1", 7, PinDataType::CV), AudioPin("Gate 1", 8, PinDataType::Gate), AudioPin("Trig 1", 9, PinDataType::Gate),
+            AudioPin("Pitch 2", 10, PinDataType::CV), AudioPin("Gate 2", 11, PinDataType::Gate), AudioPin("Trig 2", 12, PinDataType::Gate),
+            AudioPin("Pitch 3", 13, PinDataType::CV), AudioPin("Gate 3", 14, PinDataType::Gate), AudioPin("Trig 3", 15, PinDataType::Gate),
+            AudioPin("Pitch 4", 16, PinDataType::CV), AudioPin("Gate 4", 17, PinDataType::Gate), AudioPin("Trig 4", 18, PinDataType::Gate),
+            AudioPin("Pitch 5", 19, PinDataType::CV), AudioPin("Gate 5", 20, PinDataType::Gate), AudioPin("Trig 5", 21, PinDataType::Gate),
+            AudioPin("Pitch 6", 22, PinDataType::CV), AudioPin("Gate 6", 23, PinDataType::Gate), AudioPin("Trig 6", 24, PinDataType::Gate),
+            AudioPin("Pitch 7", 25, PinDataType::CV), AudioPin("Gate 7", 26, PinDataType::Gate), AudioPin("Trig 7", 27, PinDataType::Gate),
+            AudioPin("Pitch 8", 28, PinDataType::CV), AudioPin("Gate 8", 29, PinDataType::Gate), AudioPin("Trig 8", 30, PinDataType::Gate),
+            AudioPin("Pitch 9", 31, PinDataType::CV), AudioPin("Gate 9", 32, PinDataType::Gate), AudioPin("Trig 9", 33, PinDataType::Gate),
+            AudioPin("Pitch 10", 34, PinDataType::CV), AudioPin("Gate 10", 35, PinDataType::Gate), AudioPin("Trig 10", 36, PinDataType::Gate),
+            AudioPin("Pitch 11", 37, PinDataType::CV), AudioPin("Gate 11", 38, PinDataType::Gate), AudioPin("Trig 11", 39, PinDataType::Gate),
+            AudioPin("Pitch 12", 40, PinDataType::CV), AudioPin("Gate 12", 41, PinDataType::Gate), AudioPin("Trig 12", 42, PinDataType::Gate),
+            AudioPin("Pitch 13", 43, PinDataType::CV), AudioPin("Gate 13", 44, PinDataType::Gate), AudioPin("Trig 13", 45, PinDataType::Gate),
+            AudioPin("Pitch 14", 46, PinDataType::CV), AudioPin("Gate 14", 47, PinDataType::Gate), AudioPin("Trig 14", 48, PinDataType::Gate),
+            AudioPin("Pitch 15", 49, PinDataType::CV), AudioPin("Gate 15", 50, PinDataType::Gate), AudioPin("Trig 15", 51, PinDataType::Gate),
+            AudioPin("Pitch 16", 52, PinDataType::CV), AudioPin("Gate 16", 53, PinDataType::Gate), AudioPin("Trig 16", 54, PinDataType::Gate)
         },
         {}
     );
@@ -528,7 +529,7 @@ db["random"] = ModulePinInfo(
             AudioPin("In 8", 7, PinDataType::Audio),
 
             // Num Tracks modulation CV at absolute channel 64 (start of Mod bus)
-            AudioPin("Num Tracks Mod", 64, PinDataType::CV),
+            AudioPin("Num Tracks Mod", 64, PinDataType::Raw),
 
             // Per-track CV inputs on Mod bus: Gain at 65,67,... Pan at 66,68,...
             AudioPin("Gain 1 Mod", 65, PinDataType::CV),  AudioPin("Pan 1 Mod", 66, PinDataType::CV),
@@ -551,7 +552,7 @@ db["random"] = ModulePinInfo(
     db["polyvco"] = ModulePinInfo(
         {
             // Num Voices modulation input
-            AudioPin("Num Voices Mod", 0, PinDataType::CV),
+            AudioPin("Num Voices Mod", 0, PinDataType::Raw),
             
             // Frequency modulation inputs (channels 1-32)
             AudioPin("Freq 1 Mod", 1, PinDataType::CV), AudioPin("Freq 2 Mod", 2, PinDataType::CV),

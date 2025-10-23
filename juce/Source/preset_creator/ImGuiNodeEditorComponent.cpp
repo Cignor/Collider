@@ -829,11 +829,11 @@ void ImGuiNodeEditorComponent::renderImGui()
             juce::File presetDir = juce::File::getSpecialLocation(juce::File::userDocumentsDirectory)
                                    .getChildFile("PresetCreator")
                                    .getChildFile("Presets");
-            if (presetDir.exists())
-            {
-                m_presetManager.clearCache();
-                m_presetManager.scanDirectory(presetDir);
-            }
+            if (!presetDir.exists())
+                presetDir.createDirectory(); // Create the directory if it doesn't exist
+            
+            m_presetManager.clearCache();
+            m_presetManager.scanDirectory(presetDir);
         }
         
         // Display filtered presets
@@ -882,11 +882,11 @@ void ImGuiNodeEditorComponent::renderImGui()
             // Scan the default sample directory
             juce::File sampleDir = juce::File::getSpecialLocation(juce::File::userMusicDirectory)
                                    .getChildFile("Samples");
-            if (sampleDir.exists())
-            {
-                m_sampleManager.clearCache();
-                m_sampleManager.scanDirectory(sampleDir, true);
-            }
+            if (!sampleDir.exists())
+                sampleDir.createDirectory(); // Create the directory if it doesn't exist
+
+            m_sampleManager.clearCache();
+            m_sampleManager.scanDirectory(sampleDir, true); // Scan recursively
         }
         
         // Display filtered samples
@@ -1582,6 +1582,15 @@ if (auto* mp = synth->getModuleForLogical (lid))
                 };
             helpers.drawAudioInputPin = [&](const char* label, int channel)
             {
+                // +++ ADD THIS BLOCK FOR ONE-TIME DIAGNOSTIC LOGGING +++
+                const auto& style = ImNodes::GetStyle();
+                static bool logged = false;
+                if (!logged) {
+                    juce::Logger::writeToLog("DIAGNOSTIC - ImNodes Style PinOffset value: " + juce::String(style.PinOffset));
+                    logged = true;
+                }
+                // +++ END OF BLOCK +++
+
                 int attr = encodePinId({lid, channel, true});
                 seenAttrs.insert(attr);
                 availableAttrs.insert(attr);
@@ -1596,12 +1605,15 @@ if (auto* mp = synth->getModuleForLogical (lid))
 
                 ImNodes::BeginInputAttribute(attr); ImGui::TextUnformatted(label); ImNodes::EndInputAttribute();
 
-                // +++ ADD THIS BLOCK TO CACHE THE PIN'S POSITION +++
-                // Calculate the center of the pin's visual representation.
+                // +++ CACHE THE PIN'S TRUE CIRCLE POSITION +++
+                const float PIN_CIRCLE_OFFSET = 8.0f;
                 ImVec2 pinMin = ImGui::GetItemRectMin();
                 ImVec2 pinMax = ImGui::GetItemRectMax();
-                attrPositions[attr] = ImVec2(pinMin.x, pinMin.y + (pinMax.y - pinMin.y) * 0.5f);
-                // +++ END OF BLOCK +++
+                float y_center = pinMin.y + (pinMax.y - pinMin.y) * 0.5f;
+                // For input pins, the circle is to the left of the label.
+                float x_pos = pinMin.x - PIN_CIRCLE_OFFSET;
+                attrPositions[attr] = ImVec2(x_pos, y_center);
+                // +++ END OF FIX +++
 
                 ImNodes::PopColorStyle(); // Restore default color
 
@@ -1648,12 +1660,15 @@ if (auto* mp = synth->getModuleForLogical (lid))
                 ImNodes::PushColorStyle(ImNodesCol_Pin, isConnected ? colPinConnected : pinColor);
                 ImNodes::BeginOutputAttribute(attr); rightLabelWithinWidth(label); ImNodes::EndOutputAttribute();
 
-                // +++ ADD THIS BLOCK TO CACHE THE PIN'S POSITION +++
-                // Calculate the center of the pin's visual representation.
+                // +++ CACHE THE PIN'S TRUE CIRCLE POSITION +++
+                const float PIN_CIRCLE_OFFSET = 8.0f;
                 ImVec2 pinMin = ImGui::GetItemRectMin();
                 ImVec2 pinMax = ImGui::GetItemRectMax();
-                attrPositions[attr] = ImVec2(pinMax.x, pinMin.y + (pinMax.y - pinMin.y) * 0.5f);
-                // +++ END OF BLOCK +++
+                float y_center = pinMin.y + (pinMax.y - pinMin.y) * 0.5f;
+                // For output pins, the circle is to the right of the label.
+                float x_pos = pinMax.x + PIN_CIRCLE_OFFSET;
+                attrPositions[attr] = ImVec2(x_pos, y_center);
+                // +++ END OF FIX +++
 
                 ImNodes::PopColorStyle();
 
@@ -1699,12 +1714,15 @@ if (auto* mp = synth->getModuleForLogical (lid))
                     ImGui::TextUnformatted(inLabel);
                     ImNodes::EndInputAttribute();
 
-                    // +++ ADD THIS BLOCK TO CACHE THE PIN'S POSITION +++
-                    // Calculate the center of the pin's visual representation.
+                    // +++ CACHE THE PIN'S TRUE CIRCLE POSITION +++
+                    const auto& style = ImNodes::GetStyle();
                     ImVec2 pinMin = ImGui::GetItemRectMin();
                     ImVec2 pinMax = ImGui::GetItemRectMax();
-                    attrPositions[attr] = ImVec2(pinMin.x, pinMin.y + (pinMax.y - pinMin.y) * 0.5f);
-                    // +++ END OF BLOCK +++
+                    float y_center = pinMin.y + (pinMax.y - pinMin.y) * 0.5f;
+                    // For input pins, the circle is to the left of the label.
+                    float x_pos = pinMin.x - style.PinOffset;
+                    attrPositions[attr] = ImVec2(x_pos, y_center);
+                    // +++ END OF FIX +++
 
                     ImNodes::PopColorStyle();
 
@@ -1748,21 +1766,23 @@ if (auto* mp = synth->getModuleForLogical (lid))
                     unsigned int pinColor = this->getImU32ForType(pinType);
                     bool isConnected = connectedOutputAttrs.count(attr) > 0;
 
-                    // Position cursor to the right on the same line
-                    float labelWidth = ImGui::CalcTextSize(outLabel).x;
-                    ImGui::SameLine(nodeContentWidth - labelWidth);
-
+                    // --- THIS IS THE FIX ---
+                    // Remove the ImGui::SameLine call and let the attribute handle positioning.
                     ImNodes::PushColorStyle(ImNodesCol_Pin, isConnected ? colPinConnected : pinColor);
                     ImNodes::BeginOutputAttribute(attr);
-                    ImGui::TextUnformatted(outLabel);
+                    rightLabelWithinWidth(outLabel); // Use the helper for consistent right-alignment
                     ImNodes::EndOutputAttribute();
+                    // --- END OF FIX ---
 
-                    // +++ ADD THIS BLOCK TO CACHE THE PIN'S POSITION +++
-                    // Calculate the center of the pin's visual representation.
+                    // +++ CACHE THE PIN'S TRUE CIRCLE POSITION +++
+                    const auto& style = ImNodes::GetStyle();
                     ImVec2 pinMin = ImGui::GetItemRectMin();
                     ImVec2 pinMax = ImGui::GetItemRectMax();
-                    attrPositions[attr] = ImVec2(pinMax.x, pinMin.y + (pinMax.y - pinMin.y) * 0.5f);
-                    // +++ END OF BLOCK +++
+                    float y_center = pinMin.y + (pinMax.y - pinMin.y) * 0.5f;
+                    // For output pins, the circle is to the right of the label.
+                    float x_pos = pinMax.x + style.PinOffset;
+                    attrPositions[attr] = ImVec2(x_pos, y_center);
+                    // +++ END OF FIX +++
 
                     ImNodes::PopColorStyle();
 
@@ -1790,10 +1810,72 @@ if (auto* mp = synth->getModuleForLogical (lid))
                 ImGui::Dummy(ImVec2(0.0f, 0.0f));
             };
 
+            // --- DYNAMIC PIN FIX ---
+            // Add a new helper that uses dynamic pin information from modules
+            helpers.drawIoPins = [&](ModuleProcessor* module) {
+                if (!module) return;
+                const auto logicalId = module->getLogicalId();
+                const auto moduleType = synth->getModuleTypeForLogical(logicalId);
+
+                // 1. Get dynamic pins from the module itself.
+                auto dynamicInputs = module->getDynamicInputPins();
+                auto dynamicOutputs = module->getDynamicOutputPins();
+
+                // 2. Get static pins from the database as a fallback.
+                const auto& pinDb = getModulePinDatabase();
+                auto pinInfoIt = pinDb.find(moduleType.toLowerCase());
+                const bool hasStaticPinInfo = (pinInfoIt != pinDb.end());
+                const auto& staticPinInfo = hasStaticPinInfo ? pinInfoIt->second : ModulePinInfo{};
+
+                // 3. If the module has dynamic pins, use the new system
+                const bool hasDynamicPins = !dynamicInputs.empty() || !dynamicOutputs.empty();
+                
+                if (hasDynamicPins)
+                {
+                    // Draw inputs (dynamic if available, otherwise static)
+                    if (!dynamicInputs.empty())
+                    {
+                        for (const auto& pin : dynamicInputs)
+                        {
+                            helpers.drawAudioInputPin(pin.name.toRawUTF8(), pin.channel);
+                        }
+                    }
+                    else
+                    {
+                        for (const auto& pin : staticPinInfo.audioIns)
+                        {
+                            helpers.drawAudioInputPin(pin.name.toRawUTF8(), pin.channel);
+                        }
+                    }
+                    
+                    // Draw outputs (dynamic if available, otherwise static)
+                    if (!dynamicOutputs.empty())
+                    {
+                        for (const auto& pin : dynamicOutputs)
+                        {
+                            helpers.drawAudioOutputPin(pin.name.toRawUTF8(), pin.channel);
+                        }
+                    }
+                    else
+                    {
+                        for (const auto& pin : staticPinInfo.audioOuts)
+                        {
+                            helpers.drawAudioOutputPin(pin.name.toRawUTF8(), pin.channel);
+                        }
+                    }
+                }
+                else
+                {
+                    // 4. Otherwise, fall back to the module's custom drawIoPins implementation
+                    module->drawIoPins(helpers);
+                }
+            };
+            // --- END OF DYNAMIC PIN FIX ---
+
             // Delegate per-module IO pin drawing
             if (synth != nullptr)
                 if (auto* mp = synth->getModuleForLogical (lid))
-                    mp->drawIoPins(helpers);
+                    helpers.drawIoPins(mp);
 
             // Optional per-node right-click popup
             if (ImGui::IsItemHovered() && ImGui::IsMouseReleased(ImGuiMouseButton_Right))
@@ -2293,106 +2375,65 @@ if (auto* mp = synth->getModuleForLogical (lid))
         // Iterate through all visible links
         for (const auto& linkPair : linkIdToAttrs)
         {
-            int linkId = linkPair.first;
             int srcAttr = linkPair.second.first;
             int dstAttr = linkPair.second.second;
             
-            // Decode the source pin to get module and channel info
             auto srcPin = decodePinId(srcAttr);
             
-            // Skip mod pins and invalid pins
             if (srcPin.isMod || srcPin.logicalId == 0)
                 continue;
             
-            // Get the source module to read its output magnitude
             if (auto* srcModule = synth->getModuleForLogical(srcPin.logicalId))
             {
-                // Read the peak magnitude for this channel
                 float magnitude = srcModule->getOutputChannelValue(srcPin.channel);
                 
-                // Only draw visualization if there's a significant signal (> 0.01)
                 if (magnitude > 0.01f)
                 {
-                    // Get the link's color based on pin type
                     PinDataType pinType = getPinDataTypeForPin(srcPin);
                     ImU32 baseColor = getImU32ForType(pinType);
                     
-                    // Extract RGB components
                     float r = ((baseColor >> IM_COL32_R_SHIFT) & 0xFF) / 255.0f;
                     float g = ((baseColor >> IM_COL32_G_SHIFT) & 0xFF) / 255.0f;
                     float b = ((baseColor >> IM_COL32_B_SHIFT) & 0xFF) / 255.0f;
                     
-                    // Get pin screen positions from our cached positions
+                    // Since GetLinkCurvePoints is not available, we replicate the curve math ourselves
                     auto srcPosIt = attrPositions.find(srcAttr);
                     auto dstPosIt = attrPositions.find(dstAttr);
                     
                     if (srcPosIt != attrPositions.end() && dstPosIt != attrPositions.end())
                     {
-                        ImVec2 srcPos = srcPosIt->second;
-                        ImVec2 dstPos = dstPosIt->second;
+                        // 1. Get the four points of the Bézier curve
+                        const ImVec2 p0 = srcPosIt->second; // Start point
+                        const ImVec2 p3 = dstPosIt->second; // End point
                         
-                        // Calculate line midpoint
-                        ImVec2 midpoint = ImVec2(
-                            (srcPos.x + dstPos.x) * 0.5f,
-                            (srcPos.y + dstPos.y) * 0.5f
-                        );
+                        // 2. Calculate the two horizontal control points, just like imnodes does
+                        // The offset determines the "S" shape of the curve
+                        const float horizontalOffset = juce::jmin(100.0f, std::abs(p3.x - p0.x) * 0.3f);
+                        const ImVec2 p1 = ImVec2(p0.x + horizontalOffset, p0.y);
+                        const ImVec2 p2 = ImVec2(p3.x - horizontalOffset, p3.y);
                         
-                        // Animate pulse position along the line
-                        const float pulseSpeed = 200.0f; // pixels per second
-                        const float lineLength = std::sqrt(
-                            (dstPos.x - srcPos.x) * (dstPos.x - srcPos.x) +
-                            (dstPos.y - srcPos.y) * (dstPos.y - srcPos.y)
-                        );
+                        // 3. Determine our position 't' (0.0 to 1.0) along the curve based on time
+                        const float pulseSpeed = 0.4f;
+                        float t = std::fmod(currentTime * pulseSpeed, 1.0f);
                         
-                        if (lineLength > 1.0f)
-                        {
-                            // Calculate pulse travel (loops from 0 to lineLength)
-                            float travel = std::fmod(currentTime * pulseSpeed, lineLength);
-                            float t = travel / lineLength; // 0 to 1
-                            
-                            // Calculate pulse position
-                            ImVec2 pulsePos = ImVec2(
-                                srcPos.x + (dstPos.x - srcPos.x) * t,
-                                srcPos.y + (dstPos.y - srcPos.y) * t
-                            );
-                            
-                            // Calculate pulse size based on magnitude (2-8 pixels)
-                            float pulseRadius = 2.0f + magnitude * 6.0f;
-                            
-                            // Draw outer glow
-                            drawList->AddCircleFilled(
-                                pulsePos,
-                                pulseRadius + 2.0f,
-                                IM_COL32(
-                                    (int)(r * 255),
-                                    (int)(g * 255),
-                                    (int)(b * 255),
-                                    (int)(magnitude * 60)
-                                ),
-                                12
-                            );
-                            
-                            // Draw main pulse
-                            drawList->AddCircleFilled(
-                                pulsePos,
-                                pulseRadius,
-                                IM_COL32(
-                                    (int)(r * 255),
-                                    (int)(g * 255),
-                                    (int)(b * 255),
-                                    (int)(magnitude * 200)
-                                ),
-                                12
-                            );
-                            
-                            // Draw bright center
-                            drawList->AddCircleFilled(
-                                pulsePos,
-                                pulseRadius * 0.5f,
-                                IM_COL32(255, 255, 255, (int)(magnitude * 255)),
-                                8
-                            );
-                        }
+                        // 4. Apply the cubic Bézier formula to find the pulse's screen position
+                        const float u = 1.0f - t;
+                        const float tt = t * t;
+                        const float uu = u * u;
+                        const float uuu = uu * u;
+                        const float ttt = tt * t;
+                        
+                        ImVec2 pulsePos;
+                        pulsePos.x = uuu * p0.x + 3 * uu * t * p1.x + 3 * u * tt * p2.x + ttt * p3.x;
+                        pulsePos.y = uuu * p0.y + 3 * uu * t * p1.y + 3 * u * tt * p2.y + ttt * p3.y;
+                        
+                        // 5. Draw the pulse at the calculated position
+                        float pulseRadius = 2.0f + magnitude * 6.0f;
+                        float alpha = juce::jlimit(0.0f, 1.0f, magnitude * 2.0f);
+
+                        drawList->AddCircleFilled(pulsePos, pulseRadius + 2.0f, IM_COL32((int)(r*255), (int)(g*255), (int)(b*255), (int)(alpha * 60)), 12);
+                        drawList->AddCircleFilled(pulsePos, pulseRadius, IM_COL32((int)(r*255), (int)(g*255), (int)(b*255), (int)(alpha * 200)), 12);
+                        drawList->AddCircleFilled(pulsePos, pulseRadius * 0.5f, IM_COL32(255, 255, 255, (int)(alpha * 255)), 8);
                     }
                 }
             }
@@ -4828,10 +4869,13 @@ void ImGuiNodeEditorComponent::handleMultiSequencerAutoConnectSamplers(MultiSequ
         synth->connect(samplerNodeId, 0 /*Audio Output*/, mixerNodeId, i);
         
         // Connect the Sequencer's CV/Trig for this step directly to the new sampler
-        synth->connect(seqNodeId, 6 + i * 3 + 0, samplerNodeId, 0); // Pitch N -> Pitch Mod
-        synth->connect(seqNodeId, 6 + i * 3 + 1, samplerNodeId, 2); // Gate N -> Gate Mod
-        synth->connect(seqNodeId, 6 + i * 3 + 2, samplerNodeId, 3); // Trig N  -> Trigger Mod
+        synth->connect(seqNodeId, 7 + i * 3 + 0, samplerNodeId, 0); // Pitch N -> Pitch Mod
+        synth->connect(seqNodeId, 7 + i * 3 + 1, samplerNodeId, 2); // Gate N -> Gate Mod
+        synth->connect(seqNodeId, 7 + i * 3 + 2, samplerNodeId, 3); // Trig N  -> Trigger Mod
     }
+    
+    // Connect Num Steps output (channel 6) to Track Mixer's Num Tracks Mod input (channel 64)
+    synth->connect(seqNodeId, 6, mixerNodeId, 64); // Num Steps -> Num Tracks Mod
 
     // 4. Connect the mixer to the main output
     auto outputNodeId = synth->getOutputNodeID();
@@ -4870,12 +4914,18 @@ void ImGuiNodeEditorComponent::handleMultiSequencerAutoConnectVCO(MultiSequencer
     for (int i = 0; i < numSteps; ++i)
     {
         // Connect CV: Sequencer -> PolyVCO
-        synth->connect(seqNodeId, 6 + i * 3 + 0, polyVcoNodeId, 1 + i);                                  // Pitch N -> Freq N Mod
-        synth->connect(seqNodeId, 6 + i * 3 + 1, polyVcoNodeId, 1 + PolyVCOModuleProcessor::MAX_VOICES * 2 + i); // Gate N  -> Gate N Mod
+        synth->connect(seqNodeId, 7 + i * 3 + 0, polyVcoNodeId, 1 + i);                                  // Pitch N -> Freq N Mod
+        synth->connect(seqNodeId, 7 + i * 3 + 1, polyVcoNodeId, 1 + PolyVCOModuleProcessor::MAX_VOICES * 2 + i); // Gate N  -> Gate N Mod
 
         // Connect Audio: PolyVCO -> Mixer
         synth->connect(polyVcoNodeId, i, mixerNodeId, i);
     }
+    
+    // Connect Num Steps output (channel 6) to PolyVCO's Num Voices Mod input (channel 0)
+    synth->connect(seqNodeId, 6, polyVcoNodeId, 0); // Num Steps -> Num Voices Mod
+    
+    // Connect Num Steps output (channel 6) to Track Mixer's Num Tracks Mod input (channel 64)
+    synth->connect(seqNodeId, 6, mixerNodeId, 64); // Num Steps -> Num Tracks Mod
     
     // Connect Mixer -> Main Output
     auto outputNodeId = synth->getOutputNodeID();

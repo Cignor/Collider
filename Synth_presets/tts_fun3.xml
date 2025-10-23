@@ -1,20 +1,20 @@
 <?xml version="1.0" encoding="UTF-8"?>
 
-<ModularSynthPreset version="1">
+<ModularSynthPreset version="1" bpm="120.0">
   <modules>
     <module logicalId="1" type="TTS Performer">
       <params>
         <TTSPerformerParams>
           <PARAM id="engine" value="1.0"/>
           <PARAM id="gate" value="1.0"/>
-          <PARAM id="pitch" value="-11.80000019073486"/>
-          <PARAM id="rate" value="2.0"/>
-          <PARAM id="speed" value="1.0"/>
-          <PARAM id="trimEnd" value="0.6290000081062317"/>
-          <PARAM id="trimStart" value="0.2949999868869781"/>
+          <PARAM id="pitch" value="-1.100000381469727"/>
+          <PARAM id="rate" value="0.1000000014901161"/>
+          <PARAM id="speed" value="1.120000004768372"/>
+          <PARAM id="trimEnd" value="0.7369999885559082"/>
+          <PARAM id="trimStart" value="0.1879999935626984"/>
           <PARAM id="volume" value="1.0"/>
-          <PARAM id="mode"/>
-          <PARAM id="rate_division"/>
+          <PARAM id="mode" value="1.0"/>
+          <PARAM id="rate_division" value="3.0"/>
         </TTSPerformerParams>
       </params>
       <extra>
@@ -34,10 +34,13 @@
           <PARAM id="normMax"/>
           <PARAM id="normMin"/>
           <PARAM id="trigThreshold"/>
-          <PARAM id="rate_division"/>
-          <PARAM id="sync"/>
+          <PARAM id="rate_division" value="3.0"/>
+          <PARAM id="sync" value="1.0"/>
         </RandomParams>
       </params>
+      <extra>
+        <RandomState sync="1.0" rate_division="3.0"/>
+      </extra>
     </module>
     <module logicalId="3" type="Scope">
       <params>
@@ -85,14 +88,14 @@
     <connection srcId="1" srcChan="21" dstId="9" dstChan="2"/>
     <connection srcId="1" srcChan="0" dstId="10" dstChan="0"/>
     <connection srcId="1" srcChan="0" dstId="17" dstChan="0"/>
-    <connection srcId="2" srcChan="0" dstId="1" dstChan="0"/>
+    <connection srcId="2" srcChan="0" dstId="1" dstChan="5"/>
     <connection srcId="2" srcChan="0" dstId="1" dstChan="7"/>
     <connection srcId="9" srcChan="0" dstId="output" dstChan="1"/>
     <connection srcId="17" srcChan="0" dstId="9" dstChan="0"/>
   </connections>
   <NodeEditorUI>
     <node id="1" x="-737.0" y="148.0"/>
-    <node id="2" x="-1221.0" y="408.0"/>
+    <node id="2" x="-1338.0" y="461.0"/>
     <node id="3" x="667.0" y="786.0"/>
     <node id="4" x="219.0" y="261.0"/>
     <node id="9" x="84.0" y="1020.0"/>

@@ -88,6 +88,7 @@ void FunctionGeneratorModuleProcessor::prepareToPlay(double sr, int)
 {
     sampleRate = sr;
     phase = 0.0;
+    lastPhase = 0.0;
     
     smoothedSlew.reset(sampleRate, 0.01);
     smoothedRate.reset(sampleRate, 0.01);
@@ -95,6 +96,11 @@ void FunctionGeneratorModuleProcessor::prepareToPlay(double sr, int)
     smoothedTrigThresh.reset(sampleRate, 0.001);
     smoothedPitchBase.reset(sampleRate, 0.01);
     smoothedValueMult.reset(sampleRate, 0.01);
+}
+
+void FunctionGeneratorModuleProcessor::setTimingInfo(const TransportState& state)
+{
+    m_currentTransport = state;
 }
 
 void FunctionGeneratorModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midi)
@@ -189,7 +195,22 @@ void FunctionGeneratorModuleProcessor::processBlock(juce::AudioBuffer<float>& bu
         
         bool endOfCycle = false;
 
-        if (baseMode == 0) // Free (Hz) mode
+        if (baseMode == 1 && m_currentTransport.isPlaying) // Sync mode
+        {
+            const int divisionIndex = 3; // Fixed to 1/4 note for now (you can add a parameter later)
+            static const double divisions[] = { 1.0/32.0, 1.0/16.0, 1.0/8.0, 1.0/4.0, 1.0/2.0, 1.0, 2.0, 4.0, 8.0 };
+            const double beatDivision = divisions[juce::jlimit(0, 8, divisionIndex)];
+            
+            double currentBeat = m_currentTransport.songPositionBeats + (i / sampleRate / 60.0 * m_currentTransport.bpm);
+            phase = std::fmod(currentBeat * beatDivision, 1.0);
+            
+            if (phase < lastPhase) // Loop point
+            {
+                endOfCycle = true;
+            }
+            lastPhase = phase;
+        }
+        else // Free (Hz) mode or not playing
         {
             if (currentGateState) {
                 phase += smoothedRateValue / sampleRate;
@@ -203,23 +224,6 @@ void FunctionGeneratorModuleProcessor::processBlock(juce::AudioBuffer<float>& bu
                     endOfCycle = true;
                 } else {
                     phase = 1.0;
-                }
-            }
-        }
-        else // Sync mode
-        {
-            if (triggerRising) {
-                phase = 0.0;
-                isRunning = true;
-            }
-            
-            if (isRunning) {
-                // In sync mode, rate still controls speed of the one-shot
-                phase += smoothedRateValue / sampleRate;
-                if (phase >= 1.0) {
-                    isRunning = baseLoop; // If looping, stay running and wrap
-                    phase = baseLoop ? std::fmod(phase, 1.0) : 1.0;
-                    endOfCycle = true;
                 }
             }
         }
@@ -319,22 +323,35 @@ void FunctionGeneratorModuleProcessor::drawParametersInNode(float itemWidth, con
     auto& ap = getAPVTS();
     ImGui::PushItemWidth(itemWidth);
 
-    // Rate
-    const bool rateIsMod = isParamModulated(paramIdRateMod);
-    float rate = rateIsMod ? getLiveParamValueFor(paramIdRateMod, "rate_live", rateParam->load()) : rateParam->load();
-    if (rateIsMod) ImGui::BeginDisabled();
-    if (ImGui::SliderFloat("Rate", &rate, 0.1f, 100.0f, "%.2f Hz", ImGuiSliderFlags_Logarithmic)) {
-        if (!rateIsMod) *dynamic_cast<juce::AudioParameterFloat*>(ap.getParameter(paramIdRate)) = rate;
-    }
-    if (!rateIsMod) adjustParamOnWheel(ap.getParameter(paramIdRate), "rate", rate);
-    if (ImGui::IsItemDeactivatedAfterEdit() && !rateIsMod) onModificationEnded();
-    if (rateIsMod) { ImGui::EndDisabled(); ImGui::SameLine(); ImGui::TextUnformatted("(mod)"); }
-
-    // Mode (No modulation for this parameter)
-    int mode = (int)modeParam->load();
-    if (ImGui::Combo("Mode", &mode, "Free (Hz)\0Sync\0\0")) {
-        *dynamic_cast<juce::AudioParameterChoice*>(ap.getParameter(paramIdMode)) = mode;
+    // --- SYNC CONTROLS ---
+    bool sync = apvts.getRawParameterValue(paramIdMode)->load() > 0.5f;
+    if (ImGui::Checkbox("Sync to Transport", &sync))
+    {
+        if (auto* p = dynamic_cast<juce::AudioParameterChoice*>(ap.getParameter(paramIdMode)))
+            *p = sync ? 1 : 0;
         onModificationEnded();
+    }
+    
+    if (sync)
+    {
+        // NOTE: We haven't added a "rate_division" parameter to this module yet.
+        // For now, it will be fixed at 1/4 note. This UI is a placeholder.
+        ImGui::BeginDisabled();
+        ImGui::TextUnformatted("Division: 1/4 Note (fixed)");
+        ImGui::EndDisabled();
+    }
+    else
+    {
+        // Rate slider (only show in free-running mode)
+        const bool rateIsMod = isParamModulated(paramIdRateMod);
+        float rate = rateIsMod ? getLiveParamValueFor(paramIdRateMod, "rate_live", rateParam->load()) : rateParam->load();
+        if (rateIsMod) ImGui::BeginDisabled();
+        if (ImGui::SliderFloat("Rate", &rate, 0.1f, 100.0f, "%.2f Hz", ImGuiSliderFlags_Logarithmic)) {
+            if (!rateIsMod) *dynamic_cast<juce::AudioParameterFloat*>(ap.getParameter(paramIdRate)) = rate;
+        }
+        if (!rateIsMod) adjustParamOnWheel(ap.getParameter(paramIdRate), "rate", rate);
+        if (ImGui::IsItemDeactivatedAfterEdit() && !rateIsMod) onModificationEnded();
+        if (rateIsMod) { ImGui::EndDisabled(); ImGui::SameLine(); ImGui::TextUnformatted("(mod)"); }
     }
     
     // Loop (No modulation for this parameter)
@@ -541,6 +558,9 @@ bool FunctionGeneratorModuleProcessor::getParamRouting(const juce::String& param
 juce::ValueTree FunctionGeneratorModuleProcessor::getExtraStateTree() const
 {
     juce::ValueTree vt("FunctionGeneratorState");
+    // Save the mode parameter
+    vt.setProperty("mode", apvts.getRawParameterValue("mode")->load(), nullptr);
+    // Save the curve points
     for (int c = 0; c < curves.size(); ++c)
     {
         juce::ValueTree points("CurvePoints_" + juce::String(c));
@@ -557,6 +577,10 @@ void FunctionGeneratorModuleProcessor::setExtraStateTree(const juce::ValueTree& 
 {
     if (vt.hasType("FunctionGeneratorState"))
     {
+        // Restore the mode parameter
+        if (auto* p = dynamic_cast<juce::AudioParameterBool*>(apvts.getParameter("mode")))
+            *p = (bool)vt.getProperty("mode", false);
+        // Restore the curve points
         for (int c = 0; c < curves.size(); ++c)
         {
             auto points = vt.getChildWithName("CurvePoints_" + juce::String(c));

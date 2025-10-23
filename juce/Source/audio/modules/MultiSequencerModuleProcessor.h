@@ -17,6 +17,10 @@ public:
 
     juce::AudioProcessorValueTreeState& getAPVTS() override { return apvts; }
 
+    // State management for transport settings
+    juce::ValueTree getExtraStateTree() const override;
+    void setExtraStateTree(const juce::ValueTree&) override;
+
     juce::String getAudioOutputLabel(int channel) const override;
     juce::String getAudioInputLabel(int channel) const override;
     bool getParamRouting(const juce::String& paramId, int& outBusIndex, int& outChannelIndexInBus) const override;
@@ -29,6 +33,9 @@ public:
     void drawIoPins(const NodePinHelpers& helpers) override;
 #endif
 
+protected:
+    void setTimingInfo(const TransportState& state) override;
+
 private:
     static juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout();
 
@@ -36,6 +43,9 @@ private:
     std::atomic<int> currentStep { 0 };
     double phase { 0.0 };
     double sampleRate { 44100.0 };
+
+    TransportState m_currentTransport;
+
     std::atomic<float>* rateParam { nullptr };
     std::atomic<float>* gateLengthParam { nullptr };
     std::atomic<float>* gateThresholdParam { nullptr };

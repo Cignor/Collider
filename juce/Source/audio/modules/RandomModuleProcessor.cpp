@@ -13,6 +13,12 @@ juce::AudioProcessorValueTreeState::ParameterLayout RandomModuleProcessor::creat
     params.push_back(std::make_unique<juce::AudioParameterFloat>(paramIdSlew, "Slew", juce::NormalisableRange<float>(0.0f, 1.0f, 0.001f, 0.5f), 0.0f));
     params.push_back(std::make_unique<juce::AudioParameterFloat>(paramIdRate, "Rate", juce::NormalisableRange<float>(0.1f, 50.0f, 0.01f, 0.3f), 1.0f));
     params.push_back(std::make_unique<juce::AudioParameterFloat>(paramIdTrigThreshold, "Trig Threshold", 0.0f, 1.0f, 0.5f));
+    
+    // Transport sync parameters
+    params.push_back(std::make_unique<juce::AudioParameterBool>("sync", "Sync to Transport", false));
+    params.push_back(std::make_unique<juce::AudioParameterChoice>("rate_division", "Division",
+        juce::StringArray{ "1/32", "1/16", "1/8", "1/4", "1/2", "1", "2", "4", "8" }, 3));
+    
     return { params.begin(), params.end() };
 }
 
@@ -39,6 +45,7 @@ void RandomModuleProcessor::prepareToPlay(double newSampleRate, int)
 {
     sampleRate = newSampleRate;
     phase = 1.0;
+    lastScaledBeats = 0.0;
     trigPulseRemaining = 0;
     smoothedSlew.reset(newSampleRate, 0.01);
     smoothedSlew.setCurrentAndTargetValue(slewParam->load());
@@ -49,6 +56,11 @@ void RandomModuleProcessor::prepareToPlay(double newSampleRate, int)
     const float cvMinVal = cvMinParam->load();
     const float cvMaxVal = cvMaxParam->load();
     targetValueCV = currentValueCV = cvMinVal + rng.nextFloat() * (cvMaxVal - cvMinVal);
+}
+
+void RandomModuleProcessor::setTimingInfo(const TransportState& state)
+{
+    m_currentTransport = state;
 }
 
 void RandomModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midi)
@@ -68,6 +80,12 @@ void RandomModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce:
     const float normMaxVal = normMaxParam->load();
     const float trigThreshold = trigThresholdParam->load();
 
+    // Get sync parameters
+    const bool syncEnabled = apvts.getRawParameterValue("sync")->load() > 0.5f;
+    const int divisionIndex = (int)apvts.getRawParameterValue("rate_division")->load();
+    static const double divisions[] = { 1.0/32.0, 1.0/16.0, 1.0/8.0, 1.0/4.0, 1.0/2.0, 1.0, 2.0, 4.0, 8.0 };
+    const double beatDivision = divisions[juce::jlimit(0, 8, divisionIndex)];
+
     auto* normOut = outBus.getWritePointer(0);
     auto* rawOut  = outBus.getWritePointer(1);
     auto* cvOut   = outBus.getWritePointer(2);
@@ -76,10 +94,31 @@ void RandomModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce:
 
     for (int i = 0; i < numSamples; ++i)
     {
-        phase += (double)baseRate / sampleRate;
-        if (phase >= 1.0)
+        bool triggerNewValue = false;
+        if (syncEnabled && m_currentTransport.isPlaying)
         {
-            phase -= 1.0;
+            // SYNC MODE
+            double beatsNow = m_currentTransport.songPositionBeats + (i / sampleRate / 60.0 * m_currentTransport.bpm);
+            double scaledBeats = beatsNow * beatDivision;
+            if (static_cast<long long>(scaledBeats) > static_cast<long long>(lastScaledBeats))
+            {
+                triggerNewValue = true;
+            }
+            lastScaledBeats = scaledBeats;
+        }
+        else
+        {
+            // FREE-RUNNING MODE
+            phase += (double)baseRate / sampleRate;
+            if (phase >= 1.0)
+            {
+                phase -= 1.0;
+                triggerNewValue = true;
+            }
+        }
+
+        if (triggerNewValue)
+        {
             targetValue = minVal + rng.nextFloat() * (maxVal - minVal);
             targetValueCV = cvMinVal + rng.nextFloat() * (cvMaxVal - cvMinVal);
             if (currentValueCV >= trigThreshold) {
@@ -127,9 +166,30 @@ void RandomModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce:
     }
 }
 
-#if defined(PRESET_CREATOR_UI)
-void RandomModuleProcessor::drawParametersInNode(float itemWidth, const std::function<bool(const juce::String&)>&, const std::function<void()>& onModificationEnded)
+juce::ValueTree RandomModuleProcessor::getExtraStateTree() const
 {
+    juce::ValueTree vt("RandomState");
+    vt.setProperty("sync", apvts.getRawParameterValue("sync")->load(), nullptr);
+    vt.setProperty("rate_division", apvts.getRawParameterValue("rate_division")->load(), nullptr);
+    return vt;
+}
+
+void RandomModuleProcessor::setExtraStateTree(const juce::ValueTree& vt)
+{
+    if (vt.hasType("RandomState"))
+    {
+        if (auto* p = dynamic_cast<juce::AudioParameterBool*>(apvts.getParameter("sync")))
+            *p = (bool)vt.getProperty("sync", false);
+        if (auto* p = dynamic_cast<juce::AudioParameterChoice*>(apvts.getParameter("rate_division")))
+            *p = (int)vt.getProperty("rate_division", 3);
+    }
+}
+
+#if defined(PRESET_CREATOR_UI)
+void RandomModuleProcessor::drawParametersInNode(float itemWidth, const std::function<bool(const juce::String&)>& isParamModulated, const std::function<void()>& onModificationEnded)
+{
+    juce::ignoreUnused(isParamModulated);
+    
     auto& ap = getAPVTS();
     float cvMin = cvMinParam->load();
     float cvMax = cvMaxParam->load();
@@ -143,9 +203,32 @@ void RandomModuleProcessor::drawParametersInNode(float itemWidth, const std::fun
 
     ImGui::PushItemWidth(itemWidth);
 
-    if (ImGui::SliderFloat("Rate", &rate, 0.1f, 50.0f, "%.3f Hz", ImGuiSliderFlags_Logarithmic)) *dynamic_cast<juce::AudioParameterFloat*>(ap.getParameter(paramIdRate)) = rate;
-    if (ImGui::IsItemDeactivatedAfterEdit()) onModificationEnded();
-    adjustParamOnWheel(ap.getParameter(paramIdRate), "rate", rate);
+    // --- SYNC CONTROLS ---
+    bool sync = apvts.getRawParameterValue("sync")->load() > 0.5f;
+    if (ImGui::Checkbox("Sync to Transport", &sync))
+    {
+        if (auto* p = dynamic_cast<juce::AudioParameterBool*>(ap.getParameter("sync")))
+            *p = sync;
+        onModificationEnded();
+    }
+    
+    if (sync)
+    {
+        int division = (int)apvts.getRawParameterValue("rate_division")->load();
+        if (ImGui::Combo("Division", &division, "1/32\0""1/16\0""1/8\0""1/4\0""1/2\0""1\0""2\0""4\0""8\0\0"))
+        {
+            if (auto* p = dynamic_cast<juce::AudioParameterChoice*>(ap.getParameter("rate_division")))
+                *p = division;
+            onModificationEnded();
+        }
+    }
+    else
+    {
+        // Rate slider (only show in free-running mode)
+        if (ImGui::SliderFloat("Rate", &rate, 0.1f, 50.0f, "%.3f Hz", ImGuiSliderFlags_Logarithmic)) *dynamic_cast<juce::AudioParameterFloat*>(ap.getParameter(paramIdRate)) = rate;
+        if (ImGui::IsItemDeactivatedAfterEdit()) onModificationEnded();
+        adjustParamOnWheel(ap.getParameter(paramIdRate), "rate", rate);
+    }
 
     if (ImGui::SliderFloat("Slew", &slew, 0.0f, 1.0f, "%.3f")) *dynamic_cast<juce::AudioParameterFloat*>(ap.getParameter(paramIdSlew)) = slew;
     if (ImGui::IsItemDeactivatedAfterEdit()) onModificationEnded();

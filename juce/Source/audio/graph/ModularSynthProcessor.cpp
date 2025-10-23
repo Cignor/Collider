@@ -195,6 +195,7 @@ void ModularSynthProcessor::getStateInformation(juce::MemoryBlock& destData)
     const juce::ScopedLock lock (moduleLock);
     juce::ValueTree root("ModularSynthPreset");
     root.setProperty("version", 1, nullptr);
+    root.setProperty("bpm", m_transportState.bpm, nullptr);
 
     juce::ValueTree modsVT("modules");
     std::map<juce::uint32, juce::uint32> nodeUidToLogical;
@@ -292,6 +293,11 @@ void ModularSynthProcessor::setStateInformation(const void* data, int sizeInByte
     juce::Logger::writeToLog("[STATE] Cleared existing state.");
 
     juce::ValueTree root = juce::ValueTree::fromXml(*xml);
+    
+    // Restore global transport settings
+    m_transportState.bpm = root.getProperty("bpm", 120.0);
+    juce::Logger::writeToLog("[STATE] Restored BPM to " + juce::String(m_transportState.bpm));
+    
     auto modsVT = root.getChildWithName("modules");
     if (!modsVT.isValid())
     {
@@ -405,17 +411,8 @@ void ModularSynthProcessor::setStateInformation(const void* data, int sizeInByte
                 logicalToNodeId[logicalId] = nodeId;
                 juce::Logger::writeToLog("[STATE]   Mapped logicalId " + juce::String(logicalId) + " to nodeId.uid " + juce::String(nodeId.uid));
 
-                auto paramsWrapper = mv.getChildWithName("params");
-                if (paramsWrapper.isValid() && paramsWrapper.getNumChildren() > 0)
-                {
-                    auto params = paramsWrapper.getChild(0);
-                    if (auto* mp = dynamic_cast<ModuleProcessor*>(node->getProcessor()))
-                    {
-                        mp->getAPVTS().replaceState(params);
-                        juce::Logger::writeToLog("[STATE]   Restored parameters.");
-                    }
-                }
-
+                // --- FIX: Restore extra state FIRST ---
+                // This will load the clip and reset trim sliders to defaults.
                 auto extraWrapper = mv.getChildWithName("extra");
                 if (extraWrapper.isValid() && extraWrapper.getNumChildren() > 0)
                 {
@@ -424,6 +421,19 @@ void ModularSynthProcessor::setStateInformation(const void* data, int sizeInByte
                     {
                         mp->setExtraStateTree(extra);
                         juce::Logger::writeToLog("[STATE]   Restored extra state.");
+                    }
+                }
+
+                // Now restore parameters SECOND.
+                // This will overwrite the temporary default trim values with the correct saved values.
+                auto paramsWrapper = mv.getChildWithName("params");
+                if (paramsWrapper.isValid() && paramsWrapper.getNumChildren() > 0)
+                {
+                    auto params = paramsWrapper.getChild(0);
+                    if (auto* mp = dynamic_cast<ModuleProcessor*>(node->getProcessor()))
+                    {
+                        mp->getAPVTS().replaceState(params);
+                        juce::Logger::writeToLog("[STATE]   Restored parameters.");
                     }
                 }
             }

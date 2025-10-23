@@ -164,6 +164,11 @@ juce::AudioProcessorValueTreeState::ParameterLayout TTSPerformerModuleProcessor:
         juce::NormalisableRange<float>(-24.0f, 24.0f, 0.01f), 0.0f));
     params.push_back(std::make_unique<juce::AudioParameterChoice>("engine", "Engine", juce::StringArray{ "RubberBand", "Naive" }, 1));
     
+    // Transport sync parameters
+    params.push_back(std::make_unique<juce::AudioParameterBool>("mode", "Sync to Transport", false));
+    params.push_back(std::make_unique<juce::AudioParameterChoice>("rate_division", "Division",
+        juce::StringArray{ "1/32", "1/16", "1/8", "1/4", "1/2", "1", "2", "4", "8" }, 3));
+    
     // NOTE: Do NOT create APVTS parameters for modulation inputs. They are CV buses only.
     
     return { params.begin(), params.end() };
@@ -208,8 +213,14 @@ void TTSPerformerModuleProcessor::prepareToPlay(double sampleRate, int samplesPe
     interleavedOutput.allocate((size_t)(interleavedCapacityFrames * 2), true);
     readPosition = 0.0;
     stepAccumulatorSec = 0.0;
+    lastScaledBeats_tts = 0.0;
     juce::Logger::writeToLog("[TTS][Prepare] instance=" + juce::String((juce::uint64)(uintptr_t)this) +
                              " storedLogicalId=" + juce::String((int)getLogicalId()));
+}
+
+void TTSPerformerModuleProcessor::setTimingInfo(const TransportState& state)
+{
+    m_currentTransport = state;
 }
 
 void TTSPerformerModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffer&)
@@ -498,46 +509,56 @@ void TTSPerformerModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer,
             }
         }
         
-        // Rate-based stepping scheduler (jump to word starts at 1/rate seconds)
-        if (hasValidClip && haveTimings && currentRate > 0.0f)
+        // Rate-based stepping scheduler (jump to word starts)
+        const bool syncEnabled = apvts.getRawParameterValue("mode")->load() > 0.5f;
+        if (hasValidClip && haveTimings)
         {
-            // Recompute step period from per-sample (modulated) rate
-            const double stepPeriodSecNow = currentRate > 0.0f ? (1.0 / (double) currentRate) : 0.0;
-            // Force immediate reschedule if rate changed abruptly (snappy response)
-            if (lastRateForScheduler != currentRate)
+            bool advanceStep = false;
+            if (syncEnabled && m_currentTransport.isPlaying)
             {
-                stepAccumulatorSec = 0.0;
-                lastRateForScheduler = currentRate;
+                // SYNC MODE
+                const int divisionIndex = (int)apvts.getRawParameterValue("rate_division")->load();
+                static const double divisions[] = { 1.0/32.0, 1.0/16.0, 1.0/8.0, 1.0/4.0, 1.0/2.0, 1.0, 2.0, 4.0, 8.0 };
+                const double beatDivision = divisions[juce::jlimit(0, 8, divisionIndex)];
+                
+                double beatsNow = m_currentTransport.songPositionBeats + (i / srD / 60.0 * m_currentTransport.bpm);
+                double scaledBeats = beatsNow * beatDivision;
+
+                if (static_cast<long long>(scaledBeats) > static_cast<long long>(lastScaledBeats_tts))
+                {
+                    advanceStep = true;
+                }
+                lastScaledBeats_tts = scaledBeats;
             }
-            // Initialize accumulator if needed
-            if (stepAccumulatorSec <= 0.0)
+            else if (currentRate > 0.0f)
+            {
+                // FREE-RUNNING MODE
+                if (stepAccumulatorSec <= 0.0)
+                {
+                    advanceStep = true;
+                    stepAccumulatorSec += (1.0 / (double)currentRate);
+                }
+                stepAccumulatorSec -= (1.0 / srD);
+            }
+
+            if (advanceStep)
             {
                 clampWordIndexToTrim();
-
-                // --- CROSSFADE FIX: INITIATE FADE ---
-                // Instead of jumping the readPosition directly, we set up a crossfade.
-                crossfadeStartPosition = readPosition; // Store where we are now.
+                crossfadeStartPosition = readPosition;
                 const auto& w = getActiveTimings()[(size_t) juce::jlimit(0, (int)getActiveTimings().size() - 1, currentWordIndex)];
-                crossfadeEndPosition = juce::jlimit(startSamplePos, endSamplePos - 1.0, w.startTimeSeconds * srD); // This is our target.
-
-                crossfadeSamplesTotal = (int) (srD * 0.050); // 20ms crossfade
+                crossfadeEndPosition = juce::jlimit(startSamplePos, endSamplePos - 1.0, w.startTimeSeconds * srD);
+                crossfadeSamplesTotal = (int)(srD * 0.020); // 20ms crossfade
                 crossfadeSamplesRemaining = crossfadeSamplesTotal;
 
-                // Arm trigger pulse
                 if (currentWordIndex < 16)
-                    wordTriggerPending[currentWordIndex] = (int) std::ceil(0.001 * srD);
-                stepAccumulatorSec += stepPeriodSecNow;
-            }
-            // Countdown
-            stepAccumulatorSec -= (1.0 / srD);
-            if (stepAccumulatorSec <= 0.0)
-            {
-                // Advance to next word within trim range
+                    wordTriggerPending[currentWordIndex] = (int)std::ceil(0.001 * srD);
+                
+                // Advance to next word
                 const auto& t = getActiveTimings();
                 if (!t.empty())
                 {
                     currentWordIndex++;
-                    if (currentWordIndex >= (int) t.size()) currentWordIndex = 0;
+                    if (currentWordIndex >= (int)t.size()) currentWordIndex = 0;
                 }
             }
         }
@@ -1619,7 +1640,8 @@ void TTSPerformerModuleProcessor::setStateInformation(const void* data, int size
 juce::ValueTree TTSPerformerModuleProcessor::getExtraStateTree() const
 {
     juce::ValueTree vt("TTSPerformerState");
-    // If a clip is selected, save its unique ID to the preset.
+    // Only save the unique ID of the selected clip.
+    // Trim parameters are handled automatically by the main APVTS save system.
     if (selectedClip)
     {
         vt.setProperty("selectedClipId", selectedClip->clipId, nullptr);
@@ -1631,12 +1653,11 @@ void TTSPerformerModuleProcessor::setExtraStateTree(const juce::ValueTree& vt)
 {
     if (vt.hasType("TTSPerformerState"))
     {
-        // When loading, get the saved clip ID.
+        // Only load the unique ID of the clip to select.
+        // Trim parameters are restored automatically by the main APVTS system.
         juce::String clipIdToSelect = vt.getProperty("selectedClipId", "").toString();
         if (clipIdToSelect.isNotEmpty())
         {
-            // The constructor already called loadClipsFromDisk, so the cache is ready.
-            // We can now safely select the clip by its ID.
             selectClipByKey(clipIdToSelect);
         }
     }
@@ -2029,29 +2050,51 @@ void TTSPerformerModuleProcessor::drawParametersInNode(float itemWidth, const st
     
     ImGui::PushItemWidth(itemWidth);
     
-    // Rate slider (with modulation feedback + proper undo/redo)
-    const bool rateIsMod = isParamModulated("rate_mod");
-    float rate = rateIsMod ? getLiveNoGate("rate_live", rateParam->load())
-                           : rateParam->load();
-    
-    if (rateIsMod) ImGui::BeginDisabled();
-    if (ImGui::SliderFloat("Rate (Hz)", &rate, 0.1f, 20.0f, "%.2f", ImGuiSliderFlags_Logarithmic))
+    // --- SYNC CONTROLS ---
+    bool sync = apvts.getRawParameterValue("mode")->load() > 0.5f;
+    if (ImGui::Checkbox("Sync to Transport", &sync))
     {
-        if (!rateIsMod) 
+        if (auto* p = dynamic_cast<juce::AudioParameterBool*>(apvts.getParameter("mode")))
+            *p = sync;
+        onModificationEnded();
+    }
+
+    if (sync)
+    {
+        int division = (int)apvts.getRawParameterValue("rate_division")->load();
+        if (ImGui::Combo("Division", &division, "1/32\0""1/16\0""1/8\0""1/4\0""1/2\0""1\0""2\0""4\0""8\0\0"))
         {
-            auto* param = dynamic_cast<juce::AudioParameterFloat*>(apvts.getParameter("rate"));
-            if (param) param->setValueNotifyingHost(apvts.getParameterRange("rate").convertTo0to1(rate));
+            if (auto* p = dynamic_cast<juce::AudioParameterChoice*>(apvts.getParameter("rate_division")))
+                *p = division;
+            onModificationEnded();
         }
     }
-    if (!rateIsMod) adjustParamOnWheel(apvts.getParameter("rate"), "rate", rate);
-    if (ImGui::IsItemDeactivatedAfterEdit()) onModificationEnded();
-    if (rateIsMod)
+    else
     {
-        ImGui::EndDisabled();
-        const float baseRateDisp = rateParam->load();
-        const float liveRateDisp = getLiveNoGate("rate_live", baseRateDisp);
-        ImGui::SameLine();
-        ImGui::Text("%.2f Hz -> %.2f Hz (mod)", baseRateDisp, liveRateDisp);
+        // Rate slider (only shown in free-running mode, with modulation feedback + proper undo/redo)
+        const bool rateIsMod = isParamModulated("rate_mod");
+        float rate = rateIsMod ? getLiveNoGate("rate_live", rateParam->load())
+                               : rateParam->load();
+        
+        if (rateIsMod) ImGui::BeginDisabled();
+        if (ImGui::SliderFloat("Rate (Hz)", &rate, 0.1f, 20.0f, "%.2f", ImGuiSliderFlags_Logarithmic))
+        {
+            if (!rateIsMod) 
+            {
+                auto* param = dynamic_cast<juce::AudioParameterFloat*>(apvts.getParameter("rate"));
+                if (param) param->setValueNotifyingHost(apvts.getParameterRange("rate").convertTo0to1(rate));
+            }
+        }
+        if (!rateIsMod) adjustParamOnWheel(apvts.getParameter("rate"), "rate", rate);
+        if (ImGui::IsItemDeactivatedAfterEdit()) onModificationEnded();
+        if (rateIsMod)
+        {
+            ImGui::EndDisabled();
+            const float baseRateDisp = rateParam->load();
+            const float liveRateDisp = getLiveNoGate("rate_live", baseRateDisp);
+            ImGui::SameLine();
+            ImGui::Text("%.2f Hz -> %.2f Hz (mod)", baseRateDisp, liveRateDisp);
+        }
     }
     
     // Gate slider

@@ -27,6 +27,12 @@ APVTS::ParameterLayout StepSequencerModuleProcessor::createParameterLayout()
     params.push_back (std::make_unique<juce::AudioParameterFloat> ("numSteps_mod", "Num Steps Mod", 0.0f, 1.0f, 0.5f));
     // Optional maximum steps bound (1..MAX_STEPS), default MAX_STEPS
     params.push_back (std::make_unique<juce::AudioParameterInt> ("numSteps_max", "Num Steps Max", 1, StepSequencerModuleProcessor::MAX_STEPS, StepSequencerModuleProcessor::MAX_STEPS));
+    
+    // Transport sync parameters
+    params.push_back(std::make_unique<juce::AudioParameterBool>("sync", "Sync to Transport", false));
+    params.push_back(std::make_unique<juce::AudioParameterChoice>("rate_division", "Division", 
+        juce::StringArray{ "1/32", "1/16", "1/8", "1/4", "1/2", "1", "2", "4", "8" }, 3)); // Default: 1/4 note
+    
     for (int i = 0; i < StepSequencerModuleProcessor::MAX_STEPS; ++i)
     {
         const juce::String pid = "step" + juce::String (i + 1);
@@ -129,6 +135,11 @@ void StepSequencerModuleProcessor::prepareToPlay (double newSampleRate, int samp
     juce::ignoreUnused (samplesPerBlock);
     sampleRate = newSampleRate > 0.0 ? newSampleRate : 44100.0;
     phase = 0.0;
+}
+
+void StepSequencerModuleProcessor::setTimingInfo(const TransportState& state)
+{
+    m_currentTransport = state;
 }
 
 void StepSequencerModuleProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midi)
@@ -265,16 +276,39 @@ void StepSequencerModuleProcessor::processBlock (juce::AudioBuffer<float>& buffe
         }
         lastGateThresholdLive = gateThreshold;
         
-        const double phaseInc = (sampleRate > 0.0 ? (double) rate / sampleRate : 0.0);
-        
-        phase += phaseInc;
-        if (phase >= 1.0)
+        // --- Transport Sync Logic ---
+        const bool syncEnabled = apvts.getRawParameterValue("sync")->load() > 0.5f;
+
+        if (syncEnabled && m_currentTransport.isPlaying)
         {
-            phase -= 1.0;
-            const int next = (currentStep.load() + 1) % juce::jlimit (1, MAX_STEPS, activeSteps);
-            if (shouldLog) juce::Logger::writeToLog("[SEQ LOG] Step Advanced: " + juce::String(currentStep.load()) + " -> " + juce::String(next));
-            currentStep.store(next);
-            stepAdvanced = true;
+            // SYNC MODE: Use the global beat position
+            const int divisionIndex = (int)apvts.getRawParameterValue("rate_division")->load();
+            static const double divisions[] = { 1.0/32.0, 1.0/16.0, 1.0/8.0, 1.0/4.0, 1.0/2.0, 1.0, 2.0, 4.0, 8.0 };
+            const double beatDivision = divisions[juce::jlimit(0, 8, divisionIndex)];
+            
+            // Calculate which step we should be on based on song position
+            const int totalSteps = juce::jlimit(1, MAX_STEPS, activeSteps);
+            const int stepForBeat = static_cast<int>(std::fmod(m_currentTransport.songPositionBeats * beatDivision, totalSteps));
+
+            if (stepForBeat != currentStep.load())
+            {
+                currentStep.store(stepForBeat);
+                stepAdvanced = true;
+            }
+        }
+        else
+        {
+            // FREE-RUNNING MODE: Use the internal phase clock
+            const double phaseInc = (sampleRate > 0.0 ? (double) rate / sampleRate : 0.0);
+            phase += phaseInc;
+            if (phase >= 1.0)
+            {
+                phase -= 1.0;
+                const int next = (currentStep.load() + 1) % juce::jlimit (1, MAX_STEPS, activeSteps);
+                if (shouldLog) juce::Logger::writeToLog("[SEQ LOG] Step Advanced: " + juce::String(currentStep.load()) + " -> " + juce::String(next));
+                currentStep.store(next);
+                stepAdvanced = true;
+            }
         }
         lastStepsLive = activeSteps;
 
@@ -413,6 +447,25 @@ void StepSequencerModuleProcessor::processBlock (juce::AudioBuffer<float>& buffe
         if (lastOutputValues[5] && trigOut) lastOutputValues[5]->store(trigOut[numSamples - 1]);
     }
 
+}
+
+juce::ValueTree StepSequencerModuleProcessor::getExtraStateTree() const
+{
+    juce::ValueTree vt("SequencerState");
+    vt.setProperty("sync", apvts.getRawParameterValue("sync")->load(), nullptr);
+    vt.setProperty("rate_division", apvts.getRawParameterValue("rate_division")->load(), nullptr);
+    return vt;
+}
+
+void StepSequencerModuleProcessor::setExtraStateTree(const juce::ValueTree& vt)
+{
+    if (vt.hasType("SequencerState"))
+    {
+        if (auto* p = dynamic_cast<juce::AudioParameterBool*>(apvts.getParameter("sync")))
+            *p = (bool)vt.getProperty("sync", false);
+        if (auto* p = dynamic_cast<juce::AudioParameterChoice*>(apvts.getParameter("rate_division")))
+            *p = (int)vt.getProperty("rate_division", 3);
+    }
 }
 
 #if defined(PRESET_CREATOR_UI)
@@ -618,18 +671,42 @@ void StepSequencerModuleProcessor::drawParametersInNode (float itemWidth, const 
     // Current step indicator
     ImGui::Text("Current Step: %d", currentStep.load() + 1);
 
-    // Rate and gate length sliders
-    const bool isRateModulated = isParamModulated("rate_mod");
-    float rateDisplay = isRateModulated ? getLiveParamValueFor("rate_mod", "rate_live", rateParam->load()) : rateParam->load();
-    
-    ImGui::PushItemWidth (itemWidth);
-    if (isRateModulated) ImGui::BeginDisabled();
-    if (ImGui::SliderFloat ("Rate (Hz)", &rateDisplay, 0.1f, 20.0f, "%.2f")) {
-        if (!isRateModulated) if (auto* p = dynamic_cast<juce::AudioParameterFloat*>(apvts.getParameter("rate"))) *p = rateDisplay;
+    // --- SYNC CONTROLS ---
+    bool sync = apvts.getRawParameterValue("sync")->load() > 0.5f;
+    if (ImGui::Checkbox("Sync to Transport", &sync))
+    {
+        if (auto* p = dynamic_cast<juce::AudioParameterBool*>(apvts.getParameter("sync"))) *p = sync;
+        onModificationEnded();
     }
-    if (ImGui::IsItemDeactivatedAfterEdit()) { onModificationEnded(); }
-    if (!isRateModulated) adjustParamOnWheel (apvts.getParameter ("rate"), "rate", rateDisplay);
-    if (isRateModulated) { ImGui::EndDisabled(); ImGui::SameLine(); ImGui::TextUnformatted("(mod)"); }
+
+    ImGui::PushItemWidth(itemWidth);
+    if (sync)
+    {
+        int division = (int)apvts.getRawParameterValue("rate_division")->load();
+        if (ImGui::Combo("Division", &division, "1/32\0""1/16\0""1/8\0""1/4\0""1/2\0""1\0""2\0""4\0""8\0\0"))
+        {
+            if (auto* p = dynamic_cast<juce::AudioParameterChoice*>(apvts.getParameter("rate_division"))) *p = division;
+            onModificationEnded();
+        }
+    }
+    else
+    {
+        // Rate slider (only shown in free-running mode)
+        const bool isRateModulated = isParamModulated("rate_mod");
+        float rateDisplay = isRateModulated ? getLiveParamValueFor("rate_mod", "rate_live", rateParam->load()) : rateParam->load();
+        
+        if (isRateModulated) ImGui::BeginDisabled();
+        if (ImGui::SliderFloat("Rate (Hz)", &rateDisplay, 0.1f, 20.0f, "%.2f")) {
+            if (!isRateModulated) if (auto* p = dynamic_cast<juce::AudioParameterFloat*>(apvts.getParameter("rate"))) *p = rateDisplay;
+        }
+        if (ImGui::IsItemDeactivatedAfterEdit()) { onModificationEnded(); }
+        if (!isRateModulated) adjustParamOnWheel(apvts.getParameter("rate"), "rate", rateDisplay);
+        if (isRateModulated) { ImGui::EndDisabled(); ImGui::SameLine(); ImGui::TextUnformatted("(mod)"); }
+    }
+    ImGui::PopItemWidth();
+    // --- END SYNC CONTROLS ---
+
+    ImGui::PushItemWidth(itemWidth);
 
     const bool gtIsModulated = isParamModulated("gateLength_mod");
     float gtEff = gtIsModulated ? getLiveParamValueFor("gateLength_mod", "gateThreshold_live", (gateThresholdParam != nullptr ? gateThresholdParam->load() : 0.5f))

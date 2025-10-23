@@ -13,6 +13,9 @@ struct NodePinHelpers
 
     // Draws input and output pins on the same row (for compact layouts).
     std::function<void(const char* inLabel, int inChannel, const char* outLabel, int outChannel)> drawParallelPins;
+    
+    // Draws all I/O pins for a module, using dynamic pins if available
+    std::function<void(class ModuleProcessor* module)> drawIoPins;
 };
 
 

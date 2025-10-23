@@ -16,6 +16,11 @@ public:
 
     void prepareToPlay(double sampleRate, int samplesPerBlock) override;
     void releaseResources() override;
+    
+    // Dynamic pin interface for variable voice count
+    std::vector<DynamicPinInfo> getDynamicInputPins() const override;
+    std::vector<DynamicPinInfo> getDynamicOutputPins() const override;
+    
     void processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midi) override;
 
     juce::AudioProcessorValueTreeState& getAPVTS() override { return apvts; }

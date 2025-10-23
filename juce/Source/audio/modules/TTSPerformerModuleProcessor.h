@@ -43,6 +43,9 @@ public:
 
     void prepareToPlay(double sampleRate, int samplesPerBlock) override;
     void releaseResources() override {}
+    
+    void setTimingInfo(const TransportState& state) override;
+    
     void processBlock(juce::AudioBuffer<float>&, juce::MidiBuffer&) override;
 
     juce::AudioProcessorValueTreeState& getAPVTS() override { return apvts; }
@@ -332,6 +335,9 @@ private:
     static constexpr auto paramIdTrimEndMod = "trimEnd_mod";
     static constexpr auto paramIdSpeedMod = "speed_mod";
     static constexpr auto paramIdPitchMod = "pitch_mod";
+
+    TransportState m_currentTransport;
+    double lastScaledBeats_tts{ 0.0 };
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(TTSPerformerModuleProcessor);
 };

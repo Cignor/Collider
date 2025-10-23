@@ -238,6 +238,50 @@ void PolyVCOModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce
     setLiveParamValue("numVoices_live", (float)finalActiveVoices);
 }
 
+std::vector<DynamicPinInfo> PolyVCOModuleProcessor::getDynamicInputPins() const
+{
+    std::vector<DynamicPinInfo> pins;
+    if (numVoicesParam != nullptr)
+    {
+        const int activeVoices = numVoicesParam->get();
+        
+        // Always include the NumVoices modulation input
+        pins.push_back({ "NumVoices Mod", 0, PinDataType::Raw });
+        
+        // Add per-voice modulation inputs for active voices only
+        for (int i = 0; i < activeVoices; ++i)
+        {
+            const juce::String idx = juce::String(i + 1);
+            
+            // Frequency modulation (channels 1-32)
+            pins.push_back({ "Freq " + idx + " Mod", 1 + i, PinDataType::CV });
+            
+            // Waveform modulation (channels 33-64)
+            pins.push_back({ "Wave " + idx + " Mod", 1 + MAX_VOICES + i, PinDataType::CV });
+            
+            // Gate modulation (channels 65-96)
+            pins.push_back({ "Gate " + idx + " Mod", 1 + (2 * MAX_VOICES) + i, PinDataType::Gate });
+        }
+    }
+    return pins;
+}
+
+std::vector<DynamicPinInfo> PolyVCOModuleProcessor::getDynamicOutputPins() const
+{
+    std::vector<DynamicPinInfo> pins;
+    if (numVoicesParam != nullptr)
+    {
+        const int activeVoices = numVoicesParam->get();
+        pins.reserve((size_t)activeVoices); // Pre-allocate memory for efficiency
+        for (int i = 0; i < activeVoices; ++i)
+        {
+            // Use the new struct and its constructor
+            pins.push_back({ "Voice " + juce::String(i + 1), i, PinDataType::Audio });
+        }
+    }
+    return pins;
+}
+
 int PolyVCOModuleProcessor::getEffectiveNumVoices() const
 {
     return numVoicesParam ? numVoicesParam->get() : 1;
@@ -325,30 +369,24 @@ void PolyVCOModuleProcessor::drawParametersInNode(float itemWidth, const std::fu
 #if defined(PRESET_CREATOR_UI)
 void PolyVCOModuleProcessor::drawIoPins(const NodePinHelpers& helpers)
 {
-    const int activeVoices = getEffectiveNumVoices();
-
-    // --- Draw Global Modulation Input Pin ---
-    // Channel 0 in the modulePinDatabase
-    helpers.drawAudioInputPin("Num Voices Mod", 0);
-
-    // --- Draw Per-Voice Input and Output Pins, Grouped Together ---
-    for (int i = 0; i < activeVoices; ++i)
+    helpers.drawAudioInputPin("NumVoices Mod", 0);
+    
+    if (numVoicesParam != nullptr)
     {
-        const auto idx = juce::String(i + 1);
-        
-        // Use the channel indices that match the modulePinDatabase:
-        // Freq: channels 1-32, Wave: channels 33-64, Gate: channels 65-96
-        const int freqChan = i + 1;        // 1-32
-        const int waveChan = 32 + i + 1;   // 33-64  
-        const int gateChan = 64 + i + 1;   // 65-96
-        
-        // Draw the input pins using their correct channel IDs.
-        helpers.drawAudioInputPin(("Freq " + idx).toRawUTF8(), freqChan);
-        helpers.drawAudioInputPin(("Wave " + idx).toRawUTF8(), waveChan);
-        helpers.drawAudioInputPin(("Gate " + idx).toRawUTF8(), gateChan);
+        const int activeVoices = numVoicesParam->get();
+        for (int i = 0; i < activeVoices; ++i)
+        {
+            const juce::String idx = juce::String(i + 1);
 
-        // Draw the audio output pin for this voice.
-        helpers.drawAudioOutputPin(("Out " + idx).toRawUTF8(), i);
+            // --- THIS IS THE FIX ---
+            // Convert juce::String to const char* before passing to the helper.
+            helpers.drawAudioInputPin(("Freq " + idx).toRawUTF8(), 1 + i);
+            helpers.drawAudioInputPin(("Wave " + idx).toRawUTF8(), 1 + MAX_VOICES + i);
+            helpers.drawAudioInputPin(("Gate " + idx).toRawUTF8(), 1 + (2 * MAX_VOICES) + i);
+            
+            helpers.drawAudioOutputPin(("Voice " + idx).toRawUTF8(), i);
+            // --- END OF FIX ---
+        }
     }
 }
 #endif
