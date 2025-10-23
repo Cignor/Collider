@@ -288,7 +288,7 @@ void populatePinDatabase()
         {}
     );
     db["sequencer"] = ModulePinInfo(
-        { AudioPin("Mod In L", 0, PinDataType::Audio), AudioPin("Mod In R", 1, PinDataType::Audio), AudioPin("Rate Mod", 2, PinDataType::CV), AudioPin("Gate Mod", 3, PinDataType::CV), AudioPin("Steps Mod", 4, PinDataType::CV), AudioPin("Steps Max", 5, PinDataType::CV),
+        { AudioPin("Mod In L", 0, PinDataType::Audio), AudioPin("Mod In R", 1, PinDataType::Audio), AudioPin("Rate Mod", 2, PinDataType::CV), AudioPin("Gate Mod", 3, PinDataType::CV), AudioPin("Steps Mod", 4, PinDataType::CV), AudioPin("Gate Thr Mod", 5, PinDataType::CV),
           // Per-step value mods absolute 6..21 (Step1..Step16)
           AudioPin("Step 1 Mod", 6, PinDataType::CV), AudioPin("Step 2 Mod", 7, PinDataType::CV), AudioPin("Step 3 Mod", 8, PinDataType::CV), AudioPin("Step 4 Mod", 9, PinDataType::CV),
           AudioPin("Step 5 Mod", 10, PinDataType::CV), AudioPin("Step 6 Mod", 11, PinDataType::CV), AudioPin("Step 7 Mod", 12, PinDataType::CV), AudioPin("Step 8 Mod", 13, PinDataType::CV),
@@ -445,10 +445,10 @@ db["random"] = ModulePinInfo(
     );
 
     db["multi sequencer"] = ModulePinInfo(
-        { // Inputs: Mod In L, Mod In R, Rate Mod, Gate Mod, Steps Mod, plus per-step mods and triggers
+        { // Inputs: Mod In L, Mod In R, Rate Mod, Gate Mod, Steps Mod, Gate Thr Mod, plus per-step mods and triggers
             AudioPin("Mod In L", 0, PinDataType::Audio), AudioPin("Mod In R", 1, PinDataType::Audio),
             AudioPin("Rate Mod", 2, PinDataType::CV), AudioPin("Gate Mod", 3, PinDataType::CV),
-            AudioPin("Steps Mod", 4, PinDataType::CV),
+            AudioPin("Steps Mod", 4, PinDataType::CV), AudioPin("Gate Thr Mod", 5, PinDataType::CV),
             // Per-step mods (channels 6-21)
             AudioPin("Step 1 Mod", 6, PinDataType::CV), AudioPin("Step 2 Mod", 7, PinDataType::CV),
             AudioPin("Step 3 Mod", 8, PinDataType::CV), AudioPin("Step 4 Mod", 9, PinDataType::CV),

@@ -4874,7 +4874,7 @@ void ImGuiNodeEditorComponent::handleMultiSequencerAutoConnectSamplers(MultiSequ
         
         // Connect the Sequencer's CV/Trig for this step directly to the new sampler
         synth->connect(seqNodeId, 7 + i * 3 + 0, samplerNodeId, 0); // Pitch N -> Pitch Mod
-        synth->connect(seqNodeId, 7 + i * 3 + 1, samplerNodeId, 2); // Gate N -> Gate Mod
+        synth->connect(seqNodeId, 1, samplerNodeId, 2); // Main Gate -> Gate Mod
         synth->connect(seqNodeId, 7 + i * 3 + 2, samplerNodeId, 3); // Trig N  -> Trigger Mod
     }
     
@@ -4919,7 +4919,7 @@ void ImGuiNodeEditorComponent::handleMultiSequencerAutoConnectVCO(MultiSequencer
     {
         // Connect CV: Sequencer -> PolyVCO
         synth->connect(seqNodeId, 7 + i * 3 + 0, polyVcoNodeId, 1 + i);                                  // Pitch N -> Freq N Mod
-        synth->connect(seqNodeId, 7 + i * 3 + 1, polyVcoNodeId, 1 + PolyVCOModuleProcessor::MAX_VOICES * 2 + i); // Gate N  -> Gate N Mod
+        synth->connect(seqNodeId, 1, polyVcoNodeId, 1 + PolyVCOModuleProcessor::MAX_VOICES * 2 + i); // Main Gate -> Gate N Mod
 
         // Connect Audio: PolyVCO -> Mixer
         synth->connect(polyVcoNodeId, i, mixerNodeId, i);

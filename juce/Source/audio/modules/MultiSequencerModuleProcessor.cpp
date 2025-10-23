@@ -52,10 +52,10 @@ APVTS::ParameterLayout MultiSequencerModuleProcessor::createParameterLayout()
 }
 
 MultiSequencerModuleProcessor::MultiSequencerModuleProcessor()
-    // <<< CHANGE 1: Update the output bus to add per-step outputs + Num Steps output
+    // <<< CHANGE 1: Update the output bus to add per-step outputs
     : ModuleProcessor (BusesProperties()
                            .withInput("Inputs", juce::AudioChannelSet::discreteChannels(2 + 4 + (MAX_STEPS * 3)), true)
-                           .withOutput ("Outputs", juce::AudioChannelSet::discreteChannels(7 + (MAX_STEPS * 3)), true)),
+                           .withOutput ("Outputs", juce::AudioChannelSet::discreteChannels(6 + (MAX_STEPS * 3)), true)),
       apvts (*this, nullptr, "SeqParams", createParameterLayout())
 {
     numStepsParam      = apvts.getRawParameterValue ("numSteps");
@@ -98,6 +98,25 @@ void MultiSequencerModuleProcessor::setTimingInfo(const TransportState& state)
     m_currentTransport = state;
 }
 
+juce::ValueTree MultiSequencerModuleProcessor::getExtraStateTree() const
+{
+    juce::ValueTree vt("SequencerState");
+    vt.setProperty("sync", apvts.getRawParameterValue("sync")->load(), nullptr);
+    vt.setProperty("rate_division", apvts.getRawParameterValue("rate_division")->load(), nullptr);
+    return vt;
+}
+
+void MultiSequencerModuleProcessor::setExtraStateTree(const juce::ValueTree& vt)
+{
+    if (vt.hasType("SequencerState"))
+    {
+        if (auto* p = dynamic_cast<juce::AudioParameterBool*>(apvts.getParameter("sync")))
+            *p = (bool)vt.getProperty("sync", false);
+        if (auto* p = dynamic_cast<juce::AudioParameterChoice*>(apvts.getParameter("rate_division")))
+            *p = (int)vt.getProperty("rate_division", 3);
+    }
+}
+
 void MultiSequencerModuleProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midi)
 {
     // --- PART 1: The original, working StepSequencer logic for "Live" outputs ---
@@ -129,12 +148,6 @@ void MultiSequencerModuleProcessor::processBlock (juce::AudioBuffer<float>& buff
     const int baseSteps = (int) numStepsParam->load();
     const int boundMax = stepsModMaxParam != nullptr ? juce::jlimit (1, MAX_STEPS, (int) stepsModMaxParam->load()) : MAX_STEPS;
     const float gateThreshold = gateThresholdParam != nullptr ? juce::jlimit(0.0f, 1.0f, gateThresholdParam->load()) : 0.5f;
-
-    // Start of Logging Block
-    static int logCounter = 0;
-    const bool shouldLog = (logCounter++ % 300 == 0);
-    if (shouldLog) juce::Logger::writeToLog("--- MultiSequencer::processBlock ---");
-    // End of Logging Block
 
     // --- UI Telemetry Bootstrap (from old StepSequencer) ---
     // Publish per-step live values for ALL steps this block (use first-sample snapshot)
@@ -229,6 +242,7 @@ void MultiSequencerModuleProcessor::processBlock (juce::AudioBuffer<float>& buff
             static const double divisions[] = { 1.0/32.0, 1.0/16.0, 1.0/8.0, 1.0/4.0, 1.0/2.0, 1.0, 2.0, 4.0, 8.0 };
             const double beatDivision = divisions[juce::jlimit(0, 8, divisionIndex)];
             
+            // Calculate which step we should be on based on song position
             const int totalSteps = juce::jlimit(1, MAX_STEPS, activeSteps);
             const int stepForBeat = static_cast<int>(std::fmod(m_currentTransport.songPositionBeats * beatDivision, totalSteps));
 
@@ -247,7 +261,6 @@ void MultiSequencerModuleProcessor::processBlock (juce::AudioBuffer<float>& buff
             {
                 phase -= 1.0;
                 const int next = (currentStep.load() + 1) % juce::jlimit (1, MAX_STEPS, activeSteps);
-                if (shouldLog) juce::Logger::writeToLog("[M-SEQ LOG] Step Advanced: " + juce::String(currentStep.load()) + " -> " + juce::String(next));
                 currentStep.store(next);
                 stepAdvanced = true;
             }
@@ -307,7 +320,6 @@ void MultiSequencerModuleProcessor::processBlock (juce::AudioBuffer<float>& buff
         }
         
         if (stepAdvanced) {
-            if (shouldLog && trigActive) juce::Logger::writeToLog("[M-SEQ LOG] Trigger pulse armed for step " + juce::String(currentStepIndex));
             pendingTriggerSamples = trigActive ? (int) std::round (0.001 * sampleRate) : 0;
             stepAdvanced = false;
         }
@@ -322,12 +334,6 @@ void MultiSequencerModuleProcessor::processBlock (juce::AudioBuffer<float>& buff
             if (pendingTriggerSamples > 0) --pendingTriggerSamples;
         }
     }
-    if (shouldLog)
-    {
-        juce::Logger::writeToLog("[M-SEQ LOG] Rate: " + juce::String(lastRateLive, 2) + "Hz | Steps: " + juce::String(lastStepsLive));
-        juce::Logger::writeToLog("[M-SEQ LOG] Final Output (last sample): Pitch=" + juce::String(pitchOut[numSamples-1], 3) + ", Gate=" + juce::String(gateOut ? gateOut[numSamples-1] : -1.0f, 3));
-    }
-    
     setLiveParamValue("rate_live", lastRateLive);
     setLiveParamValue("gateLength_live", lastGateLive);
     setLiveParamValue("gateThreshold_live", lastGateThresholdLive);
@@ -377,14 +383,10 @@ void MultiSequencerModuleProcessor::processBlock (juce::AudioBuffer<float>& buff
             juce::FloatVectorOperations::fill(outBus.getWritePointer(trigOutChannel), trigOutputValue, numSamples);
     }
     
-    // --- Write the number of active steps to the new output pin (channel 6) ---
+    // --- Write the number of active steps to the Num Steps output pin (channel 6) ---
     if (outBus.getNumChannels() > 6)
     {
-        outBus.setSample(6, 0, (float)lastStepsLive);
-        for(int i = 1; i < numSamples; ++i)
-        {
-            outBus.setSample(6, i, (float)lastStepsLive);
-        }
+        juce::FloatVectorOperations::fill(outBus.getWritePointer(6), (float)lastStepsLive, numSamples);
     }
     
     if (lastOutputValues.size() >= (size_t)outBus.getNumChannels()) {
@@ -393,24 +395,6 @@ void MultiSequencerModuleProcessor::processBlock (juce::AudioBuffer<float>& buff
     }
 }
 
-juce::ValueTree MultiSequencerModuleProcessor::getExtraStateTree() const
-{
-    juce::ValueTree vt("SequencerState");
-    vt.setProperty("sync", apvts.getRawParameterValue("sync")->load(), nullptr);
-    vt.setProperty("rate_division", apvts.getRawParameterValue("rate_division")->load(), nullptr);
-    return vt;
-}
-
-void MultiSequencerModuleProcessor::setExtraStateTree(const juce::ValueTree& vt)
-{
-    if (vt.hasType("SequencerState"))
-    {
-        if (auto* p = dynamic_cast<juce::AudioParameterBool*>(apvts.getParameter("sync")))
-            *p = (bool)vt.getProperty("sync", false);
-        if (auto* p = dynamic_cast<juce::AudioParameterChoice*>(apvts.getParameter("rate_division")))
-            *p = (int)vt.getProperty("rate_division", 3);
-    }
-}
 
 #if defined(PRESET_CREATOR_UI)
 // ... The rest of your file (drawParametersInNode, etc.) remains unchanged ...

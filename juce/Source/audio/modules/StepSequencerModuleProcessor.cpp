@@ -142,6 +142,25 @@ void StepSequencerModuleProcessor::setTimingInfo(const TransportState& state)
     m_currentTransport = state;
 }
 
+juce::ValueTree StepSequencerModuleProcessor::getExtraStateTree() const
+{
+    juce::ValueTree vt("SequencerState");
+    vt.setProperty("sync", apvts.getRawParameterValue("sync")->load(), nullptr);
+    vt.setProperty("rate_division", apvts.getRawParameterValue("rate_division")->load(), nullptr);
+    return vt;
+}
+
+void StepSequencerModuleProcessor::setExtraStateTree(const juce::ValueTree& vt)
+{
+    if (vt.hasType("SequencerState"))
+    {
+        if (auto* p = dynamic_cast<juce::AudioParameterBool*>(apvts.getParameter("sync")))
+            *p = (bool)vt.getProperty("sync", false);
+        if (auto* p = dynamic_cast<juce::AudioParameterChoice*>(apvts.getParameter("rate_division")))
+            *p = (int)vt.getProperty("rate_division", 3);
+    }
+}
+
 void StepSequencerModuleProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midi)
 {
     juce::ignoreUnused (midi);
@@ -184,12 +203,6 @@ void StepSequencerModuleProcessor::processBlock (juce::AudioBuffer<float>& buffe
     const int baseSteps = numStepsParam != nullptr ? (int) numStepsParam->load() : 8;
     const int boundMax = stepsModMaxParam != nullptr ? juce::jlimit (1, MAX_STEPS, (int) stepsModMaxParam->load()) : MAX_STEPS;
     const float gateThreshold = gateThresholdParam != nullptr ? juce::jlimit(0.0f, 1.0f, gateThresholdParam->load()) : 0.5f;
-
-    // Start of Logging Block
-    static int logCounter = 0;
-    const bool shouldLog = (logCounter++ % 300 == 0); // Log roughly every 10 seconds
-    if (shouldLog) juce::Logger::writeToLog("--- StepSequencer::processBlock ---");
-    // End of Logging Block
 
     // --- UI Telemetry Bootstrap ---
     // Publish per-step live values for ALL steps this block (use first-sample snapshot)
@@ -305,7 +318,6 @@ void StepSequencerModuleProcessor::processBlock (juce::AudioBuffer<float>& buffe
             {
                 phase -= 1.0;
                 const int next = (currentStep.load() + 1) % juce::jlimit (1, MAX_STEPS, activeSteps);
-                if (shouldLog) juce::Logger::writeToLog("[SEQ LOG] Step Advanced: " + juce::String(currentStep.load()) + " -> " + juce::String(next));
                 currentStep.store(next);
                 stepAdvanced = true;
             }
@@ -399,7 +411,6 @@ void StepSequencerModuleProcessor::processBlock (juce::AudioBuffer<float>& buffe
         // If we advanced to this step, only emit a pulse if this step is enabled (checkbox or connected mod>0.5)
         if (stepAdvanced)
         {
-            if (shouldLog && trigActive) juce::Logger::writeToLog("[SEQ LOG] Trigger pulse armed for step " + juce::String(currentStepIndex));
             pendingTriggerSamples = trigActive ? (int) std::round (0.001 * sampleRate) : 0;
             stepAdvanced = false;
         }
@@ -423,13 +434,6 @@ void StepSequencerModuleProcessor::processBlock (juce::AudioBuffer<float>& buffe
             trigOut[i] = pulse;
         }
     }
-    if (shouldLog)
-    {
-        juce::Logger::writeToLog("[SEQ LOG] Rate: " + juce::String(lastRateLive, 2) + "Hz | Steps: " + juce::String(lastStepsLive));
-        juce::Logger::writeToLog("[SEQ LOG] Gate Length: " + juce::String(lastGateLive, 2) + " | Gate Threshold: " + juce::String(lastGateThresholdLive, 2));
-        juce::Logger::writeToLog("[SEQ LOG] Final Output (last sample): Pitch=" + juce::String(pitchOut[numSamples-1], 3) + ", Gate=" + juce::String(gateOut ? gateOut[numSamples-1] : -1.0f, 3));
-    }
-
     // Publish block-level live telemetry for UI reflection
     setLiveParamValue("rate_live", lastRateLive);
     setLiveParamValue("gateLength_live", lastGateLive);
@@ -447,25 +451,6 @@ void StepSequencerModuleProcessor::processBlock (juce::AudioBuffer<float>& buffe
         if (lastOutputValues[5] && trigOut) lastOutputValues[5]->store(trigOut[numSamples - 1]);
     }
 
-}
-
-juce::ValueTree StepSequencerModuleProcessor::getExtraStateTree() const
-{
-    juce::ValueTree vt("SequencerState");
-    vt.setProperty("sync", apvts.getRawParameterValue("sync")->load(), nullptr);
-    vt.setProperty("rate_division", apvts.getRawParameterValue("rate_division")->load(), nullptr);
-    return vt;
-}
-
-void StepSequencerModuleProcessor::setExtraStateTree(const juce::ValueTree& vt)
-{
-    if (vt.hasType("SequencerState"))
-    {
-        if (auto* p = dynamic_cast<juce::AudioParameterBool*>(apvts.getParameter("sync")))
-            *p = (bool)vt.getProperty("sync", false);
-        if (auto* p = dynamic_cast<juce::AudioParameterChoice*>(apvts.getParameter("rate_division")))
-            *p = (int)vt.getProperty("rate_division", 3);
-    }
 }
 
 #if defined(PRESET_CREATOR_UI)
