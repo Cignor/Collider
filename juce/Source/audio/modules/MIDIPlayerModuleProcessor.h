@@ -6,6 +6,9 @@
 class MIDIPlayerModuleProcessor : public ModuleProcessor
 {
 public:
+    // ADD THIS ENUM
+    enum class AutoConnectState { None, Samplers, PolyVCO, Hybrid };
+    
     static constexpr int kMaxTracks = 24;          // hard cap for output channels
     static constexpr int kOutputsPerTrack = 4;     // Pitch, Gate, Velocity, Trigger
     static constexpr int kClockChannelIndex = kMaxTracks * kOutputsPerTrack;        // 96
@@ -30,6 +33,10 @@ public:
     std::atomic<bool> autoConnectTriggered { false };
     std::atomic<bool> autoConnectVCOTriggered { false };
     std::atomic<bool> autoConnectHybridTriggered { false };
+
+    // ADD THESE TWO LINES
+    std::atomic<AutoConnectState> lastAutoConnectState { AutoConnectState::None };
+    std::atomic<bool> connectionUpdateRequested { false };
 
     void prepareToPlay(double sampleRate, int maximumExpectedSamplesPerBlock) override;
     void releaseResources() override;

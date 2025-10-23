@@ -301,6 +301,12 @@ void SampleLoaderModuleProcessor::loadSample(const juce::File& file)
     currentSamplePath = file.getFullPathName();
     apvts.state.setProperty ("samplePath", currentSamplePath, nullptr);
 
+    // --- THIS IS THE FIX ---
+    // Store the sample's metadata in our new member variables.
+    sampleDurationSeconds = (double)original->stereo.getNumSamples() / original->sampleRate;
+    sampleSampleRate = (int)original->sampleRate;
+    // --- END OF FIX ---
+
     // 2) Create a private copy and convert to mono
     auto privateCopy = std::make_shared<SampleBank::Sample>();
     privateCopy->sampleRate = original->sampleRate;
@@ -531,23 +537,9 @@ void SampleLoaderModuleProcessor::generateSpectrogram()
 #if defined(PRESET_CREATOR_UI)
 void SampleLoaderModuleProcessor::drawParametersInNode(float itemWidth, const std::function<bool(const juce::String& paramId)>& isParamModulated, const std::function<void()>& onModificationEnded)
 {
+    // --- THIS IS THE DEFINITIVE FIX ---
+    // 1. Draw all the parameter sliders and buttons FIRST.
     ImGui::PushItemWidth(itemWidth);
-
-    // Make the node a drop target for samples
-    if (ImGui::BeginDragDropTarget())
-    {
-        if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("DND_SAMPLE_PATH"))
-        {
-            // A sample was dropped on this node
-            const char* path = (const char*)payload->Data;
-            loadSample(juce::File(path));
-            onModificationEnded(); // Create an undo state for the change
-        }
-        ImGui::EndDragDropTarget();
-    }
-
-    if (hasSampleLoaded()) { ImGui::Text("Sample: %s", currentSampleName.toRawUTF8()); }
-    else { ImGui::Text("No sample loaded"); }
 
     if (ImGui::Button("Load Sample", ImVec2(itemWidth * 0.48f, 0)))
     {
@@ -691,6 +683,73 @@ void SampleLoaderModuleProcessor::drawParametersInNode(float itemWidth, const st
     }
     
     ImGui::PopItemWidth();
+    
+    // 2. Now, draw the sample information and visual display AT THE END.
+    if (hasSampleLoaded())
+    {
+        ImGui::Separator();
+        ImGui::Text("Sample: %s", currentSampleName.toRawUTF8());
+        ImGui::Text("Duration: %.2f s", sampleDurationSeconds);
+        ImGui::Text("Rate: %d Hz", sampleSampleRate);
+
+        // Draw a colored button as a visible drop zone for hot-swapping
+        ImVec2 swapZoneSize = ImVec2(itemWidth, 100.0f);
+        ImGui::PushStyleColor(ImGuiCol_Button, IM_COL32(0, 180, 180, 60));
+        ImGui::Button("##dropzone_sample_swap", swapZoneSize);
+        ImGui::PopStyleColor();
+        
+        // Draw text centered on the button
+        const char* text = "Drop to Swap Sample";
+        ImVec2 textSize = ImGui::CalcTextSize(text);
+        ImVec2 textPos = ImGui::GetItemRectMin();
+        textPos.x += (swapZoneSize.x - textSize.x) * 0.5f;
+        textPos.y += (swapZoneSize.y - textSize.y) * 0.5f;
+        ImGui::GetWindowDrawList()->AddText(textPos, IM_COL32(200, 200, 200, 255), text);
+
+        // 3. Make this button the drop target for hot-swapping.
+        if (ImGui::BeginDragDropTarget())
+        {
+            if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("DND_SAMPLE_PATH"))
+            {
+                const char* path = (const char*)payload->Data;
+                loadSample(juce::File(path));
+                onModificationEnded();
+            }
+            ImGui::EndDragDropTarget();
+        }
+    }
+    else
+    {
+        ImGui::Separator();
+        // If NO sample is loaded, draw a dedicated, colored dropzone.
+        ImVec2 dropZoneSize = ImVec2(itemWidth, 60.0f);
+        
+        // Use a cyan color to match the Sample browser theme
+        ImGui::PushStyleColor(ImGuiCol_Button, IM_COL32(0, 180, 180, 100));
+        ImGui::Button("##dropzone_sample", dropZoneSize);
+        ImGui::PopStyleColor();
+        
+        // Draw text centered on top of the button
+        const char* text = "Drop Sample Here";
+        ImVec2 textSize = ImGui::CalcTextSize(text);
+        ImVec2 textPos = ImGui::GetItemRectMin();
+        textPos.x += (dropZoneSize.x - textSize.x) * 0.5f;
+        textPos.y += (dropZoneSize.y - textSize.y) * 0.5f;
+        ImGui::GetWindowDrawList()->AddText(textPos, IM_COL32_WHITE, text);
+
+        // Make THIS BUTTON the drop target.
+        if (ImGui::BeginDragDropTarget())
+        {
+            if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("DND_SAMPLE_PATH"))
+            {
+                const char* path = (const char*)payload->Data;
+                loadSample(juce::File(path));
+                onModificationEnded();
+            }
+            ImGui::EndDragDropTarget();
+        }
+    }
+    // --- END OF FIX ---
 }
 
 void SampleLoaderModuleProcessor::drawIoPins(const NodePinHelpers& helpers)

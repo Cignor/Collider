@@ -97,6 +97,11 @@ private:
     std::unique_ptr<SampleVoiceProcessor> processorToDelete;
     juce::String currentSampleName;
     juce::String currentSamplePath;
+    
+    // ADD THESE TWO LINES
+    double sampleDurationSeconds = 0.0;
+    int sampleSampleRate = 0;
+    
     // Trigger edge detection for trigger_mod
     bool lastTriggerHigh { false };
     

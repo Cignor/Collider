@@ -176,6 +176,18 @@ ImGuiNodeEditorComponent::ImGuiNodeEditorComponent(juce::AudioDeviceManager& dm)
     
     juce::Logger::writeToLog("[UI] Preset path set to: " + m_presetScanPath.getFullPathName());
     juce::Logger::writeToLog("[UI] Sample path set to: " + m_sampleScanPath.getFullPathName());
+    
+    // --- MIDI BROWSER PATH INITIALIZATION ---
+    if (auto* props = PresetCreatorApplication::getApp().getProperties())
+    {
+        auto appFile = juce::File::getSpecialLocation(juce::File::currentApplicationFile);
+        juce::File defaultMidiPath = appFile.getParentDirectory().getChildFile("audio").getChildFile("MIDI");
+        m_midiScanPath = juce::File(props->getValue("midiScanPath", defaultMidiPath.getFullPathName()));
+    }
+    if (!m_midiScanPath.exists())
+        m_midiScanPath.createDirectory();
+    juce::Logger::writeToLog("[UI] MIDI path set to: " + m_midiScanPath.getFullPathName());
+    // --- END OF MIDI INITIALIZATION ---
 }
 
 ImGuiNodeEditorComponent::~ImGuiNodeEditorComponent()
@@ -850,17 +862,38 @@ void ImGuiNodeEditorComponent::renderImGui()
             }
         }
         
-        // Then draw presets in this directory
+        // Then draw presets in this directory with drag-and-drop support
         for (const auto& preset : node->presets)
         {
             if (m_presetSearchTerm.isEmpty() || preset.name.containsIgnoreCase(m_presetSearchTerm))
             {
-                if (ImGui::Selectable(preset.name.toRawUTF8()))
+                // Draw the selectable item and capture its return value
+                bool clicked = ImGui::Selectable(preset.name.toRawUTF8());
+
+                // --- THIS IS THE FIX ---
+                // Check if this item is the source of a drag operation
+                if (ImGui::BeginDragDropSource(ImGuiDragDropFlags_None))
+                {
+                    // Set the payload type and data (the preset's file path)
+                    const juce::String path = preset.file.getFullPathName();
+                    const std::string pathStr = path.toStdString();
+                    ImGui::SetDragDropPayload("DND_PRESET_PATH", pathStr.c_str(), pathStr.length() + 1);
+                    
+                    // Provide visual feedback while dragging
+                    ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
+                    ImGui::Text("Merge Preset: %s", preset.name.toRawUTF8());
+                    
+                    ImGui::EndDragDropSource();
+                }
+                // If a drag did NOT occur, and the item was clicked, load the preset
+                else if (clicked)
                 {
                     loadPresetFromFile(preset.file);
                 }
+                // --- END OF FIX ---
                 
-                if (ImGui::IsItemHovered() && preset.description.isNotEmpty())
+                // Tooltip (only shown when hovering, not dragging)
+                if (ImGui::IsItemHovered() && !ImGui::IsMouseDragging(0) && preset.description.isNotEmpty())
                 {
                     ImGui::BeginTooltip();
                     ImGui::TextUnformatted(preset.description.toRawUTF8());
@@ -956,52 +989,45 @@ void ImGuiNodeEditorComponent::renderImGui()
         {
             if (m_sampleSearchTerm.isEmpty() || sample.name.containsIgnoreCase(m_sampleSearchTerm))
             {
-                // Draw the selectable item
-                ImGui::Selectable(sample.name.toRawUTF8());
+                // --- THIS IS THE HEROIC FIX ---
 
-                // --- THIS IS THE FIX: Click vs. Drag Logic ---
+                // A. Draw the selectable item and capture its return value (which is true on mouse release).
+                bool clicked = ImGui::Selectable(sample.name.toRawUTF8());
 
-                // A. Check if the item is being dragged FIRST
+                // B. Check if this item is the source of a drag operation. This takes priority.
                 if (ImGui::BeginDragDropSource(ImGuiDragDropFlags_None))
                 {
-                    // Set the payload to be the file path of the sample.
-                    // This is the "data" that gets transferred.
+                    // Set the payload (the data we are transferring is the sample's file path).
                     const juce::String path = sample.file.getFullPathName();
                     const std::string pathStr = path.toStdString();
                     ImGui::SetDragDropPayload("DND_SAMPLE_PATH", pathStr.c_str(), pathStr.length() + 1);
                     
-                    // Provide visual feedback while dragging.
+                    // Provide visual feedback during the drag.
+                    ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
                     ImGui::Text("Dragging: %s", sample.name.toRawUTF8());
-                    ImGui::SetMouseCursor(ImGuiMouseCursor_Hand); // Change the cursor
                     
                     ImGui::EndDragDropSource();
                 }
-                // B. If not dragging, check if the item was just clicked
-                else if (ImGui::IsItemClicked())
+                // C. If a drag did NOT occur, and the item was clicked (mouse released on it), then create the node.
+                else if (clicked)
                 {
                     if (synth != nullptr)
                     {
-                        // 1. Create the new module
                         auto newNodeId = synth->addModule("sample loader");
                         auto newLogicalId = synth->getLogicalIdForNode(newNodeId);
-                        
-                        // 2. Position it at the mouse cursor
                         pendingNodeScreenPositions[(int)newLogicalId] = ImGui::GetMousePos();
-                        
-                        // 3. Get the processor and load the sample into it
                         if (auto* sampleLoader = dynamic_cast<SampleLoaderModuleProcessor*>(synth->getModuleForLogical(newLogicalId)))
                         {
                             sampleLoader->loadSample(sample.file);
                         }
-                        
-                        snapshotAfterEditor = true; // Create an undo state
+                        snapshotAfterEditor = true;
                     }
                 }
                 
                 // --- END OF FIX ---
 
-                // Tooltip for sample info (only shown when hovering, not dragging)
-                if (ImGui::IsItemHovered())
+                // (Existing tooltip for sample info remains the same)
+                if (ImGui::IsItemHovered() && !ImGui::IsMouseDragging(0))
                 {
                     ImGui::BeginTooltip();
                     ImGui::Text("Duration: %.2f s", sample.durationSeconds);
@@ -1064,6 +1090,129 @@ void ImGuiNodeEditorComponent::renderImGui()
 
         // 5. Display hierarchical sample tree
         drawSampleTree(m_sampleManager.getRootNode());
+    }
+    
+    ImGui::Separator();
+    
+    // === MIDI BROWSER ===
+    ImGui::PushStyleColor(ImGuiCol_Header, IM_COL32(180, 120, 255, 255)); // Purple
+    ImGui::PushStyleColor(ImGuiCol_HeaderHovered, IM_COL32(200, 140, 255, 255));
+    ImGui::PushStyleColor(ImGuiCol_HeaderActive, IM_COL32(220, 160, 255, 255));
+    bool midiExpanded = ImGui::CollapsingHeader("MIDI Files");
+    ImGui::PopStyleColor(3);
+    
+    if (midiExpanded)
+    {
+        // 1. Path Display (read-only)
+        char pathBuf[1024];
+        strncpy(pathBuf, m_midiScanPath.getFullPathName().toRawUTF8(), sizeof(pathBuf) - 1);
+        ImGui::InputText("##midipath", pathBuf, sizeof(pathBuf), ImGuiInputTextFlags_ReadOnly);
+
+        // 2. "Change Path" Button
+        if (ImGui::Button("Change Path##midi"))
+        {
+            midiPathChooser = std::make_unique<juce::FileChooser>("Select MIDI Directory", m_midiScanPath);
+            midiPathChooser->launchAsync(juce::FileBrowserComponent::openMode | juce::FileBrowserComponent::canSelectDirectories,
+                [this](const juce::FileChooser& fc)
+                {
+                    auto dir = fc.getResult();
+                    if (dir.isDirectory())
+                    {
+                        m_midiScanPath = dir;
+                        // Save the new path to the properties file
+                        if (auto* props = PresetCreatorApplication::getApp().getProperties())
+                        {
+                            props->setValue("midiScanPath", m_midiScanPath.getFullPathName());
+                        }
+                    }
+                });
+        }
+        ImGui::SameLine();
+
+        // 3. "Scan" Button
+        if (ImGui::Button("Scan##midi"))
+        {
+            m_midiManager.clearCache();
+            m_midiManager.scanDirectory(m_midiScanPath);
+        }
+
+        // 4. Search bar for filtering results
+        char searchBuf[256] = {};
+        strncpy(searchBuf, m_midiSearchTerm.toRawUTF8(), sizeof(searchBuf) - 1);
+        if (ImGui::InputText("Search##midi", searchBuf, sizeof(searchBuf)))
+            m_midiSearchTerm = juce::String(searchBuf);
+
+        ImGui::Separator();
+        
+        // 5. Display hierarchical MIDI tree
+        std::function<void(const MidiManager::DirectoryNode*)> drawMidiTree = 
+            [&](const MidiManager::DirectoryNode* node)
+        {
+            if (!node || (node->midiFiles.empty() && node->subdirectories.empty())) return;
+
+            // Draw subdirectories first
+            for (const auto& subdir : node->subdirectories)
+            {
+                if (ImGui::TreeNode(subdir->name.toRawUTF8()))
+                {
+                    drawMidiTree(subdir.get());
+                    ImGui::TreePop();
+                }
+            }
+            
+            // Then draw MIDI files in this directory with drag-and-drop support
+            for (const auto& midi : node->midiFiles)
+            {
+                if (m_midiSearchTerm.isEmpty() || midi.name.containsIgnoreCase(m_midiSearchTerm))
+                {
+                    // Draw the selectable item and capture its return value
+                    bool clicked = ImGui::Selectable(midi.name.toRawUTF8());
+
+                    // Check if this item is the source of a drag operation
+                    if (ImGui::BeginDragDropSource(ImGuiDragDropFlags_None))
+                    {
+                        // Set the payload (the MIDI file path)
+                        const juce::String path = midi.file.getFullPathName();
+                        const std::string pathStr = path.toStdString();
+                        ImGui::SetDragDropPayload("DND_MIDI_PATH", pathStr.c_str(), pathStr.length() + 1);
+                        
+                        // Provide visual feedback during the drag
+                        ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
+                        ImGui::Text("Dragging: %s", midi.name.toRawUTF8());
+                        
+                        ImGui::EndDragDropSource();
+                    }
+                    // If a drag did NOT occur, and the item was clicked, create a new MIDI Player node
+                    else if (clicked)
+                    {
+                        if (synth != nullptr)
+                        {
+                            auto newNodeId = synth->addModule("midi player");
+                            auto newLogicalId = synth->getLogicalIdForNode(newNodeId);
+                            pendingNodeScreenPositions[(int)newLogicalId] = ImGui::GetMousePos();
+                            
+                            // Load the MIDI file into the new player
+                            if (auto* midiPlayer = dynamic_cast<MIDIPlayerModuleProcessor*>(synth->getModuleForLogical(newLogicalId)))
+                            {
+                                midiPlayer->loadMIDIFile(midi.file);
+                            }
+                            
+                            snapshotAfterEditor = true;
+                        }
+                    }
+                    
+                    // Tooltip for MIDI info (only shown when hovering, not dragging)
+                    if (ImGui::IsItemHovered() && !ImGui::IsMouseDragging(0))
+                    {
+                        ImGui::BeginTooltip();
+                        ImGui::Text("MIDI File: %s", midi.file.getFileName().toRawUTF8());
+                        ImGui::EndTooltip();
+                    }
+                }
+            }
+        };
+        
+        drawMidiTree(m_midiManager.getRootNode());
     }
     
     ImGui::Separator();
@@ -1230,6 +1379,44 @@ void ImGuiNodeEditorComponent::renderImGui()
 
     ImGui::NextColumn();
 
+    // --- DEFINITIVE FIX FOR PRESET DRAG-AND-DROP WITH VISUAL FEEDBACK ---
+    // Step 1: Define canvas dimensions first (needed for the drop target)
+    const ImU32 GRID_COLOR = IM_COL32(50, 50, 50, 255);
+    const ImU32 GRID_ORIGIN_COLOR = IM_COL32(80, 80, 80, 255);
+    const float GRID_SIZE = 64.0f;
+    ImVec2 canvas_p0 = ImGui::GetCursorScreenPos();
+    ImVec2 canvas_sz = ImGui::GetContentRegionAvail();
+    ImVec2 canvas_p1 = ImVec2(canvas_p0.x + canvas_sz.x, canvas_p0.y + canvas_sz.y);
+
+    // Step 2: Create a full-canvas invisible button to act as our drop area
+    ImGui::SetCursorScreenPos(canvas_p0);
+    ImGui::InvisibleButton("##canvas_drop_target", canvas_sz);
+
+    // Step 3: Make this area a drop target with visual feedback
+    if (ImGui::BeginDragDropTarget())
+    {
+        // Check if a preset payload is being hovered over the canvas
+        if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("DND_PRESET_PATH", ImGuiDragDropFlags_AcceptBeforeDelivery))
+        {
+            // Draw a semi-transparent overlay to show the canvas is a valid drop zone
+            ImDrawList* drawList = ImGui::GetForegroundDrawList();
+            drawList->AddRectFilled(canvas_p0, canvas_p1, IM_COL32(218, 165, 32, 80)); // Preset Gold color
+            
+            // Check if the mouse button was released to complete the drop
+            if (payload->IsDelivery())
+            {
+                const char* path = (const char*)payload->Data;
+                ImVec2 dropPos = ImGui::GetMousePos(); // Get the exact drop position
+                mergePresetFromFile(juce::File(path), dropPos);
+            }
+        }
+        ImGui::EndDragDropTarget();
+    }
+    // --- END OF DEFINITIVE FIX ---
+
+    // Reset cursor position for subsequent drawing
+    ImGui::SetCursorScreenPos(canvas_p0);
+
     // <<< ADD THIS ENTIRE BLOCK TO CACHE CONNECTION STATUS >>>
     std::unordered_set<int> connectedInputAttrs;
     std::unordered_set<int> connectedOutputAttrs;
@@ -1257,12 +1444,7 @@ void ImGuiNodeEditorComponent::renderImGui()
     // (Removed the old pre-registration loop)
 
     // --- BACKGROUND GRID AND COORDINATE DISPLAY ---
-    const ImU32 GRID_COLOR = IM_COL32(50, 50, 50, 255);
-    const ImU32 GRID_ORIGIN_COLOR = IM_COL32(80, 80, 80, 255);
-    const float GRID_SIZE = 64.0f;
-    ImVec2 canvas_p0 = ImGui::GetCursorScreenPos();
-    ImVec2 canvas_sz = ImGui::GetContentRegionAvail();
-    ImVec2 canvas_p1 = ImVec2(canvas_p0.x + canvas_sz.x, canvas_p0.y + canvas_sz.y);
+    // (Canvas dimensions already defined above in the drop target code)
     ImDrawList* draw_list = ImGui::GetBackgroundDrawList();
     ImVec2 panning = ImNodes::EditorContextGetPanning();
 
@@ -2452,23 +2634,51 @@ if (auto* mp = synth->getModuleForLogical (lid))
     {
         if (auto* midiPlayer = dynamic_cast<MIDIPlayerModuleProcessor*>(synth->getModuleForLogical(modInfo.first)))
         {
-            if (midiPlayer->autoConnectTriggered.exchange(false)) // Check and reset the flag atomically
+            // Check for initial button presses
+            if (midiPlayer->autoConnectTriggered.exchange(false))
             {
+                midiPlayer->lastAutoConnectState = MIDIPlayerModuleProcessor::AutoConnectState::Samplers;
                 handleMidiPlayerAutoConnect(midiPlayer, modInfo.first);
-                pushSnapshot(); // Make the entire operation undoable
+                pushSnapshot();
             }
-            
-            if (midiPlayer->autoConnectVCOTriggered.exchange(false))
+            else if (midiPlayer->autoConnectVCOTriggered.exchange(false))
             {
+                midiPlayer->lastAutoConnectState = MIDIPlayerModuleProcessor::AutoConnectState::PolyVCO;
                 handleMidiPlayerAutoConnectVCO(midiPlayer, modInfo.first);
-                pushSnapshot(); // Make the entire operation undoable
+                pushSnapshot();
             }
-            
-            if (midiPlayer->autoConnectHybridTriggered.exchange(false))
+            else if (midiPlayer->autoConnectHybridTriggered.exchange(false))
             {
+                midiPlayer->lastAutoConnectState = MIDIPlayerModuleProcessor::AutoConnectState::Hybrid;
                 handleMidiPlayerAutoConnectHybrid(midiPlayer, modInfo.first);
-                pushSnapshot(); // Make the entire operation undoable
+                pushSnapshot();
             }
+            // --- THIS IS THE NEW LOGIC ---
+            // Check if an update was requested after a new file was loaded
+            else if (midiPlayer->connectionUpdateRequested.exchange(false))
+            {
+                // Re-run the correct handler based on the saved state
+                switch (midiPlayer->lastAutoConnectState.load())
+                {
+                    case MIDIPlayerModuleProcessor::AutoConnectState::Samplers:
+                        handleMidiPlayerAutoConnect(midiPlayer, modInfo.first);
+                        pushSnapshot();
+                        break;
+                    case MIDIPlayerModuleProcessor::AutoConnectState::PolyVCO:
+                        handleMidiPlayerAutoConnectVCO(midiPlayer, modInfo.first);
+                        pushSnapshot();
+                        break;
+                    case MIDIPlayerModuleProcessor::AutoConnectState::Hybrid:
+                        handleMidiPlayerAutoConnectHybrid(midiPlayer, modInfo.first);
+                        pushSnapshot();
+                        break;
+                    case MIDIPlayerModuleProcessor::AutoConnectState::None:
+                    default:
+                        // Do nothing if it wasn't auto-connected before
+                        break;
+                }
+            }
+            // --- END OF NEW LOGIC ---
         }
     }
 
@@ -6672,6 +6882,155 @@ void ImGuiNodeEditorComponent::loadPresetFromFile(const juce::File& file)
     currentPresetFile = file.getFileName();
     
     juce::Logger::writeToLog("[Preset] Successfully loaded preset: " + file.getFullPathName());
+}
+
+void ImGuiNodeEditorComponent::mergePresetFromFile(const juce::File& file, ImVec2 dropPosition)
+{
+    if (!file.existsAsFile() || synth == nullptr)
+        return;
+
+    auto xml = juce::XmlDocument::parse(file);
+    if (xml == nullptr) return;
+
+    juce::ValueTree preset = juce::ValueTree::fromXml(*xml);
+    auto modulesVT = preset.getChildWithName("modules");
+    auto connectionsVT = preset.getChildWithName("connections");
+    auto uiVT = preset.getChildWithName("NodeEditorUI");
+
+    if (!modulesVT.isValid()) return;
+
+    pushSnapshot(); // Create an undo state before we start merging.
+
+    // --- THIS IS THE NEW LOGIC ---
+    // 1. Find the top-most Y coordinate of all existing nodes on the canvas.
+    float topMostY = FLT_MAX;
+    auto currentUiState = getUiValueTree();
+    bool canvasHasNodes = false;
+    for (int i = 0; i < currentUiState.getNumChildren(); ++i)
+    {
+        auto nodePosVT = currentUiState.getChild(i);
+        if (nodePosVT.hasType("node"))
+        {
+            canvasHasNodes = true;
+            float y = (float)nodePosVT.getProperty("y");
+            if (y < topMostY)
+            {
+                topMostY = y;
+            }
+        }
+    }
+    // If the canvas is empty, use the drop position as the reference.
+    if (!canvasHasNodes)
+    {
+        topMostY = dropPosition.y;
+    }
+
+    // 2. Find the bounding box of the nodes within the preset we are dropping.
+    float presetMinX = FLT_MAX;
+    float presetMaxY = -FLT_MAX;
+    if (uiVT.isValid())
+    {
+        for (int i = 0; i < uiVT.getNumChildren(); ++i)
+        {
+            auto nodePosVT = uiVT.getChild(i);
+            if (nodePosVT.hasType("node"))
+            {
+                float x = (float)nodePosVT.getProperty("x");
+                float y = (float)nodePosVT.getProperty("y");
+                if (x < presetMinX) presetMinX = x;
+                if (y > presetMaxY) presetMaxY = y; // We need the lowest point (max Y) of the preset group.
+            }
+        }
+    }
+    
+    // 3. Calculate the necessary offsets.
+    const float verticalPadding = 100.0f;
+    const float yOffset = topMostY - presetMaxY - verticalPadding;
+    const float xOffset = dropPosition.x - presetMinX;
+    // --- END OF NEW LOGIC ---
+
+    // This map will track how we remap old IDs from the file to new, unique IDs on the canvas.
+    std::map<juce::uint32, juce::uint32> oldIdToNewId;
+
+    // First pass: create all the new modules from the preset.
+    for (int i = 0; i < modulesVT.getNumChildren(); ++i)
+    {
+        auto moduleNode = modulesVT.getChild(i);
+        if (moduleNode.hasType("module"))
+        {
+            juce::uint32 oldLogicalId = (juce::uint32)(int)moduleNode.getProperty("logicalId");
+            juce::String type = moduleNode.getProperty("type").toString();
+            
+            // Add the module without committing the graph changes yet.
+            auto newNodeId = synth->addModule(type, false);
+            juce::uint32 newLogicalId = synth->getLogicalIdForNode(newNodeId);
+
+            oldIdToNewId[oldLogicalId] = newLogicalId; // Store the mapping
+
+            // Restore the new module's parameters and extra state.
+            if (auto* proc = synth->getModuleForLogical(newLogicalId))
+            {
+                auto paramsWrapper = moduleNode.getChildWithName("params");
+                if (paramsWrapper.isValid()) proc->getAPVTS().replaceState(paramsWrapper.getChild(0));
+                
+                auto extraWrapper = moduleNode.getChildWithName("extra");
+                if (extraWrapper.isValid()) proc->setExtraStateTree(extraWrapper.getChild(0));
+            }
+        }
+    }
+
+    // Second pass: recreate the internal connections between the new modules.
+    if (connectionsVT.isValid())
+    {
+        for (int i = 0; i < connectionsVT.getNumChildren(); ++i)
+        {
+            auto connNode = connectionsVT.getChild(i);
+            if (connNode.hasType("connection"))
+            {
+                juce::uint32 oldSrcId = (juce::uint32)(int)connNode.getProperty("srcId");
+                int srcChan = (int)connNode.getProperty("srcChan");
+                juce::uint32 oldDstId = (juce::uint32)(int)connNode.getProperty("dstId");
+                int dstChan = (int)connNode.getProperty("dstChan");
+
+                // Only connect if both source and destination are part of the preset we're merging.
+                if (oldIdToNewId.count(oldSrcId) && oldIdToNewId.count(oldDstId))
+                {
+                    auto newSrcNodeId = synth->getNodeIdForLogical(oldIdToNewId[oldSrcId]);
+                    auto newDstNodeId = synth->getNodeIdForLogical(oldIdToNewId[oldDstId]);
+                    synth->connect(newSrcNodeId, srcChan, newDstNodeId, dstChan);
+                }
+            }
+        }
+    }
+    
+    // Third pass: Apply UI positions using our new calculated offsets.
+    if (uiVT.isValid())
+    {
+        for (int i = 0; i < uiVT.getNumChildren(); ++i)
+        {
+            auto nodePosVT = uiVT.getChild(i);
+            if (nodePosVT.hasType("node"))
+            {
+                juce::uint32 oldId = (juce::uint32)(int)nodePosVT.getProperty("id");
+                if (oldIdToNewId.count(oldId)) // Check if it's one of our new nodes
+                {
+                    ImVec2 pos = ImVec2((float)nodePosVT.getProperty("x"), (float)nodePosVT.getProperty("y"));
+                    
+                    // Apply the smart offsets
+                    ImVec2 newPos = ImVec2(pos.x + xOffset, pos.y + yOffset);
+                    
+                    pendingNodeScreenPositions[(int)oldIdToNewId[oldId]] = newPos;
+                }
+            }
+        }
+    }
+
+    // Finally, commit all the changes to the audio graph at once.
+    synth->commitChanges();
+    isPatchDirty = true; // Mark the patch as edited.
+    
+    juce::Logger::writeToLog("[Preset] Successfully merged preset: " + file.getFullPathName() + 
+                             " above existing nodes with offsets (" + juce::String(xOffset) + ", " + juce::String(yOffset) + ")");
 }
 
 

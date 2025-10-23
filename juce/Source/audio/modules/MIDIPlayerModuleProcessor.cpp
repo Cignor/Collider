@@ -548,6 +548,10 @@ void MIDIPlayerModuleProcessor::loadMIDIFile(const juce::File& file)
         parseMIDIFile();
         
         juce::Logger::writeToLog("[MIDI Player] Loaded MIDI file: " + currentMIDIFileName);
+        
+        // --- ADD THIS LINE ---
+        // If a new file is loaded, signal to the UI that connections may need to be updated.
+        connectionUpdateRequested = true;
     }
     else
     {
@@ -568,7 +572,33 @@ void MIDIPlayerModuleProcessor::drawParametersInNode(float itemWidth, const std:
     }
     else
     {
-        ImGui::Text("No MIDI file loaded");
+        // If NO MIDI file is loaded, draw a dedicated, colored dropzone.
+        ImVec2 dropZoneSize = ImVec2(itemWidth, 60.0f);
+        
+        // Use a purple color to match the MIDI browser theme
+        ImGui::PushStyleColor(ImGuiCol_Button, IM_COL32(180, 120, 255, 100));
+        ImGui::Button("##dropzone_midi", dropZoneSize);
+        ImGui::PopStyleColor();
+        
+        // Draw text centered on top of the button
+        const char* text = "Drop MIDI File Here";
+        ImVec2 textSize = ImGui::CalcTextSize(text);
+        ImVec2 textPos = ImGui::GetItemRectMin();
+        textPos.x += (dropZoneSize.x - textSize.x) * 0.5f;
+        textPos.y += (dropZoneSize.y - textSize.y) * 0.5f;
+        ImGui::GetWindowDrawList()->AddText(textPos, IM_COL32_WHITE, text);
+
+        // Make THIS BUTTON the drop target
+        if (ImGui::BeginDragDropTarget())
+        {
+            if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("DND_MIDI_PATH"))
+            {
+                const char* path = (const char*)payload->Data;
+                loadMIDIFile(juce::File(path));
+                onModificationEnded(); // Create an undo state
+            }
+            ImGui::EndDragDropTarget();
+        }
     }
     
     // Load MIDI File Button
@@ -754,6 +784,39 @@ void MIDIPlayerModuleProcessor::drawParametersInNode(float itemWidth, const std:
     {
         pendingSeekTime.store(0.0);
         juce::Logger::writeToLog("[MIDI Player] Playback reset to start");
+    }
+    
+    // Add visible drop target area when MIDI is loaded (for hot-swapping)
+    if (hasMIDIFileLoaded())
+    {
+        ImGui::Spacing();
+        ImGui::Separator();
+        
+        // Draw a colored button as a visible drop zone for hot-swapping
+        ImVec2 swapZoneSize = ImVec2(itemWidth, 50.0f);
+        ImGui::PushStyleColor(ImGuiCol_Button, IM_COL32(180, 120, 255, 60));
+        ImGui::Button("##dropzone_midi_swap", swapZoneSize);
+        ImGui::PopStyleColor();
+        
+        // Draw text centered on the button
+        const char* text = "Drop to Swap MIDI";
+        ImVec2 textSize = ImGui::CalcTextSize(text);
+        ImVec2 textPos = ImGui::GetItemRectMin();
+        textPos.x += (swapZoneSize.x - textSize.x) * 0.5f;
+        textPos.y += (swapZoneSize.y - textSize.y) * 0.5f;
+        ImGui::GetWindowDrawList()->AddText(textPos, IM_COL32(200, 200, 200, 255), text);
+        
+        // Make THIS BUTTON the drop target for hot-swapping MIDI files
+        if (ImGui::BeginDragDropTarget())
+        {
+            if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("DND_MIDI_PATH"))
+            {
+                const char* path = (const char*)payload->Data;
+                loadMIDIFile(juce::File(path));
+                onModificationEnded();
+            }
+            ImGui::EndDragDropTarget();
+        }
     }
     
     ImGui::PopItemWidth();

@@ -11,6 +11,7 @@
 #include "../audio/graph/ModularSynthProcessor.h"
 #include "PresetManager.h"
 #include "SampleManager.h"
+#include "MidiManager.h"
 
 // Forward declarations from Dear ImGui / imnodes
 struct ImGuiContext; struct ImGuiIO; struct ImNodesContext;
@@ -185,6 +186,12 @@ public:
     std::unique_ptr<juce::FileChooser> presetPathChooser;
     std::unique_ptr<juce::FileChooser> samplePathChooser;
     
+    // MIDI file management
+    MidiManager m_midiManager;
+    juce::File m_midiScanPath;
+    juce::String m_midiSearchTerm;
+    std::unique_ptr<juce::FileChooser> midiPathChooser;
+    
     // Meta module editing state
     juce::uint32 metaModuleToEditLid = 0;
     
@@ -330,6 +337,7 @@ public:
     
     // --- Unified Preset Loading ---
     void loadPresetFromFile(const juce::File& file);
+    void mergePresetFromFile(const juce::File& file, ImVec2 dropPosition);
     
     // --- Meta Module (Sub-Patching) Support ---
     void handleCollapseToMetaModule();
