@@ -30,50 +30,49 @@ void MIDICVModuleProcessor::releaseResources()
 
 void MIDICVModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midiMessages)
 {
-    // Ensure we have enough output channels
     if (buffer.getNumChannels() < 6)
     {
         buffer.clear();
         return;
     }
     
-    // Process all MIDI messages in this block
+    // --- NEW, MORE DETAILED LOGGING ---
+    if (!midiMessages.isEmpty())
+    {
+        juce::Logger::writeToLog("[MIDI CV] Processing " + juce::String(midiMessages.getNumEvents()) + " incoming MIDI events.");
+    }
+    // --- END OF NEW LOGGING ---
+
     for (const auto metadata : midiMessages)
     {
         const auto msg = metadata.getMessage();
         
+        // Use getDescription() for a detailed, human-readable log
+        juce::Logger::writeToLog("[MIDI CV] Received: " + msg.getDescription());
+
         if (msg.isNoteOn())
         {
             midiState.currentNote = msg.getNoteNumber();
             midiState.currentVelocity = msg.getVelocity() / 127.0f;
             midiState.gateHigh = true;
-            
-            juce::Logger::writeToLog("[MIDI CV] Note On: " + juce::String(midiState.currentNote) + 
-                                   " Velocity: " + juce::String(midiState.currentVelocity));
         }
         else if (msg.isNoteOff())
         {
             if (msg.getNoteNumber() == midiState.currentNote)
             {
                 midiState.gateHigh = false;
-                juce::Logger::writeToLog("[MIDI CV] Note Off: " + juce::String(midiState.currentNote));
             }
         }
         else if (msg.isController())
         {
-            const int ccNumber = msg.getControllerNumber();
-            const float ccValue = msg.getControllerValue() / 127.0f;
-            
-            if (ccNumber == 1) // Mod Wheel
+            if (msg.getControllerNumber() == 1) // Mod Wheel
             {
-                midiState.modWheel = ccValue;
+                midiState.modWheel = msg.getControllerValue() / 127.0f;
             }
         }
         else if (msg.isPitchWheel())
         {
-            // Convert 14-bit pitch wheel (0-16383) to -1 to +1 range
-            const int pitchValue = msg.getPitchWheelValue();
-            midiState.pitchBend = (pitchValue - 8192) / 8192.0f;
+            midiState.pitchBend = (msg.getPitchWheelValue() - 8192) / 8192.0f;
         }
         else if (msg.isAftertouch())
         {
@@ -141,3 +140,24 @@ float MIDICVModuleProcessor::midiNoteToCv(int noteNumber) const
     // Each semitone = 1/12 V
     return (noteNumber - 60) / 12.0f;
 }
+
+#if defined(PRESET_CREATOR_UI)
+void MIDICVModuleProcessor::drawParametersInNode(float itemWidth, const std::function<bool(const juce::String&)>&, const std::function<void()>&)
+{
+    // --- THIS IS THE FIX ---
+    // Add a text label and an invisible dummy widget to give the node a defined size.
+    ImGui::Text("MIDI to CV/Gate");
+    ImGui::Dummy(ImVec2(itemWidth, 10.0f)); // Gives the node a minimum width and a small, fixed height.
+    // --- END OF FIX ---
+}
+
+void MIDICVModuleProcessor::drawIoPins(const NodePinHelpers& helpers)
+{
+    helpers.drawAudioOutputPin("Pitch", 0);
+    helpers.drawAudioOutputPin("Gate", 1);
+    helpers.drawAudioOutputPin("Velocity", 2);
+    helpers.drawAudioOutputPin("Mod Wheel", 3);
+    helpers.drawAudioOutputPin("Pitch Bend", 4);
+    helpers.drawAudioOutputPin("Aftertouch", 5);
+}
+#endif

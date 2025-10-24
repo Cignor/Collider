@@ -49,6 +49,29 @@ PresetCreatorComponent::PresetCreatorComponent(juce::AudioDeviceManager& adm,
     // AudioProcessorPlayer lives in juce_audio_utils namespace path include; type is juce::AudioSourcePlayer for routing
     // Use AudioProcessorPlayer via juce_audio_utils module
     processorPlayer.setProcessor (synth.get());
+    
+    // --- THIS IS THE DEFINITIVE FIX ---
+    // 1. Get the list of available MIDI input devices.
+    auto midiInputs = juce::MidiInput::getAvailableDevices();
+    if (!midiInputs.isEmpty())
+    {
+        // 2. Get the name of the first (default) MIDI input device.
+        juce::String defaultDeviceName = midiInputs[0].name;
+
+        // 3. Tell the device manager to enable this device.
+        deviceManager.setMidiInputDeviceEnabled(defaultDeviceName, true);
+
+        // 4. Register our processorPlayer to receive callbacks from this device.
+        // The AudioProcessorPlayer will then forward the MIDI to the synth's processBlock.
+        deviceManager.addMidiInputDeviceCallback(defaultDeviceName, &processorPlayer);
+        juce::Logger::writeToLog("[MIDI] Registered processorPlayer as callback for: " + defaultDeviceName);
+    }
+    else
+    {
+        juce::Logger::writeToLog("[MIDI] No MIDI input devices found.");
+    }
+    // --- END OF FIX ---
+    
     setWantsKeyboardFocus (true);
 
     // Setup FileLogger at the same path the user checks: <exe>/juce/logs/preset_creator_*.log
@@ -78,7 +101,7 @@ PresetCreatorComponent::PresetCreatorComponent(juce::AudioDeviceManager& adm,
 void PresetCreatorComponent::showAudioSettingsDialog()
 {
     auto* component = new juce::AudioDeviceSelectorComponent(
-        deviceManager, 0, 256, 0, 256, false, false, false, false);
+        deviceManager, 0, 256, 0, 256, true, true, false, false);
     
     component->setSize(500, 450);
 
@@ -151,6 +174,14 @@ void PresetCreatorComponent::setMasterPlayState(bool shouldBePlaying)
 
 PresetCreatorComponent::~PresetCreatorComponent()
 {
+    // ADD THIS BLOCK
+    auto midiInputs = juce::MidiInput::getAvailableDevices();
+    if (!midiInputs.isEmpty())
+    {
+        deviceManager.removeMidiInputDeviceCallback(midiInputs[0].name, &processorPlayer);
+    }
+    // END OF BLOCK
+
     stopAudition();
     processorPlayer.setProcessor (nullptr);
     juce::Logger::writeToLog ("PresetCreator destroyed");
@@ -420,6 +451,14 @@ void PresetCreatorComponent::stopAudition()
 void PresetCreatorComponent::timerCallback()
 {
     RtLogger::flushToFileLogger();
+    
+    // Check for MIDI activity from the synth
+    if (synth != nullptr && synth->hasMidiActivity())
+        midiActivityFrames = 30;
+    
+    // Update MIDI activity indicator in editor
+    if (editor != nullptr)
+        editor->setMidiActivityFrames(midiActivityFrames);
     
     if (synth != nullptr)
     {

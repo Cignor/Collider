@@ -27,6 +27,12 @@ public:
     
     juce::AudioProcessorValueTreeState& getAPVTS() override { return dummyApvts; }
 
+#if defined(PRESET_CREATOR_UI)
+    // ADD THESE TWO FUNCTION DECLARATIONS
+    void drawParametersInNode(float itemWidth, const std::function<bool(const juce::String&)>&, const std::function<void()>&) override;
+    void drawIoPins(const NodePinHelpers& helpers) override;
+#endif
+
 private:
     // Current MIDI state
     struct MIDIState

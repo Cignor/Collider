@@ -76,6 +76,9 @@ public:
     TransportState getTransportState() const { return m_transportState; }
     void setPlaying(bool playing) { m_transportState.isPlaying = playing; }
     void setBPM(double bpm) { m_transportState.bpm = juce::jlimit(20.0, 999.0, bpm); }
+    
+    // MIDI activity indicator
+    bool hasMidiActivity() const { return m_midiActivityFlag.exchange(false); }
     void resetTransportPosition() { m_samplePosition = 0; m_transportState.songPositionBeats = 0.0; m_transportState.songPositionSeconds = 0.0; }
     
     // === VOICE MANAGEMENT FOR POLYPHONY ===
@@ -136,6 +139,9 @@ private:
     Node::Ptr audioInputNode;
     Node::Ptr audioOutputNode;
     Node::Ptr midiInputNode;
+    
+    // MIDI activity indicator (mutable because hasMidiActivity() is const)
+    mutable std::atomic<bool> m_midiActivityFlag{false};
 
     // The APVTS that will expose proxy parameters to the host/AudioEngine
     juce::AudioProcessorValueTreeState apvts;

@@ -56,6 +56,10 @@
 #include "../modules/DriveModuleProcessor.h"
 #include "../modules/SnapshotSequencerModuleProcessor.h"
 #include "../modules/MIDICVModuleProcessor.h"
+#include "../modules/MIDIFadersModuleProcessor.h"
+#include "../modules/MIDIKnobsModuleProcessor.h"
+#include "../modules/MIDIButtonsModuleProcessor.h"
+#include "../modules/MIDIJogWheelModuleProcessor.h"
 #include "../modules/InletModuleProcessor.h"
 #include "../modules/OutletModuleProcessor.h"
 #include "../modules/MetaModuleProcessor.h"
@@ -109,6 +113,15 @@ void ModularSynthProcessor::releaseResources()
 void ModularSynthProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midiMessages)
 {
     try {
+        // --- ADD THIS LOGGING BLOCK ---
+        if (!midiMessages.isEmpty())
+        {
+            // If we get this message, it means MIDI is successfully reaching the synth.
+            juce::Logger::writeToLog("[SynthCore] Received " + juce::String(midiMessages.getNumEvents()) + " MIDI events this block.");
+            m_midiActivityFlag.store(true);
+        }
+        // --- END OF BLOCK ---
+        
         if (m_transportState.isPlaying)
         {
             m_samplePosition += buffer.getNumSamples();
@@ -577,6 +590,10 @@ namespace {
             reg("snapshotsequencer", []{ return std::make_unique<SnapshotSequencerModuleProcessor>(); });
             reg("midi cv", []{ return std::make_unique<MIDICVModuleProcessor>(); });
             reg("midicv", []{ return std::make_unique<MIDICVModuleProcessor>(); });
+            reg("midi faders", []{ return std::make_unique<MIDIFadersModuleProcessor>(); });
+            reg("midi knobs", []{ return std::make_unique<MIDIKnobsModuleProcessor>(); });
+            reg("midi buttons", []{ return std::make_unique<MIDIButtonsModuleProcessor>(); });
+            reg("midi jog wheel", []{ return std::make_unique<MIDIJogWheelModuleProcessor>(); });
             
             reg("meta module", []{ return std::make_unique<MetaModuleProcessor>(); });
             reg("metamodule", []{ return std::make_unique<MetaModuleProcessor>(); });

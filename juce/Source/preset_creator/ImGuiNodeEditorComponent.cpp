@@ -807,6 +807,22 @@ void ImGuiNodeEditorComponent::renderImGui()
             ImGui::Text("%.2f beats", transportState.songPositionBeats);
         }
         
+        // === MIDI ACTIVITY INDICATOR ===
+        if (midiActivityFrames > 0)
+        {
+            ImGui::PushStyleColor(ImGuiCol_Text, IM_COL32(120, 255, 120, 255)); // Bright green
+            ImGui::Text("MIDI");
+            ImGui::PopStyleColor();
+            midiActivityFrames--;
+        }
+        else
+        {
+            ImGui::PushStyleColor(ImGuiCol_Text, IM_COL32(80, 100, 80, 255)); // Dim green
+            ImGui::Text("MIDI");
+            ImGui::PopStyleColor();
+        }
+        // === END OF INDICATOR ===
+        
         ImGui::EndMainMenuBar();
     }
 
@@ -1280,10 +1296,22 @@ void ImGuiNodeEditorComponent::renderImGui()
     addModuleButton("Noise", "Noise");
         addModuleButton("Sequencer", "Sequencer");
         addModuleButton("Multi Sequencer", "multi sequencer");
-        addModuleButton("MIDI Player", "midi player");
-        addModuleButton("MIDI CV", "midi cv");
         addModuleButton("Value", "Value");
         addModuleButton("Sample Loader", "sample loader");
+    }
+    
+    pushCategoryColor(ModuleCategory::MIDI);
+    bool midiFamilyExpanded = ImGui::CollapsingHeader("MIDI Family", ImGuiTreeNodeFlags_DefaultOpen);
+    ImGui::PopStyleColor(3);
+    if (midiFamilyExpanded) {
+        addModuleButton("MIDI CV", "midi cv");
+        addModuleButton("MIDI Player", "midi player");
+        ImGui::Separator();
+        addModuleButton("MIDI Faders", "midi faders");
+        addModuleButton("MIDI Knobs", "midi knobs");
+        addModuleButton("MIDI Buttons", "midi buttons");
+        addModuleButton("MIDI Jog Wheel", "midi jog wheel");
+        ImGui::Separator();
     }
     
     pushCategoryColor(ModuleCategory::Source);
@@ -1956,15 +1984,6 @@ if (auto* mp = synth->getModuleForLogical (lid))
             };
             helpers.drawAudioInputPin = [&](const char* label, int channel)
             {
-                // +++ ADD THIS BLOCK FOR ONE-TIME DIAGNOSTIC LOGGING +++
-                const auto& style = ImNodes::GetStyle();
-                static bool logged = false;
-                if (!logged) {
-                    juce::Logger::writeToLog("DIAGNOSTIC - ImNodes Style PinOffset value: " + juce::String(style.PinOffset));
-                    logged = true;
-                }
-                // +++ END OF BLOCK +++
-
                 int attr = encodePinId({lid, channel, true});
                 seenAttrs.insert(attr);
                 availableAttrs.insert(attr);
@@ -1979,15 +1998,15 @@ if (auto* mp = synth->getModuleForLogical (lid))
 
                 ImNodes::BeginInputAttribute(attr); ImGui::TextUnformatted(label); ImNodes::EndInputAttribute();
 
-                // +++ CACHE THE PIN'S TRUE CIRCLE POSITION +++
-                const float PIN_CIRCLE_OFFSET = 8.0f;
+                // --- THIS IS THE DEFINITIVE FIX ---
+                // Get the bounding box of the pin circle that was just drawn.
                 ImVec2 pinMin = ImGui::GetItemRectMin();
                 ImVec2 pinMax = ImGui::GetItemRectMax();
-                float y_center = pinMin.y + (pinMax.y - pinMin.y) * 0.5f;
-                // For input pins, the circle is to the left of the label.
-                float x_pos = pinMin.x - PIN_CIRCLE_OFFSET;
-                attrPositions[attr] = ImVec2(x_pos, y_center);
-                // +++ END OF FIX +++
+                // Calculate the exact center and cache it.
+                float centerX = (pinMin.x + pinMax.x) * 0.5f;
+                float centerY = (pinMin.y + pinMax.y) * 0.5f;
+                attrPositions[attr] = ImVec2(centerX, centerY);
+                // --- END OF FIX ---
 
                 ImNodes::PopColorStyle(); // Restore default color
 
@@ -2039,15 +2058,15 @@ if (auto* mp = synth->getModuleForLogical (lid))
                 ImNodes::EndOutputAttribute();
                 // --- END OF FIX ---
 
-                // +++ CACHE THE PIN'S TRUE CIRCLE POSITION +++
-                const float PIN_CIRCLE_OFFSET = 8.0f;
+                // --- THIS IS THE DEFINITIVE FIX ---
+                // Get the bounding box of the pin circle that was just drawn.
                 ImVec2 pinMin = ImGui::GetItemRectMin();
                 ImVec2 pinMax = ImGui::GetItemRectMax();
-                float y_center = pinMin.y + (pinMax.y - pinMin.y) * 0.5f;
-                // For output pins, the circle is to the right of the label.
-                float x_pos = pinMax.x + PIN_CIRCLE_OFFSET;
-                attrPositions[attr] = ImVec2(x_pos, y_center);
-                // +++ END OF FIX +++
+                // Calculate the exact center and cache it.
+                float centerX = (pinMin.x + pinMax.x) * 0.5f;
+                float centerY = (pinMin.y + pinMax.y) * 0.5f;
+                attrPositions[attr] = ImVec2(centerX, centerY);
+                // --- END OF FIX ---
 
                 ImNodes::PopColorStyle();
 
@@ -2585,34 +2604,62 @@ if (auto* mp = synth->getModuleForLogical (lid))
             const int linkId = linkIdOf(srcAttr, dstAttr);
             linkIdToAttrs[linkId] = { srcAttr, dstAttr };
             
-            // Determine the data type of the source pin for color coding
+            // --- THIS IS THE DEFINITIVE FIX ---
+            // 1. Determine the base color and check for signal activity.
             auto srcPin = decodePinId(srcAttr);
             PinDataType linkDataType = getPinDataTypeForPin(srcPin);
             ImU32 linkColor = getImU32ForType(linkDataType);
-            
-            // Push color styles for the link
+            float magnitude = 0.0f;
+            bool hasThicknessModification = false;
+
+            if (auto* srcModule = synth->getModuleForLogical(srcPin.logicalId))
+            {
+                magnitude = srcModule->getOutputChannelValue(srcPin.channel);
+            }
+
+            // 2. If the signal is active, calculate a glowing/blinking color.
+            if (magnitude > 0.01f)
+            {
+                const float blinkSpeed = 8.0f;
+                float blinkFactor = (std::sin((float)ImGui::GetTime() * blinkSpeed) + 1.0f) * 0.5f;
+                float glowIntensity = juce::jlimit(0.0f, 1.0f, blinkFactor * magnitude * 2.0f);
+
+                // Brighten the base color and modulate alpha for glow effect
+                ImVec4 colorVec = ImGui::ColorConvertU32ToFloat4(linkColor);
+                colorVec.x = juce::jmin(1.0f, colorVec.x + glowIntensity * 0.4f);
+                colorVec.y = juce::jmin(1.0f, colorVec.y + glowIntensity * 0.4f);
+                colorVec.z = juce::jmin(1.0f, colorVec.z + glowIntensity * 0.4f);
+                colorVec.w = juce::jlimit(0.5f, 1.0f, 0.5f + glowIntensity * 0.5f);
+                linkColor = ImGui::ColorConvertFloat4ToU32(colorVec);
+
+                // Make active cables slightly thicker
+                ImNodes::PushStyleVar(ImNodesStyleVar_LinkThickness, 3.0f);
+                hasThicknessModification = true;
+            }
+
+            // 3. Push the chosen color (either normal or glowing) to the style stack.
             ImNodes::PushColorStyle(ImNodesCol_Link, linkColor);
-            ImNodes::PushColorStyle(ImNodesCol_LinkHovered, IM_COL32(255, 255, 0, 255)); // Yellow on hover
-            ImNodes::PushColorStyle(ImNodesCol_LinkSelected, IM_COL32(255, 255, 0, 255)); // Yellow when selected
-            
-            // Check if this link should be highlighted (node hover)
+            ImNodes::PushColorStyle(ImNodesCol_LinkHovered, IM_COL32(255, 255, 0, 255));
+            ImNodes::PushColorStyle(ImNodesCol_LinkSelected, IM_COL32(255, 255, 0, 255));
+
+            // 4. Check for node hover highlight (this should override the glow).
             const bool hl = (hoveredNodeId != -1) && ((int) c.srcLogicalId == hoveredNodeId || (! c.dstIsOutput && (int) c.dstLogicalId == hoveredNodeId) || (c.dstIsOutput && hoveredNodeId == 0));
             if (hl)
             {
-                // Override with yellow for node highlighting
                 ImNodes::PushColorStyle(ImNodesCol_Link, IM_COL32(255, 255, 0, 255));
             }
             
+            // 5. Tell imnodes to draw the link. It will use the color we just pushed.
             ImNodes::Link(linkId, srcAttr, dstAttr);
             
-            // Pop all color styles
-            if (hl)
-            {
-                ImNodes::PopColorStyle(); // Pop highlight override
-            }
-            ImNodes::PopColorStyle(); // Pop LinkSelected
-            ImNodes::PopColorStyle(); // Pop LinkHovered
-            ImNodes::PopColorStyle(); // Pop main link color
+            // 6. Pop ALL style modifications to restore the defaults for the next link.
+            if (hl) ImNodes::PopColorStyle();
+            ImNodes::PopColorStyle(); // LinkSelected
+            ImNodes::PopColorStyle(); // LinkHovered
+            ImNodes::PopColorStyle(); // Link
+            if (hasThicknessModification) ImNodes::PopStyleVar(); // LinkThickness
+            
+            // --- END OF FIX ---
         }
 
         // Drag detection for node movement: snapshot once on mouse release (post-state)
@@ -2769,80 +2816,8 @@ if (auto* mp = synth->getModuleForLogical (lid))
     bool isLinkHovered = ImNodes::IsLinkHovered(&hoveredLinkId);
     // --- END OF CONSOLIDATED DECLARATION ---
     
-    // === SMART CABLE VISUALIZATION ===
-    // Draw animated pulses on active cables to show signal flow
-    {
-        ImDrawList* drawList = ImGui::GetForegroundDrawList();
-        const float currentTime = (float)ImGui::GetTime();
-        
-        // Iterate through all visible links
-        for (const auto& linkPair : linkIdToAttrs)
-        {
-            int srcAttr = linkPair.second.first;
-            int dstAttr = linkPair.second.second;
-            
-            auto srcPin = decodePinId(srcAttr);
-            
-            if (srcPin.isMod || srcPin.logicalId == 0)
-                continue;
-            
-            if (auto* srcModule = synth->getModuleForLogical(srcPin.logicalId))
-            {
-                float magnitude = srcModule->getOutputChannelValue(srcPin.channel);
-                
-                if (magnitude > 0.01f)
-                {
-                    PinDataType pinType = getPinDataTypeForPin(srcPin);
-                    ImU32 baseColor = getImU32ForType(pinType);
-                    
-                    float r = ((baseColor >> IM_COL32_R_SHIFT) & 0xFF) / 255.0f;
-                    float g = ((baseColor >> IM_COL32_G_SHIFT) & 0xFF) / 255.0f;
-                    float b = ((baseColor >> IM_COL32_B_SHIFT) & 0xFF) / 255.0f;
-                    
-                    // Since GetLinkCurvePoints is not available, we replicate the curve math ourselves
-                    auto srcPosIt = attrPositions.find(srcAttr);
-                    auto dstPosIt = attrPositions.find(dstAttr);
-                    
-                    if (srcPosIt != attrPositions.end() && dstPosIt != attrPositions.end())
-                    {
-                        // 1. Get the four points of the Bézier curve
-                        const ImVec2 p0 = srcPosIt->second; // Start point
-                        const ImVec2 p3 = dstPosIt->second; // End point
-                        
-                        // 2. Calculate the two horizontal control points, just like imnodes does
-                        // The offset determines the "S" shape of the curve
-                        const float horizontalOffset = juce::jmin(100.0f, std::abs(p3.x - p0.x) * 0.3f);
-                        const ImVec2 p1 = ImVec2(p0.x + horizontalOffset, p0.y);
-                        const ImVec2 p2 = ImVec2(p3.x - horizontalOffset, p3.y);
-                        
-                        // 3. Determine our position 't' (0.0 to 1.0) along the curve based on time
-                        const float pulseSpeed = 0.4f;
-                        float t = std::fmod(currentTime * pulseSpeed, 1.0f);
-                        
-                        // 4. Apply the cubic Bézier formula to find the pulse's screen position
-                        const float u = 1.0f - t;
-                        const float tt = t * t;
-                        const float uu = u * u;
-                        const float uuu = uu * u;
-                        const float ttt = tt * t;
-                        
-                        ImVec2 pulsePos;
-                        pulsePos.x = uuu * p0.x + 3 * uu * t * p1.x + 3 * u * tt * p2.x + ttt * p3.x;
-                        pulsePos.y = uuu * p0.y + 3 * uu * t * p1.y + 3 * u * tt * p2.y + ttt * p3.y;
-                        
-                        // 5. Draw the pulse at the calculated position
-                        float pulseRadius = 2.0f + magnitude * 6.0f;
-                        float alpha = juce::jlimit(0.0f, 1.0f, magnitude * 2.0f);
-
-                        drawList->AddCircleFilled(pulsePos, pulseRadius + 2.0f, IM_COL32((int)(r*255), (int)(g*255), (int)(b*255), (int)(alpha * 60)), 12);
-                        drawList->AddCircleFilled(pulsePos, pulseRadius, IM_COL32((int)(r*255), (int)(g*255), (int)(b*255), (int)(alpha * 200)), 12);
-                        drawList->AddCircleFilled(pulsePos, pulseRadius * 0.5f, IM_COL32(255, 255, 255, (int)(alpha * 255)), 8);
-                    }
-                }
-            }
-        }
-    }
-    // === END SMART CABLE VISUALIZATION ===
+    // Smart cable visualization is now integrated directly into the link drawing loop above.
+    // No separate overlay needed - cables glow by modifying their own color.
     
     // === PROBE TOOL MODE HANDLING ===
     if (isProbeModeActive)
@@ -3312,9 +3287,18 @@ if (auto* mp = synth->getModuleForLogical (lid))
                     if (ImGui::MenuItem("Sequencer")) addAtMouse("Sequencer");
                     if (ImGui::MenuItem("Multi Sequencer")) addAtMouse("multi sequencer");
                     if (ImGui::MenuItem("Snapshot Sequencer")) addAtMouse("snapshot sequencer");
-                    if (ImGui::MenuItem("MIDI Player")) addAtMouse("midi player");
                     if (ImGui::MenuItem("Value")) addAtMouse("Value");
                     if (ImGui::MenuItem("Sample Loader")) addAtMouse("sample loader");
+                    ImGui::EndMenu();
+                }
+                if (ImGui::BeginMenu("MIDI Family")) {
+                    if (ImGui::MenuItem("MIDI CV")) addAtMouse("midi cv");
+                    if (ImGui::MenuItem("MIDI Player")) addAtMouse("midi player");
+                    ImGui::Separator();
+                    if (ImGui::MenuItem("MIDI Faders")) addAtMouse("midi faders");
+                    if (ImGui::MenuItem("MIDI Knobs")) addAtMouse("midi knobs");
+                    if (ImGui::MenuItem("MIDI Buttons")) addAtMouse("midi buttons");
+                    if (ImGui::MenuItem("MIDI Jog Wheel")) addAtMouse("midi jog wheel");
                     ImGui::EndMenu();
                 }
                 if (ImGui::BeginMenu("TTS")) {
@@ -5132,96 +5116,95 @@ void ImGuiNodeEditorComponent::handleMidiPlayerAutoConnectVCO(MIDIPlayerModulePr
 
 void ImGuiNodeEditorComponent::handleMidiPlayerAutoConnectHybrid(MIDIPlayerModuleProcessor* midiPlayer, juce::uint32 midiPlayerLid)
 {
-    if (!synth || !midiPlayer || midiPlayerLid == 0 || !midiPlayer->hasMIDIFileLoaded())
-    {
-        juce::Logger::writeToLog("[AutoConnectHybrid] Aborted: MIDI Player not ready.");
-        return;
-    }
-    
-    juce::Logger::writeToLog("--- [AutoConnectHybrid] Starting routine for MIDI Player " + juce::String(midiPlayerLid) + " ---");
+    if (!synth || !midiPlayer) return;
 
-    // 1. Get positions, clear existing connections, and get track count.
+    pushSnapshot();
+
+    const int numTracks = midiPlayer->getNumTracks();
+    if (numTracks == 0) return;
+
     auto midiPlayerNodeId = synth->getNodeIdForLogical(midiPlayerLid);
-    ImVec2 midiPlayerPos = ImNodes::GetNodeGridSpacePos((int)midiPlayerLid);
-    synth->clearConnectionsForNode(midiPlayerNodeId);
-    
-    const auto& activeTrackIndices = midiPlayer->getActiveTrackIndices();
-    const int numActiveTracks = (int)activeTrackIndices.size();
-    if (numActiveTracks == 0) return;
+    ImVec2 midiPos = ImNodes::GetNodeGridSpacePos((int)midiPlayerLid);
 
-    // 2. Create all necessary modules.
-    auto polyVcoNodeId = synth->addModule("polyvco");
-    auto polyVcoLid = synth->getLogicalIdForNode(polyVcoNodeId);
-    pendingNodePositions[(int)polyVcoLid] = ImVec2(midiPlayerPos.x + 400.0f, midiPlayerPos.y);
+    // --- THIS IS THE NEW "FIND-BY-TRACING" LOGIC ---
 
-    auto mixerNodeId = synth->addModule("trackmixer");
-    auto mixerLid = synth->getLogicalIdForNode(mixerNodeId);
-    pendingNodePositions[(int)mixerLid] = ImVec2(midiPlayerPos.x + 1200.0f, midiPlayerPos.y);
-    
-    // Create a Math setup to double the track count for the mixer
-    auto valueNodeId = synth->addModule("Value");
-    auto valueLid = synth->getLogicalIdForNode(valueNodeId);
-    if(auto* valueProc = dynamic_cast<ValueModuleProcessor*>(synth->getModuleForLogical(valueLid)))
-        if (auto* p = dynamic_cast<juce::AudioParameterFloat*>(valueProc->getAPVTS().getParameter("value"))) *p = 2.0f;
-    pendingNodePositions[(int)valueLid] = ImVec2(midiPlayerPos.x, midiPlayerPos.y + 200.0f);
-    
-    auto mathNodeId = synth->addModule("Math");
-    auto mathLid = synth->getLogicalIdForNode(mathNodeId);
-    if(auto* mathProc = dynamic_cast<MathModuleProcessor*>(synth->getModuleForLogical(mathLid)))
-        *dynamic_cast<juce::AudioParameterChoice*>(mathProc->getAPVTS().getParameter("operation")) = 2; // Set to Multiply
-    pendingNodePositions[(int)mathLid] = ImVec2(midiPlayerPos.x + 200.0f, midiPlayerPos.y + 200.0f);
+    juce::uint32 polyVcoLid = 0;
+    juce::uint32 trackMixerLid = 0;
 
-    // 3. Connect the master control signals for voice/track counts.
-    synth->connect(midiPlayerNodeId, MIDIPlayerModuleProcessor::kRawNumTracksChannelIndex, mathNodeId, 0); // Raw Num Tracks -> Math In A
-    synth->connect(valueNodeId, 0, mathNodeId, 1); // Value (2.0) -> Math In B
-    synth->connect(mathNodeId, 0, mixerNodeId, TrackMixerModuleProcessor::MAX_TRACKS); // Math Out -> Mixer Num Tracks Mod
-    synth->connect(midiPlayerNodeId, MIDIPlayerModuleProcessor::kRawNumTracksChannelIndex, polyVcoNodeId, 0); // Raw Num Tracks -> PolyVCO Num Voices Mod
-
-    // 4. Create and connect a Sample Loader for each active MIDI track, and wire up CV.
-    std::vector<juce::uint32> samplerLids;
-    for (int i = 0; i < numActiveTracks; ++i)
+    // 1. Scan existing connections to find modules to reuse by tracing backwards.
+    // First, find a TrackMixer connected to the output.
+    for (const auto& conn : synth->getConnectionsInfo())
     {
-        auto samplerNodeId = synth->addModule("sample loader");
-        auto samplerLid = synth->getLogicalIdForNode(samplerNodeId);
-        samplerLids.push_back(samplerLid);
-        pendingNodePositions[(int)samplerLid] = ImVec2(midiPlayerPos.x + 800.0f, midiPlayerPos.y + (i * 350.0f));
-
-        int pitchChan = i * MIDIPlayerModuleProcessor::kOutputsPerTrack + 0;
-        int gateChan  = i * MIDIPlayerModuleProcessor::kOutputsPerTrack + 1;
-        int velChan   = i * MIDIPlayerModuleProcessor::kOutputsPerTrack + 2;
-        int trigChan  = i * MIDIPlayerModuleProcessor::kOutputsPerTrack + 3;
-
-        // Patch CV to PolyVCO Voice
-        synth->connect(midiPlayerNodeId, pitchChan, polyVcoNodeId, 1 + i);
-        synth->connect(midiPlayerNodeId, velChan,   polyVcoNodeId, 1 + PolyVCOModuleProcessor::MAX_VOICES * 2 + i);
-
-        // Patch CV to Sample Loader
-        auto currentSamplerNodeId = synth->getNodeIdForLogical(samplerLids.back());
-        synth->connect(midiPlayerNodeId, pitchChan, currentSamplerNodeId, 0);
-        synth->connect(midiPlayerNodeId, gateChan,  currentSamplerNodeId, 2);
-        synth->connect(midiPlayerNodeId, trigChan,  currentSamplerNodeId, 3);
-        synth->connect(midiPlayerNodeId, velChan,   currentSamplerNodeId, 1); // Velocity -> Speed Mod
+        if (conn.dstIsOutput && synth->getModuleTypeForLogical(conn.srcLogicalId).equalsIgnoreCase("trackmixer"))
+        {
+            trackMixerLid = conn.srcLogicalId; // Found a TrackMixer to reuse!
+            break;
+        }
+    }
+    // If we found a TrackMixer, now find a PolyVCO connected to it.
+    if (trackMixerLid != 0)
+    {
+        for (const auto& conn : synth->getConnectionsInfo())
+        {
+            if (conn.dstLogicalId == trackMixerLid && synth->getModuleTypeForLogical(conn.srcLogicalId).equalsIgnoreCase("polyvco"))
+            {
+                polyVcoLid = conn.srcLogicalId; // Found a PolyVCO to reuse!
+                break;
+            }
+        }
     }
 
-    // 5. Connect all audio routes to the mixer.
-    for (int i = 0; i < numActiveTracks; ++i)
+    // 2. Clear all old Pitch/Gate/Velocity connections from the MIDI Player.
+    std::vector<ModularSynthProcessor::ConnectionInfo> oldConnections;
+    for (const auto& conn : synth->getConnectionsInfo())
     {
-        // PolyVCO audio outputs -> first half of mixer
-        synth->connect(polyVcoNodeId, i, mixerNodeId, i);
+        if (conn.srcLogicalId == midiPlayerLid && conn.srcChan < 16 * 3)
+            oldConnections.push_back(conn);
+    }
+    for (const auto& conn : oldConnections)
+    {
+        synth->disconnect(synth->getNodeIdForLogical(conn.srcLogicalId), conn.srcChan,
+                          synth->getNodeIdForLogical(conn.dstLogicalId), conn.dstChan);
+    }
 
-        // Sample Loader audio outputs -> second half of mixer
-        auto samplerNodeId = synth->getNodeIdForLogical(samplerLids[i]);
-        synth->connect(samplerNodeId, 0, mixerNodeId, i + numActiveTracks);
+    // 3. If we didn't find a PolyVCO to reuse after tracing, create a new one.
+    if (polyVcoLid == 0)
+    {
+        auto polyVcoNodeId = synth->addModule("polyvco", false);
+        polyVcoLid = synth->getLogicalIdForNode(polyVcoNodeId);
+        pendingNodePositions[(int)polyVcoLid] = ImVec2(midiPos.x + 400.0f, midiPos.y);
+    }
+
+    // 4. If we didn't find a TrackMixer to reuse after tracing, create a new one.
+    if (trackMixerLid == 0)
+    {
+        auto trackMixerNodeId = synth->addModule("trackmixer", false);
+        trackMixerLid = synth->getLogicalIdForNode(trackMixerNodeId);
+        pendingNodePositions[(int)trackMixerLid] = ImVec2(midiPos.x + 800.0f, midiPos.y);
+    }
+    // --- END OF NEW LOGIC ---
+
+    auto polyVcoNodeId = synth->getNodeIdForLogical(polyVcoLid);
+    auto trackMixerNodeId = synth->getNodeIdForLogical(trackMixerLid);
+
+    if (auto* vco = dynamic_cast<PolyVCOModuleProcessor*>(synth->getModuleForLogical(polyVcoLid)))
+        if (auto* p = dynamic_cast<juce::AudioParameterInt*>(vco->getAPVTS().getParameter("numVoices"))) *p = numTracks;
+    if (auto* mixer = dynamic_cast<TrackMixerModuleProcessor*>(synth->getModuleForLogical(trackMixerLid)))
+        if (auto* p = dynamic_cast<juce::AudioParameterFloat*>(mixer->getAPVTS().getParameter("numTracks"))) *p = (float)numTracks;
+
+    int voicesToConnect = std::min({numTracks, PolyVCOModuleProcessor::MAX_VOICES, 64});
+    for (int i = 0; i < voicesToConnect; ++i)
+    {
+        synth->connect(midiPlayerNodeId, i, polyVcoNodeId, 1 + i);
+        synth->connect(midiPlayerNodeId, i + 16, polyVcoNodeId, 1 + PolyVCOModuleProcessor::MAX_VOICES * 2 + i);
+        synth->connect(polyVcoNodeId, i, trackMixerNodeId, i * 2);
+        synth->connect(polyVcoNodeId, i, trackMixerNodeId, i * 2 + 1);
     }
     
-    // 6. Connect the main mixer to the audio output.
-    auto outputNodeId = synth->getOutputNodeID();
-    synth->connect(mixerNodeId, 0, outputNodeId, 0);
-    synth->connect(mixerNodeId, 1, outputNodeId, 1);
-    
-    // 7. Flag the graph for a rebuild.
-    graphNeedsRebuild = true;
-    juce::Logger::writeToLog("--- [AutoConnectHybrid] Routine complete. ---");
+    synth->connect(trackMixerNodeId, 0, synth->getOutputNodeID(), 0);
+    synth->connect(trackMixerNodeId, 1, synth->getOutputNodeID(), 1);
+
+    synth->commitChanges();
 }
 
 void ImGuiNodeEditorComponent::handleMultiSequencerAutoConnectSamplers(MultiSequencerModuleProcessor* sequencer, juce::uint32 sequencerLid)
@@ -6295,6 +6278,10 @@ ImGuiNodeEditorComponent::ModuleCategory ImGuiNodeEditorComponent::getModuleCate
 {
     juce::String lower = moduleType.toLowerCase();
     
+    // --- MIDI Family (Vibrant Purple) ---
+    if (lower.contains("midi"))
+        return ModuleCategory::MIDI;
+    
     // --- Sources (Green) ---
     // Check specific matches first to avoid substring conflicts
     if (lower == "shaping oscillator")  // Prevent "shaper" from matching Effect category
@@ -6304,7 +6291,7 @@ ImGuiNodeEditorComponent::ModuleCategory ImGuiNodeEditorComponent::getModuleCate
     
     if (lower.contains("vco") || lower.contains("noise") || 
         lower.contains("sequencer") || lower.contains("sample") || 
-        lower.contains("midi") || lower.contains("input") ||
+        lower.contains("input") ||
         lower.contains("polyvco") || lower.contains("value")) 
         return ModuleCategory::Source;
     
@@ -6359,6 +6346,7 @@ unsigned int ImGuiNodeEditorComponent::getImU32ForCategory(ModuleCategory catego
         case ModuleCategory::Analysis:   color = IM_COL32(100, 50, 110, 255); break;  // Purple
         case ModuleCategory::Comment:    color = IM_COL32(80, 80, 80, 255); break;    // Grey
         case ModuleCategory::Plugin:     color = IM_COL32(50, 110, 110, 255); break;  // Teal
+        case ModuleCategory::MIDI:       color = IM_COL32(180, 120, 255, 255); break; // Vibrant Purple
         default:                         color = IM_COL32(70, 70, 70, 255); break;
     }
     
@@ -6385,6 +6373,11 @@ std::map<juce::String, std::pair<const char*, const char*>> ImGuiNodeEditorCompo
         {"Sequencer", {"Sequencer", "Step sequencer for creating patterns"}},
         {"Multi Sequencer", {"multi sequencer", "Multi-track step sequencer"}},
         {"MIDI Player", {"midi player", "Plays MIDI files"}},
+        {"MIDI CV", {"midi cv", "Converts MIDI Note/CC messages to CV signals. (Monophonic)"}},
+        {"MIDI Faders", {"midi faders", "Up to 16 MIDI faders with CC learning"}},
+        {"MIDI Knobs", {"midi knobs", "Up to 16 MIDI knobs/rotary encoders with CC learning"}},
+        {"MIDI Buttons", {"midi buttons", "Up to 32 MIDI buttons with Gate/Toggle/Trigger modes"}},
+        {"MIDI Jog Wheel", {"midi jog wheel", "Single MIDI jog wheel/rotary encoder"}},
         {"Value", {"Value", "Constant CV value output"}},
         {"Sample Loader", {"sample loader", "Loads and plays audio samples"}},
         

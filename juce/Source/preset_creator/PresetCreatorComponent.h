@@ -28,8 +28,13 @@ public:
 
     // ADD: Public function to show audio settings dialog
     void showAudioSettingsDialog();
+    
+    // Get MIDI activity indicator state
+    int getMidiActivityFrames() const { return midiActivityFrames; }
 
 private:
+    int midiActivityFrames = 0; // For MIDI activity indicator
+
     void setWindowFileName(const juce::String& fileName);
     void buttonClicked (juce::Button*) override;
     void timerCallback() override;

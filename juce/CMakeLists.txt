@@ -271,6 +271,14 @@ target_sources(ColliderApp PRIVATE
     Source/audio/modules/SnapshotSequencerModuleProcessor.cpp
     Source/audio/modules/MIDICVModuleProcessor.h
     Source/audio/modules/MIDICVModuleProcessor.cpp
+    Source/audio/modules/MIDIFadersModuleProcessor.h
+    Source/audio/modules/MIDIFadersModuleProcessor.cpp
+    Source/audio/modules/MIDIKnobsModuleProcessor.h
+    Source/audio/modules/MIDIKnobsModuleProcessor.cpp
+    Source/audio/modules/MIDIButtonsModuleProcessor.h
+    Source/audio/modules/MIDIButtonsModuleProcessor.cpp
+    Source/audio/modules/MIDIJogWheelModuleProcessor.h
+    Source/audio/modules/MIDIJogWheelModuleProcessor.cpp
     Source/ipc/IpcServer.cpp
     Source/ipc/IpcServer.h
     Source/ipc/OscClient.h
@@ -479,6 +487,14 @@ target_sources(PresetCreatorApp PRIVATE
     Source/audio/modules/SnapshotSequencerModuleProcessor.cpp
     Source/audio/modules/MIDICVModuleProcessor.h
     Source/audio/modules/MIDICVModuleProcessor.cpp
+    Source/audio/modules/MIDIFadersModuleProcessor.h
+    Source/audio/modules/MIDIFadersModuleProcessor.cpp
+    Source/audio/modules/MIDIKnobsModuleProcessor.h
+    Source/audio/modules/MIDIKnobsModuleProcessor.cpp
+    Source/audio/modules/MIDIButtonsModuleProcessor.h
+    Source/audio/modules/MIDIButtonsModuleProcessor.cpp
+    Source/audio/modules/MIDIJogWheelModuleProcessor.h
+    Source/audio/modules/MIDIJogWheelModuleProcessor.cpp
 )
 
 # This target now needs to know where to find all the headers

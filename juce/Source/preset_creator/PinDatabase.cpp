@@ -14,6 +14,12 @@ void populateModuleDescriptions()
     descriptions["Sequencer"] = "A classic 16-step CV and Gate sequencer.";
     descriptions["multi sequencer"] = "Advanced sequencer with parallel per-step outputs.";
     descriptions["midi player"] = "Plays MIDI files and outputs CV/Gate for each track.";
+    descriptions["midi cv"] = "Converts MIDI Note/CC messages to CV signals. (Monophonic)";
+    descriptions["midi control center"] = "A powerful MIDI learn interface to map any MIDI CC to CV/Gate outputs.";
+    descriptions["midi faders"] = "1-16 MIDI-learnable faders with customizable output ranges.";
+    descriptions["midi knobs"] = "1-16 MIDI-learnable knobs with customizable output ranges.";
+    descriptions["midi buttons"] = "1-32 MIDI-learnable buttons with Gate/Toggle/Trigger modes.";
+    descriptions["midi jog wheel"] = "A single MIDI-learnable jog wheel control for expressive modulation.";
     descriptions["Value"] = "Outputs a constant, adjustable numerical value.";
     descriptions["sample loader"] = "Loads and plays audio samples with pitch/time control.";
     descriptions["best practice"] = "A template and example node demonstrating best practices.";
@@ -240,7 +246,7 @@ void populatePinDatabase()
         { AudioPin("Out L", 0, PinDataType::Audio), AudioPin("Out R", 1, PinDataType::Audio) },
         {}
     );
-    db["time/pitch"] = ModulePinInfo(
+    db["timepitch"] = ModulePinInfo(
         { AudioPin("In L", 0, PinDataType::Audio), AudioPin("In R", 1, PinDataType::Audio), AudioPin("Speed Mod", 2, PinDataType::CV), AudioPin("Pitch Mod", 3, PinDataType::CV) },
         { AudioPin("Out L", 0, PinDataType::Audio), AudioPin("Out R", 1, PinDataType::Audio) },
         {}

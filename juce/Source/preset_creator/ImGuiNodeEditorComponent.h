@@ -34,6 +34,8 @@ public:
     void paint (juce::Graphics&) override;
     void resized() override;
     // Input is handled by imgui_juce backend; no JUCE overrides needed
+    
+    void setMidiActivityFrames(int frames) { midiActivityFrames = frames; }
 
     void setModel (ModularSynthProcessor* model) 
     { 
@@ -175,6 +177,7 @@ public:
     ModularSynthProcessor* synth { nullptr };
     juce::ValueTree uiPending; // applied at next render before drawing nodes
     std::atomic<bool> graphNeedsRebuild { false };
+    int midiActivityFrames = 0; // For MIDI activity indicator
     
     // Preset and sample management
     PresetManager m_presetManager;
@@ -343,7 +346,7 @@ public:
     void handleCollapseToMetaModule();
     
     // --- Module Category Color Coding ---
-    enum class ModuleCategory { Source, Effect, Modulator, Utility, Analysis, Comment, Plugin };
+    enum class ModuleCategory { Source, Effect, Modulator, Utility, Analysis, Comment, Plugin, MIDI };
     ModuleCategory getModuleCategory(const juce::String& moduleType);
     unsigned int getImU32ForCategory(ModuleCategory category, bool hovered = false);
     
