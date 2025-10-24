@@ -50,27 +50,15 @@ PresetCreatorComponent::PresetCreatorComponent(juce::AudioDeviceManager& adm,
     // Use AudioProcessorPlayer via juce_audio_utils module
     processorPlayer.setProcessor (synth.get());
     
-    // --- THIS IS THE DEFINITIVE FIX ---
-    // 1. Get the list of available MIDI input devices.
-    auto midiInputs = juce::MidiInput::getAvailableDevices();
-    if (!midiInputs.isEmpty())
-    {
-        // 2. Get the name of the first (default) MIDI input device.
-        juce::String defaultDeviceName = midiInputs[0].name;
-
-        // 3. Tell the device manager to enable this device.
-        deviceManager.setMidiInputDeviceEnabled(defaultDeviceName, true);
-
-        // 4. Register our processorPlayer to receive callbacks from this device.
-        // The AudioProcessorPlayer will then forward the MIDI to the synth's processBlock.
-        deviceManager.addMidiInputDeviceCallback(defaultDeviceName, &processorPlayer);
-        juce::Logger::writeToLog("[MIDI] Registered processorPlayer as callback for: " + defaultDeviceName);
-    }
-    else
-    {
-        juce::Logger::writeToLog("[MIDI] No MIDI input devices found.");
-    }
-    // --- END OF FIX ---
+    // --- MULTI-MIDI DEVICE SUPPORT ---
+    // Initialize multi-device MIDI manager
+    midiDeviceManager = std::make_unique<MidiDeviceManager>(deviceManager);
+    midiDeviceManager->scanDevices();
+    midiDeviceManager->enableAllDevices();  // Enable all MIDI devices by default
+    juce::Logger::writeToLog("[MIDI] Multi-device manager initialized");
+    // Note: MidiDeviceManager now handles all MIDI input callbacks
+    // The processorPlayer will receive MIDI through ModularSynthProcessor's processBlock
+    // --- END MULTI-MIDI SUPPORT ---
     
     setWantsKeyboardFocus (true);
 
@@ -174,13 +162,8 @@ void PresetCreatorComponent::setMasterPlayState(bool shouldBePlaying)
 
 PresetCreatorComponent::~PresetCreatorComponent()
 {
-    // ADD THIS BLOCK
-    auto midiInputs = juce::MidiInput::getAvailableDevices();
-    if (!midiInputs.isEmpty())
-    {
-        deviceManager.removeMidiInputDeviceCallback(midiInputs[0].name, &processorPlayer);
-    }
-    // END OF BLOCK
+    // MULTI-MIDI SUPPORT: MidiDeviceManager handles cleanup automatically in its destructor
+    midiDeviceManager.reset();
 
     stopAudition();
     processorPlayer.setProcessor (nullptr);
@@ -451,6 +434,33 @@ void PresetCreatorComponent::stopAudition()
 void PresetCreatorComponent::timerCallback()
 {
     RtLogger::flushToFileLogger();
+    
+    // MULTI-MIDI SUPPORT: Transfer MIDI messages from MidiDeviceManager to ModularSynthProcessor
+    if (midiDeviceManager && synth)
+    {
+        std::vector<MidiDeviceManager::MidiMessageWithSource> midiMessages;
+        midiDeviceManager->swapMessageBuffer(midiMessages);
+        
+        if (!midiMessages.empty())
+        {
+            // Convert to ModularSynthProcessor format
+            std::vector<MidiMessageWithDevice> convertedMessages;
+            convertedMessages.reserve(midiMessages.size());
+            
+            for (const auto& msg : midiMessages)
+            {
+                MidiMessageWithDevice converted;
+                converted.message = msg.message;
+                converted.deviceIdentifier = msg.deviceIdentifier;
+                converted.deviceName = msg.deviceName;
+                converted.deviceIndex = msg.deviceIndex;
+                convertedMessages.push_back(converted);
+            }
+            
+            // Pass to synth for distribution to modules
+            synth->processMidiWithDeviceInfo(convertedMessages);
+        }
+    }
     
     // Check for MIDI activity from the synth
     if (synth != nullptr && synth->hasMidiActivity())

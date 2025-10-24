@@ -22,10 +22,13 @@ public:
     void processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midiMessages) override;
     void prepareToPlay(double sampleRate, int samplesPerBlock) override;
     void releaseResources() override;
+    
+    // Multi-MIDI device support
+    void handleDeviceSpecificMidi(const std::vector<MidiMessageWithDevice>& midiMessages) override;
 
     const juce::String getName() const override { return "MIDI CV"; }
     
-    juce::AudioProcessorValueTreeState& getAPVTS() override { return dummyApvts; }
+    juce::AudioProcessorValueTreeState& getAPVTS() override { return apvts; }
 
 #if defined(PRESET_CREATOR_UI)
     // ADD THESE TWO FUNCTION DECLARATIONS
@@ -45,9 +48,13 @@ private:
         bool gateHigh = false;
     } midiState;
 
-    // Dummy APVTS to satisfy base class requirement
-    juce::AudioProcessorValueTreeState dummyApvts;
-    static juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout() { return {}; }
+    // APVTS with device/channel filtering parameters
+    juce::AudioProcessorValueTreeState apvts;
+    static juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout();
+    
+    // Multi-MIDI device filtering parameters
+    juce::AudioParameterChoice* deviceFilterParam { nullptr };
+    juce::AudioParameterInt* midiChannelFilterParam { nullptr };
 
     // Convert MIDI note number to CV (1V/octave, where C4 = 60 = 0V)
     float midiNoteToCv(int noteNumber) const;

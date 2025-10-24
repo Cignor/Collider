@@ -8,6 +8,15 @@ juce::AudioProcessorValueTreeState::ParameterLayout MIDIFadersModuleProcessor::c
     juce::AudioProcessorValueTreeState::ParameterLayout layout;
     layout.add(std::make_unique<juce::AudioParameterInt>("numFaders", "Number of Faders", 1, MAX_FADERS, 8));
     layout.add(std::make_unique<juce::AudioParameterInt>("midiChannel", "MIDI Channel", 0, 16, 0)); // 0 = Omni (all channels)
+    
+    // Device selection (0 = All Devices, 1+ = specific device)
+    juce::StringArray deviceOptions;
+    deviceOptions.add("All Devices");
+    auto devices = juce::MidiInput::getAvailableDevices();
+    for (const auto& device : devices)
+        deviceOptions.add(device.name);
+    layout.add(std::make_unique<juce::AudioParameterChoice>("midiDevice", "MIDI Device", deviceOptions, 0));
+    
     return layout;
 }
 
@@ -17,6 +26,7 @@ MIDIFadersModuleProcessor::MIDIFadersModuleProcessor()
 {
     numFadersParam = dynamic_cast<juce::AudioParameterInt*>(apvts.getParameter("numFaders"));
     midiChannelParam = dynamic_cast<juce::AudioParameterInt*>(apvts.getParameter("midiChannel"));
+    deviceFilterParam = dynamic_cast<juce::AudioParameterChoice*>(apvts.getParameter("midiDevice"));
     
     for (int i = 0; i < MAX_FADERS; ++i)
         lastOutputValues.push_back(std::make_unique<std::atomic<float>>(0.0f));
@@ -31,30 +41,34 @@ void MIDIFadersModuleProcessor::releaseResources()
 {
 }
 
-void MIDIFadersModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midiMessages)
+void MIDIFadersModuleProcessor::handleDeviceSpecificMidi(const std::vector<MidiMessageWithDevice>& midiMessages)
 {
     int numActive = numFadersParam ? numFadersParam->get() : MAX_FADERS;
-    int channelFilter = midiChannelParam ? midiChannelParam->get() : 0; // 0 = Omni (all channels)
+    int deviceFilter = deviceFilterParam ? deviceFilterParam->getIndex() : 0;
+    int channelFilter = midiChannelParam ? midiChannelParam->get() : 0;
     
-    // Process incoming MIDI CC messages
-    for (const auto metadata : midiMessages)
+    for (const auto& msg : midiMessages)
     {
-        auto msg = metadata.getMessage();
+        // DEVICE FILTERING (0 = All Devices, 1+ = specific device)
+        if (deviceFilter != 0 && msg.deviceIndex != (deviceFilter - 1))
+            continue;
         
-        // Channel filtering: If channel is set (not 0/Omni), only process messages from that channel
-        if (channelFilter != 0 && msg.getChannel() != channelFilter)
-            continue; // Skip messages from other channels
+        // CHANNEL FILTERING (0 = All Channels, 1-16 = specific channel)
+        if (channelFilter != 0 && msg.message.getChannel() != channelFilter)
+            continue;
         
-        if (!msg.isController()) continue;
+        // Only process CC messages
+        if (!msg.message.isController())
+            continue;
         
-        int ccNumber = msg.getControllerNumber();
-        float ccValue = msg.getControllerValue() / 127.0f;
+        int ccNumber = msg.message.getControllerNumber();
+        float ccValue = msg.message.getControllerValue() / 127.0f;
         
         // Handle MIDI Learn
         if (learningIndex != -1 && learningIndex < numActive)
         {
             mappings[learningIndex].midiCC = ccNumber;
-            learningIndex = -1;  // Stop learning
+            learningIndex = -1;
         }
         
         // Update mapped faders
@@ -66,6 +80,16 @@ void MIDIFadersModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
             }
         }
     }
+}
+
+void MIDIFadersModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midiMessages)
+{
+    juce::ignoreUnused(midiMessages); // MIDI already processed in handleDeviceSpecificMidi
+    
+    int numActive = numFadersParam ? numFadersParam->get() : MAX_FADERS;
+    
+    // Note: MIDI CC messages are processed in handleDeviceSpecificMidi() which is called BEFORE processBlock
+    // This method just generates CV outputs from the current state
     
     // Write current values to output buffer
     for (int i = 0; i < MAX_FADERS; ++i)
@@ -184,6 +208,47 @@ static void HelpMarker(const char* desc)
 void MIDIFadersModuleProcessor::drawParametersInNode(float itemWidth, const std::function<bool(const juce::String&)>&, const std::function<void()>& onModificationEnded)
 {
     ImGui::PushItemWidth(itemWidth);
+    
+    // === MULTI-MIDI DEVICE FILTERING ===
+    ImGui::TextColored(ImVec4(0.6f, 0.8f, 1.0f, 1.0f), "MIDI Routing");
+    
+    // Device selector
+    if (deviceFilterParam)
+    {
+        int deviceIdx = deviceFilterParam->getIndex();
+        const char* deviceName = deviceFilterParam->getCurrentChoiceName().toRawUTF8();
+        if (ImGui::BeginCombo("Device", deviceName))
+        {
+            for (int i = 0; i < deviceFilterParam->choices.size(); ++i)
+            {
+                bool isSelected = (deviceIdx == i);
+                if (ImGui::Selectable(deviceFilterParam->choices[i].toRawUTF8(), isSelected))
+                {
+                    deviceFilterParam->setValueNotifyingHost(
+                        deviceFilterParam->getNormalisableRange().convertTo0to1(i));
+                }
+                if (isSelected)
+                    ImGui::SetItemDefaultFocus();
+            }
+            ImGui::EndCombo();
+        }
+    }
+    
+    // Channel selector
+    if (midiChannelParam)
+    {
+        int channel = midiChannelParam->get();
+        const char* items[] = {"All Channels", "1", "2", "3", "4", "5", "6", "7", "8",
+                               "9", "10", "11", "12", "13", "14", "15", "16"};
+        if (ImGui::Combo("Channel", &channel, items, 17))
+        {
+            midiChannelParam->setValueNotifyingHost(
+                midiChannelParam->getNormalisableRange().convertTo0to1(channel));
+        }
+    }
+    
+    ImGui::Separator();
+    ImGui::Spacing();
     
     // === PRESET MANAGEMENT UI ===
     auto& presetManager = ControllerPresetManager::get();

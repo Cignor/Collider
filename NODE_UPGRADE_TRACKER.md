@@ -42,6 +42,23 @@
 **Before**: Functional but flat UI, no visual hierarchy  
 **After**: Organized, beautiful UI with clear sections and tooltips
 
+### 3. PolyVCO ✨ **UPGRADED**
+**Status**: ✅ Complete (compiles successfully)  
+**Changes**:
+- ✅ Fixed broken collapsible headers with stable IDs (`ImGui::PushID(i)`)
+- ✅ Added Expand All / Collapse All buttons
+- ✅ First 4 voices open by default (`ImGuiCond_Once`)
+- ✅ Color-coded voice headers (HSV hue cycling for 32 voices)
+- ✅ Replaced ad-hoc layout with 3-column tables (`ImGui::BeginTable`)
+- ✅ Compact voice controls: Waveform | Frequency | Gate
+- ✅ Parallel pin drawing for clean input/output alignment
+- ✅ 3 inputs per voice paired with 1 output on first row
+- ✅ No more cumulative Indent() bugs (uses tables instead)
+- 🎯 **NEW PATTERN**: Documented in IMGUI_NODE_DESIGN_GUIDE.md v2.3 Section 12
+
+**Before**: Broken collapsible headers, infinite scaling, pins misaligned  
+**After**: Professional polyphonic node with 32 voices, perfect layout, parallel pins
+
 ---
 
 ## 📋 Pending Upgrades
@@ -51,9 +68,9 @@
 - ✅ **MIDI Player** - Upgraded
 - ⏳ Remaining nodes in category already perfect (Faders, Knobs, Buttons, JogWheel)
 
-### Oscillators (1/4 complete)
+### Oscillators (2/4 complete)
 - ✅ **VCO** - Already upgraded (v2.1 design guide standard)
-- ⏳ **PolyVCO** - Pending
+- ✅ **PolyVCO** - Upgraded (v2.3 multi-voice patterns)
 - ⏳ **ShapingOscillator** - Pending
 - ⏳ **Noise** - Pending
 
@@ -133,10 +150,10 @@
 
 ## 📊 Progress Summary
 - **Total Modules**: 64
-- **Completed**: 3 (VCO, MIDI CV, MIDI Player)
+- **Completed**: 4 (VCO, MIDI CV, MIDI Player, PolyVCO)
 - **In Progress**: 0
-- **Remaining**: 61
-- **Progress**: 4.7%
+- **Remaining**: 60
+- **Progress**: 6.3%
 
 ---
 
@@ -167,5 +184,5 @@
 ---
 
 **Last Updated**: 2025-10-24  
-**Next Target**: MIDI Player module
+**Next Target**: Remaining modulation modules (Random, SAndH, FunctionGenerator)
 

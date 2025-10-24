@@ -82,6 +82,37 @@ public:
     bool hasMidiActivity() const { return m_midiActivityFlag.exchange(false); }
     void resetTransportPosition() { m_samplePosition = 0; m_transportState.songPositionBeats = 0.0; m_transportState.songPositionSeconds = 0.0; }
     
+    // === MULTI-MIDI DEVICE SUPPORT ===
+    
+    /**
+     * @brief Process device-aware MIDI messages
+     * 
+     * This method receives MIDI messages with device source information and
+     * distributes them to all modules via handleDeviceSpecificMidi().
+     * Should be called from the message thread (timer callback in PresetCreatorComponent).
+     * 
+     * @param messages Vector of MIDI messages with device information
+     */
+    void processMidiWithDeviceInfo(const std::vector<MidiMessageWithDevice>& messages);
+    
+    /**
+     * @brief MIDI activity state per device and channel
+     */
+    struct MidiActivityState {
+        std::map<int, std::array<bool, 16>> deviceChannelActivity;  // deviceIndex -> channels[16]
+        std::map<int, juce::String> deviceNames;                    // deviceIndex -> name
+    };
+    
+    /**
+     * @brief Get snapshot of current MIDI activity
+     * 
+     * Used by UI for visualization (top bar indicator).
+     * Thread-safe.
+     * 
+     * @return MidiActivityState structure
+     */
+    MidiActivityState getMidiActivityState() const;
+    
     // === VOICE MANAGEMENT FOR POLYPHONY ===
     struct Voice {
         bool isActive = false;
@@ -143,6 +174,11 @@ private:
     
     // MIDI activity indicator (mutable because hasMidiActivity() is const)
     mutable std::atomic<bool> m_midiActivityFlag{false};
+    
+    // Multi-MIDI device support
+    std::vector<MidiMessageWithDevice> currentBlockMidiMessages;
+    mutable juce::CriticalSection midiActivityLock;
+    MidiActivityState currentActivity;
 
     // The APVTS that will expose proxy parameters to the host/AudioEngine
     juce::AudioProcessorValueTreeState apvts;

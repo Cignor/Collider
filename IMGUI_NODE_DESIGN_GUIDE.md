@@ -1,6 +1,6 @@
 # 📐 ImGui Node UI Design Guide
 
-**Version**: 2.2  
+**Version**: 2.3  
 **Last Updated**: 2025-10-24  
 **Based on**: `imgui_demo.cpp` best practices + **official imnodes examples**
 
@@ -917,10 +917,191 @@ Before committing any node UI:
 
 ---
 
-## 🔄 12. Update Log
+## 🔢 12. Multi-Voice & Collapsible UI Patterns
+
+### 12.1 Collapsible Headers (For Polyphonic/Multi-Instance Modules)
+
+When dealing with many similar controls (e.g., 32 voices in PolyVCO), use collapsible headers with proper state management.
+
+**Pattern**:
+
+```cpp
+// Add Expand/Collapse All controls
+static bool expandAllState = false;
+static bool collapseAllState = false;
+
+if (ImGui::SmallButton("Expand All")) {
+    expandAllState = true;
+}
+ImGui::SameLine();
+if (ImGui::SmallButton("Collapse All")) {
+    collapseAllState = true;
+}
+
+ImGui::Spacing();
+
+for (int i = 0; i < numVoices; ++i)
+{
+    ImGui::PushID(i);  // CRITICAL: Unique ID per iteration
+    
+    // Apply expand/collapse state
+    if (expandAllState) ImGui::SetNextItemOpen(true);
+    if (collapseAllState) ImGui::SetNextItemOpen(false);
+    
+    // Default open state (first 4 only, on first use)
+    ImGui::SetNextItemOpen(i < 4, ImGuiCond_Once);
+    
+    // Color-code for visual distinction
+    float hue = (float)i / (float)maxVoices;
+    ImGui::PushStyleColor(ImGuiCol_Text, ImColor::HSV(hue, 0.7f, 1.0f).Value);
+    
+    if (ImGui::CollapsingHeader(("Voice " + juce::String(i+1)).toRawUTF8(),
+                                ImGuiTreeNodeFlags_SpanAvailWidth | 
+                                ImGuiTreeNodeFlags_FramePadding))
+    {
+        ImGui::PopStyleColor();
+        
+        // Controls go here (see next section for table layout)
+    }
+    else
+    {
+        ImGui::PopStyleColor();
+    }
+    
+    ImGui::PopID();
+}
+
+// Reset expand/collapse state after loop
+expandAllState = false;
+collapseAllState = false;
+```
+
+**Key Points**:
+- `ImGui::PushID(i)` prevents ID conflicts between similar controls
+- `ImGuiCond_Once` ensures default state applies only on first use
+- `ImGuiTreeNodeFlags_SpanAvailWidth` prevents layout issues
+- Color-coding helps distinguish voices at a glance
+
+---
+
+### 12.2 Table Layout Inside Collapsible Sections
+
+For compact, multi-column layouts inside headers, use tables instead of Indent().
+
+**Pattern**:
+
+```cpp
+if (ImGui::CollapsingHeader("Voice 1", ...))
+{
+    const float columnWidth = itemWidth / 3.0f;
+    
+    if (ImGui::BeginTable("voiceTable", 3,
+                          ImGuiTableFlags_SizingFixedFit |
+                          ImGuiTableFlags_NoBordersInBody |
+                          ImGuiTableFlags_RowBg,
+                          ImVec2(itemWidth, 0)))
+    {
+        // Column 1
+        ImGui::TableNextColumn();
+        ImGui::PushItemWidth(columnWidth - 8.0f);  // 8px padding
+        ImGui::Combo("##wave", &wave, "Sine\0Saw\0Square\0\0");
+        ImGui::TextUnformatted("Wave");
+        ImGui::PopItemWidth();
+        
+        // Column 2
+        ImGui::TableNextColumn();
+        ImGui::PushItemWidth(columnWidth - 8.0f);
+        ImGui::SliderFloat("##freq", &freq, 20.0f, 20000.0f, "%.0f", 
+                          ImGuiSliderFlags_Logarithmic);
+        ImGui::TextUnformatted("Hz");
+        ImGui::PopItemWidth();
+        
+        // Column 3
+        ImGui::TableNextColumn();
+        ImGui::PushItemWidth(columnWidth - 8.0f);
+        ImGui::SliderFloat("##gate", &gate, 0.0f, 1.0f, "%.2f");
+        ImGui::TextUnformatted("Gate");
+        ImGui::PopItemWidth();
+        
+        ImGui::EndTable();
+    }
+}
+```
+
+**Why Tables**:
+- Avoids cumulative Indent() bugs
+- Provides consistent column widths
+- Handles overflow better than manual layout
+- Row backgrounds improve readability
+
+---
+
+### 12.3 Parallel Pin Drawing (Multi-Voice Nodes)
+
+For nodes with multiple voices/channels, use `helpers.drawParallelPins()` to align inputs with outputs.
+
+**Pattern**:
+
+```cpp
+void drawIoPins(const NodePinHelpers& helpers) override
+{
+    // Global input (no output pairing)
+    helpers.drawParallelPins("NumVoices Mod", 0, nullptr, -1);
+    
+    for (int i = 0; i < getEffectiveNumVoices(); ++i)
+    {
+        juce::String idx = juce::String(i + 1);
+        
+        // Pair primary input with output on same row
+        helpers.drawParallelPins(("Freq " + idx + " Mod").toRawUTF8(), 
+                                 1 + i,
+                                 ("Voice " + idx).toRawUTF8(), 
+                                 i);
+        
+        // Secondary inputs (no output pairing)
+        helpers.drawParallelPins(("Wave " + idx + " Mod").toRawUTF8(), 
+                                 1 + MAX_VOICES + i, 
+                                 nullptr, -1);
+        helpers.drawParallelPins(("Gate " + idx + " Mod").toRawUTF8(), 
+                                 1 + (2 * MAX_VOICES) + i, 
+                                 nullptr, -1);
+    }
+}
+```
+
+**Why Parallel Pins**:
+- Creates visual alignment between related inputs/outputs
+- Reduces vertical node height
+- Makes signal flow clearer
+- Matches MultiSequencer pattern for consistency
+
+**Signature**:
+```cpp
+void drawParallelPins(const char* inputLabel, int inputChannel,
+                     const char* outputLabel, int outputChannel);
+```
+
+Pass `nullptr` and `-1` for outputLabel/outputChannel when there's no output on that row.
+
+---
+
+### 12.4 Complete Example: PolyVCO Node
+
+See `juce/Source/audio/modules/PolyVCOModuleProcessor.cpp` for the complete, production-ready implementation featuring:
+- Expand/Collapse All buttons
+- Color-coded collapsible headers (HSV hue cycling)
+- 3-column table layout for voice parameters
+- Parallel pin drawing with 3 inputs per voice + 1 output
+- Live modulation feedback with "(mod)" indicators
+- First 4 voices open by default
+
+---
+
+## 🔄 13. Update Log
 
 | Date | Version | Changes |
 |------|---------|---------|
+| 2025-10-24 | **2.3** | **🎯 NEW PATTERNS**: Multi-Voice & Collapsible UI!<br>• Added Section 12: Complete patterns for polyphonic nodes<br>• **12.1**: Collapsible headers with Expand/Collapse All<br>• **12.2**: Table-based layouts inside headers (avoids Indent bugs)<br>• **12.3**: Parallel pin drawing for multi-voice nodes<br>• **12.4**: PolyVCO as reference implementation<br>• Fixed PolyVCO node (32 voices, 3-column tables, parallel pins)<br>• Documented stable ID management and HSV color-coding |
 | 2025-10-24 | **2.2** | **🚨 CRITICAL BUG FIX**: Documented `-1` width issue in ProgressBar!<br>• **Real-world bug**: MIDI Player used `ImVec2(-1, 0)` for progress bar width<br>• **Symptom**: Infinite right-side scaling, unusable node<br>• **Fix**: Use `ImVec2(itemWidth, 0)` with fixed width parameter<br>• Updated Section 9.6 with progress bar example<br>• Added warning about `-1` width alongside `GetContentRegionAvail()` issue |
 | 2025-10-24 | **2.1** | **🚨 CRITICAL BUG FIX**: Added `Unindent()` to match every `Indent()` call!<br>• **Root cause**: Indent() is persistent and was affecting all subsequent elements<br>• **Symptom**: All output labels appeared at same X position ("red line" bug)<br>• **Fix**: Always call `ImGui::Unindent(amount)` after `ImGui::Indent(amount)`<br>• Updated Section 9.3 with Unindent() requirement<br>• Added new Common Mistake #1: Forgetting Unindent()<br>**Why imnodes examples didn't show this**: They only have ONE output per node! |
 | 2025-10-24 | **2.0** | **🎯 MAJOR UPDATE**: Analyzed ALL official imnodes examples. Discovered `ImGui::Indent()` is the CORRECT pattern (NOT Dummy()!).<br>• Added comprehensive Section 9: ImNodes-Specific Patterns<br>• Documented input/output attribute patterns from official examples<br>• Added complete node example with all best practices<br>• Updated all code to use Indent() for output pin alignment<br>• Expanded reference section with imnodes examples<br>**Breaking insight**: imgui_demo.cpp patterns don't always apply to imnodes! |
@@ -948,5 +1129,5 @@ When you discover a new pattern or fix an issue:
 
 ---
 
-**End of Guide** | Version 2.2 | 2025-10-24
+**End of Guide** | Version 2.3 | 2025-10-24
 

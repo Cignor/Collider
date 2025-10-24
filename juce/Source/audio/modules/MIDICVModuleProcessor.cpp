@@ -1,14 +1,34 @@
 #include "MIDICVModuleProcessor.h"
 
+juce::AudioProcessorValueTreeState::ParameterLayout MIDICVModuleProcessor::createParameterLayout()
+{
+    juce::AudioProcessorValueTreeState::ParameterLayout layout;
+    
+    // Device selection (simplified - device enumeration not available in this context)
+    juce::StringArray deviceOptions;
+    deviceOptions.add("All Devices");
+    
+    layout.add(std::make_unique<juce::AudioParameterChoice>(
+        "midiDevice", "MIDI Device", deviceOptions, 0));
+    
+    // Channel filter (0 = All Channels, 1-16 = specific channel)
+    layout.add(std::make_unique<juce::AudioParameterInt>(
+        "midiChannel", "MIDI Channel", 0, 16, 0));
+    
+    return layout;
+}
+
 MIDICVModuleProcessor::MIDICVModuleProcessor()
     : ModuleProcessor(
         juce::AudioProcessor::BusesProperties()
             .withOutput("Main", juce::AudioChannelSet::discreteChannels(6), true)
             .withOutput("Mod", juce::AudioChannelSet::discreteChannels(64), true)
     ),
-      dummyApvts(*this, nullptr, "DummyParams", createParameterLayout())
+      apvts(*this, nullptr, "MIDICVParams", createParameterLayout())
 {
-    // No parameters needed - this module is purely MIDI->CV conversion
+    // Get parameter pointers
+    deviceFilterParam = dynamic_cast<juce::AudioParameterChoice*>(apvts.getParameter("midiDevice"));
+    midiChannelFilterParam = dynamic_cast<juce::AudioParameterInt*>(apvts.getParameter("midiChannel"));
     
     // Initialize last output values for telemetry
     lastOutputValues.resize(6);
@@ -28,57 +48,70 @@ void MIDICVModuleProcessor::releaseResources()
 {
 }
 
+void MIDICVModuleProcessor::handleDeviceSpecificMidi(const std::vector<MidiMessageWithDevice>& midiMessages)
+{
+    // Get user's filter settings
+    int deviceFilter = deviceFilterParam ? deviceFilterParam->getIndex() : 0;
+    int channelFilter = midiChannelFilterParam ? midiChannelFilterParam->get() : 0;
+    
+    for (const auto& msg : midiMessages)
+    {
+        // DEVICE FILTERING
+        // Index 0 = "All Devices", Index 1+ = specific device
+        if (deviceFilter != 0 && msg.deviceIndex != (deviceFilter - 1))
+            continue;
+        
+        // CHANNEL FILTERING
+        // 0 = "All Channels", 1-16 = specific channel
+        if (channelFilter != 0 && msg.message.getChannel() != channelFilter)
+            continue;
+        
+        // PROCESS FILTERED MESSAGE
+        // This message passed both filters - update module state
+        if (msg.message.isNoteOn())
+        {
+            midiState.currentNote = msg.message.getNoteNumber();
+            midiState.currentVelocity = msg.message.getVelocity();
+            midiState.gateHigh = true;
+        }
+        else if (msg.message.isNoteOff())
+        {
+            if (msg.message.getNoteNumber() == midiState.currentNote)
+            {
+                midiState.gateHigh = false;
+            }
+        }
+        else if (msg.message.isController())
+        {
+            int ccNum = msg.message.getControllerNumber();
+            int ccVal = msg.message.getControllerValue();
+            
+            if (ccNum == 1) // Mod Wheel
+                midiState.modWheel = ccVal / 127.0f;
+        }
+        else if (msg.message.isPitchWheel())
+        {
+            midiState.pitchBend = (msg.message.getPitchWheelValue() - 8192) / 8192.0f;
+        }
+        else if (msg.message.isChannelPressure())
+        {
+            midiState.aftertouch = msg.message.getChannelPressureValue() / 127.0f;
+        }
+    }
+}
+
 void MIDICVModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midiMessages)
 {
+    juce::ignoreUnused(midiMessages); // MIDI already processed in handleDeviceSpecificMidi
+    
     if (buffer.getNumChannels() < 6)
     {
         buffer.clear();
         return;
     }
     
-    // --- NEW, MORE DETAILED LOGGING ---
-    if (!midiMessages.isEmpty())
-    {
-        juce::Logger::writeToLog("[MIDI CV] Processing " + juce::String(midiMessages.getNumEvents()) + " incoming MIDI events.");
-    }
-    // --- END OF NEW LOGGING ---
-
-    for (const auto metadata : midiMessages)
-    {
-        const auto msg = metadata.getMessage();
-        
-        // Use getDescription() for a detailed, human-readable log
-        juce::Logger::writeToLog("[MIDI CV] Received: " + msg.getDescription());
-
-        if (msg.isNoteOn())
-        {
-            midiState.currentNote = msg.getNoteNumber();
-            midiState.currentVelocity = msg.getVelocity() / 127.0f;
-            midiState.gateHigh = true;
-        }
-        else if (msg.isNoteOff())
-        {
-            if (msg.getNoteNumber() == midiState.currentNote)
-            {
-                midiState.gateHigh = false;
-            }
-        }
-        else if (msg.isController())
-        {
-            if (msg.getControllerNumber() == 1) // Mod Wheel
-            {
-                midiState.modWheel = msg.getControllerValue() / 127.0f;
-            }
-        }
-        else if (msg.isPitchWheel())
-        {
-            midiState.pitchBend = (msg.getPitchWheelValue() - 8192) / 8192.0f;
-        }
-        else if (msg.isAftertouch())
-        {
-            midiState.aftertouch = msg.getAfterTouchValue() / 127.0f;
-        }
-    }
+    // Note: MIDI state is updated in handleDeviceSpecificMidi() which is called BEFORE processBlock
+    // This method just generates CV outputs from the current state
     
     // Generate CV outputs for the entire block
     // Channel 0: Pitch CV (1V/octave)
@@ -159,6 +192,47 @@ static void HelpMarkerCV(const char* desc)
 void MIDICVModuleProcessor::drawParametersInNode(float itemWidth, const std::function<bool(const juce::String&)>&, const std::function<void()>&)
 {
     ImGui::PushItemWidth(itemWidth);
+    
+    // === MULTI-MIDI DEVICE FILTERING ===
+    ImGui::TextColored(ImVec4(0.6f, 0.8f, 1.0f, 1.0f), "MIDI Routing");
+    
+    // Device selector
+    if (deviceFilterParam)
+    {
+        int deviceIdx = deviceFilterParam->getIndex();
+        const char* deviceName = deviceFilterParam->getCurrentChoiceName().toRawUTF8();
+        if (ImGui::BeginCombo("Device", deviceName))
+        {
+            for (int i = 0; i < deviceFilterParam->choices.size(); ++i)
+            {
+                bool isSelected = (deviceIdx == i);
+                if (ImGui::Selectable(deviceFilterParam->choices[i].toRawUTF8(), isSelected))
+                {
+                    deviceFilterParam->setValueNotifyingHost(
+                        deviceFilterParam->getNormalisableRange().convertTo0to1(i));
+                }
+                if (isSelected)
+                    ImGui::SetItemDefaultFocus();
+            }
+            ImGui::EndCombo();
+        }
+    }
+    
+    // Channel selector
+    if (midiChannelFilterParam)
+    {
+        int channel = midiChannelFilterParam->get();
+        const char* items[] = {"All Channels", "1", "2", "3", "4", "5", "6", "7", "8",
+                               "9", "10", "11", "12", "13", "14", "15", "16"};
+        if (ImGui::Combo("Channel", &channel, items, 17))
+        {
+            midiChannelFilterParam->setValueNotifyingHost(
+                midiChannelFilterParam->getNormalisableRange().convertTo0to1(channel));
+        }
+    }
+    
+    ImGui::Separator();
+    ImGui::Spacing();
     
     // === MIDI INPUT STATUS ===
     ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1.0f), "MIDI Input Status");

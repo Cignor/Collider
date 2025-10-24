@@ -5,6 +5,7 @@
 #include <juce_audio_processors/juce_audio_processors.h>
 #include <juce_audio_utils/juce_audio_utils.h>
 #include "../audio/graph/ModularSynthProcessor.h"
+#include "../audio/MidiDeviceManager.h"
 
 class PresetCreatorComponent : public juce::Component,
                                private juce::Button::Listener,
@@ -31,6 +32,9 @@ public:
     
     // Get MIDI activity indicator state
     int getMidiActivityFrames() const { return midiActivityFrames; }
+    
+    // Multi-MIDI device manager (public for access from ImGuiNodeEditorComponent)
+    std::unique_ptr<MidiDeviceManager> midiDeviceManager;
 
 private:
     int midiActivityFrames = 0; // For MIDI activity indicator

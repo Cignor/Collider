@@ -111,6 +111,45 @@ void ModularSynthProcessor::releaseResources()
     internalGraph->releaseResources();
 }
 
+//==============================================================================
+// Multi-MIDI Device Support
+//==============================================================================
+
+void ModularSynthProcessor::processMidiWithDeviceInfo(const std::vector<MidiMessageWithDevice>& messages)
+{
+    const juce::ScopedLock lock(midiActivityLock);
+    currentBlockMidiMessages = messages;
+    
+    // Update activity tracking
+    currentActivity.deviceChannelActivity.clear();
+    currentActivity.deviceNames.clear();
+    
+    for (const auto& msg : messages)
+    {
+        // Skip system realtime messages
+        if (msg.message.isMidiClock() || msg.message.isActiveSense())
+            continue;
+        
+        int channel = msg.message.getChannel();
+        if (channel >= 1 && channel <= 16)
+        {
+            int channelIndex = channel - 1;  // 0-15
+            currentActivity.deviceChannelActivity[msg.deviceIndex][channelIndex] = true;
+            currentActivity.deviceNames[msg.deviceIndex] = msg.deviceName;
+        }
+    }
+}
+
+ModularSynthProcessor::MidiActivityState ModularSynthProcessor::getMidiActivityState() const
+{
+    const juce::ScopedLock lock(midiActivityLock);
+    return currentActivity;
+}
+
+//==============================================================================
+// Audio Processing
+//==============================================================================
+
 void ModularSynthProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midiMessages)
 {
     try {
@@ -152,6 +191,33 @@ void ModularSynthProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce:
             }
         }
         // --- END OF FIX ---
+        
+        // === MULTI-MIDI DEVICE SUPPORT: Distribute device-aware MIDI to modules ===
+        // This happens BEFORE voice management and graph processing
+        // Modules receive device info and can filter by device/channel
+        {
+            const juce::ScopedLock lock(midiActivityLock);
+            if (!currentBlockMidiMessages.empty() && internalGraph)
+            {
+                for (auto* node : internalGraph->getNodes())
+                {
+                    if (auto* module = dynamic_cast<ModuleProcessor*>(node->getProcessor()))
+                    {
+                        module->handleDeviceSpecificMidi(currentBlockMidiMessages);
+                    }
+                }
+                
+                // Merge device-aware MIDI into standard MidiBuffer for backward compatibility
+                for (const auto& msg : currentBlockMidiMessages)
+                {
+                    midiMessages.addEvent(msg.message, 0);
+                }
+                
+                // Clear for next block
+                currentBlockMidiMessages.clear();
+            }
+        }
+        // === END MULTI-MIDI DISTRIBUTION ===
         
         if (m_voiceManagerEnabled && !m_voices.empty())
         {

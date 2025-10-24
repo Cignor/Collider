@@ -9,6 +9,15 @@ juce::AudioProcessorValueTreeState::ParameterLayout MIDIJogWheelModuleProcessor:
     layout.add(std::make_unique<juce::AudioParameterChoice>("increment", "Increment", juce::StringArray{"0.001", "0.01", "0.1", "1.0", "10.0", "100.0"}, 2)); // Default to 0.1
     layout.add(std::make_unique<juce::AudioParameterFloat>("resetValue", "Reset Value", -100000.0f, 100000.0f, 0.0f));
     layout.add(std::make_unique<juce::AudioParameterInt>("midiChannel", "MIDI Channel", 0, 16, 1)); // Default to Channel 1
+    
+    // Device selection (0 = All Devices, 1+ = specific device)
+    juce::StringArray deviceOptions;
+    deviceOptions.add("All Devices");
+    auto devices = juce::MidiInput::getAvailableDevices();
+    for (const auto& device : devices)
+        deviceOptions.add(device.name);
+    layout.add(std::make_unique<juce::AudioParameterChoice>("midiDevice", "MIDI Device", deviceOptions, 0));
+    
     return layout;
 }
 
@@ -19,6 +28,7 @@ MIDIJogWheelModuleProcessor::MIDIJogWheelModuleProcessor()
     incrementParam = dynamic_cast<juce::AudioParameterChoice*>(apvts.getParameter("increment"));
     resetValueParam = dynamic_cast<juce::AudioParameterFloat*>(apvts.getParameter("resetValue"));
     midiChannelParam = dynamic_cast<juce::AudioParameterInt*>(apvts.getParameter("midiChannel"));
+    deviceFilterParam = dynamic_cast<juce::AudioParameterChoice*>(apvts.getParameter("midiDevice"));
     lastOutputValues.push_back(std::make_unique<std::atomic<float>>(0.0f));
 }
 

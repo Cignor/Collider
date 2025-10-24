@@ -23,6 +23,16 @@ struct TransportState {
     int globalDivisionIndex = -1;
 };
 
+// <<< MULTI-MIDI DEVICE SUPPORT >>>
+// MIDI message with device source information
+// This struct allows modules to filter MIDI by device and channel
+struct MidiMessageWithDevice {
+    juce::MidiMessage message;
+    juce::String deviceIdentifier;
+    juce::String deviceName;
+    int deviceIndex = -1;
+};
+
 // <<< ALL PIN-RELATED DEFINITIONS ARE NOW CENTRALIZED HERE >>>
 
 // Defines the data type of a modulation or audio signal
@@ -301,6 +311,32 @@ public:
     // Default: return empty vector (no dynamic pins)
     virtual std::vector<DynamicPinInfo> getDynamicInputPins() const { return {}; }
     virtual std::vector<DynamicPinInfo> getDynamicOutputPins() const { return {}; }
+    
+    /**
+        Device-aware MIDI processing (MULTI-MIDI CONTROLLER SUPPORT)
+        
+        This method is called by ModularSynthProcessor BEFORE the standard graph processing
+        begins. It provides MIDI modules with device-aware MIDI messages that include the
+        source device information (name, identifier, index).
+        
+        MIDI modules should override this method to:
+        - Filter messages by device (e.g., only respond to a specific controller)
+        - Filter messages by MIDI channel
+        - Update internal state based on filtered MIDI input
+        
+        The regular processBlock() can then use this updated state to generate CV outputs.
+        
+        @param midiMessages A vector of MIDI messages with device source information
+        
+        Default implementation: Does nothing (opt-in for MIDI modules only)
+        
+        @see MidiMessageWithDevice
+    */
+    virtual void handleDeviceSpecificMidi(const std::vector<MidiMessageWithDevice>& midiMessages)
+    {
+        juce::ignoreUnused(midiMessages);
+        // Default: do nothing. MIDI-aware modules will override this method.
+    }
 
 public:
     // OPTION 9: Make public for TTS debugging

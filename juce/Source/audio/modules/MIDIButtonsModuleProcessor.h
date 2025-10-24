@@ -16,6 +16,9 @@ public:
     void releaseResources() override;
     void processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midiMessages) override;
     
+    // Multi-MIDI device support
+    void handleDeviceSpecificMidi(const std::vector<MidiMessageWithDevice>& midiMessages) override;
+    
     juce::AudioProcessorValueTreeState& getAPVTS() override { return apvts; }
     
     juce::ValueTree getExtraStateTree() const override;
@@ -62,5 +65,6 @@ private:
     juce::AudioProcessorValueTreeState apvts;
     juce::AudioParameterInt* numButtonsParam { nullptr };
     juce::AudioParameterInt* midiChannelParam { nullptr };
+    juce::AudioParameterChoice* deviceFilterParam { nullptr };
 };
 

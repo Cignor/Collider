@@ -130,6 +130,8 @@ target_sources(ColliderApp PRIVATE
     Source/ui/DebugInfo.h
     Source/audio/AudioEngine.h
     Source/audio/AudioEngine.cpp
+    Source/audio/MidiDeviceManager.h
+    Source/audio/MidiDeviceManager.cpp
     Source/audio/voices/SampleVoiceProcessor.h
     Source/audio/voices/SampleVoiceProcessor.cpp
     Source/audio/voices/SynthVoiceProcessor.h
@@ -355,6 +357,8 @@ target_sources(PresetCreatorApp PRIVATE
     ${imnodes_fc_SOURCE_DIR}/imnodes.cpp
 
     # Your other reused engine modules
+    Source/audio/MidiDeviceManager.h
+    Source/audio/MidiDeviceManager.cpp
     Source/audio/graph/ModularSynthProcessor.h
     Source/audio/graph/ModularSynthProcessor.cpp
     Source/audio/modules/ModuleProcessor.h
