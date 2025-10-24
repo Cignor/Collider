@@ -1,9 +1,13 @@
 #include "MIDIFadersModuleProcessor.h"
+#if defined(PRESET_CREATOR_UI)
+#include "../../preset_creator/ControllerPresetManager.h"
+#endif
 
 juce::AudioProcessorValueTreeState::ParameterLayout MIDIFadersModuleProcessor::createParameterLayout()
 {
     juce::AudioProcessorValueTreeState::ParameterLayout layout;
     layout.add(std::make_unique<juce::AudioParameterInt>("numFaders", "Number of Faders", 1, MAX_FADERS, 8));
+    layout.add(std::make_unique<juce::AudioParameterInt>("midiChannel", "MIDI Channel", 0, 16, 0)); // 0 = Omni (all channels)
     return layout;
 }
 
@@ -12,6 +16,7 @@ MIDIFadersModuleProcessor::MIDIFadersModuleProcessor()
       apvts(*this, nullptr, "MIDIFadersParams", createParameterLayout())
 {
     numFadersParam = dynamic_cast<juce::AudioParameterInt*>(apvts.getParameter("numFaders"));
+    midiChannelParam = dynamic_cast<juce::AudioParameterInt*>(apvts.getParameter("midiChannel"));
     
     for (int i = 0; i < MAX_FADERS; ++i)
         lastOutputValues.push_back(std::make_unique<std::atomic<float>>(0.0f));
@@ -29,11 +34,17 @@ void MIDIFadersModuleProcessor::releaseResources()
 void MIDIFadersModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midiMessages)
 {
     int numActive = numFadersParam ? numFadersParam->get() : MAX_FADERS;
+    int channelFilter = midiChannelParam ? midiChannelParam->get() : 0; // 0 = Omni (all channels)
     
     // Process incoming MIDI CC messages
     for (const auto metadata : midiMessages)
     {
         auto msg = metadata.getMessage();
+        
+        // Channel filtering: If channel is set (not 0/Omni), only process messages from that channel
+        if (channelFilter != 0 && msg.getChannel() != channelFilter)
+            continue; // Skip messages from other channels
+        
         if (!msg.isController()) continue;
         
         int ccNumber = msg.getControllerNumber();
@@ -68,11 +79,37 @@ void MIDIFadersModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
         
         lastOutputValues[i]->store(val);
     }
+    
+    // DEBUG: Log first 3 channel values periodically
+    static int debugCounter = 0;
+    if (debugCounter == 0 || debugCounter % 240 == 0)
+    {
+        juce::String dbgMsg = "[MIDI Faders CV Output #" + juce::String(debugCounter) + "] ";
+        dbgMsg += "ch0=" + juce::String(mappings[0].currentValue, 3) + " ";
+        dbgMsg += "ch1=" + juce::String(mappings[1].currentValue, 3) + " ";
+        dbgMsg += "ch2=" + juce::String(mappings[2].currentValue, 3) + " | ";
+        dbgMsg += "CC0=" + juce::String(mappings[0].midiCC) + " ";
+        dbgMsg += "CC1=" + juce::String(mappings[1].midiCC) + " ";
+        dbgMsg += "CC2=" + juce::String(mappings[2].midiCC);
+        juce::Logger::writeToLog(dbgMsg);
+    }
+    debugCounter++;
 }
 
 juce::ValueTree MIDIFadersModuleProcessor::getExtraStateTree() const
 {
     juce::ValueTree vt("MIDIFadersState");
+    
+    // Save the name of the controller preset that is currently active
+    #if defined(PRESET_CREATOR_UI)
+    vt.setProperty("controllerPreset", activeControllerPresetName, nullptr);
+    #endif
+    
+    // Save the MIDI channel from the APVTS parameter
+    if (midiChannelParam)
+        vt.setProperty("midiChannel", midiChannelParam->get(), nullptr);
+    
+    // Save the actual mapping data
     for (int i = 0; i < MAX_FADERS; ++i)
     {
         juce::ValueTree mapping("Mapping");
@@ -89,6 +126,16 @@ void MIDIFadersModuleProcessor::setExtraStateTree(const juce::ValueTree& vt)
 {
     if (vt.hasType("MIDIFadersState"))
     {
+        // Load the name of the controller preset
+        #if defined(PRESET_CREATOR_UI)
+        activeControllerPresetName = vt.getProperty("controllerPreset", "").toString();
+        #endif
+        
+        // Load the MIDI channel and update the APVTS parameter
+        if (midiChannelParam)
+            *midiChannelParam = (int)vt.getProperty("midiChannel", 0);
+        
+        // Load the actual mapping data
         for (const auto& child : vt)
         {
             if (child.hasType("Mapping"))
@@ -138,6 +185,81 @@ void MIDIFadersModuleProcessor::drawParametersInNode(float itemWidth, const std:
 {
     ImGui::PushItemWidth(itemWidth);
     
+    // === PRESET MANAGEMENT UI ===
+    auto& presetManager = ControllerPresetManager::get();
+    const auto& presetNames = presetManager.getPresetNamesFor(ControllerPresetManager::ModuleType::Faders);
+    
+    // UI SYNCHRONIZATION: On first draw after loading, find the index for the saved preset name
+    if (activeControllerPresetName.isNotEmpty())
+    {
+        selectedPresetIndex = presetNames.indexOf(activeControllerPresetName);
+        activeControllerPresetName = ""; // Clear so we only do this once
+    }
+    
+    ImGui::Text("Controller Preset");
+    
+    // Create a C-style array of char pointers for the ImGui combo box
+    std::vector<const char*> names;
+    for (const auto& name : presetNames)
+        names.push_back(name.toRawUTF8());
+    
+    // Draw the dropdown menu
+    if (ImGui::Combo("##PresetCombo", &selectedPresetIndex, names.data(), (int)names.size()))
+    {
+        // When a preset is selected, load it and update our state
+        if (selectedPresetIndex >= 0 && selectedPresetIndex < (int)presetNames.size())
+        {
+            activeControllerPresetName = presetNames[selectedPresetIndex];
+            juce::ValueTree presetData = presetManager.loadPreset(ControllerPresetManager::ModuleType::Faders, activeControllerPresetName);
+            setExtraStateTree(presetData);
+            onModificationEnded(); // Create an undo state
+        }
+    }
+    
+    // "Save" button and text input popup
+    ImGui::SameLine();
+    if (ImGui::Button("Save##preset"))
+    {
+        ImGui::OpenPopup("Save Fader Preset");
+    }
+    
+    // "Delete" button
+    ImGui::SameLine();
+    if (ImGui::Button("Delete##preset"))
+    {
+        if (selectedPresetIndex >= 0 && selectedPresetIndex < (int)presetNames.size())
+        {
+            presetManager.deletePreset(ControllerPresetManager::ModuleType::Faders, presetNames[selectedPresetIndex]);
+            selectedPresetIndex = -1; // Deselect
+            activeControllerPresetName = ""; // Clear active name
+        }
+    }
+    
+    if (ImGui::BeginPopup("Save Fader Preset"))
+    {
+        ImGui::InputText("Preset Name", presetNameBuffer, sizeof(presetNameBuffer));
+        if (ImGui::Button("Save New##confirm"))
+        {
+            juce::String name(presetNameBuffer);
+            if (name.isNotEmpty())
+            {
+                presetManager.savePreset(ControllerPresetManager::ModuleType::Faders, name, getExtraStateTree());
+                activeControllerPresetName = name; // Mark this new preset as active
+                selectedPresetIndex = presetNames.indexOf(activeControllerPresetName); // Resync UI
+                ImGui::CloseCurrentPopup();
+            }
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("Cancel##preset"))
+        {
+            ImGui::CloseCurrentPopup();
+        }
+        ImGui::EndPopup();
+    }
+    
+    ImGui::Spacing();
+    ImGui::Spacing();
+    
     // === HEADER SECTION ===
     // (No SeparatorText - node already has title bar, and it extends beyond bounds)
     
@@ -152,9 +274,25 @@ void MIDIFadersModuleProcessor::drawParametersInNode(float itemWidth, const std:
             onModificationEnded();
         }
         ImGui::SameLine();
-        ImGui::Text("Faders"); 
+        ImGui::Text("Faders");
         ImGui::SameLine();
         HelpMarker("Number of active faders (1-16). Drag to adjust.");
+    }
+    
+    // MIDI Channel filter control
+    if (midiChannelParam)
+    {
+        int channel = midiChannelParam->get();
+        ImGui::SetNextItemWidth(120);
+        if (ImGui::SliderInt("##midichannel", &channel, 0, 16))
+        {
+            *midiChannelParam = channel;
+            onModificationEnded();
+        }
+        ImGui::SameLine();
+        ImGui::Text(channel == 0 ? "Ch: Omni (All)" : juce::String("Ch: " + juce::String(channel)).toRawUTF8());
+        ImGui::SameLine();
+        HelpMarker("MIDI Channel filter. 0 = Omni (all channels), 1-16 = specific channel only.");
     }
     
     // View mode selector

@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<ModularSynthPreset version="1" bpm="120.0">
+  <modules>
+    <module logicalId="1" type="sample loader">
+      <params>
+        <SampleLoaderParameters samplePath="H:\0000_CODE\01_collider_pyo\audio\samples\melodic\KSHMR_Instrumental_Fill_05_105_Kemenche_G#m.wav">
+          <PARAM id="engine" value="1.0"/>
+          <PARAM id="gate" value="0.7999999523162842"/>
+          <PARAM id="gate_mod" value="1.0"/>
+          <PARAM id="loop" value="1.0"/>
+          <PARAM id="pitch" value="0.0"/>
+          <PARAM id="pitch_mod" value="0.0"/>
+          <PARAM id="rangeEnd" value="1.0"/>
+          <PARAM id="rangeEnd_mod" value="1.0"/>
+          <PARAM id="rangeStart" value="0.0"/>
+          <PARAM id="rangeStart_mod" value="0.0"/>
+          <PARAM id="rbPhaseInd" value="1.0"/>
+          <PARAM id="rbWindowShort" value="1.0"/>
+          <PARAM id="speed" value="1.0"/>
+          <PARAM id="speed_mod" value="1.0"/>
+          <PARAM id="trigger_mod" value="0.0"/>
+        </SampleLoaderParameters>
+      </params>
+    </module>
+    <module logicalId="2" type="midi faders">
+      <params>
+        <MIDIFadersParams>
+          <PARAM id="midiChannel" value="0.0"/>
+          <PARAM id="numFaders" value="8.0"/>
+        </MIDIFadersParams>
+      </params>
+      <extra>
+        <MIDIFadersState controllerPreset="" midiChannel="0">
+          <Mapping index="0" cc="2" min="0.0" max="1.0"/>
+          <Mapping index="1" cc="3" min="0.0" max="1.0"/>
+          <Mapping index="2" cc="4" min="0.0" max="1.0"/>
+          <Mapping index="3" cc="5" min="0.0" max="1.0"/>
+          <Mapping index="4" cc="6" min="0.0" max="1.0"/>
+          <Mapping index="5" cc="8" min="0.0" max="1.0"/>
+          <Mapping index="6" cc="9" min="0.0" max="1.0"/>
+          <Mapping index="7" cc="12" min="0.0" max="1.0"/>
+          <Mapping index="8" cc="-1" min="0.0" max="1.0"/>
+          <Mapping index="9" cc="-1" min="0.0" max="1.0"/>
+          <Mapping index="10" cc="-1" min="0.0" max="1.0"/>
+          <Mapping index="11" cc="-1" min="0.0" max="1.0"/>
+          <Mapping index="12" cc="-1" min="0.0" max="1.0"/>
+          <Mapping index="13" cc="-1" min="0.0" max="1.0"/>
+          <Mapping index="14" cc="-1" min="0.0" max="1.0"/>
+          <Mapping index="15" cc="-1" min="0.0" max="1.0"/>
+        </MIDIFadersState>
+      </extra>
+    </module>
+  </modules>
+  <connections>
+    <connection srcId="1" srcChan="0" dstId="output" dstChan="0"/>
+    <connection srcId="1" srcChan="1" dstId="output" dstChan="1"/>
+    <connection srcId="2" srcChan="0" dstId="1" dstChan="0"/>
+    <connection srcId="2" srcChan="0" dstId="1" dstChan="1"/>
+    <connection srcId="2" srcChan="0" dstId="1" dstChan="2"/>
+  </connections>
+  <NodeEditorUI>
+    <node id="1" x="-202.0" y="220.0"/>
+    <node id="2" x="-764.0" y="435.0"/>
+    <node id="0" x="0.0" y="0.0"/>
+  </NodeEditorUI>
+</ModularSynthPreset>

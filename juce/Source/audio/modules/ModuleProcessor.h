@@ -19,6 +19,8 @@ struct TransportState {
     double bpm = 120.0;
     double songPositionBeats = 0.0;
     double songPositionSeconds = 0.0;
+    // Optional global division broadcast from a master tempo/clock (-1 means inactive)
+    int globalDivisionIndex = -1;
 };
 
 // <<< ALL PIN-RELATED DEFINITIONS ARE NOW CENTRALIZED HERE >>>

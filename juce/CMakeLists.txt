@@ -279,6 +279,8 @@ target_sources(ColliderApp PRIVATE
     Source/audio/modules/MIDIButtonsModuleProcessor.cpp
     Source/audio/modules/MIDIJogWheelModuleProcessor.h
     Source/audio/modules/MIDIJogWheelModuleProcessor.cpp
+    Source/audio/modules/TempoClockModuleProcessor.h
+    Source/audio/modules/TempoClockModuleProcessor.cpp
     Source/ipc/IpcServer.cpp
     Source/ipc/IpcServer.h
     Source/ipc/OscClient.h
@@ -341,6 +343,8 @@ target_sources(PresetCreatorApp PRIVATE
     Source/preset_creator/ImGuiNodeEditorComponent.cpp
     Source/preset_creator/PresetCreatorComponent.h
     Source/preset_creator/PresetCreatorComponent.cpp
+    Source/preset_creator/ControllerPresetManager.h
+    Source/preset_creator/ControllerPresetManager.cpp
 
     # Add ImGui, imnodes, and the backend DIRECTLY as source files
     ${imgui_fc_SOURCE_DIR}/imgui.cpp
@@ -495,6 +499,8 @@ target_sources(PresetCreatorApp PRIVATE
     Source/audio/modules/MIDIButtonsModuleProcessor.cpp
     Source/audio/modules/MIDIJogWheelModuleProcessor.h
     Source/audio/modules/MIDIJogWheelModuleProcessor.cpp
+    Source/audio/modules/TempoClockModuleProcessor.h
+    Source/audio/modules/TempoClockModuleProcessor.cpp
 )
 
 # This target now needs to know where to find all the headers

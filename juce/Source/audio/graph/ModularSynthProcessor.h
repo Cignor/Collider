@@ -76,6 +76,7 @@ public:
     TransportState getTransportState() const { return m_transportState; }
     void setPlaying(bool playing) { m_transportState.isPlaying = playing; }
     void setBPM(double bpm) { m_transportState.bpm = juce::jlimit(20.0, 999.0, bpm); }
+    void setGlobalDivisionIndex(int idx) { m_transportState.globalDivisionIndex = idx; }
     
     // MIDI activity indicator
     bool hasMidiActivity() const { return m_midiActivityFlag.exchange(false); }

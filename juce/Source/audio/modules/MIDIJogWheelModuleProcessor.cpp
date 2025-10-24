@@ -1,67 +1,105 @@
 #include "MIDIJogWheelModuleProcessor.h"
+#if defined(PRESET_CREATOR_UI)
+#include "../../preset_creator/ControllerPresetManager.h"
+#endif
 
 juce::AudioProcessorValueTreeState::ParameterLayout MIDIJogWheelModuleProcessor::createParameterLayout()
 {
-    return juce::AudioProcessorValueTreeState::ParameterLayout();
+    juce::AudioProcessorValueTreeState::ParameterLayout layout;
+    layout.add(std::make_unique<juce::AudioParameterChoice>("increment", "Increment", juce::StringArray{"0.001", "0.01", "0.1", "1.0", "10.0", "100.0"}, 2)); // Default to 0.1
+    layout.add(std::make_unique<juce::AudioParameterFloat>("resetValue", "Reset Value", -100000.0f, 100000.0f, 0.0f));
+    layout.add(std::make_unique<juce::AudioParameterInt>("midiChannel", "MIDI Channel", 0, 16, 1)); // Default to Channel 1
+    return layout;
 }
 
 MIDIJogWheelModuleProcessor::MIDIJogWheelModuleProcessor()
     : ModuleProcessor(BusesProperties().withOutput("Output", juce::AudioChannelSet::mono(), true)),
       apvts(*this, nullptr, "MIDIJogWheelParams", createParameterLayout())
 {
+    incrementParam = dynamic_cast<juce::AudioParameterChoice*>(apvts.getParameter("increment"));
+    resetValueParam = dynamic_cast<juce::AudioParameterFloat*>(apvts.getParameter("resetValue"));
+    midiChannelParam = dynamic_cast<juce::AudioParameterInt*>(apvts.getParameter("midiChannel"));
     lastOutputValues.push_back(std::make_unique<std::atomic<float>>(0.0f));
 }
 
 void MIDIJogWheelModuleProcessor::prepareToPlay(double, int)
 {
-    isLearning = false;  // Reset learn state
-}
-
-void MIDIJogWheelModuleProcessor::releaseResources()
-{
+    isLearning = false;
+    mapping.lastRelativeValue = -1;
 }
 
 void MIDIJogWheelModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midiMessages)
 {
-    // Process incoming MIDI CC messages
+    int channelFilter = midiChannelParam ? midiChannelParam->get() : 0;
+    static const float increments[] = {0.001f, 0.01f, 0.1f, 1.0f, 10.0f, 100.0f};
+    float incrementSize = increments[incrementParam->getIndex()];
+
     for (const auto metadata : midiMessages)
     {
         auto msg = metadata.getMessage();
+        
+        // Channel filtering
+        if (channelFilter != 0 && msg.getChannel() != channelFilter)
+            continue;
+        
         if (!msg.isController()) continue;
         
         int ccNumber = msg.getControllerNumber();
-        float ccValue = msg.getControllerValue() / 127.0f;
+        int value = msg.getControllerValue();
         
-        // Handle MIDI Learn
+        // Learn mode: capture the first CC we see
         if (isLearning)
         {
-            midiCC = ccNumber;
+            mapping.midiCC = ccNumber;
             isLearning = false;
+            mapping.lastRelativeValue = -1; // Reset delta calculation
         }
         
-        // Update jog wheel value
-        if (midiCC == ccNumber)
+        // Process the learned/assigned CC
+        if (mapping.midiCC != -1 && ccNumber == mapping.midiCC)
         {
-            currentValue = juce::jmap(ccValue, minVal, maxVal);
+            // DELTA CALCULATION: This is the key to making encoders work!
+            if (mapping.lastRelativeValue != -1)
+            {
+                // Calculate the change from last value
+                int delta = value - mapping.lastRelativeValue;
+                
+                // Handle wraparound (encoder going from 127 to 0 or 0 to 127)
+                if (delta > 64)
+                    delta -= 128;  // e.g., 127 -> 2 = -3, not +129
+                else if (delta < -64)
+                    delta += 128;  // e.g., 2 -> 127 = +3, not -125
+                
+                // Apply the delta scaled by increment size
+                mapping.currentValue += (float)delta * incrementSize;
+            }
+            
+            // Store current value for next comparison
+            mapping.lastRelativeValue = value;
         }
     }
     
-    // Write current value to output buffer
-    buffer.setSample(0, 0, currentValue);
-    
-    // Fill rest of block with same value
+    // Write output
+    buffer.setSample(0, 0, mapping.currentValue);
     if (buffer.getNumSamples() > 1)
-        juce::FloatVectorOperations::fill(buffer.getWritePointer(0) + 1, currentValue, buffer.getNumSamples() - 1);
+        juce::FloatVectorOperations::fill(buffer.getWritePointer(0) + 1, mapping.currentValue, buffer.getNumSamples() - 1);
     
-    lastOutputValues[0]->store(currentValue);
+    lastOutputValues[0]->store(mapping.currentValue);
 }
 
 juce::ValueTree MIDIJogWheelModuleProcessor::getExtraStateTree() const
 {
     juce::ValueTree vt("MIDIJogWheelState");
-    vt.setProperty("cc", midiCC, nullptr);
-    vt.setProperty("min", minVal, nullptr);
-    vt.setProperty("max", maxVal, nullptr);
+    
+    #if defined(PRESET_CREATOR_UI)
+    vt.setProperty("controllerPreset", activeControllerPresetName, nullptr);
+    #endif
+    
+    if (midiChannelParam)
+        vt.setProperty("midiChannel", midiChannelParam->get(), nullptr);
+    
+    vt.setProperty("midiCC", mapping.midiCC, nullptr);
+    vt.setProperty("currentValue", mapping.currentValue, nullptr);
     return vt;
 }
 
@@ -69,9 +107,16 @@ void MIDIJogWheelModuleProcessor::setExtraStateTree(const juce::ValueTree& vt)
 {
     if (vt.hasType("MIDIJogWheelState"))
     {
-        midiCC = vt.getProperty("cc", -1);
-        minVal = vt.getProperty("min", 0.0f);
-        maxVal = vt.getProperty("max", 1.0f);
+        #if defined(PRESET_CREATOR_UI)
+        activeControllerPresetName = vt.getProperty("controllerPreset", "").toString();
+        #endif
+        
+        if (midiChannelParam)
+            *midiChannelParam = (int)vt.getProperty("midiChannel", 1);
+        
+        mapping.midiCC = vt.getProperty("midiCC", -1);
+        mapping.currentValue = vt.getProperty("currentValue", 0.0f);
+        mapping.lastRelativeValue = -1; // Reset delta tracking on load
     }
 }
 
@@ -84,12 +129,13 @@ std::vector<DynamicPinInfo> MIDIJogWheelModuleProcessor::getDynamicOutputPins() 
 
 #if defined(PRESET_CREATOR_UI)
 
-// Helper function for tooltip with help marker
 static void HelpMarker(const char* desc)
 {
+    ImGui::SameLine();
     ImGui::TextDisabled("(?)");
-    if (ImGui::BeginItemTooltip())
+    if (ImGui::IsItemHovered())
     {
+        ImGui::BeginTooltip();
         ImGui::PushTextWrapPos(ImGui::GetFontSize() * 35.0f);
         ImGui::TextUnformatted(desc);
         ImGui::PopTextWrapPos();
@@ -101,144 +147,203 @@ void MIDIJogWheelModuleProcessor::drawParametersInNode(float itemWidth, const st
 {
     ImGui::PushItemWidth(itemWidth);
     
-    // === HEADER ===
-    ImGui::Text("MIDI Jog Wheel");
-    ImGui::SameLine();
-    HelpMarker("Single rotary control for MIDI CC input.\nPerfect for jog wheels, endless encoders, or rotary knobs.");
+    // === PRESET MANAGEMENT UI ===
+    auto& presetManager = ControllerPresetManager::get();
+    const auto& presetNames = presetManager.getPresetNamesFor(ControllerPresetManager::ModuleType::JogWheel);
     
-    ImGui::Spacing();
-    ImGui::Spacing();
-    
-    // === STATUS ===
-    if (midiCC != -1)
+    if (activeControllerPresetName.isNotEmpty())
     {
-        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.5f, 1.0f, 0.5f, 1.0f));  // Light green
-        ImGui::Text("Assigned to CC %d", midiCC);
+        selectedPresetIndex = presetNames.indexOf(activeControllerPresetName);
+        activeControllerPresetName = "";
+    }
+    
+    ImGui::Text("Controller Preset");
+    
+    std::vector<const char*> names;
+    for (const auto& name : presetNames)
+        names.push_back(name.toRawUTF8());
+    
+    if (ImGui::Combo("##PresetCombo", &selectedPresetIndex, names.data(), (int)names.size()))
+    {
+        if (selectedPresetIndex >= 0 && selectedPresetIndex < (int)presetNames.size())
+        {
+            activeControllerPresetName = presetNames[selectedPresetIndex];
+            juce::ValueTree presetData = presetManager.loadPreset(ControllerPresetManager::ModuleType::JogWheel, activeControllerPresetName);
+            setExtraStateTree(presetData);
+            onModificationEnded();
+        }
+    }
+    
+    ImGui::SameLine();
+    if (ImGui::Button("Save##preset"))
+        ImGui::OpenPopup("Save JogWheel Preset");
+    
+    ImGui::SameLine();
+    if (ImGui::Button("Delete##preset"))
+    {
+        if (selectedPresetIndex >= 0 && selectedPresetIndex < (int)presetNames.size())
+        {
+            presetManager.deletePreset(ControllerPresetManager::ModuleType::JogWheel, presetNames[selectedPresetIndex]);
+            selectedPresetIndex = -1;
+            activeControllerPresetName = "";
+        }
+    }
+    
+    if (ImGui::BeginPopup("Save JogWheel Preset"))
+    {
+        ImGui::InputText("Preset Name", presetNameBuffer, sizeof(presetNameBuffer));
+        if (ImGui::Button("Save New##confirm"))
+        {
+            juce::String name(presetNameBuffer);
+            if (name.isNotEmpty())
+            {
+                presetManager.savePreset(ControllerPresetManager::ModuleType::JogWheel, name, getExtraStateTree());
+                activeControllerPresetName = name;
+                selectedPresetIndex = presetNames.indexOf(activeControllerPresetName);
+                ImGui::CloseCurrentPopup();
+            }
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("Cancel##preset"))
+            ImGui::CloseCurrentPopup();
+        ImGui::EndPopup();
+    }
+    
+    ImGui::Spacing();
+    ImGui::Spacing();
+    
+    // === HEADER ===
+    ImGui::Text("MIDI Jog Wheel / Infinite Encoder");
+    ImGui::SameLine();
+    HelpMarker("Uses delta calculation for smooth infinite rotation.\nWorks with encoders that send changing CC values.");
+    
+    // === STATUS & LEARN ===
+    if (mapping.midiCC != -1)
+    {
+        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.5f, 1.0f, 0.5f, 1.0f));
+        ImGui::Text("Assigned to CC %d", mapping.midiCC);
         ImGui::PopStyleColor();
     }
     else
     {
-        ImGui::TextDisabled("No MIDI CC assigned");
+        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.5f, 0.5f, 1.0f));
+        ImGui::Text("Not Assigned");
+        ImGui::PopStyleColor();
     }
     
     ImGui::Spacing();
     
-    // === VISUAL DISPLAY ===
-    // Endless rotation indicator (jog wheels rotate infinitely, no fixed start/end)
-    float normalizedValue = (maxVal != minVal) ? 
-        (currentValue - minVal) / (maxVal - minVal) : 0.0f;
-    
-    // For endless rotation, we wrap around [0, 1] instead of clamping
-    normalizedValue = normalizedValue - floorf(normalizedValue);  // Keep fractional part only
-    
-    // Define canvas size - use itemWidth to constrain it
-    const float canvasWidth = juce::jmin(itemWidth, 160.0f);
-    const ImVec2 canvasSize = ImVec2(canvasWidth, canvasWidth);
-    
-    // Get screen position BEFORE any widget (critical for correct positioning)
-    ImVec2 canvasP0 = ImGui::GetCursorScreenPos();
-    ImVec2 canvasP1 = ImVec2(canvasP0.x + canvasSize.x, canvasP0.y + canvasSize.y);
-    ImVec2 center = ImVec2(canvasP0.x + canvasSize.x * 0.5f, canvasP0.y + canvasSize.y * 0.5f);
-    
-    // Get draw list and set up clipping (following imgui_demo.cpp pattern)
-    ImDrawList* drawList = ImGui::GetWindowDrawList();
-    drawList->PushClipRect(canvasP0, canvasP1, true);
-    
-    // Draw background rectangle
-    drawList->AddRectFilled(canvasP0, canvasP1, IM_COL32(30, 30, 35, 255));
-    
-    // Draw circular rotation indicator
-    float radius = canvasSize.x * 0.35f;  // Scale with canvas size
-    
-    // Full circle outline (no start/end - it's endless!)
-    ImU32 circleColor = isLearning ? 
-        IM_COL32(255, 127, 0, 255) :  // Orange when learning
-        IM_COL32(80, 80, 80, 255);     // Gray normally
-    drawList->AddCircle(center, radius, circleColor, 64, 2.0f);
-    
-    // Rotating indicator "hand" pointing to current position
-    // Angle: 0 = top (12 o'clock), rotates clockwise
-    float indicatorAngle = normalizedValue * juce::MathConstants<float>::twoPi - juce::MathConstants<float>::halfPi;
-    
-    ImU32 indicatorColor = isLearning ? 
-        IM_COL32(255, 127, 0, 255) :  // Orange when learning
-        IM_COL32(76, 178, 255, 255);   // Blue normally
-    
-    // Draw indicator line from center to edge
-    ImVec2 indicatorEnd = ImVec2(
-        center.x + cosf(indicatorAngle) * radius,
-        center.y + sinf(indicatorAngle) * radius
-    );
-    drawList->AddLine(center, indicatorEnd, indicatorColor, 4.0f);
-    
-    // Draw indicator dot at the end
-    drawList->AddCircleFilled(indicatorEnd, 6.0f, indicatorColor);
-    
-    // Center dot
-    drawList->AddCircleFilled(center, 5.0f, indicatorColor);
-    
-    // Value text in center
-    char valueText[32];
-    snprintf(valueText, sizeof(valueText), "%.2f", currentValue);
-    ImVec2 textSize = ImGui::CalcTextSize(valueText);
-    drawList->AddText(ImVec2(center.x - textSize.x * 0.5f, center.y - textSize.y * 0.5f),
-                      IM_COL32(255, 255, 255, 255), valueText);
-    
-    // Pop clipping
-    drawList->PopClipRect();
-    
-    // Reserve space with InvisibleButton (AFTER drawing, following imgui_demo.cpp)
-    ImGui::InvisibleButton("##jogwheel_canvas", canvasSize);
-    
-    ImGui::Spacing();
-    
-    // === CONTROLS ===
-    // Learn button (use itemWidth to prevent infinite scaling)
     if (isLearning)
     {
-        ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(1.0f, 0.5f, 0.0f, 1.0f));
-        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(1.0f, 0.6f, 0.1f, 1.0f));
-        if (ImGui::Button("Learning... (click to cancel)##btn", ImVec2(itemWidth, 0)))
+        ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(1.0f, 0.6f, 0.0f, 1.0f));
+        if (ImGui::Button("Learning... (turn jog wheel)", ImVec2(itemWidth, 0)))
             isLearning = false;
-        ImGui::PopStyleColor(2);
-        ImGui::TextDisabled("Move your jog wheel or rotary encoder...");
+        ImGui::PopStyleColor();
     }
     else
     {
-        if (ImGui::Button("Learn MIDI CC##btn", ImVec2(itemWidth, 0)))
+        if (ImGui::Button("Learn MIDI CC", ImVec2(itemWidth, 0)))
+        {
             isLearning = true;
+            mapping.lastRelativeValue = -1;
+        }
+    }
+    ImGui::SameLine();
+    HelpMarker("Click, then turn your jog wheel to assign it.\nWorks with any encoder CC (82, 86, etc.)");
+    
+    // MIDI Channel
+    if (midiChannelParam)
+    {
+        int channel = midiChannelParam->get();
+        ImGui::SetNextItemWidth(120);
+        if (ImGui::SliderInt("##midichannel", &channel, 0, 16))
+        {
+            *midiChannelParam = channel;
+            onModificationEnded();
+        }
+        ImGui::SameLine();
+        ImGui::Text(channel == 0 ? "Ch: Omni (All)" : juce::String("Ch: " + juce::String(channel)).toRawUTF8());
+        ImGui::SameLine();
+        HelpMarker("MIDI Channel. 0 = Omni, 1-16 = specific channel.");
     }
     
     ImGui::Spacing();
+    ImGui::Spacing();
     
-    // Range controls
-    ImGui::Text("Output Range:");
+    // === CONFIGURATION ===
+    ImGui::Text("Configuration");
+    
+    int incrementIdx = incrementParam->getIndex();
+    const char* incrementNames[] = { "0.001", "0.01", "0.1", "1.0", "10.0", "100.0" };
     ImGui::SetNextItemWidth(itemWidth);
-    ImGuiSliderFlags flags = ImGuiSliderFlags_AlwaysClamp;
-    if (ImGui::DragFloatRange2("##range", &minVal, &maxVal, 0.01f, -10.0f, 10.0f,
-                                "Min: %.2f", "Max: %.2f", flags))
+    if (ImGui::Combo("Increment", &incrementIdx, incrementNames, 6))
     {
+        *incrementParam = incrementIdx;
         onModificationEnded();
     }
-    if (ImGui::IsItemHovered())
-        ImGui::SetTooltip("Drag to adjust output range.\nIncoming MIDI values (0-127) will be mapped to this range.");
+    ImGui::SameLine();
+    HelpMarker("Step size per tick. Start with 0.1 for testing.");
     
-    // Quick range presets
+    float resetVal = resetValueParam->get();
+    ImGui::SetNextItemWidth(itemWidth);
+    if (ImGui::InputFloat("Reset Value", &resetVal))
+        *resetValueParam = resetVal;
+    if (ImGui::IsItemDeactivatedAfterEdit())
+        onModificationEnded();
+    
+    if (ImGui::Button("Reset to Value", ImVec2(itemWidth, 0)))
+    {
+        mapping.currentValue = resetValueParam->get();
+        onModificationEnded();
+    }
+    
     ImGui::Spacing();
-    ImGui::TextDisabled("Presets:");
-    const float presetBtnWidth = (itemWidth - ImGui::GetStyle().ItemSpacing.x * 2) / 3.0f;
-    if (ImGui::Button("0 to 1##preset1", ImVec2(presetBtnWidth, 0))) { minVal = 0.0f; maxVal = 1.0f; onModificationEnded(); }
-    ImGui::SameLine();
-    if (ImGui::Button("-1 to 1##preset2", ImVec2(presetBtnWidth, 0))) { minVal = -1.0f; maxVal = 1.0f; onModificationEnded(); }
-    ImGui::SameLine();
-    if (ImGui::Button("0 to 10##preset3", ImVec2(presetBtnWidth, 0))) { minVal = 0.0f; maxVal = 10.0f; onModificationEnded(); }
+    ImGui::Spacing();
+    
+    // === VALUE DISPLAY ===
+    ImGui::Separator();
+    ImGui::Text("Current Value: %.3f", mapping.currentValue);
+    
+    // Circular display
+    const float canvasWidth = juce::jmin(itemWidth, 150.0f);
+    const ImVec2 canvasSize(canvasWidth, canvasWidth);
+    ImVec2 p0 = ImGui::GetCursorScreenPos();
+    ImVec2 center(p0.x + canvasSize.x * 0.5f, p0.y + canvasSize.y * 0.5f);
+    float radius = canvasSize.x * 0.42f;
+    auto* drawList = ImGui::GetWindowDrawList();
+    
+    drawList->PushClipRect(p0, ImVec2(p0.x + canvasSize.x, p0.y + canvasSize.y), true);
+    drawList->AddCircleFilled(center, radius + 4.0f, IM_COL32(30, 30, 30, 255), 64);
+    drawList->AddCircle(center, radius, IM_COL32(100, 100, 100, 255), 64, 2.0f);
+    
+    float normalizedValue = std::fmod(mapping.currentValue, 1.0f);
+    if (normalizedValue < 0.0f) normalizedValue += 1.0f;
+    
+    float angle = normalizedValue * juce::MathConstants<float>::twoPi - juce::MathConstants<float>::halfPi;
+    ImVec2 handEnd(center.x + std::cos(angle) * radius * 0.85f, 
+                   center.y + std::sin(angle) * radius * 0.85f);
+    drawList->AddLine(center, handEnd, IM_COL32(100, 180, 255, 255), 4.0f);
+    drawList->AddCircleFilled(center, 6.0f, IM_COL32(100, 180, 255, 255));
+    
+    for (int i = 0; i < 4; ++i)
+    {
+        float tickAngle = (i * juce::MathConstants<float>::halfPi) - juce::MathConstants<float>::halfPi;
+        ImVec2 tickStart(center.x + std::cos(tickAngle) * (radius - 8.0f),
+                        center.y + std::sin(tickAngle) * (radius - 8.0f));
+        ImVec2 tickEnd(center.x + std::cos(tickAngle) * radius,
+                      center.y + std::sin(tickAngle) * radius);
+        drawList->AddLine(tickStart, tickEnd, IM_COL32(120, 120, 120, 255), 2.0f);
+    }
+    
+    drawList->PopClipRect();
+    ImGui::InvisibleButton("##jogwheel", canvasSize);
     
     ImGui::PopItemWidth();
 }
 
 void MIDIJogWheelModuleProcessor::drawIoPins(const NodePinHelpers& helpers)
 {
-    juce::ignoreUnused(helpers);
+    helpers.drawAudioOutputPin("Value", 0);
 }
-#endif
 
+#endif

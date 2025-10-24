@@ -12,7 +12,7 @@ void SampleVoiceProcessor::prepareToPlay(double rate, int samplesPerBlock)
     VoiceProcessor::prepareToPlay (rate, samplesPerBlock);
     juce::Logger::writeToLog("[SampleVoice] prepareToPlay sr=" + juce::String(rate) + ", block=" + juce::String(samplesPerBlock));
     outputSampleRate = rate;
-    readPosition = 0.0;
+    // readPosition is set by reset() or setPlaybackRange() + reset(), not here
 
     // Always run stretcher in stereo; duplicate mono content upstream
     timePitch.prepare (rate, 2, samplesPerBlock);

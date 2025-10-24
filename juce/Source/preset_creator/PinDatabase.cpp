@@ -45,6 +45,7 @@ void populateModuleDescriptions()
     descriptions["timepitch"] = "Real-time pitch and time manipulation using RubberBand.";
     descriptions["De-Crackle"] = "A utility to reduce clicks from discontinuous signals.";
     descriptions["recorder"] = "Records incoming audio to a WAV, AIFF, or FLAC file.";
+    descriptions["tempo clock"] = "Global clock generator with BPM control, transport, and clock outputs.";
     // Modulators
     descriptions["LFO"] = "A Low-Frequency Oscillator for modulation.";
     descriptions["ADSR"] = "An Attack-Decay-Sustain-Release envelope generator.";
@@ -108,7 +109,7 @@ void populatePinDatabase()
         { AudioPin("Pitch Mod", 0, PinDataType::CV), AudioPin("Speed Mod", 1, PinDataType::CV), AudioPin("Gate Mod", 2, PinDataType::CV),
           AudioPin("Trigger Mod", 3, PinDataType::Gate), AudioPin("Range Start Mod", 4, PinDataType::CV), AudioPin("Range End Mod", 5, PinDataType::CV),
           AudioPin("Randomize Trig", 6, PinDataType::Gate) },
-        { AudioPin("Audio Output", 0, PinDataType::Audio) },
+        { AudioPin("Out L", 0, PinDataType::Audio), AudioPin("Out R", 1, PinDataType::Audio) },
         {}
     );
 
@@ -512,10 +513,12 @@ db["random"] = ModulePinInfo(
             AudioPin("Gate Mod", 2, PinDataType::CV),
             AudioPin("Trigger Mod", 3, PinDataType::Gate),
             AudioPin("Range Start Mod", 4, PinDataType::CV),
-            AudioPin("Range End Mod", 5, PinDataType::CV)
+            AudioPin("Range End Mod", 5, PinDataType::CV),
+            AudioPin("Randomize Trig", 6, PinDataType::Gate)
         },
         {
-            AudioPin("Audio Output", 0, PinDataType::Audio)
+            AudioPin("Out L", 0, PinDataType::Audio),
+            AudioPin("Out R", 1, PinDataType::Audio)
         },
         {}
     );
@@ -778,6 +781,31 @@ db["random"] = ModulePinInfo(
         {}
     );
 
+    // MIDI Family - New Modules with Correct Pin Types
+    {
+        // MIDI Faders: All outputs are CV (blue)
+        db["midi faders"] = ModulePinInfo();
+        for (int i = 0; i < 16; ++i)
+            db["midi faders"].audioOuts.emplace_back("Fader " + juce::String(i+1), i, PinDataType::CV);
+
+        // MIDI Knobs: All outputs are CV (blue)
+        db["midi knobs"] = ModulePinInfo();
+        for (int i = 0; i < 16; ++i)
+            db["midi knobs"].audioOuts.emplace_back("Knob " + juce::String(i+1), i, PinDataType::CV);
+
+        // MIDI Buttons: All outputs are Gate/Trigger (yellow)
+        db["midi buttons"] = ModulePinInfo();
+        for (int i = 0; i < 32; ++i)
+            db["midi buttons"].audioOuts.emplace_back("Button " + juce::String(i+1), i, PinDataType::Gate);
+
+        // MIDI Jog Wheel: Output is CV (blue)
+        db["midi jog wheel"] = ModulePinInfo(
+            {},
+            { AudioPin("Value", 0, PinDataType::CV) },
+            {}
+        );
+    }
+
     db["Debug"] = ModulePinInfo(
         { AudioPin("In", 0, PinDataType::Audio) },
         {}, // No outputs
@@ -788,6 +816,39 @@ db["random"] = ModulePinInfo(
         {}, // No inputs
         { AudioPin("Out", 0, PinDataType::Audio) },
         {}
+    );
+
+    // Tempo Clock
+    db["tempo clock"] = ModulePinInfo(
+        {
+            AudioPin("BPM Mod", 0, PinDataType::CV),
+            AudioPin("Tap", 1, PinDataType::Gate),
+            AudioPin("Nudge+", 2, PinDataType::Gate),
+            AudioPin("Nudge-", 3, PinDataType::Gate),
+            AudioPin("Play", 4, PinDataType::Gate),
+            AudioPin("Stop", 5, PinDataType::Gate),
+            AudioPin("Reset", 6, PinDataType::Gate),
+            AudioPin("Swing Mod", 7, PinDataType::CV)
+        },
+        {
+            AudioPin("Clock", 0, PinDataType::Gate),
+            AudioPin("Beat Trig", 1, PinDataType::Gate),
+            AudioPin("Bar Trig", 2, PinDataType::Gate),
+            AudioPin("Beat Gate", 3, PinDataType::Gate),
+            AudioPin("Phase", 4, PinDataType::CV),
+            AudioPin("BPM CV", 5, PinDataType::CV),
+            AudioPin("Downbeat", 6, PinDataType::Gate)
+        },
+        {
+            ModPin("BPM", "bpm_mod", PinDataType::CV),
+            ModPin("Tap", "tap_mod", PinDataType::Gate),
+            ModPin("Nudge+", "nudge_up_mod", PinDataType::Gate),
+            ModPin("Nudge-", "nudge_down_mod", PinDataType::Gate),
+            ModPin("Play", "play_mod", PinDataType::Gate),
+            ModPin("Stop", "stop_mod", PinDataType::Gate),
+            ModPin("Reset", "reset_mod", PinDataType::Gate),
+            ModPin("Swing", "swing_mod", PinDataType::CV)
+        }
     );
 
 }

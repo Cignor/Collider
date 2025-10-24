@@ -60,6 +60,7 @@
 #include "../modules/MIDIKnobsModuleProcessor.h"
 #include "../modules/MIDIButtonsModuleProcessor.h"
 #include "../modules/MIDIJogWheelModuleProcessor.h"
+#include "../modules/TempoClockModuleProcessor.h"
 #include "../modules/InletModuleProcessor.h"
 #include "../modules/OutletModuleProcessor.h"
 #include "../modules/MetaModuleProcessor.h"
@@ -594,6 +595,7 @@ namespace {
             reg("midi knobs", []{ return std::make_unique<MIDIKnobsModuleProcessor>(); });
             reg("midi buttons", []{ return std::make_unique<MIDIButtonsModuleProcessor>(); });
             reg("midi jog wheel", []{ return std::make_unique<MIDIJogWheelModuleProcessor>(); });
+            reg("tempo clock", []{ return std::make_unique<TempoClockModuleProcessor>(); });
             
             reg("meta module", []{ return std::make_unique<MetaModuleProcessor>(); });
             reg("metamodule", []{ return std::make_unique<MetaModuleProcessor>(); });

@@ -12,6 +12,7 @@
 #include "PresetManager.h"
 #include "SampleManager.h"
 #include "MidiManager.h"
+#include "ControllerPresetManager.h"
 
 // Forward declarations from Dear ImGui / imnodes
 struct ImGuiContext; struct ImGuiIO; struct ImNodesContext;

@@ -1,0 +1,189 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<ModularSynthPreset version="1" bpm="120.0">
+  <modules>
+    <module logicalId="1" type="midi knobs">
+      <params>
+        <MIDIKnobsParams>
+          <PARAM id="numKnobs" value="8.0"/>
+        </MIDIKnobsParams>
+      </params>
+      <extra>
+        <MIDIKnobsState>
+          <Mapping index="0" cc="13" min="0.0" max="1.0"/>
+          <Mapping index="1" cc="14" min="0.0" max="1.0"/>
+          <Mapping index="2" cc="15" min="0.0" max="1.0"/>
+          <Mapping index="3" cc="16" min="0.0" max="1.0"/>
+          <Mapping index="4" cc="17" min="0.0" max="1.0"/>
+          <Mapping index="5" cc="18" min="0.0" max="1.0"/>
+          <Mapping index="6" cc="19" min="0.0" max="1.0"/>
+          <Mapping index="7" cc="20" min="0.0" max="1.0"/>
+          <Mapping index="8" cc="-1" min="0.0" max="1.0"/>
+          <Mapping index="9" cc="-1" min="0.0" max="1.0"/>
+          <Mapping index="10" cc="-1" min="0.0" max="1.0"/>
+          <Mapping index="11" cc="-1" min="0.0" max="1.0"/>
+          <Mapping index="12" cc="-1" min="0.0" max="1.0"/>
+          <Mapping index="13" cc="-1" min="0.0" max="1.0"/>
+          <Mapping index="14" cc="-1" min="0.0" max="1.0"/>
+          <Mapping index="15" cc="-1" min="0.0" max="1.0"/>
+        </MIDIKnobsState>
+      </extra>
+    </module>
+    <module logicalId="2" type="VCO">
+      <params>
+        <VCOParams>
+          <PARAM id="frequency" value="440.0"/>
+          <PARAM id="waveform" value="0.0"/>
+        </VCOParams>
+      </params>
+    </module>
+    <module logicalId="3" type="MapRange">
+      <params>
+        <MapRangeParams>
+          <PARAM id="cvMax" value="1.0"/>
+          <PARAM id="cvMin" value="0.0"/>
+          <PARAM id="inMax" value="1.0"/>
+          <PARAM id="inMin" value="0.0"/>
+          <PARAM id="normMax" value="1.0"/>
+          <PARAM id="normMin" value="0.0"/>
+          <PARAM id="outMax" value="1.0"/>
+          <PARAM id="outMin" value="0.0"/>
+        </MapRangeParams>
+      </params>
+    </module>
+    <module logicalId="4" type="midi buttons">
+      <params>
+        <MIDIButtonsParams>
+          <PARAM id="numButtons" value="4.0"/>
+        </MIDIButtonsParams>
+      </params>
+      <extra>
+        <MIDIButtonsState>
+          <Mapping index="0" cc="21" mode="0"/>
+          <Mapping index="1" cc="29" mode="0"/>
+          <Mapping index="2" cc="38" mode="0"/>
+          <Mapping index="3" cc="46" mode="0"/>
+          <Mapping index="4" cc="-1" mode="0"/>
+          <Mapping index="5" cc="-1" mode="0"/>
+          <Mapping index="6" cc="-1" mode="0"/>
+          <Mapping index="7" cc="-1" mode="0"/>
+          <Mapping index="8" cc="-1" mode="0"/>
+          <Mapping index="9" cc="-1" mode="0"/>
+          <Mapping index="10" cc="-1" mode="0"/>
+          <Mapping index="11" cc="-1" mode="0"/>
+          <Mapping index="12" cc="-1" mode="0"/>
+          <Mapping index="13" cc="-1" mode="0"/>
+          <Mapping index="14" cc="-1" mode="0"/>
+          <Mapping index="15" cc="-1" mode="0"/>
+          <Mapping index="16" cc="-1" mode="0"/>
+          <Mapping index="17" cc="-1" mode="0"/>
+          <Mapping index="18" cc="-1" mode="0"/>
+          <Mapping index="19" cc="-1" mode="0"/>
+          <Mapping index="20" cc="-1" mode="0"/>
+          <Mapping index="21" cc="-1" mode="0"/>
+          <Mapping index="22" cc="-1" mode="0"/>
+          <Mapping index="23" cc="-1" mode="0"/>
+          <Mapping index="24" cc="-1" mode="0"/>
+          <Mapping index="25" cc="-1" mode="0"/>
+          <Mapping index="26" cc="-1" mode="0"/>
+          <Mapping index="27" cc="-1" mode="0"/>
+          <Mapping index="28" cc="-1" mode="0"/>
+          <Mapping index="29" cc="-1" mode="0"/>
+          <Mapping index="30" cc="-1" mode="0"/>
+          <Mapping index="31" cc="-1" mode="0"/>
+        </MIDIButtonsState>
+      </extra>
+    </module>
+    <module logicalId="5" type="midi buttons">
+      <params>
+        <MIDIButtonsParams>
+          <PARAM id="numButtons" value="4.0"/>
+        </MIDIButtonsParams>
+      </params>
+      <extra>
+        <MIDIButtonsState>
+          <Mapping index="0" cc="22" mode="0"/>
+          <Mapping index="1" cc="30" mode="0"/>
+          <Mapping index="2" cc="39" mode="0"/>
+          <Mapping index="3" cc="47" mode="0"/>
+          <Mapping index="4" cc="-1" mode="0"/>
+          <Mapping index="5" cc="-1" mode="0"/>
+          <Mapping index="6" cc="-1" mode="0"/>
+          <Mapping index="7" cc="-1" mode="0"/>
+          <Mapping index="8" cc="-1" mode="0"/>
+          <Mapping index="9" cc="-1" mode="0"/>
+          <Mapping index="10" cc="-1" mode="0"/>
+          <Mapping index="11" cc="-1" mode="0"/>
+          <Mapping index="12" cc="-1" mode="0"/>
+          <Mapping index="13" cc="-1" mode="0"/>
+          <Mapping index="14" cc="-1" mode="0"/>
+          <Mapping index="15" cc="-1" mode="0"/>
+          <Mapping index="16" cc="-1" mode="0"/>
+          <Mapping index="17" cc="-1" mode="0"/>
+          <Mapping index="18" cc="-1" mode="0"/>
+          <Mapping index="19" cc="-1" mode="0"/>
+          <Mapping index="20" cc="-1" mode="0"/>
+          <Mapping index="21" cc="-1" mode="0"/>
+          <Mapping index="22" cc="-1" mode="0"/>
+          <Mapping index="23" cc="-1" mode="0"/>
+          <Mapping index="24" cc="-1" mode="0"/>
+          <Mapping index="25" cc="-1" mode="0"/>
+          <Mapping index="26" cc="-1" mode="0"/>
+          <Mapping index="27" cc="-1" mode="0"/>
+          <Mapping index="28" cc="-1" mode="0"/>
+          <Mapping index="29" cc="-1" mode="0"/>
+          <Mapping index="30" cc="-1" mode="0"/>
+          <Mapping index="31" cc="-1" mode="0"/>
+        </MIDIButtonsState>
+      </extra>
+    </module>
+    <module logicalId="6" type="MapRange">
+      <params>
+        <MapRangeParams>
+          <PARAM id="cvMax" value="1.0"/>
+          <PARAM id="cvMin" value="0.0"/>
+          <PARAM id="inMax" value="1.0"/>
+          <PARAM id="inMin" value="0.0"/>
+          <PARAM id="normMax" value="1.0"/>
+          <PARAM id="normMin" value="0.0"/>
+          <PARAM id="outMax" value="1.0"/>
+          <PARAM id="outMin" value="0.0"/>
+        </MapRangeParams>
+      </params>
+    </module>
+    <module logicalId="8" type="MapRange">
+      <params>
+        <MapRangeParams>
+          <PARAM id="cvMax" value="1.0"/>
+          <PARAM id="cvMin" value="0.0"/>
+          <PARAM id="inMax" value="1.0"/>
+          <PARAM id="inMin" value="0.0"/>
+          <PARAM id="normMax" value="0.0"/>
+          <PARAM id="normMin" value="-1.0"/>
+          <PARAM id="outMax" value="1.0"/>
+          <PARAM id="outMin" value="0.0"/>
+        </MapRangeParams>
+      </params>
+    </module>
+  </modules>
+  <connections>
+    <connection srcId="1" srcChan="0" dstId="3" dstChan="0"/>
+    <connection srcId="2" srcChan="0" dstId="output" dstChan="0"/>
+    <connection srcId="2" srcChan="0" dstId="output" dstChan="1"/>
+    <connection srcId="3" srcChan="0" dstId="2" dstChan="0"/>
+    <connection srcId="4" srcChan="0" dstId="6" dstChan="0"/>
+    <connection srcId="5" srcChan="0" dstId="8" dstChan="0"/>
+    <connection srcId="6" srcChan="0" dstId="2" dstChan="1"/>
+    <connection srcId="8" srcChan="0" dstId="2" dstChan="2"/>
+  </connections>
+  <NodeEditorUI>
+    <node id="1" x="-274.0" y="331.0"/>
+    <node id="2" x="879.0" y="473.0"/>
+    <node id="3" x="395.0" y="387.0"/>
+    <node id="4" x="214.0" y="779.0"/>
+    <node id="5" x="-209.0" y="1073.0"/>
+    <node id="6" x="586.5" y="768.5"/>
+    <node id="8" x="592.0" y="1098.0"/>
+    <node id="0" x="1402.0" y="508.0"/>
+  </NodeEditorUI>
+</ModularSynthPreset>

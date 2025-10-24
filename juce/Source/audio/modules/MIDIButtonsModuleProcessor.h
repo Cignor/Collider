@@ -47,6 +47,11 @@ private:
 #if defined(PRESET_CREATOR_UI)
     ViewMode viewMode = ViewMode::Visual;  // UI view mode
     
+    // Preset UI state
+    int selectedPresetIndex = -1;
+    char presetNameBuffer[128] = {};
+    juce::String activeControllerPresetName;  // Name of currently active preset
+    
     void drawVisualButtons(int numActive, const std::function<void()>& onModificationEnded);
     void drawCompactList(int numActive, const std::function<void()>& onModificationEnded);
     void drawTableView(int numActive, const std::function<void()>& onModificationEnded);
@@ -56,5 +61,6 @@ private:
     static juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout();
     juce::AudioProcessorValueTreeState apvts;
     juce::AudioParameterInt* numButtonsParam { nullptr };
+    juce::AudioParameterInt* midiChannelParam { nullptr };
 };
 

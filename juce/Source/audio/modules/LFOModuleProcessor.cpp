@@ -66,7 +66,10 @@ void LFOModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::Mi
     const int baseWave = static_cast<int>(waveParam->load());
     const bool bipolar = bipolarParam->load() > 0.5f;
     const bool syncEnabled = syncParam->load() > 0.5f;
-    const int rateDivisionIndex = static_cast<int>(rateDivisionParam->load());
+    int rateDivisionIndex = static_cast<int>(rateDivisionParam->load());
+    // If a global division is broadcast by a master clock, adopt it when sync is enabled
+    if (syncEnabled && m_currentTransport.globalDivisionIndex >= 0)
+        rateDivisionIndex = m_currentTransport.globalDivisionIndex;
 
     // Rate division map: 1/32, 1/16, 1/8, 1/4, 1/2, 1, 2, 4, 8
     static const double divisions[] = { 1.0/32.0, 1.0/16.0, 1.0/8.0, 1.0/4.0, 1.0/2.0, 1.0, 2.0, 4.0, 8.0 };
@@ -196,7 +199,8 @@ void LFOModuleProcessor::drawParametersInNode(float itemWidth, const std::functi
     if (sync)
     {
         int division = static_cast<int>(rateDivisionParam->load());
-        if (ImGui::Combo("Division", &division, "1/32\01/16\01/8\01/4\01/2\01\02\04\08\0\0")) 
+        const char* items[] = { "1/32", "1/16", "1/8", "1/4", "1/2", "1", "2", "4", "8" };
+        if (ImGui::Combo("Division", &division, items, (int)(sizeof(items)/sizeof(items[0]))))
             *dynamic_cast<juce::AudioParameterChoice*>(ap.getParameter(paramIdRateDivision)) = division;
         if (ImGui::IsItemDeactivatedAfterEdit()) onModificationEnded();
     }

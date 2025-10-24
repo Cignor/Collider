@@ -69,9 +69,21 @@ public:
     {
         switch (channel)
         {
-            case 0: return "Audio Output";
+            case 0: return "Out L";
+            case 1: return "Out R";
             default: return juce::String("Out ") + juce::String(channel + 1);
         }
+    }
+    
+    // CRITICAL: Accept multi-bus layout (like TTS Performer)
+    bool isBusesLayoutSupported(const BusesLayout& layouts) const override
+    {
+        // Accept any layout as long as we have at least the minimum channels
+        if (layouts.getMainInputChannelSet().isDisabled())
+            return false;
+        if (layouts.getMainOutputChannelSet().isDisabled())
+            return false;
+        return true;
     }
     
     // --- Spectrogram Access ---
@@ -104,8 +116,6 @@ private:
     
     // Trigger edge detection for trigger_mod
     bool lastTriggerHigh { false };
-    
-    // --- ADD THIS LINE for the new randomize trigger ---
     bool lastRandomizeTriggerHigh { false };
     
 #if defined(PRESET_CREATOR_UI)

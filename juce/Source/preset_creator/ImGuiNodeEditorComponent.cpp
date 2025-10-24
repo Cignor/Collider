@@ -1378,6 +1378,7 @@ void ImGuiNodeEditorComponent::renderImGui()
         addModuleButton("Logic", "Logic");
         addModuleButton("Clock Divider", "ClockDivider");
         addModuleButton("Sequential Switch", "SequentialSwitch");
+        addModuleButton("Tempo Clock", "tempo clock");
         addModuleButton("Snapshot Sequencer", "snapshot sequencer");
         addModuleButton("Best Practice", "best practice");
     }
@@ -1973,13 +1974,16 @@ if (auto* mp = synth->getModuleForLogical (lid))
             NodePinHelpers helpers;
             
             // Helper to draw right-aligned text within a node's content width
+            // From imnodes examples (color_node_editor.cpp:353, save_load.cpp:77, multi_editor.cpp:73):
+            // Use ImGui::Indent() for right-alignment - this is the CORRECT ImNodes pattern!
             auto rightLabelWithinWidth = [&](const char* txt, float nodeContentWidth)
             {
-                const float startX = ImGui::GetCursorPosX();
-                const ImVec2 ts = ImGui::CalcTextSize(txt);
-                // Calculate the new X position to right-align the text, with 8px of padding.
-                float x = startX + juce::jmax(0.0f, nodeContentWidth - ts.x - 8.0f);
-                ImGui::SetCursorPosX(x);
+                const ImVec2 textSize = ImGui::CalcTextSize(txt);
+                
+                // Indent by (nodeWidth - textWidth) to right-align the text
+                // ImNodes uses Indent(), NOT Dummy() + SameLine()!
+                const float indentAmount = juce::jmax(0.0f, nodeContentWidth - textSize.x);
+                ImGui::Indent(indentAmount);
                 ImGui::TextUnformatted(txt);
             };
             helpers.drawAudioInputPin = [&](const char* label, int channel)
@@ -2051,22 +2055,18 @@ if (auto* mp = synth->getModuleForLogical (lid))
 
                 ImNodes::PushColorStyle(ImNodesCol_Pin, isConnected ? colPinConnected : pinColor);
                 
-                // --- THIS IS THE FIX ---
-                // Let ImNodes position the pin, then we draw the right-aligned text inside it.
+                // OUTPUT PIN: Draw text right-aligned, pin positioned at right edge
                 ImNodes::BeginOutputAttribute(attr);
                 rightLabelWithinWidth(label, nodeContentWidth); // Use the new helper
                 ImNodes::EndOutputAttribute();
-                // --- END OF FIX ---
 
-                // --- THIS IS THE DEFINITIVE FIX ---
-                // Get the bounding box of the pin circle that was just drawn.
+                // PIN POSITIONING: Align pin to right edge for tight border alignment
+                // Text is right-aligned to nodeContentWidth (240px), pin positioned at the edge
                 ImVec2 pinMin = ImGui::GetItemRectMin();
                 ImVec2 pinMax = ImGui::GetItemRectMax();
-                // Calculate the exact center and cache it.
-                float centerX = (pinMin.x + pinMax.x) * 0.5f;
                 float centerY = (pinMin.y + pinMax.y) * 0.5f;
-                attrPositions[attr] = ImVec2(centerX, centerY);
-                // --- END OF FIX ---
+                float x_pos = pinMax.x;  // Right edge - no offset!
+                attrPositions[attr] = ImVec2(x_pos, centerY);
 
                 ImNodes::PopColorStyle();
 
@@ -2170,11 +2170,12 @@ if (auto* mp = synth->getModuleForLogical (lid))
                     rightLabelWithinWidth(outLabel, nodeContentWidth); // Use the new helper
                     ImNodes::EndOutputAttribute();
                     
-                    const float PIN_CIRCLE_OFFSET = 8.0f;
+                    // PIN POSITIONING: Zero offset for tight alignment with node border
+                    // Text is right-aligned to nodeContentWidth, pin circle positioned right after
                     ImVec2 pinMin = ImGui::GetItemRectMin();
                     ImVec2 pinMax = ImGui::GetItemRectMax();
                     float y_center = pinMin.y + (pinMax.y - pinMin.y) * 0.5f;
-                    float x_pos = pinMax.x + PIN_CIRCLE_OFFSET;
+                    float x_pos = pinMax.x;  // No offset - pin right at text edge!
                     attrPositions[attr] = ImVec2(x_pos, y_center);
                     
                     ImNodes::PopColorStyle();
@@ -2545,12 +2546,39 @@ if (auto* mp = synth->getModuleForLogical (lid))
         ImNodes::EndNodeTitleBar();
         if (isOutputHovered)
             ImNodes::PopColorStyle();
-        { int a = encodePinId({0, 0, true}); seenAttrs.insert(a); availableAttrs.insert(a); ImNodes::BeginInputAttribute (a);
-        ImGui::Text ("In L");
-        ImNodes::EndInputAttribute(); }
-        { int a = encodePinId({0, 1, true}); seenAttrs.insert(a); availableAttrs.insert(a); ImNodes::BeginInputAttribute (a);
-        ImGui::Text ("In R");
-        ImNodes::EndInputAttribute(); }
+        
+        // In L pin with proper Audio type coloring (green)
+        { 
+            int a = encodePinId({0, 0, true}); 
+            seenAttrs.insert(a); 
+            availableAttrs.insert(a); 
+            bool isConnected = connectedInputAttrs.count(a) > 0;
+            PinID pinId = {0, 0, true, false, ""};
+            PinDataType pinType = getPinDataTypeForPin(pinId);
+            unsigned int pinColor = getImU32ForType(pinType);
+            ImNodes::PushColorStyle(ImNodesCol_Pin, isConnected ? colPinConnected : pinColor);
+            ImNodes::BeginInputAttribute (a);
+            ImGui::Text ("In L");
+            ImNodes::EndInputAttribute();
+            ImNodes::PopColorStyle();
+        }
+        
+        // In R pin with proper Audio type coloring (green)
+        { 
+            int a = encodePinId({0, 1, true}); 
+            seenAttrs.insert(a); 
+            availableAttrs.insert(a); 
+            bool isConnected = connectedInputAttrs.count(a) > 0;
+            PinID pinId = {0, 1, true, false, ""};
+            PinDataType pinType = getPinDataTypeForPin(pinId);
+            unsigned int pinColor = getImU32ForType(pinType);
+            ImNodes::PushColorStyle(ImNodesCol_Pin, isConnected ? colPinConnected : pinColor);
+            ImNodes::BeginInputAttribute (a);
+            ImGui::Text ("In R");
+            ImNodes::EndInputAttribute();
+            ImNodes::PopColorStyle();
+        }
+        
         ImNodes::EndNode();
         
         // Cache output node position for snapshot safety
@@ -3331,6 +3359,7 @@ if (auto* mp = synth->getModuleForLogical (lid))
                     if (ImGui::MenuItem("ADSR")) addAtMouse("ADSR");
                     if (ImGui::MenuItem("Random")) addAtMouse("Random");
                     if (ImGui::MenuItem("S&H")) addAtMouse("S&H");
+                    if (ImGui::MenuItem("Tempo Clock")) addAtMouse("tempo clock");
                     if (ImGui::MenuItem("Function Generator")) addAtMouse("Function Generator");
                     if (ImGui::MenuItem("Shaping Oscillator")) addAtMouse("shaping oscillator");
                     ImGui::EndMenu();
@@ -3507,16 +3536,19 @@ if (auto* mp = synth->getModuleForLogical (lid))
         // Handle link deletion (multi-select via Delete)
 
         // Keyboard shortcuts
-        const bool ctrl = ImGui::GetIO().KeyCtrl;
-        const bool shift = ImGui::GetIO().KeyShift;
-        const bool alt = ImGui::GetIO().KeyAlt;
-        
-        if (ctrl && ImGui::IsKeyPressed (ImGuiKey_S)) { startSaveDialog(); }
-        if (ctrl && ImGui::IsKeyPressed (ImGuiKey_O)) { startLoadDialog(); }
-        if (ctrl && ImGui::IsKeyPressed(ImGuiKey_P)) { handleRandomizePatch(); }
-        if (ctrl && ImGui::IsKeyPressed(ImGuiKey_M)) { handleRandomizeConnections(); }
-        if (ctrl && ImGui::IsKeyPressed(ImGuiKey_B)) { handleBeautifyLayout(); }
-        if (ctrl && !shift && !alt && ImGui::IsKeyPressed(ImGuiKey_R, false)) { handleRecordOutput(); }
+        // Only process global keyboard shortcuts if no ImGui widget wants the keyboard
+        if (!ImGui::GetIO().WantCaptureKeyboard)
+        {
+            const bool ctrl = ImGui::GetIO().KeyCtrl;
+            const bool shift = ImGui::GetIO().KeyShift;
+            const bool alt = ImGui::GetIO().KeyAlt;
+            
+            if (ctrl && ImGui::IsKeyPressed (ImGuiKey_S)) { startSaveDialog(); }
+            if (ctrl && ImGui::IsKeyPressed (ImGuiKey_O)) { startLoadDialog(); }
+            if (ctrl && ImGui::IsKeyPressed(ImGuiKey_P)) { handleRandomizePatch(); }
+            if (ctrl && ImGui::IsKeyPressed(ImGuiKey_M)) { handleRandomizeConnections(); }
+            if (ctrl && ImGui::IsKeyPressed(ImGuiKey_B)) { handleBeautifyLayout(); }
+            if (ctrl && !shift && !alt && ImGui::IsKeyPressed(ImGuiKey_R, false)) { handleRecordOutput(); }
         
         // M: Mute/Bypass selected nodes (without Ctrl modifier)
         if (!ctrl && !alt && !shift && ImGui::IsKeyPressed(ImGuiKey_M, false) && ImNodes::NumSelectedNodes() > 0)
@@ -3768,6 +3800,8 @@ if (auto* mp = synth->getModuleForLogical (lid))
                 pushSnapshot();
             }
         }
+        
+        } // End of keyboard shortcuts (WantCaptureKeyboard check)
 
         // Update selection for parameter panel
         {
@@ -6409,6 +6443,7 @@ std::map<juce::String, std::pair<const char*, const char*>> ImGuiNodeEditorCompo
         {"ADSR", {"ADSR", "Attack Decay Sustain Release envelope"}},
         {"Random", {"Random", "Random value generator"}},
         {"S&H", {"S&H", "Sample and Hold"}},
+        {"Tempo Clock", {"tempo clock", "Global clock with BPM control, transport (play/stop/reset), division, swing, and clock/gate outputs. Use External Takeover to drive the master transport."}},
         {"Function Generator", {"Function Generator", "Custom function curves"}},
         {"Shaping Oscillator", {"shaping oscillator", "Oscillator with waveshaping"}},
         

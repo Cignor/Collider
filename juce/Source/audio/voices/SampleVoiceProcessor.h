@@ -11,6 +11,7 @@ public:
     void prepareToPlay (double sampleRate, int samplesPerBlock) override;
     void renderBlock (juce::AudioBuffer<float>&, juce::MidiBuffer&) override;
     void reset() override { readPosition = startSamplePos; timePitch.reset(); isPlaying = true; }
+    void resetPosition() { readPosition = startSamplePos; timePitch.reset(); } // Reset position without starting playback
     void setLooping (bool shouldLoop) { isLooping = shouldLoop; }
     void setBasePitchSemitones (float semitones) { basePitchSemitones = semitones; }
     void setZoneTimeStretchRatio (float ratio) { zoneTimeStretchRatio = juce::jlimit (0.25f, 4.0f, ratio); }

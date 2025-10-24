@@ -9,7 +9,10 @@
 
 SampleLoaderModuleProcessor::SampleLoaderModuleProcessor()
     : ModuleProcessor(BusesProperties()
-        .withInput("Inputs", juce::AudioChannelSet::discreteChannels(7), true) // 7 modulation inputs
+        .withInput("Playback Mods", juce::AudioChannelSet::discreteChannels(2), true)  // Bus 0: Pitch, Speed (flat ch 0-1)
+        .withInput("Control Mods", juce::AudioChannelSet::discreteChannels(2), true)   // Bus 1: Gate, Trigger (flat ch 2-3)
+        .withInput("Range Mods", juce::AudioChannelSet::discreteChannels(2), true)     // Bus 2: Range Start, Range End (flat ch 4-5)
+        .withInput("Randomize", juce::AudioChannelSet::discreteChannels(1), true)      // Bus 3: Randomize (flat ch 6)
         .withOutput("Audio Output", juce::AudioChannelSet::stereo(), true)),
       apvts(*this, nullptr, "SampleLoaderParameters", createParameterLayout())
 {
@@ -82,6 +85,41 @@ void SampleLoaderModuleProcessor::prepareToPlay(double sampleRate, int samplesPe
 {
     juce::ignoreUnused(sampleRate, samplesPerBlock);
     juce::Logger::writeToLog("[Sample Loader] prepareToPlay sr=" + juce::String(sampleRate) + ", block=" + juce::String(samplesPerBlock));
+    
+    // DEBUG: Check bus enablement status BEFORE forcing
+    juce::String busStatusBefore = "[Sample Loader] Bus Status BEFORE: ";
+    for (int i = 0; i < getBusCount(true); ++i)
+    {
+        auto* bus = getBus(true, i);
+        if (bus)
+            busStatusBefore += "In" + juce::String(i) + "=" + (bus->isEnabled() ? "ON" : "OFF") + "(" + juce::String(bus->getNumberOfChannels()) + "ch) ";
+    }
+    juce::Logger::writeToLog(busStatusBefore);
+    
+    // FORCE ENABLE ALL INPUT BUSES (AudioProcessorGraph might disable them)
+    for (int i = 0; i < getBusCount(true); ++i)
+    {
+        if (auto* bus = getBus(true, i))
+        {
+            if (!bus->isEnabled())
+            {
+                enableAllBuses(); // Try to enable all
+                juce::Logger::writeToLog("[Sample Loader] Forced all buses ON!");
+                break;
+            }
+        }
+    }
+    
+    // DEBUG: Check bus enablement status AFTER forcing
+    juce::String busStatusAfter = "[Sample Loader] Bus Status AFTER: ";
+    for (int i = 0; i < getBusCount(true); ++i)
+    {
+        auto* bus = getBus(true, i);
+        if (bus)
+            busStatusAfter += "In" + juce::String(i) + "=" + (bus->isEnabled() ? "ON" : "OFF") + "(" + juce::String(bus->getNumberOfChannels()) + "ch) ";
+    }
+    juce::Logger::writeToLog(busStatusAfter);
+    
     // Auto-load sample from saved state if available
     if (currentSample == nullptr)
     {
@@ -101,6 +139,10 @@ void SampleLoaderModuleProcessor::prepareToPlay(double sampleRate, int samplesPe
 
 void SampleLoaderModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midiMessages)
 {
+    // Get OUTPUT bus, but do NOT clear here.
+    // Clearing at the start can zero input buses when buffers are aliased in AudioProcessorGraph.
+    auto outBus = getBusBuffer(buffer, false, 0);
+    
     // --- Setup and Safety Checks ---
     if (auto* pending = newSampleProcessor.exchange(nullptr))
     {
@@ -115,17 +157,130 @@ void SampleLoaderModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer,
     }
     if (currentProcessor == nullptr || currentSample == nullptr)
     {
-        buffer.clear();
+        outBus.clear();
         return;
     }
-    auto inBus = getBusBuffer(buffer, true, 0);
+    
+    // DEBUG: Check MAIN buffer first (before splitting into buses)
+    static int rawDebugCounter = 0;
+    if (rawDebugCounter == 0 || rawDebugCounter % 240 == 0)
+    {
+        juce::String mainMsg = "[Sample MAIN Buffer #" + juce::String(rawDebugCounter) + "] ";
+        mainMsg += "totalCh=" + juce::String(buffer.getNumChannels()) + " samples=" + juce::String(buffer.getNumSamples()) + " | ";
+        
+        // Check if buffer channels have valid pointers
+        bool hasData = false;
+        for (int ch = 0; ch < juce::jmin(7, buffer.getNumChannels()); ++ch)
+        {
+            float val = buffer.getSample(ch, 0);
+            mainMsg += "ch" + juce::String(ch) + "=" + juce::String(val, 3) + " ";
+            if (std::abs(val) > 0.001f) hasData = true;
+        }
+        
+        mainMsg += "| hasData=" + juce::String(hasData ? "YES" : "NO");
+        
+        // Check channel pointer validity
+        mainMsg += " | ptrs: ";
+        for (int ch = 0; ch < juce::jmin(3, buffer.getNumChannels()); ++ch)
+        {
+            const float* ptr = buffer.getReadPointer(ch);
+            mainMsg += "ch" + juce::String(ch) + "=" + (ptr ? "OK" : "NULL") + " ";
+        }
+        juce::Logger::writeToLog(mainMsg);
+    }
+    
+    // Multi-bus input architecture (like TTS Performer)
+    auto playbackBus = getBusBuffer(buffer, true, 0);  // Bus 0: Pitch, Speed (flat ch 0-1)
+    auto controlBus = getBusBuffer(buffer, true, 1);   // Bus 1: Gate, Trigger (flat ch 2-3)
+    auto rangeBus = getBusBuffer(buffer, true, 2);     // Bus 2: Range Start, Range End (flat ch 4-5)
+    auto randomizeBus = getBusBuffer(buffer, true, 3); // Bus 3: Randomize (flat ch 6)
+    
+    // DEBUG: Check buses after splitting
+    if (rawDebugCounter == 0 || rawDebugCounter % 240 == 0)
+    {
+        juce::String busMsg = "[Sample Buses #" + juce::String(rawDebugCounter) + "] ";
+        busMsg += "playback=" + juce::String(playbackBus.getNumChannels()) + " ";
+        busMsg += "control=" + juce::String(controlBus.getNumChannels()) + " ";
+        busMsg += "range=" + juce::String(rangeBus.getNumChannels()) + " ";
+        busMsg += "randomize=" + juce::String(randomizeBus.getNumChannels()) + " | ";
+        if (playbackBus.getNumChannels() > 0) busMsg += "pitch=" + juce::String(playbackBus.getSample(0, 0), 3) + " ";
+        if (playbackBus.getNumChannels() > 1) busMsg += "speed=" + juce::String(playbackBus.getSample(1, 0), 3) + " ";
+        if (controlBus.getNumChannels() > 0) busMsg += "gate=" + juce::String(controlBus.getSample(0, 0), 3) + " ";
+        juce::Logger::writeToLog(busMsg);
+    }
+    rawDebugCounter++;
+    
     const int numSamples = buffer.getNumSamples();
 
-    // --- 1. TRIGGER DETECTION ---
-    // Check for a rising edge on the trigger input to start playback.
-    if (isParamInputConnected("trigger_mod") && inBus.getNumChannels() > 3)
+    // --- Compute block-rate CV-mapped values for telemetry (even when not playing) ---
+    const float baseSpeed = apvts.getRawParameterValue("speed")->load();
+    float speedNow = baseSpeed;
+    if (isParamInputConnected("speed_mod") && playbackBus.getNumChannels() > 1)
     {
-        const float* trigSignal = inBus.getReadPointer(3);
+        const float cv = juce::jlimit(0.0f, 1.0f, playbackBus.getReadPointer(1)[0]);
+        const float octaveRange = 4.0f;
+        const float octaveOffset = (cv - 0.5f) * octaveRange;
+        speedNow = juce::jlimit(0.25f, 4.0f, baseSpeed * std::pow(2.0f, octaveOffset));
+    }
+
+    const float basePitch = apvts.getRawParameterValue("pitch")->load();
+    float pitchNow = basePitch;
+    if (isParamInputConnected("pitch_mod") && playbackBus.getNumChannels() > 0)
+    {
+        const float rawCV = playbackBus.getReadPointer(0)[0];
+        const float bipolarCV = (rawCV >= 0.0f && rawCV <= 1.0f) ? (rawCV * 2.0f - 1.0f) : rawCV;
+        const float pitchModulationRange = 24.0f; 
+        pitchNow = juce::jlimit(-24.0f, 24.0f, basePitch + (bipolarCV * pitchModulationRange));
+    }
+
+    float startNorm = rangeStartParam->load();
+    if (isParamInputConnected("rangeStart_mod") && rangeBus.getNumChannels() > 0)
+        startNorm = juce::jlimit(0.0f, 1.0f, rangeBus.getReadPointer(0)[0]);
+
+    float endNorm = rangeEndParam->load();
+    if (isParamInputConnected("rangeEnd_mod") && rangeBus.getNumChannels() > 1)
+        endNorm = juce::jlimit(0.0f, 1.0f, rangeBus.getReadPointer(1)[0]);
+
+    // Ensure valid range window
+    {
+        const float minGap = 0.001f;
+        if (startNorm >= endNorm)
+        {
+            const float midpoint = (startNorm + endNorm) * 0.5f;
+            startNorm = juce::jlimit(0.0f, 1.0f - minGap, midpoint - minGap * 0.5f);
+            endNorm   = juce::jlimit(minGap, 1.0f, startNorm + minGap);
+        }
+    }
+
+    // Update live telemetry regardless of play state (matches TTS pattern)
+    setLiveParamValue("speed_live", speedNow);
+    setLiveParamValue("pitch_live", pitchNow);
+    setLiveParamValue("rangeStart_live", startNorm);
+    setLiveParamValue("rangeEnd_live", endNorm);
+    // Gate live (use first sample if CV present, otherwise knob)
+    if (isParamInputConnected("gate_mod") && controlBus.getNumChannels() > 0)
+    {
+        const float g = juce::jlimit(0.0f, 1.0f, controlBus.getReadPointer(0)[0]);
+        setLiveParamValue("gate_live", g);
+    }
+    else
+    {
+        setLiveParamValue("gate_live", apvts.getRawParameterValue("gate")->load());
+    }
+
+    // --- 1. TRIGGER DETECTION ---
+    const bool looping = apvts.getRawParameterValue("loop")->load() > 0.5f;
+    
+    // If loop is enabled and not playing, start playing
+    if (looping && !currentProcessor->isPlaying)
+    {
+        currentProcessor->reset();
+    }
+    
+    // Check for a rising edge on the trigger input to start playback.
+    if (isParamInputConnected("trigger_mod") && controlBus.getNumChannels() > 1)
+    {
+        const float* trigSignal = controlBus.getReadPointer(1);  // Control Bus Channel 1 = Trigger
         for (int i = 0; i < numSamples; ++i)
         {
             const bool trigHigh = trigSignal[i] > 0.5f;
@@ -136,13 +291,13 @@ void SampleLoaderModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer,
             }
             lastTriggerHigh = trigHigh;
         }
-        if (numSamples > 0) lastTriggerHigh = (inBus.getReadPointer(3)[numSamples - 1] > 0.5f);
+        if (numSamples > 0) lastTriggerHigh = (controlBus.getReadPointer(1)[numSamples - 1] > 0.5f);
     }
 
     // --- Randomize Trigger ---
-    if (isParamInputConnected("randomize_mod") && inBus.getNumChannels() > 6)
+    if (isParamInputConnected("randomize_mod") && randomizeBus.getNumChannels() > 0)
     {
-        const float* randTrigSignal = inBus.getReadPointer(6);
+        const float* randTrigSignal = randomizeBus.getReadPointer(0);  // Randomize Bus Channel 0
         for (int i = 0; i < numSamples; ++i)
         {
             const bool trigHigh = randTrigSignal[i] > 0.5f;
@@ -153,57 +308,29 @@ void SampleLoaderModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer,
             }
             lastRandomizeTriggerHigh = trigHigh;
         }
-        if (numSamples > 0) lastRandomizeTriggerHigh = (inBus.getReadPointer(6)[numSamples - 1] > 0.5f);
+        if (numSamples > 0) lastRandomizeTriggerHigh = (randomizeBus.getReadPointer(0)[numSamples - 1] > 0.5f);
     }
 
     // --- 2. CONDITIONAL AUDIO RENDERING ---
     // Only generate audio if the internal voice is in a playing state.
     if (currentProcessor->isPlaying)
     {
-        // Update block-rate params like speed and pitch
-        float speedNow = apvts.getRawParameterValue("speed")->load();
-        if (isParamInputConnected("speed_mod") && inBus.getNumChannels() > 1)
-            speedNow = juce::jmap(inBus.getReadPointer(1)[0], 0.0f, 1.0f, 0.25f, 4.0f);
+        // DEBUG: Log CV values from buses (like TTS)
+        static int debugFrameCounter = 0;
+        if (debugFrameCounter == 0 || debugFrameCounter % 240 == 0)
+        {
+            juce::String dbgMsg = "[Sample CV Debug #" + juce::String(debugFrameCounter) + "] ";
+            if (playbackBus.getNumChannels() > 0) dbgMsg += "pitch_cv=" + juce::String(playbackBus.getReadPointer(0)[0], 3) + " ";
+            if (playbackBus.getNumChannels() > 1) dbgMsg += "speed_cv=" + juce::String(playbackBus.getReadPointer(1)[0], 3) + " ";
+            if (controlBus.getNumChannels() > 0) dbgMsg += "gate_cv=" + juce::String(controlBus.getReadPointer(0)[0], 3) + " ";
+            juce::Logger::writeToLog(dbgMsg);
+        }
+        debugFrameCounter++;
         
-        float pitchNow = apvts.getRawParameterValue("pitch")->load();
-        if (isParamInputConnected("pitch_mod") && inBus.getNumChannels() > 0)
-        {
-            // Absolute control from CV with robust scaling
-            const float raw = inBus.getReadPointer(0)[0];
-            // Heuristic: accept either unipolar [0..1] or bipolar [-1..1]
-            const bool looksUnipolar = (raw >= 0.0f && raw <= 1.0f);
-            const float cv01 = looksUnipolar ? juce::jlimit(0.0f, 1.0f, raw)
-                                             : juce::jlimit(0.0f, 1.0f, (juce::jlimit(-1.0f, 1.0f, raw) + 1.0f) * 0.5f);
-            pitchNow = juce::jmap(cv01, 0.0f, 1.0f, -24.0f, 24.0f);
-        }
-
-        float startNorm = rangeStartParam->load();
-        if (isParamInputConnected("rangeStart_mod") && inBus.getNumChannels() > 4)
-            startNorm = juce::jlimit(0.0f, 1.0f, inBus.getReadPointer(4)[0]);
-
-        float endNorm = rangeEndParam->load();
-        if (isParamInputConnected("rangeEnd_mod") && inBus.getNumChannels() > 5)
-            endNorm = juce::jlimit(0.0f, 1.0f, inBus.getReadPointer(5)[0]);
-
-        // Ensure valid range (start < end)
-        if (startNorm >= endNorm)
-        {
-            if (isParamInputConnected("rangeStart_mod"))
-                startNorm = juce::jmax(0.0f, endNorm - 0.001f);
-            else if (isParamInputConnected("rangeEnd_mod"))
-                endNorm = juce::jmin(1.0f, startNorm + 0.001f);
-        }
-
         currentProcessor->setZoneTimeStretchRatio(speedNow);
         currentProcessor->setBasePitchSemitones(pitchNow);
         const int sourceLength = currentSample->stereo.getNumSamples();
         currentProcessor->setPlaybackRange(startNorm * sourceLength, endNorm * sourceLength);
-
-        // Update telemetry for live UI feedback
-        setLiveParamValue("speed_live", speedNow);
-        setLiveParamValue("pitch_live", pitchNow);
-        setLiveParamValue("rangeStart_live", startNorm);
-        setLiveParamValue("rangeEnd_live", endNorm);
 
         // Update APVTS parameters for UI feedback (especially spectrogram handles)
         *rangeStartParam = startNorm;
@@ -216,42 +343,61 @@ void SampleLoaderModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer,
         currentProcessor->setRubberBandOptions(apvts.getRawParameterValue("rbWindowShort")->load() > 0.5f, apvts.getRawParameterValue("rbPhaseInd")->load() > 0.5f);
         currentProcessor->setLooping(apvts.getRawParameterValue("loop")->load() > 0.5f);
 
-        // Generate the sample's audio into the buffer. This might set isPlaying to false if the sample ends.
+        // Generate the sample's audio into the OUTPUT buffer. This might set isPlaying to false if the sample ends.
         try {
-            currentProcessor->renderBlock(buffer, midiMessages);
+            // Create a temporary buffer view for just the output bus
+            juce::AudioBuffer<float> outputBuffer(outBus.getArrayOfWritePointers(), 
+                                                   outBus.getNumChannels(), 
+                                                   outBus.getNumSamples());
+            currentProcessor->renderBlock(outputBuffer, midiMessages);
         } catch (...) {
             RtLogger::postf("[SampleLoader][FATAL] renderBlock exception");
-            buffer.clear();
+            outBus.clear();
         }
 
         // --- 3. GATE (VCA) APPLICATION ---
         // If a gate is connected, use it to shape the volume of the audio we just generated.
-        if (isParamInputConnected("gate_mod") && inBus.getNumChannels() > 2)
+        float lastGateValue = 1.0f;
+        if (isParamInputConnected("gate_mod") && controlBus.getNumChannels() > 0)
         {
-            const float* gateCV = inBus.getReadPointer(2);
-            for (int ch = 0; ch < buffer.getNumChannels(); ++ch)
+            const float* gateCV = controlBus.getReadPointer(0);  // Control Bus Channel 0 = Gate
+            for (int ch = 0; ch < outBus.getNumChannels(); ++ch)
             {
-                float* channelData = buffer.getWritePointer(ch);
+                float* channelData = outBus.getWritePointer(ch);
                 for (int i = 0; i < numSamples; ++i)
                 {
-                    channelData[i] *= juce::jlimit(0.0f, 1.0f, gateCV[i]);
+                    const float gateValue = juce::jlimit(0.0f, 1.0f, gateCV[i]);
+                    channelData[i] *= gateValue;
+                    
+                    // Update telemetry (throttled every 64 samples, only once per channel)
+                    if (ch == 0 && (i & 0x3F) == 0)
+                    {
+                        setLiveParamValue("gate_live", gateValue);
+                        lastGateValue = gateValue;
+                    }
                 }
             }
         }
+        else
+        {
+            // No gate modulation - use static gate knob value
+            lastGateValue = apvts.getRawParameterValue("gate")->load();
+            setLiveParamValue("gate_live", lastGateValue);
+        }
         
         // Apply main gate knob last
-        buffer.applyGain(apvts.getRawParameterValue("gate")->load());
+        outBus.applyGain(apvts.getRawParameterValue("gate")->load());
     }
     else
     {
-        // If not playing, the buffer must be silent.
-        buffer.clear();
+        // Not playing: explicitly clear output now (safe after input analysis)
+        outBus.clear();
     }
     
     // Update output values for cable inspector using block peak
     if (lastOutputValues.size() >= 2)
     {
-        auto peakAbs = [&](int ch){ if (ch >= buffer.getNumChannels()) return 0.0f; const float* p = buffer.getReadPointer(ch); float m=0.0f; for (int i=0;i<buffer.getNumSamples();++i) m = juce::jmax(m, std::abs(p[i])); return m; };
+        auto peakAbs = [&](int ch){ if (ch >= outBus.getNumChannels()) return 0.0f; const float* p = outBus.getReadPointer(ch); float m=0.0f; for (int i=0;i<outBus.getNumSamples();++i) m = juce::jmax(m, std::abs(p[i])); return m; };
         if (lastOutputValues[0]) lastOutputValues[0]->store(peakAbs(0));
         if (lastOutputValues[1]) lastOutputValues[1]->store(peakAbs(1));
     }
@@ -307,26 +453,29 @@ void SampleLoaderModuleProcessor::loadSample(const juce::File& file)
     sampleSampleRate = (int)original->sampleRate;
     // --- END OF FIX ---
 
-    // 2) Create a private copy and convert to mono
+    // 2) Create a private STEREO copy (preserve stereo or duplicate mono)
     auto privateCopy = std::make_shared<SampleBank::Sample>();
     privateCopy->sampleRate = original->sampleRate;
     const int numSamples = original->stereo.getNumSamples();
-    privateCopy->stereo.setSize(1, numSamples);
+    privateCopy->stereo.setSize(2, numSamples); // Always stereo output
 
     if (original->stereo.getNumChannels() <= 1)
     {
-        privateCopy->stereo.copyFrom(0, 0, original->stereo, 0, 0, numSamples);
+        // Mono source: duplicate to both L and R channels
+        privateCopy->stereo.copyFrom(0, 0, original->stereo, 0, 0, numSamples); // L = Mono
+        privateCopy->stereo.copyFrom(1, 0, original->stereo, 0, 0, numSamples); // R = Mono
+        DBG("[Sample Loader] Loaded mono sample and duplicated to stereo: " << file.getFileName());
     }
     else
     {
-        privateCopy->stereo.clear();
-        privateCopy->stereo.addFrom(0, 0, original->stereo, 0, 0, numSamples, 0.5f);
-        privateCopy->stereo.addFrom(0, 0, original->stereo, 1, 0, numSamples, 0.5f);
+        // Stereo (or multi-channel) source: copy L and R channels
+        privateCopy->stereo.copyFrom(0, 0, original->stereo, 0, 0, numSamples); // L channel
+        privateCopy->stereo.copyFrom(1, 0, original->stereo, 1, 0, numSamples); // R channel
+        DBG("[Sample Loader] Loaded stereo sample: " << file.getFileName());
     }
 
     // 3) Atomically assign our private copy for this module
     currentSample = privateCopy;
-    DBG("[Sample Loader] Loaded and created private mono copy of: " << currentSampleName);
     generateSpectrogram();
 
     // 4) If the module is prepared, stage a new processor
@@ -473,7 +622,7 @@ void SampleLoaderModuleProcessor::createSampleProcessor()
     const double startSample = startNorm * currentSample->stereo.getNumSamples();
     const double endSample = endNorm * currentSample->stereo.getNumSamples();
     newProcessor->setPlaybackRange(startSample, endSample);
-    newProcessor->reset(); // This will set the read position to startSample
+    newProcessor->resetPosition(); // Reset position without starting playback - wait for trigger
     
     // Set parameters from our APVTS
     newProcessor->setZoneTimeStretchRatio(apvts.getRawParameterValue("speed")->load());
@@ -607,7 +756,8 @@ void SampleLoaderModuleProcessor::drawParametersInNode(float itemWidth, const st
     // --- Gate slider (formerly volume) ---
     bool gateModulated = isParamModulated("gate_mod"); 
     if (gateModulated) { ImGui::BeginDisabled(); ImGui::PushStyleColor(ImGuiCol_FrameBg, ImVec4(1.0f, 1.0f, 0.0f, 0.3f)); }
-    float gate = apvts.getRawParameterValue("gate")->load();
+    float gate = gateModulated ? getLiveParamValueFor("gate_mod", "gate_live", apvts.getRawParameterValue("gate")->load())
+                               : apvts.getRawParameterValue("gate")->load();
     if (ImGui::SliderFloat("Gate", &gate, 0.0f, 1.0f, "%.2f"))
     {
         if (!gateModulated) {
@@ -624,8 +774,11 @@ void SampleLoaderModuleProcessor::drawParametersInNode(float itemWidth, const st
     if (rangeStartModulated) { ImGui::BeginDisabled(); ImGui::PushStyleColor(ImGuiCol_FrameBg, ImVec4(1.0f, 1.0f, 0.0f, 0.3f)); }
     float rangeStart = rangeStartModulated ? getLiveParamValueFor("rangeStart_mod", "rangeStart_live", rangeStartParam->load()) 
                                           : rangeStartParam->load();
+    float rangeEnd = rangeEndParam->load();
     if (ImGui::SliderFloat("Range Start", &rangeStart, 0.0f, 1.0f, "%.3f"))
     {
+        // Ensure start doesn't exceed end (leave at least 0.001 gap)
+        rangeStart = juce::jmin(rangeStart, rangeEnd - 0.001f);
         apvts.getParameter("rangeStart")->setValueNotifyingHost(apvts.getParameterRange("rangeStart").convertTo0to1(rangeStart));
         onModificationEnded();
     }
@@ -635,10 +788,13 @@ void SampleLoaderModuleProcessor::drawParametersInNode(float itemWidth, const st
     
     bool rangeEndModulated = isParamModulated("rangeEnd_mod");
     if (rangeEndModulated) { ImGui::BeginDisabled(); ImGui::PushStyleColor(ImGuiCol_FrameBg, ImVec4(1.0f, 1.0f, 0.0f, 0.3f)); }
-    float rangeEnd = rangeEndModulated ? getLiveParamValueFor("rangeEnd_mod", "rangeEnd_live", rangeEndParam->load()) 
-                                       : rangeEndParam->load();
+    rangeEnd = rangeEndModulated ? getLiveParamValueFor("rangeEnd_mod", "rangeEnd_live", rangeEndParam->load()) 
+                                 : rangeEndParam->load();
+    rangeStart = rangeStartParam->load(); // Refresh rangeStart for validation
     if (ImGui::SliderFloat("Range End", &rangeEnd, 0.0f, 1.0f, "%.3f"))
     {
+        // Ensure end doesn't go below start (leave at least 0.001 gap)
+        rangeEnd = juce::jmax(rangeEnd, rangeStart + 0.001f);
         apvts.getParameter("rangeEnd")->setValueNotifyingHost(apvts.getParameterRange("rangeEnd").convertTo0to1(rangeEnd));
         onModificationEnded();
     }
@@ -762,21 +918,29 @@ void SampleLoaderModuleProcessor::drawIoPins(const NodePinHelpers& helpers)
     helpers.drawAudioInputPin("Range Start Mod", 4);
     helpers.drawAudioInputPin("Range End Mod", 5);
     helpers.drawAudioInputPin("Randomize Trig", 6);
-    // Audio output
-    helpers.drawAudioOutputPin("Audio Output", 0);
+    // Audio outputs (stereo)
+    helpers.drawAudioOutputPin("Out L", 0);
+    helpers.drawAudioOutputPin("Out R", 1);
 }
 #endif
 
-// Parameter bus contract implementation
+// Parameter bus contract implementation (multi-bus architecture like TTS Performer)
 bool SampleLoaderModuleProcessor::getParamRouting(const juce::String& paramId, int& outBusIndex, int& outChannelIndexInBus) const
 {
-    outBusIndex = 0; // All inputs are on bus 0
-    if (paramId == "pitch_mod") { outChannelIndexInBus = 0; return true; }      // Pitch Mod
-    if (paramId == "speed_mod") { outChannelIndexInBus = 1; return true; }      // Speed Mod
-    if (paramId == "gate_mod") { outChannelIndexInBus = 2; return true; }       // Gate Mod
-    if (paramId == "trigger_mod") { outChannelIndexInBus = 3; return true; }    // Trigger Mod
-    if (paramId == "rangeStart_mod") { outChannelIndexInBus = 4; return true; } // Range Start Mod
-    if (paramId == "rangeEnd_mod") { outChannelIndexInBus = 5; return true; }   // Range End Mod
-    if (paramId == "randomize_mod") { outChannelIndexInBus = 6; return true; }  // Randomize Trig
+    // Bus 0: Playback Mods (Pitch, Speed) - flat channels 0-1
+    if (paramId == "pitch_mod") { outBusIndex = 0; outChannelIndexInBus = 0; return true; }
+    if (paramId == "speed_mod") { outBusIndex = 0; outChannelIndexInBus = 1; return true; }
+    
+    // Bus 1: Control Mods (Gate, Trigger) - flat channels 2-3
+    if (paramId == "gate_mod") { outBusIndex = 1; outChannelIndexInBus = 0; return true; }
+    if (paramId == "trigger_mod") { outBusIndex = 1; outChannelIndexInBus = 1; return true; }
+    
+    // Bus 2: Range Mods (Range Start, Range End) - flat channels 4-5
+    if (paramId == "rangeStart_mod") { outBusIndex = 2; outChannelIndexInBus = 0; return true; }
+    if (paramId == "rangeEnd_mod") { outBusIndex = 2; outChannelIndexInBus = 1; return true; }
+    
+    // Bus 3: Randomize - flat channel 6
+    if (paramId == "randomize_mod") { outBusIndex = 3; outChannelIndexInBus = 0; return true; }
+    
     return false;
 }
