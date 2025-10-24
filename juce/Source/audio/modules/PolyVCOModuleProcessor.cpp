@@ -380,8 +380,7 @@ void PolyVCOModuleProcessor::drawParametersInNode(float itemWidth, const std::fu
             
             if (ImGui::BeginTable("voiceTable", 3, 
                                   ImGuiTableFlags_SizingFixedFit | 
-                                  ImGuiTableFlags_NoBordersInBody | 
-                                  ImGuiTableFlags_RowBg,
+                                  ImGuiTableFlags_NoBordersInBody,
                                   ImVec2(itemWidth, 0)))
             {
                 // Column 1: Waveform

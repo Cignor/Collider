@@ -57,6 +57,7 @@ public:
         bool hasCCActivity[16] = {false};          // Per-channel CC activity
         bool hasPitchBendActivity[16] = {false};   // Per-channel pitch bend activity
         juce::uint32 lastActivityFrame = 0;        // Frame counter for fade-out
+        juce::uint64 lastMessageTime = 0;          // Timestamp of last message (milliseconds)
     };
     
     //==============================================================================
@@ -116,6 +117,11 @@ public:
     std::vector<DeviceInfo> getAvailableDevices() const;
     
     /**
+     * @brief Alias for getAvailableDevices() - for UI convenience
+     */
+    std::vector<DeviceInfo> getDevices() const { return getAvailableDevices(); }
+    
+    /**
      * @brief Get list of currently enabled devices
      * @return Vector of DeviceInfo structures for enabled devices only
      */
@@ -154,6 +160,13 @@ public:
      * @return Map of device index to ActivityInfo
      */
     std::map<int, ActivityInfo> getActivitySnapshot() const;
+    
+    /**
+     * @brief Get activity info for a specific device
+     * @param identifier The device's unique identifier
+     * @return ActivityInfo for the device (empty if not found)
+     */
+    ActivityInfo getDeviceActivity(const juce::String& identifier) const;
     
     /**
      * @brief Clear all activity history

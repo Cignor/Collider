@@ -10,12 +10,9 @@ juce::AudioProcessorValueTreeState::ParameterLayout MIDIJogWheelModuleProcessor:
     layout.add(std::make_unique<juce::AudioParameterFloat>("resetValue", "Reset Value", -100000.0f, 100000.0f, 0.0f));
     layout.add(std::make_unique<juce::AudioParameterInt>("midiChannel", "MIDI Channel", 0, 16, 1)); // Default to Channel 1
     
-    // Device selection (0 = All Devices, 1+ = specific device)
+    // Device selection (simplified - device enumeration not available in this context)
     juce::StringArray deviceOptions;
     deviceOptions.add("All Devices");
-    auto devices = juce::MidiInput::getAvailableDevices();
-    for (const auto& device : devices)
-        deviceOptions.add(device.name);
     layout.add(std::make_unique<juce::AudioParameterChoice>("midiDevice", "MIDI Device", deviceOptions, 0));
     
     return layout;
@@ -38,56 +35,65 @@ void MIDIJogWheelModuleProcessor::prepareToPlay(double, int)
     mapping.lastRelativeValue = -1;
 }
 
-void MIDIJogWheelModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midiMessages)
+void MIDIJogWheelModuleProcessor::handleDeviceSpecificMidi(const std::vector<MidiMessageWithDevice>& midiMessages)
 {
+    int deviceFilter = deviceFilterParam ? deviceFilterParam->getIndex() : 0;
     int channelFilter = midiChannelParam ? midiChannelParam->get() : 0;
     static const float increments[] = {0.001f, 0.01f, 0.1f, 1.0f, 10.0f, 100.0f};
-    float incrementSize = increments[incrementParam->getIndex()];
+    float incrementSize = increments[incrementParam ? incrementParam->getIndex() : 2];
 
-    for (const auto metadata : midiMessages)
+    for (const auto& msg : midiMessages)
     {
-        auto msg = metadata.getMessage();
-        
-        // Channel filtering
-        if (channelFilter != 0 && msg.getChannel() != channelFilter)
+        // DEVICE FILTERING (0 = All Devices, 1+ = specific device)
+        if (deviceFilter != 0 && msg.deviceIndex != (deviceFilter - 1))
             continue;
         
-        if (!msg.isController()) continue;
+        // CHANNEL FILTERING (0 = All Channels, 1-16 = specific channel)
+        if (channelFilter != 0 && msg.message.getChannel() != channelFilter)
+            continue;
         
-        int ccNumber = msg.getControllerNumber();
-        int value = msg.getControllerValue();
+        if (!msg.message.isController())
+            continue;
+        
+        int ccNumber = msg.message.getControllerNumber();
+        int value = msg.message.getControllerValue();
         
         // Learn mode: capture the first CC we see
         if (isLearning)
         {
             mapping.midiCC = ccNumber;
             isLearning = false;
-            mapping.lastRelativeValue = -1; // Reset delta calculation
+            mapping.lastRelativeValue = -1;
         }
         
         // Process the learned/assigned CC
         if (mapping.midiCC != -1 && ccNumber == mapping.midiCC)
         {
-            // DELTA CALCULATION: This is the key to making encoders work!
+            // DELTA CALCULATION for encoders
             if (mapping.lastRelativeValue != -1)
             {
-                // Calculate the change from last value
                 int delta = value - mapping.lastRelativeValue;
                 
-                // Handle wraparound (encoder going from 127 to 0 or 0 to 127)
+                // Handle wraparound
                 if (delta > 64)
-                    delta -= 128;  // e.g., 127 -> 2 = -3, not +129
+                    delta -= 128;
                 else if (delta < -64)
-                    delta += 128;  // e.g., 2 -> 127 = +3, not -125
+                    delta += 128;
                 
-                // Apply the delta scaled by increment size
                 mapping.currentValue += (float)delta * incrementSize;
             }
             
-            // Store current value for next comparison
             mapping.lastRelativeValue = value;
         }
     }
+}
+
+void MIDIJogWheelModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midiMessages)
+{
+    juce::ignoreUnused(midiMessages); // MIDI already processed in handleDeviceSpecificMidi
+    
+    // Note: MIDI is processed in handleDeviceSpecificMidi() which is called BEFORE processBlock
+    // This method just generates CV output from the current state
     
     // Write output
     buffer.setSample(0, 0, mapping.currentValue);
@@ -156,6 +162,47 @@ static void HelpMarker(const char* desc)
 void MIDIJogWheelModuleProcessor::drawParametersInNode(float itemWidth, const std::function<bool(const juce::String&)>&, const std::function<void()>& onModificationEnded)
 {
     ImGui::PushItemWidth(itemWidth);
+    
+    // === MULTI-MIDI DEVICE FILTERING ===
+    ImGui::TextColored(ImVec4(0.6f, 0.8f, 1.0f, 1.0f), "MIDI Routing");
+    
+    // Device selector
+    if (deviceFilterParam)
+    {
+        int deviceIdx = deviceFilterParam->getIndex();
+        const char* deviceName = deviceFilterParam->getCurrentChoiceName().toRawUTF8();
+        if (ImGui::BeginCombo("Device", deviceName))
+        {
+            for (int i = 0; i < deviceFilterParam->choices.size(); ++i)
+            {
+                bool isSelected = (deviceIdx == i);
+                if (ImGui::Selectable(deviceFilterParam->choices[i].toRawUTF8(), isSelected))
+                {
+                    deviceFilterParam->setValueNotifyingHost(
+                        deviceFilterParam->getNormalisableRange().convertTo0to1(i));
+                }
+                if (isSelected)
+                    ImGui::SetItemDefaultFocus();
+            }
+            ImGui::EndCombo();
+        }
+    }
+    
+    // Channel selector
+    if (midiChannelParam)
+    {
+        int channel = midiChannelParam->get();
+        const char* items[] = {"All Channels", "1", "2", "3", "4", "5", "6", "7", "8",
+                               "9", "10", "11", "12", "13", "14", "15", "16"};
+        if (ImGui::Combo("Channel", &channel, items, 17))
+        {
+            midiChannelParam->setValueNotifyingHost(
+                midiChannelParam->getNormalisableRange().convertTo0to1(channel));
+        }
+    }
+    
+    ImGui::Separator();
+    ImGui::Spacing();
     
     // === PRESET MANAGEMENT UI ===
     auto& presetManager = ControllerPresetManager::get();

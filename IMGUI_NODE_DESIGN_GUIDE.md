@@ -1,6 +1,6 @@
 # 📐 ImGui Node UI Design Guide
 
-**Version**: 2.3  
+**Version**: 2.3.1  
 **Last Updated**: 2025-10-24  
 **Based on**: `imgui_demo.cpp` best practices + **official imnodes examples**
 
@@ -997,8 +997,7 @@ if (ImGui::CollapsingHeader("Voice 1", ...))
     
     if (ImGui::BeginTable("voiceTable", 3,
                           ImGuiTableFlags_SizingFixedFit |
-                          ImGuiTableFlags_NoBordersInBody |
-                          ImGuiTableFlags_RowBg,
+                          ImGuiTableFlags_NoBordersInBody,
                           ImVec2(itemWidth, 0)))
     {
         // Column 1
@@ -1032,7 +1031,7 @@ if (ImGui::CollapsingHeader("Voice 1", ...))
 - Avoids cumulative Indent() bugs
 - Provides consistent column widths
 - Handles overflow better than manual layout
-- Row backgrounds improve readability
+- **CRITICAL**: Don't use `ImGuiTableFlags_RowBg` with fixed-size tables in nodes! Row backgrounds can bleed outside node boundaries. Use plain tables with `NoBordersInBody` only.
 
 ---
 
@@ -1101,6 +1100,7 @@ See `juce/Source/audio/modules/PolyVCOModuleProcessor.cpp` for the complete, pro
 
 | Date | Version | Changes |
 |------|---------|---------|
+| 2025-10-24 | **2.3.1** | **🐛 CRITICAL FIX**: Removed `ImGuiTableFlags_RowBg` from PolyVCO tables!<br>• **Problem**: Blue row backgrounds were bleeding outside node boundaries<br>• **Root cause**: `RowBg` creates backgrounds that extend beyond fixed-size table constraints in nodes<br>• **Solution**: Use `SizingFixedFit + NoBordersInBody` WITHOUT `RowBg` flag<br>• Updated Section 12.2 with warning about RowBg in fixed-size nodes<br>• Based on imgui_demo.cpp analysis: RowBg is for scrollable/dynamic tables, not fixed-size property grids |
 | 2025-10-24 | **2.3** | **🎯 NEW PATTERNS**: Multi-Voice & Collapsible UI!<br>• Added Section 12: Complete patterns for polyphonic nodes<br>• **12.1**: Collapsible headers with Expand/Collapse All<br>• **12.2**: Table-based layouts inside headers (avoids Indent bugs)<br>• **12.3**: Parallel pin drawing for multi-voice nodes<br>• **12.4**: PolyVCO as reference implementation<br>• Fixed PolyVCO node (32 voices, 3-column tables, parallel pins)<br>• Documented stable ID management and HSV color-coding |
 | 2025-10-24 | **2.2** | **🚨 CRITICAL BUG FIX**: Documented `-1` width issue in ProgressBar!<br>• **Real-world bug**: MIDI Player used `ImVec2(-1, 0)` for progress bar width<br>• **Symptom**: Infinite right-side scaling, unusable node<br>• **Fix**: Use `ImVec2(itemWidth, 0)` with fixed width parameter<br>• Updated Section 9.6 with progress bar example<br>• Added warning about `-1` width alongside `GetContentRegionAvail()` issue |
 | 2025-10-24 | **2.1** | **🚨 CRITICAL BUG FIX**: Added `Unindent()` to match every `Indent()` call!<br>• **Root cause**: Indent() is persistent and was affecting all subsequent elements<br>• **Symptom**: All output labels appeared at same X position ("red line" bug)<br>• **Fix**: Always call `ImGui::Unindent(amount)` after `ImGui::Indent(amount)`<br>• Updated Section 9.3 with Unindent() requirement<br>• Added new Common Mistake #1: Forgetting Unindent()<br>**Why imnodes examples didn't show this**: They only have ONE output per node! |
@@ -1129,5 +1129,5 @@ When you discover a new pattern or fix an issue:
 
 ---
 
-**End of Guide** | Version 2.3 | 2025-10-24
+**End of Guide** | Version 2.3.1 | 2025-10-24
 

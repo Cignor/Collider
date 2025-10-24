@@ -269,6 +269,23 @@ std::map<int, MidiDeviceManager::ActivityInfo> MidiDeviceManager::getActivitySna
     return activityMap;
 }
 
+MidiDeviceManager::ActivityInfo MidiDeviceManager::getDeviceActivity(const juce::String& identifier) const
+{
+    const juce::ScopedLock lock(activityLock);
+    
+    // Find device index by identifier
+    int deviceIdx = getDeviceIndexByIdentifier(identifier);
+    if (deviceIdx < 0)
+        return ActivityInfo(); // Return empty if not found
+    
+    // Find activity for this device
+    auto it = activityMap.find(deviceIdx);
+    if (it != activityMap.end())
+        return it->second;
+    
+    return ActivityInfo(); // Return empty if no activity tracked
+}
+
 void MidiDeviceManager::clearActivityHistory()
 {
     const juce::ScopedLock lock(activityLock);
@@ -361,6 +378,7 @@ void MidiDeviceManager::updateActivityTracking(const MidiMessageWithSource& msg)
     activity.deviceName = msg.deviceName;
     activity.deviceIndex = msg.deviceIndex;
     activity.lastActivityFrame = currentFrame;
+    activity.lastMessageTime = juce::Time::getMillisecondCounter();
     
     // Track activity by type and channel
     int channel = msg.message.getChannel();

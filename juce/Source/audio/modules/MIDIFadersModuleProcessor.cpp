@@ -9,12 +9,9 @@ juce::AudioProcessorValueTreeState::ParameterLayout MIDIFadersModuleProcessor::c
     layout.add(std::make_unique<juce::AudioParameterInt>("numFaders", "Number of Faders", 1, MAX_FADERS, 8));
     layout.add(std::make_unique<juce::AudioParameterInt>("midiChannel", "MIDI Channel", 0, 16, 0)); // 0 = Omni (all channels)
     
-    // Device selection (0 = All Devices, 1+ = specific device)
+    // Device selection (simplified - device enumeration not available in this context)
     juce::StringArray deviceOptions;
     deviceOptions.add("All Devices");
-    auto devices = juce::MidiInput::getAvailableDevices();
-    for (const auto& device : devices)
-        deviceOptions.add(device.name);
     layout.add(std::make_unique<juce::AudioParameterChoice>("midiDevice", "MIDI Device", deviceOptions, 0));
     
     return layout;

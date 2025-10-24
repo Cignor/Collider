@@ -43,6 +43,7 @@
 #include "../audio/modules/InletModuleProcessor.h"
 #include "../audio/modules/OutletModuleProcessor.h"
 #include "PresetCreatorApplication.h"
+#include "PresetCreatorComponent.h"
 #include <juce_audio_processors/juce_audio_processors.h>
 #include <imgui_impl_juce/imgui_impl_juce.h>
 #include <backends/imgui_impl_opengl2.h>
@@ -501,6 +502,12 @@ void ImGuiNodeEditorComponent::renderImGui()
                     onShowAudioSettings();
             }
             
+            // MIDI Device Manager menu item
+            if (ImGui::MenuItem("MIDI Device Manager..."))
+            {
+                showMidiDeviceManager = !showMidiDeviceManager;
+            }
+            
             ImGui::Separator();
             
             // Plugin scanning menu item
@@ -807,21 +814,98 @@ void ImGuiNodeEditorComponent::renderImGui()
             ImGui::Text("%.2f beats", transportState.songPositionBeats);
         }
         
-        // === MIDI ACTIVITY INDICATOR ===
-        if (midiActivityFrames > 0)
+        // === MULTI-MIDI DEVICE ACTIVITY INDICATOR ===
+        ImGui::SameLine();
+        ImGui::Separator();
+        ImGui::SameLine();
+        
+        if (synth != nullptr)
         {
-            ImGui::PushStyleColor(ImGuiCol_Text, IM_COL32(120, 255, 120, 255)); // Bright green
-            ImGui::Text("MIDI");
-            ImGui::PopStyleColor();
-            midiActivityFrames--;
+            auto activityState = synth->getMidiActivityState();
+            
+            if (activityState.deviceNames.empty())
+            {
+                // No MIDI devices connected
+                ImGui::PushStyleColor(ImGuiCol_Text, IM_COL32(100, 100, 100, 255));
+                ImGui::Text("MIDI: No Devices");
+                ImGui::PopStyleColor();
+            }
+            else
+            {
+                ImGui::Text("MIDI:");
+                ImGui::SameLine();
+                
+                // Display each device with active channels
+                for (const auto& [deviceIndex, deviceName] : activityState.deviceNames)
+                {
+                    ImGui::SameLine();
+                    
+                    bool hasActivity = false;
+                    if (activityState.deviceChannelActivity.count(deviceIndex) > 0)
+                    {
+                        const auto& channels = activityState.deviceChannelActivity.at(deviceIndex);
+                        for (bool active : channels)
+                        {
+                            if (active)
+                            {
+                                hasActivity = true;
+                                break;
+                            }
+                        }
+                    }
+                    
+                    // Abbreviated device name (max 12 chars)
+                    juce::String abbrevName = deviceName;
+                    if (abbrevName.length() > 12)
+                        abbrevName = abbrevName.substring(0, 12) + "...";
+                    
+                    // Color: bright green if active, dim gray if inactive
+                    if (hasActivity)
+                        ImGui::PushStyleColor(ImGuiCol_Text, IM_COL32(100, 255, 100, 255));
+                    else
+                        ImGui::PushStyleColor(ImGuiCol_Text, IM_COL32(100, 100, 100, 255));
+                    
+                    ImGui::Text("[%s]", abbrevName.toRawUTF8());
+                    ImGui::PopStyleColor();
+                    
+                    // Tooltip with full name and active channels
+                    if (ImGui::IsItemHovered())
+                    {
+                        ImGui::BeginTooltip();
+                        ImGui::Text("%s", deviceName.toRawUTF8());
+                        ImGui::Separator();
+                        
+                        if (activityState.deviceChannelActivity.count(deviceIndex) > 0)
+                        {
+                            const auto& channels = activityState.deviceChannelActivity.at(deviceIndex);
+                            ImGui::Text("Active Channels:");
+                            juce::String activeChannels;
+                            for (int ch = 0; ch < 16; ++ch)
+                            {
+                                if (channels[ch])
+                                {
+                                    if (activeChannels.isNotEmpty())
+                                        activeChannels += ", ";
+                                    activeChannels += juce::String(ch + 1);
+                                }
+                            }
+                            if (activeChannels.isEmpty())
+                                activeChannels = "None";
+                            ImGui::Text("%s", activeChannels.toRawUTF8());
+                        }
+                        
+                        ImGui::EndTooltip();
+                    }
+                }
+            }
         }
         else
         {
-            ImGui::PushStyleColor(ImGuiCol_Text, IM_COL32(80, 100, 80, 255)); // Dim green
-            ImGui::Text("MIDI");
+            ImGui::PushStyleColor(ImGuiCol_Text, IM_COL32(100, 100, 100, 255));
+            ImGui::Text("MIDI: ---");
             ImGui::PopStyleColor();
         }
-        // === END OF INDICATOR ===
+        // === END OF MULTI-MIDI INDICATOR ===
         
         ImGui::EndMainMenuBar();
     }
@@ -3811,6 +3895,107 @@ if (auto* mp = synth->getModuleForLogical (lid))
         }
 
         handleDeletion();
+    }
+
+    // === MIDI DEVICE MANAGER WINDOW ===
+    if (showMidiDeviceManager)
+    {
+        if (ImGui::Begin("MIDI Device Manager", &showMidiDeviceManager, ImGuiWindowFlags_AlwaysAutoResize))
+        {
+            ImGui::TextColored(ImVec4(0.6f, 0.8f, 1.0f, 1.0f), "MIDI Input Devices");
+            ImGui::Separator();
+            
+            // Access MidiDeviceManager from PresetCreatorComponent
+            auto* presetCreator = dynamic_cast<PresetCreatorComponent*>(getParentComponent());
+            if (presetCreator && presetCreator->midiDeviceManager)
+            {
+                auto& midiMgr = *presetCreator->midiDeviceManager;
+                const auto& devices = midiMgr.getDevices();
+                
+                if (devices.empty())
+                {
+                    ImGui::TextDisabled("No MIDI devices found");
+                }
+                else
+                {
+                    ImGui::Text("Found %d device(s):", (int)devices.size());
+                    ImGui::Spacing();
+                    
+                    // Display each device
+                    for (const auto& device : devices)
+                    {
+                        ImGui::PushID(device.identifier.toRawUTF8());
+                        
+                        // Checkbox to enable/disable device
+                        bool enabled = device.enabled;
+                        if (ImGui::Checkbox("##enabled", &enabled))
+                        {
+                            if (enabled)
+                                midiMgr.enableDevice(device.identifier);
+                            else
+                                midiMgr.disableDevice(device.identifier);
+                        }
+                        
+                        ImGui::SameLine();
+                        
+                        // Device name
+                        ImGui::Text("%s", device.name.toRawUTF8());
+                        
+                        // Activity indicator
+                        auto activity = midiMgr.getDeviceActivity(device.identifier);
+                        if (activity.lastMessageTime > 0)
+                        {
+                            ImGui::SameLine();
+                            float timeSinceMessage = (juce::Time::getMillisecondCounter() - activity.lastMessageTime) / 1000.0f;
+                            if (timeSinceMessage < 1.0f)
+                            {
+                                ImGui::PushStyleColor(ImGuiCol_Text, IM_COL32(100, 255, 100, 255));
+                                ImGui::Text("ACTIVE");
+                                ImGui::PopStyleColor();
+                            }
+                            else
+                            {
+                                ImGui::PushStyleColor(ImGuiCol_Text, IM_COL32(100, 100, 100, 255));
+                                ImGui::Text("idle");
+                                ImGui::PopStyleColor();
+                            }
+                        }
+                        
+                        ImGui::PopID();
+                    }
+                }
+                
+                ImGui::Spacing();
+                ImGui::Separator();
+                ImGui::Spacing();
+                
+                // Rescan button
+                if (ImGui::Button("Rescan Devices"))
+                {
+                    midiMgr.scanDevices();
+                }
+                
+                ImGui::SameLine();
+                
+                // Enable/Disable all buttons
+                if (ImGui::Button("Enable All"))
+                {
+                    midiMgr.enableAllDevices();
+                }
+                
+                ImGui::SameLine();
+                
+                if (ImGui::Button("Disable All"))
+                {
+                    midiMgr.disableAllDevices();
+                }
+            }
+            else
+            {
+                ImGui::TextDisabled("MIDI Manager not available");
+            }
+        }
+        ImGui::End();
     }
 
     // === DEBUG WINDOW ===
