@@ -165,28 +165,8 @@ void MIDIJogWheelModuleProcessor::drawParametersInNode(float itemWidth, const st
     
     // === MULTI-MIDI DEVICE FILTERING ===
     ImGui::TextColored(ImVec4(0.6f, 0.8f, 1.0f, 1.0f), "MIDI Routing");
-    
-    // Device selector
-    if (deviceFilterParam)
-    {
-        int deviceIdx = deviceFilterParam->getIndex();
-        const char* deviceName = deviceFilterParam->getCurrentChoiceName().toRawUTF8();
-        if (ImGui::BeginCombo("Device", deviceName))
-        {
-            for (int i = 0; i < deviceFilterParam->choices.size(); ++i)
-            {
-                bool isSelected = (deviceIdx == i);
-                if (ImGui::Selectable(deviceFilterParam->choices[i].toRawUTF8(), isSelected))
-                {
-                    deviceFilterParam->setValueNotifyingHost(
-                        deviceFilterParam->getNormalisableRange().convertTo0to1(i));
-                }
-                if (isSelected)
-                    ImGui::SetItemDefaultFocus();
-            }
-            ImGui::EndCombo();
-        }
-    }
+    ImGui::Text("Device: All Devices (filtering active in background)");
+    ImGui::TextDisabled("Note: Check MIDI Device Manager window for device list");
     
     // Channel selector
     if (midiChannelParam)

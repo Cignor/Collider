@@ -50,6 +50,12 @@ void MIDICVModuleProcessor::releaseResources()
 
 void MIDICVModuleProcessor::handleDeviceSpecificMidi(const std::vector<MidiMessageWithDevice>& midiMessages)
 {
+    // DEBUG: Log when we receive MIDI
+    if (!midiMessages.empty())
+    {
+        juce::Logger::writeToLog("[MIDI CV] Received " + juce::String(midiMessages.size()) + " MIDI messages");
+    }
+    
     // Get user's filter settings
     int deviceFilter = deviceFilterParam ? deviceFilterParam->getIndex() : 0;
     int channelFilter = midiChannelFilterParam ? midiChannelFilterParam->get() : 0;
@@ -195,28 +201,8 @@ void MIDICVModuleProcessor::drawParametersInNode(float itemWidth, const std::fun
     
     // === MULTI-MIDI DEVICE FILTERING ===
     ImGui::TextColored(ImVec4(0.6f, 0.8f, 1.0f, 1.0f), "MIDI Routing");
-    
-    // Device selector
-    if (deviceFilterParam)
-    {
-        int deviceIdx = deviceFilterParam->getIndex();
-        const char* deviceName = deviceFilterParam->getCurrentChoiceName().toRawUTF8();
-        if (ImGui::BeginCombo("Device", deviceName))
-        {
-            for (int i = 0; i < deviceFilterParam->choices.size(); ++i)
-            {
-                bool isSelected = (deviceIdx == i);
-                if (ImGui::Selectable(deviceFilterParam->choices[i].toRawUTF8(), isSelected))
-                {
-                    deviceFilterParam->setValueNotifyingHost(
-                        deviceFilterParam->getNormalisableRange().convertTo0to1(i));
-                }
-                if (isSelected)
-                    ImGui::SetItemDefaultFocus();
-            }
-            ImGui::EndCombo();
-        }
-    }
+    ImGui::Text("Device: All Devices (filtering active in background)");
+    ImGui::TextDisabled("Note: Device selection UI pending - uses MidiDeviceManager");
     
     // Channel selector
     if (midiChannelFilterParam)

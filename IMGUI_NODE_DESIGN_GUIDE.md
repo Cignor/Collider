@@ -1,6 +1,6 @@
 # 📐 ImGui Node UI Design Guide
 
-**Version**: 2.3.1  
+**Version**: 2.3.2  
 **Last Updated**: 2025-10-24  
 **Based on**: `imgui_demo.cpp` best practices + **official imnodes examples**
 
@@ -944,20 +944,24 @@ for (int i = 0; i < numVoices; ++i)
 {
     ImGui::PushID(i);  // CRITICAL: Unique ID per iteration
     
-    // Apply expand/collapse state
-    if (expandAllState) ImGui::SetNextItemOpen(true);
-    if (collapseAllState) ImGui::SetNextItemOpen(false);
-    
-    // Default open state (first 4 only, on first use)
-    ImGui::SetNextItemOpen(i < 4, ImGuiCond_Once);
+    // CRITICAL: Use else-if to prevent SetNextItemOpen calls from overlapping
+    if (expandAllState) {
+        ImGui::SetNextItemOpen(true);
+    }
+    else if (collapseAllState) {
+        ImGui::SetNextItemOpen(false);
+    }
+    else {
+        // Default open state (first 4 only, on first use)
+        ImGui::SetNextItemOpen(i < 4, ImGuiCond_Once);
+    }
     
     // Color-code for visual distinction
     float hue = (float)i / (float)maxVoices;
     ImGui::PushStyleColor(ImGuiCol_Text, ImColor::HSV(hue, 0.7f, 1.0f).Value);
     
     if (ImGui::CollapsingHeader(("Voice " + juce::String(i+1)).toRawUTF8(),
-                                ImGuiTreeNodeFlags_SpanAvailWidth | 
-                                ImGuiTreeNodeFlags_FramePadding))
+                                ImGuiTreeNodeFlags_None))
     {
         ImGui::PopStyleColor();
         
@@ -978,8 +982,10 @@ collapseAllState = false;
 
 **Key Points**:
 - `ImGui::PushID(i)` prevents ID conflicts between similar controls
-- `ImGuiCond_Once` ensures default state applies only on first use
-- `ImGuiTreeNodeFlags_SpanAvailWidth` prevents layout issues
+- **CRITICAL**: Use `else-if` logic to prevent `SetNextItemOpen()` calls from overlapping! Only ONE call should execute per iteration
+- `ImGuiCond_Once` ensures default state applies only on first use (but gets overwritten if not protected by else-if)
+- **DO NOT** use `ImGuiTreeNodeFlags_SpanAvailWidth` or `ImGuiTreeNodeFlags_FramePadding` - they cause visual bleeding outside node bounds
+- Use `ImGuiTreeNodeFlags_None` for clean, minimal headers in fixed-size nodes
 - Color-coding helps distinguish voices at a glance
 
 ---
@@ -1100,6 +1106,7 @@ See `juce/Source/audio/modules/PolyVCOModuleProcessor.cpp` for the complete, pro
 
 | Date | Version | Changes |
 |------|---------|---------|
+| 2025-10-24 | **2.3.2** | **🐛 DOUBLE CRITICAL FIX**: Fixed PolyVCO Expand/Collapse buttons + blue bleeding lines!<br>• **Problem 1**: Expand/Collapse All buttons didn't work<br>• **Root cause**: Multiple `SetNextItemOpen()` calls - last one wins! `ImGuiCond_Once` was overwriting button state<br>• **Solution**: Use `else-if` logic to ensure only ONE SetNextItemOpen call executes<br>• **Problem 2**: Blue lines from collapsing headers bleeding outside node<br>• **Root cause**: `ImGuiTreeNodeFlags_SpanAvailWidth` and `FramePadding` extend beyond bounds<br>• **Solution**: Use `ImGuiTreeNodeFlags_None` for minimal, clean headers<br>• Updated Section 12.1 with critical else-if pattern and flag warnings |
 | 2025-10-24 | **2.3.1** | **🐛 CRITICAL FIX**: Removed `ImGuiTableFlags_RowBg` from PolyVCO tables!<br>• **Problem**: Blue row backgrounds were bleeding outside node boundaries<br>• **Root cause**: `RowBg` creates backgrounds that extend beyond fixed-size table constraints in nodes<br>• **Solution**: Use `SizingFixedFit + NoBordersInBody` WITHOUT `RowBg` flag<br>• Updated Section 12.2 with warning about RowBg in fixed-size nodes<br>• Based on imgui_demo.cpp analysis: RowBg is for scrollable/dynamic tables, not fixed-size property grids |
 | 2025-10-24 | **2.3** | **🎯 NEW PATTERNS**: Multi-Voice & Collapsible UI!<br>• Added Section 12: Complete patterns for polyphonic nodes<br>• **12.1**: Collapsible headers with Expand/Collapse All<br>• **12.2**: Table-based layouts inside headers (avoids Indent bugs)<br>• **12.3**: Parallel pin drawing for multi-voice nodes<br>• **12.4**: PolyVCO as reference implementation<br>• Fixed PolyVCO node (32 voices, 3-column tables, parallel pins)<br>• Documented stable ID management and HSV color-coding |
 | 2025-10-24 | **2.2** | **🚨 CRITICAL BUG FIX**: Documented `-1` width issue in ProgressBar!<br>• **Real-world bug**: MIDI Player used `ImVec2(-1, 0)` for progress bar width<br>• **Symptom**: Infinite right-side scaling, unusable node<br>• **Fix**: Use `ImVec2(itemWidth, 0)` with fixed width parameter<br>• Updated Section 9.6 with progress bar example<br>• Added warning about `-1` width alongside `GetContentRegionAvail()` issue |
@@ -1129,5 +1136,5 @@ When you discover a new pattern or fix an issue:
 
 ---
 
-**End of Guide** | Version 2.3.1 | 2025-10-24
+**End of Guide** | Version 2.3.2 | 2025-10-24
 
