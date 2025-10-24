@@ -351,16 +351,17 @@ void PolyVCOModuleProcessor::drawParametersInNode(float itemWidth, const std::fu
         const auto idx = juce::String(i + 1);
         ImGui::PushID(i);
 
-        // Apply expand/collapse all
+        // Apply expand/collapse all OR default state
         if (expandAllState) {
             ImGui::SetNextItemOpen(true);
         }
-        if (collapseAllState) {
+        else if (collapseAllState) {
             ImGui::SetNextItemOpen(false);
         }
-        
-        // First 4 voices open by default (on first use only)
-        ImGui::SetNextItemOpen(i < 4, ImGuiCond_Once);
+        else {
+            // First 4 voices open by default (on first use only)
+            ImGui::SetNextItemOpen(i < 4, ImGuiCond_Once);
+        }
 
         // Color-code voice number using HSV
         float hue = (float)i / (float)MAX_VOICES;
@@ -368,8 +369,7 @@ void PolyVCOModuleProcessor::drawParametersInNode(float itemWidth, const std::fu
         
         juce::String voiceLabel = "Voice " + idx;
         bool expanded = ImGui::CollapsingHeader(voiceLabel.toRawUTF8(), 
-                                                ImGuiTreeNodeFlags_SpanAvailWidth | 
-                                                ImGuiTreeNodeFlags_FramePadding);
+                                                ImGuiTreeNodeFlags_None);
         
         ImGui::PopStyleColor();
         
