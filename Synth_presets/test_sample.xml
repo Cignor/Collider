@@ -55,13 +55,15 @@
   <connections>
     <connection srcId="1" srcChan="0" dstId="output" dstChan="0"/>
     <connection srcId="1" srcChan="1" dstId="output" dstChan="1"/>
-    <connection srcId="2" srcChan="0" dstId="1" dstChan="0"/>
-    <connection srcId="2" srcChan="0" dstId="1" dstChan="1"/>
     <connection srcId="2" srcChan="0" dstId="1" dstChan="2"/>
+    <connection srcId="2" srcChan="1" dstId="1" dstChan="0"/>
+    <connection srcId="2" srcChan="2" dstId="1" dstChan="1"/>
+    <connection srcId="2" srcChan="3" dstId="1" dstChan="4"/>
+    <connection srcId="2" srcChan="4" dstId="1" dstChan="5"/>
   </connections>
   <NodeEditorUI>
     <node id="1" x="-202.0" y="220.0"/>
-    <node id="2" x="-764.0" y="435.0"/>
-    <node id="0" x="0.0" y="0.0"/>
+    <node id="2" x="-826.0" y="347.0"/>
+    <node id="0" x="436.0" y="364.0"/>
   </NodeEditorUI>
 </ModularSynthPreset>

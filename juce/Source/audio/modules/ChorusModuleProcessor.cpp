@@ -167,6 +167,21 @@ void ChorusModuleProcessor::drawParametersInNode(float itemWidth, const std::fun
     auto& ap = getAPVTS();
     ImGui::PushItemWidth(itemWidth);
 
+    // Helper for tooltips
+    auto HelpMarker = [](const char* desc) {
+        ImGui::TextDisabled("(?)");
+        if (ImGui::BeginItemTooltip()) {
+            ImGui::PushTextWrapPos(ImGui::GetFontSize() * 35.0f);
+            ImGui::TextUnformatted(desc);
+            ImGui::PopTextWrapPos();
+            ImGui::EndTooltip();
+        }
+    };
+
+    // === CHORUS PARAMETERS SECTION ===
+    ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1.0f), "Chorus Parameters");
+    ImGui::Spacing();
+
     // Rate Slider
     bool isRateMod = isParamModulated(paramIdRateMod);
     float rate = isRateMod ? getLiveParamValueFor(paramIdRateMod, "rate_live", rateParam->load()) : rateParam->load();
@@ -176,6 +191,8 @@ void ChorusModuleProcessor::drawParametersInNode(float itemWidth, const std::fun
     if (!isRateMod) adjustParamOnWheel(ap.getParameter(paramIdRate), "rate", rate);
     if (ImGui::IsItemDeactivatedAfterEdit()) { onModificationEnded(); }
     if (isRateMod) { ImGui::EndDisabled(); ImGui::SameLine(); ImGui::TextUnformatted("(mod)"); }
+    ImGui::SameLine();
+    HelpMarker("LFO modulation rate (0.05-5 Hz)\nControls how fast the chorus effect sweeps");
 
     // Depth Slider
     bool isDepthMod = isParamModulated(paramIdDepthMod);
@@ -186,6 +203,8 @@ void ChorusModuleProcessor::drawParametersInNode(float itemWidth, const std::fun
     if (!isDepthMod) adjustParamOnWheel(ap.getParameter(paramIdDepth), "depth", depth);
     if (ImGui::IsItemDeactivatedAfterEdit()) { onModificationEnded(); }
     if (isDepthMod) { ImGui::EndDisabled(); ImGui::SameLine(); ImGui::TextUnformatted("(mod)"); }
+    ImGui::SameLine();
+    HelpMarker("Modulation depth (0-1)\nControls intensity of pitch/time variation");
 
     // Mix Slider
     bool isMixMod = isParamModulated(paramIdMixMod);
@@ -196,6 +215,8 @@ void ChorusModuleProcessor::drawParametersInNode(float itemWidth, const std::fun
     if (!isMixMod) adjustParamOnWheel(ap.getParameter(paramIdMix), "mix", mix);
     if (ImGui::IsItemDeactivatedAfterEdit()) { onModificationEnded(); }
     if (isMixMod) { ImGui::EndDisabled(); ImGui::SameLine(); ImGui::TextUnformatted("(mod)"); }
+    ImGui::SameLine();
+    HelpMarker("Dry/wet mix (0-1)\n0 = dry only, 1 = fully chorused");
 
     ImGui::PopItemWidth();
 }

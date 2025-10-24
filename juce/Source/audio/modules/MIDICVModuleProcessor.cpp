@@ -142,13 +142,134 @@ float MIDICVModuleProcessor::midiNoteToCv(int noteNumber) const
 }
 
 #if defined(PRESET_CREATOR_UI)
+
+// Helper function for tooltip with help marker
+static void HelpMarkerCV(const char* desc)
+{
+    ImGui::TextDisabled("(?)");
+    if (ImGui::BeginItemTooltip())
+    {
+        ImGui::PushTextWrapPos(ImGui::GetFontSize() * 35.0f);
+        ImGui::TextUnformatted(desc);
+        ImGui::PopTextWrapPos();
+        ImGui::EndTooltip();
+    }
+}
+
 void MIDICVModuleProcessor::drawParametersInNode(float itemWidth, const std::function<bool(const juce::String&)>&, const std::function<void()>&)
 {
-    // --- THIS IS THE FIX ---
-    // Add a text label and an invisible dummy widget to give the node a defined size.
-    ImGui::Text("MIDI to CV/Gate");
-    ImGui::Dummy(ImVec2(itemWidth, 10.0f)); // Gives the node a minimum width and a small, fixed height.
-    // --- END OF FIX ---
+    ImGui::PushItemWidth(itemWidth);
+    
+    // === MIDI INPUT STATUS ===
+    ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1.0f), "MIDI Input Status");
+    ImGui::Spacing();
+    
+    // Get current values from telemetry
+    float pitchCV = lastOutputValues.size() > 0 ? lastOutputValues[0]->load() : 0.0f;
+    float gateValue = lastOutputValues.size() > 1 ? lastOutputValues[1]->load() : 0.0f;
+    float velocity = lastOutputValues.size() > 2 ? lastOutputValues[2]->load() : 0.0f;
+    float modWheel = lastOutputValues.size() > 3 ? lastOutputValues[3]->load() : 0.0f;
+    float pitchBend = lastOutputValues.size() > 4 ? lastOutputValues[4]->load() : 0.0f;
+    float aftertouch = lastOutputValues.size() > 5 ? lastOutputValues[5]->load() : 0.0f;
+    
+    // Convert pitch CV back to MIDI note for display
+    int midiNote = midiState.currentNote;
+    bool hasNote = (midiNote >= 0);
+    
+    // === NOTE DISPLAY ===
+    ImGui::Text("Note:");
+    ImGui::SameLine();
+    if (hasNote)
+    {
+        // Note name conversion (C4 = 60)
+        static const char* noteNames[] = { "C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B" };
+        int octave = (midiNote / 12) - 1;
+        const char* noteName = noteNames[midiNote % 12];
+        
+        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.2f, 1.0f, 0.5f, 1.0f)); // Bright green
+        ImGui::Text("%s%d (#%d)", noteName, octave, midiNote);
+        ImGui::PopStyleColor();
+    }
+    else
+    {
+        ImGui::TextDisabled("---");
+    }
+    
+    // === GATE INDICATOR ===
+    ImGui::Text("Gate:");
+    ImGui::SameLine();
+    if (gateValue > 0.5f)
+    {
+        // Animated gate indicator
+        float phase = (float)std::fmod(ImGui::GetTime() * 2.0, 1.0);
+        float brightness = 0.6f + 0.4f * std::sin(phase * 6.28318f);
+        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f * brightness, 0.3f * brightness, 0.3f * brightness, 1.0f));
+        ImGui::Text("ON");
+        ImGui::PopStyleColor();
+    }
+    else
+    {
+        ImGui::TextDisabled("OFF");
+    }
+    
+    ImGui::Spacing();
+    
+    // === LIVE VALUE DISPLAYS ===
+    ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1.0f), "Live Values");
+    ImGui::Spacing();
+    
+    // Velocity with progress bar
+    ImGui::Text("Vel");
+    ImGui::SameLine();
+    ImGui::SetNextItemWidth(100);
+    ImGui::PushStyleColor(ImGuiCol_PlotHistogram, ImColor::HSV(0.55f, 0.7f, velocity).Value);
+    ImGui::ProgressBar(velocity, ImVec2(0, 0), juce::String(velocity, 2).toRawUTF8());
+    ImGui::PopStyleColor();
+    ImGui::SameLine();
+    HelpMarkerCV("MIDI Note Velocity (0-1)");
+    
+    // Mod Wheel with progress bar
+    ImGui::Text("Mod");
+    ImGui::SameLine();
+    ImGui::SetNextItemWidth(100);
+    ImGui::PushStyleColor(ImGuiCol_PlotHistogram, ImColor::HSV(0.15f, 0.7f, modWheel).Value);
+    ImGui::ProgressBar(modWheel, ImVec2(0, 0), juce::String(modWheel, 2).toRawUTF8());
+    ImGui::PopStyleColor();
+    ImGui::SameLine();
+    HelpMarkerCV("Mod Wheel (CC#1, 0-1)");
+    
+    // Pitch Bend with centered bar
+    ImGui::Text("Bend");
+    ImGui::SameLine();
+    ImGui::SetNextItemWidth(100);
+    float normalizedBend = (pitchBend + 1.0f) / 2.0f; // -1..1 -> 0..1
+    ImGui::PushStyleColor(ImGuiCol_PlotHistogram, ImColor::HSV(0.0f, 0.7f, std::abs(pitchBend)).Value);
+    ImGui::ProgressBar(normalizedBend, ImVec2(0, 0), juce::String(pitchBend, 2).toRawUTF8());
+    ImGui::PopStyleColor();
+    ImGui::SameLine();
+    HelpMarkerCV("Pitch Bend (-1 to +1)");
+    
+    // Aftertouch with progress bar
+    ImGui::Text("AT");
+    ImGui::SameLine();
+    ImGui::SetNextItemWidth(100);
+    ImGui::PushStyleColor(ImGuiCol_PlotHistogram, ImColor::HSV(0.85f, 0.7f, aftertouch).Value);
+    ImGui::ProgressBar(aftertouch, ImVec2(0, 0), juce::String(aftertouch, 2).toRawUTF8());
+    ImGui::PopStyleColor();
+    ImGui::SameLine();
+    HelpMarkerCV("Channel Aftertouch (0-1)");
+    
+    ImGui::Spacing();
+    
+    // === CV OUTPUT INFO ===
+    ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1.0f), "CV Output");
+    ImGui::Spacing();
+    
+    ImGui::Text("Pitch CV: %.3f V", pitchCV);
+    ImGui::SameLine();
+    HelpMarkerCV("1V/octave standard\nC4 (MIDI note 60) = 0V");
+    
+    ImGui::PopItemWidth();
 }
 
 void MIDICVModuleProcessor::drawIoPins(const NodePinHelpers& helpers)

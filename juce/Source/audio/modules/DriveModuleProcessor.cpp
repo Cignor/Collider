@@ -143,16 +143,25 @@ void DriveModuleProcessor::drawParametersInNode(float itemWidth, const std::func
     auto& ap = getAPVTS();
     ImGui::PushItemWidth(itemWidth);
 
-    auto drawSlider = [&](const char* label, const juce::String& paramId, float min, float max, const char* format) {
+    auto HelpMarker = [](const char* desc) {
+        ImGui::TextDisabled("(?)");
+        if (ImGui::BeginItemTooltip()) { ImGui::PushTextWrapPos(ImGui::GetFontSize() * 35.0f); ImGui::TextUnformatted(desc); ImGui::PopTextWrapPos(); ImGui::EndTooltip(); }
+    };
+
+    auto drawSlider = [&](const char* label, const juce::String& paramId, float min, float max, const char* format, const char* tooltip) {
         float value = ap.getRawParameterValue(paramId)->load();
         if (ImGui::SliderFloat(label, &value, min, max, format))
             *dynamic_cast<juce::AudioParameterFloat*>(ap.getParameter(paramId)) = value;
         adjustParamOnWheel(ap.getParameter(paramId), paramId, value);
         if (ImGui::IsItemDeactivatedAfterEdit()) { onModificationEnded(); }
+        if (tooltip) { ImGui::SameLine(); HelpMarker(tooltip); }
     };
 
-    drawSlider("Drive", paramIdDrive, 0.0f, 2.0f, "%.2f");
-    drawSlider("Mix", paramIdMix, 0.0f, 1.0f, "%.2f");
+    ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1.0f), "Drive Parameters");
+    ImGui::Spacing();
+
+    drawSlider("Drive", paramIdDrive, 0.0f, 2.0f, "%.2f", "Saturation amount (0-2)\n0 = clean, 2 = heavy distortion");
+    drawSlider("Mix", paramIdMix, 0.0f, 1.0f, "%.2f", "Dry/wet mix (0-1)\n0 = clean, 1 = fully driven");
 
     ImGui::PopItemWidth();
 }

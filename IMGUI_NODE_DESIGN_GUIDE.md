@@ -1,6 +1,6 @@
 # 📐 ImGui Node UI Design Guide
 
-**Version**: 2.0  
+**Version**: 2.2  
 **Last Updated**: 2025-10-24  
 **Based on**: `imgui_demo.cpp` best practices + **official imnodes examples**
 
@@ -545,8 +545,11 @@ auto rightLabelWithinWidth = [&](const char* txt, float nodeContentWidth)
     const float indentAmount = juce::jmax(0.0f, nodeContentWidth - textSize.x);
     ImGui::Indent(indentAmount);
     ImGui::TextUnformatted(txt);
+    ImGui::Unindent(indentAmount);  // CRITICAL: Reset indent!
 };
 ```
+
+**⚠️ CRITICAL**: Always call `Unindent()` to match `Indent()`! Indent is **persistent** and will affect all subsequent ImGui elements until reset.
 
 **❌ WRONG**: Using Dummy() + SameLine() (imgui_demo.cpp pattern doesn't work for imnodes!)
 ```cpp
@@ -701,18 +704,24 @@ ImNodes::EndInputAttribute();
 
 ### 9.3 Output Attribute Pattern (Right Side)
 
-**Structure**: Indent first, then text (NO SameLine!)
+**Structure**: Indent first, text, then Unindent (NO SameLine!)
 
 ```cpp
-// From color_node_editor.cpp:351-356
+// From color_node_editor.cpp:351-356 (with Unindent() added for persistence prevention)
 ImNodes::BeginOutputAttribute(pin_id);
 const float label_width = ImGui::CalcTextSize("result").x;
 ImGui::Indent(node_width - label_width);  // ← Right-align!
 ImGui::TextUnformatted("result");
+ImGui::Unindent(node_width - label_width);  // ← Reset indent! CRITICAL!
 ImNodes::EndOutputAttribute();
 ```
 
-**Critical**: Use `Indent()` for right-alignment, NOT Dummy() + SameLine()!
+**Critical**: 
+- Use `Indent()` for right-alignment, NOT Dummy() + SameLine()!
+- **ALWAYS** call `Unindent()` to match `Indent()` - indent is persistent!
+
+**Why Unindent() is Required**:
+The imnodes examples work because they only have ONE output per node, so the indent doesn't affect anything else. In our multi-pin nodes, failing to unindent causes ALL subsequent elements to be indented cumulatively, creating the "red line" alignment bug where all text appears at the same wrong X position.
 
 ---
 
@@ -773,6 +782,21 @@ const float label_width = ImGui::CalcTextSize("label").x;
 
 ### 9.6 Common Mistakes to Avoid
 
+**❌ DON'T**: Forget to call Unindent() (CRITICAL BUG!)
+```cpp
+// BAD: Indent persists and affects all subsequent elements!
+ImGui::Indent(node_width - text_width);
+ImGui::Text("out");
+// Missing Unindent() causes "red line" alignment bug!
+```
+
+**✅ DO**: Always match Indent() with Unindent()
+```cpp
+ImGui::Indent(node_width - text_width);
+ImGui::Text("out");
+ImGui::Unindent(node_width - text_width);  // CRITICAL!
+```
+
 **❌ DON'T**: Use Dummy() + SameLine() for output text
 ```cpp
 // This is for ImGui windows, NOT imnodes!
@@ -781,21 +805,19 @@ ImGui::SameLine();
 ImGui::Text("out");
 ```
 
-**✅ DO**: Use Indent() for output text
-```cpp
-ImGui::Indent(node_width - text_width);
-ImGui::Text("out");
-```
-
-**❌ DON'T**: Use GetContentRegionAvail() in nodes
+**❌ DON'T**: Use GetContentRegionAvail() or -1 width in nodes
 ```cpp
 float w = ImGui::GetContentRegionAvail().x;  // Causes scrollbars!
+ImGui::ProgressBar(progress, ImVec2(-1, 0), "");  // -1 width also causes infinite scaling!
 ```
 
-**✅ DO**: Use fixed widths
+**✅ DO**: Use fixed widths from itemWidth parameter
 ```cpp
 const float node_width = 240.0f;
+ImGui::ProgressBar(progress, ImVec2(itemWidth, 0), "");  // Fixed width!
 ```
+
+**Real-world bug**: MIDI Player initially used `ImVec2(-1, 0)` for progress bar, causing infinite right-side scaling. Fixed by using `ImVec2(itemWidth, 0)`.
 
 **❌ DON'T**: Manually position with SetCursorPosX()
 ```cpp
@@ -899,6 +921,8 @@ Before committing any node UI:
 
 | Date | Version | Changes |
 |------|---------|---------|
+| 2025-10-24 | **2.2** | **🚨 CRITICAL BUG FIX**: Documented `-1` width issue in ProgressBar!<br>• **Real-world bug**: MIDI Player used `ImVec2(-1, 0)` for progress bar width<br>• **Symptom**: Infinite right-side scaling, unusable node<br>• **Fix**: Use `ImVec2(itemWidth, 0)` with fixed width parameter<br>• Updated Section 9.6 with progress bar example<br>• Added warning about `-1` width alongside `GetContentRegionAvail()` issue |
+| 2025-10-24 | **2.1** | **🚨 CRITICAL BUG FIX**: Added `Unindent()` to match every `Indent()` call!<br>• **Root cause**: Indent() is persistent and was affecting all subsequent elements<br>• **Symptom**: All output labels appeared at same X position ("red line" bug)<br>• **Fix**: Always call `ImGui::Unindent(amount)` after `ImGui::Indent(amount)`<br>• Updated Section 9.3 with Unindent() requirement<br>• Added new Common Mistake #1: Forgetting Unindent()<br>**Why imnodes examples didn't show this**: They only have ONE output per node! |
 | 2025-10-24 | **2.0** | **🎯 MAJOR UPDATE**: Analyzed ALL official imnodes examples. Discovered `ImGui::Indent()` is the CORRECT pattern (NOT Dummy()!).<br>• Added comprehensive Section 9: ImNodes-Specific Patterns<br>• Documented input/output attribute patterns from official examples<br>• Added complete node example with all best practices<br>• Updated all code to use Indent() for output pin alignment<br>• Expanded reference section with imnodes examples<br>**Breaking insight**: imgui_demo.cpp patterns don't always apply to imnodes! |
 | 2025-10-24 | 1.6 | ~~Dummy() + SameLine() approach~~ (WRONG for imnodes, fixed in v2.0) |
 | 2025-10-24 | 1.5 | ~~Manual cursor positioning~~ (WRONG, fixed in v2.0) |
@@ -924,5 +948,5 @@ When you discover a new pattern or fix an issue:
 
 ---
 
-**End of Guide** | Version 2.0 | 2025-10-24
+**End of Guide** | Version 2.2 | 2025-10-24
 

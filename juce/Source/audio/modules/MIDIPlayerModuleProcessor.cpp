@@ -560,15 +560,36 @@ void MIDIPlayerModuleProcessor::loadMIDIFile(const juce::File& file)
 }
 
 #if defined(PRESET_CREATOR_UI)
+
+// Helper function for tooltip with help marker
+static void HelpMarkerPlayer(const char* desc)
+{
+    ImGui::TextDisabled("(?)");
+    if (ImGui::BeginItemTooltip())
+    {
+        ImGui::PushTextWrapPos(ImGui::GetFontSize() * 35.0f);
+        ImGui::TextUnformatted(desc);
+        ImGui::PopTextWrapPos();
+        ImGui::EndTooltip();
+    }
+}
+
 void MIDIPlayerModuleProcessor::drawParametersInNode(float itemWidth, const std::function<bool(const juce::String& paramId)>& isParamModulated, const std::function<void()>& onModificationEnded)
 {
     ImGui::PushItemWidth(itemWidth);
     
-    // File Info
+    // === MIDI FILE SECTION ===
+    ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1.0f), "MIDI File");
+    ImGui::Spacing();
+    
     if (hasMIDIFileLoaded())
     {
-        ImGui::Text("MIDI: %s", currentMIDIFileName.toRawUTF8());
-        ImGui::Text("Tracks: %d, Notes: %d", getNumTracks(), getTotalNoteCount());
+        // Show file info with better formatting
+        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.5f, 1.0f, 0.7f, 1.0f)); // Green
+        ImGui::Text("📄 %s", currentMIDIFileName.toRawUTF8());
+        ImGui::PopStyleColor();
+        ImGui::Text("Tracks: %d | Notes: %d", getNumTracks(), getTotalNoteCount());
+        ImGui::Text("Duration: %.1fs", totalDuration);
     }
     else
     {
@@ -601,8 +622,8 @@ void MIDIPlayerModuleProcessor::drawParametersInNode(float itemWidth, const std:
         }
     }
     
-    // Load MIDI File Button
-    if (ImGui::Button("Load MIDI File", ImVec2(itemWidth, 0)))
+    // Load MIDI File Button with tooltip
+    if (ImGui::Button("Load MIDI", ImVec2(itemWidth, 0)))
     {
         juce::File startDir;
         {
@@ -642,28 +663,17 @@ void MIDIPlayerModuleProcessor::drawParametersInNode(float itemWidth, const std:
             }
         });
     }
-    
-    // Connect All to Samplers Button
-    if (ImGui::Button("Connect All to Samplers", ImVec2(itemWidth, 0)))
-    {
-        autoConnectTriggered = true; // Set the flag for the UI controller to see
-    }
-    
-    // Connect All to PolyVCO Button
-    if (ImGui::Button("Connect All to PolyVCO", ImVec2(itemWidth, 0)))
-    {
-        autoConnectVCOTriggered = true; // Set the flag for the UI controller to see
-    }
-    
-    // Connect to PolyVCO and Samples Button
-    if (ImGui::Button("Connect to PolyVCO and Samples", ImVec2(itemWidth, 0)))
-    {
-        autoConnectHybridTriggered = true;
-    }
+    ImGui::SameLine();
+    HelpMarkerPlayer("Load a MIDI file (.mid, .midi)\nSupports multi-track MIDI sequences");
     
     ImGui::Spacing();
+    ImGui::Spacing();
     
-    // Playback Controls
+    // === PLAYBACK CONTROLS SECTION ===
+    ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1.0f), "Playback");
+    ImGui::Spacing();
+    
+    // Speed control with modulation indicator
     bool speedModulated = isParamModulated("speed");
     float speed = speedParam->load();
     if (speedModulated) {
@@ -678,7 +688,10 @@ void MIDIPlayerModuleProcessor::drawParametersInNode(float itemWidth, const std:
         }
     }
     if (speedModulated) { ImGui::EndDisabled(); ImGui::SameLine(); ImGui::TextUnformatted("(mod)"); }
+    ImGui::SameLine();
+    HelpMarkerPlayer("Playback speed multiplier\n0.25x = quarter speed, 4x = quad speed");
     
+    // Pitch control with modulation indicator
     bool pitchModulated = isParamModulated("pitch");
     float pitch = pitchParam->load();
     if (pitchModulated) {
@@ -693,15 +706,45 @@ void MIDIPlayerModuleProcessor::drawParametersInNode(float itemWidth, const std:
         }
     }
     if (pitchModulated) { ImGui::EndDisabled(); ImGui::SameLine(); ImGui::TextUnformatted("(mod)"); }
+    ImGui::SameLine();
+    HelpMarkerPlayer("Pitch shift in semitones\n-12 = octave down, +12 = octave up");
     
+    // Tempo control
     float tempo = tempoParam->load();
     if (ImGui::SliderFloat("Tempo", &tempo, 60.0f, 200.0f, "%.0f BPM"))
     {
         apvts.getParameter(TEMPO_PARAM)->setValueNotifyingHost(apvts.getParameterRange(TEMPO_PARAM).convertTo0to1(tempo));
         onModificationEnded();
     }
+    ImGui::SameLine();
+    HelpMarkerPlayer("MIDI file tempo in beats per minute");
     
-    // Track Selection Dropdown
+    // Loop checkbox
+    bool loopModulated = isParamModulated("loop");
+    bool loop = loopParam->load() > 0.5f;
+    if (loopModulated) {
+        loop = getLiveParamValueFor("loop", "loop_live", loop ? 1.0f : 0.0f) > 0.5f;
+        ImGui::BeginDisabled();
+    }
+    if (ImGui::Checkbox("Loop", &loop))
+    {
+        if (!loopModulated) {
+            apvts.getParameter(LOOP_PARAM)->setValueNotifyingHost(loop ? 1.0f : 0.0f);
+            isLooping = loop;
+            onModificationEnded();
+        }
+    }
+    if (loopModulated) { ImGui::EndDisabled(); ImGui::SameLine(); ImGui::TextUnformatted("(mod)"); }
+    ImGui::SameLine();
+    HelpMarkerPlayer("Enable looping playback");
+    
+    ImGui::Spacing();
+    ImGui::Spacing();
+    
+    // === TRACK SELECTION SECTION ===
+    ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1.0f), "Track Selection");
+    ImGui::Spacing();
+    
     int track = (int)trackParam->load();
     int maxTrack = std::max(0, getNumTracks() - 1);
     
@@ -750,28 +793,19 @@ void MIDIPlayerModuleProcessor::drawParametersInNode(float itemWidth, const std:
             }
             ImGui::EndCombo();
         }
+        ImGui::SameLine();
+        HelpMarkerPlayer("Select which MIDI track to play\nShows track name and note count");
     }
-    
-    bool loopModulated = isParamModulated("loop");
-    bool loop = loopParam->load() > 0.5f;
-    if (loopModulated) {
-        loop = getLiveParamValueFor("loop", "loop_live", loop ? 1.0f : 0.0f) > 0.5f;
-        ImGui::BeginDisabled();
-    }
-    if (ImGui::Checkbox("Loop", &loop))
-    {
-        if (!loopModulated) {
-            apvts.getParameter(LOOP_PARAM)->setValueNotifyingHost(loop ? 1.0f : 0.0f);
-            isLooping = loop;
-            onModificationEnded();
-        }
-    }
-    if (loopModulated) { ImGui::EndDisabled(); ImGui::SameLine(); ImGui::TextUnformatted("(mod)"); }
     
     ImGui::Spacing();
-    // Timeline / Playhead
+    ImGui::Spacing();
+    // === TIMELINE SECTION ===
+    ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1.0f), "Timeline");
+    ImGui::Spacing();
+    
     if (totalDuration > 0.0)
     {
+        // Playhead slider
         float t = (float) currentPlaybackTime;
         if (ImGui::SliderFloat("Time", &t, 0.0f, (float) totalDuration, "%.2fs"))
         {
@@ -779,12 +813,55 @@ void MIDIPlayerModuleProcessor::drawParametersInNode(float itemWidth, const std:
             juce::Logger::writeToLog("[MIDI Player] Seek requested: " + juce::String(t, 2) + "s");
             onModificationEnded();
         }
+        ImGui::SameLine();
+        HelpMarkerPlayer("Drag to seek, or click Reset button below");
+        
+        // Progress bar visualization
+        float progress = (float)(currentPlaybackTime / totalDuration);
+        ImGui::PushStyleColor(ImGuiCol_PlotHistogram, ImColor::HSV(0.6f, 0.7f, 0.8f).Value);
+        ImGui::ProgressBar(progress, ImVec2(itemWidth, 0), "");
+        ImGui::PopStyleColor();
     }
-    if (ImGui::Button("Reset Playback"))
+    
+    // Reset button
+    if (ImGui::Button("Reset", ImVec2(itemWidth, 0)))
     {
         pendingSeekTime.store(0.0);
         juce::Logger::writeToLog("[MIDI Player] Playback reset to start");
     }
+    
+    ImGui::Spacing();
+    ImGui::Spacing();
+    
+    // === QUICK ROUTING SECTION ===
+    ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1.0f), "Quick Routing");
+    ImGui::Spacing();
+    
+    // Connect to Samplers
+    if (ImGui::Button("→ Samplers", ImVec2(itemWidth * 0.48f, 0)))
+    {
+        autoConnectTriggered = true;
+    }
+    if (ImGui::IsItemHovered())
+        ImGui::SetTooltip("Auto-connect each track to a Sample Loader module");
+    
+    ImGui::SameLine();
+    
+    // Connect to PolyVCO
+    if (ImGui::Button("→ PolyVCO", ImVec2(itemWidth * 0.48f, 0)))
+    {
+        autoConnectVCOTriggered = true;
+    }
+    if (ImGui::IsItemHovered())
+        ImGui::SetTooltip("Auto-connect to a Polyphonic VCO for synthesis");
+    
+    // Hybrid mode (full width)
+    if (ImGui::Button("→ Hybrid", ImVec2(itemWidth, 0)))
+    {
+        autoConnectHybridTriggered = true;
+    }
+    if (ImGui::IsItemHovered())
+        ImGui::SetTooltip("Connect to both PolyVCO and Sample Loaders");
     
     // Add visible drop target area when MIDI is loaded (for hot-swapping)
     if (hasMIDIFileLoaded())

@@ -129,7 +129,12 @@ void LimiterModuleProcessor::drawParametersInNode(float itemWidth, const std::fu
     auto& ap = getAPVTS();
     ImGui::PushItemWidth(itemWidth);
 
-    auto drawSlider = [&](const char* label, const juce::String& paramId, const juce::String& modId, float min, float max, const char* format) {
+    auto HelpMarker = [](const char* desc) {
+        ImGui::TextDisabled("(?)");
+        if (ImGui::BeginItemTooltip()) { ImGui::PushTextWrapPos(ImGui::GetFontSize() * 35.0f); ImGui::TextUnformatted(desc); ImGui::PopTextWrapPos(); ImGui::EndTooltip(); }
+    };
+
+    auto drawSlider = [&](const char* label, const juce::String& paramId, const juce::String& modId, float min, float max, const char* format, const char* tooltip) {
         bool isMod = isParamModulated(modId);
         float value = isMod ? getLiveParamValueFor(modId, paramId + "_live", ap.getRawParameterValue(paramId)->load())
                             : ap.getRawParameterValue(paramId)->load();
@@ -140,10 +145,14 @@ void LimiterModuleProcessor::drawParametersInNode(float itemWidth, const std::fu
         if (!isMod) adjustParamOnWheel(ap.getParameter(paramId), paramId, value);
         if (ImGui::IsItemDeactivatedAfterEdit()) { onModificationEnded(); }
         if (isMod) { ImGui::EndDisabled(); ImGui::SameLine(); ImGui::TextUnformatted("(mod)"); }
+        if (tooltip) { ImGui::SameLine(); HelpMarker(tooltip); }
     };
 
-    drawSlider("Threshold", paramIdThreshold, paramIdThresholdMod, -20.0f, 0.0f, "%.1f dB");
-    drawSlider("Release", paramIdRelease, paramIdReleaseMod, 1.0f, 200.0f, "%.0f ms");
+    ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1.0f), "Limiter Parameters");
+    ImGui::Spacing();
+
+    drawSlider("Threshold", paramIdThreshold, paramIdThresholdMod, -20.0f, 0.0f, "%.1f dB", "Maximum output level (-20 to 0 dB)\nSignal peaks above this are limited");
+    drawSlider("Release", paramIdRelease, paramIdReleaseMod, 1.0f, 200.0f, "%.0f ms", "Release time (1-200 ms)\nHow fast the limiter recovers");
 
     ImGui::PopItemWidth();
 }

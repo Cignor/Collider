@@ -157,44 +157,84 @@ void MixerModuleProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce:
 void MixerModuleProcessor::drawParametersInNode (float itemWidth, const std::function<bool(const juce::String& paramId)>& isParamModulated, const std::function<void()>& onModificationEnded)
 {
     auto& ap = getAPVTS();
+    
+    // Helper for tooltips
+    auto HelpMarkerMixer = [](const char* desc) {
+        ImGui::TextDisabled("(?)");
+        if (ImGui::BeginItemTooltip()) {
+            ImGui::PushTextWrapPos(ImGui::GetFontSize() * 35.0f);
+            ImGui::TextUnformatted(desc);
+            ImGui::PopTextWrapPos();
+            ImGui::EndTooltip();
+        }
+    };
+    
     float gainDb = gainParam != nullptr ? gainParam->load() : 0.0f;
     float pan = panParam != nullptr ? panParam->load() : 0.0f;
     float crossfade = crossfadeParam != nullptr ? crossfadeParam->load() : 0.0f;
 
-    ImGui::PushItemWidth (itemWidth);
+    ImGui::PushItemWidth(itemWidth);
 
-    // New Crossfade Slider
+    // === CROSSFADE SECTION ===
+    ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1.0f), "Crossfade");
+    ImGui::Spacing();
+
+    // Crossfade Slider
     bool isXfModulated = isParamModulated("x-fade");
     if (isXfModulated) {
         crossfade = getLiveParamValueFor("x-fade", "crossfade_live", crossfade);
         ImGui::BeginDisabled();
     }
-    if (ImGui::SliderFloat ("A <-> B", &crossfade, -1.0f, 1.0f)) if (!isXfModulated) if (auto* p = dynamic_cast<juce::AudioParameterFloat*>(ap.getParameter("crossfade"))) *p = crossfade;
-    if (!isXfModulated) adjustParamOnWheel (ap.getParameter ("crossfade"), "crossfade", crossfade);
+    if (ImGui::SliderFloat("A <-> B", &crossfade, -1.0f, 1.0f)) if (!isXfModulated) if (auto* p = dynamic_cast<juce::AudioParameterFloat*>(ap.getParameter("crossfade"))) *p = crossfade;
+    if (!isXfModulated) adjustParamOnWheel(ap.getParameter("crossfade"), "crossfade", crossfade);
     if (ImGui::IsItemDeactivatedAfterEdit()) { onModificationEnded(); }
     if (isXfModulated) { ImGui::EndDisabled(); ImGui::SameLine(); ImGui::TextUnformatted("(mod)"); }
+    ImGui::SameLine();
+    HelpMarkerMixer("Crossfade between inputs A and B\n-1 = A only, 0 = equal mix, +1 = B only");
 
+    // Visual crossfade indicator
+    float aLevel = (1.0f - crossfade) / 2.0f;
+    float bLevel = (1.0f + crossfade) / 2.0f;
+    ImGui::Text("A: %.1f%%", aLevel * 100.0f);
+    ImGui::SameLine(itemWidth * 0.5f);
+    ImGui::Text("B: %.1f%%", bLevel * 100.0f);
 
-    // Existing Gain and Pan Sliders
+    ImGui::Spacing();
+    ImGui::Spacing();
+
+    // === MASTER CONTROLS SECTION ===
+    ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1.0f), "Master Controls");
+    ImGui::Spacing();
+
+    // Gain Slider
     bool isGainModulated = isParamModulated("gain");
     if (isGainModulated) {
         gainDb = getLiveParamValueFor("gain", "gain_live", gainDb);
         ImGui::BeginDisabled();
     }
-    if (ImGui::SliderFloat ("Gain dB", &gainDb, -60.0f, 6.0f)) if (!isGainModulated) if (auto* p = dynamic_cast<juce::AudioParameterFloat*>(ap.getParameter("gain"))) *p = gainDb;
-    if (!isGainModulated) adjustParamOnWheel (ap.getParameter ("gain"), "gainDb", gainDb);
+    if (ImGui::SliderFloat("Gain dB", &gainDb, -60.0f, 6.0f)) if (!isGainModulated) if (auto* p = dynamic_cast<juce::AudioParameterFloat*>(ap.getParameter("gain"))) *p = gainDb;
+    if (!isGainModulated) adjustParamOnWheel(ap.getParameter("gain"), "gainDb", gainDb);
     if (ImGui::IsItemDeactivatedAfterEdit()) { onModificationEnded(); }
     if (isGainModulated) { ImGui::EndDisabled(); ImGui::SameLine(); ImGui::TextUnformatted("(mod)"); }
+    ImGui::SameLine();
+    HelpMarkerMixer("Master output gain (-60 to +6 dB)");
 
+    // Pan Slider
     bool isPanModulated = isParamModulated("pan");
     if (isPanModulated) {
         pan = getLiveParamValueFor("pan", "pan_live", pan);
         ImGui::BeginDisabled();
     }
-    if (ImGui::SliderFloat ("Pan", &pan, -1.0f, 1.0f)) if (!isPanModulated) if (auto* p = dynamic_cast<juce::AudioParameterFloat*>(ap.getParameter("pan")))  *p = pan;
-    if (!isPanModulated) adjustParamOnWheel (ap.getParameter ("pan"), "pan", pan);
+    if (ImGui::SliderFloat("Pan", &pan, -1.0f, 1.0f)) if (!isPanModulated) if (auto* p = dynamic_cast<juce::AudioParameterFloat*>(ap.getParameter("pan"))) *p = pan;
+    if (!isPanModulated) adjustParamOnWheel(ap.getParameter("pan"), "pan", pan);
     if (ImGui::IsItemDeactivatedAfterEdit()) { onModificationEnded(); }
     if (isPanModulated) { ImGui::EndDisabled(); ImGui::SameLine(); ImGui::TextUnformatted("(mod)"); }
+    ImGui::SameLine();
+    HelpMarkerMixer("Stereo panning\n-1 = full left, 0 = center, +1 = full right");
+
+    // Visual pan indicator
+    const char* panLabel = (pan < -0.3f) ? "L" : (pan > 0.3f) ? "R" : "C";
+    ImGui::Text("Position: %s (%.2f)", panLabel, pan);
 
     ImGui::PopItemWidth();
 }

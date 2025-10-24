@@ -155,8 +155,16 @@ void HarmonicShaperModuleProcessor::processBlock(juce::AudioBuffer<float>& buffe
 void HarmonicShaperModuleProcessor::drawParametersInNode(float itemWidth, const std::function<bool(const juce::String&)>& isParamModulated, const std::function<void()>& onModificationEnded)
 {
     auto& ap = getAPVTS();
+    
+    auto HelpMarker = [](const char* desc) {
+        ImGui::TextDisabled("(?)");
+        if (ImGui::BeginItemTooltip()) { ImGui::PushTextWrapPos(ImGui::GetFontSize() * 35.0f); ImGui::TextUnformatted(desc); ImGui::PopTextWrapPos(); ImGui::EndTooltip(); }
+    };
 
-    // --- Global Controls ---
+    // === MASTER CONTROLS SECTION ===
+    ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1.0f), "Master Controls");
+    ImGui::Spacing();
+
     const bool freqIsMod = isParamModulated(paramIdMasterFreqMod);
     float freq = freqIsMod ? getLiveParamValueFor(paramIdMasterFreqMod, "masterFrequency_live", masterFreqParam->load()) : masterFreqParam->load();
 
@@ -174,6 +182,8 @@ void HarmonicShaperModuleProcessor::drawParametersInNode(float itemWidth, const 
     if (!freqIsMod) adjustParamOnWheel(ap.getParameter(paramIdMasterFreq), "masterFreqHz", freq);
     if (ImGui::IsItemDeactivatedAfterEdit()) onModificationEnded();
     if (freqIsMod) { ImGui::EndDisabled(); ImGui::SameLine(); ImGui::TextUnformatted("(mod)"); }
+    ImGui::SameLine();
+    HelpMarker("Base frequency for all harmonics");
 
     if (driveIsMod) ImGui::BeginDisabled();
     if (ImGui::SliderFloat("Master Drive", &drive, 0.0f, 1.0f, "%.2f")) {
@@ -182,15 +192,21 @@ void HarmonicShaperModuleProcessor::drawParametersInNode(float itemWidth, const 
     if (!driveIsMod) adjustParamOnWheel(ap.getParameter(paramIdMasterDrive), "masterDrive", drive);
     if (ImGui::IsItemDeactivatedAfterEdit()) onModificationEnded();
     if (driveIsMod) { ImGui::EndDisabled(); ImGui::SameLine(); ImGui::TextUnformatted("(mod)"); }
+    ImGui::SameLine();
+    HelpMarker("Overall harmonic richness");
 
     if (ImGui::SliderFloat("Output Gain", &gain, 0.0f, 1.0f, "%.2f")) {
         if (auto* p = dynamic_cast<juce::AudioParameterFloat*>(ap.getParameter(paramIdOutputGain))) *p = gain;
     }
     if (ImGui::IsItemDeactivatedAfterEdit()) onModificationEnded();
-    ImGui::PopItemWidth(); // Pop width for global controls
+    ImGui::PopItemWidth();
 
-    // --- Per-Oscillator Controls ---
-    ImGui::Text("Oscillators");
+    ImGui::Spacing();
+    ImGui::Spacing();
+
+    // === PER-OSCILLATOR CONTROLS SECTION ===
+    ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1.0f), "Oscillators");
+    ImGui::Spacing();
     
     for (int i = 0; i < NUM_OSCILLATORS; ++i)
     {

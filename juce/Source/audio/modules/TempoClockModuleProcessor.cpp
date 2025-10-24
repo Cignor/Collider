@@ -170,19 +170,27 @@ bool TempoClockModuleProcessor::getParamRouting(const juce::String& paramId, int
 void TempoClockModuleProcessor::drawParametersInNode(float itemWidth, const std::function<bool(const juce::String& paramId)>& isParamModulated, const std::function<void()>& onModificationEnded)
 {
     ImGui::PushItemWidth(itemWidth);
+    
+    // Helper for tooltips
+    auto HelpMarkerClock = [](const char* desc) {
+        ImGui::TextDisabled("(?)");
+        if (ImGui::BeginItemTooltip()) {
+            ImGui::PushTextWrapPos(ImGui::GetFontSize() * 35.0f);
+            ImGui::TextUnformatted(desc);
+            ImGui::PopTextWrapPos();
+            ImGui::EndTooltip();
+        }
+    };
 
-    // Title row with EXT badge and status
-    const bool ext = takeoverParam && takeoverParam->load() > 0.5f;
-    if (ext)
-    {
-        ImGui::TextColored(ImVec4(0.2f, 1.0f, 0.8f, 1.0f), "EXT TEMPO");
-        ImGui::SameLine();
-    }
-    ImGui::Text("Clock");
+    // === TEMPO CONTROLS SECTION ===
+    ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1.0f), "Tempo");
+    ImGui::Spacing();
 
     // BPM slider with live display
     bool bpmMod = isParamModulated("bpm_mod");
     float bpm = bpmMod ? getLiveParamValueFor("bpm_mod", "bpm_live", bpmParam->load()) : bpmParam->load();
+    bool ext = takeoverParam && takeoverParam->load() > 0.5f;
+    
     if (bpmMod) { ImGui::BeginDisabled(); }
     if (ImGui::SliderFloat("BPM", &bpm, 20.0f, 300.0f, "%.1f"))
     {
@@ -195,6 +203,8 @@ void TempoClockModuleProcessor::drawParametersInNode(float itemWidth, const std:
     }
     if (!bpmMod) adjustParamOnWheel(apvts.getParameter("bpm"), "bpm", bpm);
     if (bpmMod) { ImGui::EndDisabled(); ImGui::SameLine(); ImGui::TextUnformatted("(mod)"); }
+    ImGui::SameLine();
+    HelpMarkerClock("Beats per minute (20-300 BPM)");
 
     // Swing
     bool swingM = isParamModulated("swing_mod");
@@ -210,6 +220,15 @@ void TempoClockModuleProcessor::drawParametersInNode(float itemWidth, const std:
     }
     if (!swingM) adjustParamOnWheel(apvts.getParameter("swing"), "swing", swing);
     if (swingM) { ImGui::EndDisabled(); ImGui::SameLine(); ImGui::TextUnformatted("(mod)"); }
+    ImGui::SameLine();
+    HelpMarkerClock("Swing amount (0-75%)\nDelays every other beat for shuffle feel");
+
+    ImGui::Spacing();
+    ImGui::Spacing();
+
+    // === CLOCK OUTPUT SECTION ===
+    ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1.0f), "Clock Output");
+    ImGui::Spacing();
 
     // Division + Gate width in-line
     int div = divisionParam ? (int)divisionParam->load() : 3;
@@ -220,25 +239,75 @@ void TempoClockModuleProcessor::drawParametersInNode(float itemWidth, const std:
         if (auto* p = dynamic_cast<juce::AudioParameterChoice*>(apvts.getParameter("division"))) *p = div;
         onModificationEnded();
     }
+    ImGui::SameLine();
+    HelpMarkerClock("Clock output division\n1/4 = quarter notes, 1/16 = sixteenth notes");
 
     float gw = gateWidthParam ? gateWidthParam->load() : 0.5f;
-    ImGui::SetNextItemWidth(itemWidth * 0.45f);
+    ImGui::SetNextItemWidth(itemWidth);
     if (ImGui::SliderFloat("Gate Width", &gw, 0.01f, 0.99f, "%.2f"))
     {
         if (auto* p = dynamic_cast<juce::AudioParameterFloat*>(apvts.getParameter("gateWidth"))) *p = gw;
         onModificationEnded();
     }
+    ImGui::SameLine();
+    HelpMarkerClock("Gate/trigger pulse width (1-99%)");
+
+    ImGui::Spacing();
+    ImGui::Spacing();
+
+    // === LIVE CLOCK DISPLAY SECTION ===
+    ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1.0f), "Clock Status");
+    ImGui::Spacing();
+
+    // Animated beat indicator (4 boxes for 4/4 time)
+    float phase = getLiveParamValue("phase_live", 0.0f);
+    int currentBeat = (int)(phase * 4.0f) % 4;
+    
+    for (int i = 0; i < 4; ++i)
+    {
+        if (i > 0) ImGui::SameLine();
+        
+        bool isCurrentBeat = (currentBeat == i);
+        ImVec4 color = isCurrentBeat ? ImVec4(1.0f, 0.3f, 0.3f, 1.0f) : ImVec4(0.3f, 0.3f, 0.3f, 1.0f);
+        
+        ImGui::PushStyleColor(ImGuiCol_Button, color);
+        ImGui::Button(juce::String(i + 1).toRawUTF8(), ImVec2(itemWidth * 0.23f, 30));
+        ImGui::PopStyleColor();
+    }
+
+    // Current BPM display (large, colored)
+    ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.5f, 1.0f, 0.7f, 1.0f));
+    ImGui::Text("♩ = %.1f BPM", getLiveParamValue("bpm_live", bpm));
+    ImGui::PopStyleColor();
+
+    // Bar:Beat display
+    int bar = (int)(phase / 4.0f) + 1;
+    int beat = currentBeat + 1;
+    ImGui::Text("Bar %d | Beat %d", bar, beat);
+
+    ImGui::Spacing();
+    ImGui::Spacing();
+
+    // === TRANSPORT SYNC SECTION ===
+    ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1.0f), "Transport Sync");
+    ImGui::Spacing();
 
     // Takeover toggle
-    bool tk = takeoverParam && takeoverParam->load() > 0.5f;
+    bool tk = ext;
     if (ImGui::Checkbox("External Takeover", &tk))
     {
         if (auto* p = dynamic_cast<juce::AudioParameterBool*>(apvts.getParameter("takeover"))) *p = tk;
         onModificationEnded();
     }
-
-    // Live readouts row (phase, bpm)
-    ImGui::Text("Phase: %.2f  |  BPM: %.1f", getLiveParamValue("phase_live", 0.0f), getLiveParamValue("bpm_live", bpmParam->load()));
+    ImGui::SameLine();
+    HelpMarkerClock("Use host transport tempo instead of manual BPM\nDisables manual BPM control when enabled");
+    
+    if (ext)
+    {
+        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.2f, 1.0f, 0.8f, 1.0f));
+        ImGui::Text("⚡ EXTERNAL TEMPO ACTIVE");
+        ImGui::PopStyleColor();
+    }
 
     ImGui::PopItemWidth();
 }

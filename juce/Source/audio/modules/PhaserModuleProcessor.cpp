@@ -175,7 +175,12 @@ void PhaserModuleProcessor::drawParametersInNode(float itemWidth, const std::fun
     auto& ap = getAPVTS();
     ImGui::PushItemWidth(itemWidth);
 
-    auto drawSlider = [&](const char* label, const juce::String& paramId, const juce::String& modId, float min, float max, const char* format, ImGuiSliderFlags flags = 0)
+    auto HelpMarker = [](const char* desc) {
+        ImGui::TextDisabled("(?)");
+        if (ImGui::BeginItemTooltip()) { ImGui::PushTextWrapPos(ImGui::GetFontSize() * 35.0f); ImGui::TextUnformatted(desc); ImGui::PopTextWrapPos(); ImGui::EndTooltip(); }
+    };
+
+    auto drawSlider = [&](const char* label, const juce::String& paramId, const juce::String& modId, float min, float max, const char* format, const char* tooltip, ImGuiSliderFlags flags = 0)
     {
         bool isMod = isParamModulated(modId);
         float value = isMod ? getLiveParamValueFor(modId, paramId + "_live", ap.getRawParameterValue(paramId)->load())
@@ -187,13 +192,17 @@ void PhaserModuleProcessor::drawParametersInNode(float itemWidth, const std::fun
         if (!isMod) adjustParamOnWheel(ap.getParameter(paramId), paramId, value);
         if (ImGui::IsItemDeactivatedAfterEdit()) { onModificationEnded(); }
         if (isMod) { ImGui::EndDisabled(); ImGui::SameLine(); ImGui::TextUnformatted("(mod)"); }
+        if (tooltip) { ImGui::SameLine(); HelpMarker(tooltip); }
     };
 
-    drawSlider("Rate", paramIdRate, paramIdRateMod, 0.01f, 10.0f, "%.2f Hz", 0);
-    drawSlider("Depth", paramIdDepth, paramIdDepthMod, 0.0f, 1.0f, "%.2f", 0);
-    drawSlider("Centre", paramIdCentreHz, paramIdCentreHzMod, 20.0f, 10000.0f, "%.0f Hz", ImGuiSliderFlags_Logarithmic);
-    drawSlider("Feedback", paramIdFeedback, paramIdFeedbackMod, -0.95f, 0.95f, "%.2f", 0);
-    drawSlider("Mix", paramIdMix, paramIdMixMod, 0.0f, 1.0f, "%.2f", 0);
+    ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1.0f), "Phaser Parameters");
+    ImGui::Spacing();
+
+    drawSlider("Rate", paramIdRate, paramIdRateMod, 0.01f, 10.0f, "%.2f Hz", "LFO sweep rate (0.01-10 Hz)", 0);
+    drawSlider("Depth", paramIdDepth, paramIdDepthMod, 0.0f, 1.0f, "%.2f", "Modulation depth (0-1)", 0);
+    drawSlider("Centre", paramIdCentreHz, paramIdCentreHzMod, 20.0f, 10000.0f, "%.0f Hz", "Center frequency of phase shift", ImGuiSliderFlags_Logarithmic);
+    drawSlider("Feedback", paramIdFeedback, paramIdFeedbackMod, -0.95f, 0.95f, "%.2f", "Feedback amount\nNegative = darker, Positive = brighter", 0);
+    drawSlider("Mix", paramIdMix, paramIdMixMod, 0.0f, 1.0f, "%.2f", "Dry/wet mix (0-1)", 0);
 
     ImGui::PopItemWidth();
 }

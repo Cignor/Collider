@@ -29,52 +29,120 @@ public:
     void drawParametersInNode (float itemWidth, const std::function<bool(const juce::String& paramId)>& isParamModulated, const std::function<void()>& onModificationEnded) override
     {
         auto& ap = getAPVTS();
+        
+        // Helper for tooltips
+        auto HelpMarkerVCF = [](const char* desc) {
+            ImGui::TextDisabled("(?)");
+            if (ImGui::BeginItemTooltip()) {
+                ImGui::PushTextWrapPos(ImGui::GetFontSize() * 35.0f);
+                ImGui::TextUnformatted(desc);
+                ImGui::PopTextWrapPos();
+                ImGui::EndTooltip();
+            }
+        };
+        
         float cutoff = cutoffParam != nullptr ? cutoffParam->load() : 1000.0f;
         float q = resonanceParam != nullptr ? resonanceParam->load() : 1.0f;
         int ftype = 0; if (auto* p = dynamic_cast<juce::AudioParameterChoice*>(ap.getParameter(paramIdType))) ftype = p->getIndex();
 
-        ImGui::PushItemWidth (itemWidth);
+        ImGui::PushItemWidth(itemWidth);
 
+        // === FILTER PARAMETERS SECTION ===
+        ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1.0f), "Filter Parameters");
+        ImGui::Spacing();
+
+        // Cutoff
         bool isCutoffModulated = isParamModulated(paramIdCutoff);
         if (isCutoffModulated) {
             cutoff = getLiveParamValueFor(paramIdCutoff, "cutoff_live", cutoff);
             ImGui::BeginDisabled();
         }
-        if (ImGui::SliderFloat ("Cutoff", &cutoff, 20.0f, 20000.0f, "%.1f Hz", ImGuiSliderFlags_Logarithmic)) {
+        if (ImGui::SliderFloat("Cutoff", &cutoff, 20.0f, 20000.0f, "%.1f Hz", ImGuiSliderFlags_Logarithmic)) {
             if (!isCutoffModulated) {
                 if (auto* p = dynamic_cast<juce::AudioParameterFloat*>(ap.getParameter(paramIdCutoff))) *p = cutoff;
             }
         }
-        if (!isCutoffModulated) adjustParamOnWheel (ap.getParameter(paramIdCutoff), "cutoffHz", cutoff);
+        if (!isCutoffModulated) adjustParamOnWheel(ap.getParameter(paramIdCutoff), "cutoffHz", cutoff);
         if (ImGui::IsItemDeactivatedAfterEdit()) { onModificationEnded(); }
         if (isCutoffModulated) { ImGui::EndDisabled(); ImGui::SameLine(); ImGui::TextUnformatted("(mod)"); }
+        ImGui::SameLine();
+        HelpMarkerVCF("Filter cutoff frequency in Hz (20-20000 Hz)\nLogarithmic scale for musical tuning");
 
+        // Resonance
         bool isResoModulated = isParamModulated(paramIdResonance);
         if (isResoModulated) {
             q = getLiveParamValueFor(paramIdResonance, "resonance_live", q);
             ImGui::BeginDisabled();
         }
-        if (ImGui::SliderFloat ("Resonance", &q, 0.1f, 10.0f)) {
+        if (ImGui::SliderFloat("Resonance", &q, 0.1f, 10.0f)) {
             if (!isResoModulated) {
                 if (auto* p = dynamic_cast<juce::AudioParameterFloat*>(ap.getParameter(paramIdResonance))) *p = q;
             }
         }
-        if (!isResoModulated) adjustParamOnWheel (ap.getParameter(paramIdResonance), "resonance", q);
+        if (!isResoModulated) adjustParamOnWheel(ap.getParameter(paramIdResonance), "resonance", q);
         if (ImGui::IsItemDeactivatedAfterEdit()) { onModificationEnded(); }
         if (isResoModulated) { ImGui::EndDisabled(); ImGui::SameLine(); ImGui::TextUnformatted("(mod)"); }
+        ImGui::SameLine();
+        HelpMarkerVCF("Filter resonance/Q factor (0.1-10)\nHigher values create a peak at cutoff frequency");
         
+        // Type
         bool isTypeModulated = isParamModulated(paramIdTypeMod);
         if (isTypeModulated) {
             ftype = static_cast<int>(getLiveParamValueFor(paramIdTypeMod, "type_live", static_cast<float>(ftype)));
             ImGui::BeginDisabled();
         }
-        if (ImGui::Combo ("Type", &ftype, "Low-pass\0High-pass\0Band-pass\0\0")) {
+        if (ImGui::Combo("Type", &ftype, "Low-pass\0High-pass\0Band-pass\0\0")) {
             if (!isTypeModulated) {
                 if (auto* p = dynamic_cast<juce::AudioParameterChoice*>(ap.getParameter(paramIdType))) *p = ftype;
             }
         }
         if (ImGui::IsItemDeactivatedAfterEdit()) { onModificationEnded(); }
         if (isTypeModulated) { ImGui::EndDisabled(); ImGui::SameLine(); ImGui::TextUnformatted("(mod)"); }
+        ImGui::SameLine();
+        HelpMarkerVCF("Filter type:\nLow-pass = removes high frequencies\nHigh-pass = removes low frequencies\nBand-pass = keeps only mid frequencies");
+
+        ImGui::Spacing();
+        ImGui::Spacing();
+
+        // === FILTER RESPONSE SECTION ===
+        ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1.0f), "Filter Response");
+        ImGui::Spacing();
+
+        // Visual frequency response curve
+        float responseCurve[50];
+        float logCutoff = std::log10(cutoff);
+        
+        for (int i = 0; i < 50; ++i)
+        {
+            float freq = 20.0f * std::pow(1000.0f, (float)i / 49.0f);  // 20 Hz to 20 kHz
+            float logFreq = std::log10(freq);
+            float delta = logFreq - logCutoff;
+            
+            // Simplified filter response simulation
+            if (ftype == 0) {  // Low-pass
+                responseCurve[i] = 1.0f / (1.0f + q * delta * delta * 4.0f);
+            } else if (ftype == 1) {  // High-pass
+                responseCurve[i] = 1.0f - (1.0f / (1.0f + q * delta * delta * 4.0f));
+            } else {  // Band-pass
+                responseCurve[i] = std::exp(-delta * delta * q);
+            }
+            responseCurve[i] = juce::jlimit(0.0f, 1.0f, responseCurve[i]);
+        }
+
+        // Color-code by filter type
+        ImVec4 curveColor = (ftype == 0) ? ImVec4(1.0f, 0.5f, 0.3f, 1.0f) :  // Low-pass: orange
+                            (ftype == 1) ? ImVec4(0.3f, 0.7f, 1.0f, 1.0f) :  // High-pass: blue
+                                           ImVec4(0.5f, 1.0f, 0.5f, 1.0f);   // Band-pass: green
+        
+        ImGui::PushStyleColor(ImGuiCol_PlotLines, curveColor);
+        ImGui::PlotLines("##response", responseCurve, 50, 0, nullptr, 0.0f, 1.0f, ImVec2(itemWidth, 60));
+        ImGui::PopStyleColor();
+
+        // Filter type badge
+        const char* typeNames[] = { "LOW-PASS", "HIGH-PASS", "BAND-PASS" };
+        ImGui::PushStyleColor(ImGuiCol_Text, curveColor);
+        ImGui::Text("Active: %s", typeNames[ftype]);
+        ImGui::PopStyleColor();
 
         ImGui::PopItemWidth();
     }

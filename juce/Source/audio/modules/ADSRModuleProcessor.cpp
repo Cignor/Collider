@@ -199,4 +199,135 @@ bool ADSRModuleProcessor::getParamRouting(const juce::String& paramId, int& outB
     return false;
 }
 
+#if defined(PRESET_CREATOR_UI)
+// Helper function for tooltip with help marker
+void ADSRModuleProcessor::HelpMarkerADSR(const char* desc)
+{
+    ImGui::TextDisabled("(?)");
+    if (ImGui::BeginItemTooltip())
+    {
+        ImGui::PushTextWrapPos(ImGui::GetFontSize() * 35.0f);
+        ImGui::TextUnformatted(desc);
+        ImGui::PopTextWrapPos();
+        ImGui::EndTooltip();
+    }
+}
+
+void ADSRModuleProcessor::drawParametersInNode(float itemWidth, const std::function<bool(const juce::String& paramId)>& isParamModulated, const std::function<void()>& onModificationEnded)
+{
+    auto& ap = getAPVTS();
+    
+    // Get live modulated values for display
+    bool isAttackModulated = isParamModulated(paramIdAttackMod);
+    bool isDecayModulated = isParamModulated(paramIdDecayMod);
+    bool isSustainModulated = isParamModulated(paramIdSustainMod);
+    bool isReleaseModulated = isParamModulated(paramIdReleaseMod);
+    
+    float a = isAttackModulated ? getLiveParamValueFor("attack_mod", "attack_live", attackParam->load()) : (attackParam != nullptr ? attackParam->load() : 0.01f);
+    float d = isDecayModulated ? getLiveParamValueFor("decay_mod", "decay_live", decayParam->load()) : (decayParam != nullptr ? decayParam->load() : 0.1f);
+    float s = isSustainModulated ? getLiveParamValueFor("sustain_mod", "sustain_live", sustainParam->load()) : (sustainParam != nullptr ? sustainParam->load() : 0.7f);
+    float r = isReleaseModulated ? getLiveParamValueFor("release_mod", "release_live", releaseParam->load()) : (releaseParam != nullptr ? releaseParam->load() : 0.2f);
+    
+    ImGui::PushItemWidth(itemWidth);
+    
+    // === ENVELOPE PARAMETERS SECTION ===
+    ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1.0f), "Envelope Shape");
+    ImGui::Spacing();
+    
+    // Attack
+    if (isAttackModulated) ImGui::BeginDisabled();
+    if (ImGui::SliderFloat("Attack (s)", &a, 0.001f, 5.0f, "%.3f", ImGuiSliderFlags_Logarithmic)) if (!isAttackModulated) if (auto* p = dynamic_cast<juce::AudioParameterFloat*>(ap.getParameter(paramIdAttack))) *p = a;
+    if (!isAttackModulated) adjustParamOnWheel(ap.getParameter(paramIdAttack), "attack", a);
+    if (ImGui::IsItemDeactivatedAfterEdit()) { onModificationEnded(); }
+    if (isAttackModulated) { ImGui::EndDisabled(); ImGui::SameLine(); ImGui::TextUnformatted("(mod)"); }
+    ImGui::SameLine();
+    HelpMarkerADSR("Attack time in seconds\nTime to reach peak from gate trigger");
+
+    // Decay
+    if (isDecayModulated) ImGui::BeginDisabled();
+    if (ImGui::SliderFloat("Decay (s)", &d, 0.001f, 5.0f, "%.3f", ImGuiSliderFlags_Logarithmic)) if (!isDecayModulated) if (auto* p = dynamic_cast<juce::AudioParameterFloat*>(ap.getParameter(paramIdDecay))) *p = d;
+    if (!isDecayModulated) adjustParamOnWheel(ap.getParameter(paramIdDecay), "decay", d);
+    if (ImGui::IsItemDeactivatedAfterEdit()) { onModificationEnded(); }
+    if (isDecayModulated) { ImGui::EndDisabled(); ImGui::SameLine(); ImGui::TextUnformatted("(mod)"); }
+    ImGui::SameLine();
+    HelpMarkerADSR("Decay time in seconds\nTime to reach sustain level");
+
+    // Sustain
+    if (isSustainModulated) ImGui::BeginDisabled();
+    if (ImGui::SliderFloat("Sustain", &s, 0.0f, 1.0f)) if (!isSustainModulated) if (auto* p = dynamic_cast<juce::AudioParameterFloat*>(ap.getParameter(paramIdSustain))) *p = s;
+    if (!isSustainModulated) adjustParamOnWheel(ap.getParameter(paramIdSustain), "sustain", s);
+    if (ImGui::IsItemDeactivatedAfterEdit()) { onModificationEnded(); }
+    if (isSustainModulated) { ImGui::EndDisabled(); ImGui::SameLine(); ImGui::TextUnformatted("(mod)"); }
+    ImGui::SameLine();
+    HelpMarkerADSR("Sustain level (0-1)\nLevel maintained while gate is held");
+
+    // Release
+    if (isReleaseModulated) ImGui::BeginDisabled();
+    if (ImGui::SliderFloat("Release (s)", &r, 0.001f, 5.0f, "%.3f", ImGuiSliderFlags_Logarithmic)) if (!isReleaseModulated) if (auto* p = dynamic_cast<juce::AudioParameterFloat*>(ap.getParameter(paramIdRelease))) *p = r;
+    if (!isReleaseModulated) adjustParamOnWheel(ap.getParameter(paramIdRelease), "release", r);
+    if (ImGui::IsItemDeactivatedAfterEdit()) { onModificationEnded(); }
+    if (isReleaseModulated) { ImGui::EndDisabled(); ImGui::SameLine(); ImGui::TextUnformatted("(mod)"); }
+    ImGui::SameLine();
+    HelpMarkerADSR("Release time in seconds\nTime to fade to zero after gate off");
+
+    ImGui::Spacing();
+    ImGui::Spacing();
+
+    // === VISUAL ENVELOPE PREVIEW SECTION ===
+    ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1.0f), "Envelope Preview");
+    ImGui::Spacing();
+
+    // Generate ADSR curve for visualization
+    float adsrCurve[100];
+    float totalTime = a + d + r + 0.5f; // Add 0.5s for sustain visualization
+    float timePerSample = totalTime / 100.0f;
+    
+    for (int i = 0; i < 100; ++i)
+    {
+        float t = i * timePerSample;
+        if (t < a)
+        {
+            // Attack phase
+            adsrCurve[i] = t / a;
+        }
+        else if (t < a + d)
+        {
+            // Decay phase
+            float decayProgress = (t - a) / d;
+            adsrCurve[i] = 1.0f + decayProgress * (s - 1.0f);
+        }
+        else if (t < a + d + 0.5f)
+        {
+            // Sustain phase (0.5s duration for visualization)
+            adsrCurve[i] = s;
+        }
+        else
+        {
+            // Release phase
+            float releaseProgress = (t - a - d - 0.5f) / r;
+            adsrCurve[i] = s * (1.0f - releaseProgress);
+        }
+        adsrCurve[i] = juce::jlimit(0.0f, 1.0f, adsrCurve[i]);
+    }
+
+    ImGui::PlotLines("##envelope", adsrCurve, 100, 0, nullptr, 0.0f, 1.0f, ImVec2(itemWidth, 60));
+
+    // Show current envelope value and stage
+    float currentEnvValue = lastOutputValues.size() > 0 ? lastOutputValues[0]->load() : 0.0f;
+    ImGui::Text("Current: %.3f", currentEnvValue);
+    
+    // Color-coded stage indicator
+    const char* stageNames[] = { "Idle", "Attack", "Decay", "Sustain", "Release" };
+    int stageIndex = static_cast<int>(stage);
+    if (stageIndex >= 0 && stageIndex < 5)
+    {
+        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.5f, 1.0f, 0.7f, 1.0f));
+        ImGui::Text("Stage: %s", stageNames[stageIndex]);
+        ImGui::PopStyleColor();
+    }
+
+    ImGui::PopItemWidth();
+}
+#endif
+
 

@@ -111,10 +111,19 @@ void WaveshaperModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
 void WaveshaperModuleProcessor::drawParametersInNode(float itemWidth, const std::function<bool(const juce::String& paramId)>& isParamModulated, const std::function<void()>& onModificationEnded)
 {
     auto& ap = getAPVTS();
+    
+    auto HelpMarker = [](const char* desc) {
+        ImGui::TextDisabled("(?)");
+        if (ImGui::BeginItemTooltip()) { ImGui::PushTextWrapPos(ImGui::GetFontSize() * 35.0f); ImGui::TextUnformatted(desc); ImGui::PopTextWrapPos(); ImGui::EndTooltip(); }
+    };
+    
     float drive = 1.0f; if (auto* p = dynamic_cast<juce::AudioParameterFloat*>(ap.getParameter("drive"))) drive = *p;
     int type = 0; if (auto* p = dynamic_cast<juce::AudioParameterChoice*>(ap.getParameter("type"))) type = p->getIndex();
 
     ImGui::PushItemWidth(itemWidth);
+
+    ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1.0f), "Waveshaper Parameters");
+    ImGui::Spacing();
 
     // Drive
     bool isDriveModulated = isParamModulated("drive");
@@ -126,6 +135,8 @@ void WaveshaperModuleProcessor::drawParametersInNode(float itemWidth, const std:
     if (!isDriveModulated) adjustParamOnWheel(ap.getParameter("drive"), "drive", drive);
     if (ImGui::IsItemDeactivatedAfterEdit()) { onModificationEnded(); }
     if (isDriveModulated) { ImGui::EndDisabled(); ImGui::SameLine(); ImGui::TextUnformatted("(mod)"); }
+    ImGui::SameLine();
+    HelpMarker("Drive amount (1-100)\nLogarithmic scale for fine control");
 
     // Type
     bool isTypeModulated = isParamModulated("type");
@@ -136,6 +147,8 @@ void WaveshaperModuleProcessor::drawParametersInNode(float itemWidth, const std:
     if (ImGui::Combo("Type", &type, "Soft Clip\0Hard Clip\0Foldback\0\0")) if (!isTypeModulated) if (auto* p = dynamic_cast<juce::AudioParameterChoice*>(ap.getParameter("type"))) *p = type;
     if (ImGui::IsItemDeactivatedAfterEdit()) { onModificationEnded(); }
     if (isTypeModulated) { ImGui::EndDisabled(); ImGui::SameLine(); ImGui::TextUnformatted("(mod)"); }
+    ImGui::SameLine();
+    HelpMarker("Shaping algorithm:\nSoft Clip = smooth saturation\nHard Clip = digital clipping\nFoldback = wave folding distortion");
 
     ImGui::PopItemWidth();
 }

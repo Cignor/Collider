@@ -25,37 +25,86 @@ public:
     {
         auto& ap = getAPVTS();
         
+        // Helper for tooltips
+        auto HelpMarkerReverb = [](const char* desc) {
+            ImGui::TextDisabled("(?)");
+            if (ImGui::BeginItemTooltip()) {
+                ImGui::PushTextWrapPos(ImGui::GetFontSize() * 35.0f);
+                ImGui::TextUnformatted(desc);
+                ImGui::PopTextWrapPos();
+                ImGui::EndTooltip();
+            }
+        };
+        
         // Get live modulated values for display
         bool isSizeModulated = isParamModulated("size");
         bool isDampModulated = isParamModulated("damp");
         bool isMixModulated = isParamModulated("mix");
         
-        // Use correct mod param IDs (same as parameter IDs)
         float size = isSizeModulated ? getLiveParamValueFor("size", "size_live", sizeParam->load()) : (sizeParam != nullptr ? sizeParam->load() : 0.5f);
         float damp = isDampModulated ? getLiveParamValueFor("damp", "damp_live", dampParam->load()) : (dampParam != nullptr ? dampParam->load() : 0.3f);
         float mix = isMixModulated ? getLiveParamValueFor("mix", "mix_live", mixParam->load()) : (mixParam != nullptr ? mixParam->load() : 0.3f);
-        ImGui::PushItemWidth (itemWidth);
+        
+        ImGui::PushItemWidth(itemWidth);
+
+        // === REVERB PARAMETERS SECTION ===
+        ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1.0f), "Reverb Parameters");
+        ImGui::Spacing();
 
         // Size
         if (isSizeModulated) ImGui::BeginDisabled();
-        if (ImGui::SliderFloat ("Size", &size, 0.0f, 1.0f)) if (!isSizeModulated) if (auto* p = dynamic_cast<juce::AudioParameterFloat*>(ap.getParameter("size"))) *p = size;
-        if (!isSizeModulated) adjustParamOnWheel (ap.getParameter ("size"), "size", size);
+        if (ImGui::SliderFloat("Size", &size, 0.0f, 1.0f)) if (!isSizeModulated) if (auto* p = dynamic_cast<juce::AudioParameterFloat*>(ap.getParameter("size"))) *p = size;
+        if (!isSizeModulated) adjustParamOnWheel(ap.getParameter("size"), "size", size);
         if (ImGui::IsItemDeactivatedAfterEdit()) { onModificationEnded(); }
         if (isSizeModulated) { ImGui::EndDisabled(); ImGui::SameLine(); ImGui::TextUnformatted("(mod)"); }
+        ImGui::SameLine();
+        HelpMarkerReverb("Room size (0-1)\n0 = small room, 1 = large hall");
         
         // Damp
         if (isDampModulated) ImGui::BeginDisabled();
-        if (ImGui::SliderFloat ("Damp", &damp, 0.0f, 1.0f)) if (!isDampModulated) if (auto* p = dynamic_cast<juce::AudioParameterFloat*>(ap.getParameter("damp"))) *p = damp;
-        if (!isDampModulated) adjustParamOnWheel (ap.getParameter ("damp"), "damp", damp);
+        if (ImGui::SliderFloat("Damp", &damp, 0.0f, 1.0f)) if (!isDampModulated) if (auto* p = dynamic_cast<juce::AudioParameterFloat*>(ap.getParameter("damp"))) *p = damp;
+        if (!isDampModulated) adjustParamOnWheel(ap.getParameter("damp"), "damp", damp);
         if (ImGui::IsItemDeactivatedAfterEdit()) { onModificationEnded(); }
         if (isDampModulated) { ImGui::EndDisabled(); ImGui::SameLine(); ImGui::TextUnformatted("(mod)"); }
+        ImGui::SameLine();
+        HelpMarkerReverb("High frequency damping (0-1)\n0 = bright, 1 = dark/muffled");
         
         // Mix
         if (isMixModulated) ImGui::BeginDisabled();
-        if (ImGui::SliderFloat ("Mix", &mix, 0.0f, 1.0f)) if (!isMixModulated) if (auto* p = dynamic_cast<juce::AudioParameterFloat*>(ap.getParameter("mix")))  *p = mix;
-        if (!isMixModulated) adjustParamOnWheel (ap.getParameter ("mix"), "mix", mix);
+        if (ImGui::SliderFloat("Mix", &mix, 0.0f, 1.0f)) if (!isMixModulated) if (auto* p = dynamic_cast<juce::AudioParameterFloat*>(ap.getParameter("mix"))) *p = mix;
+        if (!isMixModulated) adjustParamOnWheel(ap.getParameter("mix"), "mix", mix);
         if (ImGui::IsItemDeactivatedAfterEdit()) { onModificationEnded(); }
         if (isMixModulated) { ImGui::EndDisabled(); ImGui::SameLine(); ImGui::TextUnformatted("(mod)"); }
+        ImGui::SameLine();
+        HelpMarkerReverb("Dry/wet mix (0-1)\n0 = dry only, 1 = wet only");
+
+        ImGui::Spacing();
+        ImGui::Spacing();
+
+        // === REVERB VISUALIZATION SECTION ===
+        ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1.0f), "Decay Envelope");
+        ImGui::Spacing();
+
+        // Visual decay curve based on size and damp
+        float decayCurve[50];
+        float rt60 = size * 3.0f + 0.5f;  // Decay time in seconds (0.5-3.5s)
+        float dampFactor = 1.0f - (damp * 0.7f);  // Damping affects decay rate
+        
+        for (int i = 0; i < 50; ++i)
+        {
+            float t = (float)i / 49.0f;  // 0 to 1
+            decayCurve[i] = std::exp(-t * 5.0f / (rt60 * dampFactor));
+            decayCurve[i] = juce::jlimit(0.0f, 1.0f, decayCurve[i]);
+        }
+
+        ImGui::PushStyleColor(ImGuiCol_PlotLines, ImColor::HSV(0.55f, 0.6f, 0.9f).Value);
+        ImGui::PlotLines("##decay", decayCurve, 50, 0, nullptr, 0.0f, 1.0f, ImVec2(itemWidth, 50));
+        ImGui::PopStyleColor();
+
+        // Room type indicator based on size
+        const char* roomType = (size < 0.3f) ? "Small Room" : (size < 0.7f) ? "Medium Hall" : "Large Cathedral";
+        ImGui::Text("Space: %s", roomType);
+        ImGui::Text("RT60: %.2f s", rt60 * dampFactor);
 
         ImGui::PopItemWidth();
     }

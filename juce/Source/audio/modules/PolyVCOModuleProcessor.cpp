@@ -278,7 +278,22 @@ void PolyVCOModuleProcessor::drawParametersInNode(float itemWidth, const std::fu
     ImGui::PushItemWidth(itemWidth);
     auto& ap = getAPVTS();
 
-    // --- Master Voice Count Control with Live Feedback ---
+    // Helper for tooltips
+    auto HelpMarkerPoly = [](const char* desc) {
+        ImGui::TextDisabled("(?)");
+        if (ImGui::BeginItemTooltip()) {
+            ImGui::PushTextWrapPos(ImGui::GetFontSize() * 35.0f);
+            ImGui::TextUnformatted(desc);
+            ImGui::PopTextWrapPos();
+            ImGui::EndTooltip();
+        }
+    };
+
+    // === MASTER CONTROLS SECTION ===
+    ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1.0f), "Master Controls");
+    ImGui::Spacing();
+
+    // Master Voice Count Control with Live Feedback
     const bool isCountModulated = isParamModulated("numVoices");
     int displayedVoices = isCountModulated ? (int)getLiveParamValueFor("numVoices", "numVoices_live", (float)(numVoicesParam != nullptr ? numVoicesParam->get() : 1))
                                            : (numVoicesParam != nullptr ? numVoicesParam->get() : 1);
@@ -299,53 +314,89 @@ void PolyVCOModuleProcessor::drawParametersInNode(float itemWidth, const std::fu
         ImGui::SameLine(); 
         ImGui::TextUnformatted("(mod)");
     }
+    ImGui::SameLine();
+    HelpMarkerPoly("Number of active voices (1-32)\nEach voice is an independent oscillator");
 
-    // --- Per-Voice Controls (rows follow live voice count when modded) ---
+    ImGui::Spacing();
+    ImGui::Spacing();
+
+    // === PER-VOICE CONTROLS SECTION ===
+    ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1.0f), "Voice Parameters");
+    ImGui::Spacing();
+
+    // Per-voice controls with collapsible sections
     const int activeVoices = juce::jlimit(1, MAX_VOICES,
         (int)(isCountModulated ? getLiveParamValueFor("numVoices", "numVoices_live", (float)getEffectiveNumVoices())
                                : (float)getEffectiveNumVoices()));
+    
     for (int i = 0; i < activeVoices; ++i)
     {
         const auto idx = juce::String(i + 1);
         ImGui::PushID(i);
 
-        // Frequency Slider with live feedback
-        const bool isFreqModulated = isParamModulated("freq_" + idx);
-        float freq = isFreqModulated ? getLiveParamValueFor("freq_" + idx, "freq_" + idx + "_live", (voiceFreqParams[i] != nullptr ? voiceFreqParams[i]->get() : 440.0f))
-                                     : (voiceFreqParams[i] != nullptr ? voiceFreqParams[i]->get() : 440.0f);
-        if (isFreqModulated) ImGui::BeginDisabled();
-        if (ImGui::SliderFloat(("Freq " + idx).toRawUTF8(), &freq, 20.0f, 20000.0f, "%.1f Hz", ImGuiSliderFlags_Logarithmic)) {
-            if (!isFreqModulated) *voiceFreqParams[i] = freq;
-        }
-        if (ImGui::IsItemDeactivatedAfterEdit() && !isFreqModulated) onModificationEnded();
-        if (!isFreqModulated) adjustParamOnWheel(ap.getParameter("freq_" + idx), "freq_" + idx, freq);
-        if (isFreqModulated) { ImGui::EndDisabled(); ImGui::SameLine(); ImGui::TextUnformatted("(mod)"); }
+        // Color-code voice number using HSV
+        float hue = (float)i / (float)MAX_VOICES;
+        ImGui::PushStyleColor(ImGuiCol_Text, ImColor::HSV(hue, 0.7f, 1.0f).Value);
+        
+        // Use CollapsingHeader for collapsible sections
+        // First 4 voices open by default
+        ImGuiTreeNodeFlags flags = (i < 4) ? ImGuiTreeNodeFlags_DefaultOpen : 0;
+        juce::String voiceLabel = "Voice " + idx;
+        bool expanded = ImGui::CollapsingHeader(voiceLabel.toRawUTF8(), flags);
+        
+        ImGui::PopStyleColor();
+        
+        if (expanded)
+        {
+            ImGui::Indent();
 
-        // Waveform Combo with live feedback
-        const bool isWaveModulated = isParamModulated("wave_" + idx);
-        int wave = isWaveModulated ? (int)getLiveParamValueFor("wave_" + idx, "wave_" + idx + "_live", (float)(voiceWaveParams[i] != nullptr ? voiceWaveParams[i]->getIndex() : 0))
-                                   : (voiceWaveParams[i] != nullptr ? voiceWaveParams[i]->getIndex() : 0);
-        if (isWaveModulated) ImGui::BeginDisabled();
-        if (ImGui::Combo(("Wave " + idx).toRawUTF8(), &wave, "Sine\0Saw\0Square\0\0")) {
-            if (!isWaveModulated) *voiceWaveParams[i] = wave;
-        }
-        if (ImGui::IsItemDeactivatedAfterEdit() && !isWaveModulated) onModificationEnded();
-        if (isWaveModulated) { ImGui::EndDisabled(); ImGui::SameLine(); ImGui::TextUnformatted("(mod)"); }
+            // Frequency Slider with live feedback
+            const bool isFreqModulated = isParamModulated("freq_" + idx);
+            float freq = isFreqModulated ? getLiveParamValueFor("freq_" + idx, "freq_" + idx + "_live", (voiceFreqParams[i] != nullptr ? voiceFreqParams[i]->get() : 440.0f))
+                                         : (voiceFreqParams[i] != nullptr ? voiceFreqParams[i]->get() : 440.0f);
+            if (isFreqModulated) ImGui::BeginDisabled();
+            if (ImGui::SliderFloat("Frequency", &freq, 20.0f, 20000.0f, "%.1f Hz", ImGuiSliderFlags_Logarithmic)) {
+                if (!isFreqModulated) *voiceFreqParams[i] = freq;
+            }
+            if (ImGui::IsItemDeactivatedAfterEdit() && !isFreqModulated) onModificationEnded();
+            if (!isFreqModulated) adjustParamOnWheel(ap.getParameter("freq_" + idx), "freq_" + idx, freq);
+            if (isFreqModulated) { ImGui::EndDisabled(); ImGui::SameLine(); ImGui::TextUnformatted("(mod)"); }
+            ImGui::SameLine();
+            HelpMarkerPoly("Voice frequency in Hz");
 
-        // Gate Slider with live feedback
-        const bool isGateModulated = isParamModulated("gate_" + idx);
-        float gate = isGateModulated ? getLiveParamValueFor("gate_" + idx, "gate_" + idx + "_live", (voiceGateParams[i] != nullptr ? voiceGateParams[i]->get() : 1.0f))
-                                     : (voiceGateParams[i] != nullptr ? voiceGateParams[i]->get() : 1.0f);
-        if (isGateModulated) ImGui::BeginDisabled();
-        if (ImGui::SliderFloat(("Gate " + idx).toRawUTF8(), &gate, 0.0f, 1.0f, "%.2f")) {
-            if (!isGateModulated) *voiceGateParams[i] = gate;
+            // Waveform Combo with live feedback
+            const bool isWaveModulated = isParamModulated("wave_" + idx);
+            int wave = isWaveModulated ? (int)getLiveParamValueFor("wave_" + idx, "wave_" + idx + "_live", (float)(voiceWaveParams[i] != nullptr ? voiceWaveParams[i]->getIndex() : 0))
+                                       : (voiceWaveParams[i] != nullptr ? voiceWaveParams[i]->getIndex() : 0);
+            if (isWaveModulated) ImGui::BeginDisabled();
+            if (ImGui::Combo("Waveform", &wave, "Sine\0Saw\0Square\0\0")) {
+                if (!isWaveModulated) *voiceWaveParams[i] = wave;
+            }
+            if (ImGui::IsItemDeactivatedAfterEdit() && !isWaveModulated) onModificationEnded();
+            if (isWaveModulated) { ImGui::EndDisabled(); ImGui::SameLine(); ImGui::TextUnformatted("(mod)"); }
+            ImGui::SameLine();
+            HelpMarkerPoly("Oscillator waveform");
+
+            // Gate Slider with live feedback
+            const bool isGateModulated = isParamModulated("gate_" + idx);
+            float gate = isGateModulated ? getLiveParamValueFor("gate_" + idx, "gate_" + idx + "_live", (voiceGateParams[i] != nullptr ? voiceGateParams[i]->get() : 1.0f))
+                                         : (voiceGateParams[i] != nullptr ? voiceGateParams[i]->get() : 1.0f);
+            if (isGateModulated) ImGui::BeginDisabled();
+            if (ImGui::SliderFloat("Gate", &gate, 0.0f, 1.0f, "%.2f")) {
+                if (!isGateModulated) *voiceGateParams[i] = gate;
+            }
+            if (ImGui::IsItemDeactivatedAfterEdit() && !isGateModulated) onModificationEnded();
+            if (!isGateModulated) adjustParamOnWheel(ap.getParameter("gate_" + idx), "gate_" + idx, gate);
+            if (isGateModulated) { ImGui::EndDisabled(); ImGui::SameLine(); ImGui::TextUnformatted("(mod)"); }
+            ImGui::SameLine();
+            HelpMarkerPoly("Voice amplitude (0-1)");
+
+            ImGui::Unindent();
         }
-        if (ImGui::IsItemDeactivatedAfterEdit() && !isGateModulated) onModificationEnded();
-        if (!isGateModulated) adjustParamOnWheel(ap.getParameter("gate_" + idx), "gate_" + idx, gate);
-        if (isGateModulated) { ImGui::EndDisabled(); ImGui::SameLine(); ImGui::TextUnformatted("(mod)"); }
 
         ImGui::PopID();
     }
+    
     ImGui::PopItemWidth();
 }
 #endif

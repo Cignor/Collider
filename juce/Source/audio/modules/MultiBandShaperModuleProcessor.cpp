@@ -209,9 +209,19 @@ void MultiBandShaperModuleProcessor::drawParametersInNode(
     const std::function<void()>& onModificationEnded)
 {
     auto& ap = getAPVTS();
+    
+    auto HelpMarker = [](const char* desc) {
+        ImGui::TextDisabled("(?)");
+        if (ImGui::BeginItemTooltip()) { ImGui::PushTextWrapPos(ImGui::GetFontSize() * 35.0f); ImGui::TextUnformatted(desc); ImGui::PopTextWrapPos(); ImGui::EndTooltip(); }
+    };
+    
     const float centerFreqs[NUM_BANDS] = { 60.0f, 150.0f, 400.0f, 1000.0f, 2400.0f, 5000.0f, 10000.0f, 16000.0f };
 
-    // --- NEW: Vertical Slider Bank Layout ---
+    // === FREQUENCY BANDS SECTION ===
+    ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1.0f), "Frequency Bands");
+    ImGui::Spacing();
+
+    // Vertical Slider Bank Layout
     const float sliderWidth = itemWidth / (float)NUM_BANDS * 0.85f;
     const float sliderHeight = 80.0f;
 
@@ -250,7 +260,14 @@ void MultiBandShaperModuleProcessor::drawParametersInNode(
     }
 
 
-    // Output Gain Slider (remains horizontal)
+    ImGui::Spacing();
+    ImGui::Spacing();
+
+    // === OUTPUT SECTION ===
+    ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1.0f), "Output");
+    ImGui::Spacing();
+
+    // Output Gain Slider (horizontal)
     auto* gainParamPtr = dynamic_cast<juce::AudioParameterFloat*>(ap.getParameter("outputGain"));
     const bool isGainModulated = isParamInputConnected("outputGain");
     float gain = isGainModulated ? getLiveParamValueFor("outputGain", "outputGain_live", gainParamPtr->get()) : gainParamPtr->get();

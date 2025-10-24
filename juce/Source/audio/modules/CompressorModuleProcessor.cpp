@@ -162,8 +162,19 @@ void CompressorModuleProcessor::drawParametersInNode(float itemWidth, const std:
     auto& ap = getAPVTS();
     ImGui::PushItemWidth(itemWidth);
 
+    // Helper for tooltips
+    auto HelpMarkerComp = [](const char* desc) {
+        ImGui::TextDisabled("(?)");
+        if (ImGui::BeginItemTooltip()) {
+            ImGui::PushTextWrapPos(ImGui::GetFontSize() * 35.0f);
+            ImGui::TextUnformatted(desc);
+            ImGui::PopTextWrapPos();
+            ImGui::EndTooltip();
+        }
+    };
+
     // Lambda that correctly handles modulation
-    auto drawSlider = [&](const char* label, const juce::String& paramId, const juce::String& modId, float min, float max, const char* format) {
+    auto drawSlider = [&](const char* label, const juce::String& paramId, const juce::String& modId, float min, float max, const char* format, const char* tooltip) {
         bool isMod = isParamModulated(modId);
         float value = isMod ? getLiveParamValueFor(modId, paramId + juce::String("_live"), ap.getRawParameterValue(paramId)->load())
                             : ap.getRawParameterValue(paramId)->load();
@@ -174,13 +185,53 @@ void CompressorModuleProcessor::drawParametersInNode(float itemWidth, const std:
         if (!isMod) adjustParamOnWheel(ap.getParameter(paramId), paramId, value);
         if (ImGui::IsItemDeactivatedAfterEdit()) { onModificationEnded(); }
         if (isMod) { ImGui::EndDisabled(); ImGui::SameLine(); ImGui::TextUnformatted("(mod)"); }
+        if (tooltip) { ImGui::SameLine(); HelpMarkerComp(tooltip); }
     };
 
-    drawSlider("Threshold", paramIdThreshold, paramIdThresholdMod, -60.0f, 0.0f, "%.1f dB");
-    drawSlider("Ratio", paramIdRatio, paramIdRatioMod, 1.0f, 20.0f, "%.1f : 1");
-    drawSlider("Attack", paramIdAttack, paramIdAttackMod, 0.1f, 200.0f, "%.1f ms");
-    drawSlider("Release", paramIdRelease, paramIdReleaseMod, 5.0f, 1000.0f, "%.0f ms");
-    drawSlider("Makeup", paramIdMakeup, paramIdMakeupMod, -12.0f, 12.0f, "%.1f dB");
+    // === DYNAMICS SECTION ===
+    ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1.0f), "Dynamics");
+    ImGui::Spacing();
+
+    drawSlider("Threshold", paramIdThreshold, paramIdThresholdMod, -60.0f, 0.0f, "%.1f dB", "Level above which compression starts (-60 to 0 dB)");
+    drawSlider("Ratio", paramIdRatio, paramIdRatioMod, 1.0f, 20.0f, "%.1f : 1", "Compression ratio (1:1 to 20:1)\n4:1 = moderate, 10:1 = heavy, 20:1 = limiting");
+
+    ImGui::Spacing();
+    ImGui::Spacing();
+
+    // === TIMING SECTION ===
+    ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1.0f), "Timing");
+    ImGui::Spacing();
+
+    drawSlider("Attack", paramIdAttack, paramIdAttackMod, 0.1f, 200.0f, "%.1f ms", "How fast compression engages (0.1-200 ms)\nFast = punchy, Slow = smooth");
+    drawSlider("Release", paramIdRelease, paramIdReleaseMod, 5.0f, 1000.0f, "%.0f ms", "How fast compression releases (5-1000 ms)\nFast = pumping, Slow = transparent");
+
+    ImGui::Spacing();
+    ImGui::Spacing();
+
+    // === OUTPUT SECTION ===
+    ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1.0f), "Output");
+    ImGui::Spacing();
+
+    drawSlider("Makeup", paramIdMakeup, paramIdMakeupMod, -12.0f, 12.0f, "%.1f dB", "Output gain compensation (-12 to +12 dB)");
+
+    ImGui::Spacing();
+    ImGui::Spacing();
+
+    // === GAIN REDUCTION METER SECTION ===
+    ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1.0f), "Gain Reduction");
+    ImGui::Spacing();
+
+    // Simulated gain reduction meter (would need real GR value from DSP)
+    float threshold = ap.getRawParameterValue(paramIdThreshold)->load();
+    float ratio = ap.getRawParameterValue(paramIdRatio)->load();
+    
+    // Simulate GR based on threshold and ratio (placeholder)
+    float simulatedGR = juce::jlimit(0.0f, 1.0f, (-threshold / 60.0f) * (ratio / 20.0f));
+    
+    ImGui::PushStyleColor(ImGuiCol_PlotHistogram, ImVec4(1.0f, 0.3f, 0.3f, 1.0f));
+    ImGui::ProgressBar(simulatedGR, ImVec2(itemWidth, 0), "");
+    ImGui::PopStyleColor();
+    ImGui::Text("GR: ~%.1f dB", simulatedGR * -12.0f);
 
     ImGui::PopItemWidth();
 }

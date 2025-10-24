@@ -81,8 +81,25 @@ void ScopeModuleProcessor::drawParametersInNode (float itemWidth, const std::fun
 {
     juce::ignoreUnused (isParamModulated);
     auto& ap = getAPVTS();
+    
+    // Helper for tooltips
+    auto HelpMarkerScope = [](const char* desc) {
+        ImGui::TextDisabled("(?)");
+        if (ImGui::BeginItemTooltip()) {
+            ImGui::PushTextWrapPos(ImGui::GetFontSize() * 35.0f);
+            ImGui::TextUnformatted(desc);
+            ImGui::PopTextWrapPos();
+            ImGui::EndTooltip();
+        }
+    };
+    
     float seconds = monitorSecondsParam ? monitorSecondsParam->load() : 5.0f;
     ImGui::PushItemWidth (itemWidth);
+    
+    // === SCOPE SETTINGS SECTION ===
+    ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1.0f), "Scope Settings");
+    ImGui::Spacing();
+    
     if (ImGui::SliderFloat ("Seconds", &seconds, 0.5f, 20.0f, "%.1f s"))
     {
         if (auto* p = ap.getParameter ("monitorSeconds"))
@@ -90,7 +107,17 @@ void ScopeModuleProcessor::drawParametersInNode (float itemWidth, const std::fun
     }
     if (ImGui::IsItemDeactivatedAfterEdit()) { onModificationEnded(); }
     adjustParamOnWheel (ap.getParameter ("monitorSeconds"), "monitorSeconds", seconds);
+    ImGui::SameLine();
+    HelpMarkerScope("Time window for waveform display (0.5-20 seconds)\nAlso affects min/max monitoring period");
+    
     ImGui::PopItemWidth();
+
+    ImGui::Spacing();
+    ImGui::Spacing();
+
+    // === LIVE WAVEFORM SECTION ===
+    ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1.0f), "Live Waveform");
+    ImGui::Spacing();
 
     // Draw waveform using ImGui draw list
     auto* dl = ImGui::GetWindowDrawList();
@@ -148,6 +175,30 @@ void ScopeModuleProcessor::drawParametersInNode (float itemWidth, const std::fun
     }
     ImGui::PopClipRect();
     ImGui::Dummy (ImVec2 (width, height));
+
+    ImGui::Spacing();
+    ImGui::Spacing();
+
+    // === SIGNAL STATISTICS SECTION ===
+    ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1.0f), "Signal Statistics");
+    ImGui::Spacing();
+
+    // Display min/max values with color coding
+    ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.3f, 0.3f, 1.0f));
+    ImGui::Text("Peak Max: %.3f", rollMax);
+    ImGui::PopStyleColor();
+    
+    ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.86f, 0.31f, 1.0f));
+    ImGui::Text("Peak Min: %.3f", rollMin);
+    ImGui::PopStyleColor();
+    
+    // Peak-to-peak
+    float peakToPeak = rollMax - rollMin;
+    ImGui::Text("P-P: %.3f", peakToPeak);
+    
+    // dBFS conversion for max
+    float dBMax = rollMax > 0.0001f ? 20.0f * std::log10(rollMax) : -100.0f;
+    ImGui::Text("Max dBFS: %.1f", dBMax);
 }
 #endif
 

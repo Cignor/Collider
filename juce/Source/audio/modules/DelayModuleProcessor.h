@@ -25,37 +25,78 @@ public:
     {
         auto& ap = getAPVTS();
         
+        // Helper for tooltips
+        auto HelpMarkerDelay = [](const char* desc) {
+            ImGui::TextDisabled("(?)");
+            if (ImGui::BeginItemTooltip()) {
+                ImGui::PushTextWrapPos(ImGui::GetFontSize() * 35.0f);
+                ImGui::TextUnformatted(desc);
+                ImGui::PopTextWrapPos();
+                ImGui::EndTooltip();
+            }
+        };
+        
         // Get live modulated values for display
         bool isTimeModulated = isParamModulated("timeMs");
         bool isFbModulated = isParamModulated("feedback");
         bool isMixModulated = isParamModulated("mix");
         
-        // Use correct mod param IDs (same as parameter IDs)
         float timeMs = isTimeModulated ? getLiveParamValueFor("timeMs", "timeMs_live", timeMsParam->load()) : (timeMsParam != nullptr ? timeMsParam->load() : 400.0f);
         float fb = isFbModulated ? getLiveParamValueFor("feedback", "feedback_live", feedbackParam->load()) : (feedbackParam != nullptr ? feedbackParam->load() : 0.4f);
         float mix = isMixModulated ? getLiveParamValueFor("mix", "mix_live", mixParam->load()) : (mixParam != nullptr ? mixParam->load() : 0.3f);
-        ImGui::PushItemWidth (itemWidth);
+        
+        ImGui::PushItemWidth(itemWidth);
+
+        // === DELAY PARAMETERS SECTION ===
+        ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1.0f), "Delay Parameters");
+        ImGui::Spacing();
 
         // Time
         if (isTimeModulated) ImGui::BeginDisabled();
-        if (ImGui::SliderFloat ("Time (ms)", &timeMs, 1.0f, 2000.0f, "%.1f")) if (!isTimeModulated) if (auto* p = dynamic_cast<juce::AudioParameterFloat*>(ap.getParameter("timeMs"))) *p = timeMs;
-        if (!isTimeModulated) adjustParamOnWheel (ap.getParameter ("timeMs"), "timeMs", timeMs);
+        if (ImGui::SliderFloat("Time (ms)", &timeMs, 1.0f, 2000.0f, "%.1f")) if (!isTimeModulated) if (auto* p = dynamic_cast<juce::AudioParameterFloat*>(ap.getParameter("timeMs"))) *p = timeMs;
+        if (!isTimeModulated) adjustParamOnWheel(ap.getParameter("timeMs"), "timeMs", timeMs);
         if (ImGui::IsItemDeactivatedAfterEdit()) { onModificationEnded(); }
         if (isTimeModulated) { ImGui::EndDisabled(); ImGui::SameLine(); ImGui::TextUnformatted("(mod)"); }
+        ImGui::SameLine();
+        HelpMarkerDelay("Delay time in milliseconds (1-2000 ms)");
 
         // Feedback
         if (isFbModulated) ImGui::BeginDisabled();
-        if (ImGui::SliderFloat ("Feedback", &fb, 0.0f, 0.95f)) if (!isFbModulated) if (auto* p = dynamic_cast<juce::AudioParameterFloat*>(ap.getParameter("feedback"))) *p = fb;
-        if (!isFbModulated) adjustParamOnWheel (ap.getParameter ("feedback"), "feedback", fb);
+        if (ImGui::SliderFloat("Feedback", &fb, 0.0f, 0.95f)) if (!isFbModulated) if (auto* p = dynamic_cast<juce::AudioParameterFloat*>(ap.getParameter("feedback"))) *p = fb;
+        if (!isFbModulated) adjustParamOnWheel(ap.getParameter("feedback"), "feedback", fb);
         if (ImGui::IsItemDeactivatedAfterEdit()) { onModificationEnded(); }
         if (isFbModulated) { ImGui::EndDisabled(); ImGui::SameLine(); ImGui::TextUnformatted("(mod)"); }
+        ImGui::SameLine();
+        HelpMarkerDelay("Feedback amount (0-95%)\nCreates repeating echoes");
 
         // Mix
         if (isMixModulated) ImGui::BeginDisabled();
-        if (ImGui::SliderFloat ("Mix", &mix, 0.0f, 1.0f)) if (!isMixModulated) if (auto* p = dynamic_cast<juce::AudioParameterFloat*>(ap.getParameter("mix"))) *p = mix;
-        if (!isMixModulated) adjustParamOnWheel (ap.getParameter ("mix"), "mix", mix);
+        if (ImGui::SliderFloat("Mix", &mix, 0.0f, 1.0f)) if (!isMixModulated) if (auto* p = dynamic_cast<juce::AudioParameterFloat*>(ap.getParameter("mix"))) *p = mix;
+        if (!isMixModulated) adjustParamOnWheel(ap.getParameter("mix"), "mix", mix);
         if (ImGui::IsItemDeactivatedAfterEdit()) { onModificationEnded(); }
         if (isMixModulated) { ImGui::EndDisabled(); ImGui::SameLine(); ImGui::TextUnformatted("(mod)"); }
+        ImGui::SameLine();
+        HelpMarkerDelay("Dry/wet mix (0-100%)\n0% = dry signal only, 100% = delayed signal only");
+
+        ImGui::Spacing();
+        ImGui::Spacing();
+
+        // === VISUAL DELAY TAPS SECTION ===
+        ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1.0f), "Delay Taps");
+        ImGui::Spacing();
+
+        // Show first 5 delay taps as dots
+        for (int i = 0; i < 5; ++i)
+        {
+            if (i > 0) ImGui::SameLine();
+            
+            float tapLevel = fb * std::pow(fb, (float)i);  // Exponential decay
+            ImVec4 color = ImColor::HSV(0.15f, 0.7f, tapLevel).Value;
+            
+            ImGui::PushStyleColor(ImGuiCol_Button, color);
+            ImGui::Button("•", ImVec2(itemWidth * 0.18f, 20));
+            ImGui::PopStyleColor();
+        }
         
         ImGui::PopItemWidth();
     }

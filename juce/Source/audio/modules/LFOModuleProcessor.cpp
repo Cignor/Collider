@@ -158,6 +158,19 @@ bool LFOModuleProcessor::getParamRouting(const juce::String& paramId, int& outBu
 
 #if defined(PRESET_CREATOR_UI)
 
+// Helper function for tooltip with help marker
+static void HelpMarkerLFO(const char* desc)
+{
+    ImGui::TextDisabled("(?)");
+    if (ImGui::BeginItemTooltip())
+    {
+        ImGui::PushTextWrapPos(ImGui::GetFontSize() * 35.0f);
+        ImGui::TextUnformatted(desc);
+        ImGui::PopTextWrapPos();
+        ImGui::EndTooltip();
+    }
+}
+
 void LFOModuleProcessor::drawParametersInNode(float itemWidth, const std::function<bool(const juce::String& paramId)>& isParamModulated, const std::function<void()>& onModificationEnded)
 {
     auto& ap = getAPVTS();
@@ -173,37 +186,82 @@ void LFOModuleProcessor::drawParametersInNode(float itemWidth, const std::functi
     
     ImGui::PushItemWidth(itemWidth);
 
+    // === LFO PARAMETERS SECTION ===
+    ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1.0f), "LFO Parameters");
+    ImGui::Spacing();
+
+    // Rate slider with tooltip
     if (isRateModulated) ImGui::BeginDisabled();
     if (ImGui::SliderFloat("Rate", &rate, 0.05f, 20.0f, "%.2f Hz", ImGuiSliderFlags_Logarithmic)) if (!isRateModulated) *dynamic_cast<juce::AudioParameterFloat*>(ap.getParameter(paramIdRate)) = rate;
     if (ImGui::IsItemDeactivatedAfterEdit() && !isRateModulated) onModificationEnded();
     if (isRateModulated) { ImGui::EndDisabled(); ImGui::SameLine(); ImGui::TextUnformatted("(mod)"); }
+    ImGui::SameLine();
+    HelpMarkerLFO("LFO rate in Hz\nLogarithmic scale from 0.05 Hz to 20 Hz");
     
+    // Depth slider with tooltip
     if (isDepthModulated) ImGui::BeginDisabled();
     if (ImGui::SliderFloat("Depth", &depth, 0.0f, 1.0f)) if (!isDepthModulated) *dynamic_cast<juce::AudioParameterFloat*>(ap.getParameter(paramIdDepth)) = depth;
     if (ImGui::IsItemDeactivatedAfterEdit() && !isDepthModulated) onModificationEnded();
     if (isDepthModulated) { ImGui::EndDisabled(); ImGui::SameLine(); ImGui::TextUnformatted("(mod)"); }
+    ImGui::SameLine();
+    HelpMarkerLFO("LFO depth/amplitude (0-1)\nControls output signal strength");
 
+    // Wave combo with tooltip
     if (isWaveModulated) ImGui::BeginDisabled();
     if (ImGui::Combo("Wave", &wave, "Sine\0Tri\0Saw\0\0")) if (!isWaveModulated) *dynamic_cast<juce::AudioParameterChoice*>(ap.getParameter(paramIdWave)) = wave;
     if (ImGui::IsItemDeactivatedAfterEdit() && !isWaveModulated) onModificationEnded();
     if (isWaveModulated) { ImGui::EndDisabled(); ImGui::SameLine(); ImGui::TextUnformatted("(mod)"); }
+    ImGui::SameLine();
+    HelpMarkerLFO("Waveform shape:\nSine = smooth\nTri = linear\nSaw = ramp");
 
+    // Bipolar checkbox
     if (ImGui::Checkbox("Bipolar", &bipolar)) *dynamic_cast<juce::AudioParameterBool*>(ap.getParameter(paramIdBipolar)) = bipolar;
     if (ImGui::IsItemDeactivatedAfterEdit()) onModificationEnded();
+    ImGui::SameLine();
+    HelpMarkerLFO("Bipolar: -1 to +1\nUnipolar: 0 to +1");
 
-    // Transport sync controls
+    ImGui::Spacing();
+    ImGui::Spacing();
+
+    // === TRANSPORT SYNC SECTION ===
+    ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1.0f), "Transport Sync");
+    ImGui::Spacing();
+
+    // Sync checkbox
     bool sync = syncParam->load() > 0.5f;
     if (ImGui::Checkbox("Sync to Transport", &sync)) *dynamic_cast<juce::AudioParameterBool*>(ap.getParameter(paramIdSync)) = sync;
     if (ImGui::IsItemDeactivatedAfterEdit()) onModificationEnded();
+    ImGui::SameLine();
+    HelpMarkerLFO("Sync LFO rate to host transport tempo");
     
     if (sync)
     {
+        // Division combo
         int division = static_cast<int>(rateDivisionParam->load());
         const char* items[] = { "1/32", "1/16", "1/8", "1/4", "1/2", "1", "2", "4", "8" };
         if (ImGui::Combo("Division", &division, items, (int)(sizeof(items)/sizeof(items[0]))))
             *dynamic_cast<juce::AudioParameterChoice*>(ap.getParameter(paramIdRateDivision)) = division;
         if (ImGui::IsItemDeactivatedAfterEdit()) onModificationEnded();
+        ImGui::SameLine();
+        HelpMarkerLFO("Note division for tempo sync\n1/16 = sixteenth notes, 1 = whole notes, etc.");
     }
+
+    ImGui::Spacing();
+    ImGui::Spacing();
+
+    // === LIVE OUTPUT SECTION ===
+    ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1.0f), "Live Output");
+    ImGui::Spacing();
+
+    // Visual LFO output indicator
+    float currentValue = lastOutputValues.size() > 0 ? lastOutputValues[0]->load() : 0.0f;
+    ImGui::Text("Output: %.3f", currentValue);
+
+    // Progress bar showing current LFO position
+    float normalizedValue = bipolar ? (currentValue + 1.0f) / 2.0f : currentValue;
+    ImGui::PushStyleColor(ImGuiCol_PlotHistogram, ImColor::HSV(0.55f, 0.7f, 0.8f).Value);
+    ImGui::ProgressBar(normalizedValue, ImVec2(itemWidth, 0), "");
+    ImGui::PopStyleColor();
 
     ImGui::PopItemWidth();
 }

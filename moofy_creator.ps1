@@ -192,6 +192,40 @@
 
  )
 
+#--- Auto-discover audio module node files ---
+$modulesRoot = Join-Path $projectRoot "juce\Source\audio\modules"
+if (Test-Path $modulesRoot) {
+    $patterns = @('*ModuleProcessor.h','*ModuleProcessor.cpp','*NodeProcessor.h','*NodeProcessor.cpp')
+    $discovered = Get-ChildItem -Path $modulesRoot -Recurse -File -Include $patterns
+    foreach ($item in $discovered) {
+        $relativePath = $item.FullName.Substring($projectRoot.Length + 1).Replace('\\','/')
+        if (-not ($sourceFiles -contains $relativePath)) {
+            $sourceFiles += $relativePath
+        }
+    }
+}
+
+#--- Include entire imnode_examples directory ---
+$imnodeDir = Join-Path $projectRoot "imnode_examples"
+if (Test-Path $imnodeDir) {
+    $imnodeFiles = Get-ChildItem -Path $imnodeDir -Recurse -File
+    foreach ($item in $imnodeFiles) {
+        $relativePath = $item.FullName.Substring($projectRoot.Length + 1).Replace('\\','/')
+        if (-not ($sourceFiles -contains $relativePath)) {
+            $sourceFiles += $relativePath
+        }
+    }
+}
+
+#--- Ensure IMGUI_NODE_DESIGN_GUIDE.md is included ---
+$imguiGuide = Join-Path $projectRoot "IMGUI_NODE_DESIGN_GUIDE.md"
+if (Test-Path $imguiGuide) {
+    $relativePath = $imguiGuide.Substring($projectRoot.Length + 1).Replace('\\','/')
+    if (-not ($sourceFiles -contains $relativePath)) {
+        $sourceFiles += $relativePath
+    }
+}
+
 #--- Script Execution ---
 
  if (Test-Path $outputFile) {

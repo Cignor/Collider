@@ -30,53 +30,10 @@ public:
     bool getParamRouting(const juce::String& paramId, int& outBusIndex, int& outChannelIndexInBus) const override;
 
 #if defined(PRESET_CREATOR_UI)
-    void drawParametersInNode (float itemWidth, const std::function<bool(const juce::String& paramId)>& isParamModulated, const std::function<void()>& onModificationEnded) override
-    {
-        auto& ap = getAPVTS();
-        
-        // Get live modulated values for display
-        bool isAttackModulated = isParamModulated(paramIdAttackMod);
-        bool isDecayModulated = isParamModulated(paramIdDecayMod);
-        bool isSustainModulated = isParamModulated(paramIdSustainMod);
-        bool isReleaseModulated = isParamModulated(paramIdReleaseMod);
-        
-        float a = isAttackModulated ? getLiveParamValueFor("attack_mod", "attack_live", attackParam->load()) : (attackParam != nullptr ? attackParam->load() : 0.01f);
-        float d = isDecayModulated ? getLiveParamValueFor("decay_mod", "decay_live", decayParam->load()) : (decayParam != nullptr ? decayParam->load() : 0.1f);
-        float s = isSustainModulated ? getLiveParamValueFor("sustain_mod", "sustain_live", sustainParam->load()) : (sustainParam != nullptr ? sustainParam->load() : 0.7f);
-        float r = isReleaseModulated ? getLiveParamValueFor("release_mod", "release_live", releaseParam->load()) : (releaseParam != nullptr ? releaseParam->load() : 0.2f);
-        
-        ImGui::PushItemWidth (itemWidth);
-        
-        // Attack
-        if (isAttackModulated) ImGui::BeginDisabled();
-        if (ImGui::SliderFloat ("Attack (s)",  &a, 0.001f, 5.0f, "%.3f", ImGuiSliderFlags_Logarithmic)) if (!isAttackModulated) if (auto* p = dynamic_cast<juce::AudioParameterFloat*>(ap.getParameter(paramIdAttack)))  *p = a;
-        if (!isAttackModulated) adjustParamOnWheel (ap.getParameter(paramIdAttack), "attack", a);
-        if (ImGui::IsItemDeactivatedAfterEdit()) { onModificationEnded(); }
-        if (isAttackModulated) { ImGui::EndDisabled(); ImGui::SameLine(); ImGui::TextUnformatted("(mod)"); }
-
-        // Decay
-        if (isDecayModulated) ImGui::BeginDisabled();
-        if (ImGui::SliderFloat ("Decay (s)",   &d, 0.001f, 5.0f, "%.3f", ImGuiSliderFlags_Logarithmic)) if (!isDecayModulated) if (auto* p = dynamic_cast<juce::AudioParameterFloat*>(ap.getParameter(paramIdDecay)))   *p = d;
-        if (!isDecayModulated) adjustParamOnWheel (ap.getParameter(paramIdDecay), "decay", d);
-        if (ImGui::IsItemDeactivatedAfterEdit()) { onModificationEnded(); }
-        if (isDecayModulated) { ImGui::EndDisabled(); ImGui::SameLine(); ImGui::TextUnformatted("(mod)"); }
-
-        // Sustain
-        if (isSustainModulated) ImGui::BeginDisabled();
-        if (ImGui::SliderFloat ("Sustain", &s, 0.0f, 1.0f)) if (!isSustainModulated) if (auto* p = dynamic_cast<juce::AudioParameterFloat*>(ap.getParameter(paramIdSustain))) *p = s;
-        if (!isSustainModulated) adjustParamOnWheel (ap.getParameter(paramIdSustain), "sustain", s);
-        if (ImGui::IsItemDeactivatedAfterEdit()) { onModificationEnded(); }
-        if (isSustainModulated) { ImGui::EndDisabled(); ImGui::SameLine(); ImGui::TextUnformatted("(mod)"); }
-
-        // Release
-        if (isReleaseModulated) ImGui::BeginDisabled();
-        if (ImGui::SliderFloat ("Release (s)", &r, 0.001f, 5.0f, "%.3f", ImGuiSliderFlags_Logarithmic)) if (!isReleaseModulated) if (auto* p = dynamic_cast<juce::AudioParameterFloat*>(ap.getParameter(paramIdRelease))) *p = r;
-        if (!isReleaseModulated) adjustParamOnWheel (ap.getParameter(paramIdRelease), "release", r);
-        if (ImGui::IsItemDeactivatedAfterEdit()) { onModificationEnded(); }
-        if (isReleaseModulated) { ImGui::EndDisabled(); ImGui::SameLine(); ImGui::TextUnformatted("(mod)"); }
-
-        ImGui::PopItemWidth();
-    }
+    void drawParametersInNode (float itemWidth, const std::function<bool(const juce::String& paramId)>& isParamModulated, const std::function<void()>& onModificationEnded) override;
+private:
+    static void HelpMarkerADSR(const char* desc);
+public:
 
     void drawIoPins(const NodePinHelpers& helpers) override
     {

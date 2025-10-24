@@ -409,7 +409,6 @@ void MultiSequencerModuleProcessor::processBlock (juce::AudioBuffer<float>& buff
 // ... The rest of your file (drawParametersInNode, etc.) remains unchanged ...
 void MultiSequencerModuleProcessor::drawParametersInNode (float itemWidth, const std::function<bool(const juce::String& paramId)>& isParamModulated, const std::function<void()>& onModificationEnded)
 {
-    // This is the full, working UI code from the original StepSequencer, with buttons added.
     auto& ap = getAPVTS();
     int activeSteps = numStepsParam ? (int)numStepsParam->load() : 8;
     const int boundMaxUi = stepsModMaxParam ? juce::jlimit(1, MAX_STEPS, (int)stepsModMaxParam->load()) : MAX_STEPS;
@@ -429,9 +428,16 @@ void MultiSequencerModuleProcessor::drawParametersInNode (float itemWidth, const
     if (stepsAreModulated) { ImGui::EndDisabled(); ImGui::SameLine(); ImGui::TextUnformatted("(mod)"); }
 
     const int shown = juce::jlimit(1, MAX_STEPS, displayedSteps);
-    const float sliderW = itemWidth / (float)juce::jmax(8, shown) * 0.8f;
+    // Calculate responsive step width based on itemWidth and spacing
+    const float spacing = 4.0f;
+    const float sliderW = (itemWidth - spacing * (shown - 1)) / (float)shown;
     
-    ImGui::PushItemWidth(sliderW);
+    // Apply the calculated spacing to ItemSpacing for consistent grid layout
+    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(spacing, spacing));
+    
+    // CRITICAL FIX: Use BeginGroup() to constrain the grid to exactly itemWidth
+    // This prevents the first item from expanding to full width
+    ImGui::BeginGroup();
     for (int i = 0; i < shown; ++i) {
         if (i > 0) ImGui::SameLine();
         float baseValue = (pitchParams[i]) ? pitchParams[i]->load() : 0.5f;
@@ -462,10 +468,16 @@ void MultiSequencerModuleProcessor::drawParametersInNode (float itemWidth, const
         if (isActive) ImGui::PopStyleColor(2);
         ImGui::PopID();
     }
-	ImGui::PopItemWidth();
+    ImGui::EndGroup();  // End pitch sliders group
+    
+    ImGui::PopStyleVar(); // Pop ItemSpacing for value sliders
 
-	ImGui::PushItemWidth(sliderW);
+    // Apply spacing for gate sliders grid
+    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(spacing, spacing));
     ImVec2 gate_sliders_p0 = ImGui::GetCursorScreenPos();
+    
+    // CRITICAL FIX: Use BeginGroup() to constrain the grid
+    ImGui::BeginGroup();
     for (int i = 0; i < shown; ++i) {
 		if (i > 0) ImGui::SameLine();
         ImGui::PushID(2000 + i);
@@ -490,14 +502,39 @@ void MultiSequencerModuleProcessor::drawParametersInNode (float itemWidth, const
 		if (isActive) ImGui::PopStyleColor();
 		ImGui::PopID();
 	}
-	ImGui::PopItemWidth();
+    ImGui::EndGroup();  // End gate sliders group
     
+    ImGui::PopStyleVar(); // Pop ItemSpacing for gate sliders
+    
+    // Draw threshold line overlay on the gate sliders
     const bool gtIsModulatedForLine = isParamInputConnected("gateLength_mod");
     const float threshold_value = gtIsModulatedForLine ? getLiveParamValueFor("gateLength_mod", "gateThreshold_live", (gateThresholdParam ? gateThresholdParam->load() : 0.5f)) : (gateThresholdParam ? gateThresholdParam->load() : 0.5f);
     const float slider_height = 60.0f;
-    const float row_width = (sliderW * shown) + (ImGui::GetStyle().ItemSpacing.x * (shown - 1));
+    const float row_width = (sliderW * shown) + (spacing * (shown - 1));
     const float line_y = gate_sliders_p0.y + (1.0f - threshold_value) * slider_height;
     ImGui::GetWindowDrawList()->AddLine(ImVec2(gate_sliders_p0.x, line_y), ImVec2(gate_sliders_p0.x + row_width, line_y), IM_COL32(255, 255, 0, 200), 2.0f);
+    
+    // Apply spacing for trigger checkbox grid (MOVED HERE - directly after gate sliders!)
+    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(spacing, spacing));
+    
+    // CRITICAL FIX: Use BeginGroup() to constrain the grid
+    ImGui::BeginGroup();
+    for (int i = 0; i < shown; ++i) {
+        if (i > 0) ImGui::SameLine();
+        bool baseTrig = (stepTrigParams.size() > (size_t)i && stepTrigParams[i]) ? (bool)(*stepTrigParams[i]) : false;
+        const auto trigModId = "step" + juce::String(i + 1) + "_trig_mod";
+        const bool trigIsModulated = isParamInputConnected(trigModId);
+        bool displayTrig = trigIsModulated ? getLiveParamValueFor(trigModId, "trig_live_" + juce::String(i + 1), baseTrig ? 1.0f : 0.0f) > 0.5f : baseTrig;
+        if (trigIsModulated) ImGui::BeginDisabled();
+        ImGui::PushID(1000 + i);
+        if (ImGui::Checkbox("##trig", &displayTrig) && !trigIsModulated && stepTrigParams[i]) *stepTrigParams[i] = displayTrig;
+        if (ImGui::IsItemDeactivatedAfterEdit()) onModificationEnded();
+        ImGui::PopID();
+        if (trigIsModulated) ImGui::EndDisabled();
+    }
+    ImGui::EndGroup();  // End checkboxes group
+    
+    ImGui::PopStyleVar(); // Pop ItemSpacing for trigger checkboxes
     
     ImGui::Text("Current Step: %d", currentStep.load() + 1);
     
@@ -548,27 +585,6 @@ void MultiSequencerModuleProcessor::drawParametersInNode (float itemWidth, const
     if (!gtIsModulated) adjustParamOnWheel(ap.getParameter("gateThreshold"), "gateThreshold", gtEff);
     if (gtIsModulated) { ImGui::EndDisabled(); ImGui::SameLine(); ImGui::TextUnformatted("(mod)"); }
     ImGui::PopItemWidth();
-
-    {
-        for (int i = 0; i < shown; ++i) {
-            if (i > 0) ImGui::SameLine();
-            bool baseTrig = (stepTrigParams.size() > (size_t)i && stepTrigParams[i]) ? (bool)(*stepTrigParams[i]) : false;
-            const auto trigModId = "step" + juce::String(i + 1) + "_trig_mod";
-            const bool trigIsModulated = isParamInputConnected(trigModId);
-            bool displayTrig = trigIsModulated ? getLiveParamValueFor(trigModId, "trig_live_" + juce::String(i + 1), baseTrig ? 1.0f : 0.0f) > 0.5f : baseTrig;
-            if (trigIsModulated) ImGui::BeginDisabled();
-            ImGui::PushID(1000 + i);
-            ImGui::SetNextItemWidth(sliderW);
-            ImGui::PushItemWidth(sliderW);
-            if (ImGui::Checkbox("##trig", &displayTrig) && !trigIsModulated && stepTrigParams[i]) *stepTrigParams[i] = displayTrig;
-            ImGui::PopItemWidth();
-            float used = ImGui::GetItemRectSize().x;
-            if (used < sliderW) { ImGui::SameLine(0.0f, 0.0f); ImGui::Dummy(ImVec2(sliderW - used, 0.0f)); }
-            if (ImGui::IsItemDeactivatedAfterEdit()) onModificationEnded();
-            ImGui::PopID();
-            if (trigIsModulated) ImGui::EndDisabled();
-        }
-    }
     
     // ADDED: Auto-connect buttons
     if (ImGui::Button("Connect to Samplers", ImVec2(itemWidth, 0))) { autoConnectSamplersTriggered = true; }
@@ -585,33 +601,27 @@ void MultiSequencerModuleProcessor::drawIoPins(const NodePinHelpers& helpers)
         activeSteps = juce::jlimit(1, boundMaxPins, activeSteps);
     }
     
-    // --- Section 1: Global Inputs & Live Outputs (In Parallel) ---
+    // --- Section 1: Global I/O (Parallel Layout for Compactness) ---
     helpers.drawParallelPins("Mod In L", 0, "Pitch", 0);
     helpers.drawParallelPins("Mod In R", 1, "Gate", 1);
     helpers.drawParallelPins("Rate Mod", 2, "Gate Nuanced", 2);
     helpers.drawParallelPins("Gate Mod", 3, "Velocity", 3);
     helpers.drawParallelPins("Steps Mod", 4, "Mod", 4);
-    
-    // This output has no corresponding global input; use nullptr for input
     helpers.drawParallelPins(nullptr, -1, "Trigger", 5);
+    helpers.drawParallelPins(nullptr, -1, "Num Steps", 6);
     
-    // Num Steps output (Raw pin type, no corresponding input)
-    helpers.drawAudioOutputPin("Num Steps", 6);
+    ImGui::Spacing();
 
-    // --- Section 2: Per-Step Inputs & Outputs (In Parallel) ---
+    // --- Section 2: Per-Step I/O (Parallel Layout for Compactness) ---
     for (int i = 0; i < activeSteps; ++i)
     {
         const juce::String stepStr = " " + juce::String(i + 1);
-
-        // Pitch I/O for this step
+        
+        // Draw all 3 I/O pairs for this step on consecutive lines
         helpers.drawParallelPins(("Step" + stepStr + " Mod").toRawUTF8(), 6 + i, 
                                 ("Pitch" + stepStr).toRawUTF8(), 7 + i * 3 + 0);
-        
-        // Gate I/O for this step
         helpers.drawParallelPins(("Step" + stepStr + " Gate Mod").toRawUTF8(), 38 + i, 
                                 ("Gate" + stepStr).toRawUTF8(), 7 + i * 3 + 1);
-
-        // Trigger I/O for this step
         helpers.drawParallelPins(("Step" + stepStr + " Trig Mod").toRawUTF8(), 22 + i, 
                                 ("Trig" + stepStr).toRawUTF8(), 7 + i * 3 + 2);
 	}

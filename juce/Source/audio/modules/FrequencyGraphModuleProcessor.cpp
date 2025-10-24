@@ -211,6 +211,8 @@ void FrequencyGraphModuleProcessor::processBlock(juce::AudioBuffer<float>& buffe
 
 void FrequencyGraphModuleProcessor::drawParametersInNode(float itemWidth, const std::function<bool(const juce::String&)>&, const std::function<void()>& onModificationEnded)
 {
+    ImGui::PushItemWidth(itemWidth);
+    
     if (!isFrozen && abstractFifo.getNumReady() > 0)
     {
         int start1, size1, start2, size2;
@@ -233,7 +235,8 @@ void FrequencyGraphModuleProcessor::drawParametersInNode(float itemWidth, const 
         peakHoldData[i] = juce::jmax(-100.0f, peakHoldData[i]);
     }
 
-    const float graphWidth = 400.0f;
+    // THE FIX: Use itemWidth directly for responsive, stable sizing
+    const float graphWidth = itemWidth;
     const float graphHeight = 200.0f;
     ImGui::Dummy(ImVec2(graphWidth, graphHeight));
     ImVec2 p0 = ImGui::GetItemRectMin();
@@ -301,8 +304,6 @@ void FrequencyGraphModuleProcessor::drawParametersInNode(float itemWidth, const 
     drawList->AddRect(p0, p1, IM_COL32(80, 80, 80, 255));
     drawList->PopClipRect(); // Pop the clipping rectangle
 
-    ImGui::PushItemWidth(itemWidth);
-    
     ImGui::Checkbox("Freeze", &isFrozen);
     
     auto& ap = getAPVTS();
@@ -334,8 +335,6 @@ void FrequencyGraphModuleProcessor::drawParametersInNode(float itemWidth, const 
     drawThresholdSlider("Mid Thr", midThresholdParam, FrequencyGraphModuleProcessor::paramIdMidThreshold);
     drawThresholdSlider("High Thr", highThresholdParam, FrequencyGraphModuleProcessor::paramIdHighThreshold);
 
-    ImGui::PopItemWidth();
-
     if (ImGui::IsItemHovered(ImGuiHoveredFlags_RectOnly))
     {
         ImVec2 mousePos = ImGui::GetMousePos();
@@ -350,6 +349,8 @@ void FrequencyGraphModuleProcessor::drawParametersInNode(float itemWidth, const 
             ImGui::EndTooltip();
         }
     }
+    
+    ImGui::PopItemWidth();
 }
 
 void FrequencyGraphModuleProcessor::drawIoPins(const NodePinHelpers& helpers)
