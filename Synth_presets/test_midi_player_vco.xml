@@ -1,0 +1,166 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<ModularSynthPreset version="1" bpm="120.0">
+  <modules>
+    <module logicalId="1" type="midi player">
+      <params>
+        <MIDIPlayerParameters>
+          <PARAM id="loop" value="1.0"/>
+          <PARAM id="pitch" value="0.0"/>
+          <PARAM id="pitch_mod" value="0.5"/>
+          <PARAM id="speed" value="1.0"/>
+          <PARAM id="speed_mod" value="0.5"/>
+          <PARAM id="tempo" value="142.0"/>
+          <PARAM id="track" value="0.0"/>
+          <PARAM id="velocity_mod" value="0.5"/>
+        </MIDIPlayerParameters>
+      </params>
+      <extra>
+        <MIDIPlayerExtra fileName="saved_pikon.mid" filePath="H:\0000_CODE\01_collider_pyo\audio\MIDI\saved_pikon.mid"
+                         track="0"/>
+      </extra>
+    </module>
+    <module logicalId="2" type="VCO">
+      <params>
+        <VCOParams>
+          <PARAM id="frequency" value="440.0"/>
+          <PARAM id="waveform" value="0.0"/>
+        </VCOParams>
+      </params>
+    </module>
+    <module logicalId="3" type="VCO">
+      <params>
+        <VCOParams>
+          <PARAM id="frequency" value="440.0"/>
+          <PARAM id="waveform" value="0.0"/>
+        </VCOParams>
+      </params>
+    </module>
+    <module logicalId="4" type="Mixer">
+      <params>
+        <MixerParams>
+          <PARAM id="crossfade" value="0.0"/>
+          <PARAM id="gain" value="0.0"/>
+          <PARAM id="pan" value="0.0"/>
+        </MixerParams>
+      </params>
+    </module>
+    <module logicalId="5" type="MapRange">
+      <params>
+        <MapRangeParams>
+          <PARAM id="cvMax" value="1.0"/>
+          <PARAM id="cvMin" value="0.0"/>
+          <PARAM id="inMax" value="1.0"/>
+          <PARAM id="inMin" value="0.0"/>
+          <PARAM id="normMax" value="1.0"/>
+          <PARAM id="normMin" value="-1.0"/>
+          <PARAM id="outMax" value="1.0"/>
+          <PARAM id="outMin" value="0.0"/>
+        </MapRangeParams>
+      </params>
+    </module>
+    <module logicalId="6" type="MapRange">
+      <params>
+        <MapRangeParams>
+          <PARAM id="cvMax" value="1.0"/>
+          <PARAM id="cvMin" value="0.0"/>
+          <PARAM id="inMax" value="1.0"/>
+          <PARAM id="inMin" value="0.0"/>
+          <PARAM id="normMax" value="1.0"/>
+          <PARAM id="normMin" value="-1.0"/>
+          <PARAM id="outMax" value="1.0"/>
+          <PARAM id="outMin" value="0.0"/>
+        </MapRangeParams>
+      </params>
+    </module>
+    <module logicalId="7" type="MapRange">
+      <params>
+        <MapRangeParams>
+          <PARAM id="cvMax" value="1.0"/>
+          <PARAM id="cvMin" value="0.0"/>
+          <PARAM id="inMax" value="1.0"/>
+          <PARAM id="inMin" value="0.0"/>
+          <PARAM id="normMax" value="1.0"/>
+          <PARAM id="normMin" value="-1.0"/>
+          <PARAM id="outMax" value="1.0"/>
+          <PARAM id="outMin" value="0.0"/>
+        </MapRangeParams>
+      </params>
+    </module>
+    <module logicalId="8" type="MapRange">
+      <params>
+        <MapRangeParams>
+          <PARAM id="cvMax" value="1.0"/>
+          <PARAM id="cvMin" value="0.0"/>
+          <PARAM id="inMax" value="1.0"/>
+          <PARAM id="inMin" value="0.0"/>
+          <PARAM id="normMax" value="1.0"/>
+          <PARAM id="normMin" value="-1.0"/>
+          <PARAM id="outMax" value="1.0"/>
+          <PARAM id="outMin" value="0.0"/>
+        </MapRangeParams>
+      </params>
+    </module>
+    <module logicalId="9" type="MapRange">
+      <params>
+        <MapRangeParams>
+          <PARAM id="cvMax" value="1.0"/>
+          <PARAM id="cvMin" value="0.0"/>
+          <PARAM id="inMax" value="1.0"/>
+          <PARAM id="inMin" value="0.0"/>
+          <PARAM id="normMax" value="1.0"/>
+          <PARAM id="normMin" value="-1.0"/>
+          <PARAM id="outMax" value="1.0"/>
+          <PARAM id="outMin" value="0.0"/>
+        </MapRangeParams>
+      </params>
+    </module>
+    <module logicalId="10" type="MapRange">
+      <params>
+        <MapRangeParams>
+          <PARAM id="cvMax" value="1.0"/>
+          <PARAM id="cvMin" value="0.0"/>
+          <PARAM id="inMax" value="1.0"/>
+          <PARAM id="inMin" value="0.0"/>
+          <PARAM id="normMax" value="1.0"/>
+          <PARAM id="normMin" value="-1.0"/>
+          <PARAM id="outMax" value="1.0"/>
+          <PARAM id="outMin" value="0.0"/>
+        </MapRangeParams>
+      </params>
+    </module>
+  </modules>
+  <connections>
+    <connection srcId="1" srcChan="0" dstId="5" dstChan="0"/>
+    <connection srcId="1" srcChan="1" dstId="6" dstChan="0"/>
+    <connection srcId="1" srcChan="2" dstId="7" dstChan="0"/>
+    <connection srcId="1" srcChan="4" dstId="8" dstChan="0"/>
+    <connection srcId="1" srcChan="5" dstId="9" dstChan="0"/>
+    <connection srcId="1" srcChan="6" dstId="10" dstChan="0"/>
+    <connection srcId="2" srcChan="0" dstId="4" dstChan="0"/>
+    <connection srcId="2" srcChan="0" dstId="4" dstChan="1"/>
+    <connection srcId="3" srcChan="0" dstId="4" dstChan="2"/>
+    <connection srcId="3" srcChan="0" dstId="4" dstChan="3"/>
+    <connection srcId="4" srcChan="0" dstId="output" dstChan="0"/>
+    <connection srcId="4" srcChan="1" dstId="output" dstChan="1"/>
+    <connection srcId="5" srcChan="0" dstId="2" dstChan="0"/>
+    <connection srcId="6" srcChan="0" dstId="2" dstChan="2"/>
+    <connection srcId="7" srcChan="0" dstId="2" dstChan="1"/>
+    <connection srcId="8" srcChan="0" dstId="3" dstChan="0"/>
+    <connection srcId="9" srcChan="0" dstId="3" dstChan="2"/>
+    <connection srcId="10" srcChan="0" dstId="3" dstChan="1"/>
+  </connections>
+  <NodeEditorUI>
+    <node id="1" x="-571.0" y="392.0"/>
+    <node id="2" x="75.0" y="515.0"/>
+    <node id="3" x="70.0" y="904.0"/>
+    <node id="4" x="567.0" y="669.0"/>
+    <node id="5" x="-170.0" y="395.5"/>
+    <node id="6" x="-170.0" y="395.5"/>
+    <node id="7" x="-17.0" y="411.5"/>
+    <node id="8" x="-172.5" y="590.0"/>
+    <node id="9" x="-172.5" y="590.0"/>
+    <node id="10" x="-20.5" y="707.0"/>
+    <node id="0" x="0.0" y="0.0"/>
+  </NodeEditorUI>
+</ModularSynthPreset>

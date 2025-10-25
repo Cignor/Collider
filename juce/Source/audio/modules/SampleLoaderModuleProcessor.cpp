@@ -847,19 +847,49 @@ void SampleLoaderModuleProcessor::drawParametersInNode(float itemWidth, const st
         ImGui::Text("Duration: %.2f s", sampleDurationSeconds);
         ImGui::Text("Rate: %d Hz", sampleSampleRate);
 
-        // Draw a colored button as a visible drop zone for hot-swapping
+        // Draw a drop zone for hot-swapping with visual feedback
         ImVec2 swapZoneSize = ImVec2(itemWidth, 100.0f);
-        ImGui::PushStyleColor(ImGuiCol_Button, IM_COL32(0, 180, 180, 60));
-        ImGui::Button("##dropzone_sample_swap", swapZoneSize);
-        ImGui::PopStyleColor();
+        
+        // Check if a drag-drop operation is in progress
+        bool isDragging = ImGui::GetDragDropPayload() != nullptr;
+        
+        if (isDragging)
+        {
+            // Beautiful blinking animation during drag-drop
+            float time = (float)ImGui::GetTime();
+            float pulse = (std::sin(time * 8.0f) * 0.5f + 0.5f); // Fast blink
+            float glow = (std::sin(time * 3.0f) * 0.3f + 0.7f);  // Slower glow
+            
+            // Vibrant cyan with pulsing alpha
+            ImU32 fillColor = IM_COL32(0, (int)(180 * glow), (int)(220 * glow), (int)(100 + pulse * 155));
+            ImU32 borderColor = IM_COL32((int)(100 * glow), (int)(255 * pulse), (int)(255 * pulse), 255);
+            
+            ImGui::PushStyleColor(ImGuiCol_Button, fillColor);
+            ImGui::PushStyleColor(ImGuiCol_Border, borderColor);
+            ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 3.0f);
+            ImGui::Button("##dropzone_sample_swap", swapZoneSize);
+            ImGui::PopStyleVar();
+            ImGui::PopStyleColor(2);
+        }
+        else
+        {
+            // Discrete outline only when idle
+            ImGui::PushStyleColor(ImGuiCol_Button, IM_COL32(0, 0, 0, 0)); // Transparent fill
+            ImGui::PushStyleColor(ImGuiCol_Border, IM_COL32(100, 100, 100, 120)); // Gray outline
+            ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 1.0f);
+            ImGui::Button("##dropzone_sample_swap", swapZoneSize);
+            ImGui::PopStyleVar();
+            ImGui::PopStyleColor(2);
+        }
         
         // Draw text centered on the button
-        const char* text = "Drop to Swap Sample";
+        const char* text = isDragging ? "Drop to Swap!" : "Drop to Swap Sample";
         ImVec2 textSize = ImGui::CalcTextSize(text);
         ImVec2 textPos = ImGui::GetItemRectMin();
         textPos.x += (swapZoneSize.x - textSize.x) * 0.5f;
         textPos.y += (swapZoneSize.y - textSize.y) * 0.5f;
-        ImGui::GetWindowDrawList()->AddText(textPos, IM_COL32(200, 200, 200, 255), text);
+        ImU32 textColor = isDragging ? IM_COL32(100, 255, 255, 255) : IM_COL32(150, 150, 150, 200);
+        ImGui::GetWindowDrawList()->AddText(textPos, textColor, text);
 
         // 3. Make this button the drop target for hot-swapping.
         if (ImGui::BeginDragDropTarget())
@@ -875,21 +905,49 @@ void SampleLoaderModuleProcessor::drawParametersInNode(float itemWidth, const st
     }
     else
     {
-        // If NO sample is loaded, draw a dedicated, colored dropzone.
+        // If NO sample is loaded, draw a dedicated dropzone with visual feedback
         ImVec2 dropZoneSize = ImVec2(itemWidth, 60.0f);
         
-        // Use a cyan color to match the Sample browser theme
-        ImGui::PushStyleColor(ImGuiCol_Button, IM_COL32(0, 180, 180, 100));
-        ImGui::Button("##dropzone_sample", dropZoneSize);
-        ImGui::PopStyleColor();
+        // Check if a drag-drop operation is in progress
+        bool isDragging = ImGui::GetDragDropPayload() != nullptr;
+        
+        if (isDragging)
+        {
+            // Beautiful blinking animation during drag-drop
+            float time = (float)ImGui::GetTime();
+            float pulse = (std::sin(time * 8.0f) * 0.5f + 0.5f); // Fast blink
+            float glow = (std::sin(time * 3.0f) * 0.3f + 0.7f);  // Slower glow
+            
+            // Vibrant cyan with pulsing alpha
+            ImU32 fillColor = IM_COL32(0, (int)(180 * glow), (int)(220 * glow), (int)(100 + pulse * 155));
+            ImU32 borderColor = IM_COL32((int)(100 * glow), (int)(255 * pulse), (int)(255 * pulse), 255);
+            
+            ImGui::PushStyleColor(ImGuiCol_Button, fillColor);
+            ImGui::PushStyleColor(ImGuiCol_Border, borderColor);
+            ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 3.0f);
+            ImGui::Button("##dropzone_sample", dropZoneSize);
+            ImGui::PopStyleVar();
+            ImGui::PopStyleColor(2);
+        }
+        else
+        {
+            // Discrete outline only when idle
+            ImGui::PushStyleColor(ImGuiCol_Button, IM_COL32(0, 0, 0, 0)); // Transparent fill
+            ImGui::PushStyleColor(ImGuiCol_Border, IM_COL32(100, 100, 100, 120)); // Gray outline
+            ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 1.0f);
+            ImGui::Button("##dropzone_sample", dropZoneSize);
+            ImGui::PopStyleVar();
+            ImGui::PopStyleColor(2);
+        }
         
         // Draw text centered on top of the button
-        const char* text = "Drop Sample Here";
+        const char* text = isDragging ? "Drop Here!" : "Drop Sample Here";
         ImVec2 textSize = ImGui::CalcTextSize(text);
         ImVec2 textPos = ImGui::GetItemRectMin();
         textPos.x += (dropZoneSize.x - textSize.x) * 0.5f;
         textPos.y += (dropZoneSize.y - textSize.y) * 0.5f;
-        ImGui::GetWindowDrawList()->AddText(textPos, IM_COL32_WHITE, text);
+        ImU32 textColor = isDragging ? IM_COL32(100, 255, 255, 255) : IM_COL32(150, 150, 150, 200);
+        ImGui::GetWindowDrawList()->AddText(textPos, textColor, text);
 
         // Make THIS BUTTON the drop target.
         if (ImGui::BeginDragDropTarget())

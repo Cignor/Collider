@@ -41,8 +41,14 @@ public:
     void prepareToPlay(double sampleRate, int maximumExpectedSamplesPerBlock) override;
     void releaseResources() override;
     void processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midiMessages) override;
+    
+    // CRITICAL: Receive transport state (BPM, position, play state) from ModularSynthProcessor
+    void setTimingInfo(const TransportState& state) override { m_currentTransport = state; }
 
     juce::AudioProcessorValueTreeState& getAPVTS() override { return apvts; }
+    
+    // POLYPHONIC OUTPUTS: Dynamic pins for multi-track playback
+    std::vector<DynamicPinInfo> getDynamicOutputPins() const override;
 
     void drawIoPins(const NodePinHelpers& helpers) override;
     bool getParamRouting(const juce::String& paramId, int& outBusIndex, int& outChannelIndexInBus) const override;
@@ -83,6 +89,15 @@ public:
     const std::vector<TrackInfo>& getTrackInfos() const { return trackInfos; }
     const std::vector<int>& getActiveTrackIndices() const { return activeTrackIndices; }
     double getTotalDuration() const { return totalDuration; }
+    
+    // Quick Connect: Check and consume connection request
+    // Returns: 0=none, 1=PolyVCO, 2=Samplers, 3=Both
+    int getAndClearConnectionRequest() 
+    { 
+        int req = connectionRequestType.load(); 
+        connectionRequestType = 0; 
+        return req; 
+    }
     int getNumTracks() const { return midiFile ? midiFile->getNumTracks() : 0; }
     int getTotalNoteCount() const;
 
@@ -137,6 +152,21 @@ private:
     
     // File Chooser
     std::unique_ptr<juce::FileChooser> fileChooser;
+    
+    // TEMPO HANDLING: Smart tempo system with file/host/multiplier hierarchy
+    juce::AudioParameterBool* syncToHostParam { nullptr };
+    juce::AudioParameterFloat* tempoMultiplierParam { nullptr };
+    double fileBpm = 120.0; // Stores tempo parsed from loaded .mid file
+    
+    // CRITICAL: Custom transport state (replaces JUCE getPlayHead() for standalone app)
+    TransportState m_currentTransport;
+    
+    // PHASE 1: UI State Variables for Piano Roll
+    float nodeWidth = 600.0f;
+    float zoomX = 50.0f; // Pixels per beat (matches MidiLogger default)
+    
+    // Quick Connect: Connection request flag (0=none, 1=PolyVCO, 2=Samplers, 3=Both)
+    std::atomic<int> connectionRequestType { 0 };
     
     // Internal Methods
     void parseMIDIFile();

@@ -108,6 +108,9 @@ public:
     void connectToPolyphonicTarget(ModuleProcessor* sourceNode, const std::map<juce::String, juce::String>& pinNameMapping);
     void handleAutoConnectionRequests();
     
+    // MIDI Player Quick Connect handler
+    void handleMIDIPlayerConnectionRequest(juce::uint32 midiPlayerLid, MIDIPlayerModuleProcessor* midiPlayer, int requestType);
+    
     // MultiSequencer specific handlers
     void handleMultiSequencerAutoConnectSamplers(MultiSequencerModuleProcessor* sequencer, juce::uint32 sequencerLid);
     void handleMultiSequencerAutoConnectVCO(MultiSequencerModuleProcessor* sequencer, juce::uint32 sequencerLid);

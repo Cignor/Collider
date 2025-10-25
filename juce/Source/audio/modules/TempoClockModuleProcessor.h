@@ -65,7 +65,8 @@ private:
     std::atomic<float>* swingParam { nullptr };
     std::atomic<float>* divisionParam { nullptr };
     std::atomic<float>* gateWidthParam { nullptr };
-    std::atomic<float>* takeoverParam { nullptr };
+    std::atomic<float>* syncToHostParam { nullptr };
+    std::atomic<float>* divisionOverrideParam { nullptr };
 
     // Transport cache for per-block start
     TransportState m_currentTransport;

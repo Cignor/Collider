@@ -1059,7 +1059,7 @@ void ImGuiNodeEditorComponent::renderImGui()
         // 4. Search bar for filtering results
         char searchBuf[256] = {};
         strncpy(searchBuf, m_presetSearchTerm.toRawUTF8(), sizeof(searchBuf) - 1);
-        if (ImGui::InputText("Search", searchBuf, sizeof(searchBuf)))
+        if (ImGui::InputText("Search##preset", searchBuf, sizeof(searchBuf)))
             m_presetSearchTerm = juce::String(searchBuf);
 
         ImGui::Separator();
@@ -1183,7 +1183,7 @@ void ImGuiNodeEditorComponent::renderImGui()
         // 4. Search bar for filtering results
         char searchBuf[256] = {};
         strncpy(searchBuf, m_sampleSearchTerm.toRawUTF8(), sizeof(searchBuf) - 1);
-        if (ImGui::InputText("Search", searchBuf, sizeof(searchBuf)))
+        if (ImGui::InputText("Search##sample", searchBuf, sizeof(searchBuf)))
             m_sampleSearchTerm = juce::String(searchBuf);
 
         ImGui::Separator();
@@ -2843,6 +2843,25 @@ if (auto* mp = synth->getModuleForLogical (lid))
 
     ImNodes::EndNodeEditor();
     
+    // ================== MIDI PLAYER QUICK CONNECT LOGIC ==================
+    // Poll all MIDI Player modules for connection requests
+    if (synth != nullptr)
+    {
+        for (const auto& modInfo : synth->getModulesInfo())
+        {
+            if (auto* midiPlayer = dynamic_cast<MIDIPlayerModuleProcessor*>(synth->getModuleForLogical(modInfo.first)))
+            {
+                int requestType = midiPlayer->getAndClearConnectionRequest();
+                if (requestType > 0)
+                {
+                    handleMIDIPlayerConnectionRequest(modInfo.first, midiPlayer, requestType);
+                    break; // Only handle one request per frame
+                }
+            }
+        }
+    }
+    // ================== END MIDI PLAYER QUICK CONNECT ==================
+    
     // ================== META MODULE EDITING LOGIC ==================
     // Check if any Meta Module has requested to be edited
     if (synth != nullptr && metaModuleToEditLid == 0) // Only check if not already editing one
@@ -3336,7 +3355,7 @@ if (auto* mp = synth->getModuleForLogical (lid))
             
             ImGui::Text("Add Module");
             ImGui::PushItemWidth(250.0f);
-            if (ImGui::InputText("Search", searchQuery, sizeof(searchQuery))) {
+            if (ImGui::InputText("Search##addmodule", searchQuery, sizeof(searchQuery))) {
                 // Text was changed
             }
             ImGui::PopItemWidth();
@@ -5801,6 +5820,169 @@ void ImGuiNodeEditorComponent::handleAutoConnectionRequests()
             }
         }
     }
+}
+
+void ImGuiNodeEditorComponent::handleMIDIPlayerConnectionRequest(juce::uint32 midiPlayerLid, MIDIPlayerModuleProcessor* midiPlayer, int requestType)
+{
+    if (!synth || !midiPlayer) return;
+    
+    juce::Logger::writeToLog("[MIDI Player Quick Connect] Request type: " + juce::String(requestType));
+    
+    // Get ALL tracks (don't filter by whether they have notes)
+    const auto& notesByTrack = midiPlayer->getNotesByTrack();
+    int numTracks = (int)notesByTrack.size();
+    
+    if (numTracks == 0)
+    {
+        juce::Logger::writeToLog("[MIDI Player Quick Connect] No tracks in MIDI file");
+        return;
+    }
+    
+    // Get MIDI Player position for positioning new nodes
+    ImVec2 playerPos = ImNodes::GetNodeEditorSpacePos(static_cast<int>(midiPlayerLid));
+    auto midiPlayerNodeId = synth->getNodeIdForLogical(midiPlayerLid);
+    
+    // Request Type: 1=PolyVCO, 2=Samplers, 3=Both
+    juce::uint32 polyVCOLid = 0;
+    juce::uint32 mixerLid = 0;
+    
+    if (requestType == 1 || requestType == 3) // PolyVCO or Both
+    {
+        // 1. Create PolyVCO
+        auto polyVCONodeId = synth->addModule("polyvco");
+        polyVCOLid = synth->getLogicalIdForNode(polyVCONodeId);
+        pendingNodeScreenPositions[(int)polyVCOLid] = ImVec2(playerPos.x + 400.0f, playerPos.y);
+        juce::Logger::writeToLog("[MIDI Player Quick Connect] Created PolyVCO at LID " + juce::String((int)polyVCOLid));
+        
+        // 2. Create Track Mixer
+        auto mixerNodeId = synth->addModule("trackmixer");
+        mixerLid = synth->getLogicalIdForNode(mixerNodeId);
+        pendingNodeScreenPositions[(int)mixerLid] = ImVec2(playerPos.x + 700.0f, playerPos.y);
+        juce::Logger::writeToLog("[MIDI Player Quick Connect] Created Track Mixer at LID " + juce::String((int)mixerLid));
+        
+        // 3. Connect MIDI Player tracks to PolyVCO
+        // Connect ALL tracks, regardless of whether they have notes
+        int trackIdx = 0;
+        for (size_t i = 0; i < notesByTrack.size() && trackIdx < 32; ++i)
+        {
+            const int midiPitchPin = trackIdx * 4 + 1;
+            const int midiGatePin = trackIdx * 4 + 0;
+            const int midiVeloPin = trackIdx * 4 + 2;
+            
+            const int vcoFreqPin = trackIdx + 1;
+            const int vcoWavePin = 32 + trackIdx + 1;
+            const int vcoGatePin = 64 + trackIdx + 1;
+            
+            synth->connect(midiPlayerNodeId, midiPitchPin, polyVCONodeId, vcoFreqPin);
+            synth->connect(midiPlayerNodeId, midiGatePin, polyVCONodeId, vcoGatePin);
+            synth->connect(midiPlayerNodeId, midiVeloPin, polyVCONodeId, vcoWavePin);
+            trackIdx++;
+        }
+        
+        // 4. Connect Num Tracks to PolyVCO (Num Voices Mod on channel 0)
+        synth->connect(midiPlayerNodeId, MIDIPlayerModuleProcessor::kRawNumTracksChannelIndex, 
+                       polyVCONodeId, 0);
+        
+        // 5. Connect PolyVCO outputs to Track Mixer inputs
+        for (int i = 0; i < trackIdx; ++i)
+        {
+            synth->connect(polyVCONodeId, i, mixerNodeId, i);
+        }
+        
+        // 6. Connect Num Tracks output to mixer's Num Tracks Mod input
+        synth->connect(midiPlayerNodeId, MIDIPlayerModuleProcessor::kRawNumTracksChannelIndex, 
+                       mixerNodeId, TrackMixerModuleProcessor::MAX_TRACKS);
+        
+        // 7. Connect Track Mixer to main output
+        auto outputNodeId = synth->getOutputNodeID();
+        synth->connect(mixerNodeId, 0, outputNodeId, 0); // L
+        synth->connect(mixerNodeId, 1, outputNodeId, 1); // R
+        
+        juce::Logger::writeToLog("[MIDI Player Quick Connect] Connected " + juce::String(trackIdx) + 
+                                " tracks: MIDI Player → PolyVCO → Track Mixer → Output");
+    }
+    
+    if (requestType == 2 || requestType == 3) // Samplers or Both
+    {
+        float samplerX = playerPos.x + 400.0f;
+        float mixerX = playerPos.x + 700.0f;
+        
+        // If PolyVCO mode (Both), offset samplers and use same mixer
+        if (requestType == 3)
+        {
+            samplerX += 300.0f; // Offset samplers if PolyVCO exists
+            // Reuse existing mixer created in PolyVCO section
+        }
+        else
+        {
+            // 1. Create Track Mixer for Samplers-only mode
+            auto mixerNodeId = synth->addModule("trackmixer");
+            mixerLid = synth->getLogicalIdForNode(mixerNodeId);
+            pendingNodeScreenPositions[(int)mixerLid] = ImVec2(mixerX, playerPos.y);
+            juce::Logger::writeToLog("[MIDI Player Quick Connect] Created Track Mixer at LID " + juce::String((int)mixerLid));
+        }
+        
+        // 2. Create samplers and connect
+        // Connect ALL tracks, regardless of whether they have notes
+        auto mixerNodeId = synth->getNodeIdForLogical(mixerLid);
+        int trackIdx = 0;
+        int totalTracks = (int)notesByTrack.size();
+        int mixerStartChannel = (requestType == 3) ? totalTracks : 0; // Offset for "Both" mode
+        
+        for (size_t i = 0; i < notesByTrack.size(); ++i)
+        {
+            // Create SampleLoader
+            float samplerY = playerPos.y + (trackIdx * 150.0f);
+            auto samplerNodeId = synth->addModule("Sample Loader");
+            juce::uint32 samplerLid = synth->getLogicalIdForNode(samplerNodeId);
+            pendingNodeScreenPositions[(int)samplerLid] = ImVec2(samplerX, samplerY);
+            
+            const int midiPitchPin = trackIdx * 4 + 1;
+            const int midiGatePin = trackIdx * 4 + 0;
+            const int midiTrigPin = trackIdx * 4 + 3;
+            
+            // Connect MIDI Player to Sampler
+            synth->connect(midiPlayerNodeId, midiPitchPin, samplerNodeId, 0);
+            synth->connect(midiPlayerNodeId, midiGatePin, samplerNodeId, 2);
+            synth->connect(midiPlayerNodeId, midiTrigPin, samplerNodeId, 3);
+            
+            // Connect Sampler output to Track Mixer input
+            synth->connect(samplerNodeId, 0, mixerNodeId, mixerStartChannel + trackIdx);
+            
+            trackIdx++;
+        }
+        
+        // 3. Connect Num Tracks to mixer and route to output (only if not already done in PolyVCO mode)
+        if (requestType != 3)
+        {
+            synth->connect(midiPlayerNodeId, MIDIPlayerModuleProcessor::kRawNumTracksChannelIndex, 
+                           mixerNodeId, TrackMixerModuleProcessor::MAX_TRACKS);
+            
+            // 4. Connect Track Mixer to output
+            auto outputNodeId = synth->getOutputNodeID();
+            synth->connect(mixerNodeId, 0, outputNodeId, 0);
+            synth->connect(mixerNodeId, 1, outputNodeId, 1);
+            
+            juce::Logger::writeToLog("[MIDI Player Quick Connect] Complete chain: " + juce::String(trackIdx) + 
+                                    " SampleLoaders → Track Mixer (with Num Tracks) → Stereo Output");
+        }
+        else
+        {
+            juce::Logger::writeToLog("[MIDI Player Quick Connect] Connected " + juce::String(trackIdx) + 
+                                    " SampleLoaders → Track Mixer (channels " + juce::String(mixerStartChannel) + 
+                                    "-" + juce::String(mixerStartChannel + trackIdx - 1) + 
+                                    ") [Mixer already connected in PolyVCO section]");
+        }
+    }
+    
+    // Commit changes
+    if (synth)
+    {
+        synth->commitChanges();
+        graphNeedsRebuild = true;
+    }
+    
+    pushSnapshot();
 }
 
 void ImGuiNodeEditorComponent::drawInsertNodeOnLinkPopup()

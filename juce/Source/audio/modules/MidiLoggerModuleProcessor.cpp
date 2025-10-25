@@ -352,37 +352,42 @@ void MidiLoggerModuleProcessor::drawParametersInNode(float /*itemWidth*/, const 
     const int loopLengthBars = loopLengthParam ? loopLengthParam->get() : 4;
     const float totalWidth = loopLengthBars * 4.0f * pixelsPerBeat;
 
-    // Draw timeline background
+    // Draw timeline background (only visible portion for performance)
     drawList->AddRectFilled(
         windowPos, 
-        ImVec2(windowPos.x + totalWidth, windowPos.y + timelineHeight), 
+        ImVec2(windowPos.x + nodeWidth, windowPos.y + timelineHeight), 
         IM_COL32(30, 30, 30, 255)
     );
     
-    // Draw bar and beat lines
-    for (int bar = 0; bar < loopLengthBars; ++bar) 
+    // --- SCROLL-AWARE CULLING FOR PERFORMANCE ---
+    // Only draw beats that are actually visible in the current scroll position
+    const int totalBeats = loopLengthBars * 4;
+    const int firstBeat = juce::jmax(0, static_cast<int>(scrollX / pixelsPerBeat));
+    const int lastBeat = juce::jmin(totalBeats, static_cast<int>((scrollX + nodeWidth) / pixelsPerBeat) + 1);
+    
+    // Draw only visible bar and beat lines
+    for (int beatIndex = firstBeat; beatIndex <= lastBeat; ++beatIndex)
     {
-        for (int beat = 0; beat < 4; ++beat) 
+        const bool isBarLine = (beatIndex % 4 == 0);
+        const int barNumber = beatIndex / 4;
+        
+        // Calculate screen position (accounting for scroll)
+        const float x = windowPos.x + (beatIndex * pixelsPerBeat) - scrollX;
+        
+        // Draw the vertical line
+        drawList->AddLine(
+            ImVec2(x, windowPos.y),
+            ImVec2(x, windowPos.y + timelineHeight),
+            isBarLine ? IM_COL32(140, 140, 140, 255) : IM_COL32(70, 70, 70, 255),
+            isBarLine ? 2.0f : 1.0f
+        );
+        
+        // Draw bar number label for bar lines
+        if (isBarLine)
         {
-            const float x = windowPos.x + (bar * 4 + beat) * pixelsPerBeat - scrollX;
-            const bool isBarLine = (beat == 0);
-            
-            if (x >= windowPos.x - 10 && x <= windowPos.x + nodeWidth + 10) // Culling
-            {
-                drawList->AddLine(
-                    ImVec2(x, windowPos.y),
-                    ImVec2(x, windowPos.y + timelineHeight),
-                    isBarLine ? IM_COL32(140, 140, 140, 255) : IM_COL32(70, 70, 70, 255),
-                    isBarLine ? 2.0f : 1.0f
-                );
-                
-                if (isBarLine) 
-                {
-                    char label[8];
-                    snprintf(label, sizeof(label), "%d", bar + 1);
-                    drawList->AddText(ImVec2(x + 4, windowPos.y + 4), IM_COL32(220, 220, 220, 255), label);
-                }
-            }
+            char label[8];
+            snprintf(label, sizeof(label), "%d", barNumber + 1);
+            drawList->AddText(ImVec2(x + 4, windowPos.y + 4), IM_COL32(220, 220, 220, 255), label);
         }
     }
 
@@ -651,15 +656,45 @@ void MidiLoggerModuleProcessor::exportToMidiFile()
         juce::MidiFile midiFile;
         midiFile.setTicksPerQuarterNote(960);
 
-        // Iterate through each of our internal tracks.
-        for (const auto& track : tracks)
-        {
-            if (!track) continue;
+        // === CRITICAL FIX: Create Tempo Track (Track 0) with Meta Events ===
+        juce::MidiMessageSequence tempoTrack;
+        
+        // 1. Add track name
+        tempoTrack.addEvent(juce::MidiMessage::textMetaEvent(3, "Tempo Track"), 0.0);
+        
+        // 2. Add time signature (4/4 - standard)
+        tempoTrack.addEvent(juce::MidiMessage::timeSignatureMetaEvent(4, 4), 0.0);
+        
+        // 3. **CRITICAL**: Add tempo meta event
+        // Convert BPM to microseconds per quarter note
+        const double microsecondsPerQuarterNote = 60'000'000.0 / currentBpm;
+        tempoTrack.addEvent(
+            juce::MidiMessage::tempoMetaEvent(static_cast<int>(microsecondsPerQuarterNote)), 
+            0.0
+        );
+        
+        // 4. Add end-of-track marker
+        tempoTrack.addEvent(juce::MidiMessage::endOfTrack(), 0.0);
+        
+        // Add tempo track FIRST (Track 0 in Type 1 MIDI files)
+        midiFile.addTrack(tempoTrack);
+        // === END TEMPO TRACK ===
 
-            auto events = track->getEventsCopy();
+        // Iterate through each of our internal note tracks (become Track 1, 2, 3...).
+        for (size_t trackIdx = 0; trackIdx < tracks.size(); ++trackIdx)
+        {
+            if (!tracks[trackIdx]) continue;
+
+            auto events = tracks[trackIdx]->getEventsCopy();
             if (events.empty()) continue;
 
             juce::MidiMessageSequence sequence;
+            
+            // Add track name meta event for better organization
+            sequence.addEvent(
+                juce::MidiMessage::textMetaEvent(3, tracks[trackIdx]->name.toStdString()), 
+                0.0
+            );
 
             // Convert each MidiEvent into a pair of juce::MidiMessages.
             for (const auto& ev : events)
@@ -671,6 +706,11 @@ void MidiLoggerModuleProcessor::exportToMidiFile()
                                   samplesToMidiTicks(ev.startTimeInSamples + ev.durationInSamples));
             }
             
+            // Add end-of-track marker for this track
+            double lastTick = events.empty() ? 0.0 : 
+                samplesToMidiTicks(events.back().startTimeInSamples + events.back().durationInSamples);
+            sequence.addEvent(juce::MidiMessage::endOfTrack(), lastTick + 100.0);
+            
             sequence.updateMatchedPairs(); // Clean up the sequence
             midiFile.addTrack(sequence);
         }
@@ -680,7 +720,9 @@ void MidiLoggerModuleProcessor::exportToMidiFile()
         if (stream.openedOk())
         {
             midiFile.writeTo(stream);
-            juce::Logger::writeToLog("[MIDI Logger] Exported to: " + file.getFullPathName());
+            juce::Logger::writeToLog("[MIDI Logger] Exported " + juce::String(midiFile.getNumTracks()) + 
+                                    " tracks at " + juce::String(currentBpm, 1) + " BPM to: " + 
+                                    file.getFullPathName());
         }
         else
         {

@@ -1,0 +1,70 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<Preset name="MIDI Pads Demo" description="16-pad MIDI trigger module demonstration">
+  
+  <!-- MIDI Pads Module - Main percussion controller -->
+  <Module id="1" type="MIDI Pads" x="100" y="100">
+    <Parameters>
+      <midiDevice value="0"/>          <!-- All Devices -->
+      <midiChannel value="0"/>         <!-- All Channels -->
+      <startNote value="36"/>          <!-- C1 (kick drum note) -->
+      <noteLayout value="0"/>          <!-- Chromatic -->
+      <triggerMode value="0"/>         <!-- Trigger (brief pulse) -->
+      <triggerLength value="15"/>      <!-- 15ms pulse -->
+      <velocityCurve value="1"/>       <!-- Exponential (more dynamic) -->
+      <colorMode value="1"/>           <!-- Row Colors -->
+    </Parameters>
+  </Module>
+  
+  <!-- Sample Loader 1 - Kick Drum -->
+  <Module id="2" type="Sample Loader" x="400" y="50">
+    <Parameters>
+      <samplePath value="audio/samples/kick.wav"/>
+    </Parameters>
+  </Module>
+  
+  <!-- Sample Loader 2 - Snare Drum -->
+  <Module id="3" type="Sample Loader" x="400" y="150">
+    <Parameters>
+      <samplePath value="audio/samples/snare.wav"/>
+    </Parameters>
+  </Module>
+  
+  <!-- Sample Loader 3 - Hi-Hat -->
+  <Module id="4" type="Sample Loader" x="400" y="250">
+    <Parameters>
+      <samplePath value="audio/samples/hihat.wav"/>
+    </Parameters>
+  </Module>
+  
+  <!-- Mixer - Combine all drum sounds -->
+  <Module id="5" type="Mixer" x="700" y="150">
+    <Parameters>
+      <numChannels value="8"/>
+    </Parameters>
+  </Module>
+  
+  <!-- Connections -->
+  <!-- Pad 1 (Kick) triggers Sample Loader 1 -->
+  <Connection fromModule="1" fromChannel="0" toModule="2" toChannel="0"/>      <!-- Gate -->
+  <Connection fromModule="1" fromChannel="16" toModule="2" toChannel="1"/>     <!-- Velocity -->
+  
+  <!-- Pad 2 (Snare) triggers Sample Loader 2 -->
+  <Connection fromModule="1" fromChannel="1" toModule="3" toChannel="0"/>      <!-- Gate -->
+  <Connection fromModule="1" fromChannel="17" toModule="3" toChannel="1"/>     <!-- Velocity -->
+  
+  <!-- Pad 3 (Hi-Hat) triggers Sample Loader 3 -->
+  <Connection fromModule="1" fromChannel="2" toModule="4" toChannel="0"/>      <!-- Gate -->
+  <Connection fromModule="1" fromChannel="18" toModule="4" toChannel="1"/>     <!-- Velocity -->
+  
+  <!-- Mix all samples -->
+  <Connection fromModule="2" fromChannel="0" toModule="5" toChannel="0"/>
+  <Connection fromModule="3" fromChannel="0" toModule="5" toChannel="1"/>
+  <Connection fromModule="4" fromChannel="0" toModule="5" toChannel="2"/>
+  
+  <!-- Output -->
+  <Connection fromModule="5" fromChannel="0" toModule="output" toChannel="0"/>
+  <Connection fromModule="5" fromChannel="0" toModule="output" toChannel="1"/>
+  
+</Preset>
+

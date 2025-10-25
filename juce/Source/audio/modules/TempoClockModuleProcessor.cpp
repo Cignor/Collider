@@ -11,7 +11,8 @@ TempoClockModuleProcessor::TempoClockModuleProcessor()
     swingParam = apvts.getRawParameterValue("swing");
     divisionParam = apvts.getRawParameterValue("division");
     gateWidthParam = apvts.getRawParameterValue("gateWidth");
-    takeoverParam = apvts.getRawParameterValue("takeover");
+    syncToHostParam = apvts.getRawParameterValue("syncToHost");
+    divisionOverrideParam = apvts.getRawParameterValue("divisionOverride");
 }
 
 juce::AudioProcessorValueTreeState::ParameterLayout TempoClockModuleProcessor::createParameterLayout()
@@ -21,7 +22,8 @@ juce::AudioProcessorValueTreeState::ParameterLayout TempoClockModuleProcessor::c
     params.push_back(std::make_unique<juce::AudioParameterFloat>("swing", "Swing", juce::NormalisableRange<float>(0.0f, 0.75f, 0.0f, 1.0f), 0.0f));
     params.push_back(std::make_unique<juce::AudioParameterChoice>("division", "Division", juce::StringArray{"1/32","1/16","1/8","1/4","1/2","1","2","4"}, 3));
     params.push_back(std::make_unique<juce::AudioParameterFloat>("gateWidth", "Gate Width", juce::NormalisableRange<float>(0.01f, 0.99f, 0.0f, 1.0f), 0.5f));
-    params.push_back(std::make_unique<juce::AudioParameterBool>("takeover", "External Takeover", false));
+    params.push_back(std::make_unique<juce::AudioParameterBool>("syncToHost", "Sync to Host", false));
+    params.push_back(std::make_unique<juce::AudioParameterBool>("divisionOverride", "Division Override", false));
     return { params.begin(), params.end() };
 }
 
@@ -86,9 +88,13 @@ void TempoClockModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
     if (edge(nudgeUpCV, lastNudgeUpHigh))   { bpm = juce::jlimit(20.0f, 300.0f, bpm + 0.5f); }
     if (edge(nudgeDownCV, lastNudgeDownHigh)) { bpm = juce::jlimit(20.0f, 300.0f, bpm - 0.5f); }
 
-    // External takeover: write BPM to parent transport AFTER nudges
-    if (takeoverParam && takeoverParam->load() > 0.5f)
+    // Sync to Host: Use host transport tempo
+    bool syncToHost = syncToHostParam && syncToHostParam->load() > 0.5f;
+    if (syncToHost)
     {
+        // Override local BPM with transport BPM
+        bpm = (float)m_currentTransport.bpm;
+        // Also update the parameter so UI shows correct value
         if (auto* parent = getParent())
             parent->setBPM(bpm);
     }
@@ -103,9 +109,15 @@ void TempoClockModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
     float* downbeat = out.getNumChannels() > 6 ? out.getWritePointer(6) : nullptr;
 
     int divisionIdx = divisionParam ? (int)divisionParam->load() : 3; // default 1/4
-    // Broadcast division to transport so sync-enabled modules can follow
-    if (auto* parent = getParent())
-        parent->setGlobalDivisionIndex(divisionIdx);
+    
+    // Division Override: Broadcast local division to global transport
+    bool divisionOverride = divisionOverrideParam && divisionOverrideParam->load() > 0.5f;
+    if (divisionOverride)
+    {
+        // This clock becomes the master division source
+        if (auto* parent = getParent())
+            parent->setGlobalDivisionIndex(divisionIdx);
+    }
     static const double divisions[] = { 1.0/32.0, 1.0/16.0, 1.0/8.0, 1.0/4.0, 1.0/2.0, 1.0, 2.0, 4.0 };
     const double div = divisions[juce::jlimit(0, 7, divisionIdx)];
 
@@ -189,22 +201,24 @@ void TempoClockModuleProcessor::drawParametersInNode(float itemWidth, const std:
     // BPM slider with live display
     bool bpmMod = isParamModulated("bpm_mod");
     float bpm = bpmMod ? getLiveParamValueFor("bpm_mod", "bpm_live", bpmParam->load()) : bpmParam->load();
-    bool ext = takeoverParam && takeoverParam->load() > 0.5f;
+    bool syncToHost = syncToHostParam && syncToHostParam->load() > 0.5f;
     
-    if (bpmMod) { ImGui::BeginDisabled(); }
+    // Disable BPM control if synced to host
+    if (bpmMod || syncToHost) { ImGui::BeginDisabled(); }
     if (ImGui::SliderFloat("BPM", &bpm, 20.0f, 300.0f, "%.1f"))
     {
-        if (!bpmMod)
+        if (!bpmMod && !syncToHost)
         {
             if (auto* p = dynamic_cast<juce::AudioParameterFloat*>(apvts.getParameter("bpm"))) *p = bpm;
-            if (ext) if (auto* parent = getParent()) parent->setBPM(bpm);
         }
         onModificationEnded();
     }
-    if (!bpmMod) adjustParamOnWheel(apvts.getParameter("bpm"), "bpm", bpm);
-    if (bpmMod) { ImGui::EndDisabled(); ImGui::SameLine(); ImGui::TextUnformatted("(mod)"); }
+    if (!bpmMod && !syncToHost) adjustParamOnWheel(apvts.getParameter("bpm"), "bpm", bpm);
+    if (bpmMod) { ImGui::SameLine(); ImGui::TextUnformatted("(mod)"); }
+    if (syncToHost) { ImGui::SameLine(); ImGui::TextColored(ImVec4(0.2f, 1.0f, 0.8f, 1.0f), "(synced)"); }
+    if (bpmMod || syncToHost) { ImGui::EndDisabled(); }
     ImGui::SameLine();
-    HelpMarkerClock("Beats per minute (20-300 BPM)");
+    HelpMarkerClock("Beats per minute (20-300 BPM)\nDisabled when synced to host");
 
     // Swing
     bool swingM = isParamModulated("swing_mod");
@@ -292,20 +306,39 @@ void TempoClockModuleProcessor::drawParametersInNode(float itemWidth, const std:
     ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1.0f), "Transport Sync");
     ImGui::Spacing();
 
-    // Takeover toggle
-    bool tk = ext;
-    if (ImGui::Checkbox("External Takeover", &tk))
+    // Sync to Host checkbox
+    bool sync = syncToHost;
+    if (ImGui::Checkbox("Sync to Host", &sync))
     {
-        if (auto* p = dynamic_cast<juce::AudioParameterBool*>(apvts.getParameter("takeover"))) *p = tk;
+        if (auto* p = dynamic_cast<juce::AudioParameterBool*>(apvts.getParameter("syncToHost"))) *p = sync;
         onModificationEnded();
     }
     ImGui::SameLine();
-    HelpMarkerClock("Use host transport tempo instead of manual BPM\nDisables manual BPM control when enabled");
+    HelpMarkerClock("Follow host transport tempo\nDisables manual BPM control when enabled");
     
-    if (ext)
+    if (sync)
     {
         ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.2f, 1.0f, 0.8f, 1.0f));
-        ImGui::Text("⚡ EXTERNAL TEMPO ACTIVE");
+        ImGui::Text("⚡ SYNCED TO HOST TRANSPORT");
+        ImGui::PopStyleColor();
+    }
+    
+    ImGui::Spacing();
+    
+    // Division Override checkbox
+    bool divOverride = divisionOverrideParam && divisionOverrideParam->load() > 0.5f;
+    if (ImGui::Checkbox("Division Override", &divOverride))
+    {
+        if (auto* p = dynamic_cast<juce::AudioParameterBool*>(apvts.getParameter("divisionOverride"))) *p = divOverride;
+        onModificationEnded();
+    }
+    ImGui::SameLine();
+    HelpMarkerClock("Broadcast this clock's division globally\nForces all synced modules to follow this clock's subdivision");
+    
+    if (divOverride)
+    {
+        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.8f, 0.2f, 1.0f));
+        ImGui::Text("⚡ MASTER DIVISION SOURCE");
         ImGui::PopStyleColor();
     }
 
