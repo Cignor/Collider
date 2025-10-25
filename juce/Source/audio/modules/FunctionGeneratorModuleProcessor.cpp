@@ -323,7 +323,9 @@ void FunctionGeneratorModuleProcessor::drawParametersInNode(float itemWidth, con
     auto& ap = getAPVTS();
     ImGui::PushItemWidth(itemWidth);
 
-    // --- SYNC CONTROLS ---
+    // === SECTION: Timing ===
+    ImGui::TextColored(ImVec4(0.6f, 0.9f, 1.0f, 1.0f), "TIMING");
+    
     bool sync = apvts.getRawParameterValue(paramIdMode)->load() > 0.5f;
     if (ImGui::Checkbox("Sync to Transport", &sync))
     {
@@ -331,18 +333,16 @@ void FunctionGeneratorModuleProcessor::drawParametersInNode(float itemWidth, con
             *p = sync ? 1 : 0;
         onModificationEnded();
     }
+    if (ImGui::IsItemHovered()) ImGui::SetTooltip("Lock function playback to host tempo");
     
     if (sync)
     {
-        // NOTE: We haven't added a "rate_division" parameter to this module yet.
-        // For now, it will be fixed at 1/4 note. This UI is a placeholder.
         ImGui::BeginDisabled();
         ImGui::TextUnformatted("Division: 1/4 Note (fixed)");
         ImGui::EndDisabled();
     }
     else
     {
-        // Rate slider (only show in free-running mode)
         const bool rateIsMod = isParamModulated(paramIdRateMod);
         float rate = rateIsMod ? getLiveParamValueFor(paramIdRateMod, "rate_live", rateParam->load()) : rateParam->load();
         if (rateIsMod) ImGui::BeginDisabled();
@@ -352,16 +352,16 @@ void FunctionGeneratorModuleProcessor::drawParametersInNode(float itemWidth, con
         if (!rateIsMod) adjustParamOnWheel(ap.getParameter(paramIdRate), "rate", rate);
         if (ImGui::IsItemDeactivatedAfterEdit() && !rateIsMod) onModificationEnded();
         if (rateIsMod) { ImGui::EndDisabled(); ImGui::SameLine(); ImGui::TextUnformatted("(mod)"); }
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip("Function generation rate");
     }
     
-    // Loop (No modulation for this parameter)
     bool loop = loopParam->load() > 0.5f;
     if (ImGui::Checkbox("Loop", &loop)) {
         *dynamic_cast<juce::AudioParameterBool*>(ap.getParameter(paramIdLoop)) = loop;
         onModificationEnded();
     }
+    if (ImGui::IsItemHovered()) ImGui::SetTooltip("Restart function when it reaches the end");
     
-    // Slew
     const bool slewIsMod = isParamModulated(paramIdSlewMod);
     float slew = slewIsMod ? getLiveParamValueFor(paramIdSlewMod, "slew_live", slewParam->load()) : slewParam->load();
     if (slewIsMod) ImGui::BeginDisabled();
@@ -371,8 +371,14 @@ void FunctionGeneratorModuleProcessor::drawParametersInNode(float itemWidth, con
     if (!slewIsMod) adjustParamOnWheel(ap.getParameter(paramIdSlew), "slew", slew);
     if (ImGui::IsItemDeactivatedAfterEdit() && !slewIsMod) onModificationEnded();
     if (slewIsMod) { ImGui::EndDisabled(); ImGui::SameLine(); ImGui::TextUnformatted("(mod)"); }
+    if (ImGui::IsItemHovered()) ImGui::SetTooltip("Smoothness of output transitions");
+    
+    ImGui::Spacing();
+    ImGui::Spacing();
+    
+    // === SECTION: Function Parameters ===
+    ImGui::TextColored(ImVec4(0.6f, 0.9f, 1.0f, 1.0f), "FUNCTION PARAMETERS");
 
-    // Gate Thresh
     const bool gateThreshIsMod = isParamModulated(paramIdGateThreshMod);
     float gateThresh = gateThreshIsMod ? getLiveParamValueFor(paramIdGateThreshMod, "gateThresh_live", gateThreshParam->load()) : gateThreshParam->load();
     if (gateThreshIsMod) ImGui::BeginDisabled();
@@ -382,8 +388,8 @@ void FunctionGeneratorModuleProcessor::drawParametersInNode(float itemWidth, con
     if (!gateThreshIsMod) adjustParamOnWheel(ap.getParameter(paramIdGateThresh), "gateThresh", gateThresh);
     if (ImGui::IsItemDeactivatedAfterEdit() && !gateThreshIsMod) onModificationEnded();
     if (gateThreshIsMod) { ImGui::EndDisabled(); ImGui::SameLine(); ImGui::TextUnformatted("(mod)"); }
+    if (ImGui::IsItemHovered()) ImGui::SetTooltip("Threshold for gate output generation");
 
-    // Trig Thresh
     const bool trigThreshIsMod = isParamModulated(paramIdTrigThreshMod);
     float trigThresh = trigThreshIsMod ? getLiveParamValueFor(paramIdTrigThreshMod, "trigThresh_live", trigThreshParam->load()) : trigThreshParam->load();
     if (trigThreshIsMod) ImGui::BeginDisabled();
@@ -393,8 +399,8 @@ void FunctionGeneratorModuleProcessor::drawParametersInNode(float itemWidth, con
     if (!trigThreshIsMod) adjustParamOnWheel(ap.getParameter(paramIdTrigThresh), "trigThresh", trigThresh);
     if (ImGui::IsItemDeactivatedAfterEdit() && !trigThreshIsMod) onModificationEnded();
     if (trigThreshIsMod) { ImGui::EndDisabled(); ImGui::SameLine(); ImGui::TextUnformatted("(mod)"); }
+    if (ImGui::IsItemHovered()) ImGui::SetTooltip("Threshold for trigger output generation");
 
-    // Pitch Base
     const bool pitchBaseIsMod = isParamModulated(paramIdPitchBaseMod);
     float pitchBase = pitchBaseIsMod ? getLiveParamValueFor(paramIdPitchBaseMod, "pitchBase_live", pitchBaseParam->load()) : pitchBaseParam->load();
     if (pitchBaseIsMod) ImGui::BeginDisabled();
@@ -404,8 +410,8 @@ void FunctionGeneratorModuleProcessor::drawParametersInNode(float itemWidth, con
     if (!pitchBaseIsMod) adjustParamOnWheel(ap.getParameter(paramIdPitchBase), "pitchBase", pitchBase);
     if (ImGui::IsItemDeactivatedAfterEdit() && !pitchBaseIsMod) onModificationEnded();
     if (pitchBaseIsMod) { ImGui::EndDisabled(); ImGui::SameLine(); ImGui::TextUnformatted("(mod)"); }
+    if (ImGui::IsItemHovered()) ImGui::SetTooltip("Base pitch offset in semitones");
 
-    // Value Mult
     const bool valueMultIsMod = isParamModulated(paramIdValueMultMod);
     float valueMult = valueMultIsMod ? getLiveParamValueFor(paramIdValueMultMod, "valueMult_live", valueMultParam->load()) : valueMultParam->load();
     if (valueMultIsMod) ImGui::BeginDisabled();
@@ -415,10 +421,14 @@ void FunctionGeneratorModuleProcessor::drawParametersInNode(float itemWidth, con
     if (!valueMultIsMod) adjustParamOnWheel(ap.getParameter(paramIdValueMult), "valueMult", valueMult);
     if (ImGui::IsItemDeactivatedAfterEdit() && !valueMultIsMod) onModificationEnded();
     if (valueMultIsMod) { ImGui::EndDisabled(); ImGui::SameLine(); ImGui::TextUnformatted("(mod)"); }
+    if (ImGui::IsItemHovered()) ImGui::SetTooltip("Multiplier for output value range");
 
-    // --- CURVE CANVAS LOGIC (Moved to the end to fix UI interaction) ---
+    ImGui::Spacing();
+    ImGui::Spacing();
 
-    // Curve Selection
+    // === SECTION: Curve Editor ===
+    ImGui::TextColored(ImVec4(0.6f, 0.9f, 1.0f, 1.0f), "CURVE EDITOR");
+
     int activeEditorCurve = static_cast<int>(curveSelectParam->load());
     if (isParamInputConnected(paramIdCurveSelectMod)) {
         activeEditorCurve = static_cast<int>(getLiveParamValueFor(paramIdCurveSelectMod, "curveSelect_live", (float)activeEditorCurve));

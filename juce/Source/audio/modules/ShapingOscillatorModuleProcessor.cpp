@@ -146,6 +146,9 @@ void ShapingOscillatorModuleProcessor::drawParametersInNode (float itemWidth,
 
     ImGui::PushItemWidth(itemWidth);
 
+    // === SECTION: Oscillator ===
+    ImGui::TextColored(ImVec4(0.6f, 0.9f, 1.0f, 1.0f), "OSCILLATOR");
+
     if (freqIsMod) ImGui::BeginDisabled();
     if (ImGui::SliderFloat("Frequency", &freq, 20.0f, 20000.0f, "%.1f Hz", ImGuiSliderFlags_Logarithmic))
     {
@@ -154,6 +157,7 @@ void ShapingOscillatorModuleProcessor::drawParametersInNode (float itemWidth,
     if (!freqIsMod) adjustParamOnWheel(ap.getParameter(paramIdFrequency), "frequencyHz", freq);
     if (ImGui::IsItemDeactivatedAfterEdit()) onModificationEnded();
     if (freqIsMod) { ImGui::EndDisabled(); ImGui::SameLine(); ImGui::TextUnformatted("(mod)"); }
+    if (ImGui::IsItemHovered()) ImGui::SetTooltip("Base oscillator frequency");
 
     const bool waveIsMod = isParamModulated(paramIdWaveformMod);
     if (waveIsMod) ImGui::BeginDisabled();
@@ -163,6 +167,13 @@ void ShapingOscillatorModuleProcessor::drawParametersInNode (float itemWidth,
     }
     if (ImGui::IsItemDeactivatedAfterEdit()) onModificationEnded();
     if (waveIsMod) { ImGui::EndDisabled(); ImGui::SameLine(); ImGui::TextUnformatted("(mod)"); }
+    if (ImGui::IsItemHovered()) ImGui::SetTooltip("Oscillator waveform shape");
+
+    ImGui::Spacing();
+    ImGui::Spacing();
+
+    // === SECTION: Waveshaping ===
+    ImGui::TextColored(ImVec4(0.6f, 0.9f, 1.0f, 1.0f), "WAVESHAPING");
 
     if (driveIsMod) ImGui::BeginDisabled();
     if (ImGui::SliderFloat("Drive", &drive, 1.0f, 50.0f, "%.2f", ImGuiSliderFlags_Logarithmic))
@@ -172,6 +183,30 @@ void ShapingOscillatorModuleProcessor::drawParametersInNode (float itemWidth,
     if (!driveIsMod) adjustParamOnWheel(ap.getParameter(paramIdDrive), "drive", drive);
     if (ImGui::IsItemDeactivatedAfterEdit()) onModificationEnded();
     if (driveIsMod) { ImGui::EndDisabled(); ImGui::SameLine(); ImGui::TextUnformatted("(mod)"); }
+    if (ImGui::IsItemHovered()) ImGui::SetTooltip("Waveshaping amount (1=clean, 50=extreme)");
+
+    ImGui::Spacing();
+    ImGui::Spacing();
+
+    // === SECTION: Output ===
+    ImGui::TextColored(ImVec4(0.6f, 0.9f, 1.0f, 1.0f), "OUTPUT");
+
+    float currentOut = 0.0f;
+    if (lastOutputValues.size() >= 1 && lastOutputValues[0]) {
+        currentOut = lastOutputValues[0]->load();
+    }
+
+    // Calculate fixed width for progress bar using actual text measurements
+    const float labelTextWidth = ImGui::CalcTextSize("Level:").x;
+    const float valueTextWidth = ImGui::CalcTextSize("-0.999").x;  // Max expected width
+    const float spacing = ImGui::GetStyle().ItemSpacing.x;
+    const float barWidth = itemWidth - labelTextWidth - valueTextWidth - (spacing * 2.0f);
+
+    ImGui::Text("Level:");
+    ImGui::SameLine();
+    ImGui::ProgressBar((currentOut + 1.0f) / 2.0f, ImVec2(barWidth, 0), "");
+    ImGui::SameLine();
+    ImGui::Text("%.3f", currentOut);
 
     ImGui::PopItemWidth();
 }

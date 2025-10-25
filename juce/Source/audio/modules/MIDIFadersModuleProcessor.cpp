@@ -40,9 +40,32 @@ void MIDIFadersModuleProcessor::releaseResources()
 
 void MIDIFadersModuleProcessor::handleDeviceSpecificMidi(const std::vector<MidiMessageWithDevice>& midiMessages)
 {
+    // DEBUG: Log when MIDI arrives
+    if (!midiMessages.empty())
+    {
+        static int msgCount = 0;
+        msgCount++;
+        if (msgCount % 50 == 1) // Log every 50th batch
+        {
+            juce::Logger::writeToLog("[MIDI Faders] Received " + juce::String(midiMessages.size()) + 
+                                    " messages (total batches: " + juce::String(msgCount) + ")");
+        }
+    }
+    
     int numActive = numFadersParam ? numFadersParam->get() : MAX_FADERS;
     int deviceFilter = deviceFilterParam ? deviceFilterParam->getIndex() : 0;
     int channelFilter = midiChannelParam ? midiChannelParam->get() : 0;
+    
+    // DEBUG: Log if we're in learn mode
+    static int lastLearningIndex = -2; // Track changes
+    if (learningIndex != lastLearningIndex)
+    {
+        if (learningIndex != -1)
+            juce::Logger::writeToLog("[MIDI Faders] LEARN MODE ACTIVE for fader " + juce::String(learningIndex));
+        else if (lastLearningIndex != -2)
+            juce::Logger::writeToLog("[MIDI Faders] Learn mode deactivated");
+        lastLearningIndex = learningIndex;
+    }
     
     for (const auto& msg : midiMessages)
     {
@@ -61,10 +84,20 @@ void MIDIFadersModuleProcessor::handleDeviceSpecificMidi(const std::vector<MidiM
         int ccNumber = msg.message.getControllerNumber();
         float ccValue = msg.message.getControllerValue() / 127.0f;
         
+        // DEBUG: Log CC messages during learn mode
+        if (learningIndex != -1)
+        {
+            juce::Logger::writeToLog("[MIDI Faders] Learning - received CC#" + juce::String(ccNumber) + 
+                                    " value=" + juce::String(ccValue) + 
+                                    " from device: " + msg.deviceName);
+        }
+        
         // Handle MIDI Learn
         if (learningIndex != -1 && learningIndex < numActive)
         {
             mappings[learningIndex].midiCC = ccNumber;
+            juce::Logger::writeToLog("[MIDI Faders] ✓ Learned! Fader " + juce::String(learningIndex) + 
+                                    " mapped to CC#" + juce::String(ccNumber));
             learningIndex = -1;
         }
         
@@ -126,6 +159,10 @@ juce::ValueTree MIDIFadersModuleProcessor::getExtraStateTree() const
     vt.setProperty("controllerPreset", activeControllerPresetName, nullptr);
     #endif
     
+    // Save the MIDI device filter (0 = All Devices, 1+ = specific device)
+    if (deviceFilterParam)
+        vt.setProperty("deviceFilter", deviceFilterParam->getIndex(), nullptr);
+    
     // Save the MIDI channel from the APVTS parameter
     if (midiChannelParam)
         vt.setProperty("midiChannel", midiChannelParam->get(), nullptr);
@@ -151,6 +188,14 @@ void MIDIFadersModuleProcessor::setExtraStateTree(const juce::ValueTree& vt)
         #if defined(PRESET_CREATOR_UI)
         activeControllerPresetName = vt.getProperty("controllerPreset", "").toString();
         #endif
+        
+        // Load the MIDI device filter and update the parameter
+        if (deviceFilterParam && vt.hasProperty("deviceFilter"))
+        {
+            int deviceIndex = vt.getProperty("deviceFilter", 0);
+            // Clamp to valid range (0 = All Devices, 1+ = specific devices)
+            deviceFilterParam->setValueNotifyingHost(deviceFilterParam->convertTo0to1((float)deviceIndex));
+        }
         
         // Load the MIDI channel and update the APVTS parameter
         if (midiChannelParam)
@@ -484,13 +529,19 @@ void MIDIFadersModuleProcessor::drawVisualFaders(int numActive, const std::funct
                 ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(1.0f, 0.5f, 0.0f, 1.0f));
                 ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(1.0f, 0.6f, 0.1f, 1.0f));
                 if (ImGui::Button("Stop##btn", ImVec2(faderWidth, 0)))
+                {
+                    juce::Logger::writeToLog("[MIDI Faders UI] Learn STOPPED for fader " + juce::String(i));
                     learningIndex = -1;
+                }
                 ImGui::PopStyleColor(2);
             }
             else
             {
                 if (ImGui::Button("Lrn##btn", ImVec2(faderWidth, 0)))
+                {
+                    juce::Logger::writeToLog("[MIDI Faders UI] Learn button CLICKED for fader " + juce::String(i) + " - waiting for MIDI CC...");
                     learningIndex = i;
+                }
             }
             
             ImGui::EndGroup();
@@ -542,13 +593,19 @@ void MIDIFadersModuleProcessor::drawCompactList(int numActive, const std::functi
             ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(1.0f, 0.5f, 0.0f, 1.0f));
             ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(1.0f, 0.6f, 0.1f, 1.0f));
             if (ImGui::Button("Learning...##btn", ImVec2(90, 0)))
+            {
+                juce::Logger::writeToLog("[MIDI Faders UI] Learn STOPPED for fader " + juce::String(i));
                 learningIndex = -1;
+            }
             ImGui::PopStyleColor(2);
         }
         else
         {
             if (ImGui::Button("Learn##btn", ImVec2(90, 0)))
+            {
+                juce::Logger::writeToLog("[MIDI Faders UI] Learn button CLICKED for fader " + juce::String(i) + " - waiting for MIDI CC...");
                 learningIndex = i;
+            }
         }
         
         // Range control on same line
@@ -627,13 +684,19 @@ void MIDIFadersModuleProcessor::drawTableView(int numActive, const std::function
             {
                 ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(1.0f, 0.5f, 0.0f, 1.0f));
                 if (ImGui::Button("Learning##btn"))  // ##btn ensures unique ID with PushID(i)
+                {
+                    juce::Logger::writeToLog("[MIDI Faders UI] Learn STOPPED for fader " + juce::String(i));
                     learningIndex = -1;
+                }
                 ImGui::PopStyleColor();
             }
             else
             {
                 if (ImGui::Button("Learn##btn"))  // ##btn ensures unique ID with PushID(i)
+                {
+                    juce::Logger::writeToLog("[MIDI Faders UI] Learn button CLICKED for fader " + juce::String(i) + " - waiting for MIDI CC...");
                     learningIndex = i;
+                }
             }
             
             // Column 4: Min value (NO SetNextItemWidth, let column control it)

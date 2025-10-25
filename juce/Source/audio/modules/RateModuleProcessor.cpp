@@ -85,13 +85,15 @@ void RateModuleProcessor::drawParametersInNode(float itemWidth, const std::funct
 
     ImGui::PushItemWidth(itemWidth);
     
-    // Base Rate slider with live modulation feedback
+    // === SECTION: Rate Control ===
+    ImGui::TextColored(ImVec4(0.6f, 0.9f, 1.0f, 1.0f), "RATE CONTROL");
+    
     bool isBaseRateModulated = isParamModulated("baseRate");
     if (isBaseRateModulated) {
         baseRate = getLiveParamValueFor("baseRate", "baseRate_live", baseRate);
         ImGui::BeginDisabled();
     }
-    if (ImGui::SliderFloat("Base Rate", &baseRate, 0.1f, 20.0f)) {
+    if (ImGui::SliderFloat("Base Rate", &baseRate, 0.1f, 20.0f, "%.2f Hz")) {
         if (!isBaseRateModulated) {
             if (auto* p = dynamic_cast<juce::AudioParameterFloat*>(ap.getParameter("baseRate"))) *p = baseRate;
         }
@@ -99,14 +101,14 @@ void RateModuleProcessor::drawParametersInNode(float itemWidth, const std::funct
     if (!isBaseRateModulated) adjustParamOnWheel(ap.getParameter("baseRate"), "baseRate", baseRate);
     if (ImGui::IsItemDeactivatedAfterEdit()) onModificationEnded();
     if (isBaseRateModulated) { ImGui::EndDisabled(); ImGui::SameLine(); ImGui::TextUnformatted("(mod)"); }
+    if (ImGui::IsItemHovered()) ImGui::SetTooltip("Base frequency in Hz");
 
-    // Multiplier slider with live modulation feedback
     bool isMultiplierModulated = isParamModulated("multiplier");
     if (isMultiplierModulated) {
         multiplier = getLiveParamValueFor("multiplier", "multiplier_live", multiplier);
         ImGui::BeginDisabled();
     }
-    if (ImGui::SliderFloat("Multiplier", &multiplier, 0.1f, 10.0f)) {
+    if (ImGui::SliderFloat("Multiplier", &multiplier, 0.1f, 10.0f, "%.2fx")) {
         if (!isMultiplierModulated) {
             if (auto* p = dynamic_cast<juce::AudioParameterFloat*>(ap.getParameter("multiplier"))) *p = multiplier;
         }
@@ -114,8 +116,16 @@ void RateModuleProcessor::drawParametersInNode(float itemWidth, const std::funct
     if (!isMultiplierModulated) adjustParamOnWheel(ap.getParameter("multiplier"), "multiplier", multiplier);
     if (ImGui::IsItemDeactivatedAfterEdit()) onModificationEnded();
     if (isMultiplierModulated) { ImGui::EndDisabled(); ImGui::SameLine(); ImGui::TextUnformatted("(mod)"); }
+    if (ImGui::IsItemHovered()) ImGui::SetTooltip("Rate multiplier");
 
-    ImGui::Text("Output: %.2f Hz", getLastOutputValue());
+    ImGui::Spacing();
+    ImGui::Spacing();
+    
+    // === SECTION: Output ===
+    ImGui::TextColored(ImVec4(0.6f, 0.9f, 1.0f, 1.0f), "OUTPUT");
+    
+    float outputHz = getLastOutputValue();
+    ImGui::Text("Frequency: %.2f Hz", outputHz);
     
     ImGui::PopItemWidth();
 }

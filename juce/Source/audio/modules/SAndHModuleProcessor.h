@@ -29,6 +29,9 @@ public:
         
         ImGui::PushItemWidth (itemWidth);
 
+        // === SECTION: Sample Settings ===
+        ImGui::TextColored(ImVec4(0.6f, 0.9f, 1.0f, 1.0f), "SAMPLE SETTINGS");
+
         // Threshold
         bool isThreshModulated = isParamModulated("threshold_mod");
         if (isThreshModulated) {
@@ -39,6 +42,7 @@ public:
         if (!isThreshModulated) adjustParamOnWheel (ap.getParameter ("threshold"), "threshold", thr);
         if (ImGui::IsItemDeactivatedAfterEdit()) { onModificationEnded(); }
         if (isThreshModulated) { ImGui::EndDisabled(); ImGui::SameLine(); ImGui::TextUnformatted("(mod)"); }
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip("Trigger threshold for sampling signal");
 
         // Edge
         bool isEdgeModulated = isParamModulated("edge_mod");
@@ -50,6 +54,7 @@ public:
         if (ImGui::Combo ("Edge", &edge, items)) if (!isEdgeModulated) if (auto* p = dynamic_cast<juce::AudioParameterChoice*>(ap.getParameter("edge"))) *p = edge;
         if (ImGui::IsItemDeactivatedAfterEdit()) { onModificationEnded(); }
         if (isEdgeModulated) { ImGui::EndDisabled(); ImGui::SameLine(); ImGui::TextUnformatted("(mod)"); }
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip("Which edge triggers sampling");
 
         // Slew
         bool isSlewModulated = isParamModulated("slewMs_mod");
@@ -57,10 +62,43 @@ public:
             slew = getLiveParamValueFor("slewMs_mod", "slewMs_live", slew);
             ImGui::BeginDisabled();
         }
-        if (ImGui::SliderFloat ("Slew (ms)", &slew, 0.0f, 2000.0f)) if (!isSlewModulated) if (auto* p = dynamic_cast<juce::AudioParameterFloat*>(ap.getParameter("slewMs"))) *p = slew;
+        if (ImGui::SliderFloat ("Slew", &slew, 0.0f, 2000.0f, "%.1f ms", ImGuiSliderFlags_Logarithmic)) if (!isSlewModulated) if (auto* p = dynamic_cast<juce::AudioParameterFloat*>(ap.getParameter("slewMs"))) *p = slew;
         if (!isSlewModulated) adjustParamOnWheel (ap.getParameter ("slewMs"), "slewMs", slew);
         if (ImGui::IsItemDeactivatedAfterEdit()) { onModificationEnded(); }
         if (isSlewModulated) { ImGui::EndDisabled(); ImGui::SameLine(); ImGui::TextUnformatted("(mod)"); }
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip("Smooth transitions between held values");
+
+        ImGui::Spacing();
+        ImGui::Spacing();
+
+        // === SECTION: Held Values ===
+        ImGui::TextColored(ImVec4(0.6f, 0.9f, 1.0f, 1.0f), "HELD VALUES");
+        
+        // Get current held values from output tracking
+        float heldL = 0.0f, heldR = 0.0f;
+        if (lastOutputValues.size() >= 2) {
+            if (lastOutputValues[0]) heldL = lastOutputValues[0]->load();
+            if (lastOutputValues[1]) heldR = lastOutputValues[1]->load();
+        }
+        
+        // Calculate fixed width for progress bars using actual text measurements
+        const float labelTextWidth = ImGui::CalcTextSize("R:").x;  // R is wider than L
+        const float valueTextWidth = ImGui::CalcTextSize("-0.999").x;  // Max expected width
+        const float spacing = ImGui::GetStyle().ItemSpacing.x;
+        const float barWidth = itemWidth - labelTextWidth - valueTextWidth - (spacing * 2.0f);
+        
+        // Display held values with progress bars (bidirectional for -1 to +1)
+        ImGui::Text("L:");
+        ImGui::SameLine();
+        ImGui::ProgressBar((heldL + 1.0f) / 2.0f, ImVec2(barWidth, 0), "");
+        ImGui::SameLine();
+        ImGui::Text("%.3f", heldL);
+        
+        ImGui::Text("R:");
+        ImGui::SameLine();
+        ImGui::ProgressBar((heldR + 1.0f) / 2.0f, ImVec2(barWidth, 0), "");
+        ImGui::SameLine();
+        ImGui::Text("%.3f", heldR);
 
         ImGui::PopItemWidth();
     }

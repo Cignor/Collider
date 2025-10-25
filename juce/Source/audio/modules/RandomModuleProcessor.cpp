@@ -203,7 +203,9 @@ void RandomModuleProcessor::drawParametersInNode(float itemWidth, const std::fun
 
     ImGui::PushItemWidth(itemWidth);
 
-    // --- SYNC CONTROLS ---
+    // === SECTION: Timing ===
+    ImGui::TextColored(ImVec4(0.6f, 0.9f, 1.0f, 1.0f), "TIMING");
+    
     bool sync = apvts.getRawParameterValue("sync")->load() > 0.5f;
     if (ImGui::Checkbox("Sync to Transport", &sync))
     {
@@ -211,6 +213,7 @@ void RandomModuleProcessor::drawParametersInNode(float itemWidth, const std::fun
             *p = sync;
         onModificationEnded();
     }
+    if (ImGui::IsItemHovered()) ImGui::SetTooltip("Lock random generation to host tempo");
     
     if (sync)
     {
@@ -221,52 +224,137 @@ void RandomModuleProcessor::drawParametersInNode(float itemWidth, const std::fun
                 *p = division;
             onModificationEnded();
         }
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip("Note division for synced random generation");
     }
     else
     {
-        // Rate slider (only show in free-running mode)
-        if (ImGui::SliderFloat("Rate", &rate, 0.1f, 50.0f, "%.3f Hz", ImGuiSliderFlags_Logarithmic)) *dynamic_cast<juce::AudioParameterFloat*>(ap.getParameter(paramIdRate)) = rate;
+        if (ImGui::SliderFloat("Rate", &rate, 0.1f, 50.0f, "%.2f Hz", ImGuiSliderFlags_Logarithmic))
+        {
+            *dynamic_cast<juce::AudioParameterFloat*>(ap.getParameter(paramIdRate)) = rate;
+        }
         if (ImGui::IsItemDeactivatedAfterEdit()) onModificationEnded();
         adjustParamOnWheel(ap.getParameter(paramIdRate), "rate", rate);
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip("Random value generation rate");
     }
 
-    if (ImGui::SliderFloat("Slew", &slew, 0.0f, 1.0f, "%.3f")) *dynamic_cast<juce::AudioParameterFloat*>(ap.getParameter(paramIdSlew)) = slew;
+    if (ImGui::SliderFloat("Slew", &slew, 0.0f, 1.0f, "%.3f"))
+    {
+        *dynamic_cast<juce::AudioParameterFloat*>(ap.getParameter(paramIdSlew)) = slew;
+    }
     if (ImGui::IsItemDeactivatedAfterEdit()) onModificationEnded();
     adjustParamOnWheel(ap.getParameter(paramIdSlew), "slew", slew);
+    if (ImGui::IsItemHovered()) ImGui::SetTooltip("Smoothness of transitions between random values");
     
-    if (ImGui::SliderFloat("CV Min", &cvMin, 0.0f, 1.0f)) *dynamic_cast<juce::AudioParameterFloat*>(ap.getParameter(paramIdCvMin)) = cvMin;
-    if (ImGui::IsItemDeactivatedAfterEdit()) onModificationEnded();
-    adjustParamOnWheel(ap.getParameter(paramIdCvMin), "cvMin", cvMin);
-
-    if (ImGui::SliderFloat("CV Max", &cvMax, 0.0f, 1.0f)) *dynamic_cast<juce::AudioParameterFloat*>(ap.getParameter(paramIdCvMax)) = cvMax;
-    if (ImGui::IsItemDeactivatedAfterEdit()) onModificationEnded();
-    adjustParamOnWheel(ap.getParameter(paramIdCvMax), "cvMax", cvMax);
-
-    if (ImGui::SliderFloat("Norm Min", &normMin, 0.0f, 1.0f)) *dynamic_cast<juce::AudioParameterFloat*>(ap.getParameter(paramIdNormMin)) = normMin;
-    if (ImGui::IsItemDeactivatedAfterEdit()) onModificationEnded();
-    adjustParamOnWheel(ap.getParameter(paramIdNormMin), "normMin", normMin);
-
-    if (ImGui::SliderFloat("Norm Max", &normMax, 0.0f, 1.0f)) *dynamic_cast<juce::AudioParameterFloat*>(ap.getParameter(paramIdNormMax)) = normMax;
-    if (ImGui::IsItemDeactivatedAfterEdit()) onModificationEnded();
-    adjustParamOnWheel(ap.getParameter(paramIdNormMax), "normMax", normMax);
-
-    if (ImGui::SliderFloat("Min", &minVal, -100.0f, 100.0f, "%.3f")) *dynamic_cast<juce::AudioParameterFloat*>(ap.getParameter(paramIdMin)) = minVal;
+    ImGui::Spacing();
+    ImGui::Spacing();
+    
+    // === SECTION: Range Controls ===
+    ImGui::TextColored(ImVec4(0.6f, 0.9f, 1.0f, 1.0f), "RANGE CONTROLS");
+    
+    if (ImGui::SliderFloat("Min", &minVal, -100.0f, 100.0f, "%.2f"))
+    {
+        *dynamic_cast<juce::AudioParameterFloat*>(ap.getParameter(paramIdMin)) = minVal;
+    }
     if (ImGui::IsItemDeactivatedAfterEdit()) onModificationEnded();
     adjustParamOnWheel(ap.getParameter(paramIdMin), "min", minVal);
+    if (ImGui::IsItemHovered()) ImGui::SetTooltip("Minimum raw output value");
 
-    if (ImGui::SliderFloat("Max", &maxVal, -100.0f, 100.0f, "%.3f")) *dynamic_cast<juce::AudioParameterFloat*>(ap.getParameter(paramIdMax)) = maxVal;
+    if (ImGui::SliderFloat("Max", &maxVal, -100.0f, 100.0f, "%.2f"))
+    {
+        *dynamic_cast<juce::AudioParameterFloat*>(ap.getParameter(paramIdMax)) = maxVal;
+    }
     if (ImGui::IsItemDeactivatedAfterEdit()) onModificationEnded();
     adjustParamOnWheel(ap.getParameter(paramIdMax), "max", maxVal);
+    if (ImGui::IsItemHovered()) ImGui::SetTooltip("Maximum raw output value");
     
-    if (ImGui::SliderFloat("Trig Threshold", &trigThreshold, 0.0f, 1.0f, "%.2f")) *dynamic_cast<juce::AudioParameterFloat*>(ap.getParameter(paramIdTrigThreshold)) = trigThreshold;
+    if (ImGui::SliderFloat("CV Min", &cvMin, 0.0f, 1.0f, "%.3f"))
+    {
+        *dynamic_cast<juce::AudioParameterFloat*>(ap.getParameter(paramIdCvMin)) = cvMin;
+    }
+    if (ImGui::IsItemDeactivatedAfterEdit()) onModificationEnded();
+    adjustParamOnWheel(ap.getParameter(paramIdCvMin), "cvMin", cvMin);
+    if (ImGui::IsItemHovered()) ImGui::SetTooltip("Minimum CV output value (0-1)");
+
+    if (ImGui::SliderFloat("CV Max", &cvMax, 0.0f, 1.0f, "%.3f"))
+    {
+        *dynamic_cast<juce::AudioParameterFloat*>(ap.getParameter(paramIdCvMax)) = cvMax;
+    }
+    if (ImGui::IsItemDeactivatedAfterEdit()) onModificationEnded();
+    adjustParamOnWheel(ap.getParameter(paramIdCvMax), "cvMax", cvMax);
+    if (ImGui::IsItemHovered()) ImGui::SetTooltip("Maximum CV output value (0-1)");
+
+    if (ImGui::SliderFloat("Norm Min", &normMin, 0.0f, 1.0f, "%.3f"))
+    {
+        *dynamic_cast<juce::AudioParameterFloat*>(ap.getParameter(paramIdNormMin)) = normMin;
+    }
+    if (ImGui::IsItemDeactivatedAfterEdit()) onModificationEnded();
+    adjustParamOnWheel(ap.getParameter(paramIdNormMin), "normMin", normMin);
+    if (ImGui::IsItemHovered()) ImGui::SetTooltip("Minimum normalized output value");
+
+    if (ImGui::SliderFloat("Norm Max", &normMax, 0.0f, 1.0f, "%.3f"))
+    {
+        *dynamic_cast<juce::AudioParameterFloat*>(ap.getParameter(paramIdNormMax)) = normMax;
+    }
+    if (ImGui::IsItemDeactivatedAfterEdit()) onModificationEnded();
+    adjustParamOnWheel(ap.getParameter(paramIdNormMax), "normMax", normMax);
+    if (ImGui::IsItemHovered()) ImGui::SetTooltip("Maximum normalized output value");
+    
+    if (ImGui::SliderFloat("Trig Thr", &trigThreshold, 0.0f, 1.0f, "%.2f"))
+    {
+        *dynamic_cast<juce::AudioParameterFloat*>(ap.getParameter(paramIdTrigThreshold)) = trigThreshold;
+    }
     if (ImGui::IsItemDeactivatedAfterEdit()) onModificationEnded();
     adjustParamOnWheel(ap.getParameter(paramIdTrigThreshold), "trigThreshold", trigThreshold);
+    if (ImGui::IsItemHovered()) ImGui::SetTooltip("Threshold for trigger/gate outputs");
 
-    ImGui::Text("Raw Output:        %.2f", getLastOutputValue());
-    ImGui::Text("Normalized Output: %.2f", getLastNormalizedOutputValue());
-    ImGui::Text("CV Output:         %.2f", getLastCvOutputValue());
-    ImGui::Text("Bool Output:       %s", (getLastBoolOutputValue() > 0.5f) ? "On" : "Off");
-    ImGui::Text("Trig Output:       %s", (getLastTrigOutputValue() > 0.5f) ? "On" : "Off");
+    ImGui::Spacing();
+    ImGui::Spacing();
+    
+    // === SECTION: Live Output ===
+    ImGui::TextColored(ImVec4(0.6f, 0.9f, 1.0f, 1.0f), "LIVE OUTPUT");
+    
+    const float rawOut = getLastOutputValue();
+    const float normOut = getLastNormalizedOutputValue();
+    const float cvOut = getLastCvOutputValue();
+    const bool boolOut = getLastBoolOutputValue() > 0.5f;
+    const bool trigOut = getLastTrigOutputValue() > 0.5f;
+    
+    // Calculate fixed width for progress bars using actual text measurements
+    const float labelTextWidth = ImGui::CalcTextSize("Norm").x;  // "Norm" is the widest label
+    const float valueTextWidth = ImGui::CalcTextSize("-99.99").x;  // Max expected width based on -100 to 100 range
+    const float spacing = ImGui::GetStyle().ItemSpacing.x;
+    const float barWidth = itemWidth - labelTextWidth - valueTextWidth - (spacing * 2.0f);
+    
+    // Raw output with bar
+    ImGui::Text("Raw");
+    ImGui::SameLine();
+    ImGui::ProgressBar((rawOut - minVal) / (maxVal - minVal + 0.0001f), ImVec2(barWidth, 0), "");
+    ImGui::SameLine();
+    ImGui::Text("%.2f", rawOut);
+    
+    // Normalized output with bar
+    ImGui::Text("Norm");
+    ImGui::SameLine();
+    ImGui::ProgressBar(normOut, ImVec2(barWidth, 0), "");
+    ImGui::SameLine();
+    ImGui::Text("%.2f", normOut);
+    
+    // CV output with bar
+    ImGui::Text("CV");
+    ImGui::SameLine();
+    ImGui::ProgressBar(cvOut, ImVec2(barWidth, 0), "");
+    ImGui::SameLine();
+    ImGui::Text("%.2f", cvOut);
+    
+    // Bool indicator (LED style)
+    ImGui::Text("Bool:");
+    ImGui::SameLine();
+    ImGui::TextColored(boolOut ? ImVec4(0.0f, 1.0f, 0.0f, 1.0f) : ImVec4(0.3f, 0.3f, 0.3f, 1.0f), boolOut ? "ON" : "OFF");
+    
+    // Trig indicator (LED style)
+    ImGui::Text("Trig:");
+    ImGui::SameLine();
+    ImGui::TextColored(trigOut ? ImVec4(1.0f, 1.0f, 0.0f, 1.0f) : ImVec4(0.3f, 0.3f, 0.3f, 1.0f), trigOut ? "TRIG" : "---");
 
     ImGui::PopItemWidth();
 }

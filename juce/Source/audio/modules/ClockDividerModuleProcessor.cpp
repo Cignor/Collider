@@ -145,14 +145,40 @@ void ClockDividerModuleProcessor::drawParametersInNode(float itemWidth, const st
     juce::ignoreUnused(isParamModulated);
     auto& ap = getAPVTS();
     ImGui::PushItemWidth(itemWidth);
+    
+    // === SECTION: Clock Settings ===
+    ImGui::TextColored(ImVec4(0.6f, 0.9f, 1.0f, 1.0f), "CLOCK SETTINGS");
+    
     float gateThresh = gateThresholdParam != nullptr ? gateThresholdParam->load() : 0.5f;
-    if (ImGui::SliderFloat("Gate Thresh", &gateThresh, 0.0f, 1.0f, "%.3f")) { if (auto* p = dynamic_cast<juce::AudioParameterFloat*>(ap.getParameter("gateThreshold"))) *p = gateThresh; onModificationEnded(); }
+    if (ImGui::SliderFloat("Gate Thresh", &gateThresh, 0.0f, 1.0f, "%.3f")) { 
+        if (auto* p = dynamic_cast<juce::AudioParameterFloat*>(ap.getParameter("gateThreshold"))) *p = gateThresh; 
+        onModificationEnded(); 
+    }
+    if (ImGui::IsItemHovered()) ImGui::SetTooltip("Threshold for detecting clock pulses");
+    
     float hyst = hysteresisParam != nullptr ? hysteresisParam->load() : 0.05f;
-    if (ImGui::SliderFloat("Hysteresis", &hyst, 0.0f, 0.5f, "%.4f")) { if (auto* p = dynamic_cast<juce::AudioParameterFloat*>(ap.getParameter("hysteresis"))) *p = hyst; onModificationEnded(); }
+    if (ImGui::SliderFloat("Hysteresis", &hyst, 0.0f, 0.5f, "%.4f")) { 
+        if (auto* p = dynamic_cast<juce::AudioParameterFloat*>(ap.getParameter("hysteresis"))) *p = hyst; 
+        onModificationEnded(); 
+    }
+    if (ImGui::IsItemHovered()) ImGui::SetTooltip("Noise immunity for clock detection");
+    
     float pw = pulseWidthParam != nullptr ? pulseWidthParam->load() : 0.5f;
-    if (ImGui::SliderFloat("Pulse Width", &pw, 0.01f, 1.0f, "%.3f")) { if (auto* p = dynamic_cast<juce::AudioParameterFloat*>(ap.getParameter("pulseWidth"))) *p = pw; onModificationEnded(); }
+    if (ImGui::SliderFloat("Pulse Width", &pw, 0.01f, 1.0f, "%.3f")) { 
+        if (auto* p = dynamic_cast<juce::AudioParameterFloat*>(ap.getParameter("pulseWidth"))) *p = pw; 
+        onModificationEnded(); 
+    }
+    if (ImGui::IsItemHovered()) ImGui::SetTooltip("Output pulse width (0-1)");
+    
+    ImGui::Spacing();
+    ImGui::Spacing();
+    
+    // === SECTION: Clock Monitor ===
+    ImGui::TextColored(ImVec4(0.6f, 0.9f, 1.0f, 1.0f), "CLOCK MONITOR");
+    
     double bpm = (currentClockInterval > 0.0) ? (60.0 * sampleRate / currentClockInterval) : 0.0;
-    ImGui::Text("Clock: %.1f BPM", bpm);
+    ImGui::Text("Clock Rate: %.1f BPM", bpm);
+    
     ImGui::PopItemWidth();
 }
 

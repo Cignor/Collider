@@ -120,6 +120,13 @@ void ModularSynthProcessor::processMidiWithDeviceInfo(const std::vector<MidiMess
     const juce::ScopedLock lock(midiActivityLock);
     currentBlockMidiMessages = messages;
     
+    // DEBUG LOGGING
+    if (!messages.empty())
+    {
+        juce::Logger::writeToLog("[ModularSynth] processMidiWithDeviceInfo received " + 
+                                juce::String(messages.size()) + " MIDI messages");
+    }
+    
     // Update activity tracking
     currentActivity.deviceChannelActivity.clear();
     currentActivity.deviceNames.clear();
@@ -197,24 +204,61 @@ void ModularSynthProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce:
         // Modules receive device info and can filter by device/channel
         {
             const juce::ScopedLock lock(midiActivityLock);
-            if (!currentBlockMidiMessages.empty() && internalGraph)
+            
+            // DEBUG: Log every processBlock attempt to check the buffer
+            static int checkCount = 0;
+            static int distributionCount = 0;
+            checkCount++;
+            
+            if (!currentBlockMidiMessages.empty())
             {
-                for (auto* node : internalGraph->getNodes())
+                distributionCount++;
+                
+                // Log only first few times to avoid spam
+                if (distributionCount <= 5)
                 {
-                    if (auto* module = dynamic_cast<ModuleProcessor*>(node->getProcessor()))
+                    juce::Logger::writeToLog("[ModularSynth processBlock] CHECK #" + juce::String(checkCount) + 
+                                            " - Found " + juce::String(currentBlockMidiMessages.size()) + " messages to distribute");
+                }
+                
+                if (internalGraph)
+                {
+                    int nodeCount = internalGraph->getNodes().size();
+                    int moduleCount = 0;
+                    
+                    if (distributionCount <= 5)
                     {
-                        module->handleDeviceSpecificMidi(currentBlockMidiMessages);
+                        juce::Logger::writeToLog("[ModularSynth] Distributing to " + juce::String(nodeCount) + " nodes");
                     }
+                    
+                    for (auto* node : internalGraph->getNodes())
+                    {
+                        if (auto* module = dynamic_cast<ModuleProcessor*>(node->getProcessor()))
+                        {
+                            moduleCount++;
+                            module->handleDeviceSpecificMidi(currentBlockMidiMessages);
+                        }
+                    }
+                    
+                    if (distributionCount <= 5)
+                    {
+                        juce::Logger::writeToLog("[ModularSynth] Called handleDeviceSpecificMidi on " + 
+                                                juce::String(moduleCount) + " modules");
+                    }
+                    
+                    // Merge device-aware MIDI into standard MidiBuffer for backward compatibility
+                    for (const auto& msg : currentBlockMidiMessages)
+                    {
+                        midiMessages.addEvent(msg.message, 0);
+                    }
+                    
+                    // Clear for next block
+                    currentBlockMidiMessages.clear();
                 }
-                
-                // Merge device-aware MIDI into standard MidiBuffer for backward compatibility
-                for (const auto& msg : currentBlockMidiMessages)
+                else
                 {
-                    midiMessages.addEvent(msg.message, 0);
+                    juce::Logger::writeToLog("[ModularSynth] WARNING: Have MIDI messages but internalGraph is null!");
                 }
-                
-                // Clear for next block
-                currentBlockMidiMessages.clear();
             }
         }
         // === END MULTI-MIDI DISTRIBUTION ===

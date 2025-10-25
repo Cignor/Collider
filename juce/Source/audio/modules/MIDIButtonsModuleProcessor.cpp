@@ -143,6 +143,10 @@ juce::ValueTree MIDIButtonsModuleProcessor::getExtraStateTree() const
     vt.setProperty("controllerPreset", activeControllerPresetName, nullptr);
     #endif
     
+    // Save the MIDI device filter
+    if (deviceFilterParam)
+        vt.setProperty("deviceFilter", deviceFilterParam->getIndex(), nullptr);
+    
     // Save the MIDI channel from the APVTS parameter
     if (midiChannelParam)
         vt.setProperty("midiChannel", midiChannelParam->get(), nullptr);
@@ -167,6 +171,13 @@ void MIDIButtonsModuleProcessor::setExtraStateTree(const juce::ValueTree& vt)
         #if defined(PRESET_CREATOR_UI)
         activeControllerPresetName = vt.getProperty("controllerPreset", "").toString();
         #endif
+        
+        // Load the MIDI device filter
+        if (deviceFilterParam && vt.hasProperty("deviceFilter"))
+        {
+            int deviceIndex = vt.getProperty("deviceFilter", 0);
+            deviceFilterParam->setValueNotifyingHost(deviceFilterParam->convertTo0to1((float)deviceIndex));
+        }
         
         // Load the MIDI channel and update the APVTS parameter
         if (midiChannelParam)

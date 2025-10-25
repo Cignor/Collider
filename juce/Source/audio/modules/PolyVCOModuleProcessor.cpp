@@ -148,27 +148,26 @@ void PolyVCOModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce
             float finalGateMultiplier = 0.0f;
             if (gateIsModulated[voice])
             {
-                // MODE 1: Gate is modulated by an external signal (e.g., ADSR).
-                // Use the incoming CV directly as the envelope.
+                // MODE 1: Gate is modulated by an external signal (e.g., an ADSR).
+                // Use the incoming CV directly as the gate's level.
                 int chan = 1 + (2 * MAX_VOICES) + voice;
                 if (chan < modInBus.getNumChannels())
                 {
                     float gateCV = modInBus.getReadPointer(chan)[sample];
-                    // Apply light smoothing to the direct CV to prevent clicks.
+                    // Apply light smoothing to the direct CV to prevent clicks from stepped signals.
                     gateEnvelope[voice] += (gateCV - gateEnvelope[voice]) * 0.005f; 
                     finalGateMultiplier = gateEnvelope[voice];
                 }
             }
             else
             {
-                // MODE 2: Gate is NOT modulated. Use the internal slider as a threshold
-                // against the signal from the 'Freq Mod' input.
-                float gateThreshold = voiceGateParams[voice] != nullptr ? voiceGateParams[voice]->get() : 0.5f;
-                float gateTarget = (freqModCV > gateThreshold) ? 1.0f : 0.0f;
-                
-                // Use the fast attack/release envelope for a snappy response.
-                const float coeff = (gateTarget > gateEnvelope[voice]) ? gateAttackCoeff : gateReleaseCoeff;
-                gateEnvelope[voice] += coeff * (gateTarget - gateEnvelope[voice]);
+                // MODE 2: Gate is NOT modulated. The oscillator is free-running.
+                // The internal "Gate" slider now acts as a simple level/volume control.
+                float targetLevel = voiceGateParams[voice] ? voiceGateParams[voice]->get() : 1.0f;
+
+                // Smooth the parameter value to prevent zipper noise when the user moves the slider.
+                const float smoothingCoeff = 0.001f;
+                gateEnvelope[voice] += (targetLevel - gateEnvelope[voice]) * smoothingCoeff;
                 finalGateMultiplier = gateEnvelope[voice];
             }
             // --- END OF FIX ---
@@ -254,7 +253,8 @@ std::vector<DynamicPinInfo> PolyVCOModuleProcessor::getDynamicOutputPins() const
     pins.reserve((size_t)activeVoices);
     for (int i = 0; i < activeVoices; ++i)
     {
-        pins.push_back({ "Voice " + juce::String(i + 1), i, PinDataType::Audio });
+        // Label outputs as "Freq 1", "Freq 2", etc. to match their function
+        pins.push_back({ "Freq " + juce::String(i + 1), i, PinDataType::Audio });
     }
     return pins;
 }
@@ -292,15 +292,14 @@ void PolyVCOModuleProcessor::drawParametersInNode(float itemWidth, const std::fu
     ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1.0f), "Master Controls");
     ImGui::Spacing();
 
-    ImGui::PushItemWidth(itemWidth);
-    
     // Master Voice Count Control with Live Feedback
     const bool isCountModulated = isParamModulated("numVoices");
     int displayedVoices = isCountModulated ? (int)getLiveParamValueFor("numVoices", "numVoices_live", (float)(numVoicesParam != nullptr ? numVoicesParam->get() : 1))
                                            : (numVoicesParam != nullptr ? numVoicesParam->get() : 1);
 
     if (isCountModulated) ImGui::BeginDisabled();
-    if (ImGui::SliderInt("Num Voices", &displayedVoices, 1, MAX_VOICES)) {
+    ImGui::SetNextItemWidth(120);
+    if (ImGui::SliderInt("##numvoices", &displayedVoices, 1, MAX_VOICES)) {
         if (!isCountModulated) {
             *numVoicesParam = displayedVoices;
             onModificationEnded();
@@ -316,175 +315,160 @@ void PolyVCOModuleProcessor::drawParametersInNode(float itemWidth, const std::fu
         ImGui::TextUnformatted("(mod)");
     }
     ImGui::SameLine();
-    HelpMarkerPoly("Number of active voices (1-32)\nEach voice is an independent oscillator");
-    
-    ImGui::PopItemWidth();
-
-    ImGui::Spacing();
-    ImGui::Spacing();
-
-    // === PER-VOICE CONTROLS SECTION ===
-    ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1.0f), "Voice Parameters");
-    ImGui::Spacing();
-
-    // Expand/Collapse All controls
-    static bool expandAllState = false;
-    static bool collapseAllState = false;
-    
-    if (ImGui::SmallButton("Expand All")) {
-        expandAllState = true;
-    }
+    ImGui::Text("Voices");
     ImGui::SameLine();
-    if (ImGui::SmallButton("Collapse All")) {
-        collapseAllState = true;
-    }
-    
+    HelpMarkerPoly("Number of active voices (1-32)\nEach voice is an independent oscillator");
+
+    ImGui::Spacing();
     ImGui::Spacing();
 
-    // Per-voice controls with collapsible sections
+    // === PER-VOICE CONTROLS SECTION (TABLE SYSTEM) ===
+    ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1.0f), "Voice Parameters");
+    ImGui::TextDisabled("Clean table view - inputs on left, outputs on right");
+    ImGui::Spacing();
+
     const int activeVoices = juce::jlimit(1, MAX_VOICES,
         (int)(isCountModulated ? getLiveParamValueFor("numVoices", "numVoices_live", (float)getEffectiveNumVoices())
                                : (float)getEffectiveNumVoices()));
     
-    for (int i = 0; i < activeVoices; ++i)
-    {
-        const auto idx = juce::String(i + 1);
-        ImGui::PushID(i);
-
-        // Apply expand/collapse all OR default state
-        if (expandAllState) {
-            ImGui::SetNextItemOpen(true);
-        }
-        else if (collapseAllState) {
-            ImGui::SetNextItemOpen(false);
-        }
-        else {
-            // First 4 voices open by default (on first use only)
-            ImGui::SetNextItemOpen(i < 4, ImGuiCond_Once);
-        }
-
-        // Color-code voice number using HSV
-        float hue = (float)i / (float)MAX_VOICES;
-        ImGui::PushStyleColor(ImGuiCol_Text, ImColor::HSV(hue, 0.7f, 1.0f).Value);
-        
-        juce::String voiceLabel = "Voice " + idx;
-        bool expanded = ImGui::CollapsingHeader(voiceLabel.toRawUTF8(), 
-                                                ImGuiTreeNodeFlags_None);
-        
-        ImGui::PopStyleColor();
-        
-        if (expanded)
-        {
-            // Use a 3-column table for compact layout
-            const float columnWidth = itemWidth / 3.0f;
-            
-            if (ImGui::BeginTable("voiceTable", 3, 
-                                  ImGuiTableFlags_SizingFixedFit | 
-                                  ImGuiTableFlags_NoBordersInBody,
-                                  ImVec2(itemWidth, 0)))
-            {
-                // Column 1: Waveform
-                ImGui::TableNextColumn();
-                ImGui::PushItemWidth(columnWidth - 8.0f);
-                
-                const bool isWaveModulated = isParamModulated("wave_" + idx);
-                int wave = isWaveModulated ? (int)getLiveParamValueFor("wave_" + idx, "wave_" + idx + "_live", (float)(voiceWaveParams[i] != nullptr ? voiceWaveParams[i]->getIndex() : 0))
-                                           : (voiceWaveParams[i] != nullptr ? voiceWaveParams[i]->getIndex() : 0);
-                if (isWaveModulated) ImGui::BeginDisabled();
-                if (ImGui::Combo("##wave", &wave, "Sine\0Saw\0Square\0\0")) {
-                    if (!isWaveModulated) *voiceWaveParams[i] = wave;
-                }
-                if (ImGui::IsItemDeactivatedAfterEdit() && !isWaveModulated) onModificationEnded();
-                if (isWaveModulated) ImGui::EndDisabled();
-                
-                ImGui::TextUnformatted("Wave");
-                if (isWaveModulated) {
-                    ImGui::SameLine();
-                    ImGui::TextColored(ImVec4(0.3f, 0.8f, 1.0f, 1.0f), "(mod)");
-                }
-                
-                ImGui::PopItemWidth();
-                
-                // Column 2: Frequency
-                ImGui::TableNextColumn();
-                ImGui::PushItemWidth(columnWidth - 8.0f);
-                
-                const bool isFreqModulated = isParamModulated("freq_" + idx);
-                float freq = isFreqModulated ? getLiveParamValueFor("freq_" + idx, "freq_" + idx + "_live", (voiceFreqParams[i] != nullptr ? voiceFreqParams[i]->get() : 440.0f))
-                                             : (voiceFreqParams[i] != nullptr ? voiceFreqParams[i]->get() : 440.0f);
-                if (isFreqModulated) ImGui::BeginDisabled();
-                if (ImGui::SliderFloat("##freq", &freq, 20.0f, 20000.0f, "%.0f", ImGuiSliderFlags_Logarithmic)) {
-                    if (!isFreqModulated) *voiceFreqParams[i] = freq;
-                }
-                if (ImGui::IsItemDeactivatedAfterEdit() && !isFreqModulated) onModificationEnded();
-                if (!isFreqModulated) adjustParamOnWheel(ap.getParameter("freq_" + idx), "freq_" + idx, freq);
-                if (isFreqModulated) ImGui::EndDisabled();
-                
-                ImGui::TextUnformatted("Hz");
-                if (isFreqModulated) {
-                    ImGui::SameLine();
-                    ImGui::TextColored(ImVec4(0.3f, 0.8f, 1.0f, 1.0f), "(mod)");
-                }
-                
-                ImGui::PopItemWidth();
-                
-                // Column 3: Gate
-                ImGui::TableNextColumn();
-                ImGui::PushItemWidth(columnWidth - 8.0f);
-                
-                const bool isGateModulated = isParamModulated("gate_" + idx);
-                float gate = isGateModulated ? getLiveParamValueFor("gate_" + idx, "gate_" + idx + "_live", (voiceGateParams[i] != nullptr ? voiceGateParams[i]->get() : 1.0f))
-                                             : (voiceGateParams[i] != nullptr ? voiceGateParams[i]->get() : 1.0f);
-                if (isGateModulated) ImGui::BeginDisabled();
-                if (ImGui::SliderFloat("##gate", &gate, 0.0f, 1.0f, "%.2f")) {
-                    if (!isGateModulated) *voiceGateParams[i] = gate;
-                }
-                if (ImGui::IsItemDeactivatedAfterEdit() && !isGateModulated) onModificationEnded();
-                if (!isGateModulated) adjustParamOnWheel(ap.getParameter("gate_" + idx), "gate_" + idx, gate);
-                if (isGateModulated) ImGui::EndDisabled();
-                
-                ImGui::TextUnformatted("Gate");
-                if (isGateModulated) {
-                    ImGui::SameLine();
-                    ImGui::TextColored(ImVec4(0.3f, 0.8f, 1.0f, 1.0f), "(mod)");
-                }
-                
-                ImGui::PopItemWidth();
-                
-                ImGui::EndTable();
-            }
-        }
-
-        ImGui::PopID();
-    }
+    // Table system like MIDI Buttons - clean, compact, and NO BLEEDING!
+    ImGuiTableFlags flags = ImGuiTableFlags_SizingFixedFit |
+                            ImGuiTableFlags_Borders |
+                            ImGuiTableFlags_ScrollY;
     
-    // Reset expand/collapse state after processing all voices
-    expandAllState = false;
-    collapseAllState = false;
+    float rowHeight = ImGui::GetTextLineHeightWithSpacing() + 4;
+    // Scale table height with number of voices, with scrolling for many voices
+    float tableHeight = rowHeight * juce::jmin(activeVoices + 1.5f, 16.0f); // Show up to 16 rows, then scroll
+    
+    // CRITICAL: Constrain table width to itemWidth to prevent bleeding
+    if (ImGui::BeginTable("##voices_table", 4, flags, ImVec2(itemWidth, tableHeight)))
+    {
+        ImGui::TableSetupColumn("Voice", ImGuiTableColumnFlags_WidthFixed, 40);
+        ImGui::TableSetupColumn("Waveform", ImGuiTableColumnFlags_WidthFixed, 70);
+        ImGui::TableSetupColumn("Frequency", ImGuiTableColumnFlags_WidthFixed, 65);
+        ImGui::TableSetupColumn("Gate", ImGuiTableColumnFlags_WidthFixed, 55);
+        ImGui::TableSetupScrollFreeze(0, 1); // Freeze header row
+        ImGui::TableHeadersRow();
+        
+        for (int i = 0; i < activeVoices; ++i)
+        {
+            const auto idx = juce::String(i + 1);
+            ImGui::PushID(i);
+            
+            ImGui::TableNextRow();
+            
+            // Column 0: Voice number with color
+            ImGui::TableNextColumn();
+            float hue = (float)i / (float)MAX_VOICES;
+            ImGui::PushStyleColor(ImGuiCol_Text, ImColor::HSV(hue, 0.7f, 1.0f).Value);
+            ImGui::Text("V%d", i + 1);
+            ImGui::PopStyleColor();
+            
+            // Column 1: Waveform
+            ImGui::TableNextColumn();
+            const bool isWaveModulated = isParamModulated("wave_" + idx);
+            int wave = isWaveModulated ? (int)getLiveParamValueFor("wave_" + idx, "wave_" + idx + "_live", (float)(voiceWaveParams[i] ? voiceWaveParams[i]->getIndex() : 0))
+                                       : (voiceWaveParams[i] ? voiceWaveParams[i]->getIndex() : 0);
+            
+            if (isWaveModulated) ImGui::BeginDisabled();
+            ImGui::PushItemWidth(-1);
+            if (ImGui::Combo(("##wave" + idx).toRawUTF8(), &wave, "Sine\0Saw\0Square\0\0"))
+            {
+                if (!isWaveModulated && voiceWaveParams[i]) {
+                    *voiceWaveParams[i] = wave;
+                    onModificationEnded();
+                }
+            }
+            ImGui::PopItemWidth();
+            if (isWaveModulated) ImGui::EndDisabled();
+            
+            // Column 2: Frequency
+            ImGui::TableNextColumn();
+            const bool isFreqModulated = isParamModulated("freq_" + idx);
+            float freq = isFreqModulated ? getLiveParamValueFor("freq_" + idx, "freq_" + idx + "_live", voiceFreqParams[i] ? voiceFreqParams[i]->get() : 440.0f)
+                                         : (voiceFreqParams[i] ? voiceFreqParams[i]->get() : 440.0f);
+            
+            if (isFreqModulated) ImGui::BeginDisabled();
+            ImGui::PushItemWidth(-1);
+            if (ImGui::DragFloat(("##freq" + idx).toRawUTF8(), &freq, 1.0f, 20.0f, 20000.0f, "%.0f"))
+            {
+                if (!isFreqModulated && voiceFreqParams[i]) *voiceFreqParams[i] = freq;
+            }
+            if (ImGui::IsItemDeactivatedAfterEdit() && !isFreqModulated) onModificationEnded();
+            ImGui::PopItemWidth();
+            if (isFreqModulated) ImGui::EndDisabled();
+            
+            // Column 3: Gate
+            ImGui::TableNextColumn();
+            const bool isGateModulated = isParamModulated("gate_" + idx);
+            float gate = isGateModulated ? getLiveParamValueFor("gate_" + idx, "gate_" + idx + "_live", voiceGateParams[i] ? voiceGateParams[i]->get() : 1.0f)
+                                         : (voiceGateParams[i] ? voiceGateParams[i]->get() : 1.0f);
+            
+            if (isGateModulated) ImGui::BeginDisabled();
+            ImGui::PushItemWidth(-1);
+            if (ImGui::DragFloat(("##gate" + idx).toRawUTF8(), &gate, 0.01f, 0.0f, 1.0f, "%.2f"))
+            {
+                if (!isGateModulated && voiceGateParams[i]) *voiceGateParams[i] = gate;
+            }
+            if (ImGui::IsItemDeactivatedAfterEdit() && !isGateModulated) onModificationEnded();
+            ImGui::PopItemWidth();
+            if (isGateModulated) ImGui::EndDisabled();
+            
+            ImGui::PopID();
+        }
+        
+        ImGui::EndTable();
+    }
 }
 #endif
 
 #if defined(PRESET_CREATOR_UI)
 void PolyVCOModuleProcessor::drawIoPins(const NodePinHelpers& helpers)
 {
-    // NumVoices modulation input (no output pairing)
+    // First, draw the single master input for the voice count.
+    // It has no corresponding output, so we pass nullptr and -1.
     helpers.drawParallelPins("NumVoices Mod", 0, nullptr, -1);
     
+    ImGui::Spacing();
+
+    // === THE NEW HELPER FUNCTION ===
+    // This helper encapsulates the complex 3-input-to-1-output layout logic.
+    auto drawVoicePins = [&](int voiceIndex)
+    {
+        const juce::String idx = juce::String(voiceIndex + 1);
+        const int inFreq = 1 + voiceIndex;
+        const int inWave = 1 + MAX_VOICES + voiceIndex;
+        const int inGate = 1 + (2 * MAX_VOICES) + voiceIndex;
+
+        // We use a three-column layout to manage the pins perfectly.
+        // Col 0: Inputs | Col 1: Spacer | Col 2: Output
+        ImGui::Columns(3, ("voice_pins_" + idx).toRawUTF8(), false);
+
+        // --- Column 0: All three input pins ---
+        // We group the three input pins together on the left.
+        helpers.drawAudioInputPin(("Freq " + idx + " Mod").toRawUTF8(), inFreq);
+        helpers.drawAudioInputPin(("Wave " + idx + " Mod").toRawUTF8(), inWave);
+        helpers.drawAudioInputPin(("Gate " + idx + " Mod").toRawUTF8(), inGate);
+
+        // --- Column 1: Spacer ---
+        // This column pushes the output pin to the far right.
+        ImGui::NextColumn();
+
+        // --- Column 2: The single output pin ---
+        ImGui::NextColumn();
+        helpers.drawAudioOutputPin(("Freq " + idx).toRawUTF8(), voiceIndex);
+
+        // --- Cleanup ---
+        ImGui::Columns(1);
+    };
+    // === END OF HELPER ===
+
+    // Now, the main loop is incredibly simple.
+    // We just call our new helper for each active voice.
     const int activeVoices = getEffectiveNumVoices();
     for (int i = 0; i < activeVoices; ++i)
     {
-        const juce::String idx = juce::String(i + 1);
-        const int inFreq = 1 + i;
-        const int inWave = 1 + MAX_VOICES + i;
-        const int inGate = 1 + (2 * MAX_VOICES) + i;
-        
-        // Pair Freq input with Voice output on the same row
-        helpers.drawParallelPins(("Freq " + idx + " Mod").toRawUTF8(), inFreq,
-                                 ("Voice " + idx).toRawUTF8(), i);
-        
-        // Wave and Gate inputs without outputs
-        helpers.drawParallelPins(("Wave " + idx + " Mod").toRawUTF8(), inWave, nullptr, -1);
-        helpers.drawParallelPins(("Gate " + idx + " Mod").toRawUTF8(), inGate, nullptr, -1);
+        drawVoicePins(i);
     }
 }
 #endif

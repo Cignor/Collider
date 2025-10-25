@@ -130,8 +130,6 @@ void NoiseModuleProcessor::drawParametersInNode(float itemWidth, const std::func
 {
     auto& ap = getAPVTS();
 
-    // --- Get values for display, checking for modulation ---
-    // CORRECTED: Use the _mod parameter IDs to check for modulation
     bool levelIsModulated = isParamModulated(paramIdLevelMod);
     float levelDb = levelIsModulated ? getLiveParamValueFor(paramIdLevelMod, "level_live", levelDbParam->load()) : levelDbParam->load();
 
@@ -140,7 +138,9 @@ void NoiseModuleProcessor::drawParametersInNode(float itemWidth, const std::func
 
     ImGui::PushItemWidth(itemWidth);
 
-    // --- Colour Dropdown ---
+    // === SECTION: Noise Type ===
+    ImGui::TextColored(ImVec4(0.6f, 0.9f, 1.0f, 1.0f), "NOISE TYPE");
+
     if (colourIsModulated) ImGui::BeginDisabled();
     if (ImGui::Combo("Colour", &colourIndex, "White\0Pink\0Brown\0\0"))
     {
@@ -148,16 +148,46 @@ void NoiseModuleProcessor::drawParametersInNode(float itemWidth, const std::func
     }
     if (ImGui::IsItemDeactivatedAfterEdit() && !colourIsModulated) { onModificationEnded(); }
     if (colourIsModulated) { ImGui::EndDisabled(); ImGui::SameLine(); ImGui::TextUnformatted("(mod)"); }
+    if (ImGui::IsItemHovered()) ImGui::SetTooltip("White=flat spectrum, Pink=-3dB/oct, Brown=-6dB/oct");
 
-    // --- Level Slider ---
+    ImGui::Spacing();
+    ImGui::Spacing();
+
+    // === SECTION: Output Level ===
+    ImGui::TextColored(ImVec4(0.6f, 0.9f, 1.0f, 1.0f), "OUTPUT LEVEL");
+
     if (levelIsModulated) ImGui::BeginDisabled();
-    if (ImGui::SliderFloat("Level dB", &levelDb, -60.0f, 6.0f, "%.3f"))
+    if (ImGui::SliderFloat("Level", &levelDb, -60.0f, 6.0f, "%.1f dB"))
     {
         if (!levelIsModulated) *dynamic_cast<juce::AudioParameterFloat*>(ap.getParameter(paramIdLevel)) = levelDb;
     }
     if (ImGui::IsItemDeactivatedAfterEdit() && !levelIsModulated) { onModificationEnded(); }
     if (!levelIsModulated) adjustParamOnWheel(ap.getParameter(paramIdLevel), "level", levelDb);
     if (levelIsModulated) { ImGui::EndDisabled(); ImGui::SameLine(); ImGui::TextUnformatted("(mod)"); }
+    if (ImGui::IsItemHovered()) ImGui::SetTooltip("Output amplitude in decibels");
+
+    ImGui::Spacing();
+    ImGui::Spacing();
+
+    // === SECTION: Live Output ===
+    ImGui::TextColored(ImVec4(0.6f, 0.9f, 1.0f, 1.0f), "LIVE OUTPUT");
+
+    float currentOut = 0.0f;
+    if (lastOutputValues.size() >= 1 && lastOutputValues[0]) {
+        currentOut = lastOutputValues[0]->load();
+    }
+
+    // Calculate fixed width for progress bar using actual text measurements
+    const float labelTextWidth = ImGui::CalcTextSize("Level:").x;
+    const float valueTextWidth = ImGui::CalcTextSize("-0.999").x;  // Max expected width
+    const float spacing = ImGui::GetStyle().ItemSpacing.x;
+    const float barWidth = itemWidth - labelTextWidth - valueTextWidth - (spacing * 2.0f);
+
+    ImGui::Text("Level:");
+    ImGui::SameLine();
+    ImGui::ProgressBar((currentOut + 1.0f) / 2.0f, ImVec2(barWidth, 0), "");
+    ImGui::SameLine();
+    ImGui::Text("%.3f", currentOut);
 
     ImGui::PopItemWidth();
 }

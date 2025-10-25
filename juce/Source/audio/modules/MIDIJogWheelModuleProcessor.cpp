@@ -111,6 +111,10 @@ juce::ValueTree MIDIJogWheelModuleProcessor::getExtraStateTree() const
     vt.setProperty("controllerPreset", activeControllerPresetName, nullptr);
     #endif
     
+    // Save the MIDI device filter
+    if (deviceFilterParam)
+        vt.setProperty("deviceFilter", deviceFilterParam->getIndex(), nullptr);
+    
     if (midiChannelParam)
         vt.setProperty("midiChannel", midiChannelParam->get(), nullptr);
     
@@ -126,6 +130,13 @@ void MIDIJogWheelModuleProcessor::setExtraStateTree(const juce::ValueTree& vt)
         #if defined(PRESET_CREATOR_UI)
         activeControllerPresetName = vt.getProperty("controllerPreset", "").toString();
         #endif
+        
+        // Load the MIDI device filter
+        if (deviceFilterParam && vt.hasProperty("deviceFilter"))
+        {
+            int deviceIndex = vt.getProperty("deviceFilter", 0);
+            deviceFilterParam->setValueNotifyingHost(deviceFilterParam->convertTo0to1((float)deviceIndex));
+        }
         
         if (midiChannelParam)
             *midiChannelParam = (int)vt.getProperty("midiChannel", 1);

@@ -6495,8 +6495,6 @@ ImGuiNodeEditorComponent::ModuleCategory ImGuiNodeEditorComponent::getModuleCate
     
     // --- Sources (Green) ---
     // Check specific matches first to avoid substring conflicts
-    if (lower == "shaping oscillator")  // Prevent "shaper" from matching Effect category
-        return ModuleCategory::Source;
     if (lower == "tts performer")  // Explicit TTS categorization
         return ModuleCategory::Source;
     

@@ -60,6 +60,13 @@ PresetCreatorComponent::PresetCreatorComponent(juce::AudioDeviceManager& adm,
     // The processorPlayer will receive MIDI through ModularSynthProcessor's processBlock
     // --- END MULTI-MIDI SUPPORT ---
     
+    // === CRITICAL FIX: Audio callback must ALWAYS be active for MIDI processing ===
+    // Without this, processBlock never runs and MIDI learn doesn't work!
+    deviceManager.addAudioCallback(&processorPlayer);
+    auditioning = true;  // Set flag to indicate audio is active
+    juce::Logger::writeToLog("[Audio] Audio callback started - synth is now processing");
+    // === END FIX ===
+    
     setWantsKeyboardFocus (true);
 
     // Setup FileLogger at the same path the user checks: <exe>/juce/logs/preset_creator_*.log
@@ -443,6 +450,9 @@ void PresetCreatorComponent::timerCallback()
         
         if (!midiMessages.empty())
         {
+            juce::Logger::writeToLog("[PresetCreator] Received " + juce::String(midiMessages.size()) + 
+                                    " MIDI messages from MidiDeviceManager");
+            
             // Convert to ModularSynthProcessor format
             std::vector<MidiMessageWithDevice> convertedMessages;
             convertedMessages.reserve(midiMessages.size());
@@ -456,6 +466,9 @@ void PresetCreatorComponent::timerCallback()
                 converted.deviceIndex = msg.deviceIndex;
                 convertedMessages.push_back(converted);
             }
+            
+            juce::Logger::writeToLog("[PresetCreator] Passing " + juce::String(convertedMessages.size()) + 
+                                    " messages to ModularSynthProcessor");
             
             // Pass to synth for distribution to modules
             synth->processMidiWithDeviceInfo(convertedMessages);
