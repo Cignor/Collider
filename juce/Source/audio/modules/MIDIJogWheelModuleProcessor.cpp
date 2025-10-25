@@ -192,7 +192,6 @@ void MIDIJogWheelModuleProcessor::drawParametersInNode(float itemWidth, const st
         }
     }
     
-    ImGui::Separator();
     ImGui::Spacing();
     
     // === PRESET MANAGEMENT UI ===
@@ -349,7 +348,6 @@ void MIDIJogWheelModuleProcessor::drawParametersInNode(float itemWidth, const st
     ImGui::Spacing();
     
     // === VALUE DISPLAY ===
-    ImGui::Separator();
     ImGui::Text("Current Value: %.3f", mapping.currentValue);
     
     // Circular display

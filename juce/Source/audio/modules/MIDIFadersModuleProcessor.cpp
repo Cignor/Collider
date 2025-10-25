@@ -269,7 +269,6 @@ void MIDIFadersModuleProcessor::drawParametersInNode(float itemWidth, const std:
         }
     }
     
-    ImGui::Separator();
     ImGui::Spacing();
     
     // === PRESET MANAGEMENT UI ===

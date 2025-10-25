@@ -224,14 +224,12 @@ void SnapshotSequencerModuleProcessor::drawParametersInNode (float itemWidth, co
     
     ImGui::PopItemWidth();
     
-    ImGui::Separator();
     ImGui::Text("Snapshots:");
     
     // Display current step
     int currentStepIndex = currentStep.load();
     ImGui::Text("Current Step: %d", currentStepIndex + 1);
     
-    ImGui::Separator();
     
     // Draw snapshot slots
     const int numSteps = numStepsParam ? (int)numStepsParam->load() : 8;
@@ -273,7 +271,6 @@ void SnapshotSequencerModuleProcessor::drawParametersInNode (float itemWidth, co
         ImGui::PopID();
     }
     
-    ImGui::Separator();
     ImGui::TextWrapped("Connect a clock to advance steps. Each step can store a complete patch state.");
 }
 #endif

@@ -309,7 +309,6 @@ void MetaModuleProcessor::drawParametersInNode(float itemWidth,
         onModificationEnded();
     }
     
-    ImGui::Separator();
     
     // Get stats from the internal graph
     int numModules = 0, numInlets = 0, numOutlets = 0;

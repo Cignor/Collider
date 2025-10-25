@@ -111,7 +111,6 @@ if (ImGui::Button("Reset", ImVec2(itemWidth, 0)))
 ### Section 5: Auto-Connect Tools
 ```cpp
 ImGui::Spacing();
-ImGui::Separator();
 ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1.0f), "Quick Routing");
 ImGui::Spacing();
 
@@ -139,7 +138,6 @@ HelpMarker("Connect to both PolyVCO and Sample Loaders");
 if (hasMIDIFileLoaded())
 {
     ImGui::Spacing();
-    ImGui::Separator();
     [Hot-swap dropzone code]
 }
 ```

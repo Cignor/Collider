@@ -843,7 +843,6 @@ void SampleLoaderModuleProcessor::drawParametersInNode(float itemWidth, const st
     // 2. Now, draw the sample information and visual display AT THE END.
     if (hasSampleLoaded())
     {
-        ImGui::Separator();
         ImGui::Text("Sample: %s", currentSampleName.toRawUTF8());
         ImGui::Text("Duration: %.2f s", sampleDurationSeconds);
         ImGui::Text("Rate: %d Hz", sampleSampleRate);
@@ -876,7 +875,6 @@ void SampleLoaderModuleProcessor::drawParametersInNode(float itemWidth, const st
     }
     else
     {
-        ImGui::Separator();
         // If NO sample is loaded, draw a dedicated, colored dropzone.
         ImVec2 dropZoneSize = ImVec2(itemWidth, 60.0f);
         

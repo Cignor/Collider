@@ -867,7 +867,6 @@ void MIDIPlayerModuleProcessor::drawParametersInNode(float itemWidth, const std:
     if (hasMIDIFileLoaded())
     {
         ImGui::Spacing();
-        ImGui::Separator();
         
         // Draw a colored button as a visible drop zone for hot-swapping
         ImVec2 swapZoneSize = ImVec2(itemWidth, 50.0f);

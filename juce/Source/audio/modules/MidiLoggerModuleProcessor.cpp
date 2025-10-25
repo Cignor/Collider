@@ -313,13 +313,23 @@ void MidiLoggerModuleProcessor::drawParametersInNode(float /*itemWidth*/, const 
     {
         ImGui::PushItemWidth(100);
         int loopLen = loopLengthParam->get();
-        if (ImGui::SliderInt("Loop (Bars)", &loopLen, 1, 64)) 
+        if (ImGui::SliderInt("##loop", &loopLen, 1, 64, "Loop: %d bars")) 
         {
             *loopLengthParam = loopLen;
             onModificationEnded();
         }
         ImGui::PopItemWidth();
     }
+    
+    // Zoom Slider (controls horizontal density of timeline)
+    ImGui::SameLine();
+    ImGui::PushItemWidth(120);
+    if (ImGui::SliderFloat("##zoom", &zoomX, 20.0f, 400.0f, "Zoom: %.0fpx/beat"))
+    {
+        // Clamp to reasonable values
+        zoomX = juce::jlimit(20.0f, 400.0f, zoomX);
+    }
+    ImGui::PopItemWidth();
     
     ImGui::Spacing();
 
