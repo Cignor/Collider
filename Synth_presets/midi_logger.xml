@@ -1,0 +1,439 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<ModularSynthPreset version="1" bpm="63.90000152587891">
+  <modules>
+    <module logicalId="1" type="midi logger">
+      <params>
+        <MidiLoggerParams/>
+      </params>
+    </module>
+    <module logicalId="2" type="VCO">
+      <params>
+        <VCOParams>
+          <PARAM id="frequency" value="440.0"/>
+          <PARAM id="waveform" value="0.0"/>
+        </VCOParams>
+      </params>
+    </module>
+    <module logicalId="3" type="MapRange">
+      <params>
+        <MapRangeParams>
+          <PARAM id="cvMax" value="1.0"/>
+          <PARAM id="cvMin" value="0.0"/>
+          <PARAM id="inMax" value="1.0"/>
+          <PARAM id="inMin" value="0.0"/>
+          <PARAM id="normMax" value="1.0"/>
+          <PARAM id="normMin" value="-1.0"/>
+          <PARAM id="outMax" value="1.0"/>
+          <PARAM id="outMin" value="0.0"/>
+        </MapRangeParams>
+      </params>
+    </module>
+    <module logicalId="4" type="MapRange">
+      <params>
+        <MapRangeParams>
+          <PARAM id="cvMax" value="1.0"/>
+          <PARAM id="cvMin" value="0.0"/>
+          <PARAM id="inMax" value="1.0"/>
+          <PARAM id="inMin" value="0.0"/>
+          <PARAM id="normMax" value="1.0"/>
+          <PARAM id="normMin" value="-1.0"/>
+          <PARAM id="outMax" value="1.0"/>
+          <PARAM id="outMin" value="0.0"/>
+        </MapRangeParams>
+      </params>
+    </module>
+    <module logicalId="5" type="Sequencer">
+      <params>
+        <SeqParams>
+          <PARAM id="gateLength" value="0.5"/>
+          <PARAM id="gateLength_mod" value="0.5"/>
+          <PARAM id="gateThreshold" value="0.5"/>
+          <PARAM id="numSteps" value="5.0"/>
+          <PARAM id="numSteps_max" value="16.0"/>
+          <PARAM id="numSteps_mod" value="0.5"/>
+          <PARAM id="rate" value="2.0"/>
+          <PARAM id="rate_division" value="3.0"/>
+          <PARAM id="rate_mod" value="0.0"/>
+          <PARAM id="step1" value="0.1363636255264282"/>
+          <PARAM id="step10" value="0.5"/>
+          <PARAM id="step10_gate" value="0.7999999523162842"/>
+          <PARAM id="step10_gate_mod" value="0.5"/>
+          <PARAM id="step10_mod" value="0.5"/>
+          <PARAM id="step10_trig" value="0.0"/>
+          <PARAM id="step10_trig_mod" value="0.5"/>
+          <PARAM id="step11" value="0.5"/>
+          <PARAM id="step11_gate" value="0.7999999523162842"/>
+          <PARAM id="step11_gate_mod" value="0.5"/>
+          <PARAM id="step11_mod" value="0.5"/>
+          <PARAM id="step11_trig" value="0.0"/>
+          <PARAM id="step11_trig_mod" value="0.5"/>
+          <PARAM id="step12" value="0.5"/>
+          <PARAM id="step12_gate" value="0.7999999523162842"/>
+          <PARAM id="step12_gate_mod" value="0.5"/>
+          <PARAM id="step12_mod" value="0.5"/>
+          <PARAM id="step12_trig" value="0.0"/>
+          <PARAM id="step12_trig_mod" value="0.5"/>
+          <PARAM id="step13" value="0.5"/>
+          <PARAM id="step13_gate" value="0.7999999523162842"/>
+          <PARAM id="step13_gate_mod" value="0.5"/>
+          <PARAM id="step13_mod" value="0.5"/>
+          <PARAM id="step13_trig" value="0.0"/>
+          <PARAM id="step13_trig_mod" value="0.5"/>
+          <PARAM id="step14" value="0.5"/>
+          <PARAM id="step14_gate" value="0.7999999523162842"/>
+          <PARAM id="step14_gate_mod" value="0.5"/>
+          <PARAM id="step14_mod" value="0.5"/>
+          <PARAM id="step14_trig" value="0.0"/>
+          <PARAM id="step14_trig_mod" value="0.5"/>
+          <PARAM id="step15" value="0.5"/>
+          <PARAM id="step15_gate" value="0.7999999523162842"/>
+          <PARAM id="step15_gate_mod" value="0.5"/>
+          <PARAM id="step15_mod" value="0.5"/>
+          <PARAM id="step15_trig" value="0.0"/>
+          <PARAM id="step15_trig_mod" value="0.5"/>
+          <PARAM id="step16" value="0.5"/>
+          <PARAM id="step16_gate" value="0.7999999523162842"/>
+          <PARAM id="step16_gate_mod" value="0.5"/>
+          <PARAM id="step16_mod" value="0.5"/>
+          <PARAM id="step16_trig" value="0.0"/>
+          <PARAM id="step16_trig_mod" value="0.5"/>
+          <PARAM id="step1_gate" value="0.3700000047683716"/>
+          <PARAM id="step1_gate_mod" value="0.5"/>
+          <PARAM id="step1_mod" value="0.5"/>
+          <PARAM id="step1_trig" value="0.0"/>
+          <PARAM id="step1_trig_mod" value="0.5"/>
+          <PARAM id="step2" value="0.7727272510528564"/>
+          <PARAM id="step2_gate" value="0.5"/>
+          <PARAM id="step2_gate_mod" value="0.5"/>
+          <PARAM id="step2_mod" value="0.5"/>
+          <PARAM id="step2_trig" value="0.0"/>
+          <PARAM id="step2_trig_mod" value="0.5"/>
+          <PARAM id="step3" value="0.1590909361839294"/>
+          <PARAM id="step3_gate" value="0.5699999928474426"/>
+          <PARAM id="step3_gate_mod" value="0.5"/>
+          <PARAM id="step3_mod" value="0.5"/>
+          <PARAM id="step3_trig" value="0.0"/>
+          <PARAM id="step3_trig_mod" value="0.5"/>
+          <PARAM id="step4" value="0.6136363744735718"/>
+          <PARAM id="step4_gate" value="0.5699999928474426"/>
+          <PARAM id="step4_gate_mod" value="0.5"/>
+          <PARAM id="step4_mod" value="0.5"/>
+          <PARAM id="step4_trig" value="0.0"/>
+          <PARAM id="step4_trig_mod" value="0.5"/>
+          <PARAM id="step5" value="0.25"/>
+          <PARAM id="step5_gate" value="0.6399999856948853"/>
+          <PARAM id="step5_gate_mod" value="0.5"/>
+          <PARAM id="step5_mod" value="0.5"/>
+          <PARAM id="step5_trig" value="0.0"/>
+          <PARAM id="step5_trig_mod" value="0.5"/>
+          <PARAM id="step6" value="0.5"/>
+          <PARAM id="step6_gate" value="0.7999999523162842"/>
+          <PARAM id="step6_gate_mod" value="0.5"/>
+          <PARAM id="step6_mod" value="0.5"/>
+          <PARAM id="step6_trig" value="0.0"/>
+          <PARAM id="step6_trig_mod" value="0.5"/>
+          <PARAM id="step7" value="0.5"/>
+          <PARAM id="step7_gate" value="0.7999999523162842"/>
+          <PARAM id="step7_gate_mod" value="0.5"/>
+          <PARAM id="step7_mod" value="0.5"/>
+          <PARAM id="step7_trig" value="0.0"/>
+          <PARAM id="step7_trig_mod" value="0.5"/>
+          <PARAM id="step8" value="0.5"/>
+          <PARAM id="step8_gate" value="0.7999999523162842"/>
+          <PARAM id="step8_gate_mod" value="0.5"/>
+          <PARAM id="step8_mod" value="0.5"/>
+          <PARAM id="step8_trig" value="0.0"/>
+          <PARAM id="step8_trig_mod" value="0.5"/>
+          <PARAM id="step9" value="0.5"/>
+          <PARAM id="step9_gate" value="0.7999999523162842"/>
+          <PARAM id="step9_gate_mod" value="0.5"/>
+          <PARAM id="step9_mod" value="0.5"/>
+          <PARAM id="step9_trig" value="0.0"/>
+          <PARAM id="step9_trig_mod" value="0.5"/>
+          <PARAM id="sync" value="0.0"/>
+        </SeqParams>
+      </params>
+      <extra>
+        <SequencerState sync="0.0" rate_division="3.0"/>
+      </extra>
+    </module>
+    <module logicalId="6" type="Random">
+      <params>
+        <RandomParams>
+          <PARAM id="cvMax" value="1.0"/>
+          <PARAM id="cvMin" value="0.0"/>
+          <PARAM id="max" value="1.0"/>
+          <PARAM id="min" value="0.0"/>
+          <PARAM id="normMax" value="1.0"/>
+          <PARAM id="normMin" value="0.0"/>
+          <PARAM id="rate" value="13.19999980926514"/>
+          <PARAM id="rate_division" value="3.0"/>
+          <PARAM id="slew" value="0.0"/>
+          <PARAM id="sync" value="0.0"/>
+          <PARAM id="trigThreshold" value="0.5"/>
+        </RandomParams>
+      </params>
+      <extra>
+        <RandomState sync="0.0" rate_division="3.0"/>
+      </extra>
+    </module>
+    <module logicalId="7" type="MapRange">
+      <params>
+        <MapRangeParams>
+          <PARAM id="cvMax" value="1.0"/>
+          <PARAM id="cvMin" value="0.0"/>
+          <PARAM id="inMax" value="29.57099914550781"/>
+          <PARAM id="inMin" value="-20.08900451660156"/>
+          <PARAM id="normMax" value="0.4285999536514282"/>
+          <PARAM id="normMin" value="-0.3392000198364258"/>
+          <PARAM id="outMax" value="1.0"/>
+          <PARAM id="outMin" value="0.0"/>
+        </MapRangeParams>
+      </params>
+    </module>
+    <module logicalId="9" type="Sequencer">
+      <params>
+        <SeqParams>
+          <PARAM id="gateLength" value="0.5"/>
+          <PARAM id="gateLength_mod" value="0.5"/>
+          <PARAM id="gateThreshold" value="0.5"/>
+          <PARAM id="numSteps" value="4.0"/>
+          <PARAM id="numSteps_max" value="16.0"/>
+          <PARAM id="numSteps_mod" value="0.5"/>
+          <PARAM id="rate" value="2.0"/>
+          <PARAM id="rate_division" value="3.0"/>
+          <PARAM id="rate_mod" value="0.0"/>
+          <PARAM id="step1" value="0.1363636255264282"/>
+          <PARAM id="step10" value="0.5"/>
+          <PARAM id="step10_gate" value="0.7999999523162842"/>
+          <PARAM id="step10_gate_mod" value="0.5"/>
+          <PARAM id="step10_mod" value="0.5"/>
+          <PARAM id="step10_trig" value="0.0"/>
+          <PARAM id="step10_trig_mod" value="0.5"/>
+          <PARAM id="step11" value="0.5"/>
+          <PARAM id="step11_gate" value="0.7999999523162842"/>
+          <PARAM id="step11_gate_mod" value="0.5"/>
+          <PARAM id="step11_mod" value="0.5"/>
+          <PARAM id="step11_trig" value="0.0"/>
+          <PARAM id="step11_trig_mod" value="0.5"/>
+          <PARAM id="step12" value="0.5"/>
+          <PARAM id="step12_gate" value="0.7999999523162842"/>
+          <PARAM id="step12_gate_mod" value="0.5"/>
+          <PARAM id="step12_mod" value="0.5"/>
+          <PARAM id="step12_trig" value="0.0"/>
+          <PARAM id="step12_trig_mod" value="0.5"/>
+          <PARAM id="step13" value="0.5"/>
+          <PARAM id="step13_gate" value="0.7999999523162842"/>
+          <PARAM id="step13_gate_mod" value="0.5"/>
+          <PARAM id="step13_mod" value="0.5"/>
+          <PARAM id="step13_trig" value="0.0"/>
+          <PARAM id="step13_trig_mod" value="0.5"/>
+          <PARAM id="step14" value="0.5"/>
+          <PARAM id="step14_gate" value="0.7999999523162842"/>
+          <PARAM id="step14_gate_mod" value="0.5"/>
+          <PARAM id="step14_mod" value="0.5"/>
+          <PARAM id="step14_trig" value="0.0"/>
+          <PARAM id="step14_trig_mod" value="0.5"/>
+          <PARAM id="step15" value="0.5"/>
+          <PARAM id="step15_gate" value="0.7999999523162842"/>
+          <PARAM id="step15_gate_mod" value="0.5"/>
+          <PARAM id="step15_mod" value="0.5"/>
+          <PARAM id="step15_trig" value="0.0"/>
+          <PARAM id="step15_trig_mod" value="0.5"/>
+          <PARAM id="step16" value="0.5"/>
+          <PARAM id="step16_gate" value="0.7999999523162842"/>
+          <PARAM id="step16_gate_mod" value="0.5"/>
+          <PARAM id="step16_mod" value="0.5"/>
+          <PARAM id="step16_trig" value="0.0"/>
+          <PARAM id="step16_trig_mod" value="0.5"/>
+          <PARAM id="step1_gate" value="0.3700000047683716"/>
+          <PARAM id="step1_gate_mod" value="0.5"/>
+          <PARAM id="step1_mod" value="0.5"/>
+          <PARAM id="step1_trig" value="0.0"/>
+          <PARAM id="step1_trig_mod" value="0.5"/>
+          <PARAM id="step2" value="0.2045454382896423"/>
+          <PARAM id="step2_gate" value="0.5"/>
+          <PARAM id="step2_gate_mod" value="0.5"/>
+          <PARAM id="step2_mod" value="0.5"/>
+          <PARAM id="step2_trig" value="0.0"/>
+          <PARAM id="step2_trig_mod" value="0.5"/>
+          <PARAM id="step3" value="0.3863636255264282"/>
+          <PARAM id="step3_gate" value="0.5699999928474426"/>
+          <PARAM id="step3_gate_mod" value="0.5"/>
+          <PARAM id="step3_mod" value="0.5"/>
+          <PARAM id="step3_trig" value="0.0"/>
+          <PARAM id="step3_trig_mod" value="0.5"/>
+          <PARAM id="step4" value="0.6136363744735718"/>
+          <PARAM id="step4_gate" value="0.5699999928474426"/>
+          <PARAM id="step4_gate_mod" value="0.5"/>
+          <PARAM id="step4_mod" value="0.5"/>
+          <PARAM id="step4_trig" value="0.0"/>
+          <PARAM id="step4_trig_mod" value="0.5"/>
+          <PARAM id="step5" value="0.25"/>
+          <PARAM id="step5_gate" value="0.6399999856948853"/>
+          <PARAM id="step5_gate_mod" value="0.5"/>
+          <PARAM id="step5_mod" value="0.5"/>
+          <PARAM id="step5_trig" value="0.0"/>
+          <PARAM id="step5_trig_mod" value="0.5"/>
+          <PARAM id="step6" value="0.5"/>
+          <PARAM id="step6_gate" value="0.7999999523162842"/>
+          <PARAM id="step6_gate_mod" value="0.5"/>
+          <PARAM id="step6_mod" value="0.5"/>
+          <PARAM id="step6_trig" value="0.0"/>
+          <PARAM id="step6_trig_mod" value="0.5"/>
+          <PARAM id="step7" value="0.5"/>
+          <PARAM id="step7_gate" value="0.7999999523162842"/>
+          <PARAM id="step7_gate_mod" value="0.5"/>
+          <PARAM id="step7_mod" value="0.5"/>
+          <PARAM id="step7_trig" value="0.0"/>
+          <PARAM id="step7_trig_mod" value="0.5"/>
+          <PARAM id="step8" value="0.5"/>
+          <PARAM id="step8_gate" value="0.7999999523162842"/>
+          <PARAM id="step8_gate_mod" value="0.5"/>
+          <PARAM id="step8_mod" value="0.5"/>
+          <PARAM id="step8_trig" value="0.0"/>
+          <PARAM id="step8_trig_mod" value="0.5"/>
+          <PARAM id="step9" value="0.5"/>
+          <PARAM id="step9_gate" value="0.7999999523162842"/>
+          <PARAM id="step9_gate_mod" value="0.5"/>
+          <PARAM id="step9_mod" value="0.5"/>
+          <PARAM id="step9_trig" value="0.0"/>
+          <PARAM id="step9_trig_mod" value="0.5"/>
+          <PARAM id="sync" value="0.0"/>
+        </SeqParams>
+      </params>
+      <extra>
+        <SequencerState sync="0.0" rate_division="3.0"/>
+      </extra>
+    </module>
+    <module logicalId="10" type="Random">
+      <params>
+        <RandomParams>
+          <PARAM id="cvMax" value="1.0"/>
+          <PARAM id="cvMin" value="0.0"/>
+          <PARAM id="max" value="1.0"/>
+          <PARAM id="min" value="0.0"/>
+          <PARAM id="normMax" value="1.0"/>
+          <PARAM id="normMin" value="0.0"/>
+          <PARAM id="rate" value="13.19999980926514"/>
+          <PARAM id="rate_division" value="3.0"/>
+          <PARAM id="slew" value="0.0"/>
+          <PARAM id="sync" value="0.0"/>
+          <PARAM id="trigThreshold" value="0.5"/>
+        </RandomParams>
+      </params>
+      <extra>
+        <RandomState sync="0.0" rate_division="3.0"/>
+      </extra>
+    </module>
+    <module logicalId="11" type="Mixer">
+      <params>
+        <MixerParams>
+          <PARAM id="crossfade" value="-0.6700000166893005"/>
+          <PARAM id="gain" value="0.0"/>
+          <PARAM id="pan" value="0.0"/>
+        </MixerParams>
+      </params>
+    </module>
+    <module logicalId="12" type="VCO">
+      <params>
+        <VCOParams>
+          <PARAM id="frequency" value="440.0"/>
+          <PARAM id="waveform" value="0.0"/>
+        </VCOParams>
+      </params>
+    </module>
+    <module logicalId="13" type="MapRange">
+      <params>
+        <MapRangeParams>
+          <PARAM id="cvMax" value="1.0"/>
+          <PARAM id="cvMin" value="0.0"/>
+          <PARAM id="inMax" value="1.0"/>
+          <PARAM id="inMin" value="0.0"/>
+          <PARAM id="normMax" value="1.0"/>
+          <PARAM id="normMin" value="-1.0"/>
+          <PARAM id="outMax" value="1.0"/>
+          <PARAM id="outMin" value="0.0"/>
+        </MapRangeParams>
+      </params>
+    </module>
+    <module logicalId="14" type="MapRange">
+      <params>
+        <MapRangeParams>
+          <PARAM id="cvMax" value="1.0"/>
+          <PARAM id="cvMin" value="0.0"/>
+          <PARAM id="inMax" value="1.0"/>
+          <PARAM id="inMin" value="0.0"/>
+          <PARAM id="normMax" value="1.0"/>
+          <PARAM id="normMin" value="-1.0"/>
+          <PARAM id="outMax" value="1.0"/>
+          <PARAM id="outMin" value="0.0"/>
+        </MapRangeParams>
+      </params>
+    </module>
+    <module logicalId="15" type="MapRange">
+      <params>
+        <MapRangeParams>
+          <PARAM id="cvMax" value="1.0"/>
+          <PARAM id="cvMin" value="0.0"/>
+          <PARAM id="inMax" value="1.0"/>
+          <PARAM id="inMin" value="0.0"/>
+          <PARAM id="normMax" value="1.0"/>
+          <PARAM id="normMin" value="-1.0"/>
+          <PARAM id="outMax" value="1.0"/>
+          <PARAM id="outMin" value="0.0"/>
+        </MapRangeParams>
+      </params>
+    </module>
+  </modules>
+  <connections>
+    <connection srcId="1" srcChan="0" dstId="3" dstChan="0"/>
+    <connection srcId="1" srcChan="1" dstId="4" dstChan="0"/>
+    <connection srcId="1" srcChan="2" dstId="7" dstChan="0"/>
+    <connection srcId="1" srcChan="3" dstId="13" dstChan="0"/>
+    <connection srcId="1" srcChan="4" dstId="14" dstChan="0"/>
+    <connection srcId="1" srcChan="5" dstId="15" dstChan="0"/>
+    <connection srcId="2" srcChan="0" dstId="11" dstChan="0"/>
+    <connection srcId="2" srcChan="0" dstId="11" dstChan="1"/>
+    <connection srcId="3" srcChan="0" dstId="2" dstChan="2"/>
+    <connection srcId="4" srcChan="0" dstId="2" dstChan="0"/>
+    <connection srcId="5" srcChan="0" dstId="1" dstChan="1"/>
+    <connection srcId="5" srcChan="1" dstId="1" dstChan="0"/>
+    <connection srcId="5" srcChan="3" dstId="1" dstChan="2"/>
+    <connection srcId="6" srcChan="0" dstId="5" dstChan="3"/>
+    <connection srcId="7" srcChan="1" dstId="2" dstChan="1"/>
+    <connection srcId="9" srcChan="0" dstId="1" dstChan="4"/>
+    <connection srcId="9" srcChan="1" dstId="1" dstChan="3"/>
+    <connection srcId="9" srcChan="3" dstId="1" dstChan="5"/>
+    <connection srcId="10" srcChan="0" dstId="9" dstChan="2"/>
+    <connection srcId="10" srcChan="0" dstId="9" dstChan="6"/>
+    <connection srcId="10" srcChan="0" dstId="9" dstChan="7"/>
+    <connection srcId="10" srcChan="0" dstId="9" dstChan="8"/>
+    <connection srcId="10" srcChan="0" dstId="9" dstChan="9"/>
+    <connection srcId="10" srcChan="2" dstId="9" dstChan="3"/>
+    <connection srcId="11" srcChan="0" dstId="output" dstChan="0"/>
+    <connection srcId="12" srcChan="0" dstId="11" dstChan="2"/>
+    <connection srcId="12" srcChan="0" dstId="11" dstChan="3"/>
+    <connection srcId="13" srcChan="0" dstId="12" dstChan="2"/>
+    <connection srcId="14" srcChan="0" dstId="12" dstChan="0"/>
+    <connection srcId="15" srcChan="0" dstId="12" dstChan="1"/>
+  </connections>
+  <NodeEditorUI>
+    <node id="1" x="-477.0" y="374.9999694824219"/>
+    <node id="2" x="382.0" y="408.9999389648438"/>
+    <node id="3" x="-86.0" y="158.5"/>
+    <node id="4" x="-82.5" y="-167.5"/>
+    <node id="5" x="-1134.0" y="-92.0"/>
+    <node id="6" x="-1563.0" y="143.0"/>
+    <node id="7" x="-58.5" y="593.0"/>
+    <node id="9" x="-1014.04052734375" y="661.9315185546875"/>
+    <node id="10" x="-1484.0" y="771.0"/>
+    <node id="11" x="833.5" y="499.9999694824219"/>
+    <node id="12" x="384.0" y="800.9998779296875"/>
+    <node id="13" x="-31.5" y="568.9999389648438"/>
+    <node id="14" x="-76.5" y="578.9998779296875"/>
+    <node id="15" x="-130.5" y="780.9998779296875"/>
+    <node id="0" x="1089.0" y="330.0"/>
+  </NodeEditorUI>
+</ModularSynthPreset>

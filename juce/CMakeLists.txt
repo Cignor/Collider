@@ -281,6 +281,10 @@ target_sources(ColliderApp PRIVATE
     Source/audio/modules/MIDIButtonsModuleProcessor.cpp
     Source/audio/modules/MIDIJogWheelModuleProcessor.h
     Source/audio/modules/MIDIJogWheelModuleProcessor.cpp
+    Source/audio/modules/MIDIPadModuleProcessor.h
+    Source/audio/modules/MIDIPadModuleProcessor.cpp
+    Source/audio/modules/MidiLoggerModuleProcessor.h
+    Source/audio/modules/MidiLoggerModuleProcessor.cpp
     Source/audio/modules/TempoClockModuleProcessor.h
     Source/audio/modules/TempoClockModuleProcessor.cpp
     Source/ipc/IpcServer.cpp
@@ -503,6 +507,10 @@ target_sources(PresetCreatorApp PRIVATE
     Source/audio/modules/MIDIButtonsModuleProcessor.cpp
     Source/audio/modules/MIDIJogWheelModuleProcessor.h
     Source/audio/modules/MIDIJogWheelModuleProcessor.cpp
+    Source/audio/modules/MIDIPadModuleProcessor.h
+    Source/audio/modules/MIDIPadModuleProcessor.cpp
+    Source/audio/modules/MidiLoggerModuleProcessor.h
+    Source/audio/modules/MidiLoggerModuleProcessor.cpp
     Source/audio/modules/TempoClockModuleProcessor.h
     Source/audio/modules/TempoClockModuleProcessor.cpp
 )

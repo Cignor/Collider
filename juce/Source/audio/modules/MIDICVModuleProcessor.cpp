@@ -185,6 +185,7 @@ float MIDICVModuleProcessor::midiNoteToCv(int noteNumber) const
 // Helper function for tooltip with help marker
 static void HelpMarkerCV(const char* desc)
 {
+    ImGui::SameLine();  // CRITICAL: Position inline with previous element
     ImGui::TextDisabled("(?)");
     if (ImGui::BeginItemTooltip())
     {
@@ -197,12 +198,30 @@ static void HelpMarkerCV(const char* desc)
 
 void MIDICVModuleProcessor::drawParametersInNode(float itemWidth, const std::function<bool(const juce::String&)>&, const std::function<void()>&)
 {
+    // HelpMarker helper function
+    auto HelpMarker = [](const char* desc)
+    {
+        ImGui::SameLine();
+        ImGui::TextDisabled("(?)");
+        if (ImGui::BeginItemTooltip())
+        {
+            ImGui::PushTextWrapPos(ImGui::GetFontSize() * 35.0f);
+            ImGui::TextUnformatted(desc);
+            ImGui::PopTextWrapPos();
+            ImGui::EndTooltip();
+        }
+    };
+    
     ImGui::PushItemWidth(itemWidth);
     
     // === MULTI-MIDI DEVICE FILTERING ===
     ImGui::TextColored(ImVec4(0.6f, 0.8f, 1.0f, 1.0f), "MIDI Routing");
-    ImGui::Text("Device: All Devices (filtering active in background)");
-    ImGui::TextDisabled("Note: Device selection UI pending - uses MidiDeviceManager");
+    ImGui::Spacing();
+    
+    ImGui::Text("Device: All Devices");
+    HelpMarker("Multi-device filtering active.\nDevice selection managed by MidiDeviceManager.");
+    
+    ImGui::Spacing();
     
     // Channel selector
     if (midiChannelFilterParam)
@@ -210,14 +229,17 @@ void MIDICVModuleProcessor::drawParametersInNode(float itemWidth, const std::fun
         int channel = midiChannelFilterParam->get();
         const char* items[] = {"All Channels", "1", "2", "3", "4", "5", "6", "7", "8",
                                "9", "10", "11", "12", "13", "14", "15", "16"};
-        if (ImGui::Combo("Channel", &channel, items, 17))
+        if (ImGui::Combo("##channel", &channel, items, 17))
         {
             midiChannelFilterParam->setValueNotifyingHost(
                 midiChannelFilterParam->getNormalisableRange().convertTo0to1(channel));
         }
+        ImGui::SameLine();
+        ImGui::Text("Channel");
+        HelpMarker("Filter MIDI by channel.\n0 = All Channels, 1-16 = specific channel.");
     }
     
-    ImGui::Separator();
+    ImGui::Spacing();
     ImGui::Spacing();
     
     // === MIDI INPUT STATUS ===
@@ -254,6 +276,7 @@ void MIDICVModuleProcessor::drawParametersInNode(float itemWidth, const std::fun
     {
         ImGui::TextDisabled("---");
     }
+    HelpMarker("Currently playing MIDI note.\nDisplays note name, octave, and MIDI number.");
     
     // === GATE INDICATOR ===
     ImGui::Text("Gate:");
@@ -271,6 +294,7 @@ void MIDICVModuleProcessor::drawParametersInNode(float itemWidth, const std::fun
     {
         ImGui::TextDisabled("OFF");
     }
+    HelpMarker("Gate output status.\nHigh (ON) when note is held, Low (OFF) when released.");
     
     ImGui::Spacing();
     
@@ -278,47 +302,44 @@ void MIDICVModuleProcessor::drawParametersInNode(float itemWidth, const std::fun
     ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1.0f), "Live Values");
     ImGui::Spacing();
     
+    // Calculate responsive progress bar width
+    const float progressBarWidth = itemWidth * 0.6f;
+    const float labelWidth = itemWidth * 0.15f;
+    
     // Velocity with progress bar
     ImGui::Text("Vel");
     ImGui::SameLine();
-    ImGui::SetNextItemWidth(100);
     ImGui::PushStyleColor(ImGuiCol_PlotHistogram, ImColor::HSV(0.55f, 0.7f, velocity).Value);
-    ImGui::ProgressBar(velocity, ImVec2(0, 0), juce::String(velocity, 2).toRawUTF8());
+    ImGui::ProgressBar(velocity, ImVec2(progressBarWidth, 0), juce::String(velocity, 2).toRawUTF8());
     ImGui::PopStyleColor();
-    ImGui::SameLine();
-    HelpMarkerCV("MIDI Note Velocity (0-1)");
+    HelpMarker("MIDI Note Velocity (0-1)");
     
     // Mod Wheel with progress bar
     ImGui::Text("Mod");
     ImGui::SameLine();
-    ImGui::SetNextItemWidth(100);
     ImGui::PushStyleColor(ImGuiCol_PlotHistogram, ImColor::HSV(0.15f, 0.7f, modWheel).Value);
-    ImGui::ProgressBar(modWheel, ImVec2(0, 0), juce::String(modWheel, 2).toRawUTF8());
+    ImGui::ProgressBar(modWheel, ImVec2(progressBarWidth, 0), juce::String(modWheel, 2).toRawUTF8());
     ImGui::PopStyleColor();
-    ImGui::SameLine();
-    HelpMarkerCV("Mod Wheel (CC#1, 0-1)");
+    HelpMarker("Mod Wheel (CC#1, 0-1)");
     
     // Pitch Bend with centered bar
     ImGui::Text("Bend");
     ImGui::SameLine();
-    ImGui::SetNextItemWidth(100);
     float normalizedBend = (pitchBend + 1.0f) / 2.0f; // -1..1 -> 0..1
     ImGui::PushStyleColor(ImGuiCol_PlotHistogram, ImColor::HSV(0.0f, 0.7f, std::abs(pitchBend)).Value);
-    ImGui::ProgressBar(normalizedBend, ImVec2(0, 0), juce::String(pitchBend, 2).toRawUTF8());
+    ImGui::ProgressBar(normalizedBend, ImVec2(progressBarWidth, 0), juce::String(pitchBend, 2).toRawUTF8());
     ImGui::PopStyleColor();
-    ImGui::SameLine();
-    HelpMarkerCV("Pitch Bend (-1 to +1)");
+    HelpMarker("Pitch Bend (-1 to +1)");
     
     // Aftertouch with progress bar
     ImGui::Text("AT");
     ImGui::SameLine();
-    ImGui::SetNextItemWidth(100);
     ImGui::PushStyleColor(ImGuiCol_PlotHistogram, ImColor::HSV(0.85f, 0.7f, aftertouch).Value);
-    ImGui::ProgressBar(aftertouch, ImVec2(0, 0), juce::String(aftertouch, 2).toRawUTF8());
+    ImGui::ProgressBar(aftertouch, ImVec2(progressBarWidth, 0), juce::String(aftertouch, 2).toRawUTF8());
     ImGui::PopStyleColor();
-    ImGui::SameLine();
-    HelpMarkerCV("Channel Aftertouch (0-1)");
+    HelpMarker("Channel Aftertouch (0-1)");
     
+    ImGui::Spacing();
     ImGui::Spacing();
     
     // === CV OUTPUT INFO ===
@@ -326,8 +347,7 @@ void MIDICVModuleProcessor::drawParametersInNode(float itemWidth, const std::fun
     ImGui::Spacing();
     
     ImGui::Text("Pitch CV: %.3f V", pitchCV);
-    ImGui::SameLine();
-    HelpMarkerCV("1V/octave standard\nC4 (MIDI note 60) = 0V");
+    HelpMarker("1V/octave standard\nC4 (MIDI note 60) = 0V\nEach semitone = 0.0833V");
     
     ImGui::PopItemWidth();
 }

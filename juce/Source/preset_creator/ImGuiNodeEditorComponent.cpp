@@ -1395,6 +1395,9 @@ void ImGuiNodeEditorComponent::renderImGui()
         addModuleButton("MIDI Knobs", "midi knobs");
         addModuleButton("MIDI Buttons", "midi buttons");
         addModuleButton("MIDI Jog Wheel", "midi jog wheel");
+        addModuleButton("MIDI Pads", "midi pads");
+        ImGui::Separator();
+        addModuleButton("MIDI Logger", "midi logger");
         ImGui::Separator();
     }
     
@@ -3403,6 +3406,9 @@ if (auto* mp = synth->getModuleForLogical (lid))
                     if (ImGui::MenuItem("MIDI Knobs")) addAtMouse("midi knobs");
                     if (ImGui::MenuItem("MIDI Buttons")) addAtMouse("midi buttons");
                     if (ImGui::MenuItem("MIDI Jog Wheel")) addAtMouse("midi jog wheel");
+                    if (ImGui::MenuItem("MIDI Pads")) addAtMouse("midi pads");
+                    ImGui::Separator();
+                    if (ImGui::MenuItem("MIDI Logger")) addAtMouse("midi logger");
                     ImGui::EndMenu();
                 }
                 if (ImGui::BeginMenu("TTS")) {
@@ -6587,6 +6593,8 @@ std::map<juce::String, std::pair<const char*, const char*>> ImGuiNodeEditorCompo
         {"MIDI Knobs", {"midi knobs", "Up to 16 MIDI knobs/rotary encoders with CC learning"}},
         {"MIDI Buttons", {"midi buttons", "Up to 32 MIDI buttons with Gate/Toggle/Trigger modes"}},
         {"MIDI Jog Wheel", {"midi jog wheel", "Single MIDI jog wheel/rotary encoder"}},
+        {"MIDI Pads", {"midi pads", "16-pad MIDI controller with polyphonic triggers and velocity outputs"}},
+        {"MIDI Logger", {"midi logger", "Records CV/Gate to MIDI events with piano roll editor and .mid export"}},
         {"Value", {"Value", "Constant CV value output"}},
         {"Sample Loader", {"sample loader", "Loads and plays audio samples"}},
         

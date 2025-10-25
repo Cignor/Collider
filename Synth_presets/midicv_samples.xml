@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<ModularSynthPreset version="1" bpm="120.0">
+  <modules>
+    <module logicalId="1" type="midi cv">
+      <params>
+        <MIDICVParams>
+          <PARAM id="midiChannel" value="0.0"/>
+          <PARAM id="midiDevice" value="0.0"/>
+        </MIDICVParams>
+      </params>
+    </module>
+    <module logicalId="2" type="sample loader">
+      <params>
+        <SampleLoaderParameters samplePath="H:\0000_CODE\01_collider_pyo\audio\samples\effects\KSHMR_Psy_FX_23_140_F.wav">
+          <PARAM id="engine" value="1.0"/>
+          <PARAM id="gate" value="0.7999999523162842"/>
+          <PARAM id="gate_mod" value="1.0"/>
+          <PARAM id="loop" value="1.0"/>
+          <PARAM id="pitch" value="0.0"/>
+          <PARAM id="pitch_mod" value="0.0"/>
+          <PARAM id="rangeEnd" value="0.5540000200271606"/>
+          <PARAM id="rangeEnd_mod" value="1.0"/>
+          <PARAM id="rangeStart" value="0.3041666746139526"/>
+          <PARAM id="rangeStart_mod" value="0.0"/>
+          <PARAM id="rbPhaseInd" value="1.0"/>
+          <PARAM id="rbWindowShort" value="1.0"/>
+          <PARAM id="speed" value="1.0"/>
+          <PARAM id="speed_mod" value="1.0"/>
+          <PARAM id="trigger_mod" value="0.0"/>
+        </SampleLoaderParameters>
+      </params>
+    </module>
+  </modules>
+  <connections>
+    <connection srcId="1" srcChan="0" dstId="2" dstChan="0"/>
+    <connection srcId="1" srcChan="1" dstId="2" dstChan="3"/>
+    <connection srcId="1" srcChan="3" dstId="2" dstChan="1"/>
+    <connection srcId="2" srcChan="0" dstId="output" dstChan="0"/>
+    <connection srcId="2" srcChan="1" dstId="output" dstChan="1"/>
+  </connections>
+  <NodeEditorUI>
+    <node id="1" x="-246.0" y="382.0"/>
+    <node id="2" x="345.0" y="216.0"/>
+    <node id="0" x="836.0" y="449.0"/>
+  </NodeEditorUI>
+</ModularSynthPreset>

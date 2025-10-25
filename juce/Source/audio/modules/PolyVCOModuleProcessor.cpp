@@ -425,50 +425,54 @@ void PolyVCOModuleProcessor::drawParametersInNode(float itemWidth, const std::fu
 #if defined(PRESET_CREATOR_UI)
 void PolyVCOModuleProcessor::drawIoPins(const NodePinHelpers& helpers)
 {
-    // First, draw the single master input for the voice count.
-    // It has no corresponding output, so we pass nullptr and -1.
+    // 1. Draw the single master input for the voice count. It has no output.
     helpers.drawParallelPins("NumVoices Mod", 0, nullptr, -1);
-    
     ImGui::Spacing();
 
-    // === THE NEW HELPER FUNCTION ===
-    // This helper encapsulates the complex 3-input-to-1-output layout logic.
-    auto drawVoicePins = [&](int voiceIndex)
-    {
-        const juce::String idx = juce::String(voiceIndex + 1);
-        const int inFreq = 1 + voiceIndex;
-        const int inWave = 1 + MAX_VOICES + voiceIndex;
-        const int inGate = 1 + (2 * MAX_VOICES) + voiceIndex;
-
-        // We use a three-column layout to manage the pins perfectly.
-        // Col 0: Inputs | Col 1: Spacer | Col 2: Output
-        ImGui::Columns(3, ("voice_pins_" + idx).toRawUTF8(), false);
-
-        // --- Column 0: All three input pins ---
-        // We group the three input pins together on the left.
-        helpers.drawAudioInputPin(("Freq " + idx + " Mod").toRawUTF8(), inFreq);
-        helpers.drawAudioInputPin(("Wave " + idx + " Mod").toRawUTF8(), inWave);
-        helpers.drawAudioInputPin(("Gate " + idx + " Mod").toRawUTF8(), inGate);
-
-        // --- Column 1: Spacer ---
-        // This column pushes the output pin to the far right.
-        ImGui::NextColumn();
-
-        // --- Column 2: The single output pin ---
-        ImGui::NextColumn();
-        helpers.drawAudioOutputPin(("Freq " + idx).toRawUTF8(), voiceIndex);
-
-        // --- Cleanup ---
-        ImGui::Columns(1);
-    };
-    // === END OF HELPER ===
-
-    // Now, the main loop is incredibly simple.
-    // We just call our new helper for each active voice.
     const int activeVoices = getEffectiveNumVoices();
     for (int i = 0; i < activeVoices; ++i)
     {
-        drawVoicePins(i);
+        const juce::String idx = juce::String(i + 1);
+        const int inFreq = 1 + i;
+        const int inWave = 1 + MAX_VOICES + i;
+        const int inGate = 1 + (2 * MAX_VOICES) + i;
+        const int outChannel = i;
+
+        // Use a group to keep all pins for a voice together visually.
+        ImGui::BeginGroup();
+
+        // Row 1: The main Freq input is paired with the voice's audio output.
+        helpers.drawParallelPins(
+            ("Freq " + idx + " Mod").toRawUTF8(),
+            inFreq,
+            ("Freq " + idx).toRawUTF8(), // The output is also labeled "Freq"
+            outChannel
+        );
+
+        // Row 2: The Wave input stands alone on the left.
+        helpers.drawParallelPins(
+            ("Wave " + idx + " Mod").toRawUTF8(),
+            inWave,
+            nullptr,  // No output text on this row
+            -1        // No output pin on this row
+        );
+
+        // Row 3: The Gate input also stands alone on the left.
+        helpers.drawParallelPins(
+            ("Gate " + idx + " Mod").toRawUTF8(),
+            inGate,
+            nullptr,
+            -1
+        );
+
+        ImGui::EndGroup();
+
+        // Add visual separation between voice groups.
+        if (i < activeVoices - 1)
+        {
+            ImGui::Spacing();
+            ImGui::Spacing();
+        }
     }
 }
 #endif
