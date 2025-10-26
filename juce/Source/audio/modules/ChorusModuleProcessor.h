@@ -35,6 +35,10 @@ public:
     juce::String getAudioInputLabel(int channel) const override;
     juce::String getAudioOutputLabel(int channel) const override;
 
+    // Dynamic pin interface - preserves exact modulation system
+    std::vector<DynamicPinInfo> getDynamicInputPins() const override;
+    std::vector<DynamicPinInfo> getDynamicOutputPins() const override;
+
 private:
     static juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout();
 

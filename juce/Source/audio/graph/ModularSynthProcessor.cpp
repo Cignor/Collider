@@ -64,6 +64,7 @@
 #include "../modules/MidiLoggerModuleProcessor.h"
 #include "../modules/TempoClockModuleProcessor.h"
 #include "../modules/PhysicsModuleProcessor.h"
+#include "../modules/StrokeSequencerModuleProcessor.h"
 #include "../modules/InletModuleProcessor.h"
 #include "../modules/OutletModuleProcessor.h"
 #include "../modules/MetaModuleProcessor.h"
@@ -716,6 +717,8 @@ namespace {
             reg("midi logger", []{ return std::make_unique<MidiLoggerModuleProcessor>(); });
             reg("tempo clock", []{ return std::make_unique<TempoClockModuleProcessor>(); });
             reg("physics", []{ return std::make_unique<PhysicsModuleProcessor>(); });
+            reg("stroke sequencer", []{ return std::make_unique<StrokeSequencerModuleProcessor>(); });
+            reg("stroke_sequencer", []{ return std::make_unique<StrokeSequencerModuleProcessor>(); });
             
             reg("meta module", []{ return std::make_unique<MetaModuleProcessor>(); });
             reg("metamodule", []{ return std::make_unique<MetaModuleProcessor>(); });

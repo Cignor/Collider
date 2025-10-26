@@ -54,6 +54,7 @@ struct PhysicsObject
     std::vector<b2Vec2> vertices; // Used for polygons (in local space)
     float mass = 1.0f; // Mass of the object (affects physics and sound)
     Polarity polarity = Polarity::None; // Magnetic polarity (for future electromagnetic features)
+    MaterialData materialData; // ADD THIS - Each object has its own material properties
     juce::uint32 lastSoundTimeMs = 0; // Timestamp of last sound event (prevents jitter spam)
 };
 
@@ -162,6 +163,9 @@ public:
     
     // Trigger a sound based on material, collision impact, position, shape type, and object mass
     void playSound(StrokeType strokeType, float impulse, float collisionX, ShapeType shapeType);
+
+    // ADD THIS - Trigger a sound directly from MaterialData (for object-object collisions)
+    void playSoundWithMaterial(const MaterialData& material, float impulse, float mass, float collisionX);
     
     // Dynamic pin interface - expose all 6 output channels and 3 input triggers
     std::vector<DynamicPinInfo> getDynamicInputPins() const override;
@@ -271,6 +275,9 @@ private:
     // --- Audio Synthesis ---
     std::map<StrokeType, MaterialData> strokeDatabase;
     std::map<StrokeType, juce::Colour> strokeColourMap;
+
+    // ADD THIS - Default material database for our shapes
+    std::map<ShapeType, MaterialData> shapeMaterialDatabase;
     // Add your synthesizer voice(s) and other DSP components here
 
     // --- CV Output Data (Thread-Safe) ---
@@ -297,18 +304,21 @@ private:
     static constexpr auto paramIdMaxObjects     = "maxObjects";
     static constexpr auto paramIdVortexStrength = "vortexStrength";
     static constexpr auto paramIdVortexSpin     = "vortexSpin";
+    static constexpr auto paramIdMagnetForce    = "magnetForce"; // ADD THIS
 
     // Virtual modulation target IDs (no APVTS parameters required)
     static constexpr auto paramIdGravityMod        = "gravity_mod";
     static constexpr auto paramIdWindMod           = "wind_mod";
     static constexpr auto paramIdVortexStrengthMod = "vortexStrength_mod";
     static constexpr auto paramIdVortexSpinMod     = "vortexSpin_mod";
+    static constexpr auto paramIdMagnetForceMod    = "magnetForce_mod"; // ADD THIS
 
     // Atomics to hold CV values read from the audio thread
     std::atomic<float> gravityModValue        { -1.0f }; // -1.0f indicates not modulated
     std::atomic<float> windModValue          { -1.0f }; // -1.0f indicates not modulated
     std::atomic<float> vortexStrengthModValue { -1.0f }; // -1.0f indicates not modulated
     std::atomic<float> vortexSpinModValue     { -1.0f }; // -1.0f indicates not modulated
+    std::atomic<float> magnetForceModValue    { -1.0f }; // ADD THIS
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(PhysicsModuleProcessor)
 };

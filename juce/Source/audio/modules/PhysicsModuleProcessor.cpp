@@ -32,39 +32,57 @@ public:
         for (int i = 0; i < impulse->count; ++i)
             totalImpulse += impulse->normalImpulses[i];
 
-        if (totalImpulse > 0.1f)
+        if (totalImpulse < 0.1f)
+            return;
+
+        b2Body* bodyA = contact->GetFixtureA()->GetBody();
+        b2Body* bodyB = contact->GetFixtureB()->GetBody();
+
+        // --- CASE 1: Object vs Object Collision (NEW) ---
+        if (bodyA->GetType() == b2_dynamicBody && bodyB->GetType() == b2_dynamicBody)
+        {
+            auto* objectA = reinterpret_cast<PhysicsObject*>(bodyA->GetUserData().pointer);
+            auto* objectB = reinterpret_cast<PhysicsObject*>(bodyB->GetUserData().pointer);
+
+            if (objectA && objectB)
+            {
+                // Use the object that was hit harder for the sound, or the heavier one
+                auto* soundSource = (objectA->mass > objectB->mass) ? objectA : objectB;
+
+                const juce::uint32 currentTimeMs = juce::Time::getMillisecondCounter();
+                if (currentTimeMs > soundSource->lastSoundTimeMs + 50)
+                {
+                    b2WorldManifold worldManifold;
+                    contact->GetWorldManifold(&worldManifold);
+
+                    // Call playSoundWithMaterial with the object's own material data
+                    processor->playSoundWithMaterial(soundSource->materialData, totalImpulse, soundSource->mass, worldManifold.points[0].x);
+
+                    soundSource->lastSoundTimeMs = currentTimeMs;
+                }
+            }
+        }
+        // --- CASE 2: Object vs Stroke Collision (Existing) ---
+        else
         {
             // Check if this contact matches one of the new ones we detected in BeginContact
             for (const auto& collision : newCollisionsThisStep)
             {
-                b2Body* objectBody = contact->GetFixtureA()->GetBody()->GetType() == b2_dynamicBody
-                                       ? contact->GetFixtureA()->GetBody()
-                                       : contact->GetFixtureB()->GetBody();
-
+                b2Body* objectBody = (bodyA->GetType() == b2_dynamicBody) ? bodyA : bodyB;
                 auto* currentObject = reinterpret_cast<PhysicsObject*>(objectBody->GetUserData().pointer);
 
                 if (currentObject == collision.object)
                 {
-                    // --- COOLDOWN CHECK: Prevent contact jitter spam ---
                     const juce::uint32 currentTimeMs = juce::Time::getMillisecondCounter();
-                    const juce::uint32 cooldownMs = 50; // 50ms cooldown between sounds per object
-
-                    if (currentTimeMs > currentObject->lastSoundTimeMs + cooldownMs)
+                    if (currentTimeMs > currentObject->lastSoundTimeMs + 50)
                     {
                         b2WorldManifold worldManifold;
                         contact->GetWorldManifold(&worldManifold);
 
-                        // Call the reverted playSound function
-                        processor->playSound(collision.stroke->type,
-                                             totalImpulse,
-                                             worldManifold.points[0].x,
-                                             collision.object->type);
+                        processor->playSound(collision.stroke->type, totalImpulse, worldManifold.points[0].x, collision.object->type);
 
-                        // Update the object's timestamp to start the cooldown
                         currentObject->lastSoundTimeMs = currentTimeMs;
                     }
-
-                    // Break to avoid triggering the same sound multiple times if there are multiple contact points
                     break;
                 }
             }
@@ -167,7 +185,7 @@ void PhysicsContactListener::EndContact(b2Contact* contact)
 
 PhysicsModuleProcessor::PhysicsModuleProcessor()
     : ModuleProcessor(BusesProperties()
-                        .withInput("Input", juce::AudioChannelSet::discreteChannels(7), true) // 3x Spawn Triggers + 2x CV Mod + 2x Vortex CV Mod
+                        .withInput("Input", juce::AudioChannelSet::discreteChannels(8), true) // 3x Spawn Triggers + 2x CV Mod + 2x Vortex CV Mod + 1x Magnet Force CV Mod
                         .withOutput("Output", juce::AudioChannelSet::discreteChannels(18), true)), // L, R, 4x Triggers, 12x CV
       apvts(*this, nullptr, "PhysicsParams", createParameterLayout())
 {
@@ -197,6 +215,12 @@ PhysicsModuleProcessor::PhysicsModuleProcessor()
     strokeColourMap[StrokeType::Conveyor] = juce::Colours::mediumpurple;
     strokeColourMap[StrokeType::BouncyGoo] = juce::Colours::springgreen;
     strokeColourMap[StrokeType::StickyMud] = juce::Colours::saddlebrown;
+
+    // --- ADD THIS INITIALIZATION ---
+    // Define default sounds for dynamic shapes
+    shapeMaterialDatabase[ShapeType::Circle]   = { {1.0f, 3.1f, 5.8f}, 0.8f, 600.0f }; // Ringing, metallic sound
+    shapeMaterialDatabase[ShapeType::Square]   = { {1.0f, 1.9f}, 0.3f, 350.0f };       // Dull, woody sound
+    shapeMaterialDatabase[ShapeType::Triangle] = { {1.0f, 2.1f}, 0.3f, 350.0f };       // Also woody
 
 
     // Initialize trigger outputs (Main, Ball, Square, Triangle)
@@ -281,6 +305,10 @@ juce::AudioProcessorValueTreeState::ParameterLayout PhysicsModuleProcessor::crea
         paramIdVortexSpin, "Vortex Spin",
         juce::NormalisableRange<float>(-50.0f, 50.0f, 0.1f), 0.0f));
 
+    params.push_back(std::make_unique<juce::AudioParameterFloat>(
+        paramIdMagnetForce, "Magnet Force",
+        juce::NormalisableRange<float>(-50.0f, 50.0f, 0.1f), 0.0f));
+
     // Material physics properties (friction and restitution/bounciness)
     params.push_back(std::make_unique<juce::AudioParameterFloat>(
         "metalFriction", "Metal Friction",
@@ -324,7 +352,7 @@ void PhysicsModuleProcessor::releaseResources()
 
 std::vector<DynamicPinInfo> PhysicsModuleProcessor::getDynamicInputPins() const
 {
-    // Define 7 input pins: 3 triggers for spawning shapes + 4 CV modulation inputs
+    // Define 8 input pins: 3 triggers for spawning shapes + 5 CV modulation inputs
     return {
         { "Spawn Ball",       0, PinDataType::Gate },      // Trigger to spawn circle
         { "Spawn Square",     1, PinDataType::Gate },      // Trigger to spawn square
@@ -332,7 +360,8 @@ std::vector<DynamicPinInfo> PhysicsModuleProcessor::getDynamicInputPins() const
         { "Gravity Mod",      3, PinDataType::CV   },      // CV modulation for gravity
         { "Wind Mod",         4, PinDataType::CV   },      // CV modulation for wind
         { "Vortex Str Mod",   5, PinDataType::CV   },      // CV modulation for vortex strength
-        { "Vortex Spin Mod",  6, PinDataType::CV   }       // CV modulation for vortex spin
+        { "Vortex Spin Mod",  6, PinDataType::CV   },      // CV modulation for vortex spin
+        { "Magnet Force Mod", 7, PinDataType::CV   }       // CV modulation for magnet force
     };
 }
 
@@ -343,6 +372,7 @@ bool PhysicsModuleProcessor::getParamRouting(const juce::String& paramId, int& o
     if (paramId == paramIdWindMod)           { outChannelIndexInBus = 4; return true; }
     if (paramId == paramIdVortexStrengthMod) { outChannelIndexInBus = 5; return true; }
     if (paramId == paramIdVortexSpinMod)     { outChannelIndexInBus = 6; return true; }
+    if (paramId == paramIdMagnetForceMod)    { outChannelIndexInBus = 7; return true; }
     return false;
 }
 
@@ -408,10 +438,16 @@ void PhysicsModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce
         vortexSpinModValue.store(inBus.getReadPointer(6)[0]);
     else
         vortexSpinModValue.store(-1.0f); // Sentinel for "not connected"
-    
+
+    const bool isMagnetMod = isParamInputConnected(paramIdMagnetForceMod);
+    if (isMagnetMod && numInputChannels > 7 && numSamples > 0)
+        magnetForceModValue.store(inBus.getReadPointer(7)[0]);
+    else
+        magnetForceModValue.store(-1.0f); // Sentinel for "not connected"
+
     // --- Input Trigger Detection (BEFORE clearing buffer!) ---
     // Read spawn trigger inputs (channels 0-2) and detect rising edges
-    if (numInputChannels >= 3 && numSamples > 0)
+    if (numInputChannels >= 8 && numSamples > 0)
     {
         for (int i = 0; i < 3; ++i) // 0=Ball, 1=Square, 2=Triangle
         {
@@ -429,8 +465,6 @@ void PhysicsModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce
                     spawnQueue.prepareToWrite(1, start1, size1, start2, size2);
                     if (size1 > 0)
                     {
-                        // REPLACE THIS: spawnQueueBuffer[start1] = typeToSpawn;
-                        // WITH THIS:
                         spawnQueueBuffer[start1] = { typeToSpawn, currentMass, currentPolarity };
                         spawnQueue.finishedWrite(1);
                     }
@@ -612,6 +646,20 @@ void PhysicsModuleProcessor::timerCallback()
     strokeCreationQueue.finishedRead(strokeSize1 + strokeSize2);
     // --- END OF STROKE CREATION PROCESSING ---
 
+    // --- READ ALL CV MODULATION VALUES (must be done before using them) ---
+    float currentGravityCV = gravityModValue.load();
+    float currentWindCV = windModValue.load();
+    float currentVortexStrCV = vortexStrengthModValue.load();
+    float currentVortexSpinCV = vortexSpinModValue.load();
+    float currentMagnetCV = magnetForceModValue.load();
+
+    // Declare final values (will be calculated in their respective sections)
+    float finalGravityValue = 0.0f;
+    float finalWindValue = 0.0f;
+    float finalVortexStrength = 0.0f;
+    float finalVortexSpin = 0.0f;
+    float finalMagnetForce = 0.0f;
+
     // --- EMITTER LOGIC ---
     // Update all emitters and spawn objects based on their timers
     const float timeStep = 1.0f / 60.0f; // 60 FPS
@@ -629,9 +677,6 @@ void PhysicsModuleProcessor::timerCallback()
     // --- END EMITTER LOGIC ---
 
     // --- Apply Gravity (with modulation override) ---
-    float currentGravityCV = gravityModValue.load();
-    float finalGravityValue;
-
     if (currentGravityCV >= 0.0f) // Check if modulated (CV is 0..1)
     {
         auto range = apvts.getParameterRange(paramIdGravity);
@@ -644,9 +689,6 @@ void PhysicsModuleProcessor::timerCallback()
     world->SetGravity({ 0.0f, finalGravityValue });
 
     // --- Apply Wind (with modulation override) and Inertial Forces ---
-    float currentWindCV = windModValue.load();
-    float finalWindValue;
-
     if (currentWindCV >= 0.0f) // Check if modulated (CV is 0..1)
     {
         auto range = apvts.getParameterRange(paramIdWind);
@@ -669,11 +711,75 @@ void PhysicsModuleProcessor::timerCallback()
         }
     }
 
+    // --- Apply Magnetic Forces ---
+    if (currentMagnetCV >= 0.0f) // Check if modulated (CV is 0..1)
+    {
+        auto range = apvts.getParameterRange(paramIdMagnetForce);
+        finalMagnetForce = range.convertFrom0to1(currentMagnetCV);
+    }
+    else
+    {
+        finalMagnetForce = *apvts.getRawParameterValue(paramIdMagnetForce);
+    }
+
+
+    if (std::abs(finalMagnetForce) > 0.01f)
+    {
+        for (size_t i = 0; i < physicsObjects.size(); ++i)
+        {
+            for (size_t j = i + 1; j < physicsObjects.size(); ++j)
+            {
+                auto& objA = physicsObjects[i];
+                auto& objB = physicsObjects[j];
+
+                if (!objA || !objB || objA->polarity == Polarity::None || objB->polarity == Polarity::None)
+                    continue;
+
+                b2Body* bodyA = objA->physicsBody;
+                b2Body* bodyB = objB->physicsBody;
+
+                b2Vec2 posA = bodyA->GetPosition();
+                b2Vec2 posB = bodyB->GetPosition();
+                b2Vec2 direction = posB - posA;
+                float distanceSq = direction.LengthSquared();
+
+                if (distanceSq < 0.1f) continue; // Avoid singularity at very close distances
+
+                // Force = (k * m1 * m2) / d^2. We'll use finalMagnetForce as k.
+                float forceMagnitude = finalMagnetForce / distanceSq;
+
+                // Repel if same polarity, attract if different
+                if (objA->polarity == objB->polarity)
+                    forceMagnitude *= -1.0f; // Repel (negative force)
+
+                direction.Normalize();
+                b2Vec2 force = forceMagnitude * direction;
+
+                bodyA->ApplyForceToCenter(force, true);
+                bodyB->ApplyForceToCenter(-force, true); // Newton's third law
+            }
+        }
+    }
+
+    // --- Update UI Telemetry for modulated parameters ---
+    if (currentGravityCV >= 0.0f) {
+        setLiveParamValue("gravity_live", finalGravityValue);
+    }
+    if (currentWindCV >= 0.0f) {
+        setLiveParamValue("wind_live", finalWindValue);
+    }
+    if (currentVortexStrCV >= 0.0f) {
+        setLiveParamValue("vortex_strength_live", finalVortexStrength);
+    }
+    if (currentVortexSpinCV >= 0.0f) {
+        setLiveParamValue("vortex_spin_live", finalVortexSpin);
+    }
+    if (currentMagnetCV >= 0.0f) {
+        setLiveParamValue("magnet_force_live", finalMagnetForce);
+    }
+
     // --- Apply Vortex Forces from All Placed Force Objects ---
     // Get Global Force Parameters (respecting modulation)
-    float currentVortexStrCV = vortexStrengthModValue.load();
-    float finalVortexStrength;
-
     if (currentVortexStrCV >= 0.0f) // Check if modulated (CV is 0..1)
     {
         auto range = apvts.getParameterRange(paramIdVortexStrength);
@@ -683,9 +789,6 @@ void PhysicsModuleProcessor::timerCallback()
     {
         finalVortexStrength = *apvts.getRawParameterValue(paramIdVortexStrength);
     }
-
-    float currentVortexSpinCV = vortexSpinModValue.load();
-    float finalVortexSpin;
 
     if (currentVortexSpinCV >= 0.0f) // Check if modulated (CV is 0..1)
     {
@@ -889,6 +992,24 @@ void PhysicsModuleProcessor::playSound(StrokeType strokeType, float impulse, flo
     }
 }
 
+// ADD THIS - New helper function to trigger sound directly from MaterialData
+void PhysicsModuleProcessor::playSoundWithMaterial(const MaterialData& material, float impulse, float mass, float collisionX)
+{
+    // Convert physics X-coordinate (meters) to pan value (0-1)
+    const float scale = 50.0f;
+    const float canvasWidthMeters = 600.0f / scale;
+    float pan = collisionX / canvasWidthMeters;
+
+    // Find the next available voice and trigger it
+    synthVoices[nextVoice].startNote(material, impulse, pan);
+
+    // Cycle to the next voice for next time (round-robin)
+    nextVoice = (nextVoice + 1) % synthVoices.size();
+
+    // Fire the main trigger for these collisions
+    triggerOutputValues[0] = 1.0f;
+}
+
 #if defined(PRESET_CREATOR_UI)
 void PhysicsModuleProcessor::drawParametersInNode(float itemWidth, const std::function<bool(const juce::String& paramId)>& isParamModulated, const std::function<void()>& onModificationEnded)
 {
@@ -982,7 +1103,9 @@ void PhysicsModuleProcessor::drawParametersInNode(float itemWidth, const std::fu
     if (auto* gravityParam = apvts.getRawParameterValue(paramIdGravity))
     {
         const bool gravityIsMod = isParamModulated(paramIdGravityMod);
-        float gravityValue = gravityParam->load();
+        float gravityValue = gravityIsMod
+            ? getLiveParamValueFor(paramIdGravityMod, "gravity_live", gravityParam->load())
+            : gravityParam->load();
 
         if (gravityIsMod) ImGui::BeginDisabled();
 
@@ -1003,17 +1126,19 @@ void PhysicsModuleProcessor::drawParametersInNode(float itemWidth, const std::fu
             ImGui::TextUnformatted("(mod)");
         }
     }
-    
+
     // Wind slider with modulation indicator
     if (auto* windParam = apvts.getRawParameterValue(paramIdWind))
     {
         const bool windIsMod = isParamModulated(paramIdWindMod);
-        float windValue = windParam->load();
+        float windValue = windIsMod
+            ? getLiveParamValueFor(paramIdWindMod, "wind_live", windParam->load())
+            : windParam->load();
 
         if (windIsMod) ImGui::BeginDisabled();
 
         ImGui::PushItemWidth(150.0f);
-        if (ImGui::SliderFloat("Wind", &windValue, -20.0f, 20.0f, "%.1f"))
+        if (ImGui::SliderFloat("Wind", &windValue, -50.0f, 50.0f, "%.1f"))
         {
             if (!windIsMod)
                 if (auto* param = apvts.getParameter(paramIdWind))
@@ -1034,7 +1159,9 @@ void PhysicsModuleProcessor::drawParametersInNode(float itemWidth, const std::fu
     if (auto* vortexStrengthParam = apvts.getRawParameterValue(paramIdVortexStrength))
     {
         const bool vortexStrIsMod = isParamModulated(paramIdVortexStrengthMod);
-        float vortexStrengthValue = vortexStrengthParam->load();
+        float vortexStrengthValue = vortexStrIsMod
+            ? getLiveParamValueFor(paramIdVortexStrengthMod, "vortex_strength_live", vortexStrengthParam->load())
+            : vortexStrengthParam->load();
 
         if (vortexStrIsMod) ImGui::BeginDisabled();
 
@@ -1060,7 +1187,9 @@ void PhysicsModuleProcessor::drawParametersInNode(float itemWidth, const std::fu
     if (auto* vortexSpinParam = apvts.getRawParameterValue(paramIdVortexSpin))
     {
         const bool vortexSpinIsMod = isParamModulated(paramIdVortexSpinMod);
-        float vortexSpinValue = vortexSpinParam->load();
+        float vortexSpinValue = vortexSpinIsMod
+            ? getLiveParamValueFor(paramIdVortexSpinMod, "vortex_spin_live", vortexSpinParam->load())
+            : vortexSpinParam->load();
 
         if (vortexSpinIsMod) ImGui::BeginDisabled();
 
@@ -1081,7 +1210,35 @@ void PhysicsModuleProcessor::drawParametersInNode(float itemWidth, const std::fu
             ImGui::TextUnformatted("(mod)");
         }
     }
-    
+
+    // Magnet Force slider with modulation indicator
+    if (auto* magnetForceParam = apvts.getRawParameterValue(paramIdMagnetForce))
+    {
+        const bool magnetForceIsMod = isParamModulated(paramIdMagnetForceMod);
+        float magnetForceValue = magnetForceIsMod
+            ? getLiveParamValueFor(paramIdMagnetForceMod, "magnet_force_live", magnetForceParam->load())
+            : magnetForceParam->load();
+
+        if (magnetForceIsMod) ImGui::BeginDisabled();
+
+        ImGui::PushItemWidth(150.0f);
+        if (ImGui::SliderFloat("Magnet Force", &magnetForceValue, -50.0f, 50.0f, "%.1f"))
+        {
+            if (!magnetForceIsMod)
+                if (auto* param = apvts.getParameter(paramIdMagnetForce))
+                    param->setValueNotifyingHost(apvts.getParameterRange(paramIdMagnetForce).convertTo0to1(magnetForceValue));
+        }
+        if (ImGui::IsItemDeactivatedAfterEdit() && !magnetForceIsMod) { onModificationEnded(); }
+        ImGui::PopItemWidth();
+
+        if (magnetForceIsMod)
+        {
+            ImGui::EndDisabled();
+            ImGui::SameLine();
+            ImGui::TextUnformatted("(mod)");
+        }
+    }
+
     // Stroke Size slider
     auto* strokeSizeParam = apvts.getRawParameterValue(paramIdStrokeSize);
     if (strokeSizeParam)
@@ -1995,6 +2152,7 @@ void PhysicsModuleProcessor::spawnObject(ShapeType type, float mass, b2Vec2 posi
     newObject->type = type;
     newObject->mass = mass; // Store the mass for later use
     newObject->polarity = polarity; // Store the polarity for future electromagnetic features
+    newObject->materialData = shapeMaterialDatabase[type]; // ADD THIS - Assign the default material data
 
     // If no position is provided (i.e., a manual spawn), use the draggable spawn point.
     if (position.x == 0 && position.y == 0)

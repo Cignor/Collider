@@ -135,11 +135,39 @@ void ChorusModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce:
 bool ChorusModuleProcessor::getParamRouting(const juce::String& paramId, int& outBusIndex, int& outChannelIndexInBus) const
 {
     outBusIndex = 0; // All modulation is on the single input bus
-    
+
     if (paramId == paramIdRateMod) { outChannelIndexInBus = 2; return true; }
     if (paramId == paramIdDepthMod) { outChannelIndexInBus = 3; return true; }
     if (paramId == paramIdMixMod) { outChannelIndexInBus = 4; return true; }
     return false;
+}
+
+// Dynamic pin interface - preserves exact same modulation system
+std::vector<DynamicPinInfo> ChorusModuleProcessor::getDynamicInputPins() const
+{
+    std::vector<DynamicPinInfo> pins;
+
+    // Audio inputs (always present)
+    pins.push_back({"In L", 0, PinDataType::Audio});
+    pins.push_back({"In R", 1, PinDataType::Audio});
+
+    // Modulation inputs - exactly matching current static layout
+    pins.push_back({"Rate Mod", 2, PinDataType::CV});
+    pins.push_back({"Depth Mod", 3, PinDataType::CV});
+    pins.push_back({"Mix Mod", 4, PinDataType::CV});
+
+    return pins;
+}
+
+std::vector<DynamicPinInfo> ChorusModuleProcessor::getDynamicOutputPins() const
+{
+    std::vector<DynamicPinInfo> pins;
+
+    // Audio outputs - exactly matching current static layout
+    pins.push_back({"Out L", 0, PinDataType::Audio});
+    pins.push_back({"Out R", 1, PinDataType::Audio});
+
+    return pins;
 }
 
 juce::String ChorusModuleProcessor::getAudioInputLabel(int channel) const
@@ -223,14 +251,22 @@ void ChorusModuleProcessor::drawParametersInNode(float itemWidth, const std::fun
 
 void ChorusModuleProcessor::drawIoPins(const NodePinHelpers& helpers)
 {
-    helpers.drawAudioInputPin("In L", 0);
-    helpers.drawAudioInputPin("In R", 1);
-    helpers.drawAudioInputPin("Rate Mod", 2);
-    helpers.drawAudioInputPin("Depth Mod", 3);
-    helpers.drawAudioInputPin("Mix Mod", 4);
+    // Use dynamic pins - this preserves the exact same modulation system
+    // The channel indices match getParamRouting() exactly
+    auto dynamicInputs = getDynamicInputPins();
+    auto dynamicOutputs = getDynamicOutputPins();
 
-    helpers.drawAudioOutputPin("Out L", 0);
-    helpers.drawAudioOutputPin("Out R", 1);
+    // Draw inputs using dynamic pin system
+    for (const auto& pin : dynamicInputs)
+    {
+        helpers.drawAudioInputPin(pin.name.toRawUTF8(), pin.channel);
+    }
+
+    // Draw outputs using dynamic pin system
+    for (const auto& pin : dynamicOutputs)
+    {
+        helpers.drawAudioOutputPin(pin.name.toRawUTF8(), pin.channel);
+    }
 }
 #endif
 

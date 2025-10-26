@@ -301,6 +301,8 @@ target_sources(ColliderApp PRIVATE
     Source/audio/modules/TempoClockModuleProcessor.cpp
     Source/audio/modules/PhysicsModuleProcessor.h
     Source/audio/modules/PhysicsModuleProcessor.cpp
+    Source/audio/modules/StrokeSequencerModuleProcessor.h
+    Source/audio/modules/StrokeSequencerModuleProcessor.cpp
     Source/ipc/IpcServer.cpp
     Source/ipc/IpcServer.h
     Source/ipc/OscClient.h
@@ -530,6 +532,8 @@ target_sources(PresetCreatorApp PRIVATE
     Source/audio/modules/TempoClockModuleProcessor.cpp
     Source/audio/modules/PhysicsModuleProcessor.h
     Source/audio/modules/PhysicsModuleProcessor.cpp
+    Source/audio/modules/StrokeSequencerModuleProcessor.h
+    Source/audio/modules/StrokeSequencerModuleProcessor.cpp
 )
 
 # This target now needs to know where to find all the headers

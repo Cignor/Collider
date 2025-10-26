@@ -1399,6 +1399,7 @@ void ImGuiNodeEditorComponent::renderImGui()
     addModuleButton("Noise", "Noise");
         addModuleButton("Sequencer", "Sequencer");
         addModuleButton("Multi Sequencer", "multi sequencer");
+        addModuleButton("Stroke Sequencer", "stroke_sequencer");
         addModuleButton("Value", "Value");
         addModuleButton("Sample Loader", "sample loader");
     }
@@ -3417,6 +3418,7 @@ if (auto* mp = synth->getModuleForLogical (lid))
                     if (ImGui::MenuItem("Sequencer")) addAtMouse("Sequencer");
                     if (ImGui::MenuItem("Multi Sequencer")) addAtMouse("multi sequencer");
                     if (ImGui::MenuItem("Snapshot Sequencer")) addAtMouse("snapshot sequencer");
+                    if (ImGui::MenuItem("Stroke Sequencer")) addAtMouse("stroke_sequencer");
                     if (ImGui::MenuItem("Value")) addAtMouse("Value");
                     if (ImGui::MenuItem("Sample Loader")) addAtMouse("sample loader");
                     ImGui::EndMenu();
@@ -6522,10 +6524,23 @@ std::vector<AudioPin> ImGuiNodeEditorComponent::getPinsOfType(juce::uint32 logic
     }
     else if (auto* module = synth->getModuleForLogical(logicalId))
     {
-        // --- DYNAMIC PATH FOR VSTs AND OTHER UNLISTED MODULES ---
-        if (dynamic_cast<VstHostModuleProcessor*>(module))
+        // --- DYNAMIC PATH FOR MODULES WITH getDynamicInputPins/getDynamicOutputPins ---
+        auto dynamicPins = isInput ? module->getDynamicInputPins() : module->getDynamicOutputPins();
+        
+        if (!dynamicPins.empty())
         {
-            // For VSTs, assume all pins are 'Audio' type for chaining.
+            // Module provides dynamic pins - filter by type
+            for (const auto& pin : dynamicPins)
+            {
+                if (pin.type == targetType)
+                {
+                    matchingPins.emplace_back(pin.name, pin.channel, pin.type);
+                }
+            }
+        }
+        else if (dynamic_cast<VstHostModuleProcessor*>(module))
+        {
+            // For VSTs without dynamic pins, assume all pins are 'Audio' type for chaining.
             if (targetType == PinDataType::Audio)
             {
                 const int numChannels = isInput ? module->getTotalNumInputChannels() : module->getTotalNumOutputChannels();
@@ -6812,6 +6827,7 @@ std::map<juce::String, std::pair<const char*, const char*>> ImGuiNodeEditorCompo
         {"Noise", {"Noise", "White, pink, or brown noise generator"}},
         {"Sequencer", {"Sequencer", "Step sequencer for creating patterns"}},
         {"Multi Sequencer", {"multi sequencer", "Multi-track step sequencer"}},
+        {"Stroke Sequencer", {"stroke_sequencer", "Freeform visual rhythmic and CV generator"}},
         {"MIDI Player", {"midi player", "Plays MIDI files"}},
         {"MIDI CV", {"midi cv", "Converts MIDI Note/CC messages to CV signals. (Monophonic)"}},
         {"MIDI Faders", {"midi faders", "Up to 16 MIDI faders with CC learning"}},
