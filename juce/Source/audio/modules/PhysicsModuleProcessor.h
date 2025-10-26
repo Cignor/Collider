@@ -236,7 +236,22 @@ private:
     
     // --- Thread-Safe Spawning ---
     juce::AbstractFifo spawnQueue { 32 }; // Lock-free queue for spawn requests
-    std::vector<ShapeType> spawnQueueBuffer; // Buffer for queue data
+
+    // ADD THIS STRUCT
+    struct SpawnRequest
+    {
+        ShapeType type;
+        float mass;
+        Polarity polarity;
+        b2Vec2 position = {0, 0}; // Default to 0,0 to signal manual spawn point
+        b2Vec2 velocity = {0, 0};
+    };
+
+    // CHANGE THIS LINE
+    std::vector<SpawnRequest> spawnQueueBuffer; // Buffer for queue data
+
+    // --- Thread-Safe Clear All ---
+    std::atomic<bool> clearAllRequested { false }; // Flag for clear all operations
 
     // --- Thread-Safe Stroke Creation ---
     struct StrokeCreationRequest

@@ -141,7 +141,6 @@ void PhysicsContactListener::PreSolve(b2Contact* contact, const b2Manifold* oldM
     {
         // Values > 1.0 create energy, making it super bouncy
         contact->SetRestitution(2.0f);
-        // juce::Logger::writeToLog("  -> Bouncy Goo: Set restitution to 2.0 (super bouncy!)"); // Commented out to reduce log noise
     }
 }
 
@@ -430,7 +429,9 @@ void PhysicsModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce
                     spawnQueue.prepareToWrite(1, start1, size1, start2, size2);
                     if (size1 > 0)
                     {
-                        spawnQueueBuffer[start1] = typeToSpawn;
+                        // REPLACE THIS: spawnQueueBuffer[start1] = typeToSpawn;
+                        // WITH THIS:
+                        spawnQueueBuffer[start1] = { typeToSpawn, currentMass, currentPolarity };
                         spawnQueue.finishedWrite(1);
                     }
                 }
@@ -472,14 +473,6 @@ void PhysicsModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce
                     float outputSample = voice.getNextSample();
                     leftOut += outputSample * leftGain;
                     rightOut += outputSample * rightGain;
-                    
-                    // Debug: Log first non-zero sample (throttled to avoid spam)
-                    if (sample == 0 && outputSample != 0.0f && debugCounter++ % 100 == 0)
-                    {
-                        juce::String audioMsg = "Physics: Audio sample = " + juce::String(outputSample)
-                            + " L=" + juce::String(leftOut) + " R=" + juce::String(rightOut);
-                        juce::Logger::writeToLog(audioMsg);
-                    }
                 }
             }
             
@@ -513,11 +506,6 @@ void PhysicsModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce
         float triggerValue = triggerOutputValues[i].load();
         if (triggerValue > 0.0f)
         {
-            // Debug: Log trigger firing
-            static const char* triggerNames[] = { "Main", "Ball", "Square", "Triangle" };
-            juce::String triggerMsg = "Physics: Trigger " + juce::String(triggerNames[i]) + " fired with value " + juce::String(triggerValue);
-            juce::Logger::writeToLog(triggerMsg);
-            
             // Audio is channels 0 & 1. Triggers start at channel 2.
             int triggerOutputChannel = 2 + i;
             if (numChannels > triggerOutputChannel)
@@ -579,7 +567,10 @@ void PhysicsModuleProcessor::timerCallback()
     {
         for (int i = 0; i < size1; ++i)
         {
-            spawnObject(spawnQueueBuffer[start1 + i], 1.0f, {0, 0}, {0, 0}, Polarity::None); // Use default mass for audio thread spawns
+            // REPLACE THIS: spawnObject(spawnQueueBuffer[start1 + i]);
+            // WITH THIS:
+            const auto& request = spawnQueueBuffer[start1 + i];
+            spawnObject(request.type, request.mass, request.position, request.velocity, request.polarity);
         }
     }
 
@@ -588,7 +579,10 @@ void PhysicsModuleProcessor::timerCallback()
     {
         for (int i = 0; i < size2; ++i)
         {
-            spawnObject(spawnQueueBuffer[start2 + i], 1.0f, {0, 0}, {0, 0}, Polarity::None); // Use default mass for audio thread spawns
+            // REPLACE THIS: spawnObject(spawnQueueBuffer[start2 + i]);
+            // WITH THIS:
+            const auto& request = spawnQueueBuffer[start2 + i];
+            spawnObject(request.type, request.mass, request.position, request.velocity, request.polarity);
         }
     }
     
@@ -601,8 +595,6 @@ void PhysicsModuleProcessor::timerCallback()
     auto processStrokeRequest = [&](int startIndex, int numItems) {
         for (int i = 0; i < numItems; ++i)
         {
-            // ADD THIS DEBUG LINE
-            juce::Logger::writeToLog("Physics Thread: Received stroke creation request.");
 
             const auto& request = strokeCreationQueueBuffer[startIndex + i];
 
@@ -772,43 +764,59 @@ void PhysicsModuleProcessor::timerCallback()
     
     // 3. Update any internal state needed for rendering or audio
 
-    // 4. Now it's safe to destroy bodies (world->Step() has finished)
-    for (auto& objPtr : objectsToDestroy)
-    {
-        if (objPtr && objPtr->physicsBody && world)
+    // --- Process Destruction Requests from UI Thread (FINAL, SAFE version) ---
+    { // Use a scope to keep local variables clean
+        // 1. Drain all requests from the lock-free queue into a temporary vector.
+        std::vector<b2Body*> bodiesToDestroyThisFrame;
+        int start1, size1, start2, size2;
+        destructionQueue.prepareToRead(destructionQueue.getNumReady(), start1, size1, start2, size2);
+        if (size1 > 0)
+            bodiesToDestroyThisFrame.insert(bodiesToDestroyThisFrame.end(), destructionQueueBuffer.begin() + start1, destructionQueueBuffer.begin() + start1 + size1);
+        if (size2 > 0)
+            bodiesToDestroyThisFrame.insert(bodiesToDestroyThisFrame.end(), destructionQueueBuffer.begin() + start2, destructionQueueBuffer.begin() + start2 + size2);
+        destructionQueue.finishedRead(size1 + size2);
+
+        // 2. Remove all duplicate pointers. This is the core of the fix.
+        std::sort(bodiesToDestroyThisFrame.begin(), bodiesToDestroyThisFrame.end());
+        bodiesToDestroyThisFrame.erase(std::unique(bodiesToDestroyThisFrame.begin(), bodiesToDestroyThisFrame.end()), bodiesToDestroyThisFrame.end());
+
+        // 3. Now, iterate through the *unique* list and safely destroy everything.
+        for (auto* bodyToDestroy : bodiesToDestroyThisFrame)
         {
-            world->DestroyBody(objPtr->physicsBody);
+            if (bodyToDestroy)
+            {
+                // Remove from our C++ lists first
+                std::erase_if(physicsObjects, [&](const auto& p) { return p && p->physicsBody == bodyToDestroy; });
+                std::erase_if(userStrokes,   [&](const auto& s) { return s.physicsBody == bodyToDestroy; });
+
+                // Now, safely destroy the body from the world ONCE.
+                world->DestroyBody(bodyToDestroy);
+            }
         }
     }
-    // The unique_ptrs are now out of scope, safely deleting the PhysicsObject wrappers.
-    objectsToDestroy.clear();
 
-    // --- Process Destruction Requests from UI Thread ---
-    destructionQueue.prepareToRead(destructionQueue.getNumReady(), start1, size1, start2, size2);
+    // --- Handle Clear All Requests ---
+    if (clearAllRequested.load())
+    {
+        // Clear all non-physics data structures
+        forceObjects.clear();
+        emitters.clear();
+        selectedEmitterIndex = -1;
 
-    auto processDestruction = [&](int startIndex, int numItems) {
-        for (int i = 0; i < numItems; ++i)
+        // Also enqueue any remaining bodies that might not have been caught by the UI
+        for (b2Body* b = world->GetBodyList(); b; b = b->GetNext())
         {
-            b2Body* bodyToDestroy = destructionQueueBuffer[startIndex + i];
-
-            // Find and erase the corresponding stroke from our list
-            userStrokes.erase(
-                std::remove_if(userStrokes.begin(), userStrokes.end(),
-                    [&](const Stroke& stroke) {
-                        return stroke.physicsBody == bodyToDestroy;
-                    }),
-                userStrokes.end()
-            );
-
-            // Now, safely destroy the body
-            world->DestroyBody(bodyToDestroy);
+            int start1, size1, start2, size2;
+            destructionQueue.prepareToWrite(1, start1, size1, start2, size2);
+            if (size1 > 0) {
+                destructionQueueBuffer[start1] = b;
+                destructionQueue.finishedWrite(1);
+            }
         }
-    };
 
-    if (size1 > 0) processDestruction(start1, size1);
-    if (size2 > 0) processDestruction(start2, size2);
+        clearAllRequested = false; // Reset the flag
+    }
 
-    destructionQueue.finishedRead(size1 + size2);
     // --- END OF DESTRUCTION PROCESSING ---
 
     // 6. Calculate CV outputs (median position and velocity for each shape type)
@@ -1112,14 +1120,22 @@ void PhysicsModuleProcessor::drawParametersInNode(float itemWidth, const std::fu
     if (ImGui::RadioButton("N", currentPolarity == Polarity::North)) { currentPolarity = Polarity::North; } ImGui::SameLine();
     if (ImGui::RadioButton("S", currentPolarity == Polarity::South)) { currentPolarity = Polarity::South; }
 
-    // Spawn shape buttons
+    // Spawn shape buttons (Thread-Safe)
     ImGui::Text("Spawn:");
     ImGui::SameLine();
-    if (ImGui::Button("Ball"))     { spawnObject(ShapeType::Circle, currentMass, {0, 0}, {0, 0}, currentPolarity); }
+    auto enqueueSpawn = [&](ShapeType type) {
+        int start1, size1, start2, size2;
+        spawnQueue.prepareToWrite(1, start1, size1, start2, size2);
+        if (size1 > 0) {
+            spawnQueueBuffer[start1] = { type, currentMass, currentPolarity };
+            spawnQueue.finishedWrite(1);
+        }
+    };
+    if (ImGui::Button("Ball"))     { enqueueSpawn(ShapeType::Circle); }
     ImGui::SameLine();
-    if (ImGui::Button("Square"))   { spawnObject(ShapeType::Square, currentMass, {0, 0}, {0, 0}, currentPolarity); }
+    if (ImGui::Button("Square"))   { enqueueSpawn(ShapeType::Square); }
     ImGui::SameLine();
-    if (ImGui::Button("Triangle")) { spawnObject(ShapeType::Triangle, currentMass, {0, 0}, {0, 0}, currentPolarity); }
+    if (ImGui::Button("Triangle")) { enqueueSpawn(ShapeType::Triangle); }
 
     ImGui::SameLine(); ImGui::Text("|"); ImGui::SameLine();
     if (ImGui::Button("Vortex")) {
@@ -1137,27 +1153,9 @@ void PhysicsModuleProcessor::drawParametersInNode(float itemWidth, const std::fu
     // Add a button to clear the drawing
     if (ImGui::Button("Clear All"))
     {
-        // Build a list of ALL objects in the world to destroy
-        // (More robust than relying on potentially stale pointers)
-        std::vector<b2Body*> bodiesToDestroy;
-        for (b2Body* b = world->GetBodyList(); b; b = b->GetNext())
-        {
-            // Add every body in the world to our kill list
-            bodiesToDestroy.push_back(b);
-        }
-
-        // Now it's safe to iterate through our temporary list and destroy the bodies
-        for (auto* body : bodiesToDestroy)
-        {
-            world->DestroyBody(body);
-        }
-
-        // Finally, clear our own data structures (safe because bodies are already destroyed)
-        physicsObjects.clear();
-        userStrokes.clear();
-        forceObjects.clear();
-        emitters.clear();
-        selectedEmitterIndex = -1; // Reset selection
+        // --- THREAD-SAFE CLEAR ---
+        // Set the clear all flag - the physics thread will handle the cleanup
+        clearAllRequested = true;
     }
     
     ImGui::Spacing();
@@ -1347,56 +1345,51 @@ void PhysicsModuleProcessor::drawParametersInNode(float itemWidth, const std::fu
         draw_list->AddRect({mousePos.x - 5, mousePos.y - 5}, {mousePos.x + 5, mousePos.y + 5}, IM_COL32(255, 255, 255, 200));
     }
     
-    // --- Eraser Mode ---
+    // --- Eraser Mode (Thread-Safe) ---
     if (isErasing && is_hovered && ImGui::IsMouseDragging(ImGuiMouseButton_Left))
     {
         juce::Point<float> mousePos = { mouse_pos_in_canvas.x, mouse_pos_in_canvas.y };
-        const float eraseRadius = 15.0f; // The "size" of our eraser tip
+        const float eraseRadius = 15.0f;
+        const float scale = 50.0f;
 
-        // Erase Physics Objects (Thread-Safe)
-        // Loop backwards to safely erase elements from the vector
-        for (int i = (int)physicsObjects.size() - 1; i >= 0; --i)
-        {
-            if (physicsObjects[i] && physicsObjects[i]->physicsBody)
-            {
-                b2Vec2 bodyPos = physicsObjects[i]->physicsBody->GetPosition();
+        // Helper to enqueue a body for destruction
+        auto enqueueDestruction = [&](b2Body* body) {
+            if (body) {
+                int start1, size1, start2, size2;
+                destructionQueue.prepareToWrite(1, start1, size1, start2, size2);
+                if (size1 > 0) {
+                    destructionQueueBuffer[start1] = body;
+                    destructionQueue.finishedWrite(1);
+                }
+            }
+        };
+
+        // Enqueue Physics Objects for destruction
+        for (const auto& objPtr : physicsObjects) {
+            if (objPtr && objPtr->physicsBody) {
+                b2Vec2 bodyPos = objPtr->physicsBody->GetPosition();
                 juce::Point<float> objPos = { bodyPos.x * scale, bodyPos.y * scale };
-
-                if (mousePos.getDistanceFrom(objPos) < eraseRadius)
-                {
-                    // Move to destruction list for safe deletion by physics thread
-                    objectsToDestroy.push_back(std::move(physicsObjects[i]));
-                    physicsObjects.erase(physicsObjects.begin() + i);
+                if (mousePos.getDistanceFrom(objPos) < eraseRadius) {
+                    enqueueDestruction(objPtr->physicsBody);
                 }
             }
         }
 
-        // Erase Strokes (Thread-Safe)
-        for (const auto& stroke : userStrokes)
-        {
-            // Check if any point in the stroke is close to the mouse
-            for (const auto& point : stroke.points)
-            {
-                if (mousePos.getDistanceFrom(point) < eraseRadius)
-                {
-                    // Enqueue the body for destruction by the physics thread
-                    if (stroke.physicsBody)
-                    {
-                        int start1, size1, start2, size2;
-                        destructionQueue.prepareToWrite(1, start1, size1, start2, size2);
-                        if (size1 > 0) {
-                            destructionQueueBuffer[start1] = stroke.physicsBody;
-                            destructionQueue.finishedWrite(1);
-                        }
-                    }
-                    // Break to avoid queueing the same stroke multiple times per drag
-                    goto next_stroke;
+        // Enqueue Strokes for destruction
+        for (const auto& stroke : userStrokes) {
+            for (const auto& point : stroke.points) {
+                if (mousePos.getDistanceFrom(point) < eraseRadius) {
+                    enqueueDestruction(stroke.physicsBody);
+                    goto next_stroke_erase; // Avoid queueing the same stroke multiple times
                 }
             }
-        next_stroke:;
+        next_stroke_erase:;
         }
 
-        // Erase Force Objects
+        // Note: Force objects and emitters are not physics bodies, so they don't need destructionQueue
+        // They can be safely erased directly since they don't affect Box2D state
+
+        // Erase Force Objects (Direct removal - no physics bodies involved)
         const float eraseScale = 50.0f;
         for (int i = (int)forceObjects.size() - 1; i >= 0; --i) {
             juce::Point<float> forcePos = { forceObjects[i].position.x * eraseScale, forceObjects[i].position.y * eraseScale };
@@ -1405,7 +1398,7 @@ void PhysicsModuleProcessor::drawParametersInNode(float itemWidth, const std::fu
             }
         }
 
-        // Erase Emitters
+        // Erase Emitters (Direct removal - no physics bodies involved)
         for (int i = (int)emitters.size() - 1; i >= 0; --i) {
             juce::Point<float> emitterPos = { emitters[i].position.x * eraseScale, emitters[i].position.y * eraseScale };
             float distance = std::sqrt(
@@ -1984,9 +1977,15 @@ void PhysicsModuleProcessor::spawnObject(ShapeType type, float mass, b2Vec2 posi
         // Check if we are at or over the limit
         while (static_cast<int>(physicsObjects.size()) >= maxObjects)
         {
-            // Move the oldest object from the active list to the destruction list.
-            // This transfers ownership and keeps the object alive until we are ready.
-            objectsToDestroy.push_back(std::move(physicsObjects.front()));
+            // Enqueue the oldest object for destruction and remove it from our list
+            if (physicsObjects.front() && physicsObjects.front()->physicsBody) {
+                int start1, size1, start2, size2;
+                destructionQueue.prepareToWrite(1, start1, size1, start2, size2);
+                if (size1 > 0) {
+                    destructionQueueBuffer[start1] = physicsObjects.front()->physicsBody;
+                    destructionQueue.finishedWrite(1);
+                }
+            }
             physicsObjects.pop_front();
         }
     }
