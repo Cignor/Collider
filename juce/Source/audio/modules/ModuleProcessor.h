@@ -66,6 +66,10 @@ struct MidiMessageWithDevice {
 // Defines the data type of a modulation or audio signal
 enum class PinDataType { CV, Audio, Gate, Raw };
 
+// Forward declare NodeWidth enum (defined in ImGuiNodeEditorComponent.h)
+// This avoids circular dependency while allowing ModulePinInfo to store it
+enum class NodeWidth;
+
 // Describes a single audio/CV input or output pin
 struct AudioPin
 {
@@ -99,14 +103,18 @@ struct ModPin
 // A collection of all pins for a given module type
 struct ModulePinInfo
 {
+    NodeWidth defaultWidth;  // Standardized node width category
     std::vector<AudioPin> audioIns;
     std::vector<AudioPin> audioOuts;
     std::vector<ModPin> modIns;
-    ModulePinInfo() = default;
-    ModulePinInfo(std::initializer_list<AudioPin> ins,
+    
+    ModulePinInfo() : defaultWidth(static_cast<NodeWidth>(0)) {}  // Default to Small (0)
+    
+    ModulePinInfo(NodeWidth width,
+                  std::initializer_list<AudioPin> ins,
                   std::initializer_list<AudioPin> outs,
                   std::initializer_list<ModPin> mods)
-        : audioIns(ins), audioOuts(outs), modIns(mods) {}
+        : defaultWidth(width), audioIns(ins), audioOuts(outs), modIns(mods) {}
 };
 
 // Forward declaration for NodePinHelpers
@@ -152,6 +160,16 @@ public:
 
     // Optional UI hook for drawing IO pins inside nodes
     virtual void drawIoPins(const NodePinHelpers& /*helpers*/) {}
+
+#if defined(PRESET_CREATOR_UI)
+    // Optional UI hook for modules that need custom node dimensions (Exception size category)
+    // Return ImVec2(width, height) for custom size, or ImVec2(0, 0) to use default from PinDatabase
+    // Height of 0 means auto-size to content (recommended for most cases)
+    virtual ImVec2 getCustomNodeSize() const 
+    { 
+        return ImVec2(0.0f, 0.0f); // Default: use PinDatabase size
+    }
+#endif
 
 
     // Get the current output value for a channel (for visualization)

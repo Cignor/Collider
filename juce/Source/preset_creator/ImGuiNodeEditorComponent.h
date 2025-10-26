@@ -19,6 +19,31 @@ struct ImGuiContext; struct ImGuiIO; struct ImNodesContext;
 class MIDIPlayerModuleProcessor;
 class MultiSequencerModuleProcessor;
 
+// === NODE SIZING SYSTEM ===
+// Standardized node width categories for consistent visual layout
+enum class NodeWidth 
+{ 
+    Small,      // 240px - Basic modules (VCO, VCA, simple utilities)
+    Medium,     // 360px - Effects with visualizations (Reverb, Chorus, Phaser)
+    Big,        // 480px - Complex modules (PolyVCO, advanced effects)
+    ExtraWide,  // 840px - Timeline/grid modules (MultiSequencer, MIDI Player)
+    Exception   // Custom size - Module defines its own dimensions via getCustomNodeSize()
+};
+
+// Helper function to convert NodeWidth category to pixel width
+inline float getWidthForCategory(NodeWidth width)
+{
+    switch (width)
+    {
+        case NodeWidth::Medium:    return 360.0f;
+        case NodeWidth::Big:       return 480.0f;
+        case NodeWidth::ExtraWide: return 840.0f;
+        case NodeWidth::Exception: return 0.0f;  // Signals that module provides custom size
+        case NodeWidth::Small:
+        default:                   return 360.0f;
+    }
+}
+
 // Pin information struct for node editor
 struct PinInfo {
     uint32_t id;      // The unique ID of the pin

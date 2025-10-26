@@ -2156,78 +2156,57 @@ if (auto* mp = synth->getModuleForLogical (lid))
                     ImGui::EndTooltip();
                 }
             };
-            helpers.drawAudioOutputPin = [&](const char* label, int channel)
-            {
-                const int attr = encodePinId({(juce::uint32)lid, channel, false});
-                seenAttrs.insert(attr);
-                availableAttrs.insert(attr);
 
-                PinID pinId = {(juce::uint32)lid, channel, false, false, ""};
-                PinDataType pinType = this->getPinDataTypeForPin(pinId);
-                unsigned int pinColor = this->getImU32ForType(pinType);
-                bool isConnected = connectedOutputAttrs.count(attr) > 0;
-
-                ImNodes::PushColorStyle(ImNodesCol_Pin, isConnected ? colPinConnected : pinColor);
-
-                // Two-column layout: column 0 (label, right-aligned), column 1 (pin)
-                ImGui::PushID(attr);
-                ImGui::Columns(2, "out_pin_cols", false);
-                const float pinColumnWidth = 18.0f;
-                const float nodeWidth = ImNodes::GetNodeDimensions(lid).x;
-                const float textColumnWidth = juce::jmax(24.0f, nodeWidth - pinColumnWidth - ImGui::GetStyle().ItemSpacing.x);
-                ImGui::SetColumnWidth(0, textColumnWidth);
-                ImGui::SetColumnWidth(1, pinColumnWidth);
-
-                // Column 0: right-align the label within this column
+                // NEW CLEAN OUTPUT PIN TEXT FUNCTION - FIXED SPACING
+                helpers.drawAudioOutputPin = [&](const char* label, int channel)
                 {
-                    float textWidth = ImGui::CalcTextSize(label).x;
-                    float startX    = ImGui::GetCursorPosX();
-                    // Minimal padding (2px) between text and pin for tighter layout
-                    float targetX   = startX + juce::jmax(0.0f, textColumnWidth - textWidth - 2.0f);
-                    ImGui::SetCursorPosX(targetX);
+                    const int attr = encodePinId({(juce::uint32)lid, channel, false});
+                    seenAttrs.insert(attr);
+                    availableAttrs.insert(attr);
+
+                    PinID pinId = {(juce::uint32)lid, channel, false, false, ""};
+                    PinDataType pinType = this->getPinDataTypeForPin(pinId);
+                    unsigned int pinColor = this->getImU32ForType(pinType);
+                    bool isConnected = connectedOutputAttrs.count(attr) > 0;
+
+                    ImNodes::PushColorStyle(ImNodesCol_Pin, isConnected ? colPinConnected : pinColor);
+
+                    // EXACT OFFICIAL PATTERN: Text right-aligned, pin touches text edge
+                    ImNodes::BeginOutputAttribute(attr);
+                    const float label_width = ImGui::CalcTextSize(label).x;
+                    ImGui::Indent(nodeContentWidth - label_width);  // Right-align to content width
                     ImGui::TextUnformatted(label);
-                }
+                    ImGui::Unindent(nodeContentWidth - label_width);
+                    ImNodes::EndOutputAttribute();
 
-                // Column 1: output attribute (pin)
-                ImGui::NextColumn();
-                ImNodes::BeginOutputAttribute(attr);
-                ImGui::Dummy(ImVec2(1.0f, ImGui::GetTextLineHeight()));
-                ImNodes::EndOutputAttribute();
-
-                // Cache pin center
-                {
-                    ImVec2 pinMin = ImGui::GetItemRectMin();
-                    ImVec2 pinMax = ImGui::GetItemRectMax();
-                    float centerY = (pinMin.y + pinMax.y) * 0.5f;
-                    float x_pos   = pinMax.x;
-                    attrPositions[attr] = ImVec2(x_pos, centerY);
-                }
-
-                // Restore single column
-                ImGui::Columns(1);
-                ImGui::PopID();
-
-                ImNodes::PopColorStyle();
-
-                if (ImGui::IsItemHovered())
-                {
-                    ImGui::BeginTooltip();
-                    if (isConnected) {
-                        ImGui::TextColored(ImVec4(0.5f, 1.0f, 0.5f, 1.0f), "Connected");
-                    } else {
-                        ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1.0f), "Not Connected");
-                    }
-                    // Show pin data type
-                    ImGui::Text("Type: %s", this->pinDataTypeToString(pinType));
-                    // Show the existing value tooltip
-                    if (auto* mp = synth->getModuleForLogical(lid))
+                    // Cache pin center
                     {
-                        float value = mp->getOutputChannelValue(channel);
-                        ImGui::Text("Value: %.3f", value);
+                        ImVec2 pinMin = ImGui::GetItemRectMin();
+                        ImVec2 pinMax = ImGui::GetItemRectMax();
+                        float centerY = (pinMin.y + pinMax.y) * 0.5f;
+                        float x_pos   = pinMax.x;
+                        attrPositions[attr] = ImVec2(x_pos, centerY);
                     }
-                    ImGui::EndTooltip();
-                }
-            };
+
+                    ImNodes::PopColorStyle();
+
+                    if (ImGui::IsItemHovered())
+                    {
+                        ImGui::BeginTooltip();
+                        if (isConnected) {
+                            ImGui::TextColored(ImVec4(0.5f, 1.0f, 0.5f, 1.0f), "Connected");
+                        } else {
+                            ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1.0f), "Not Connected");
+                        }
+                        ImGui::Text("Type: %s", this->pinDataTypeToString(pinType));
+                        if (auto* mp = synth->getModuleForLogical(lid))
+                        {
+                            float value = mp->getOutputChannelValue(channel);
+                            ImGui::Text("Value: %.3f", value);
+                        }
+                        ImGui::EndTooltip();
+                    }
+                };
 
             // ADD THE NEW drawParallelPins HELPER
             helpers.drawParallelPins = [&](const char* inLabel, int inChannel, const char* outLabel, int outChannel)
@@ -2272,12 +2251,11 @@ if (auto* mp = synth->getModuleForLogical (lid))
                 ImGui::NextColumn();
                 if (outLabel != nullptr)
                 {
-                    float textW = ImGui::CalcTextSize(outLabel).x;
-                    float startX = ImGui::GetCursorPosX();
-                    // Minimal padding (2px) between text and pin for tighter layout
-                    float targetX = startX + juce::jmax(0.0f, labelColW - textW - 2.0f);
-                    ImGui::SetCursorPosX(targetX);
+                    // EXACT OFFICIAL PATTERN: Same as regular output pins
+                    const float textW = ImGui::CalcTextSize(outLabel).x;
+                    ImGui::Indent(labelColW - textW);  // Right-align to column width
                     ImGui::TextUnformatted(outLabel);
+                    ImGui::Unindent(labelColW - textW);
                 }
 
                 // Column 2: Output pin
