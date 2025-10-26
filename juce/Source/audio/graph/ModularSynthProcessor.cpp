@@ -63,6 +63,7 @@
 #include "../modules/MIDIPadModuleProcessor.h"
 #include "../modules/MidiLoggerModuleProcessor.h"
 #include "../modules/TempoClockModuleProcessor.h"
+#include "../modules/PhysicsModuleProcessor.h"
 #include "../modules/InletModuleProcessor.h"
 #include "../modules/OutletModuleProcessor.h"
 #include "../modules/MetaModuleProcessor.h"
@@ -162,6 +163,9 @@ ModularSynthProcessor::MidiActivityState ModularSynthProcessor::getMidiActivityS
 void ModularSynthProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midiMessages)
 {
     try {
+        // NOTE: Both tempo and division control flags are managed by Tempo Clock modules directly
+        // No resets here to avoid flickering in UI
+        
         // --- ADD THIS LOGGING BLOCK ---
         if (!midiMessages.isEmpty())
         {
@@ -711,6 +715,7 @@ namespace {
             reg("midipads", []{ return std::make_unique<MIDIPadModuleProcessor>(); });
             reg("midi logger", []{ return std::make_unique<MidiLoggerModuleProcessor>(); });
             reg("tempo clock", []{ return std::make_unique<TempoClockModuleProcessor>(); });
+            reg("physics", []{ return std::make_unique<PhysicsModuleProcessor>(); });
             
             reg("meta module", []{ return std::make_unique<MetaModuleProcessor>(); });
             reg("metamodule", []{ return std::make_unique<MetaModuleProcessor>(); });

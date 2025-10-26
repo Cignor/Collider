@@ -351,7 +351,7 @@ public:
     void handleCollapseToMetaModule();
     
     // --- Module Category Color Coding ---
-    enum class ModuleCategory { Source, Effect, Modulator, Utility, Analysis, Comment, Plugin, MIDI };
+    enum class ModuleCategory { Source, Effect, Modulator, Utility, Analysis, Comment, Plugin, MIDI, Physics };
     ModuleCategory getModuleCategory(const juce::String& moduleType);
     unsigned int getImU32ForCategory(ModuleCategory category, bool hovered = false);
     

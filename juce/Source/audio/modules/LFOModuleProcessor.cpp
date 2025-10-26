@@ -1,4 +1,5 @@
 #include "LFOModuleProcessor.h"
+#include "../graph/ModularSynthProcessor.h"
 
 LFOModuleProcessor::LFOModuleProcessor()
     // CORRECTED: Use a single input bus with 3 discrete channels
@@ -68,8 +69,13 @@ void LFOModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::Mi
     const bool syncEnabled = syncParam->load() > 0.5f;
     int rateDivisionIndex = static_cast<int>(rateDivisionParam->load());
     // If a global division is broadcast by a master clock, adopt it when sync is enabled
-    if (syncEnabled && m_currentTransport.globalDivisionIndex >= 0)
-        rateDivisionIndex = m_currentTransport.globalDivisionIndex;
+    // IMPORTANT: Read from parent's LIVE transport state, not cached copy (which is stale)
+    if (syncEnabled && getParent())
+    {
+        int globalDiv = getParent()->getTransportState().globalDivisionIndex.load();
+        if (globalDiv >= 0)
+            rateDivisionIndex = globalDiv;
+    }
 
     // Rate division map: 1/32, 1/16, 1/8, 1/4, 1/2, 1, 2, 4, 8
     static const double divisions[] = { 1.0/32.0, 1.0/16.0, 1.0/8.0, 1.0/4.0, 1.0/2.0, 1.0, 2.0, 4.0, 8.0 };
@@ -236,14 +242,40 @@ void LFOModuleProcessor::drawParametersInNode(float itemWidth, const std::functi
     
     if (sync)
     {
-        // Division combo
-        int division = static_cast<int>(rateDivisionParam->load());
+        // Check if global division is active (Tempo Clock override)
+        // IMPORTANT: Read from parent's LIVE transport state, not cached copy
+        int globalDiv = getParent() ? getParent()->getTransportState().globalDivisionIndex.load() : -1;
+        bool isGlobalDivisionActive = globalDiv >= 0;
+        int division = isGlobalDivisionActive ? globalDiv : static_cast<int>(rateDivisionParam->load());
+        
         const char* items[] = { "1/32", "1/16", "1/8", "1/4", "1/2", "1", "2", "4", "8" };
+        
+        // Grey out if controlled by Tempo Clock
+        if (isGlobalDivisionActive) ImGui::BeginDisabled();
+        
         if (ImGui::Combo("Division", &division, items, (int)(sizeof(items)/sizeof(items[0]))))
-            *dynamic_cast<juce::AudioParameterChoice*>(ap.getParameter(paramIdRateDivision)) = division;
-        if (ImGui::IsItemDeactivatedAfterEdit()) onModificationEnded();
-        ImGui::SameLine();
-        HelpMarkerLFO("Note division for tempo sync\n1/16 = sixteenth notes, 1 = whole notes, etc.");
+            if (!isGlobalDivisionActive)
+                *dynamic_cast<juce::AudioParameterChoice*>(ap.getParameter(paramIdRateDivision)) = division;
+        if (ImGui::IsItemDeactivatedAfterEdit() && !isGlobalDivisionActive) onModificationEnded();
+        
+        if (isGlobalDivisionActive)
+        {
+            ImGui::EndDisabled();
+            if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
+            {
+                ImGui::BeginTooltip();
+                ImGui::PushTextWrapPos(ImGui::GetFontSize() * 25.0f);
+                ImGui::TextColored(ImVec4(1.0f, 0.8f, 0.0f, 1.0f), "Tempo Clock Division Override Active");
+                ImGui::TextUnformatted("A Tempo Clock node with 'Division Override' enabled is controlling the global division.");
+                ImGui::PopTextWrapPos();
+                ImGui::EndTooltip();
+            }
+        }
+        else
+        {
+            ImGui::SameLine();
+            HelpMarkerLFO("Note division for tempo sync\n1/16 = sixteenth notes, 1 = whole notes, etc.");
+        }
     }
 
     ImGui::Spacing();

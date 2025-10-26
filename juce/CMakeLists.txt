@@ -79,6 +79,18 @@ FetchContent_Declare(imgui_juce_fc
 FetchContent_MakeAvailable(imgui_juce_fc)
 
 # --------------------------------------------------------------
+# Box2D (2D physics engine for physics-based audio module)
+# --------------------------------------------------------------
+FetchContent_Declare(box2d_fc
+    GIT_REPOSITORY https://github.com/erincatto/box2d.git
+    GIT_TAG v2.4.1
+)
+set(BOX2D_BUILD_UNIT_TESTS OFF CACHE BOOL "" FORCE)
+set(BOX2D_BUILD_TESTBED OFF CACHE BOOL "" FORCE)
+set(BOX2D_BUILD_DOCS OFF CACHE BOOL "" FORCE)
+FetchContent_MakeAvailable(box2d_fc)
+
+# --------------------------------------------------------------
 # Rubber Band (optional, real-time timestretcher/pitch-shifter)
 # --------------------------------------------------------------
 set(USE_RUBBERBAND ON CACHE BOOL "Enable Rubber Band time/pitch processing")
@@ -287,6 +299,8 @@ target_sources(ColliderApp PRIVATE
     Source/audio/modules/MidiLoggerModuleProcessor.cpp
     Source/audio/modules/TempoClockModuleProcessor.h
     Source/audio/modules/TempoClockModuleProcessor.cpp
+    Source/audio/modules/PhysicsModuleProcessor.h
+    Source/audio/modules/PhysicsModuleProcessor.cpp
     Source/ipc/IpcServer.cpp
     Source/ipc/IpcServer.h
     Source/ipc/OscClient.h
@@ -315,6 +329,7 @@ target_link_libraries(ColliderApp PRIVATE
     juce::juce_dsp
     juce::juce_osc
     soundtouch
+    box2d
     $<$<BOOL:${USE_RUBBERBAND}>:${RUBBERBAND_TARGET}>
     # Piper TTS libraries (pre-built)
     ${ONNXRUNTIME_DIR}/lib/onnxruntime.lib
@@ -513,6 +528,8 @@ target_sources(PresetCreatorApp PRIVATE
     Source/audio/modules/MidiLoggerModuleProcessor.cpp
     Source/audio/modules/TempoClockModuleProcessor.h
     Source/audio/modules/TempoClockModuleProcessor.cpp
+    Source/audio/modules/PhysicsModuleProcessor.h
+    Source/audio/modules/PhysicsModuleProcessor.cpp
 )
 
 # This target now needs to know where to find all the headers
@@ -554,6 +571,7 @@ target_link_libraries(PresetCreatorApp PRIVATE
     juce::juce_dsp
     imgui_impl_juce
     soundtouch
+    box2d
     $<$<BOOL:${USE_RUBBERBAND}>:${RUBBERBAND_TARGET}>
     # Piper TTS libraries (pre-built)
     ${ONNXRUNTIME_DIR}/lib/onnxruntime.lib

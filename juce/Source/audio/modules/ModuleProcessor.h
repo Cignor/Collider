@@ -20,7 +20,35 @@ struct TransportState {
     double songPositionBeats = 0.0;
     double songPositionSeconds = 0.0;
     // Optional global division broadcast from a master tempo/clock (-1 means inactive)
-    int globalDivisionIndex = -1;
+    std::atomic<int> globalDivisionIndex { -1 };
+    // Flag to indicate if a Tempo Clock module is controlling the BPM (for UI feedback)
+    std::atomic<bool> isTempoControlledByModule { false };
+    
+    // Custom copy constructor (atomics are not copyable by default)
+    TransportState() = default;
+    TransportState(const TransportState& other)
+        : isPlaying(other.isPlaying)
+        , bpm(other.bpm)
+        , songPositionBeats(other.songPositionBeats)
+        , songPositionSeconds(other.songPositionSeconds)
+        , globalDivisionIndex(other.globalDivisionIndex.load())
+        , isTempoControlledByModule(other.isTempoControlledByModule.load())
+    {}
+    
+    // Custom copy assignment operator
+    TransportState& operator=(const TransportState& other)
+    {
+        if (this != &other)
+        {
+            isPlaying = other.isPlaying;
+            bpm = other.bpm;
+            songPositionBeats = other.songPositionBeats;
+            songPositionSeconds = other.songPositionSeconds;
+            globalDivisionIndex.store(other.globalDivisionIndex.load());
+            isTempoControlledByModule.store(other.isTempoControlledByModule.load());
+        }
+        return *this;
+    }
 };
 
 // <<< MULTI-MIDI DEVICE SUPPORT >>>

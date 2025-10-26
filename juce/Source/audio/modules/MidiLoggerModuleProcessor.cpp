@@ -1,4 +1,5 @@
 #include "MidiLoggerModuleProcessor.h"
+#include "../graph/ModularSynthProcessor.h" // Needed for connection queries
 #include <juce_gui_basics/juce_gui_basics.h> // Needed for FileChooser
 #include <algorithm>
 
@@ -346,16 +347,24 @@ void MidiLoggerModuleProcessor::drawParametersInNode(float /*itemWidth*/, const 
     const float scrollX = ImGui::GetScrollX();
     const float scrollY = ImGui::GetScrollY();
 
-    // --- 3. TIMELINE RULER ---
+    // --- 3. TIMELINE RULER (UPGRADED: Matches MIDI Player) ---
     const double samplesPerBeat = (60.0 / currentBpm) * currentSampleRate;
     const float pixelsPerBeat = zoomX;
     const int loopLengthBars = loopLengthParam ? loopLengthParam->get() : 4;
     const float totalWidth = loopLengthBars * 4.0f * pixelsPerBeat;
 
+    // CRITICAL: Reserve space for the ENTIRE timeline content so scrolling works properly
+    ImGui::Dummy(ImVec2(totalWidth, timelineHeight));
+    
+    // Get the screen position for drawing (AFTER Dummy)
+    const ImVec2 timelineStartPos = ImGui::GetItemRectMin();
+    
     // Draw timeline background (only visible portion for performance)
+    const float visibleLeft = timelineStartPos.x;
+    const float visibleRight = visibleLeft + nodeWidth;
     drawList->AddRectFilled(
-        windowPos, 
-        ImVec2(windowPos.x + nodeWidth, windowPos.y + timelineHeight), 
+        ImVec2(visibleLeft, timelineStartPos.y), 
+        ImVec2(visibleRight, timelineStartPos.y + timelineHeight), 
         IM_COL32(30, 30, 30, 255)
     );
     
@@ -371,13 +380,13 @@ void MidiLoggerModuleProcessor::drawParametersInNode(float /*itemWidth*/, const 
         const bool isBarLine = (beatIndex % 4 == 0);
         const int barNumber = beatIndex / 4;
         
-        // Calculate screen position (accounting for scroll)
-        const float x = windowPos.x + (beatIndex * pixelsPerBeat) - scrollX;
+        // Calculate absolute position in content space
+        const float x = timelineStartPos.x + (beatIndex * pixelsPerBeat);
         
         // Draw the vertical line
         drawList->AddLine(
-            ImVec2(x, windowPos.y),
-            ImVec2(x, windowPos.y + timelineHeight),
+            ImVec2(x, timelineStartPos.y),
+            ImVec2(x, timelineStartPos.y + timelineHeight),
             isBarLine ? IM_COL32(140, 140, 140, 255) : IM_COL32(70, 70, 70, 255),
             isBarLine ? 2.0f : 1.0f
         );
@@ -387,14 +396,14 @@ void MidiLoggerModuleProcessor::drawParametersInNode(float /*itemWidth*/, const 
         {
             char label[8];
             snprintf(label, sizeof(label), "%d", barNumber + 1);
-            drawList->AddText(ImVec2(x + 4, windowPos.y + 4), IM_COL32(220, 220, 220, 255), label);
+            drawList->AddText(ImVec2(x + 4, timelineStartPos.y + 4), IM_COL32(220, 220, 220, 255), label);
         }
     }
 
     // --- 4. TRACK HEADERS ---
     // Draw track names and controls on the left side
     const float trackHeight = 40.0f;
-    ImGui::SetCursorScreenPos(ImVec2(windowPos.x, windowPos.y + timelineHeight));
+    ImGui::SetCursorScreenPos(ImVec2(windowPos.x, timelineStartPos.y + timelineHeight));
 
     ImGui::BeginChild("TrackHeaders", ImVec2(trackHeaderWidth, contentHeight - timelineHeight), false);
     for (size_t i = 0; i < tracks.size(); ++i)
@@ -433,7 +442,12 @@ void MidiLoggerModuleProcessor::drawParametersInNode(float /*itemWidth*/, const 
     ImGui::BeginChild("PianoRoll", ImVec2(0, contentHeight - timelineHeight), false, 
                       ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoMove);
     
-    const ImVec2 gridStartPos = ImGui::GetCursorScreenPos();
+    // CRITICAL: Reserve space for ENTIRE piano roll content (width × height)
+    const float pianoRollHeight = std::max(100.0f, (float)tracks.size() * trackHeight);
+    ImGui::Dummy(ImVec2(totalWidth, pianoRollHeight));
+    
+    // Get the piano roll area bounds (AFTER Dummy)
+    const ImVec2 gridStartPos = ImGui::GetItemRectMin();
 
     // A. Draw Grid Background (horizontal lines for tracks)
     for (size_t i = 0; i < tracks.size(); ++i)
@@ -468,15 +482,11 @@ void MidiLoggerModuleProcessor::drawParametersInNode(float /*itemWidth*/, const 
             const float noteStartX_samples = (float)ev.startTimeInSamples;
             const float noteEndX_samples = (float)(ev.startTimeInSamples + ev.durationInSamples);
 
-            // Convert sample time to pixel position
-            const float noteStartX_px = windowPos.x + (noteStartX_samples / samplesPerBeat) * pixelsPerBeat - scrollX;
-            const float noteEndX_px = windowPos.x + (noteEndX_samples / samplesPerBeat) * pixelsPerBeat - scrollX;
+            // Convert sample time to pixel position (ABSOLUTE positioning - no scroll subtraction)
+            const float noteStartX_px = gridStartPos.x + (noteStartX_samples / samplesPerBeat) * pixelsPerBeat;
+            const float noteEndX_px = gridStartPos.x + (noteEndX_samples / samplesPerBeat) * pixelsPerBeat;
 
-            // --- CULLING (Performance Optimization) ---
-            // Don't draw notes that are completely outside the visible area
-            if (noteEndX_px < windowPos.x || noteStartX_px > windowPos.x + nodeWidth) {
-                continue;
-            }
+            // ImGui handles clipping automatically - no manual culling needed
 
             // Stack notes on a single line per track for now
             // (A full piano roll would use `ev.pitch` to determine the Y position)
@@ -502,28 +512,51 @@ void MidiLoggerModuleProcessor::drawParametersInNode(float /*itemWidth*/, const 
         }
     }
 
-    // Reserve space for scroll area
-    ImGui::Dummy(ImVec2(totalWidth, std::max(100.0f, (float)tracks.size() * trackHeight)));
-
-    ImGui::EndChild();
-
-    // --- 6. PLAYHEAD (Draws on top of notes) ---
+    // --- 6. PLAYHEAD (CRITICAL: Must be INSIDE BeginChild/EndChild for clipping!) ---
+    // Draw playhead at its absolute position in the content (ImGui clips to child window)
     if (samplesPerBeat > 0)
     {
-        const float playheadX = windowPos.x + (playheadPositionSamples / samplesPerBeat) * pixelsPerBeat - scrollX;
+        const float playheadX = gridStartPos.x + (playheadPositionSamples / samplesPerBeat) * pixelsPerBeat;
         
-        if (playheadX >= windowPos.x && playheadX <= windowPos.x + nodeWidth)
-        {
-            drawList->AddLine(
-                ImVec2(playheadX, windowPos.y),
-                ImVec2(playheadX, windowPos.y + contentHeight),
-                IM_COL32(255, 255, 0, 200), // Yellow playhead
-                2.0f
-            );
-        }
+        drawList->AddLine(
+            ImVec2(playheadX, gridStartPos.y),
+            ImVec2(playheadX, gridStartPos.y + pianoRollHeight),
+            IM_COL32(255, 255, 0, 200), // Yellow playhead
+            2.0f
+        );
+        
+        // Draw a triangle handle at the top for visual reference
+        drawList->AddTriangleFilled(
+            ImVec2(playheadX, gridStartPos.y),
+            ImVec2(playheadX - 6.0f, gridStartPos.y + 10.0f),
+            ImVec2(playheadX + 6.0f, gridStartPos.y + 10.0f),
+            IM_COL32(255, 255, 0, 255)
+        );
     }
+    
+    ImGui::EndChild();
 
     ImGui::EndChild();
+    
+    // --- 7. CLICK-TO-SEEK INTERACTION (New feature from MIDI Player) ---
+    // Check if user clicked in the MainContent child window
+    if (ImGui::IsItemHovered() && ImGui::IsMouseClicked(ImGuiMouseButton_Left))
+    {
+        // CRITICAL FIX: Get the child window's screen bounds (the item we just ended)
+        ImVec2 childWindowMin = ImGui::GetItemRectMin(); // Top-left of visible child window
+        float mouseX = ImGui::GetMousePos().x;
+        
+        // Calculate timeline position: mouse relative to visible window + scroll offset
+        float relativeX = (mouseX - childWindowMin.x) + scrollX;
+        double newTimeSamples = (relativeX / pixelsPerBeat) * samplesPerBeat;
+        
+        // Clamp to valid range
+        const double loopEndSamples = loopLengthBars * 4 * samplesPerBeat;
+        newTimeSamples = juce::jlimit(0.0, loopEndSamples, newTimeSamples);
+        
+        // Set the new playhead position
+        playheadPositionSamples = (int64_t)newTimeSamples;
+    }
     
     // --- DEBUG INFO ---
     ImGui::Text("Playhead: %.2f beats | %d tracks", 
@@ -614,7 +647,40 @@ void MidiLoggerModuleProcessor::ensureTrackExists(int trackIndex)
         if (tracks[trackIndex] == nullptr)
         {
             tracks[trackIndex] = std::make_unique<MidiTrack>();
-            tracks[trackIndex]->name = "Track " + juce::String(trackIndex + 1);
+            
+            // SMART NAMING: Get the name of the connected source node
+            juce::String trackName = "Track " + juce::String(trackIndex + 1); // Default name
+            
+            if (auto* parent = getParent())
+            {
+                // Get my own logical ID and all connections
+                const juce::uint32 myLogicalId = getLogicalId();
+                auto connections = parent->getConnectionsInfo();
+                
+                // Calculate the gate input channel for this track (track i uses channels i*3, i*3+1, i*3+2)
+                const int gateChannel = trackIndex * 3 + 0;
+                
+                // Find what's connected to this track's gate input
+                for (const auto& conn : connections)
+                {
+                    // Check if this connection is to our gate input
+                    if (conn.dstLogicalId == myLogicalId && 
+                        conn.dstChan == gateChannel && 
+                        !conn.dstIsOutput)
+                    {
+                        // Get the source module
+                        if (auto* sourceModule = parent->getModuleForLogical(conn.srcLogicalId))
+                        {
+                            trackName = sourceModule->getName();
+                            juce::Logger::writeToLog("[MIDI Logger] Track " + juce::String(trackIndex + 1) + 
+                                                    " auto-named: \"" + trackName + "\" (from connected node)");
+                            break;
+                        }
+                    }
+                }
+            }
+            
+            tracks[trackIndex]->name = trackName;
             // We need to inform the UI that the pins have changed.
             updateHostDisplay();
         }

@@ -1,4 +1,5 @@
 #include "StepSequencerModuleProcessor.h"
+#include "../graph/ModularSynthProcessor.h"
 #include <iostream>
 #include <array>
 
@@ -304,7 +305,15 @@ void StepSequencerModuleProcessor::processBlock (juce::AudioBuffer<float>& buffe
         if (syncEnabled && m_currentTransport.isPlaying)
         {
             // SYNC MODE: Use the global beat position
-            const int divisionIndex = (int)apvts.getRawParameterValue("rate_division")->load();
+            int divisionIndex = (int)apvts.getRawParameterValue("rate_division")->load();
+            // Use global division if a Tempo Clock has override enabled
+            // IMPORTANT: Read from parent's LIVE transport state, not cached copy (which is stale)
+            if (getParent())
+            {
+                int globalDiv = getParent()->getTransportState().globalDivisionIndex.load();
+                if (globalDiv >= 0)
+                    divisionIndex = globalDiv;
+            }
             static const double divisions[] = { 1.0/32.0, 1.0/16.0, 1.0/8.0, 1.0/4.0, 1.0/2.0, 1.0, 2.0, 4.0, 8.0 };
             const double beatDivision = divisions[juce::jlimit(0, 8, divisionIndex)];
             
@@ -676,11 +685,36 @@ void StepSequencerModuleProcessor::drawParametersInNode (float itemWidth, const 
     ImGui::PushItemWidth(itemWidth);
     if (sync)
     {
-        int division = (int)apvts.getRawParameterValue("rate_division")->load();
+        // Check if global division is active (Tempo Clock override)
+        // IMPORTANT: Read from parent's LIVE transport state, not cached copy
+        int globalDiv = getParent() ? getParent()->getTransportState().globalDivisionIndex.load() : -1;
+        bool isGlobalDivisionActive = globalDiv >= 0;
+        int division = isGlobalDivisionActive ? globalDiv : (int)apvts.getRawParameterValue("rate_division")->load();
+        
+        // Grey out if controlled by Tempo Clock
+        if (isGlobalDivisionActive) ImGui::BeginDisabled();
+        
         if (ImGui::Combo("Division", &division, "1/32\0""1/16\0""1/8\0""1/4\0""1/2\0""1\0""2\0""4\0""8\0\0"))
         {
-            if (auto* p = dynamic_cast<juce::AudioParameterChoice*>(apvts.getParameter("rate_division"))) *p = division;
-            onModificationEnded();
+            if (!isGlobalDivisionActive)
+            {
+                if (auto* p = dynamic_cast<juce::AudioParameterChoice*>(apvts.getParameter("rate_division"))) *p = division;
+                onModificationEnded();
+            }
+        }
+        
+        if (isGlobalDivisionActive)
+        {
+            ImGui::EndDisabled();
+            if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
+            {
+                ImGui::BeginTooltip();
+                ImGui::PushTextWrapPos(ImGui::GetFontSize() * 25.0f);
+                ImGui::TextColored(ImVec4(1.0f, 0.8f, 0.0f, 1.0f), "Tempo Clock Division Override Active");
+                ImGui::TextUnformatted("A Tempo Clock node with 'Division Override' enabled is controlling the global division.");
+                ImGui::PopTextWrapPos();
+                ImGui::EndTooltip();
+            }
         }
     }
     else

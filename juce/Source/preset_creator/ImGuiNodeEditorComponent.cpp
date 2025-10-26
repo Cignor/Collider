@@ -802,11 +802,30 @@ void ImGuiNodeEditorComponent::renderImGui()
             
             ImGui::SameLine();
             
-            // BPM control
+            // BPM control (greyed out if controlled by Tempo Clock module)
             float bpm = static_cast<float>(transportState.bpm);
             ImGui::SetNextItemWidth(80.0f);
+            
+            bool isControlled = transportState.isTempoControlledByModule.load();
+            if (isControlled)
+                ImGui::BeginDisabled();
+                
             if (ImGui::DragFloat("BPM", &bpm, 0.1f, 20.0f, 999.0f, "%.1f"))
                 synth->setBPM(static_cast<double>(bpm));
+                
+            if (isControlled)
+            {
+                ImGui::EndDisabled();
+                if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
+                {
+                    ImGui::BeginTooltip();
+                    ImGui::PushTextWrapPos(ImGui::GetFontSize() * 25.0f);
+                    ImGui::TextColored(ImVec4(1.0f, 0.8f, 0.0f, 1.0f), "Tempo Clock Module Active");
+                    ImGui::TextUnformatted("A Tempo Clock node with 'Sync to Host' disabled is controlling the global BPM.");
+                    ImGui::PopTextWrapPos();
+                    ImGui::EndTooltip();
+                }
+            }
             
             ImGui::SameLine();
             
@@ -1408,6 +1427,13 @@ void ImGuiNodeEditorComponent::renderImGui()
 
         addModuleButton("TTS Performer", "TTS Performer");
         addModuleButton("Vocal Tract Filter", "Vocal Tract Filter");
+    }
+    
+    pushCategoryColor(ModuleCategory::Physics);
+    bool physicsFamilyExpanded = ImGui::CollapsingHeader("Physics Family", ImGuiTreeNodeFlags_DefaultOpen);
+    ImGui::PopStyleColor(3);
+    if (physicsFamilyExpanded) {
+        addModuleButton("Physics", "physics");
     }
     
     pushCategoryColor(ModuleCategory::Effect);
@@ -3433,6 +3459,10 @@ if (auto* mp = synth->getModuleForLogical (lid))
                 if (ImGui::BeginMenu("TTS")) {
                     if (ImGui::MenuItem("TTS Performer")) addAtMouse("TTS Performer");
                     if (ImGui::MenuItem("Vocal Tract Filter")) addAtMouse("Vocal Tract Filter");
+                    ImGui::EndMenu();
+                }
+                if (ImGui::BeginMenu("Physics Family")) {
+                    if (ImGui::MenuItem("Physics")) addAtMouse("physics");
                     ImGui::EndMenu();
                 }
                 if (ImGui::BeginMenu("Effects")) {
@@ -6298,6 +6328,36 @@ PinDataType ImGuiNodeEditorComponent::getPinDataTypeForPin(const PinID& pin)
     juce::String moduleType = getTypeForLogical(pin.logicalId);
     if (moduleType.isEmpty()) return PinDataType::Raw;
 
+    // *** NEW: Check dynamic pins FIRST ***
+    if (auto* module = synth->getModuleForLogical(pin.logicalId))
+    {
+        // Check dynamic input pins
+        if (pin.isInput && !pin.isMod)
+        {
+            auto dynamicInputs = module->getDynamicInputPins();
+            for (const auto& dynPin : dynamicInputs)
+            {
+                if (dynPin.channel == pin.channel)
+                {
+                    return dynPin.type;
+                }
+            }
+        }
+        // Check dynamic output pins
+        else if (!pin.isInput && !pin.isMod)
+        {
+            auto dynamicOutputs = module->getDynamicOutputPins();
+            for (const auto& dynPin : dynamicOutputs)
+            {
+                if (dynPin.channel == pin.channel)
+                {
+                    return dynPin.type;
+                }
+            }
+        }
+    }
+    // *** END NEW CODE ***
+
     auto it = getModulePinDatabase().find(moduleType);
     if (it == getModulePinDatabase().end())
     {
@@ -6681,6 +6741,10 @@ ImGuiNodeEditorComponent::ModuleCategory ImGuiNodeEditorComponent::getModuleCate
     if (lower.contains("midi"))
         return ModuleCategory::MIDI;
     
+    // --- Physics Family (Cyan) ---
+    if (lower.contains("physics"))
+        return ModuleCategory::Physics;
+    
     // --- Sources (Green) ---
     // Check specific matches first to avoid substring conflicts
     if (lower == "tts performer")  // Explicit TTS categorization
@@ -6744,6 +6808,7 @@ unsigned int ImGuiNodeEditorComponent::getImU32ForCategory(ModuleCategory catego
         case ModuleCategory::Comment:    color = IM_COL32(80, 80, 80, 255); break;    // Grey
         case ModuleCategory::Plugin:     color = IM_COL32(50, 110, 110, 255); break;  // Teal
         case ModuleCategory::MIDI:       color = IM_COL32(180, 120, 255, 255); break; // Vibrant Purple
+        case ModuleCategory::Physics:    color = IM_COL32(50, 200, 200, 255); break;  // Cyan
         default:                         color = IM_COL32(70, 70, 70, 255); break;
     }
     

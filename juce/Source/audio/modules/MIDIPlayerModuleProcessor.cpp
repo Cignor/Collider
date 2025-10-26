@@ -899,7 +899,40 @@ void MIDIPlayerModuleProcessor::drawParametersInNode(float /*itemWidth*/, const 
     }
     ImGui::PopItemWidth();
     
-    ImGui::Spacing(); // Visual separation between tempo and zoom
+    ImGui::Spacing(); // Visual separation between tempo and pitch
+    
+    // === PITCH TRANSPOSE SECTION ===
+    ImGui::Text("Pitch Transpose:");
+    ImGui::SameLine();
+    ImGui::PushItemWidth(150);
+    float pitchOffset = pitchParam ? pitchParam->load() : 0.0f;
+    if (ImGui::SliderFloat("##pitchTranspose", &pitchOffset, -24.0f, 24.0f, "%+.0f semi"))
+    {
+        if (pitchParam)
+        {
+            float norm = apvts.getParameterRange(PITCH_PARAM).convertTo0to1(pitchOffset);
+            apvts.getParameter(PITCH_PARAM)->setValueNotifyingHost(norm);
+            onModificationEnded();
+        }
+    }
+    if (ImGui::IsItemHovered())
+    {
+        int octaves = (int)(pitchOffset / 12.0f);
+        int semis = (int)pitchOffset % 12;
+        juce::String tooltip = "Transpose all notes by " + juce::String((int)pitchOffset) + " semitones";
+        if (octaves != 0)
+            tooltip += juce::String::formatted(" (%+d octave%s", octaves, std::abs(octaves) > 1 ? "s" : "");
+        if (semis != 0)
+        {
+            if (octaves != 0) tooltip += ",";
+            tooltip += juce::String::formatted(" %+d semi%s", semis, std::abs(semis) > 1 ? "s" : "");
+        }
+        if (octaves != 0) tooltip += ")";
+        ImGui::SetTooltip("%s", tooltip.toRawUTF8());
+    }
+    ImGui::PopItemWidth();
+    
+    ImGui::Spacing(); // Visual separation between pitch and zoom
     
     // === TIMELINE ZOOM SECTION ===
     ImGui::Text("Timeline Zoom:");

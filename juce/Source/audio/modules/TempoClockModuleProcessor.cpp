@@ -88,15 +88,22 @@ void TempoClockModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
     if (edge(nudgeUpCV, lastNudgeUpHigh))   { bpm = juce::jlimit(20.0f, 300.0f, bpm + 0.5f); }
     if (edge(nudgeDownCV, lastNudgeDownHigh)) { bpm = juce::jlimit(20.0f, 300.0f, bpm - 0.5f); }
 
-    // Sync to Host: Use host transport tempo
+    // Sync to Host: Use host transport tempo OR control it
     bool syncToHost = syncToHostParam && syncToHostParam->load() > 0.5f;
-    if (syncToHost)
+    if (auto* parent = getParent())
     {
-        // Override local BPM with transport BPM
-        bpm = (float)m_currentTransport.bpm;
-        // Also update the parameter so UI shows correct value
-        if (auto* parent = getParent())
+        if (syncToHost)
+        {
+            // Pull tempo FROM host transport (Tempo Clock follows)
+            bpm = (float)m_currentTransport.bpm;
+            parent->setTempoControlledByModule(false);  // Not controlling
+        }
+        else
+        {
+            // Push tempo TO host transport (Tempo Clock controls the global BPM)
             parent->setBPM(bpm);
+            parent->setTempoControlledByModule(true);  // Controlling - UI should be greyed
+        }
     }
 
     // Compute outputs
@@ -110,13 +117,20 @@ void TempoClockModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
 
     int divisionIdx = divisionParam ? (int)divisionParam->load() : 3; // default 1/4
     
-    // Division Override: Broadcast local division to global transport
+    // Division Override: Broadcast local division to global transport OR clear it
     bool divisionOverride = divisionOverrideParam && divisionOverrideParam->load() > 0.5f;
-    if (divisionOverride)
+    if (auto* parent = getParent())
     {
-        // This clock becomes the master division source
-        if (auto* parent = getParent())
+        if (divisionOverride)
+        {
+            // This clock becomes the master division source
             parent->setGlobalDivisionIndex(divisionIdx);
+        }
+        else
+        {
+            // Not overriding - clear the global division
+            parent->setGlobalDivisionIndex(-1);
+        }
     }
     static const double divisions[] = { 1.0/32.0, 1.0/16.0, 1.0/8.0, 1.0/4.0, 1.0/2.0, 1.0, 2.0, 4.0 };
     const double div = divisions[juce::jlimit(0, 7, divisionIdx)];
