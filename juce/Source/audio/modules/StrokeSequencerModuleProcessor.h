@@ -31,9 +31,12 @@ public:
 private:
     void timerCallback() override; // For UI updates
     void setTimingInfo(const TransportState& state) override;
+    void clearStrokes(); // Helper to reset all stroke data
 
     // --- Data Structures ---
-    struct StrokePoint { float x, y; };
+    struct StrokePoint {
+        float x, y;
+    };
     std::vector<std::vector<StrokePoint>> userStrokes;      // For the UI thread to draw into
     std::vector<StrokePoint> audioStrokePoints;             // A flattened, sorted copy for the audio thread
     std::atomic<bool> strokeDataDirty { true };             // Flag to signal when the audio copy needs updating
@@ -45,6 +48,8 @@ private:
     std::array<bool, 3> wasAboveThreshold { false, false, false }; // State for edge detection
     std::array<std::atomic<float>, 3> triggerOutputValues; // Thread-safe triggers
     std::atomic<float> currentStrokeYValue { 0.0f }; // For UI telemetry
+    std::atomic<bool> isUnderManualControl { false }; // True when user is actively dragging the playhead slider
+    std::atomic<double> livePlayheadPosition { 0.0 }; // Live playhead position for UI tracking
     
     // --- Transport State ---
     TransportState m_currentTransport;
@@ -52,7 +57,6 @@ private:
 
     // --- UI State ---
     bool isDrawing = false;
-    bool isErasing = false;
 
     // --- Parameter Management ---
     juce::AudioProcessorValueTreeState apvts;
@@ -63,6 +67,7 @@ private:
     std::atomic<float>* floorYParam { nullptr };
     std::atomic<float>* midYParam { nullptr };
     std::atomic<float>* ceilingYParam { nullptr };
+    std::atomic<float>* playheadParam { nullptr };
 
     // Parameter IDs for APVTS
     static constexpr auto paramIdRate         = "rate";
@@ -71,12 +76,14 @@ private:
     static constexpr auto paramIdFloorY       = "floorY";
     static constexpr auto paramIdMidY         = "midY";
     static constexpr auto paramIdCeilingY     = "ceilingY";
+    static constexpr auto paramIdPlayhead     = "playhead";
 
     // Virtual modulation target IDs
     static constexpr auto paramIdRateMod     = "rate_mod";
     static constexpr auto paramIdFloorYMod   = "floorY_mod";
     static constexpr auto paramIdMidYMod     = "midY_mod";
     static constexpr auto paramIdCeilingYMod = "ceilingY_mod";
+    static constexpr auto paramIdPlayheadMod = "playhead_mod";
     
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(StrokeSequencerModuleProcessor)
 };

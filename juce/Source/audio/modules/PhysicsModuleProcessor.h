@@ -213,7 +213,6 @@ private:
     
     // --- GUI State ---
     bool isDrawing = false; // Flag to track if we're currently drawing a stroke
-    bool isErasing = false;
     StrokeType currentStrokeType = StrokeType::Metal;
     Stroke currentDrawingStroke; // The stroke currently being drawn by the user
 

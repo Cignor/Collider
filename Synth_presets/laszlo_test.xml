@@ -1,0 +1,183 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<ModularSynthPreset version="1" bpm="20.0">
+  <modules>
+    <module logicalId="1" type="midi faders">
+      <params>
+        <MIDIFadersParams>
+          <PARAM id="midiChannel" value="0.0"/>
+          <PARAM id="midiDevice" value="0.0"/>
+          <PARAM id="numFaders" value="4.0"/>
+        </MIDIFadersParams>
+      </params>
+      <extra>
+        <MIDIFadersState controllerPreset="" deviceFilter="0" midiChannel="0">
+          <Mapping index="0" cc="82" min="0.0" max="1.0"/>
+          <Mapping index="1" cc="83" min="0.0" max="1.0"/>
+          <Mapping index="2" cc="2" min="0.0" max="1.0"/>
+          <Mapping index="3" cc="3" min="0.0" max="1.0"/>
+          <Mapping index="4" cc="-1" min="0.0" max="1.0"/>
+          <Mapping index="5" cc="-1" min="0.0" max="1.0"/>
+          <Mapping index="6" cc="-1" min="0.0" max="1.0"/>
+          <Mapping index="7" cc="-1" min="0.0" max="1.0"/>
+          <Mapping index="8" cc="-1" min="0.0" max="1.0"/>
+          <Mapping index="9" cc="-1" min="0.0" max="1.0"/>
+          <Mapping index="10" cc="-1" min="0.0" max="1.0"/>
+          <Mapping index="11" cc="-1" min="0.0" max="1.0"/>
+          <Mapping index="12" cc="-1" min="0.0" max="1.0"/>
+          <Mapping index="13" cc="-1" min="0.0" max="1.0"/>
+          <Mapping index="14" cc="-1" min="0.0" max="1.0"/>
+          <Mapping index="15" cc="-1" min="0.0" max="1.0"/>
+        </MIDIFadersState>
+      </extra>
+    </module>
+    <module logicalId="5" type="audio input">
+      <params>
+        <AudioInputParams>
+          <PARAM id="channelMap0" value="0.0"/>
+          <PARAM id="channelMap1" value="1.0"/>
+          <PARAM id="channelMap10" value="10.0"/>
+          <PARAM id="channelMap11" value="11.0"/>
+          <PARAM id="channelMap12" value="12.0"/>
+          <PARAM id="channelMap13" value="13.0"/>
+          <PARAM id="channelMap14" value="14.0"/>
+          <PARAM id="channelMap15" value="15.0"/>
+          <PARAM id="channelMap2" value="2.0"/>
+          <PARAM id="channelMap3" value="3.0"/>
+          <PARAM id="channelMap4" value="4.0"/>
+          <PARAM id="channelMap5" value="5.0"/>
+          <PARAM id="channelMap6" value="6.0"/>
+          <PARAM id="channelMap7" value="7.0"/>
+          <PARAM id="channelMap8" value="8.0"/>
+          <PARAM id="channelMap9" value="9.0"/>
+          <PARAM id="gateThreshold" value="0.4599999785423279"/>
+          <PARAM id="numChannels" value="1.0"/>
+          <PARAM id="triggerThreshold" value="0.5"/>
+        </AudioInputParams>
+      </params>
+      <extra>
+        <AudioInputState deviceName="">
+          <AudioInputParams>
+            <PARAM id="channelMap0" value="0.0"/>
+            <PARAM id="channelMap1" value="1.0"/>
+            <PARAM id="channelMap10" value="10.0"/>
+            <PARAM id="channelMap11" value="11.0"/>
+            <PARAM id="channelMap12" value="12.0"/>
+            <PARAM id="channelMap13" value="13.0"/>
+            <PARAM id="channelMap14" value="14.0"/>
+            <PARAM id="channelMap15" value="15.0"/>
+            <PARAM id="channelMap2" value="2.0"/>
+            <PARAM id="channelMap3" value="3.0"/>
+            <PARAM id="channelMap4" value="4.0"/>
+            <PARAM id="channelMap5" value="5.0"/>
+            <PARAM id="channelMap6" value="6.0"/>
+            <PARAM id="channelMap7" value="7.0"/>
+            <PARAM id="channelMap8" value="8.0"/>
+            <PARAM id="channelMap9" value="9.0"/>
+            <PARAM id="gateThreshold" value="0.4599999785423279"/>
+            <PARAM id="numChannels" value="1.0"/>
+            <PARAM id="triggerThreshold" value="0.5"/>
+          </AudioInputParams>
+        </AudioInputState>
+      </extra>
+    </module>
+    <module logicalId="6" type="drive">
+      <params>
+        <DriveParams>
+          <PARAM id="drive" value="1.909999966621399"/>
+          <PARAM id="mix" value="1.0"/>
+        </DriveParams>
+      </params>
+    </module>
+    <module logicalId="7" type="Frequency Graph">
+      <params>
+        <FreqGraphParams>
+          <PARAM id="bassThreshold" value="-24.0"/>
+          <PARAM id="decay" value="0.9799999594688416"/>
+          <PARAM id="highThreshold" value="-48.40000152587891"/>
+          <PARAM id="midThreshold" value="-24.0"/>
+          <PARAM id="subThreshold" value="-24.0"/>
+        </FreqGraphParams>
+      </params>
+    </module>
+    <module logicalId="10" type="graphic eq">
+      <params>
+        <GraphicEQParams>
+          <PARAM id="gainBand1" value="-9.180000305175781"/>
+          <PARAM id="gainBand2" value="-17.75"/>
+          <PARAM id="gainBand3" value="-16.29000091552734"/>
+          <PARAM id="gainBand4" value="-5.139999389648438"/>
+          <PARAM id="gainBand5" value="-10.92000198364258"/>
+          <PARAM id="gainBand6" value="-31.65000152587891"/>
+          <PARAM id="gainBand7" value="-46.02999877929688"/>
+          <PARAM id="gainBand8" value="-47.15000152587891"/>
+          <PARAM id="gateThreshold" value="-2.0"/>
+          <PARAM id="outputLevel" value="3.69999885559082"/>
+          <PARAM id="triggerThreshold" value="-6.0"/>
+        </GraphicEQParams>
+      </params>
+    </module>
+    <module logicalId="11" type="Springs">
+      <extra>
+        <VstHostState fileOrIdentifier="H:\0000_CODE\01_collider_pyo\juce\build\PresetCreatorApp_artefacts\Release\VST\Springs.vst3"
+                      name="Springs" manufacturerName="AudioThing" version="1.3.3"
+                      pluginFormatName="VST3" pluginState="1652.VMjLgrlA...O+fWarAhckI2bo8la8HRLt.iHfTlai8FYo41Y8HRUTYTK3HxO9.BOVMEUy.Ea0cVZtMEcgQWY9vSRC8Vav8lak4Fc9DSL0PiKV0zQicUPt3hKl4hKt3BTt3hKt3hKLoGVzMGQt3BTlokQIoGTtEjKt3BR1QkcIUkVtPjctLjKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKtLDRyU0PIMERM4jKt3hc48zLvXTXlg0UYgWSWoUczX0SnQTZKYGRBgzZzDCV0EkUZQ2XV8DZTUTUFAiPNg1Mo8jY1kGU1kzUZQ2XwHVYMUUTTEUUR4zX5QkYpoVX1U0QigCRBwDcPkVS2o1TNQiZC4DdTMkSv.0PMkmXogjYPolXuk0UYgCRBwDcHkVS4o1TNQiZS4zLTkVSz.0PNMCUogjYpoVX1U0QiwTPU8DZtj1R5g0PLYmKCwjcpkWSxP0TLECQ40jdHIDRIQiQhASTGIETvjFR1MiPLIiKCwjctLDS14RZLQiYCwDdLkFS3gjPHMUPsI1azDSVTs1QhsFLogDRYACUyQTZHYFTTkUZEYEY3fjPLQmKogjYtTjVm0zUYkDMrM1ZIczX3fjPLQmKogjYlQEU3fjTLQmKogjYynWXu0zUYgCRBwDctLDS4A0PLAiY4wjLLMTS3QzPMkmKS0DMHIDRNgiUZkWUVEEcYcUVxgiQhsFLogjcyHDSn4BdToWUrI1Z3DSUuEkQi4FLogjcyHES1o1TNQiZS4DMpMTS1wzTNACSo0DZtHDU3UkUKQTUFE1Yqc0Sn4RZKICUogjYTQUX1clUXk2ZwHFNHIDSzo1PNYmKCwjctjWSyfUdMMCQ4wzcDkFRlwjdgMWPsI1ZMIiX3fjPLQmYS4DMpMkSznVdMECQS0zLDMTS3QTZHYFRTgUdMISTmsFaggCRBwDcTkGSz.0TNQiZS4zLtLkS3g0TMcGTogjYHQEV40TaQgWUVIFLUwVXos1UOglKosjdhMkSzn1TNQCUS4jdXMjSy.0TLECRBgTSqYTVGUjUZQGLogjcyHDS4o1PLYmKCwjclkFSvPUZLoGS4wDZtH0TuEEaQgWUVIFLUwVXos1UOglKoszLLMkSzn1TNMCUC0DLXMTSwfUZMICRBgTSqYTVQASZHY2LBwzLtLDS14xPLYGUo0TLHMTS5QTZLACRBgDUIcUVncmUYcTQVoEcvjFR1MCdLQCVS0jctLDS3QTZLcmZowDLLMUSn4hPUgWUrgkbUwVT3UkUhASUrEVZqc0Sn4RZKAiYS4DMpMkSyP0PMACVC0TLXkVSxfjPHUTQUMUcQYUV3fjPLQmKogjYTQEUEQiUXg1cVkENHIDSz4RZHYFSvDFaQICTxslQhgCRBwDctjFRlIVUYoGLogjcyfVS4o1TNQiZS4zLTkVSz.0PNMCU4wDZtHTT3s1UOglKoszcPMDS14xPLYmKCwDLpkVS1AUZMoGRBgjPqcjXm0jLhgCRRwDctjFRlolZTA0ZFMVZmY0Sn4RZKACRBgTRIACU5UDahoGLogjcyHDSn4hTRIUUpElZvjFR2MiPLglKRIkTYQEVpUkURQGLogjcyHDSn4hTRIUVTgkZUYkTz0DUigWVWkENHIDSzQUZHYlZpQkQEYTVqgCUioGLogzcyHDSn4hTRIUVTgkZUEyTvDkLPASRsM1ZvjFR1MiTMglKRIkTUQTVuEkLggWUpE1YIYTXqASZHc2LBwDZtfVUqkjLh8FNrEFNHIESzwTZKkGRBgTQQYkV5gCahgCRBwDZtHDUmkzUXMWUFM1ZIczT00TLZgCRngjYtrlXq0zUYoGLogTRzXkV5kDdKkiKt3hKt3hKt3hKt3haTU0PUQDU3sFaicVTWkEQEYzXmEDTtDDRTQlcEEiX4EDTtDDSt3xXt3hKt3hKt3hKlIUUMQUTPkzUZESQFM1ZQQEV5UjQ77RRC8Vav8lak4Fc9vyKVMEUy.Ea0cVZtMEcgQWY9.."/>
+      </extra>
+    </module>
+    <module logicalId="12" type="midi logger">
+      <params>
+        <MidiLoggerParams>
+          <PARAM id="loopLength" value="4.0"/>
+        </MidiLoggerParams>
+      </params>
+    </module>
+    <module logicalId="15" type="stroke_sequencer">
+      <params>
+        <StrokeSeqParams>
+          <PARAM id="ceilingY" value="0.75"/>
+          <PARAM id="floorY" value="0.25"/>
+          <PARAM id="midY" value="0.5"/>
+          <PARAM id="rate" value="0.9999999403953552"/>
+          <PARAM id="rate_division" value="0.0"/>
+          <PARAM id="sync" value="0.0"/>
+        </StrokeSeqParams>
+      </params>
+      <extra>
+        <StrokeSequencerState sync="0.0" rate_division="0.0">
+          <Strokes>
+            <Stroke points=""/>
+            <Stroke points="1,0.102778;1,0.113889;1,0.138889;1,0.183333;1,0.227778;1,0.283333;1,0.45;1,0.45;1,0.605556;1,0.672222;1,0.791667;1,0.855556;1,0.958333;1,1;1,1;1,1;1,1;1,1;1,1;1,1;1,1;1,1;1,1;1,1;1,1;1,1;1,1;1,1;1,1;1,1;1,1;1,1;1,1;1,1;1,1;1,1;1,1;1,1;1,1;1,1;"/>
+          </Strokes>
+        </StrokeSequencerState>
+      </extra>
+    </module>
+    <module logicalId="16" type="recorder">
+      <params>
+        <RecordParams>
+          <PARAM id="format" value="0.0"/>
+        </RecordParams>
+      </params>
+    </module>
+  </modules>
+  <connections>
+    <connection srcId="5" srcChan="0" dstId="6" dstChan="0"/>
+    <connection srcId="6" srcChan="0" dstId="10" dstChan="0"/>
+    <connection srcId="6" srcChan="1" dstId="10" dstChan="1"/>
+    <connection srcId="7" srcChan="0" dstId="output" dstChan="0"/>
+    <connection srcId="7" srcChan="1" dstId="output" dstChan="1"/>
+    <connection srcId="10" srcChan="0" dstId="11" dstChan="0"/>
+    <connection srcId="11" srcChan="0" dstId="7" dstChan="0"/>
+  </connections>
+  <NodeEditorUI>
+    <node id="1" x="-784.0" y="502.0"/>
+    <node id="5" x="-1788.29443359375" y="43.30059814453125"/>
+    <node id="6" x="-727.29443359375" y="194.3005981445312"/>
+    <node id="7" x="518.7055053710938" y="157.3005981445312"/>
+    <node id="10" x="-165.29443359375" y="298.3005981445312"/>
+    <node id="11" x="338.70556640625" y="681.300537109375"/>
+    <node id="12" x="-1967.923583984375" y="581.0050048828125"/>
+    <node id="15" x="-3059.923583984375" y="289.0050048828125"/>
+    <node id="16" x="-1247.923583984375" y="296.0050048828125"/>
+    <node id="0" x="1024.370849609375" y="548.7044067382812"/>
+  </NodeEditorUI>
+</ModularSynthPreset>

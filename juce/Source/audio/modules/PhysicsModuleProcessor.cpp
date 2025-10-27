@@ -1045,61 +1045,94 @@ void PhysicsModuleProcessor::drawParametersInNode(float itemWidth, const std::fu
     previousNodePos = currentNodePos;
     
     // --- Basic UI controls ---
-    ImGui::TextColored(ImVec4(0.7f, 0.9f, 1.0f, 1.0f), "Physics Sandbox");
+    ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.3f, 0.9f, 1.0f, 1.0f));
+    ImGui::TextUnformatted("Physics Sandbox");
+    ImGui::PopStyleColor();
     ImGui::Spacing();
     
-    // Stroke type selection buttons
-    ImGui::Text("Stroke Type:");
+    // Helper lambda for color-coded buttons
+    auto ColorButton = [](const char* label, bool isSelected, const ImVec4& color) -> bool {
+        if (isSelected) {
+            ImGui::PushStyleColor(ImGuiCol_Button, color);
+            ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(color.x * 1.2f, color.y * 1.2f, color.z * 1.2f, 1.0f));
+            ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(color.x * 0.8f, color.y * 0.8f, color.z * 0.8f, 1.0f));
+            ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 1.0f, 1.0f, 1.0f));
+        } else {
+            ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(color.x * 0.3f, color.y * 0.3f, color.z * 0.3f, 0.6f));
+            ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(color.x * 0.5f, color.y * 0.5f, color.z * 0.5f, 0.8f));
+            ImGui::PushStyleColor(ImGuiCol_ButtonActive, color);
+            ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.8f, 0.8f, 0.8f, 1.0f));
+        }
+        bool result = ImGui::Button(label);
+        ImGui::PopStyleColor(4);
+        return result;
+    };
+    
+    // Stroke type selection buttons with color coding
+    ImGui::TextColored(ImVec4(0.9f, 0.9f, 0.5f, 1.0f), "Stroke Type:");
     ImGui::SameLine();
-    if (ImGui::Button("Metal")) { currentStrokeType = StrokeType::Metal; }
+    if (ColorButton("Metal", currentStrokeType == StrokeType::Metal, ImVec4(0.53f, 0.81f, 0.92f, 1.0f))) { currentStrokeType = StrokeType::Metal; }
     ImGui::SameLine();
-    if (ImGui::Button("Wood"))  { currentStrokeType = StrokeType::Wood; }
+    if (ColorButton("Wood", currentStrokeType == StrokeType::Wood, ImVec4(0.96f, 0.64f, 0.38f, 1.0f))) { currentStrokeType = StrokeType::Wood; }
     ImGui::SameLine();
-    if (ImGui::Button("Soil"))  { currentStrokeType = StrokeType::Soil; }
+    if (ColorButton("Soil", currentStrokeType == StrokeType::Soil, ImVec4(0.0f, 0.39f, 0.0f, 1.0f))) { currentStrokeType = StrokeType::Soil; }
     ImGui::SameLine();
-    if (ImGui::Button("Conveyor")) { currentStrokeType = StrokeType::Conveyor; }
+    if (ColorButton("Conveyor", currentStrokeType == StrokeType::Conveyor, ImVec4(0.58f, 0.44f, 0.86f, 1.0f))) { currentStrokeType = StrokeType::Conveyor; }
     ImGui::SameLine();
-    if (ImGui::Button("Bouncy")) { currentStrokeType = StrokeType::BouncyGoo; }
+    if (ColorButton("Bouncy", currentStrokeType == StrokeType::BouncyGoo, ImVec4(0.0f, 0.98f, 0.6f, 1.0f))) { currentStrokeType = StrokeType::BouncyGoo; }
     ImGui::SameLine();
-    if (ImGui::Button("Sticky")) { currentStrokeType = StrokeType::StickyMud; }
+    if (ColorButton("Sticky", currentStrokeType == StrokeType::StickyMud, ImVec4(0.54f, 0.27f, 0.07f, 1.0f))) { currentStrokeType = StrokeType::StickyMud; }
     ImGui::SameLine();
-    if (ImGui::Button("Emitter")) {
-        isErasing = false;
+    if (ColorButton("Emitter", isPlacingEmitter, ImVec4(1.0f, 0.84f, 0.0f, 1.0f))) {
         currentForceTool.reset();
         isPlacingEmitter = true; // Activate emitter placement mode
     }
     
     // Material physics property sliders (context-sensitive based on selected material)
     
-    // Helper lambda to create a slider for a given parameter
-    auto createMaterialSlider = [&](const char* label, const char* paramID) {
+    // Helper lambda to create a styled slider for material properties
+    auto createMaterialSlider = [&](const char* label, const char* paramID, const ImVec4& color) {
         auto* param = apvts.getRawParameterValue(paramID);
         if (param) {
             float value = param->load();
             ImGui::PushItemWidth(150.0f);
+            
+            // Style the slider with the material color
+            ImGui::PushStyleColor(ImGuiCol_FrameBg, ImVec4(color.x * 0.3f, color.y * 0.3f, color.z * 0.3f, 0.5f));
+            ImGui::PushStyleColor(ImGuiCol_FrameBgHovered, ImVec4(color.x * 0.4f, color.y * 0.4f, color.z * 0.4f, 0.7f));
+            ImGui::PushStyleColor(ImGuiCol_FrameBgActive, ImVec4(color.x * 0.5f, color.y * 0.5f, color.z * 0.5f, 0.8f));
+            ImGui::PushStyleColor(ImGuiCol_SliderGrab, color);
+            ImGui::PushStyleColor(ImGuiCol_SliderGrabActive, ImVec4(color.x * 1.2f, color.y * 1.2f, color.z * 1.2f, 1.0f));
+            
             if (ImGui::SliderFloat(label, &value, 0.0f, 1.0f, "%.2f")) {
                 if (auto* p = apvts.getParameter(paramID))
                     p->setValueNotifyingHost(apvts.getParameterRange(paramID).convertTo0to1(value));
             }
             if (ImGui::IsItemDeactivatedAfterEdit()) { onModificationEnded(); }
+            
+            ImGui::PopStyleColor(5);
             ImGui::PopItemWidth();
         }
     };
     
     // Show sliders based on the current stroke type (only for material types)
     if (currentStrokeType == StrokeType::Metal) {
-        createMaterialSlider("Friction", "metalFriction");
-        createMaterialSlider("Bounciness", "metalRestitution");
+        createMaterialSlider("Friction", "metalFriction", ImVec4(0.53f, 0.81f, 0.92f, 1.0f));
+        createMaterialSlider("Bounciness", "metalRestitution", ImVec4(0.53f, 0.81f, 0.92f, 1.0f));
     } else if (currentStrokeType == StrokeType::Wood) {
-        createMaterialSlider("Friction", "woodFriction");
-        createMaterialSlider("Bounciness", "woodRestitution");
+        createMaterialSlider("Friction", "woodFriction", ImVec4(0.96f, 0.64f, 0.38f, 1.0f));
+        createMaterialSlider("Bounciness", "woodRestitution", ImVec4(0.96f, 0.64f, 0.38f, 1.0f));
     } else if (currentStrokeType == StrokeType::Soil) {
-        createMaterialSlider("Friction", "soilFriction");
-        createMaterialSlider("Bounciness", "soilRestitution");
+        createMaterialSlider("Friction", "soilFriction", ImVec4(0.4f, 0.8f, 0.4f, 1.0f));
+        createMaterialSlider("Bounciness", "soilRestitution", ImVec4(0.4f, 0.8f, 0.4f, 1.0f));
     }
     
     
-    // Gravity slider with modulation indicator
+    ImGui::Spacing();
+    ImGui::TextColored(ImVec4(0.7f, 0.9f, 0.7f, 1.0f), "Physics Parameters");
+    ImGui::Spacing();
+    
+    // Gravity slider with modulation indicator (styled in yellow/orange)
     if (auto* gravityParam = apvts.getRawParameterValue(paramIdGravity))
     {
         const bool gravityIsMod = isParamModulated(paramIdGravityMod);
@@ -1110,6 +1143,14 @@ void PhysicsModuleProcessor::drawParametersInNode(float itemWidth, const std::fu
         if (gravityIsMod) ImGui::BeginDisabled();
 
         ImGui::PushItemWidth(150.0f);
+        
+        // Style with gravity color (yellow/orange downward)
+        ImVec4 gravityColor = gravityIsMod ? ImVec4(0.4f, 0.8f, 1.0f, 1.0f) : ImVec4(1.0f, 0.8f, 0.2f, 1.0f);
+        ImGui::PushStyleColor(ImGuiCol_FrameBg, ImVec4(gravityColor.x * 0.3f, gravityColor.y * 0.3f, gravityColor.z * 0.3f, 0.5f));
+        ImGui::PushStyleColor(ImGuiCol_FrameBgHovered, ImVec4(gravityColor.x * 0.4f, gravityColor.y * 0.4f, gravityColor.z * 0.4f, 0.7f));
+        ImGui::PushStyleColor(ImGuiCol_SliderGrab, gravityColor);
+        ImGui::PushStyleColor(ImGuiCol_SliderGrabActive, ImVec4(gravityColor.x * 1.2f, gravityColor.y * 1.2f, gravityColor.z * 1.2f, 1.0f));
+        
         if (ImGui::SliderFloat("Gravity", &gravityValue, 0.0f, 50.0f, "%.1f"))
         {
             if (!gravityIsMod)
@@ -1117,17 +1158,19 @@ void PhysicsModuleProcessor::drawParametersInNode(float itemWidth, const std::fu
                     param->setValueNotifyingHost(apvts.getParameterRange(paramIdGravity).convertTo0to1(gravityValue));
         }
         if (ImGui::IsItemDeactivatedAfterEdit() && !gravityIsMod) { onModificationEnded(); }
+        
+        ImGui::PopStyleColor(4);
         ImGui::PopItemWidth();
 
         if (gravityIsMod)
         {
             ImGui::EndDisabled();
             ImGui::SameLine();
-            ImGui::TextUnformatted("(mod)");
+            ImGui::TextColored(ImVec4(0.4f, 0.8f, 1.0f, 1.0f), "(mod)");
         }
     }
 
-    // Wind slider with modulation indicator
+    // Wind slider with modulation indicator (styled in cyan/white)
     if (auto* windParam = apvts.getRawParameterValue(paramIdWind))
     {
         const bool windIsMod = isParamModulated(paramIdWindMod);
@@ -1138,6 +1181,14 @@ void PhysicsModuleProcessor::drawParametersInNode(float itemWidth, const std::fu
         if (windIsMod) ImGui::BeginDisabled();
 
         ImGui::PushItemWidth(150.0f);
+        
+        // Style with wind color (cyan/white horizontal)
+        ImVec4 windColor = windIsMod ? ImVec4(0.4f, 0.8f, 1.0f, 1.0f) : ImVec4(0.7f, 0.9f, 1.0f, 1.0f);
+        ImGui::PushStyleColor(ImGuiCol_FrameBg, ImVec4(windColor.x * 0.3f, windColor.y * 0.3f, windColor.z * 0.3f, 0.5f));
+        ImGui::PushStyleColor(ImGuiCol_FrameBgHovered, ImVec4(windColor.x * 0.4f, windColor.y * 0.4f, windColor.z * 0.4f, 0.7f));
+        ImGui::PushStyleColor(ImGuiCol_SliderGrab, windColor);
+        ImGui::PushStyleColor(ImGuiCol_SliderGrabActive, ImVec4(windColor.x * 1.2f, windColor.y * 1.2f, windColor.z * 1.2f, 1.0f));
+        
         if (ImGui::SliderFloat("Wind", &windValue, -50.0f, 50.0f, "%.1f"))
         {
             if (!windIsMod)
@@ -1145,17 +1196,19 @@ void PhysicsModuleProcessor::drawParametersInNode(float itemWidth, const std::fu
                     param->setValueNotifyingHost(apvts.getParameterRange(paramIdWind).convertTo0to1(windValue));
         }
         if (ImGui::IsItemDeactivatedAfterEdit() && !windIsMod) { onModificationEnded(); }
+        
+        ImGui::PopStyleColor(4);
         ImGui::PopItemWidth();
 
         if (windIsMod)
         {
             ImGui::EndDisabled();
             ImGui::SameLine();
-            ImGui::TextUnformatted("(mod)");
+            ImGui::TextColored(ImVec4(0.4f, 0.8f, 1.0f, 1.0f), "(mod)");
         }
     }
 
-    // Vortex Strength slider with modulation indicator
+    // Vortex Strength slider with modulation indicator (styled in purple)
     if (auto* vortexStrengthParam = apvts.getRawParameterValue(paramIdVortexStrength))
     {
         const bool vortexStrIsMod = isParamModulated(paramIdVortexStrengthMod);
@@ -1166,6 +1219,14 @@ void PhysicsModuleProcessor::drawParametersInNode(float itemWidth, const std::fu
         if (vortexStrIsMod) ImGui::BeginDisabled();
 
         ImGui::PushItemWidth(150.0f);
+        
+        // Style with vortex color (purple spiral)
+        ImVec4 vortexColor = vortexStrIsMod ? ImVec4(0.4f, 0.8f, 1.0f, 1.0f) : ImVec4(0.7f, 0.4f, 1.0f, 1.0f);
+        ImGui::PushStyleColor(ImGuiCol_FrameBg, ImVec4(vortexColor.x * 0.3f, vortexColor.y * 0.3f, vortexColor.z * 0.3f, 0.5f));
+        ImGui::PushStyleColor(ImGuiCol_FrameBgHovered, ImVec4(vortexColor.x * 0.4f, vortexColor.y * 0.4f, vortexColor.z * 0.4f, 0.7f));
+        ImGui::PushStyleColor(ImGuiCol_SliderGrab, vortexColor);
+        ImGui::PushStyleColor(ImGuiCol_SliderGrabActive, ImVec4(vortexColor.x * 1.2f, vortexColor.y * 1.2f, vortexColor.z * 1.2f, 1.0f));
+        
         if (ImGui::SliderFloat("Vortex Strength", &vortexStrengthValue, -100.0f, 100.0f, "%.1f"))
         {
             if (!vortexStrIsMod)
@@ -1173,17 +1234,19 @@ void PhysicsModuleProcessor::drawParametersInNode(float itemWidth, const std::fu
                     param->setValueNotifyingHost(apvts.getParameterRange(paramIdVortexStrength).convertTo0to1(vortexStrengthValue));
         }
         if (ImGui::IsItemDeactivatedAfterEdit() && !vortexStrIsMod) { onModificationEnded(); }
+        
+        ImGui::PopStyleColor(4);
         ImGui::PopItemWidth();
 
         if (vortexStrIsMod)
         {
             ImGui::EndDisabled();
             ImGui::SameLine();
-            ImGui::TextUnformatted("(mod)");
+            ImGui::TextColored(ImVec4(0.4f, 0.8f, 1.0f, 1.0f), "(mod)");
         }
     }
 
-    // Vortex Spin slider with modulation indicator
+    // Vortex Spin slider with modulation indicator (styled in magenta)
     if (auto* vortexSpinParam = apvts.getRawParameterValue(paramIdVortexSpin))
     {
         const bool vortexSpinIsMod = isParamModulated(paramIdVortexSpinMod);
@@ -1194,6 +1257,14 @@ void PhysicsModuleProcessor::drawParametersInNode(float itemWidth, const std::fu
         if (vortexSpinIsMod) ImGui::BeginDisabled();
 
         ImGui::PushItemWidth(150.0f);
+        
+        // Style with spin color (magenta swirl)
+        ImVec4 spinColor = vortexSpinIsMod ? ImVec4(0.4f, 0.8f, 1.0f, 1.0f) : ImVec4(1.0f, 0.4f, 0.8f, 1.0f);
+        ImGui::PushStyleColor(ImGuiCol_FrameBg, ImVec4(spinColor.x * 0.3f, spinColor.y * 0.3f, spinColor.z * 0.3f, 0.5f));
+        ImGui::PushStyleColor(ImGuiCol_FrameBgHovered, ImVec4(spinColor.x * 0.4f, spinColor.y * 0.4f, spinColor.z * 0.4f, 0.7f));
+        ImGui::PushStyleColor(ImGuiCol_SliderGrab, spinColor);
+        ImGui::PushStyleColor(ImGuiCol_SliderGrabActive, ImVec4(spinColor.x * 1.2f, spinColor.y * 1.2f, spinColor.z * 1.2f, 1.0f));
+        
         if (ImGui::SliderFloat("Vortex Spin", &vortexSpinValue, -50.0f, 50.0f, "%.1f"))
         {
             if (!vortexSpinIsMod)
@@ -1201,17 +1272,19 @@ void PhysicsModuleProcessor::drawParametersInNode(float itemWidth, const std::fu
                     param->setValueNotifyingHost(apvts.getParameterRange(paramIdVortexSpin).convertTo0to1(vortexSpinValue));
         }
         if (ImGui::IsItemDeactivatedAfterEdit() && !vortexSpinIsMod) { onModificationEnded(); }
+        
+        ImGui::PopStyleColor(4);
         ImGui::PopItemWidth();
 
         if (vortexSpinIsMod)
         {
             ImGui::EndDisabled();
             ImGui::SameLine();
-            ImGui::TextUnformatted("(mod)");
+            ImGui::TextColored(ImVec4(0.4f, 0.8f, 1.0f, 1.0f), "(mod)");
         }
     }
 
-    // Magnet Force slider with modulation indicator
+    // Magnet Force slider with modulation indicator (styled in red/blue)
     if (auto* magnetForceParam = apvts.getRawParameterValue(paramIdMagnetForce))
     {
         const bool magnetForceIsMod = isParamModulated(paramIdMagnetForceMod);
@@ -1222,6 +1295,14 @@ void PhysicsModuleProcessor::drawParametersInNode(float itemWidth, const std::fu
         if (magnetForceIsMod) ImGui::BeginDisabled();
 
         ImGui::PushItemWidth(150.0f);
+        
+        // Style with magnet color (red for positive, blue for negative)
+        ImVec4 magnetColor = magnetForceIsMod ? ImVec4(0.4f, 0.8f, 1.0f, 1.0f) : ImVec4(1.0f, 0.3f, 0.3f, 1.0f);
+        ImGui::PushStyleColor(ImGuiCol_FrameBg, ImVec4(magnetColor.x * 0.3f, magnetColor.y * 0.3f, magnetColor.z * 0.3f, 0.5f));
+        ImGui::PushStyleColor(ImGuiCol_FrameBgHovered, ImVec4(magnetColor.x * 0.4f, magnetColor.y * 0.4f, magnetColor.z * 0.4f, 0.7f));
+        ImGui::PushStyleColor(ImGuiCol_SliderGrab, magnetColor);
+        ImGui::PushStyleColor(ImGuiCol_SliderGrabActive, ImVec4(magnetColor.x * 1.2f, magnetColor.y * 1.2f, magnetColor.z * 1.2f, 1.0f));
+        
         if (ImGui::SliderFloat("Magnet Force", &magnetForceValue, -50.0f, 50.0f, "%.1f"))
         {
             if (!magnetForceIsMod)
@@ -1229,57 +1310,109 @@ void PhysicsModuleProcessor::drawParametersInNode(float itemWidth, const std::fu
                     param->setValueNotifyingHost(apvts.getParameterRange(paramIdMagnetForce).convertTo0to1(magnetForceValue));
         }
         if (ImGui::IsItemDeactivatedAfterEdit() && !magnetForceIsMod) { onModificationEnded(); }
+        
+        ImGui::PopStyleColor(4);
         ImGui::PopItemWidth();
 
         if (magnetForceIsMod)
         {
             ImGui::EndDisabled();
             ImGui::SameLine();
-            ImGui::TextUnformatted("(mod)");
+            ImGui::TextColored(ImVec4(0.4f, 0.8f, 1.0f, 1.0f), "(mod)");
         }
     }
 
-    // Stroke Size slider
+    // Stroke Size slider (styled in grey/white)
     auto* strokeSizeParam = apvts.getRawParameterValue(paramIdStrokeSize);
     if (strokeSizeParam)
     {
         float strokeSizeValue = strokeSizeParam->load();
         ImGui::PushItemWidth(150.0f);
+        
+        ImVec4 strokeSizeColor = ImVec4(0.8f, 0.8f, 0.8f, 1.0f);
+        ImGui::PushStyleColor(ImGuiCol_FrameBg, ImVec4(strokeSizeColor.x * 0.3f, strokeSizeColor.y * 0.3f, strokeSizeColor.z * 0.3f, 0.5f));
+        ImGui::PushStyleColor(ImGuiCol_FrameBgHovered, ImVec4(strokeSizeColor.x * 0.4f, strokeSizeColor.y * 0.4f, strokeSizeColor.z * 0.4f, 0.7f));
+        ImGui::PushStyleColor(ImGuiCol_SliderGrab, strokeSizeColor);
+        ImGui::PushStyleColor(ImGuiCol_SliderGrabActive, ImVec4(strokeSizeColor.x * 1.2f, strokeSizeColor.y * 1.2f, strokeSizeColor.z * 1.2f, 1.0f));
+        
         if (ImGui::SliderFloat("Stroke Size", &strokeSizeValue, 1.0f, 10.0f, "%.1f"))
         {
             if (auto* param = apvts.getParameter(paramIdStrokeSize))
                 param->setValueNotifyingHost(apvts.getParameterRange(paramIdStrokeSize).convertTo0to1(strokeSizeValue));
         }
         if (ImGui::IsItemDeactivatedAfterEdit()) { onModificationEnded(); }
+        
+        ImGui::PopStyleColor(4);
         ImGui::PopItemWidth();
     }
+    
+    ImGui::Spacing();
+    ImGui::TextColored(ImVec4(0.9f, 0.7f, 0.9f, 1.0f), "Spawning Settings");
+    ImGui::Spacing();
     
     // Max Objects, Mass, and Polarity controls (grouped with consistent width)
     ImGui::PushItemWidth(150.0f);
     if (auto* maxObjectsParam = static_cast<juce::AudioParameterInt*>(apvts.getParameter(paramIdMaxObjects)))
     {
         int maxObjectsValue = maxObjectsParam->get();
+        
+        ImVec4 maxObjColor = ImVec4(0.6f, 0.9f, 0.6f, 1.0f);
+        ImGui::PushStyleColor(ImGuiCol_FrameBg, ImVec4(maxObjColor.x * 0.3f, maxObjColor.y * 0.3f, maxObjColor.z * 0.3f, 0.5f));
+        ImGui::PushStyleColor(ImGuiCol_FrameBgHovered, ImVec4(maxObjColor.x * 0.4f, maxObjColor.y * 0.4f, maxObjColor.z * 0.4f, 0.7f));
+        ImGui::PushStyleColor(ImGuiCol_SliderGrab, maxObjColor);
+        ImGui::PushStyleColor(ImGuiCol_SliderGrabActive, ImVec4(maxObjColor.x * 1.2f, maxObjColor.y * 1.2f, maxObjColor.z * 1.2f, 1.0f));
+        
         if (ImGui::SliderInt("Max Objects", &maxObjectsValue, 1, 500))
         {
             *maxObjectsParam = maxObjectsValue;
         }
         if (ImGui::IsItemDeactivatedAfterEdit()) { onModificationEnded(); }
+        
+        ImGui::PopStyleColor(4);
+        
         // Display current object count on the same line
         ImGui::SameLine();
-        ImGui::Text("(%d)", (int)physicsObjects.size());
+        
+        // Color code the count based on how close we are to the limit
+        float ratio = (float)physicsObjects.size() / (float)maxObjectsValue;
+        ImVec4 countColor = ratio < 0.7f ? ImVec4(0.6f, 0.9f, 0.6f, 1.0f) : 
+                           ratio < 0.9f ? ImVec4(1.0f, 0.9f, 0.4f, 1.0f) : 
+                                          ImVec4(1.0f, 0.4f, 0.4f, 1.0f);
+        ImGui::TextColored(countColor, "(%d)", (int)physicsObjects.size());
     }
 
+    ImVec4 massColor = ImVec4(0.9f, 0.9f, 0.6f, 1.0f);
+    ImGui::PushStyleColor(ImGuiCol_FrameBg, ImVec4(massColor.x * 0.3f, massColor.y * 0.3f, massColor.z * 0.3f, 0.5f));
+    ImGui::PushStyleColor(ImGuiCol_FrameBgHovered, ImVec4(massColor.x * 0.4f, massColor.y * 0.4f, massColor.z * 0.4f, 0.7f));
+    ImGui::PushStyleColor(ImGuiCol_SliderGrab, massColor);
+    ImGui::PushStyleColor(ImGuiCol_SliderGrabActive, ImVec4(massColor.x * 1.2f, massColor.y * 1.2f, massColor.z * 1.2f, 1.0f));
+    
     ImGui::SliderFloat("Spawn Mass", &currentMass, 0.1f, 10.0f, "%.2f kg", ImGuiSliderFlags_Logarithmic);
+    
+    ImGui::PopStyleColor(4);
     ImGui::PopItemWidth();
 
-    ImGui::Text("Polarity:"); ImGui::SameLine();
-    if (ImGui::RadioButton("None", currentPolarity == Polarity::None)) { currentPolarity = Polarity::None; } ImGui::SameLine();
-    if (ImGui::RadioButton("N", currentPolarity == Polarity::North)) { currentPolarity = Polarity::North; } ImGui::SameLine();
-    if (ImGui::RadioButton("S", currentPolarity == Polarity::South)) { currentPolarity = Polarity::South; }
-
-    // Spawn shape buttons (Thread-Safe)
-    ImGui::Text("Spawn:");
+    ImGui::TextColored(ImVec4(0.9f, 0.9f, 0.5f, 1.0f), "Polarity:"); 
     ImGui::SameLine();
+    
+    // Style polarity radio buttons
+    ImGui::PushStyleColor(ImGuiCol_CheckMark, ImVec4(0.3f, 0.9f, 0.3f, 1.0f));
+    if (ImGui::RadioButton("None", currentPolarity == Polarity::None)) { currentPolarity = Polarity::None; } ImGui::SameLine();
+    ImGui::PopStyleColor();
+    
+    ImGui::PushStyleColor(ImGuiCol_CheckMark, ImVec4(1.0f, 0.3f, 0.3f, 1.0f));
+    if (ImGui::RadioButton("N", currentPolarity == Polarity::North)) { currentPolarity = Polarity::North; } ImGui::SameLine();
+    ImGui::PopStyleColor();
+    
+    ImGui::PushStyleColor(ImGuiCol_CheckMark, ImVec4(0.3f, 0.5f, 1.0f, 1.0f));
+    if (ImGui::RadioButton("S", currentPolarity == Polarity::South)) { currentPolarity = Polarity::South; }
+    ImGui::PopStyleColor();
+
+    ImGui::Spacing();
+    ImGui::TextColored(ImVec4(0.5f, 0.9f, 1.0f, 1.0f), "Spawn:");
+    ImGui::SameLine();
+    
+    // Spawn shape buttons (Thread-Safe) with color coding
     auto enqueueSpawn = [&](ShapeType type) {
         int start1, size1, start2, size2;
         spawnQueue.prepareToWrite(1, start1, size1, start2, size2);
@@ -1288,32 +1421,34 @@ void PhysicsModuleProcessor::drawParametersInNode(float itemWidth, const std::fu
             spawnQueue.finishedWrite(1);
         }
     };
-    if (ImGui::Button("Ball"))     { enqueueSpawn(ShapeType::Circle); }
+    
+    if (ColorButton("Ball", false, ImVec4(1.0f, 0.4f, 0.4f, 1.0f)))     { enqueueSpawn(ShapeType::Circle); }
     ImGui::SameLine();
-    if (ImGui::Button("Square"))   { enqueueSpawn(ShapeType::Square); }
+    if (ColorButton("Square", false, ImVec4(0.4f, 1.0f, 0.4f, 1.0f)))   { enqueueSpawn(ShapeType::Square); }
     ImGui::SameLine();
-    if (ImGui::Button("Triangle")) { enqueueSpawn(ShapeType::Triangle); }
+    if (ColorButton("Triangle", false, ImVec4(0.4f, 0.4f, 1.0f, 1.0f))) { enqueueSpawn(ShapeType::Triangle); }
 
-    ImGui::SameLine(); ImGui::Text("|"); ImGui::SameLine();
-    if (ImGui::Button("Vortex")) {
-        isErasing = false; // Turn off other tools
+    ImGui::SameLine(); ImGui::TextDisabled("|"); ImGui::SameLine();
+    if (ColorButton("Vortex", currentForceTool.has_value() && *currentForceTool == ForceType::Vortex, ImVec4(0.7f, 0.4f, 1.0f, 1.0f))) {
         currentForceTool = ForceType::Vortex;
+        isPlacingEmitter = false;
     }
 
     ImGui::SameLine();
-
-    // Erase Mode checkbox
-    ImGui::Checkbox("Erase Mode", &isErasing);
     
-    ImGui::SameLine();
+    // Clear All button with warning color
+    ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.6f, 0.2f, 0.2f, 0.8f));
+    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.8f, 0.3f, 0.3f, 1.0f));
+    ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(1.0f, 0.4f, 0.4f, 1.0f));
     
-    // Add a button to clear the drawing
     if (ImGui::Button("Clear All"))
     {
         // --- THREAD-SAFE CLEAR ---
         // Set the clear all flag - the physics thread will handle the cleanup
         clearAllRequested = true;
     }
+    
+    ImGui::PopStyleColor(3);
     
     ImGui::Spacing();
     ImGui::Separator();
@@ -1410,17 +1545,13 @@ void PhysicsModuleProcessor::drawParametersInNode(float itemWidth, const std::fu
             currentForceTool.reset(); // Deselect tool after placing
             selectedEmitterIndex = -1;
         }
-        else if (!isErasing) // Otherwise, start drawing
+        else // Otherwise, start drawing
         {
             isDrawing = true;
             currentDrawingStroke.points.clear();
             currentDrawingStroke.type = currentStrokeType; // Use the currently selected stroke type
             currentDrawingStroke.points.push_back({mouse_pos_in_canvas.x, mouse_pos_in_canvas.y});
             selectedEmitterIndex = -1;
-        }
-        else
-        {
-             selectedEmitterIndex = -1; // Deselect if clicking on empty space
         }
     }
 
@@ -1448,7 +1579,7 @@ void PhysicsModuleProcessor::drawParametersInNode(float itemWidth, const std::fu
     }
 
     // Is the user dragging the mouse?
-    if (!isErasing && isDrawing && ImGui::IsMouseDragging(ImGuiMouseButton_Left))
+    if (isDrawing && ImGui::IsMouseDragging(ImGuiMouseButton_Left))
     {
         juce::Point<float> currentPos = {mouse_pos_in_canvas.x, mouse_pos_in_canvas.y};
         juce::Point<float> lastPos = currentDrawingStroke.points.back();
@@ -1461,7 +1592,7 @@ void PhysicsModuleProcessor::drawParametersInNode(float itemWidth, const std::fu
     }
 
     // Has the user released the mouse button?
-    if (!isErasing && isDrawing && ImGui::IsMouseReleased(ImGuiMouseButton_Left))
+    if (isDrawing && ImGui::IsMouseReleased(ImGuiMouseButton_Left))
     {
         isDrawing = false;
         // If the stroke has at least two points, consider it a valid stroke and add it to our list
@@ -1480,15 +1611,16 @@ void PhysicsModuleProcessor::drawParametersInNode(float itemWidth, const std::fu
         currentDrawingStroke.points.clear();
     }
     
-    // --- Eraser Visual Feedback ---
-    if (isErasing && is_hovered)
+    // --- Eraser Visual Feedback (Right Mouse Button) ---
+    if (is_hovered && ImGui::IsMouseDown(ImGuiMouseButton_Right))
     {
         // Get absolute mouse position on screen
         ImVec2 mousePos = ImGui::GetMousePos();
         const float eraseRadius = 15.0f;
 
         // Draw a semi-transparent red circle around the mouse cursor to show eraser size
-        draw_list->AddCircle(mousePos, eraseRadius, IM_COL32(255, 0, 0, 128), 12, 2.0f);
+        draw_list->AddCircleFilled(mousePos, eraseRadius, IM_COL32(255, 100, 100, 60)); // Subtle red fill
+        draw_list->AddCircle(mousePos, eraseRadius, IM_COL32(220, 20, 20, 180), 12, 2.0f); // Red outline
     }
 
     // --- Emitter Visual Feedback ---
@@ -1502,9 +1634,10 @@ void PhysicsModuleProcessor::drawParametersInNode(float itemWidth, const std::fu
         draw_list->AddRect({mousePos.x - 5, mousePos.y - 5}, {mousePos.x + 5, mousePos.y + 5}, IM_COL32(255, 255, 255, 200));
     }
     
-    // --- Eraser Mode (Thread-Safe) ---
-    if (isErasing && is_hovered && ImGui::IsMouseDragging(ImGuiMouseButton_Left))
+    // --- Eraser Mode (Thread-Safe - Right Mouse Drag) ---
+    if (is_hovered && ImGui::IsMouseDragging(ImGuiMouseButton_Right))
     {
+        isDrawing = false; // Stop any drawing action
         juce::Point<float> mousePos = { mouse_pos_in_canvas.x, mouse_pos_in_canvas.y };
         const float eraseRadius = 15.0f;
         const float scale = 50.0f;
@@ -1844,12 +1977,13 @@ void PhysicsModuleProcessor::drawParametersInNode(float itemWidth, const std::fu
         draw_list->AddPolyline(pointsForImGui.data(), (int)pointsForImGui.size(), IM_COL32(255, 255, 255, 128), 0, 1.5f);
     }
 
-    // 4. Draw eraser cursor when in erase mode
-    if (isErasing && is_hovered)
+    // 4. Draw eraser cursor when right mouse button is down
+    if (is_hovered && ImGui::IsMouseDown(ImGuiMouseButton_Right))
     {
         ImVec2 eraserCenter(canvas_p0.x + mouse_pos_in_canvas.x, canvas_p0.y + mouse_pos_in_canvas.y);
         const float eraseRadius = 15.0f;
-        draw_list->AddCircle(eraserCenter, eraseRadius, IM_COL32(255, 50, 50, 200), 0, 2.0f);
+        draw_list->AddCircleFilled(eraserCenter, eraseRadius, IM_COL32(255, 100, 100, 60)); // Subtle red fill
+        draw_list->AddCircle(eraserCenter, eraseRadius, IM_COL32(220, 20, 20, 180), 0, 2.0f); // Red outline
     }
 
     draw_list->PopClipRect();
@@ -1857,43 +1991,93 @@ void PhysicsModuleProcessor::drawParametersInNode(float itemWidth, const std::fu
     // --- Emitter Editor Panel ---
     if (selectedEmitterIndex != -1 && selectedEmitterIndex < emitters.size())
     {
-        ImGui::Separator(); // Visual separator between canvas and panel
-        ImGui::TextColored(ImVec4(1.0f, 1.0f, 0.0f, 1.0f), "Emitter Settings");
+        ImGui::Spacing();
+        
+        // Draw a colored line separator
+        ImDrawList* separator_draw_list = ImGui::GetWindowDrawList();
+        ImVec2 separator_pos = ImGui::GetCursorScreenPos();
+        ImVec2 separator_end = ImVec2(separator_pos.x + 600.0f, separator_pos.y);
+        separator_draw_list->AddLine(separator_pos, separator_end, IM_COL32(255, 215, 0, 200), 2.0f);
+        ImGui::Dummy(ImVec2(0, 2));
+        
+        ImGui::Spacing();
+        ImGui::TextColored(ImVec4(1.0f, 0.84f, 0.0f, 1.0f), "Emitter Settings");
+        ImGui::Spacing();
+        
         auto& emitter = emitters[selectedEmitterIndex];
 
         // Wrap all sliders in consistent width
         ImGui::PushItemWidth(150.0f);
 
-        // Spawn Rate Slider
+        // Spawn Rate Slider (styled in yellow)
+        ImVec4 rateColor = ImVec4(1.0f, 0.84f, 0.2f, 1.0f);
+        ImGui::PushStyleColor(ImGuiCol_FrameBg, ImVec4(rateColor.x * 0.3f, rateColor.y * 0.3f, rateColor.z * 0.3f, 0.5f));
+        ImGui::PushStyleColor(ImGuiCol_FrameBgHovered, ImVec4(rateColor.x * 0.4f, rateColor.y * 0.4f, rateColor.z * 0.4f, 0.7f));
+        ImGui::PushStyleColor(ImGuiCol_SliderGrab, rateColor);
+        ImGui::PushStyleColor(ImGuiCol_SliderGrabActive, ImVec4(rateColor.x * 1.2f, rateColor.y * 1.2f, rateColor.z * 1.2f, 1.0f));
+        
         if (ImGui::SliderFloat("Spawn Rate", &emitter.spawnRateHz, 0.1f, 30.0f, "%.2f Hz", ImGuiSliderFlags_Logarithmic))
         {
             // No need for onModificationEnded since this doesn't affect physics bodies
         }
+        
+        ImGui::PopStyleColor(4);
 
-        // Shape Type Combo Box
+        // Shape Type Combo Box (styled)
+        ImGui::PushStyleColor(ImGuiCol_FrameBg, ImVec4(0.3f, 0.3f, 0.3f, 0.5f));
+        ImGui::PushStyleColor(ImGuiCol_FrameBgHovered, ImVec4(0.4f, 0.4f, 0.4f, 0.7f));
+        ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(rateColor.x * 0.5f, rateColor.y * 0.5f, rateColor.z * 0.5f, 0.8f));
+        
         const char* items[] = { "Ball", "Square", "Triangle" };
         int currentItem = static_cast<int>(emitter.shapeToSpawn);
         if (ImGui::Combo("Shape", &currentItem, items, IM_ARRAYSIZE(items)))
         {
             emitter.shapeToSpawn = static_cast<ShapeType>(currentItem);
         }
+        
+        ImGui::PopStyleColor(3);
 
-        // Initial Velocity Sliders
+        // Initial Velocity Sliders (styled in cyan)
+        ImVec4 velColor = ImVec4(0.5f, 0.9f, 1.0f, 1.0f);
+        ImGui::PushStyleColor(ImGuiCol_FrameBg, ImVec4(velColor.x * 0.3f, velColor.y * 0.3f, velColor.z * 0.3f, 0.5f));
+        ImGui::PushStyleColor(ImGuiCol_FrameBgHovered, ImVec4(velColor.x * 0.4f, velColor.y * 0.4f, velColor.z * 0.4f, 0.7f));
+        ImGui::PushStyleColor(ImGuiCol_SliderGrab, velColor);
+        ImGui::PushStyleColor(ImGuiCol_SliderGrabActive, ImVec4(velColor.x * 1.2f, velColor.y * 1.2f, velColor.z * 1.2f, 1.0f));
+        
         ImGui::SliderFloat("Velocity X", &emitter.initialVelocity.x, -10.0f, 10.0f, "%.2f m/s");
         ImGui::SliderFloat("Velocity Y", &emitter.initialVelocity.y, -10.0f, 10.0f, "%.2f m/s");
+        
+        ImGui::PopStyleColor(4);
 
-        // Mass Slider
+        // Mass Slider (styled in gold)
+        ImVec4 emitterMassColor = ImVec4(0.9f, 0.7f, 0.3f, 1.0f);
+        ImGui::PushStyleColor(ImGuiCol_FrameBg, ImVec4(emitterMassColor.x * 0.3f, emitterMassColor.y * 0.3f, emitterMassColor.z * 0.3f, 0.5f));
+        ImGui::PushStyleColor(ImGuiCol_FrameBgHovered, ImVec4(emitterMassColor.x * 0.4f, emitterMassColor.y * 0.4f, emitterMassColor.z * 0.4f, 0.7f));
+        ImGui::PushStyleColor(ImGuiCol_SliderGrab, emitterMassColor);
+        ImGui::PushStyleColor(ImGuiCol_SliderGrabActive, ImVec4(emitterMassColor.x * 1.2f, emitterMassColor.y * 1.2f, emitterMassColor.z * 1.2f, 1.0f));
+        
         ImGui::SliderFloat("Mass", &emitter.mass, 0.1f, 10.0f, "%.2f kg", ImGuiSliderFlags_Logarithmic);
+        
+        ImGui::PopStyleColor(4);
 
-        // Polarity Radio Buttons
-        ImGui::Text("Polarity:");
+        // Polarity Radio Buttons (styled)
+        ImGui::TextColored(ImVec4(0.9f, 0.9f, 0.5f, 1.0f), "Polarity:");
         ImGui::SameLine();
         int polarityInt = static_cast<int>(emitter.polarity);
+        
+        ImGui::PushStyleColor(ImGuiCol_CheckMark, ImVec4(0.3f, 0.9f, 0.3f, 1.0f));
         if (ImGui::RadioButton("None##emitter", polarityInt == 0)) { emitter.polarity = Polarity::None; }
         ImGui::SameLine();
+        ImGui::PopStyleColor();
+        
+        ImGui::PushStyleColor(ImGuiCol_CheckMark, ImVec4(1.0f, 0.3f, 0.3f, 1.0f));
         if (ImGui::RadioButton("N##emitter", polarityInt == 1)) { emitter.polarity = Polarity::North; }
         ImGui::SameLine();
+        ImGui::PopStyleColor();
+        
+        ImGui::PushStyleColor(ImGuiCol_CheckMark, ImVec4(0.3f, 0.5f, 1.0f, 1.0f));
         if (ImGui::RadioButton("S##emitter", polarityInt == 2)) { emitter.polarity = Polarity::South; }
+        ImGui::PopStyleColor();
 
         ImGui::PopItemWidth();
     }

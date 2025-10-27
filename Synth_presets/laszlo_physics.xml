@@ -1,0 +1,488 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<ModularSynthPreset version="1" bpm="120.0">
+  <modules>
+    <module logicalId="1" type="physics">
+      <params>
+        <PhysicsParams>
+          <PARAM id="gravity" value="12.30000019073486"/>
+          <PARAM id="maxObjects" value="100.0"/>
+          <PARAM id="strokeSize" value="4.400000095367432"/>
+          <PARAM id="wind" value="0.0"/>
+          <PARAM id="magnetForce"/>
+          <PARAM id="metalFriction"/>
+          <PARAM id="metalRestitution"/>
+          <PARAM id="soilFriction"/>
+          <PARAM id="soilRestitution"/>
+          <PARAM id="vortexSpin" value="33.59999847412109"/>
+          <PARAM id="vortexStrength" value="77.60000610351562"/>
+          <PARAM id="woodFriction"/>
+          <PARAM id="woodRestitution"/>
+        </PhysicsParams>
+      </params>
+      <extra>
+        <PhysicsState spawnPointX="2.740000009536743" spawnPointY="0.6399999856948853">
+          <Strokes>
+            <Stroke type="0" conveyorDirX="0.0" conveyorDirY="0.0" points="42,100;62,104;73,107;78,109;91,111;104,115;"/>
+            <Stroke type="0" conveyorDirX="0.0" conveyorDirY="0.0" points="230,92;236,93;248,95;280,98;303,99;328,101;"/>
+            <Stroke type="0" conveyorDirX="0.0" conveyorDirY="0.0" points="512,98;518,97;518,103;515,108;511,115;503,127;496,134;"/>
+            <Stroke type="0" conveyorDirX="0.0" conveyorDirY="0.0" points="400,198;400,205;388,216;380,221;373,227;"/>
+            <Stroke type="0" conveyorDirX="0.0" conveyorDirY="0.0" points="297,243;289,240;283,240;273,248;267,252;260,257;252,261;242,265;236,267;"/>
+            <Stroke type="0" conveyorDirX="0.0" conveyorDirY="0.0" points="142,225;138,235;135,243;129,251;123,261;119,266;110,275;95,290;88,295;81,299;69,306;63,309;"/>
+            <Stroke type="0" conveyorDirX="0.0" conveyorDirY="0.0" points="44,302;48,310;49,316;52,321;56,326;62,329;68,331;"/>
+            <Stroke type="0" conveyorDirX="0.0" conveyorDirY="0.0" points="312,63;304,63;297,61;292,60;299,62;"/>
+          </Strokes>
+          <PhysicsObjects>
+            <Object type="0" posX="0.1828885823488235" posY="5.099367618560791" velX="3.657771348953247"
+                    velY="31.51870346069336" angle="-38.11564254760742" mass="10.0"
+                    polarity="2" radius="10.0"/>
+            <Object type="0" posX="2.0218186378479" posY="1.209109783172607" velX="-2.164854049682617"
+                    velY="10.97879886627197" angle="-6.639107704162598" mass="10.0"
+                    polarity="2" radius="10.0"/>
+            <Object type="0" posX="7.139739990234375" posY="6.184999942779541" velX="-8.836820602416992"
+                    velY="10.79813289642334" angle="93.70897674560547" mass="10.0"
+                    polarity="2" radius="10.0"/>
+            <Object type="0" posX="6.787570953369141" posY="1.294089436531067" velX="6.83368444442749"
+                    velY="10.42317008972168" angle="-33.38160705566406" mass="10.0"
+                    polarity="2" radius="10.0"/>
+            <Object type="0" posX="7.216262340545654" posY="4.143510818481445" velX="-2.024398803710938"
+                    velY="-1.063919186592102" angle="-62.57018280029297" mass="10.0"
+                    polarity="2" radius="10.0"/>
+            <Object type="0" posX="11.08678150177002" posY="5.358396053314209" velX="-0.02162623405456543"
+                    velY="11.65452671051025" angle="-10.03206062316895" mass="10.0"
+                    polarity="2" radius="10.0"/>
+            <Object type="0" posX="0.413798987865448" posY="5.838339328765869" velX="-4.834471702575684"
+                    velY="5.916512489318848" angle="-71.54843902587891" mass="10.0"
+                    polarity="2" radius="10.0"/>
+            <Object type="0" posX="10.96272850036621" posY="4.688436031341553" velX="-2.82890796661377"
+                    velY="17.37061882019043" angle="-1.620189189910889" mass="10.0"
+                    polarity="2" radius="10.0"/>
+            <Object type="0" posX="1.650138020515442" posY="1.623442053794861" velX="0.7517603635787964"
+                    velY="-6.037546634674072" angle="-70.38832855224609" mass="10.0"
+                    polarity="2" radius="10.0"/>
+            <Object type="0" posX="3.012099742889404" posY="3.967593193054199" velX="0.7450988292694092"
+                    velY="8.42180347442627" angle="-146.4715881347656" mass="10.0"
+                    polarity="2" radius="10.0"/>
+            <Object type="2" posX="6.201097965240479" posY="6.739843845367432" velX="-3.645531415939331"
+                    velY="3.802319526672363" angle="-67.42884063720703" mass="10.0"
+                    polarity="2" vertices="0,-0.2;0.2,0.2;-0.2,0.2;"/>
+            <Object type="2" posX="7.217206478118896" posY="1.561123251914978" velX="-1.287557005882263"
+                    velY="12.4253454208374" angle="-69.63907623291016" mass="10.0"
+                    polarity="2" vertices="0,-0.2;0.2,0.2;-0.2,0.2;"/>
+            <Object type="1" posX="7.811363697052002" posY="6.942837238311768" velX="2.242712259292603"
+                    velY="9.871211051940918" angle="-51.30515289306641" mass="10.0"
+                    polarity="2" vertices="-0.2,-0.2;0.2,-0.2;0.2,0.2;-0.2,0.2;"/>
+            <Object type="1" posX="10.93960952758789" posY="1.239559650421143" velX="-3.181182146072388"
+                    velY="15.28471660614014" angle="-55.51317977905273" mass="10.0"
+                    polarity="2" vertices="-0.2,-0.2;0.2,-0.2;0.2,0.2;-0.2,0.2;"/>
+            <Object type="1" posX="6.935702800750732" posY="3.67873477935791" velX="-0.870518684387207"
+                    velY="-1.703119516372681" angle="50.36160278320312" mass="10.0"
+                    polarity="2" vertices="-0.2,-0.2;0.2,-0.2;0.2,0.2;-0.2,0.2;"/>
+            <Object type="1" posX="9.480290412902832" posY="1.088794112205505" velX="-1.501495599746704"
+                    velY="-0.9277594089508057" angle="7.216874122619629" mass="10.0"
+                    polarity="2" vertices="-0.2,-0.2;0.2,-0.2;0.2,0.2;-0.2,0.2;"/>
+            <Object type="0" posX="1.322451591491699" posY="5.124779224395752" velX="-2.860266923904419"
+                    velY="6.467397689819336" angle="-76.97016906738281" mass="10.0"
+                    polarity="2" radius="10.0"/>
+            <Object type="1" posX="12.0" posY="6.627745151519775" velX="-0.9849813580513"
+                    velY="10.71516513824463" angle="7.407629489898682" mass="10.0"
+                    polarity="2" vertices="-0.2,-0.2;0.2,-0.2;0.2,0.2;-0.2,0.2;"/>
+            <Object type="1" posX="6.797475814819336" posY="7.244097232818604" velX="0.8442603945732117"
+                    velY="-11.03104209899902" angle="-95.79126739501953" mass="10.0"
+                    polarity="2" vertices="-0.2,-0.2;0.2,-0.2;0.2,0.2;-0.2,0.2;"/>
+          </PhysicsObjects>
+          <ForceObjects/>
+          <Emitters/>
+        </PhysicsState>
+      </extra>
+    </module>
+    <module logicalId="2" type="Sequencer">
+      <params>
+        <SeqParams>
+          <PARAM id="gateLength" value="0.5"/>
+          <PARAM id="gateLength_mod" value="0.5"/>
+          <PARAM id="gateThreshold" value="0.5"/>
+          <PARAM id="numSteps" value="6.0"/>
+          <PARAM id="numSteps_max" value="16.0"/>
+          <PARAM id="numSteps_mod" value="0.5"/>
+          <PARAM id="rate" value="20.0"/>
+          <PARAM id="rate_division" value="3.0"/>
+          <PARAM id="rate_mod" value="0.0"/>
+          <PARAM id="step1" value="0.2045454382896423"/>
+          <PARAM id="step10" value="0.5"/>
+          <PARAM id="step10_gate" value="0.7999999523162842"/>
+          <PARAM id="step10_gate_mod" value="0.5"/>
+          <PARAM id="step10_mod" value="0.5"/>
+          <PARAM id="step10_trig" value="0.0"/>
+          <PARAM id="step10_trig_mod" value="0.5"/>
+          <PARAM id="step11" value="0.5"/>
+          <PARAM id="step11_gate" value="0.7999999523162842"/>
+          <PARAM id="step11_gate_mod" value="0.5"/>
+          <PARAM id="step11_mod" value="0.5"/>
+          <PARAM id="step11_trig" value="0.0"/>
+          <PARAM id="step11_trig_mod" value="0.5"/>
+          <PARAM id="step12" value="0.5"/>
+          <PARAM id="step12_gate" value="0.7999999523162842"/>
+          <PARAM id="step12_gate_mod" value="0.5"/>
+          <PARAM id="step12_mod" value="0.5"/>
+          <PARAM id="step12_trig" value="0.0"/>
+          <PARAM id="step12_trig_mod" value="0.5"/>
+          <PARAM id="step13" value="0.5"/>
+          <PARAM id="step13_gate" value="0.7999999523162842"/>
+          <PARAM id="step13_gate_mod" value="0.5"/>
+          <PARAM id="step13_mod" value="0.5"/>
+          <PARAM id="step13_trig" value="0.0"/>
+          <PARAM id="step13_trig_mod" value="0.5"/>
+          <PARAM id="step14" value="0.5"/>
+          <PARAM id="step14_gate" value="0.7999999523162842"/>
+          <PARAM id="step14_gate_mod" value="0.5"/>
+          <PARAM id="step14_mod" value="0.5"/>
+          <PARAM id="step14_trig" value="0.0"/>
+          <PARAM id="step14_trig_mod" value="0.5"/>
+          <PARAM id="step15" value="0.5"/>
+          <PARAM id="step15_gate" value="0.7999999523162842"/>
+          <PARAM id="step15_gate_mod" value="0.5"/>
+          <PARAM id="step15_mod" value="0.5"/>
+          <PARAM id="step15_trig" value="0.0"/>
+          <PARAM id="step15_trig_mod" value="0.5"/>
+          <PARAM id="step16" value="0.5"/>
+          <PARAM id="step16_gate" value="0.7999999523162842"/>
+          <PARAM id="step16_gate_mod" value="0.5"/>
+          <PARAM id="step16_mod" value="0.5"/>
+          <PARAM id="step16_trig" value="0.0"/>
+          <PARAM id="step16_trig_mod" value="0.5"/>
+          <PARAM id="step1_gate" value="0.1899999976158142"/>
+          <PARAM id="step1_gate_mod" value="0.5"/>
+          <PARAM id="step1_mod" value="0.5"/>
+          <PARAM id="step1_trig" value="1.0"/>
+          <PARAM id="step1_trig_mod" value="0.5"/>
+          <PARAM id="step2" value="0.5681818127632141"/>
+          <PARAM id="step2_gate" value="0.7099999785423279"/>
+          <PARAM id="step2_gate_mod" value="0.5"/>
+          <PARAM id="step2_mod" value="0.5"/>
+          <PARAM id="step2_trig" value="0.0"/>
+          <PARAM id="step2_trig_mod" value="0.5"/>
+          <PARAM id="step3" value="0.5"/>
+          <PARAM id="step3_gate" value="0.3499999940395355"/>
+          <PARAM id="step3_gate_mod" value="0.5"/>
+          <PARAM id="step3_mod" value="0.5"/>
+          <PARAM id="step3_trig" value="0.0"/>
+          <PARAM id="step3_trig_mod" value="0.5"/>
+          <PARAM id="step4" value="0.5"/>
+          <PARAM id="step4_gate" value="0.1599999964237213"/>
+          <PARAM id="step4_gate_mod" value="0.5"/>
+          <PARAM id="step4_mod" value="0.5"/>
+          <PARAM id="step4_trig" value="1.0"/>
+          <PARAM id="step4_trig_mod" value="0.5"/>
+          <PARAM id="step5" value="0.5"/>
+          <PARAM id="step5_gate" value="0.7999999523162842"/>
+          <PARAM id="step5_gate_mod" value="0.5"/>
+          <PARAM id="step5_mod" value="0.5"/>
+          <PARAM id="step5_trig" value="0.0"/>
+          <PARAM id="step5_trig_mod" value="0.5"/>
+          <PARAM id="step6" value="0.5"/>
+          <PARAM id="step6_gate" value="0.5"/>
+          <PARAM id="step6_gate_mod" value="0.5"/>
+          <PARAM id="step6_mod" value="0.5"/>
+          <PARAM id="step6_trig" value="1.0"/>
+          <PARAM id="step6_trig_mod" value="0.5"/>
+          <PARAM id="step7" value="0.5"/>
+          <PARAM id="step7_gate" value="0.7999999523162842"/>
+          <PARAM id="step7_gate_mod" value="0.5"/>
+          <PARAM id="step7_mod" value="0.5"/>
+          <PARAM id="step7_trig" value="0.0"/>
+          <PARAM id="step7_trig_mod" value="0.5"/>
+          <PARAM id="step8" value="0.5"/>
+          <PARAM id="step8_gate" value="0.7999999523162842"/>
+          <PARAM id="step8_gate_mod" value="0.5"/>
+          <PARAM id="step8_mod" value="0.5"/>
+          <PARAM id="step8_trig" value="0.0"/>
+          <PARAM id="step8_trig_mod" value="0.5"/>
+          <PARAM id="step9" value="0.5"/>
+          <PARAM id="step9_gate" value="0.7999999523162842"/>
+          <PARAM id="step9_gate_mod" value="0.5"/>
+          <PARAM id="step9_mod" value="0.5"/>
+          <PARAM id="step9_trig" value="0.0"/>
+          <PARAM id="step9_trig_mod" value="0.5"/>
+          <PARAM id="sync" value="0.0"/>
+        </SeqParams>
+      </params>
+      <extra>
+        <SequencerState sync="0.0" rate_division="3.0"/>
+      </extra>
+    </module>
+    <module logicalId="5" type="sample loader">
+      <params>
+        <SampleLoaderParameters samplePath="H:\0000_CODE\01_collider_pyo\audio\samples\percussion\KSHMR_Acoustic_Kick_01_Big.wav">
+          <PARAM id="engine" value="1.0"/>
+          <PARAM id="gate" value="0.7999999523162842"/>
+          <PARAM id="gate_mod" value="1.0"/>
+          <PARAM id="loop" value="0.0"/>
+          <PARAM id="pitch" value="0.0"/>
+          <PARAM id="pitch_mod" value="0.0"/>
+          <PARAM id="rangeEnd" value="1.0"/>
+          <PARAM id="rangeEnd_mod" value="1.0"/>
+          <PARAM id="rangeStart" value="0.0"/>
+          <PARAM id="rangeStart_mod" value="0.0"/>
+          <PARAM id="rbPhaseInd" value="1.0"/>
+          <PARAM id="rbWindowShort" value="1.0"/>
+          <PARAM id="speed" value="1.0"/>
+          <PARAM id="speed_mod" value="1.0"/>
+          <PARAM id="trigger_mod" value="0.0"/>
+        </SampleLoaderParameters>
+      </params>
+    </module>
+    <module logicalId="8" type="sample loader">
+      <params>
+        <SampleLoaderParameters samplePath="H:\0000_CODE\01_collider_pyo\audio\samples\percussion\KSHMR_Acoustic_Kick_01_Big.wav">
+          <PARAM id="engine" value="1.0"/>
+          <PARAM id="gate" value="0.7999999523162842"/>
+          <PARAM id="gate_mod" value="1.0"/>
+          <PARAM id="loop" value="0.0"/>
+          <PARAM id="pitch" value="0.0"/>
+          <PARAM id="pitch_mod" value="0.0"/>
+          <PARAM id="rangeEnd" value="1.0"/>
+          <PARAM id="rangeEnd_mod" value="1.0"/>
+          <PARAM id="rangeStart" value="0.0"/>
+          <PARAM id="rangeStart_mod" value="0.0"/>
+          <PARAM id="rbPhaseInd" value="1.0"/>
+          <PARAM id="rbWindowShort" value="1.0"/>
+          <PARAM id="speed" value="1.0"/>
+          <PARAM id="speed_mod" value="1.0"/>
+          <PARAM id="trigger_mod" value="0.0"/>
+        </SampleLoaderParameters>
+      </params>
+    </module>
+    <module logicalId="9" type="sample loader">
+      <params>
+        <SampleLoaderParameters samplePath="H:\0000_CODE\01_collider_pyo\audio\samples\percussion\KSHMR_Acoustic_Ride_02.wav">
+          <PARAM id="engine" value="1.0"/>
+          <PARAM id="gate" value="0.7999999523162842"/>
+          <PARAM id="gate_mod" value="1.0"/>
+          <PARAM id="loop" value="0.0"/>
+          <PARAM id="pitch" value="0.0"/>
+          <PARAM id="pitch_mod" value="0.0"/>
+          <PARAM id="rangeEnd" value="1.0"/>
+          <PARAM id="rangeEnd_mod" value="1.0"/>
+          <PARAM id="rangeStart" value="0.0"/>
+          <PARAM id="rangeStart_mod" value="0.0"/>
+          <PARAM id="rbPhaseInd" value="1.0"/>
+          <PARAM id="rbWindowShort" value="1.0"/>
+          <PARAM id="speed" value="1.0"/>
+          <PARAM id="speed_mod" value="1.0"/>
+          <PARAM id="trigger_mod" value="0.0"/>
+        </SampleLoaderParameters>
+      </params>
+    </module>
+    <module logicalId="10" type="Value">
+      <params>
+        <ValueParams>
+          <PARAM id="cvMax" value="1.0"/>
+          <PARAM id="cvMin" value="0.0"/>
+          <PARAM id="value" value="5.0"/>
+        </ValueParams>
+      </params>
+    </module>
+    <module logicalId="11" type="trackmixer">
+      <params>
+        <TrackMixerParams>
+          <PARAM id="numTracks" value="8.0"/>
+          <PARAM id="numTracks_max" value="64.0"/>
+          <PARAM id="track_gain_1" value="0.0"/>
+          <PARAM id="track_gain_10" value="0.0"/>
+          <PARAM id="track_gain_11" value="0.0"/>
+          <PARAM id="track_gain_12" value="0.0"/>
+          <PARAM id="track_gain_13" value="0.0"/>
+          <PARAM id="track_gain_14" value="0.0"/>
+          <PARAM id="track_gain_15" value="0.0"/>
+          <PARAM id="track_gain_16" value="0.0"/>
+          <PARAM id="track_gain_17" value="0.0"/>
+          <PARAM id="track_gain_18" value="0.0"/>
+          <PARAM id="track_gain_19" value="0.0"/>
+          <PARAM id="track_gain_2" value="0.0"/>
+          <PARAM id="track_gain_20" value="0.0"/>
+          <PARAM id="track_gain_21" value="0.0"/>
+          <PARAM id="track_gain_22" value="0.0"/>
+          <PARAM id="track_gain_23" value="0.0"/>
+          <PARAM id="track_gain_24" value="0.0"/>
+          <PARAM id="track_gain_25" value="0.0"/>
+          <PARAM id="track_gain_26" value="0.0"/>
+          <PARAM id="track_gain_27" value="0.0"/>
+          <PARAM id="track_gain_28" value="0.0"/>
+          <PARAM id="track_gain_29" value="0.0"/>
+          <PARAM id="track_gain_3" value="0.0"/>
+          <PARAM id="track_gain_30" value="0.0"/>
+          <PARAM id="track_gain_31" value="0.0"/>
+          <PARAM id="track_gain_32" value="0.0"/>
+          <PARAM id="track_gain_33" value="0.0"/>
+          <PARAM id="track_gain_34" value="0.0"/>
+          <PARAM id="track_gain_35" value="0.0"/>
+          <PARAM id="track_gain_36" value="0.0"/>
+          <PARAM id="track_gain_37" value="0.0"/>
+          <PARAM id="track_gain_38" value="0.0"/>
+          <PARAM id="track_gain_39" value="0.0"/>
+          <PARAM id="track_gain_4" value="0.0"/>
+          <PARAM id="track_gain_40" value="0.0"/>
+          <PARAM id="track_gain_41" value="0.0"/>
+          <PARAM id="track_gain_42" value="0.0"/>
+          <PARAM id="track_gain_43" value="0.0"/>
+          <PARAM id="track_gain_44" value="0.0"/>
+          <PARAM id="track_gain_45" value="0.0"/>
+          <PARAM id="track_gain_46" value="0.0"/>
+          <PARAM id="track_gain_47" value="0.0"/>
+          <PARAM id="track_gain_48" value="0.0"/>
+          <PARAM id="track_gain_49" value="0.0"/>
+          <PARAM id="track_gain_5" value="0.0"/>
+          <PARAM id="track_gain_50" value="0.0"/>
+          <PARAM id="track_gain_51" value="0.0"/>
+          <PARAM id="track_gain_52" value="0.0"/>
+          <PARAM id="track_gain_53" value="0.0"/>
+          <PARAM id="track_gain_54" value="0.0"/>
+          <PARAM id="track_gain_55" value="0.0"/>
+          <PARAM id="track_gain_56" value="0.0"/>
+          <PARAM id="track_gain_57" value="0.0"/>
+          <PARAM id="track_gain_58" value="0.0"/>
+          <PARAM id="track_gain_59" value="0.0"/>
+          <PARAM id="track_gain_6" value="0.0"/>
+          <PARAM id="track_gain_60" value="0.0"/>
+          <PARAM id="track_gain_61" value="0.0"/>
+          <PARAM id="track_gain_62" value="0.0"/>
+          <PARAM id="track_gain_63" value="0.0"/>
+          <PARAM id="track_gain_64" value="0.0"/>
+          <PARAM id="track_gain_7" value="0.0"/>
+          <PARAM id="track_gain_8" value="0.0"/>
+          <PARAM id="track_gain_9" value="0.0"/>
+          <PARAM id="track_pan_1" value="-1.0"/>
+          <PARAM id="track_pan_10" value="0.0"/>
+          <PARAM id="track_pan_11" value="0.0"/>
+          <PARAM id="track_pan_12" value="0.0"/>
+          <PARAM id="track_pan_13" value="0.0"/>
+          <PARAM id="track_pan_14" value="0.0"/>
+          <PARAM id="track_pan_15" value="0.0"/>
+          <PARAM id="track_pan_16" value="0.0"/>
+          <PARAM id="track_pan_17" value="0.0"/>
+          <PARAM id="track_pan_18" value="0.0"/>
+          <PARAM id="track_pan_19" value="0.0"/>
+          <PARAM id="track_pan_2" value="1.0"/>
+          <PARAM id="track_pan_20" value="0.0"/>
+          <PARAM id="track_pan_21" value="0.0"/>
+          <PARAM id="track_pan_22" value="0.0"/>
+          <PARAM id="track_pan_23" value="0.0"/>
+          <PARAM id="track_pan_24" value="0.0"/>
+          <PARAM id="track_pan_25" value="0.0"/>
+          <PARAM id="track_pan_26" value="0.0"/>
+          <PARAM id="track_pan_27" value="0.0"/>
+          <PARAM id="track_pan_28" value="0.0"/>
+          <PARAM id="track_pan_29" value="0.0"/>
+          <PARAM id="track_pan_3" value="0.0"/>
+          <PARAM id="track_pan_30" value="0.0"/>
+          <PARAM id="track_pan_31" value="0.0"/>
+          <PARAM id="track_pan_32" value="0.0"/>
+          <PARAM id="track_pan_33" value="0.0"/>
+          <PARAM id="track_pan_34" value="0.0"/>
+          <PARAM id="track_pan_35" value="0.0"/>
+          <PARAM id="track_pan_36" value="0.0"/>
+          <PARAM id="track_pan_37" value="0.0"/>
+          <PARAM id="track_pan_38" value="0.0"/>
+          <PARAM id="track_pan_39" value="0.0"/>
+          <PARAM id="track_pan_4" value="0.0"/>
+          <PARAM id="track_pan_40" value="0.0"/>
+          <PARAM id="track_pan_41" value="0.0"/>
+          <PARAM id="track_pan_42" value="0.0"/>
+          <PARAM id="track_pan_43" value="0.0"/>
+          <PARAM id="track_pan_44" value="0.0"/>
+          <PARAM id="track_pan_45" value="0.0"/>
+          <PARAM id="track_pan_46" value="0.0"/>
+          <PARAM id="track_pan_47" value="0.0"/>
+          <PARAM id="track_pan_48" value="0.0"/>
+          <PARAM id="track_pan_49" value="0.0"/>
+          <PARAM id="track_pan_5" value="-1.0"/>
+          <PARAM id="track_pan_50" value="0.0"/>
+          <PARAM id="track_pan_51" value="0.0"/>
+          <PARAM id="track_pan_52" value="0.0"/>
+          <PARAM id="track_pan_53" value="0.0"/>
+          <PARAM id="track_pan_54" value="0.0"/>
+          <PARAM id="track_pan_55" value="0.0"/>
+          <PARAM id="track_pan_56" value="0.0"/>
+          <PARAM id="track_pan_57" value="0.0"/>
+          <PARAM id="track_pan_58" value="0.0"/>
+          <PARAM id="track_pan_59" value="0.0"/>
+          <PARAM id="track_pan_6" value="1.0"/>
+          <PARAM id="track_pan_60" value="0.0"/>
+          <PARAM id="track_pan_61" value="0.0"/>
+          <PARAM id="track_pan_62" value="0.0"/>
+          <PARAM id="track_pan_63" value="0.0"/>
+          <PARAM id="track_pan_64" value="0.0"/>
+          <PARAM id="track_pan_7" value="-1.0"/>
+          <PARAM id="track_pan_8" value="1.0"/>
+          <PARAM id="track_pan_9" value="0.0"/>
+        </TrackMixerParams>
+      </params>
+    </module>
+    <module logicalId="12" type="midi knobs">
+      <params>
+        <MIDIKnobsParams>
+          <PARAM id="midiChannel" value="0.0"/>
+          <PARAM id="midiDevice" value="0.0"/>
+          <PARAM id="numKnobs" value="8.0"/>
+        </MIDIKnobsParams>
+      </params>
+      <extra>
+        <MIDIKnobsState controllerPreset="" deviceFilter="0" midiChannel="0">
+          <Mapping index="0" cc="-1" min="0.0" max="1.0"/>
+          <Mapping index="1" cc="-1" min="0.0" max="1.0"/>
+          <Mapping index="2" cc="-1" min="0.0" max="1.0"/>
+          <Mapping index="3" cc="-1" min="0.0" max="1.0"/>
+          <Mapping index="4" cc="-1" min="0.0" max="1.0"/>
+          <Mapping index="5" cc="-1" min="0.0" max="1.0"/>
+          <Mapping index="6" cc="-1" min="0.0" max="1.0"/>
+          <Mapping index="7" cc="-1" min="0.0" max="1.0"/>
+          <Mapping index="8" cc="-1" min="0.0" max="1.0"/>
+          <Mapping index="9" cc="-1" min="0.0" max="1.0"/>
+          <Mapping index="10" cc="-1" min="0.0" max="1.0"/>
+          <Mapping index="11" cc="-1" min="0.0" max="1.0"/>
+          <Mapping index="12" cc="-1" min="0.0" max="1.0"/>
+          <Mapping index="13" cc="-1" min="0.0" max="1.0"/>
+          <Mapping index="14" cc="-1" min="0.0" max="1.0"/>
+          <Mapping index="15" cc="-1" min="0.0" max="1.0"/>
+        </MIDIKnobsState>
+      </extra>
+    </module>
+    <module logicalId="21" type="Mixer">
+      <params>
+        <MixerParams>
+          <PARAM id="crossfade" value="0.0"/>
+          <PARAM id="gain" value="-11.09000015258789"/>
+          <PARAM id="pan" value="0.0"/>
+        </MixerParams>
+      </params>
+    </module>
+  </modules>
+  <connections>
+    <connection srcId="1" srcChan="2" dstId="5" dstChan="3"/>
+    <connection srcId="1" srcChan="0" dstId="21" dstChan="0"/>
+    <connection srcId="1" srcChan="1" dstId="21" dstChan="1"/>
+    <connection srcId="5" srcChan="0" dstId="11" dstChan="0"/>
+    <connection srcId="5" srcChan="1" dstId="11" dstChan="1"/>
+    <connection srcId="8" srcChan="0" dstId="11" dstChan="4"/>
+    <connection srcId="8" srcChan="1" dstId="11" dstChan="5"/>
+    <connection srcId="9" srcChan="0" dstId="11" dstChan="7"/>
+    <connection srcId="9" srcChan="1" dstId="11" dstChan="6"/>
+    <connection srcId="11" srcChan="0" dstId="output" dstChan="0"/>
+    <connection srcId="11" srcChan="1" dstId="output" dstChan="1"/>
+    <connection srcId="21" srcChan="0" dstId="output" dstChan="0"/>
+    <connection srcId="21" srcChan="1" dstId="output" dstChan="1"/>
+  </connections>
+  <NodeEditorUI>
+    <node id="1" x="-311.0" y="508.0"/>
+    <node id="2" x="-955.0" y="561.0"/>
+    <node id="5" x="512.0" y="552.0"/>
+    <node id="8" x="505.0" y="1177.0"/>
+    <node id="9" x="508.0" y="1796.0"/>
+    <node id="10" x="976.6666259765625" y="943.3333740234375"/>
+    <node id="11" x="1305.0" y="1108.333374023438"/>
+    <node id="12" x="-940.0" y="1430.0"/>
+    <node id="21" x="950.9166259765625" y="540.9166259765625"/>
+    <node id="0" x="1612.0" y="565.0"/>
+  </NodeEditorUI>
+</ModularSynthPreset>
