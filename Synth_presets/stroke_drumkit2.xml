@@ -1,0 +1,303 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<ModularSynthPreset version="1" bpm="120.0">
+  <modules>
+    <module logicalId="1" type="stroke_sequencer">
+      <params>
+        <StrokeSeqParams>
+          <PARAM id="ceilingY" value="0.75"/>
+          <PARAM id="floorY" value="0.25"/>
+          <PARAM id="midY" value="0.5"/>
+          <PARAM id="playhead" value="0.0"/>
+          <PARAM id="rate" value="0.9999999403953552"/>
+          <PARAM id="rate_division" value="4.0"/>
+          <PARAM id="sync" value="1.0"/>
+        </StrokeSeqParams>
+      </params>
+      <extra>
+        <StrokeSequencerState sync="1.0" rate_division="4.0">
+          <Strokes>
+            <Stroke points="0.152381,0.316667;0.15119,0.313889;0.14881,0.305556;0.147619,0.302778;0.146429,0.294444;0.144048,0.288889;0.142857,0.283333;0.139286,0.275;0.138095,0.266667;0.134524,0.252778;0.133333,0.247222;0.129762,0.236111;0.128571,0.227778;0.128571,0.225;0.127381,0.222222;0.127381,0.222222;"/>
+            <Stroke points="0.480952,0.288889;0.480952,0.275;0.480952,0.252778;0.480952,0.238889;0.479762,0.213889;0.478571,0.177778;0.477381,0.161111;0.477381,0.147222;0.477381,0.133333;0.477381,0.122222;0.477381,0.111111;0.477381,0.102778;0.477381,0.102778;"/>
+            <Stroke points="0.696429,0.313889;0.69881,0.291667;0.70119,0.258333;0.703571,0.238889;0.704762,0.225;0.704762,0.202778;0.705952,0.188889;0.705952,0.180556;0.705952,0.169444;0.705952,0.166667;0.707143,0.161111;0.707143,0.158333;"/>
+            <Stroke points="0.221429,0.566667;0.221429,0.563889;0.221429,0.561111;0.221429,0.558333;0.221429,0.555556;0.221429,0.552778;0.221429,0.55;0.221429,0.547222;0.221429,0.547222;0.221429,0.541667;0.221429,0.536111;0.221429,0.530556;0.221429,0.530556;0.221429,0.527778;0.221429,0.525;0.221429,0.519444;0.221429,0.516667;0.221429,0.513889;0.221429,0.505556;0.220238,0.502778;0.220238,0.5;0.220238,0.497222;0.220238,0.497222;0.220238,0.497222;0.220238,0.497222;0.220238,0.494444;0.220238,0.494444;0.220238,0.491667;0.220238,0.491667;0.220238,0.488889;0.220238,0.488889;0.220238,0.488889;0.220238,0.486111;0.220238,0.486111;0.220238,0.486111;0.220238,0.486111;0.220238,0.486111;0.220238,0.483333;0.220238,0.483333;0.220238,0.483333;0.220238,0.483333;0.220238,0.483333;0.220238,0.483333;0.220238,0.483333;0.220238,0.483333;0.220238,0.483333;0.220238,0.480556;0.220238,0.477778;0.220238,0.475;0.220238,0.475;0.220238,0.472222;0.220238,0.469444;0.219048,0.469444;0.219048,0.466667;0.219048,0.463889;0.219048,0.463889;0.219048,0.463889;0.219048,0.463889;0.219048,0.463889;0.219048,0.463889;0.219048,0.463889;0.219048,0.463889;0.219048,0.463889;0.219048,0.463889;0.219048,0.463889;0.219048,0.463889;0.219048,0.463889;0.219048,0.463889;0.219048,0.463889;0.219048,0.463889;0.219048,0.463889;0.219048,0.463889;0.219048,0.463889;0.219048,0.463889;0.219048,0.463889;"/>
+            <Stroke points="0.892857,0.313889;0.895238,0.3;0.896429,0.294444;0.896429,0.288889;0.896429,0.286111;0.897619,0.283333;0.897619,0.277778;0.89881,0.275;0.89881,0.269444;0.89881,0.269444;0.9,0.263889;0.9,0.263889;0.9,0.263889;0.9,0.263889;0.9,0.263889;0.9,0.263889;0.9,0.261111;0.9,0.258333;0.9,0.258333;0.9,0.255556;0.9,0.252778;0.9,0.252778;0.9,0.247222;0.9,0.244444;0.9,0.244444;0.9,0.241667;0.9,0.241667;0.9,0.241667;0.9,0.241667;0.9,0.241667;0.9,0.241667;"/>
+            <Stroke points="0.70119,0.544444;0.70119,0.541667;0.70119,0.538889;0.69881,0.530556;0.697619,0.527778;0.696429,0.525;0.696429,0.522222;0.691667,0.516667;0.691667,0.511111;0.688095,0.505556;0.686905,0.502778;0.682143,0.497222;0.682143,0.497222;0.679762,0.497222;0.677381,0.494444;0.677381,0.491667;0.67619,0.488889;0.672619,0.486111;0.667857,0.483333;0.665476,0.483333;0.663095,0.480556;0.660714,0.477778;0.659524,0.475;0.657143,0.475;0.653571,0.472222;0.652381,0.469444;0.652381,0.469444;0.652381,0.469444;0.652381,0.469444;0.652381,0.469444;0.652381,0.469444;0.652381,0.469444;0.652381,0.469444;0.652381,0.469444;0.652381,0.469444;0.652381,0.469444;"/>
+            <Stroke points="0.877381,0.55;0.877381,0.547222;0.87619,0.544444;0.87381,0.536111;0.872619,0.530556;0.872619,0.527778;0.871429,0.519444;0.869048,0.511111;0.867857,0.508333;0.867857,0.505556;0.866667,0.5;0.864286,0.497222;0.863095,0.488889;0.861905,0.486111;0.861905,0.486111;0.861905,0.480556;0.859524,0.475;0.859524,0.475;0.859524,0.472222;0.859524,0.469444;0.858333,0.469444;0.858333,0.466667;0.858333,0.466667;0.858333,0.466667;0.858333,0.466667;0.858333,0.466667;0.858333,0.466667;0.858333,0.466667;0.858333,0.466667;0.858333,0.466667;"/>
+            <Stroke points="0.271429,0.811111;0.271429,0.808333;0.271429,0.797222;0.271429,0.791667;0.271429,0.783333;0.275,0.761111;0.27619,0.752778;0.277381,0.744444;0.280952,0.733333;0.282143,0.727778;0.285714,0.716667;0.286905,0.711111;0.288095,0.708333;0.290476,0.702778;0.291667,0.7;0.292857,0.697222;0.294048,0.691667;0.295238,0.686111;0.295238,0.683333;0.295238,0.680556;0.295238,0.680556;0.295238,0.677778;0.295238,0.675;0.295238,0.675;0.295238,0.675;0.295238,0.675;0.295238,0.675;0.295238,0.675;0.295238,0.675;0.295238,0.675;"/>
+            <Stroke points="0.438095,0.838889;0.438095,0.836111;0.439286,0.825;0.439286,0.819444;0.441667,0.802778;0.442857,0.8;0.445238,0.777778;0.446429,0.775;0.44881,0.763889;0.44881,0.761111;0.44881,0.755556;0.44881,0.752778;0.45,0.752778;0.45,0.75;0.45,0.75;0.45,0.75;0.45,0.747222;0.45,0.747222;0.45,0.747222;0.45,0.747222;0.45,0.744444;0.45,0.741667;0.45,0.741667;0.45,0.741667;0.45,0.741667;0.45,0.741667;"/>
+            <Stroke points="0.513095,0.822222;0.513095,0.813889;0.514286,0.797222;0.514286,0.786111;0.514286,0.775;0.514286,0.766667;0.513095,0.758333;0.511905,0.752778;0.510714,0.75;0.510714,0.741667;0.510714,0.738889;0.509524,0.730556;0.508333,0.725;0.508333,0.722222;0.507143,0.719444;0.505952,0.719444;0.505952,0.716667;0.505952,0.713889;0.505952,0.711111;0.505952,0.711111;0.505952,0.711111;0.505952,0.711111;0.505952,0.708333;0.504762,0.708333;0.504762,0.708333;0.504762,0.708333;0.504762,0.708333;0.504762,0.708333;0.504762,0.708333;0.503571,0.708333;0.503571,0.705556;0.503571,0.705556;0.503571,0.7;0.502381,0.7;0.502381,0.7;0.502381,0.697222;0.502381,0.697222;0.502381,0.697222;"/>
+            <Stroke points="0.113095,0.0805556;0.114286,0.0805556;0.116667,0.0805556;0.121429,0.0805556;0.125,0.0805556;0.12619,0.0805556;0.135714,0.0805556;0.146429,0.0805556;0.15,0.0805556;0.154762,0.0805556;0.158333,0.0805556;0.165476,0.0805556;0.166667,0.0805556;0.170238,0.0805556;0.171429,0.0805556;0.17381,0.0805556;0.17381,0.0805556;0.17381,0.0805556;0.17381,0.0805556;0.17381,0.0805556;0.17381,0.0805556;0.17381,0.0805556;0.17381,0.0805556;0.17381,0.0805556;0.17381,0.0805556;0.17381,0.0805556;0.17381,0.0805556;0.17381,0.0805556;0.169048,0.0805556;0.164286,0.0777778;0.159524,0.0777778;0.154762,0.0777778;0.15,0.0777778;0.144048,0.0777778;0.139286,0.0777778;0.135714,0.0777778;0.133333,0.0777778;0.132143,0.0777778;0.130952,0.0777778;0.130952,0.0777778;0.130952,0.0777778;0.130952,0.0777778;0.130952,0.0777778;0.130952,0.0777778;0.130952,0.0777778;0.130952,0.0777778;0.130952,0.0777778;0.130952,0.0777778;0.130952,0.0777778;0.130952,0.0777778;0.130952,0.0777778;0.130952,0.0777778;0.130952,0.0777778;0.136905,0.0777778;0.140476,0.0777778;0.145238,0.0777778;0.152381,0.0777778;0.157143,0.0777778;0.164286,0.0777778;0.167857,0.0777778;0.169048,0.0777778;0.169048,0.0777778;"/>
+            <Stroke points="0.145238,0.913889;0.15,0.913889;0.152381,0.913889;0.155952,0.913889;0.160714,0.913889;0.163095,0.913889;0.167857,0.913889;0.170238,0.913889;0.172619,0.913889;0.17381,0.913889;0.17381,0.913889;0.17381,0.913889;0.17381,0.913889;0.17381,0.913889;0.17381,0.913889;0.17381,0.913889;0.17381,0.913889;0.17381,0.913889;0.17381,0.913889;0.170238,0.913889;0.165476,0.913889;0.164286,0.913889;0.158333,0.913889;0.15119,0.913889;0.15,0.913889;0.145238,0.913889;0.140476,0.913889;0.138095,0.913889;0.138095,0.913889;0.138095,0.913889;0.138095,0.913889;0.138095,0.913889;0.138095,0.913889;0.138095,0.913889;0.138095,0.913889;0.138095,0.913889;0.138095,0.913889;0.138095,0.913889;0.138095,0.913889;0.138095,0.913889;0.138095,0.913889;0.142857,0.913889;0.145238,0.916667;0.14881,0.916667;0.15119,0.919444;0.155952,0.922222;0.157143,0.922222;0.157143,0.922222;0.157143,0.922222;"/>
+            <Stroke points="0.870238,0;0.875,0;0.878571,0;0.889286,0;0.892857,0;0.897619,0;0.902381,0;0.911905,0;0.916667,0;"/>
+            <Stroke points="0.572619,0.166667;0.572619,0.166667;0.572619,0.166667;0.572619,0.163889;0.57381,0.161111;0.57381,0.155556;0.57381,0.155556;0.57381,0.155556;0.57381,0.15;0.575,0.144444;0.57619,0.144444;0.577381,0.136111;0.578571,0.130556;0.582143,0.119444;0.584524,0.111111;0.586905,0.105556;0.589286,0.0972222;0.591667,0.0888889;0.592857,0.0833333;0.596429,0.075;0.597619,0.0666667;0.59881,0.0666667;0.60119,0.0583333;0.602381,0.0583333;0.602381,0.0555556;0.602381,0.0555556;0.602381,0.0527778;0.602381,0.0527778;0.603571,0.0527778;0.603571,0.05;0.603571,0.0472222;0.604762,0.0444444;0.604762,0.0444444;0.607143,0.0388889;0.607143,0.0388889;0.607143,0.0333334;0.608333,0.0333334;0.608333,0.0333334;"/>
+            <Stroke points="0.365476,0.183333;0.365476,0.177778;0.365476,0.166667;0.366667,0.15;0.369048,0.127778;0.369048,0.116667;0.370238,0.102778;0.372619,0.0916666;0.37381,0.0888889;0.37381,0.0833333;0.37381,0.0777778;0.37381,0.0777778;0.375,0.0722222;0.37619,0.0666667;0.37619,0.0666667;0.377381,0.0638889;0.377381,0.0583333;0.377381,0.0555556;0.378571,0.0527778;0.378571,0.0472222;0.379762,0.0416667;0.379762,0.0416667;"/>
+          </Strokes>
+        </StrokeSequencerState>
+      </extra>
+    </module>
+    <module logicalId="2" type="sample loader">
+      <params>
+        <SampleLoaderParameters samplePath="H:\0000_CODE\01_collider_pyo\audio\samples\percussion\KSHMR_Acoustic_Kick_08_Clean.wav">
+          <PARAM id="engine" value="1.0"/>
+          <PARAM id="gate" value="0.7999999523162842"/>
+          <PARAM id="gate_mod" value="1.0"/>
+          <PARAM id="loop" value="0.0"/>
+          <PARAM id="pitch" value="0.0"/>
+          <PARAM id="pitch_mod" value="0.0"/>
+          <PARAM id="rangeEnd" value="1.0"/>
+          <PARAM id="rangeEnd_mod" value="1.0"/>
+          <PARAM id="rangeStart" value="0.0"/>
+          <PARAM id="rangeStart_mod" value="0.0"/>
+          <PARAM id="rbPhaseInd" value="1.0"/>
+          <PARAM id="rbWindowShort" value="1.0"/>
+          <PARAM id="speed" value="1.0"/>
+          <PARAM id="speed_mod" value="1.0"/>
+          <PARAM id="trigger_mod" value="0.0"/>
+        </SampleLoaderParameters>
+      </params>
+    </module>
+    <module logicalId="3" type="sample loader">
+      <params>
+        <SampleLoaderParameters samplePath="H:\0000_CODE\01_collider_pyo\audio\samples\percussion\KSHMR_Acoustic_Ride_02.wav">
+          <PARAM id="engine" value="1.0"/>
+          <PARAM id="gate" value="0.7999999523162842"/>
+          <PARAM id="gate_mod" value="1.0"/>
+          <PARAM id="loop" value="0.0"/>
+          <PARAM id="pitch" value="0.0"/>
+          <PARAM id="pitch_mod" value="0.0"/>
+          <PARAM id="rangeEnd" value="1.0"/>
+          <PARAM id="rangeEnd_mod" value="1.0"/>
+          <PARAM id="rangeStart" value="0.0"/>
+          <PARAM id="rangeStart_mod" value="0.0"/>
+          <PARAM id="rbPhaseInd" value="1.0"/>
+          <PARAM id="rbWindowShort" value="1.0"/>
+          <PARAM id="speed" value="1.0"/>
+          <PARAM id="speed_mod" value="1.0"/>
+          <PARAM id="trigger_mod" value="0.0"/>
+        </SampleLoaderParameters>
+      </params>
+    </module>
+    <module logicalId="4" type="sample loader">
+      <params>
+        <SampleLoaderParameters samplePath="H:\0000_CODE\01_collider_pyo\audio\samples\percussion\KSHMR_Acoustic_Tom_14_Medium_G.wav">
+          <PARAM id="engine" value="1.0"/>
+          <PARAM id="gate" value="0.7999999523162842"/>
+          <PARAM id="gate_mod" value="1.0"/>
+          <PARAM id="loop" value="0.0"/>
+          <PARAM id="pitch" value="0.0"/>
+          <PARAM id="pitch_mod" value="0.0"/>
+          <PARAM id="rangeEnd" value="1.0"/>
+          <PARAM id="rangeEnd_mod" value="1.0"/>
+          <PARAM id="rangeStart" value="0.0"/>
+          <PARAM id="rangeStart_mod" value="0.0"/>
+          <PARAM id="rbPhaseInd" value="1.0"/>
+          <PARAM id="rbWindowShort" value="1.0"/>
+          <PARAM id="speed" value="1.0"/>
+          <PARAM id="speed_mod" value="1.0"/>
+          <PARAM id="trigger_mod" value="0.0"/>
+        </SampleLoaderParameters>
+      </params>
+    </module>
+    <module logicalId="5" type="trackmixer">
+      <params>
+        <TrackMixerParams>
+          <PARAM id="numTracks" value="8.0"/>
+          <PARAM id="numTracks_max" value="64.0"/>
+          <PARAM id="track_gain_1" value="6.0"/>
+          <PARAM id="track_gain_10" value="0.0"/>
+          <PARAM id="track_gain_11" value="0.0"/>
+          <PARAM id="track_gain_12" value="0.0"/>
+          <PARAM id="track_gain_13" value="0.0"/>
+          <PARAM id="track_gain_14" value="0.0"/>
+          <PARAM id="track_gain_15" value="0.0"/>
+          <PARAM id="track_gain_16" value="0.0"/>
+          <PARAM id="track_gain_17" value="0.0"/>
+          <PARAM id="track_gain_18" value="0.0"/>
+          <PARAM id="track_gain_19" value="0.0"/>
+          <PARAM id="track_gain_2" value="6.0"/>
+          <PARAM id="track_gain_20" value="0.0"/>
+          <PARAM id="track_gain_21" value="0.0"/>
+          <PARAM id="track_gain_22" value="0.0"/>
+          <PARAM id="track_gain_23" value="0.0"/>
+          <PARAM id="track_gain_24" value="0.0"/>
+          <PARAM id="track_gain_25" value="0.0"/>
+          <PARAM id="track_gain_26" value="0.0"/>
+          <PARAM id="track_gain_27" value="0.0"/>
+          <PARAM id="track_gain_28" value="0.0"/>
+          <PARAM id="track_gain_29" value="0.0"/>
+          <PARAM id="track_gain_3" value="0.0"/>
+          <PARAM id="track_gain_30" value="0.0"/>
+          <PARAM id="track_gain_31" value="0.0"/>
+          <PARAM id="track_gain_32" value="0.0"/>
+          <PARAM id="track_gain_33" value="0.0"/>
+          <PARAM id="track_gain_34" value="0.0"/>
+          <PARAM id="track_gain_35" value="0.0"/>
+          <PARAM id="track_gain_36" value="0.0"/>
+          <PARAM id="track_gain_37" value="0.0"/>
+          <PARAM id="track_gain_38" value="0.0"/>
+          <PARAM id="track_gain_39" value="0.0"/>
+          <PARAM id="track_gain_4" value="5.5"/>
+          <PARAM id="track_gain_40" value="0.0"/>
+          <PARAM id="track_gain_41" value="0.0"/>
+          <PARAM id="track_gain_42" value="0.0"/>
+          <PARAM id="track_gain_43" value="0.0"/>
+          <PARAM id="track_gain_44" value="0.0"/>
+          <PARAM id="track_gain_45" value="0.0"/>
+          <PARAM id="track_gain_46" value="0.0"/>
+          <PARAM id="track_gain_47" value="0.0"/>
+          <PARAM id="track_gain_48" value="0.0"/>
+          <PARAM id="track_gain_49" value="0.0"/>
+          <PARAM id="track_gain_5" value="3.100002288818359"/>
+          <PARAM id="track_gain_50" value="0.0"/>
+          <PARAM id="track_gain_51" value="0.0"/>
+          <PARAM id="track_gain_52" value="0.0"/>
+          <PARAM id="track_gain_53" value="0.0"/>
+          <PARAM id="track_gain_54" value="0.0"/>
+          <PARAM id="track_gain_55" value="0.0"/>
+          <PARAM id="track_gain_56" value="0.0"/>
+          <PARAM id="track_gain_57" value="0.0"/>
+          <PARAM id="track_gain_58" value="0.0"/>
+          <PARAM id="track_gain_59" value="0.0"/>
+          <PARAM id="track_gain_6" value="5.5"/>
+          <PARAM id="track_gain_60" value="0.0"/>
+          <PARAM id="track_gain_61" value="0.0"/>
+          <PARAM id="track_gain_62" value="0.0"/>
+          <PARAM id="track_gain_63" value="0.0"/>
+          <PARAM id="track_gain_64" value="0.0"/>
+          <PARAM id="track_gain_7" value="0.0"/>
+          <PARAM id="track_gain_8" value="0.0"/>
+          <PARAM id="track_gain_9" value="0.0"/>
+          <PARAM id="track_pan_1" value="-0.8600000143051147"/>
+          <PARAM id="track_pan_10" value="0.0"/>
+          <PARAM id="track_pan_11" value="0.0"/>
+          <PARAM id="track_pan_12" value="0.0"/>
+          <PARAM id="track_pan_13" value="0.0"/>
+          <PARAM id="track_pan_14" value="0.0"/>
+          <PARAM id="track_pan_15" value="0.0"/>
+          <PARAM id="track_pan_16" value="0.0"/>
+          <PARAM id="track_pan_17" value="0.0"/>
+          <PARAM id="track_pan_18" value="0.0"/>
+          <PARAM id="track_pan_19" value="0.0"/>
+          <PARAM id="track_pan_2" value="1.0"/>
+          <PARAM id="track_pan_20" value="0.0"/>
+          <PARAM id="track_pan_21" value="0.0"/>
+          <PARAM id="track_pan_22" value="0.0"/>
+          <PARAM id="track_pan_23" value="0.0"/>
+          <PARAM id="track_pan_24" value="0.0"/>
+          <PARAM id="track_pan_25" value="0.0"/>
+          <PARAM id="track_pan_26" value="0.0"/>
+          <PARAM id="track_pan_27" value="0.0"/>
+          <PARAM id="track_pan_28" value="0.0"/>
+          <PARAM id="track_pan_29" value="0.0"/>
+          <PARAM id="track_pan_3" value="-1.0"/>
+          <PARAM id="track_pan_30" value="0.0"/>
+          <PARAM id="track_pan_31" value="0.0"/>
+          <PARAM id="track_pan_32" value="0.0"/>
+          <PARAM id="track_pan_33" value="0.0"/>
+          <PARAM id="track_pan_34" value="0.0"/>
+          <PARAM id="track_pan_35" value="0.0"/>
+          <PARAM id="track_pan_36" value="0.0"/>
+          <PARAM id="track_pan_37" value="0.0"/>
+          <PARAM id="track_pan_38" value="0.0"/>
+          <PARAM id="track_pan_39" value="0.0"/>
+          <PARAM id="track_pan_4" value="1.0"/>
+          <PARAM id="track_pan_40" value="0.0"/>
+          <PARAM id="track_pan_41" value="0.0"/>
+          <PARAM id="track_pan_42" value="0.0"/>
+          <PARAM id="track_pan_43" value="0.0"/>
+          <PARAM id="track_pan_44" value="0.0"/>
+          <PARAM id="track_pan_45" value="0.0"/>
+          <PARAM id="track_pan_46" value="0.0"/>
+          <PARAM id="track_pan_47" value="0.0"/>
+          <PARAM id="track_pan_48" value="0.0"/>
+          <PARAM id="track_pan_49" value="0.0"/>
+          <PARAM id="track_pan_5" value="-1.0"/>
+          <PARAM id="track_pan_50" value="0.0"/>
+          <PARAM id="track_pan_51" value="0.0"/>
+          <PARAM id="track_pan_52" value="0.0"/>
+          <PARAM id="track_pan_53" value="0.0"/>
+          <PARAM id="track_pan_54" value="0.0"/>
+          <PARAM id="track_pan_55" value="0.0"/>
+          <PARAM id="track_pan_56" value="0.0"/>
+          <PARAM id="track_pan_57" value="0.0"/>
+          <PARAM id="track_pan_58" value="0.0"/>
+          <PARAM id="track_pan_59" value="0.0"/>
+          <PARAM id="track_pan_6" value="1.0"/>
+          <PARAM id="track_pan_60" value="0.0"/>
+          <PARAM id="track_pan_61" value="0.0"/>
+          <PARAM id="track_pan_62" value="0.0"/>
+          <PARAM id="track_pan_63" value="0.0"/>
+          <PARAM id="track_pan_64" value="0.0"/>
+          <PARAM id="track_pan_7" value="0.0"/>
+          <PARAM id="track_pan_8" value="0.0"/>
+          <PARAM id="track_pan_9" value="0.0"/>
+        </TrackMixerParams>
+      </params>
+    </module>
+    <module logicalId="6" type="value">
+      <params>
+        <ValueParams>
+          <PARAM id="cvMax" value="1.0"/>
+          <PARAM id="cvMin" value="0.0"/>
+          <PARAM id="value" value="6.0"/>
+        </ValueParams>
+      </params>
+    </module>
+    <module logicalId="14" type="Reverb">
+      <params>
+        <ReverbParams>
+          <PARAM id="damp" value="0.300000011920929"/>
+          <PARAM id="mix" value="0.2460000067949295"/>
+          <PARAM id="size" value="0.5"/>
+        </ReverbParams>
+      </params>
+    </module>
+    <module logicalId="23" type="8bandshaper">
+      <params>
+        <MultiBandShaperParams>
+          <PARAM id="drive_1" value="0.4099999964237213"/>
+          <PARAM id="drive_2" value="2.460000038146973"/>
+          <PARAM id="drive_3" value="0.699999988079071"/>
+          <PARAM id="drive_4" value="0.3400000035762787"/>
+          <PARAM id="drive_5" value="0.2800000011920929"/>
+          <PARAM id="drive_6" value="1.71999990940094"/>
+          <PARAM id="drive_7" value="16.54999923706055"/>
+          <PARAM id="drive_8" value="0.6499999761581421"/>
+          <PARAM id="outputGain" value="0.0"/>
+        </MultiBandShaperParams>
+      </params>
+    </module>
+  </modules>
+  <connections>
+    <connection srcId="1" srcChan="0" dstId="2" dstChan="3"/>
+    <connection srcId="1" srcChan="3" dstId="2" dstChan="0"/>
+    <connection srcId="1" srcChan="1" dstId="3" dstChan="3"/>
+    <connection srcId="1" srcChan="3" dstId="3" dstChan="0"/>
+    <connection srcId="1" srcChan="2" dstId="4" dstChan="3"/>
+    <connection srcId="2" srcChan="0" dstId="5" dstChan="0"/>
+    <connection srcId="2" srcChan="1" dstId="5" dstChan="1"/>
+    <connection srcId="3" srcChan="0" dstId="5" dstChan="2"/>
+    <connection srcId="3" srcChan="1" dstId="5" dstChan="3"/>
+    <connection srcId="4" srcChan="0" dstId="5" dstChan="4"/>
+    <connection srcId="4" srcChan="1" dstId="5" dstChan="5"/>
+    <connection srcId="5" srcChan="0" dstId="14" dstChan="0"/>
+    <connection srcId="5" srcChan="1" dstId="14" dstChan="1"/>
+    <connection srcId="6" srcChan="0" dstId="5" dstChan="64"/>
+    <connection srcId="14" srcChan="0" dstId="23" dstChan="0"/>
+    <connection srcId="14" srcChan="1" dstId="23" dstChan="1"/>
+    <connection srcId="23" srcChan="0" dstId="output" dstChan="0"/>
+    <connection srcId="23" srcChan="1" dstId="output" dstChan="1"/>
+  </connections>
+  <NodeEditorUI>
+    <node id="1" x="-1129.0" y="166.0"/>
+    <node id="2" x="39.0" y="-248.0"/>
+    <node id="3" x="36.0" y="375.0"/>
+    <node id="4" x="43.0" y="992.0"/>
+    <node id="5" x="491.0" y="182.0"/>
+    <node id="6" x="612.0" y="811.0"/>
+    <node id="14" x="1112.0" y="321.0"/>
+    <node id="23" x="1542.0" y="435.0"/>
+    <node id="0" x="1609.0" y="234.0"/>
+  </NodeEditorUI>
+</ModularSynthPreset>

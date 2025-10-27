@@ -121,6 +121,16 @@ FetchContent_Declare(
 FetchContent_MakeAvailable(tinygltf)
 
 # --------------------------------------------------------------
+# ufbx (FBX file loader for animation system)
+# --------------------------------------------------------------
+FetchContent_Declare(
+  ufbx
+  GIT_REPOSITORY https://github.com/ufbx/ufbx.git
+  GIT_TAG        v0.10.0 # A recent stable version of ufbx
+)
+FetchContent_MakeAvailable(ufbx)
+
+# --------------------------------------------------------------
 # Rubber Band (optional, real-time timestretcher/pitch-shifter)
 # --------------------------------------------------------------
 set(USE_RUBBERBAND ON CACHE BOOL "Enable Rubber Band time/pitch processing")
@@ -333,6 +343,17 @@ target_sources(ColliderApp PRIVATE
     Source/audio/modules/PhysicsModuleProcessor.cpp
     Source/audio/modules/StrokeSequencerModuleProcessor.h
     Source/audio/modules/StrokeSequencerModuleProcessor.cpp
+    Source/audio/modules/AnimationModuleProcessor.h
+    Source/audio/modules/AnimationModuleProcessor.cpp
+    Source/animation/AnimationData.h
+    Source/animation/Animator.h
+    Source/animation/Animator.cpp
+    Source/animation/GltfLoader.h
+    Source/animation/GltfLoader.cpp
+    Source/animation/FbxLoader.h
+    Source/animation/FbxLoader.cpp
+    Source/animation/AnimationRenderer.h
+    Source/animation/AnimationRenderer.cpp
     Source/ipc/IpcServer.cpp
     Source/ipc/IpcServer.h
     Source/ipc/OscClient.h
@@ -355,6 +376,7 @@ target_compile_definitions(ColliderApp PRIVATE
 
 target_link_libraries(ColliderApp PRIVATE
     juce::juce_gui_extra
+    juce::juce_opengl
     juce::juce_audio_processors
     juce::juce_audio_utils
     juce::juce_audio_formats
@@ -376,6 +398,7 @@ target_include_directories(ColliderApp PRIVATE
     ${CMAKE_SOURCE_DIR}/../vendor/openvino_toolkit_windows_2025.3.0.19807.44526285f24_x86_64/samples/cpp/thirdparty/nlohmann_json/single_include
     ${CMAKE_SOURCE_DIR}/../soundtouch/include
     ${CMAKE_SOURCE_DIR}/../soundtouch/source/SoundTouch
+    ${ufbx_SOURCE_DIR}
     $<$<BOOL:${USE_RUBBERBAND}>:${RUBBERBAND_INCLUDE_DIR}>
 )
 
@@ -566,6 +589,17 @@ target_sources(PresetCreatorApp PRIVATE
     Source/audio/modules/PhysicsModuleProcessor.cpp
     Source/audio/modules/StrokeSequencerModuleProcessor.h
     Source/audio/modules/StrokeSequencerModuleProcessor.cpp
+    Source/audio/modules/AnimationModuleProcessor.h
+    Source/audio/modules/AnimationModuleProcessor.cpp
+    Source/animation/AnimationData.h
+    Source/animation/Animator.h
+    Source/animation/Animator.cpp
+    Source/animation/GltfLoader.h
+    Source/animation/GltfLoader.cpp
+    Source/animation/FbxLoader.h
+    Source/animation/FbxLoader.cpp
+    Source/animation/AnimationRenderer.h
+    Source/animation/AnimationRenderer.cpp
 )
 
 # This target now needs to know where to find all the headers
@@ -579,6 +613,7 @@ target_include_directories(PresetCreatorApp PRIVATE
     ${CMAKE_SOURCE_DIR}/../vendor/openvino_toolkit_windows_2025.3.0.19807.44526285f24_x86_64/samples/cpp/thirdparty/nlohmann_json/single_include
     ${CMAKE_SOURCE_DIR}/../soundtouch/include
     ${CMAKE_SOURCE_DIR}/../soundtouch/source/SoundTouch
+    ${ufbx_SOURCE_DIR}
     $<$<BOOL:${USE_RUBBERBAND}>:${RUBBERBAND_INCLUDE_DIR}>
 )
 

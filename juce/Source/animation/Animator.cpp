@@ -1,4 +1,6 @@
+#define GLM_ENABLE_EXPERIMENTAL
 #include "Animator.h"
+#include <glm/gtx/quaternion.hpp>
 
 Animator::Animator(AnimationData* animationData)
 {

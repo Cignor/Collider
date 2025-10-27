@@ -360,6 +360,7 @@ public:
 
     // Helper functions
     void insertNodeOnLink(const juce::String& nodeType, const LinkInfo& linkInfo, const ImVec2& position);
+    void insertNodeOnLinkStereo(const juce::String& nodeType, const LinkInfo& linkLeft, const LinkInfo& linkRight, const ImVec2& position);
     juce::File findPresetsDirectory();
 
     // --- NEW: Handler for node chaining shortcut ---

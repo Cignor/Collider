@@ -1436,6 +1436,7 @@ void ImGuiNodeEditorComponent::renderImGui()
     ImGui::PopStyleColor(3);
     if (physicsFamilyExpanded) {
         addModuleButton("Physics", "physics");
+        addModuleButton("Animation", "animation");
     }
     
     pushCategoryColor(ModuleCategory::Effect);
@@ -3444,6 +3445,7 @@ if (auto* mp = synth->getModuleForLogical (lid))
                 }
                 if (ImGui::BeginMenu("Physics Family")) {
                     if (ImGui::MenuItem("Physics")) addAtMouse("physics");
+                    if (ImGui::MenuItem("Animation")) addAtMouse("animation");
                     ImGui::EndMenu();
                 }
                 if (ImGui::BeginMenu("Effects")) {
@@ -6238,6 +6240,63 @@ void ImGuiNodeEditorComponent::insertNodeOnLink(const juce::String& nodeType, co
     synth->connect(newNodeId, newNodeOutputChannel, originalDstNodeId, linkInfo.dstPin.channel);
 }
 
+void ImGuiNodeEditorComponent::insertNodeOnLinkStereo(const juce::String& nodeType, 
+                                                       const LinkInfo& linkLeft, 
+                                                       const LinkInfo& linkRight, 
+                                                       const ImVec2& position)
+{
+    if (synth == nullptr) return;
+
+    juce::Logger::writeToLog("[InsertStereo] Inserting stereo node: " + nodeType);
+
+    // 1. Create ONE node for both channels
+    juce::AudioProcessorGraph::NodeID newNodeId;
+    auto& app = PresetCreatorApplication::getApp();
+    auto& knownPluginList = app.getKnownPluginList();
+    bool isVst = false;
+    
+    for (const auto& desc : knownPluginList.getTypes())
+    {
+        if (desc.name == nodeType)
+        {
+            newNodeId = synth->addVstModule(app.getPluginFormatManager(), desc);
+            isVst = true;
+            break;
+        }
+    }
+    
+    if (!isVst)
+    {
+        newNodeId = synth->addModule(nodeType);
+    }
+    
+    auto newNodeLid = synth->getLogicalIdForNode(newNodeId);
+    pendingNodeScreenPositions[(int)newNodeLid] = position;
+
+    // 2. Get Original Connection Points (same for both channels)
+    auto originalSrcNodeId = synth->getNodeIdForLogical(linkLeft.srcPin.logicalId);
+    auto originalDstNodeId = (linkLeft.dstPin.logicalId == 0) 
+        ? synth->getOutputNodeID() 
+        : synth->getNodeIdForLogical(linkLeft.dstPin.logicalId);
+
+    // 3. Disconnect BOTH Original Links
+    synth->disconnect(originalSrcNodeId, 0, originalDstNodeId, 0); // Left
+    synth->disconnect(originalSrcNodeId, 1, originalDstNodeId, 1); // Right
+
+    // 4. Reconnect BOTH Channels Through the New Node
+    // Left channel: src ch0 -> new node ch0 -> dst ch0
+    synth->connect(originalSrcNodeId, 0, newNodeId, 0);
+    synth->connect(newNodeId, 0, originalDstNodeId, 0);
+    
+    // Right channel: src ch1 -> new node ch1 -> dst ch1
+    synth->connect(originalSrcNodeId, 1, newNodeId, 1);
+    synth->connect(newNodeId, 1, originalDstNodeId, 1);
+
+    juce::Logger::writeToLog("[InsertStereo] Successfully inserted stereo node between " + 
+                            juce::String(linkLeft.srcPin.logicalId) + " and " + 
+                            juce::String(linkLeft.dstPin.logicalId));
+}
+
 // --- REFACTORED OLD FUNCTION ---
 void ImGuiNodeEditorComponent::insertNodeBetween(const juce::String& nodeType, const PinID& srcPin, const PinID& dstPin)
 {
@@ -6323,30 +6382,79 @@ void ImGuiNodeEditorComponent::handleInsertNodeOnSelectedLinks(const juce::Strin
     std::vector<int> selectedLinkIds(numSelectedLinks);
     ImNodes::GetSelectedLinks(selectedLinkIds.data());
 
+    // === NEW: Detect stereo pairs ===
+    std::set<int> processedLinks; // Track which links we've already handled
     ImVec2 basePosition = ImGui::GetMousePos();
     float x_offset = 0.0f;
 
-    for (int linkId : selectedLinkIds)
+    for (size_t i = 0; i < selectedLinkIds.size(); ++i)
     {
+        int linkId = selectedLinkIds[i];
+        if (processedLinks.count(linkId)) continue; // Skip if already processed as part of a pair
+
         auto it = linkIdToAttrs.find(linkId);
-        if (it != linkIdToAttrs.end())
+        if (it == linkIdToAttrs.end()) continue;
+
+        LinkInfo currentLink;
+        currentLink.linkId = linkId;
+        currentLink.isMod = false; // Assuming audio links for now
+        currentLink.srcPin = decodePinId(it->second.first);
+        currentLink.dstPin = decodePinId(it->second.second);
+
+        // === Check if this is part of a stereo pair ===
+        int pairLinkId = -1;
+        LinkInfo pairLink;
+        
+        // Look for a matching link with the same src/dst nodes but channel+1
+        if (currentLink.srcPin.channel == 0) // Only check for pairs starting from channel 0
         {
-            // Decode the link and create a LinkInfo struct for it
-            LinkInfo currentLink;
-            currentLink.linkId = linkId;
-            currentLink.isMod = false; // Assuming audio links for now
-            currentLink.srcPin = decodePinId(it->second.first);
-            currentLink.dstPin = decodePinId(it->second.second);
-            
-            // Calculate a staggered position for the new node
-            ImVec2 newPosition = ImVec2(basePosition.x + x_offset, basePosition.y);
-            
-            // Call our reusable helper function
-            insertNodeOnLink(nodeType, currentLink, newPosition);
-            
-            // Increment the offset for the next node
-            x_offset += 40.0f; 
+            for (size_t j = i + 1; j < selectedLinkIds.size(); ++j)
+            {
+                int candidateId = selectedLinkIds[j];
+                auto candidateIt = linkIdToAttrs.find(candidateId);
+                if (candidateIt != linkIdToAttrs.end())
+                {
+                    LinkInfo candidate;
+                    candidate.srcPin = decodePinId(candidateIt->second.first);
+                    candidate.dstPin = decodePinId(candidateIt->second.second);
+                    
+                    // Check if it's the same connection but channel 1
+                    if (candidate.srcPin.logicalId == currentLink.srcPin.logicalId &&
+                        candidate.dstPin.logicalId == currentLink.dstPin.logicalId &&
+                        candidate.srcPin.channel == 1 &&
+                        candidate.dstPin.channel == 1)
+                    {
+                        pairLinkId = candidateId;
+                        pairLink = candidate;
+                        pairLink.linkId = candidateId;
+                        pairLink.isMod = false;
+                        juce::Logger::writeToLog("[InsertNode] Detected stereo pair: links " + 
+                                                juce::String(linkId) + " & " + juce::String(candidateId));
+                        break;
+                    }
+                }
+            }
         }
+
+        ImVec2 newPosition = ImVec2(basePosition.x + x_offset, basePosition.y);
+
+        if (pairLinkId != -1)
+        {
+            // === STEREO INSERT: Create one node and connect both channels ===
+            insertNodeOnLinkStereo(nodeType, currentLink, pairLink, newPosition);
+            processedLinks.insert(linkId);
+            processedLinks.insert(pairLinkId);
+            juce::Logger::writeToLog("[InsertNode] Inserted STEREO node for pair");
+        }
+        else
+        {
+            // === MONO INSERT: Single channel as before ===
+            insertNodeOnLink(nodeType, currentLink, newPosition);
+            processedLinks.insert(linkId);
+            juce::Logger::writeToLog("[InsertNode] Inserted MONO node for link " + juce::String(linkId));
+        }
+
+        x_offset += 40.0f;
     }
 
     graphNeedsRebuild = true;
@@ -6923,6 +7031,10 @@ std::map<juce::String, std::pair<const char*, const char*>> ImGuiNodeEditorCompo
         // TTS
         {"TTS Performer", {"TTS Performer", "Text-to-speech synthesizer"}},
         {"Vocal Tract Filter", {"Vocal Tract Filter", "Physical model vocal tract filter"}},
+        
+        // Physics & Animation
+        {"Physics", {"physics", "2D physics simulation for audio modulation"}},
+        {"Animation", {"animation", "Skeletal animation system with glTF file support"}},
         
         // Effects
         {"VCF", {"VCF", "Voltage Controlled Filter"}},

@@ -23,6 +23,9 @@ private:
     static void ParseNodes(const tinygltf::Model& model, const tinygltf::Node& inputNode, NodeData& parentNode);
     static void ParseSkin(const tinygltf::Model& model, AnimationData& animData);
     static void ParseAnimations(const tinygltf::Model& model, AnimationData& animData);
+    
+    // Helper to extract bone info from node hierarchy (for files without skin data)
+    static void ExtractBonesFromNodes(const NodeData& node, AnimationData& animData, int& boneCounter);
 
     // Helper to read raw data from glTF buffers
     template <typename T>
