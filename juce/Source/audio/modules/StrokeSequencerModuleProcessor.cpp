@@ -3,17 +3,15 @@
 
 #if defined(PRESET_CREATOR_UI)
 #include "../../preset_creator/ImGuiNodeEditorComponent.h" // For ImGui calls
+#include "../../preset_creator/ControllerPresetManager.h"
 #endif
 
 StrokeSequencerModuleProcessor::StrokeSequencerModuleProcessor()
     : ModuleProcessor(BusesProperties()
-                          .withInput("Inputs", juce::AudioChannelSet::discreteChannels(6), true) // Reset, Rate, 3x Thresholds, Playhead
+                          .withInput("Inputs", juce::AudioChannelSet::discreteChannels(5), true) // Reset, Rate, 3x Thresholds
                           .withOutput("Outputs", juce::AudioChannelSet::discreteChannels(4), true)), // 3x Triggers, 1x CV
       apvts(*this, nullptr, "StrokeSeqParams", createParameterLayout())
 {
-    for (auto& val : triggerOutputValues)
-        val = 0.0f;
-    
     // Initialize cached parameter pointers
     rateParam = apvts.getRawParameterValue(paramIdRate);
     floorYParam = apvts.getRawParameterValue(paramIdFloorY);
@@ -75,8 +73,7 @@ std::vector<DynamicPinInfo> StrokeSequencerModuleProcessor::getDynamicInputPins(
         { "Rate Mod In",    1, PinDataType::CV },
         { "Floor Mod In",   2, PinDataType::CV },
         { "Mid Mod In",     3, PinDataType::CV },
-        { "Ceiling Mod In", 4, PinDataType::CV },
-        { "Playhead Mod In", 5, PinDataType::CV }
+        { "Ceiling Mod In", 4, PinDataType::CV }
     };
 }
 
@@ -97,7 +94,6 @@ bool StrokeSequencerModuleProcessor::getParamRouting(const juce::String& paramId
     if (paramId == paramIdFloorYMod)   { outChannelIndexInBus = 2; return true; }
     if (paramId == paramIdMidYMod)     { outChannelIndexInBus = 3; return true; }
     if (paramId == paramIdCeilingYMod) { outChannelIndexInBus = 4; return true; }
-    if (paramId == paramIdPlayheadMod) { outChannelIndexInBus = 5; return true; }
     return false;
 }
 
@@ -119,37 +115,41 @@ void StrokeSequencerModuleProcessor::processBlock(juce::AudioBuffer<float>& buff
     const int numSamples = buffer.getNumSamples();
     const auto inBus = getBusBuffer(buffer, true, 0);
 
-    // --- Get Modulation CVs ---
+    // --- Get Modulation CVs (check if connected) ---
     const bool isRateMod = isParamInputConnected(paramIdRateMod);
     const bool isFloorMod = isParamInputConnected(paramIdFloorYMod);
     const bool isMidMod = isParamInputConnected(paramIdMidYMod);
     const bool isCeilingMod = isParamInputConnected(paramIdCeilingYMod);
-    const bool isPlayheadMod = isParamInputConnected(paramIdPlayheadMod);
 
-    const float* rateCV = isRateMod && inBus.getNumChannels() > 1 ? inBus.getReadPointer(1) : nullptr;
-    const float* floorCV = isFloorMod && inBus.getNumChannels() > 2 ? inBus.getReadPointer(2) : nullptr;
-    const float* midCV = isMidMod && inBus.getNumChannels() > 3 ? inBus.getReadPointer(3) : nullptr;
-    const float* ceilingCV = isCeilingMod && inBus.getNumChannels() > 4 ? inBus.getReadPointer(4) : nullptr;
-    const float* playheadCV = isPlayheadMod && inBus.getNumChannels() > 5 ? inBus.getReadPointer(5) : nullptr;
+    // CRITICAL: Read and SAVE all CV values BEFORE clearing buffer (in-place processing protection)
+    const float savedRateCV = (isRateMod && inBus.getNumChannels() > 1) ? inBus.getReadPointer(1)[0] : 0.0f;
+    const float savedFloorCV = (isFloorMod && inBus.getNumChannels() > 2) ? inBus.getReadPointer(2)[0] : 0.0f;
+    const float savedMidCV = (isMidMod && inBus.getNumChannels() > 3) ? inBus.getReadPointer(3)[0] : 0.0f;
+    const float savedCeilingCV = (isCeilingMod && inBus.getNumChannels() > 4) ? inBus.getReadPointer(4)[0] : 0.0f;
+    
+    // Check for reset trigger BEFORE clearing
+    const bool resetTriggered = (inBus.getNumChannels() > 0 && inBus.getReadPointer(0)[0] > 0.5f);
+    
+    // NOW it's safe to clear the output buffer
+    buffer.clear();
 
     // --- Get Base Parameter Values ---
     const bool sync = apvts.getRawParameterValue(paramIdSync)->load() > 0.5f;
     const float baseRate = rateParam->load();
-    const float basePlayhead = playheadParam->load();
     float finalThresholds[3] = { floorYParam->load(), midYParam->load(), ceilingYParam->load() };
     
-    // --- Calculate Final Values (per-block for simplicity) ---
+    // --- Calculate Final Values (using saved CV values) ---
     float finalRate = baseRate;
-    if (isRateMod && rateCV)
+    if (isRateMod)
     {
         // CV (0..1) scales the rate from its minimum to its maximum
         auto range = apvts.getParameterRange(paramIdRate);
-        finalRate = range.convertFrom0to1(juce::jlimit(0.0f, 1.0f, rateCV[0]));
+        finalRate = range.convertFrom0to1(juce::jlimit(0.0f, 1.0f, savedRateCV));
     }
 
-    if (isFloorMod && floorCV)   finalThresholds[0] = juce::jlimit(0.0f, 1.0f, floorCV[0]);
-    if (isMidMod && midCV)       finalThresholds[1] = juce::jlimit(0.0f, 1.0f, midCV[0]);
-    if (isCeilingMod && ceilingCV) finalThresholds[2] = juce::jlimit(0.0f, 1.0f, ceilingCV[0]);
+    if (isFloorMod)   finalThresholds[0] = juce::jlimit(0.0f, 1.0f, savedFloorCV);
+    if (isMidMod)     finalThresholds[1] = juce::jlimit(0.0f, 1.0f, savedMidCV);
+    if (isCeilingMod) finalThresholds[2] = juce::jlimit(0.0f, 1.0f, savedCeilingCV);
 
     // --- Update UI Telemetry ---
     setLiveParamValue("rate_live", finalRate);
@@ -157,8 +157,8 @@ void StrokeSequencerModuleProcessor::processBlock(juce::AudioBuffer<float>& buff
     setLiveParamValue("midY_live", finalThresholds[1]);
     setLiveParamValue("ceilingY_live", finalThresholds[2]);
 
-    // Check for reset trigger
-    if (inBus.getNumChannels() > 0 && inBus.getReadPointer(0)[0] > 0.5f)
+    // Apply reset trigger if it was detected
+    if (resetTriggered)
     {
         playheadPosition = 0.0;
         phase = 0.0;
@@ -193,21 +193,19 @@ void StrokeSequencerModuleProcessor::processBlock(juce::AudioBuffer<float>& buff
     }
 
     // --- Main processing loop ---
+    // Get direct write pointers to output channels
+    auto* floorTrigOut = buffer.getWritePointer(0);
+    auto* midTrigOut = buffer.getWritePointer(1);
+    auto* ceilTrigOut = buffer.getWritePointer(2);
     auto* valueOut = buffer.getWritePointer(3);
+    
     for (int i = 0; i < numSamples; ++i)
     {
-        // DJ PLATTER MODEL: Priority system for playhead control
-        // PRIORITY 1: CV Input (highest override)
-        if (isPlayheadMod && playheadCV)
-        {
-            playheadPosition = juce::jlimit(0.0, 1.0, (double)playheadCV[i]);
-        }
-        // PRIORITY 2: Manual Drag from UI
-        else if (isUnderManualControl.load())
+        // Playhead control: Manual drag has priority, otherwise auto-advance
+        if (isUnderManualControl.load())
         {
             playheadPosition = juce::jlimit(0.0, 1.0, (double)playheadParam->load());
         }
-        // PRIORITY 3: Automatic Playback (the platter spins)
         else if (increment > 0.0)
         {
             playheadPosition += increment;
@@ -248,26 +246,24 @@ void StrokeSequencerModuleProcessor::processBlock(juce::AudioBuffer<float>& buff
         currentStrokeYValue.store(currentStrokeY);
         valueOut[i] = currentStrokeY;
 
-        // Intersection Logic
-        for (int t = 0; t < 3; ++t)
-        {
-            const bool isAbove = currentStrokeY >= finalThresholds[t];
-            if (isAbove && !wasAboveThreshold[t])
-            {
-                triggerOutputValues[t] = 1.0f; // Fire trigger
-            }
-            wasAboveThreshold[t] = isAbove;
-        }
-    }
+        // Direct Intersection Logic - write triggers directly at the sample they occur
+        // Floor
+        bool isAboveFloor = currentStrokeY >= finalThresholds[0];
+        if (isAboveFloor && !wasAboveThreshold[0])
+            floorTrigOut[i] = 1.0f; // Single-sample pulse
+        wasAboveThreshold[0] = isAboveFloor;
 
-    // Write Triggers to Output Buffers
-    for (int t = 0; t < 3; ++t)
-    {
-        if (triggerOutputValues[t].load() > 0.5f)
-        {
-            buffer.setSample(t, 0, 1.0f);
-            triggerOutputValues[t] = 0.0f; // Reset for next block
-        }
+        // Mid
+        bool isAboveMid = currentStrokeY >= finalThresholds[1];
+        if (isAboveMid && !wasAboveThreshold[1])
+            midTrigOut[i] = 1.0f; // Single-sample pulse
+        wasAboveThreshold[1] = isAboveMid;
+
+        // Ceiling
+        bool isAboveCeil = currentStrokeY >= finalThresholds[2];
+        if (isAboveCeil && !wasAboveThreshold[2])
+            ceilTrigOut[i] = 1.0f; // Single-sample pulse
+        wasAboveThreshold[2] = isAboveCeil;
     }
     
     // Report live playhead position for UI
@@ -560,10 +556,8 @@ void StrokeSequencerModuleProcessor::drawParametersInNode(float itemWidth, const
 
     draw_list->PopClipRect();
     
-    // --- PLAYHEAD SLIDER (Correct DJ Platter Style) ---
+    // --- PLAYHEAD SLIDER (Manual Control Only - No CV Input) ---
     ImGui::PushItemWidth(canvas_size.x);
-
-    bool isPlayheadMod = isParamModulated(paramIdPlayheadMod);
 
     // The slider's visual position is ALWAYS driven by the live playhead from the audio thread
     float displayValue = (float)livePlayheadPosition.load();
@@ -574,17 +568,14 @@ void StrokeSequencerModuleProcessor::drawParametersInNode(float itemWidth, const
     ImGui::PushStyleColor(ImGuiCol_FrameBgActive, ImVec4(0.5f, 0.48f, 0.2f, 0.9f));
     ImGui::PushStyleColor(ImGuiCol_SliderGrab, ImVec4(1.0f, 0.0f, 0.4f, 1.0f)); // Hot pink grab
     ImGui::PushStyleColor(ImGuiCol_SliderGrabActive, ImVec4(1.0f, 0.3f, 0.6f, 1.0f));
-    
-    if (isPlayheadMod) ImGui::BeginDisabled();
 
     if (ImGui::SliderFloat("##Playhead", &displayValue, 0.0f, 1.0f, "%.3f"))
     {
-        // When the user drags, we update the parameter. The audio thread will see
-        // isUnderManualControl is true and use this value.
-        if (!isPlayheadMod) *playheadParam = displayValue;
+        // When the user drags, we update the parameter
+        *playheadParam = displayValue;
     }
 
-    // This is the key: Detect when the user grabs and releases the slider
+    // Detect when the user grabs and releases the slider
     if (ImGui::IsItemActivated())
     {
         isUnderManualControl = true; // Tell audio thread to stop auto-incrementing
@@ -593,13 +584,6 @@ void StrokeSequencerModuleProcessor::drawParametersInNode(float itemWidth, const
     {
         isUnderManualControl = false; // Tell audio thread to resume auto-incrementing
         onModificationEnded();
-    }
-
-    if (isPlayheadMod) 
-    { 
-        ImGui::EndDisabled(); 
-        ImGui::SameLine(); 
-        ImGui::TextColored(ImVec4(0.85f, 0.85f, 0.3f, 1.0f), "(mod)");
     }
 
     ImGui::PopStyleColor(5);
@@ -669,6 +653,109 @@ void StrokeSequencerModuleProcessor::drawParametersInNode(float itemWidth, const
     HelpMarker("Clear all strokes from the display.");
     
     ImGui::SameLine();
+    
+    // Build Drum Kit Quick-Connect Button (80s blue style)
+    ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.15f, 0.6f, 0.85f, 0.8f));
+    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.25f, 0.7f, 0.95f, 0.95f));
+    ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.35f, 0.8f, 1.0f, 1.0f));
+    ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 1.0f, 1.0f, 1.0f));
+    if (ImGui::Button("BUILD DRUM KIT", ImVec2(150, 0)))
+    {
+        autoBuildDrumKitTriggered = true;
+    }
+    ImGui::PopStyleColor(4);
+    HelpMarker("Auto-create 3 samplers + mixer, wire triggers to pads.");
+    
+    ImGui::Spacing();
+    ImGui::Spacing();
+    
+    // === STROKE PRESET MANAGEMENT ===
+    ImGui::TextColored(ImVec4(0.9f, 0.95f, 0.2f, 1.0f), "STROKE PRESETS");
+    
+    auto& presetManager = ControllerPresetManager::get();
+    const auto& presetNames = presetManager.getPresetNamesFor(ControllerPresetManager::ModuleType::StrokeSequencer);
+    
+    // UI SYNCHRONIZATION: On first draw after loading, find the index for the saved preset name
+    if (activeStrokePresetName.isNotEmpty())
+    {
+        selectedStrokePresetIndex = presetNames.indexOf(activeStrokePresetName);
+        activeStrokePresetName = ""; // Clear so we only do this once
+    }
+    
+    // Create a C-style array of char pointers for the ImGui combo box
+    std::vector<const char*> names;
+    for (const auto& name : presetNames)
+        names.push_back(name.toRawUTF8());
+    
+    // Add a placeholder if no presets exist
+    if (names.empty())
+        names.push_back("<no presets>");
+    
+    // Dropdown menu
+    ImGui::SetNextItemWidth(200);
+    if (ImGui::Combo("##StrokePreset", &selectedStrokePresetIndex, names.data(), (int)names.size()))
+    {
+        // When a preset is selected, load it
+        if (selectedStrokePresetIndex >= 0 && selectedStrokePresetIndex < (int)presetNames.size())
+        {
+            activeStrokePresetName = presetNames[selectedStrokePresetIndex];
+            juce::ValueTree presetData = presetManager.loadPreset(ControllerPresetManager::ModuleType::StrokeSequencer, activeStrokePresetName);
+            setExtraStateTree(presetData);
+            onModificationEnded(); // Create an undo state
+        }
+    }
+    
+    // "Save" button
+    ImGui::SameLine();
+    ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.2f, 0.7f, 0.3f, 0.8f));
+    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.3f, 0.8f, 0.4f, 0.95f));
+    ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 1.0f, 1.0f, 1.0f));
+    if (ImGui::Button("Save##strokepreset"))
+    {
+        ImGui::OpenPopup("Save Stroke Preset");
+    }
+    ImGui::PopStyleColor(3);
+    
+    // "Delete" button
+    ImGui::SameLine();
+    ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.8f, 0.2f, 0.2f, 0.8f));
+    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.9f, 0.3f, 0.3f, 0.95f));
+    ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 1.0f, 1.0f, 1.0f));
+    if (ImGui::Button("Delete##strokepreset"))
+    {
+        if (selectedStrokePresetIndex >= 0 && selectedStrokePresetIndex < (int)presetNames.size())
+        {
+            presetManager.deletePreset(ControllerPresetManager::ModuleType::StrokeSequencer, presetNames[selectedStrokePresetIndex]);
+            selectedStrokePresetIndex = -1; // Deselect
+            activeStrokePresetName = ""; // Clear active name
+        }
+    }
+    ImGui::PopStyleColor(3);
+    
+    // Save popup
+    if (ImGui::BeginPopup("Save Stroke Preset"))
+    {
+        ImGui::InputText("Preset Name", strokePresetNameBuffer, sizeof(strokePresetNameBuffer));
+        if (ImGui::Button("Save New##confirm"))
+        {
+            juce::String name(strokePresetNameBuffer);
+            if (name.isNotEmpty())
+            {
+                presetManager.savePreset(ControllerPresetManager::ModuleType::StrokeSequencer, name, getExtraStateTree());
+                activeStrokePresetName = name; // Mark this new preset as active
+                selectedStrokePresetIndex = presetNames.indexOf(activeStrokePresetName); // Resync UI
+                ImGui::CloseCurrentPopup();
+            }
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("Cancel##strokepreset"))
+        {
+            ImGui::CloseCurrentPopup();
+        }
+        ImGui::EndPopup();
+    }
+    
+    ImGui::Spacing();
     ImGui::TextColored(ImVec4(0.85f, 0.85f, 0.3f, 1.0f), "L-CLICK: DRAW  |  R-CLICK: ERASE");
 }
 #endif
@@ -677,6 +764,18 @@ void StrokeSequencerModuleProcessor::drawParametersInNode(float itemWidth, const
 juce::ValueTree StrokeSequencerModuleProcessor::getExtraStateTree() const
 {
     juce::ValueTree state("StrokeSequencerState");
+    
+    // Save the active preset name
+    #if defined(PRESET_CREATOR_UI)
+    if (selectedStrokePresetIndex >= 0)
+    {
+        auto& presetManager = ControllerPresetManager::get();
+        const auto& presetNames = presetManager.getPresetNamesFor(ControllerPresetManager::ModuleType::StrokeSequencer);
+        if (selectedStrokePresetIndex < presetNames.size())
+            state.setProperty("strokePreset", presetNames[selectedStrokePresetIndex], nullptr);
+    }
+    #endif
+    
     juce::ValueTree strokesNode("Strokes");
 
     for (const auto& stroke : userStrokes)
@@ -701,6 +800,9 @@ void StrokeSequencerModuleProcessor::setExtraStateTree(const juce::ValueTree& st
 {
     if (state.hasType("StrokeSequencerState"))
     {
+        // Load the preset name for UI synchronization
+        activeStrokePresetName = state.getProperty("strokePreset", "").toString();
+        
         clearStrokes(); // Use the helper to properly reset all state
         if (auto strokesNode = state.getChildWithName("Strokes"); strokesNode.isValid())
         {

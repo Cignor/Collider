@@ -21,6 +21,8 @@ public:
     std::vector<DynamicPinInfo> getDynamicOutputPins() const override;
     
 #if defined(PRESET_CREATOR_UI)
+    std::atomic<bool> autoBuildDrumKitTriggered { false };
+    
     void drawParametersInNode(float itemWidth, const std::function<bool(const juce::String& paramId)>& isParamModulated, const std::function<void()>& onModificationEnded) override;
 #endif
 
@@ -46,7 +48,6 @@ private:
     double phase = 0.0; // For free-running mode
     double sampleRate = 44100.0;
     std::array<bool, 3> wasAboveThreshold { false, false, false }; // State for edge detection
-    std::array<std::atomic<float>, 3> triggerOutputValues; // Thread-safe triggers
     std::atomic<float> currentStrokeYValue { 0.0f }; // For UI telemetry
     std::atomic<bool> isUnderManualControl { false }; // True when user is actively dragging the playhead slider
     std::atomic<double> livePlayheadPosition { 0.0 }; // Live playhead position for UI tracking
@@ -57,6 +58,9 @@ private:
 
     // --- UI State ---
     bool isDrawing = false;
+    juce::String activeStrokePresetName; // Name of the currently loaded preset
+    int selectedStrokePresetIndex = -1; // Index in the preset dropdown
+    char strokePresetNameBuffer[128] = ""; // Buffer for new preset name input
 
     // --- Parameter Management ---
     juce::AudioProcessorValueTreeState apvts;
@@ -83,7 +87,6 @@ private:
     static constexpr auto paramIdFloorYMod   = "floorY_mod";
     static constexpr auto paramIdMidYMod     = "midY_mod";
     static constexpr auto paramIdCeilingYMod = "ceilingY_mod";
-    static constexpr auto paramIdPlayheadMod = "playhead_mod";
     
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(StrokeSequencerModuleProcessor)
 };

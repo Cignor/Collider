@@ -22,6 +22,7 @@
 #include "../audio/modules/MathModuleProcessor.h"
 #include "../audio/modules/StepSequencerModuleProcessor.h"
 #include "../audio/modules/MultiSequencerModuleProcessor.h"
+#include "../audio/modules/StrokeSequencerModuleProcessor.h"
 #include "../audio/modules/MapRangeModuleProcessor.h"
 #include "../audio/modules/LagProcessorModuleProcessor.h"
 #include "../audio/modules/DeCrackleModuleProcessor.h"
@@ -5453,6 +5454,75 @@ void ImGuiNodeEditorComponent::handleMidiPlayerAutoConnectHybrid(MIDIPlayerModul
     synth->commitChanges();
 }
 
+void ImGuiNodeEditorComponent::handleStrokeSeqBuildDrumKit(StrokeSequencerModuleProcessor* strokeSeq, juce::uint32 strokeSeqLid)
+{
+    if (!synth || !strokeSeq) return;
+
+    juce::Logger::writeToLog("🥁 BUILD DRUM KIT handler called! Creating modules...");
+
+    // 1. Get Stroke Sequencer position
+    auto seqNodeId = synth->getNodeIdForLogical(strokeSeqLid);
+    ImVec2 seqPos = ImNodes::GetNodeGridSpacePos((int)strokeSeqLid);
+
+    // 2. Create 3 Sample Loaders (for Floor, Mid, Ceiling triggers)
+    auto sampler1NodeId = synth->addModule("sample loader");
+    auto sampler2NodeId = synth->addModule("sample loader");
+    auto sampler3NodeId = synth->addModule("sample loader");
+    
+    auto sampler1Lid = synth->getLogicalIdForNode(sampler1NodeId);
+    auto sampler2Lid = synth->getLogicalIdForNode(sampler2NodeId);
+    auto sampler3Lid = synth->getLogicalIdForNode(sampler3NodeId);
+    
+    // Position samplers in a vertical stack to the right
+    pendingNodePositions[(int)sampler1Lid] = ImVec2(seqPos.x + 400.0f, seqPos.y);
+    pendingNodePositions[(int)sampler2Lid] = ImVec2(seqPos.x + 400.0f, seqPos.y + 220.0f);
+    pendingNodePositions[(int)sampler3Lid] = ImVec2(seqPos.x + 400.0f, seqPos.y + 440.0f);
+
+    // 3. Create Track Mixer (will be set to 6 tracks by Value node)
+    auto mixerNodeId = synth->addModule("trackmixer");
+    auto mixerLid = synth->getLogicalIdForNode(mixerNodeId);
+    pendingNodePositions[(int)mixerLid] = ImVec2(seqPos.x + 800.0f, seqPos.y + 200.0f);
+
+    // 4. Create Value node set to 6.0 (for 3 stereo tracks = 6 channels)
+    auto valueNodeId = synth->addModule("value");
+    auto valueLid = synth->getLogicalIdForNode(valueNodeId);
+    pendingNodePositions[(int)valueLid] = ImVec2(seqPos.x + 600.0f, seqPos.y + 550.0f);
+    
+    if (auto* valueNode = dynamic_cast<ValueModuleProcessor*>(synth->getModuleForLogical(valueLid)))
+    {
+        *dynamic_cast<juce::AudioParameterFloat*>(valueNode->getAPVTS().getParameter("value")) = 6.0f;
+    }
+
+    // 5. Connect Stroke Sequencer TRIGGERS to Sample Loader TRIGGER MOD inputs (channel 3)
+    synth->connect(seqNodeId, 0, sampler1NodeId, 3); // Floor Trig   -> Sampler 1 Trigger Mod
+    synth->connect(seqNodeId, 1, sampler2NodeId, 3); // Mid Trig     -> Sampler 2 Trigger Mod
+    synth->connect(seqNodeId, 2, sampler3NodeId, 3); // Ceiling Trig -> Sampler 3 Trigger Mod
+
+    // 6. Connect Sample Loader AUDIO OUTPUTS to Track Mixer AUDIO INPUTS (stereo pairs)
+    // Sampler 1 (L+R) -> Mixer Audio 1+2
+    synth->connect(sampler1NodeId, 0, mixerNodeId, 0); // Sampler 1 L -> Mixer Audio 1
+    synth->connect(sampler1NodeId, 1, mixerNodeId, 1); // Sampler 1 R -> Mixer Audio 2
+    
+    // Sampler 2 (L+R) -> Mixer Audio 3+4
+    synth->connect(sampler2NodeId, 0, mixerNodeId, 2); // Sampler 2 L -> Mixer Audio 3
+    synth->connect(sampler2NodeId, 1, mixerNodeId, 3); // Sampler 2 R -> Mixer Audio 4
+    
+    // Sampler 3 (L+R) -> Mixer Audio 5+6
+    synth->connect(sampler3NodeId, 0, mixerNodeId, 4); // Sampler 3 L -> Mixer Audio 5
+    synth->connect(sampler3NodeId, 1, mixerNodeId, 5); // Sampler 3 R -> Mixer Audio 6
+
+    // 7. Connect Value node (6.0) to Track Mixer's "Num Tracks" input
+    synth->connect(valueNodeId, 0, mixerNodeId, 64); // Value (6) -> Num Tracks Mod
+
+    // 8. Connect Track Mixer output to global output
+    auto outputNodeId = synth->getOutputNodeID();
+    synth->connect(mixerNodeId, 0, outputNodeId, 0); // Mixer Out L -> Global Out L
+    synth->connect(mixerNodeId, 1, outputNodeId, 1); // Mixer Out R -> Global Out R
+
+    synth->commitChanges();
+    graphNeedsRebuild = true;
+}
+
 void ImGuiNodeEditorComponent::handleMultiSequencerAutoConnectSamplers(MultiSequencerModuleProcessor* sequencer, juce::uint32 sequencerLid)
 {
     if (!synth || !sequencer) return;
@@ -5802,6 +5872,17 @@ void ImGuiNodeEditorComponent::handleAutoConnectionRequests()
             if (multiSeq->autoConnectVCOTriggered.exchange(false))
             {
                 handleMultiSequencerAutoConnectVCO(multiSeq, modInfo.first); // Call the new specific handler
+                pushSnapshot();
+                return;
+            }
+        }
+        
+        // --- Check StrokeSequencer Flags ---
+        if (auto* strokeSeq = dynamic_cast<StrokeSequencerModuleProcessor*>(module))
+        {
+            if (strokeSeq->autoBuildDrumKitTriggered.exchange(false))
+            {
+                handleStrokeSeqBuildDrumKit(strokeSeq, modInfo.first);
                 pushSnapshot();
                 return;
             }
@@ -6815,7 +6896,7 @@ unsigned int ImGuiNodeEditorComponent::getImU32ForCategory(ModuleCategory catego
     return color;
 }
 
-// Quick Add Menu - Module Registry
+// Quick Add Menu - Module Registry - Dictionary
 // Maps Display Name -> { Internal Type, Description }
 std::map<juce::String, std::pair<const char*, const char*>> ImGuiNodeEditorComponent::getModuleRegistry()
 {

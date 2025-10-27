@@ -24,6 +24,10 @@ public:
     juce::String getAudioInputLabel(int channel) const override;
     void drawIoPins(const NodePinHelpers& helpers) override;
     bool getParamRouting(const juce::String& paramId, int& outBusIndex, int& outChannelIndexInBus) const override;
+    
+    // Dynamic pin reporting (fixes color issue for tracks beyond 8)
+    std::vector<DynamicPinInfo> getDynamicInputPins() const override;
+    std::vector<DynamicPinInfo> getDynamicOutputPins() const override;
 
 #if defined(PRESET_CREATOR_UI)
     void drawParametersInNode(float itemWidth, const std::function<bool(const juce::String& paramId)>& isParamModulated,

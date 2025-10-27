@@ -91,6 +91,36 @@ set(BOX2D_BUILD_DOCS OFF CACHE BOOL "" FORCE)
 FetchContent_MakeAvailable(box2d_fc)
 
 # --------------------------------------------------------------
+# GLM (OpenGL Mathematics library for 3D vector/matrix math)
+# --------------------------------------------------------------
+FetchContent_Declare(
+  glm
+  GIT_REPOSITORY https://github.com/g-truc/glm.git
+  GIT_TAG        1.0.1 # Latest stable version
+)
+FetchContent_MakeAvailable(glm)
+
+# --------------------------------------------------------------
+# nlohmann/json (required by tinygltf)
+# --------------------------------------------------------------
+FetchContent_Declare(
+  nlohmann_json
+  GIT_REPOSITORY https://github.com/nlohmann/json.git
+  GIT_TAG        v3.11.3 # A recent stable version
+)
+FetchContent_MakeAvailable(nlohmann_json)
+
+# --------------------------------------------------------------
+# tinygltf (glTF 2.0 file loader for animation system)
+# --------------------------------------------------------------
+FetchContent_Declare(
+  tinygltf
+  GIT_REPOSITORY https://github.com/syoyo/tinygltf.git
+  GIT_TAG        v2.8.20 # A recent stable version
+)
+FetchContent_MakeAvailable(tinygltf)
+
+# --------------------------------------------------------------
 # Rubber Band (optional, real-time timestretcher/pitch-shifter)
 # --------------------------------------------------------------
 set(USE_RUBBERBAND ON CACHE BOOL "Enable Rubber Band time/pitch processing")
@@ -332,6 +362,8 @@ target_link_libraries(ColliderApp PRIVATE
     juce::juce_osc
     soundtouch
     box2d
+    glm::glm
+    tinygltf
     $<$<BOOL:${USE_RUBBERBAND}>:${RUBBERBAND_TARGET}>
     # Piper TTS libraries (pre-built)
     ${ONNXRUNTIME_DIR}/lib/onnxruntime.lib
@@ -576,6 +608,8 @@ target_link_libraries(PresetCreatorApp PRIVATE
     imgui_impl_juce
     soundtouch
     box2d
+    glm::glm
+    tinygltf
     $<$<BOOL:${USE_RUBBERBAND}>:${RUBBERBAND_TARGET}>
     # Piper TTS libraries (pre-built)
     ${ONNXRUNTIME_DIR}/lib/onnxruntime.lib

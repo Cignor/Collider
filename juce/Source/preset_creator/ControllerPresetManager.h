@@ -14,7 +14,8 @@ public:
         Faders,
         Knobs,
         Buttons,
-        JogWheel
+        JogWheel,
+        StrokeSequencer
     };
 
     // Get the singleton instance of the manager.

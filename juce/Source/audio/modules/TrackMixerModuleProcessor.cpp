@@ -334,6 +334,59 @@ void TrackMixerModuleProcessor::drawIoPins(const NodePinHelpers& helpers)
     }
 }
 
+std::vector<DynamicPinInfo> TrackMixerModuleProcessor::getDynamicInputPins() const
+{
+    std::vector<DynamicPinInfo> pins;
+    const int activeTracks = juce::jlimit(2, MAX_TRACKS, lastActiveTracks.load());
+    
+    // Audio input pins (channels 0 through activeTracks-1)
+    for (int t = 0; t < activeTracks; ++t)
+    {
+        pins.push_back({ "Audio " + juce::String(t + 1), t, PinDataType::Audio });
+    }
+    
+    // NumTracks modulation pin
+    int busIdx, chanInBus;
+    if (getParamRouting(paramIdNumTracksMod, busIdx, chanInBus))
+    {
+        int channel = getChannelIndexInProcessBlockBuffer(true, busIdx, chanInBus);
+        pins.push_back({ "Num Tracks Mod", channel, PinDataType::Raw });
+    }
+    
+    // Per-track modulation pins (Gain and Pan for each track)
+    for (int t = 1; t <= activeTracks; ++t)
+    {
+        const juce::String trackNumStr = juce::String(t);
+        const juce::String gainModId = paramIdGainModPrefix + trackNumStr;
+        const juce::String panModId = paramIdPanModPrefix + trackNumStr;
+        
+        if (getParamRouting(gainModId, busIdx, chanInBus))
+        {
+            int channel = getChannelIndexInProcessBlockBuffer(true, busIdx, chanInBus);
+            pins.push_back({ "Gain " + trackNumStr + " Mod", channel, PinDataType::CV });
+        }
+        
+        if (getParamRouting(panModId, busIdx, chanInBus))
+        {
+            int channel = getChannelIndexInProcessBlockBuffer(true, busIdx, chanInBus);
+            pins.push_back({ "Pan " + trackNumStr + " Mod", channel, PinDataType::CV });
+        }
+    }
+    
+    return pins;
+}
+
+std::vector<DynamicPinInfo> TrackMixerModuleProcessor::getDynamicOutputPins() const
+{
+    std::vector<DynamicPinInfo> pins;
+    
+    // Stereo output
+    pins.push_back({ "Out L", 0, PinDataType::Audio });
+    pins.push_back({ "Out R", 1, PinDataType::Audio });
+    
+    return pins;
+}
+
 bool TrackMixerModuleProcessor::getParamRouting(const juce::String& paramId, int& outBusIndex, int& outChannelIndexInBus) const
 {
     // All modulation is on the single input bus
