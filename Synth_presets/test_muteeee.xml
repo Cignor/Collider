@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<ModularSynthPreset version="1" bpm="120.0">
+  <modules>
+    <module logicalId="4" type="delay">
+      <params>
+        <DelayParams>
+          <PARAM id="feedback" value="0.4000000059604645"/>
+          <PARAM id="mix" value="0.300000011920929"/>
+          <PARAM id="timeMs" value="400.0"/>
+        </DelayParams>
+      </params>
+    </module>
+    <module logicalId="5" type="chorus">
+      <params>
+        <ChorusParams>
+          <PARAM id="depth" value="0.25"/>
+          <PARAM id="mix" value="0.5"/>
+          <PARAM id="rate" value="1.0"/>
+        </ChorusParams>
+      </params>
+    </module>
+    <module logicalId="6" type="recorder">
+      <params>
+        <RecordParams>
+          <PARAM id="format" value="0.0"/>
+        </RecordParams>
+      </params>
+    </module>
+  </modules>
+  <connections>
+    <connection srcId="4" srcChan="0" dstId="output" dstChan="0"/>
+    <connection srcId="4" srcChan="0" dstId="output" dstChan="1"/>
+    <connection srcId="4" srcChan="0" dstId="6" dstChan="0"/>
+    <connection srcId="4" srcChan="0" dstId="6" dstChan="1"/>
+  </connections>
+  <NodeEditorUI>
+    <node id="4" x="-1342.0" y="698.0"/>
+    <node id="5" x="-151.0" y="258.0" muted="1"/>
+    <node id="6" x="-162.0" y="709.0"/>
+    <node id="0" x="400.0" y="434.5"/>
+  </NodeEditorUI>
+</ModularSynthPreset>

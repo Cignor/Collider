@@ -53,6 +53,23 @@ std::unique_ptr<RawAnimationData> GltfLoader::LoadFromFile(const std::string& fi
     ParseAnimations(model, *rawData);
     
     juce::Logger::writeToLog("GltfLoader: Finished creating RawAnimationData.");
+    
+    // --- VALIDATION STEP ---
+    // Verify the data integrity before returning it
+    std::string validationError;
+    if (!RawAnimationData::validate(*rawData, validationError))
+    {
+        // Validation failed - log the specific error and return nullptr
+        juce::Logger::writeToLog("GltfLoader ERROR: Raw data validation failed for file: " + juce::String(filePath));
+        juce::Logger::writeToLog("Validation message: " + juce::String(validationError));
+        
+        // Return nullptr to signal that loading has failed
+        return nullptr;
+    }
+    
+    juce::Logger::writeToLog("GltfLoader: Raw data validated successfully.");
+    // --- END OF VALIDATION STEP ---
+    
     return rawData;
 }
 
@@ -73,9 +90,9 @@ void ParseNodes(const tinygltf::Model& model, RawAnimationData& outData)
 
         for (int childIndex : inputNode.children) {
             outputNode.childIndices.push_back(childIndex);
-            // We find the parent later, but we need to know who the parent of the child is
-            // This is slightly inefficient but safe.
-            if(outData.nodes.size() > childIndex)
+            // Set the parent index for the child node (with bounds checking)
+            // childIndex must be valid (>= 0 and < size)
+            if(childIndex >= 0 && childIndex < static_cast<int>(outData.nodes.size()))
                 outData.nodes[childIndex].parentIndex = i;
         }
     }
@@ -110,7 +127,19 @@ void ParseSkins(const tinygltf::Model& model, RawAnimationData& outData)
         std::map<std::string, int> boneNameMap;
         for (const auto& anim : model.animations) {
             for (const auto& channel : anim.channels) {
+                // Bounds check the target node index
+                if (channel.target_node < 0 || channel.target_node >= static_cast<int>(model.nodes.size()))
+                    continue;
+                    
                 std::string boneName = model.nodes[channel.target_node].name;
+                
+                // Skip nodes with empty names
+                if (boneName.empty()) {
+                    boneName = "gltf_bone_" + std::to_string(channel.target_node);
+                    juce::Logger::writeToLog("GltfLoader: Animation target node " + juce::String(channel.target_node) + 
+                                           " has empty name. Assigning default name '" + juce::String(boneName) + "'.");
+                }
+                
                 if (boneNameMap.find(boneName) == boneNameMap.end()) {
                     boneNameMap[boneName] = outData.bones.size();
                     RawBoneInfo boneInfo;
@@ -135,9 +164,30 @@ void ParseAnimations(const tinygltf::Model& model, RawAnimationData& outData)
 
         for (const auto& channel : anim.channels)
         {
+            // Bounds check the target node index
+            if (channel.target_node < 0 || channel.target_node >= static_cast<int>(model.nodes.size()))
+            {
+                juce::Logger::writeToLog("GltfLoader WARNING: Skipping animation channel in clip '" + 
+                                       juce::String(clip.name) + "' because target_node index " + 
+                                       juce::String(channel.target_node) + " is out of bounds.");
+                continue;
+            }
+            
             const auto& sampler = anim.samplers[channel.sampler];
             std::string boneName = model.nodes[channel.target_node].name;
+            
+            // Skip nodes with empty names
+            if (boneName.empty())
+            {
+                boneName = "gltf_bone_" + std::to_string(channel.target_node);
+                juce::Logger::writeToLog("GltfLoader WARNING: Animation channel in clip '" + 
+                                       juce::String(clip.name) + "' targets node " + 
+                                       juce::String(channel.target_node) + " with no name. Using default name '" +
+                                       juce::String(boneName) + "'.");
+            }
+            
             RawBoneAnimation& boneAnim = clip.boneAnimations[boneName];
+            boneAnim.boneName = boneName;
 
             std::vector<float> timestampsFloat;
             ReadDataFromBuffer(model, sampler.input, timestampsFloat);

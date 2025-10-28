@@ -74,6 +74,14 @@ public:
             default: return juce::String("Out ") + juce::String(channel + 1);
         }
     }
+
+    std::vector<DynamicPinInfo> getDynamicOutputPins() const override
+    {
+        return {
+            { "Out L", 0, PinDataType::Audio },
+            { "Out R", 1, PinDataType::Audio }
+        };
+    }
     
     // CRITICAL: Accept multi-bus layout (like TTS Performer)
     bool isBusesLayoutSupported(const BusesLayout& layouts) const override

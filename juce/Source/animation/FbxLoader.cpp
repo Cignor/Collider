@@ -51,6 +51,15 @@ std::unique_ptr<RawAnimationData> FbxLoader::LoadFromFile(const std::string& fil
         nodeIdToIndexMap[ufbNode->element_id] = rawData->nodes.size();
         RawNodeData node;
         node.name = ufbNode->name.data;
+        
+        // If the node's name is empty, give it a default name.
+        // This is common for the implicit root node in some FBX files.
+        if (node.name.empty())
+        {
+            node.name = "fbx_node_" + std::to_string(i);
+            juce::Logger::writeToLog("FbxLoader: Found node with empty name at index " + juce::String(i) + ". Assigning default name '" + juce::String(node.name) + "'.");
+        }
+        
         node.localTransform = ToGlmMat4(ufbNode->local_transform);
         rawData->nodes.push_back(node);
     }
@@ -62,8 +71,11 @@ std::unique_ptr<RawAnimationData> FbxLoader::LoadFromFile(const std::string& fil
 
          if (nodeIdToIndexMap.count(ufbNode->parent->element_id)) {
             int parentIndex = nodeIdToIndexMap[ufbNode->parent->element_id];
-            rawData->nodes[i].parentIndex = parentIndex;
-            rawData->nodes[parentIndex].childIndices.push_back(i);
+            // Validate parentIndex before using it to access arrays
+            if (parentIndex >= 0 && parentIndex < static_cast<int>(rawData->nodes.size())) {
+                rawData->nodes[i].parentIndex = parentIndex;
+                rawData->nodes[parentIndex].childIndices.push_back(i);
+            }
          }
     }
 
@@ -137,6 +149,17 @@ std::unique_ptr<RawAnimationData> FbxLoader::LoadFromFile(const std::string& fil
     }
     
     juce::Logger::writeToLog("FbxLoader: Total bones found: " + juce::String(rawData->bones.size()));
+    
+    // --- DEBUG: Validate node structure ---
+    juce::Logger::writeToLog("FbxLoader: Validating node structure...");
+    int nodesWithoutParent = 0;
+    for (size_t i = 0; i < rawData->nodes.size(); ++i) {
+        if (rawData->nodes[i].parentIndex == -1) {
+            nodesWithoutParent++;
+            juce::Logger::writeToLog("FbxLoader: Root node found: " + juce::String(rawData->nodes[i].name));
+        }
+    }
+    juce::Logger::writeToLog("FbxLoader: Found " + juce::String(nodesWithoutParent) + " root nodes in hierarchy.");
 
     // --- 4. Parse Animations ---
     juce::Logger::writeToLog("FbxLoader: Parsing animations...");
@@ -163,7 +186,33 @@ std::unique_ptr<RawAnimationData> FbxLoader::LoadFromFile(const std::string& fil
                 if (!node) continue;
                 
                 std::string boneName = node->name.data;
+                
+                // If the bone name is empty, try to look it up from our node map
+                if (boneName.empty())
+                {
+                    // The target node might be a root node we renamed earlier
+                    if (nodeIdToIndexMap.count(node->element_id))
+                    {
+                        int nodeIndex = nodeIdToIndexMap[node->element_id];
+                        if (nodeIndex >= 0 && nodeIndex < static_cast<int>(rawData->nodes.size()))
+                        {
+                            boneName = rawData->nodes[nodeIndex].name;
+                            juce::Logger::writeToLog("FbxLoader: Animation property targets unnamed node, resolved to '" + 
+                                                   juce::String(boneName) + "' from node map.");
+                        }
+                    }
+                }
+                
+                // After attempting to resolve, if it's STILL empty, skip this track
+                if (boneName.empty())
+                {
+                    juce::Logger::writeToLog("FbxLoader WARNING: Skipping animation property for node ID " + 
+                                           juce::String(node->element_id) + " because its name could not be resolved.");
+                    continue; // Safely skip this animation track
+                }
+                
                 RawBoneAnimation& boneAnim = clip.boneAnimations[boneName];
+                boneAnim.boneName = boneName; // Explicitly set the bone name
                 
                 // Translation
                 if (strcmp(prop->prop_name.data, "Lcl Translation") == 0) {
@@ -205,6 +254,26 @@ std::unique_ptr<RawAnimationData> FbxLoader::LoadFromFile(const std::string& fil
     }
 
     juce::Logger::writeToLog("FbxLoader: Finished creating RawAnimationData. Bones: " + juce::String(rawData->bones.size()) + ", Clips: " + juce::String(rawData->clips.size()));
+    
+    // --- VALIDATION STEP ---
+    // Verify the data integrity before returning it
+    std::string validationError;
+    if (!RawAnimationData::validate(*rawData, validationError))
+    {
+        // Validation failed - log the specific error and return nullptr
+        juce::Logger::writeToLog("FbxLoader ERROR: Raw data validation failed for file: " + juce::String(filePath));
+        juce::Logger::writeToLog("Validation message: " + juce::String(validationError));
+        
+        // Free the ufbx scene before returning
+        ufbx_free_scene(scene);
+        
+        // Return nullptr to signal that loading has failed
+        return nullptr;
+    }
+    
+    juce::Logger::writeToLog("FbxLoader: Raw data validated successfully.");
+    // --- END OF VALIDATION STEP ---
+    
     ufbx_free_scene(scene);
     return rawData;
 }

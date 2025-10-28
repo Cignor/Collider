@@ -1,5 +1,4 @@
 #include "AnimationModuleProcessor.h"
-#include "../../animation/FbxLoader.h"
 #include <glm/gtc/matrix_transform.hpp>
 #include <algorithm>
 
@@ -11,6 +10,9 @@ AnimationModuleProcessor::AnimationModuleProcessor()
     // Constructor: m_AnimationData and m_Animator are nullptrs initially.
     m_Renderer = std::make_unique<AnimationRenderer>();
     
+    // Register this class to listen for changes from our file loader
+    m_fileLoader.addChangeListener(this);
+    
     // DEBUG: Verify output channel count
     juce::Logger::writeToLog("[AnimationModule] Constructor: getTotalNumOutputChannels() = " + 
                              juce::String(getTotalNumOutputChannels()));
@@ -18,7 +20,24 @@ AnimationModuleProcessor::AnimationModuleProcessor()
 
 AnimationModuleProcessor::~AnimationModuleProcessor()
 {
-    // Destructor: unique_ptrs will automatically clean up the animator and data.
+    // Remove listener before destruction
+    m_fileLoader.removeChangeListener(this);
+    
+    // Safely clean up the active animator
+    Animator* oldAnimator = m_activeAnimator.exchange(nullptr);
+    if (oldAnimator)
+    {
+        // Move to deletion queue to be freed safely
+        const juce::ScopedLock lock(m_freeingLock);
+        m_animatorsToFree.push_back(std::unique_ptr<Animator>(oldAnimator));
+    }
+    
+    // Clear all pending deletions
+    {
+        const juce::ScopedLock lock(m_freeingLock);
+        m_animatorsToFree.clear();
+        m_dataToFree.clear();
+    }
 }
 
 void AnimationModuleProcessor::prepareToPlay(double sampleRate, int samplesPerBlock)
@@ -29,15 +48,35 @@ void AnimationModuleProcessor::prepareToPlay(double sampleRate, int samplesPerBl
 
 void AnimationModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffer&)
 {
-    // Calculate the time elapsed for this audio block.
-    const float deltaTime = buffer.getNumSamples() / getSampleRate();
-
-    // Lock the mutex to ensure the UI thread doesn't access the animator while we update it.
-    const juce::ScopedLock scopedLock(m_AnimatorLock);
-
-    if (m_Animator)
+    // This is the REAL-TIME AUDIO THREAD - must NOT block!
+    
+    // === STEP 1: Clean up old data (non-blocking try-lock) ===
+    // This is a safe place to delete old animation data that was swapped out.
     {
-        m_Animator->Update(deltaTime);
+        const juce::ScopedTryLock tryLock(m_freeingLock);
+        if (tryLock.isLocked())
+        {
+            // We got the lock without blocking - safe to clear old data
+            m_animatorsToFree.clear();
+            m_dataToFree.clear();
+        }
+        // If we didn't get the lock, that's fine - we'll try again next block
+    }
+    
+    // === STEP 2: Get current animator (LOCK-FREE atomic load) ===
+    // Load the active animator pointer atomically.
+    // This is lock-free and safe - even if the main thread swaps in new data,
+    // our local pointer remains valid for this entire block.
+    Animator* currentAnimator = m_activeAnimator.load(std::memory_order_acquire);
+    
+    // === STEP 3: Update animation if we have one ===
+    if (currentAnimator != nullptr)
+    {
+        // Calculate the time elapsed for this audio block.
+        const float deltaTime = buffer.getNumSamples() / getSampleRate();
+        
+        // Update the animation - this is now completely lock-free!
+        currentAnimator->Update(deltaTime);
     }
     
     // Clear the output buffer first
@@ -50,12 +89,7 @@ void AnimationModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, ju
     float velX = m_outputVelX.load();
     float velY = m_outputVelY.load();
     
-    // Debug: Log values occasionally
-    static int debugCounter = 0;
-    if (++debugCounter % 480 == 0) // Every ~0.1 seconds at 48kHz
-    {
-        DBG("Animation outputs: PosX=" << posX << " PosY=" << posY << " VelX=" << velX << " VelY=" << velY);
-    }
+    // Debug logging removed - was causing "string too long" exceptions in audio thread
 
     // Write the values to the corresponding output buffers (first sample of each channel)
     if (buffer.getNumChannels() >= 5 && buffer.getNumSamples() > 0)
@@ -88,78 +122,188 @@ void AnimationModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, ju
     }
 }
 
-void AnimationModuleProcessor::loadFile(const juce::File& file)
+bool AnimationModuleProcessor::isCurrentlyLoading() const
 {
-    juce::Logger::writeToLog("--- Animation File Load Started ---");
-    juce::Logger::writeToLog("File: " + file.getFullPathName());
+    return m_fileLoader.isLoading();
+}
 
-    // --- Step 1: Load and Bind the data ---
-    std::unique_ptr<RawAnimationData> rawData;
-    std::string path = file.getFullPathName().toStdString();
-
-    if (file.hasFileExtension(".fbx"))
+void AnimationModuleProcessor::openAnimationFile()
+{
+    // If already loading, ignore the request
+    if (isCurrentlyLoading())
     {
-        juce::Logger::writeToLog("Using FBX Loader...");
-        rawData = FbxLoader::LoadFromFile(path);
-    }
-    else
-    {
-        juce::Logger::writeToLog("Using glTF Loader...");
-        rawData = GltfLoader::LoadFromFile(path);
-    }
-
-    if (!rawData)
-    {
-        juce::Logger::writeToLog("-> CRITICAL ERROR: Loader failed to produce RawAnimationData.");
+        juce::Logger::writeToLog("AnimationModule: Already loading a file. Ignoring new request.");
         return;
     }
-    juce::Logger::writeToLog("-> Loader SUCCESS: Raw data created.");
-    juce::Logger::writeToLog("   Raw Nodes: " + juce::String(rawData->nodes.size()));
-    juce::Logger::writeToLog("   Raw Bones: " + juce::String(rawData->bones.size()));
-    juce::Logger::writeToLog("   Raw Clips: " + juce::String(rawData->clips.size()));
 
-    juce::Logger::writeToLog("Binding Raw Data...");
+    // Create a file chooser to let the user select an animation file
+    // Store it as a member to keep it alive during the async operation
+    m_FileChooser = std::make_unique<juce::FileChooser>(
+        "Select an animation file (glTF/FBX)...",
+        juce::File{},
+        "*.gltf;*.glb;*.fbx");
+
+    auto flags = juce::FileBrowserComponent::openMode | juce::FileBrowserComponent::canSelectFiles;
+
+    // Launch the file chooser asynchronously
+    m_FileChooser->launchAsync(flags, [this](const juce::FileChooser& chooser)
+    {
+        if (chooser.getResults().isEmpty())
+        {
+            juce::Logger::writeToLog("AnimationModule: File selection cancelled.");
+            return; // User cancelled
+        }
+
+        juce::File file = chooser.getResult();
+        
+        if (!file.existsAsFile())
+        {
+            juce::Logger::writeToLog("AnimationModule: Selected file does not exist.");
+            return;
+        }
+        
+        juce::Logger::writeToLog("AnimationModule: Starting background load of: " + file.getFullPathName());
+        
+        // Start the background loading process
+        // The UI will remain responsive while this happens!
+        m_fileLoader.startLoadingFile(file);
+    });
+}
+
+// THIS IS THE MOST IMPORTANT PART
+// This function will be called on the MESSAGE THREAD when the background thread finishes
+void AnimationModuleProcessor::changeListenerCallback(juce::ChangeBroadcaster* source)
+{
+    // Make sure the notification is coming from our file loader
+    if (source == &m_fileLoader)
+    {
+        juce::Logger::writeToLog("AnimationModule: Background loading complete. Processing data...");
+        
+        // Get the loaded data from the loader (transfers ownership)
+        std::unique_ptr<RawAnimationData> rawData = m_fileLoader.getLoadedData();
+
+        if (rawData != nullptr)
+        {
+            // Success! The file was loaded and parsed in the background.
+            // Now we can do the binding and setup work on the message thread.
+            juce::String filePath = m_fileLoader.getLoadedFilePath();
+            juce::Logger::writeToLog("AnimationModule: File loaded successfully: " + filePath);
+            juce::Logger::writeToLog("   Raw Nodes: " + juce::String(rawData->nodes.size()));
+            juce::Logger::writeToLog("   Raw Bones: " + juce::String(rawData->bones.size()));
+            juce::Logger::writeToLog("   Raw Clips: " + juce::String(rawData->clips.size()));
+            
+            setupAnimationFromRawData(std::move(rawData));
+        }
+        else
+        {
+            // Failure - the loader returned nullptr
+            juce::Logger::writeToLog("AnimationModule ERROR: Failed to load animation file. Check logs for details.");
+            
+            // Show error message to the user
+            juce::AlertWindow::showMessageBoxAsync(
+                juce::MessageBoxIconType::WarningIcon,
+                "Loading Failed",
+                "The selected animation file could not be loaded.\nCheck the console logs for details.",
+                "OK");
+        }
+    }
+}
+
+void AnimationModuleProcessor::setupAnimationFromRawData(std::unique_ptr<RawAnimationData> rawData)
+{
+    // This is called on the MESSAGE THREAD after background loading completes
+    
+    juce::Logger::writeToLog("AnimationModule: Binding raw data to create AnimationData...");
     auto finalData = AnimationBinder::Bind(*rawData);
 
     if (!finalData)
     {
-        juce::Logger::writeToLog("-> CRITICAL ERROR: AnimationBinder failed to create final AnimationData.");
+        juce::Logger::writeToLog("AnimationModule ERROR: AnimationBinder failed to create final AnimationData.");
+        
+        juce::AlertWindow::showMessageBoxAsync(
+            juce::MessageBoxIconType::WarningIcon,
+            "Binding Failed",
+            "The animation data could not be processed after loading.",
+            "OK");
         return;
     }
-    juce::Logger::writeToLog("-> Binder SUCCESS: Final data created.");
+    
+    juce::Logger::writeToLog("AnimationModule: Binder SUCCESS - Final data created.");
     juce::Logger::writeToLog("   Final Bones: " + juce::String(finalData->boneInfoMap.size()));
     juce::Logger::writeToLog("   Final Clips: " + juce::String(finalData->animationClips.size()));
 
-    // --- Step 2: Safely swap the new data into the module ---
-    // THE CRITICAL FIX IS HERE: We lock and update ALL data members first.
-    const juce::ScopedLock scopedLock(m_AnimatorLock);
+    // === THREAD-SAFE DATA SWAP ===
+    // Prepare the new animator and data in "staging" area (not visible to audio thread yet)
+    m_stagedAnimationData = std::move(finalData);
+    m_stagedAnimator = std::make_unique<Animator>(m_stagedAnimationData.get());
+    
+    // Play the first animation clip if available
+    if (!m_stagedAnimationData->animationClips.empty())
+    {
+        juce::Logger::writeToLog("AnimationModule: Playing first animation clip: " + 
+                               juce::String(m_stagedAnimationData->animationClips[0].name));
+        m_stagedAnimator->PlayAnimation(m_stagedAnimationData->animationClips[0].name);
+    }
+    
+    // Cache bone names for thread-safe UI access (on main thread, before audio thread gets it)
+    m_cachedBoneNames.clear();
+    for (const auto& pair : m_stagedAnimationData->boneInfoMap)
+    {
+        m_cachedBoneNames.push_back(pair.first);
+    }
+    juce::Logger::writeToLog("AnimationModule: Cached " + juce::String((int)m_cachedBoneNames.size()) + " bone names for UI.");
+    
+    juce::Logger::writeToLog("AnimationModule: Preparing to swap animation data...");
+    
+    // 1. Release the raw pointer for the new animator from its unique_ptr.
+    Animator* newAnimator = m_stagedAnimator.release();
+    
+    // 2. Atomically swap the new animator into the 'active' slot.
+    // The audio thread will pick this up on its next processBlock().
+    Animator* oldAnimator = m_activeAnimator.exchange(newAnimator, std::memory_order_release);
+    
+    // 3. Now, swap the unique_ptr that owns the AnimationData.
+    // m_stagedAnimationData (holding the NEW data) is moved into m_activeData.
+    // The previous m_activeData (holding the OLD data) is moved into a temporary.
+    std::unique_ptr<AnimationData> oldDataToFree = std::move(m_activeData);
+    m_activeData = std::move(m_stagedAnimationData);
 
-    m_AnimationData = std::move(finalData);
-    m_Animator = std::make_unique<Animator>(m_AnimationData.get());
+    juce::Logger::writeToLog("AnimationModule: New animator is now active.");
 
-    // Reset UI state now that data is valid
+    // 4. Queue the OLD animator and OLD data for safe deletion.
+    // We can't delete them immediately, as the audio thread might still be using them.
+    {
+        const juce::ScopedLock lock(m_freeingLock);
+        if (oldAnimator)
+        {
+            m_animatorsToFree.push_back(std::unique_ptr<Animator>(oldAnimator));
+            juce::Logger::writeToLog("AnimationModule: Old animator queued for safe deletion.");
+        }
+        if (oldDataToFree)
+        {
+            m_dataToFree.push_back(std::move(oldDataToFree));
+            juce::Logger::writeToLog("AnimationModule: Old animation data queued for safe deletion.");
+        }
+    }
+    
+    // Reset UI state now that new data is active
     m_selectedBoneIndex = -1;
     m_selectedBoneName = "None";
     m_isFirstFrame = true;
-
-    // --- Step 3: Play the animation AFTER the animator and data are valid ---
-    if (m_Animator && !m_AnimationData->animationClips.empty())
-    {
-        juce::Logger::writeToLog("Playing first animation clip: " + juce::String(m_AnimationData->animationClips[0].name));
-        m_Animator->PlayAnimation(m_AnimationData->animationClips[0].name);
-    }
     
-    juce::Logger::writeToLog("--- Animation File Load Finished ---");
+    juce::Logger::writeToLog("AnimationModule: Animation atomically swapped and ready for audio thread!");
 }
 
 const std::vector<glm::mat4>& AnimationModuleProcessor::getFinalBoneMatrices() const
 {
-    // Lock the mutex to ensure the audio thread doesn't change the data while we are reading it.
-    const juce::ScopedLock scopedLock(m_AnimatorLock);
+    // This is called from the UI/message thread to get bone matrices for rendering.
+    // We use the same atomic pointer the audio thread uses - this is safe and lock-free!
+    
+    Animator* currentAnimator = m_activeAnimator.load(std::memory_order_acquire);
 
-    if (m_Animator)
+    if (currentAnimator != nullptr)
     {
-        return m_Animator->GetFinalBoneMatrices();
+        return currentAnimator->GetFinalBoneMatrices();
     }
 
     // If there's no animator, return a static empty vector to avoid crashes.
@@ -189,95 +333,115 @@ void AnimationModuleProcessor::drawParametersInNode(float itemWidth,
     
     // File loading section
     ImGui::TextWrapped("glTF File:");
-    if (m_AnimationData)
+    
+    // Show loading status or loaded file info
+    // Get current animator atomically (lock-free)
+    Animator* currentAnimator = m_activeAnimator.load(std::memory_order_acquire);
+    
+    if (isCurrentlyLoading())
     {
+        // Show a loading indicator while file is being loaded in the background
+        ImGui::TextColored(ImVec4(1.0f, 1.0f, 0.0f, 1.0f), "Loading...");
+        ImGui::SameLine();
+        // Simple animated spinner
+        static float spinnerAngle = 0.0f;
+        spinnerAngle += ImGui::GetIO().DeltaTime * 10.0f;
+        ImGui::Text("%.1f", spinnerAngle); // Simple animation placeholder
+    }
+    else if (currentAnimator != nullptr && currentAnimator->GetAnimationData() != nullptr)
+    {
+        auto* animData = currentAnimator->GetAnimationData();
         ImGui::TextColored(ImVec4(0.4f, 1.0f, 0.4f, 1.0f), "Loaded");
-        ImGui::Text("Bones: %zu", m_AnimationData->boneInfoMap.size());
-        ImGui::Text("Clips: %zu", m_AnimationData->animationClips.size());
+        ImGui::Text("Bones: %zu", animData->boneInfoMap.size());
+        ImGui::Text("Clips: %zu", animData->animationClips.size());
     }
     else
     {
         ImGui::TextColored(ImVec4(1.0f, 0.4f, 0.4f, 1.0f), "No file loaded");
     }
     
+    // Disable button while loading
+    if (isCurrentlyLoading())
+        ImGui::BeginDisabled();
+    
     if (ImGui::Button("Load Animation File...", ImVec2(itemWidth, 0)))
     {
-        // Create a JUCE file chooser to select a glTF, GLB, or FBX file.
-        // Store it as a member to keep it alive during the async operation
-        m_FileChooser = std::make_unique<juce::FileChooser>(
-            "Select an animation file (glTF/FBX)...",
-            juce::File{},
-            "*.gltf;*.glb;*.fbx");
-
-        auto flags = juce::FileBrowserComponent::openMode | juce::FileBrowserComponent::canSelectFiles;
-
-        // Launch the file chooser asynchronously.
-        // The lambda function will be called when the user makes a selection.
-        m_FileChooser->launchAsync(flags, [this](const juce::FileChooser& chooser)
-        {
-            if (chooser.getResults().isEmpty())
-                return; // User cancelled
-
-            juce::File file = chooser.getResult();
-            
-            // Call the load function on our module.
-            this->loadFile(file);
-        });
+        // Use the new async loading method!
+        // This will not block the UI - the file chooser and loading happen in the background
+        openAnimationFile();
     }
+    
+    if (isCurrentlyLoading())
+        ImGui::EndDisabled();
     
     
     // --- BONE SELECTION ---
-    if (m_AnimationData && !m_AnimationData->boneInfoMap.empty())
+    if (currentAnimator != nullptr && currentAnimator->GetAnimationData() != nullptr)
     {
-        if (ImGui::BeginCombo("Selected Bone", m_selectedBoneName.c_str()))
+        auto* animData = currentAnimator->GetAnimationData();
+        if (!animData->boneInfoMap.empty())
         {
-            // Add a "None" option
-            bool isNoneSelected = (m_selectedBoneIndex == -1);
-            if (ImGui::Selectable("None", isNoneSelected))
+            if (ImGui::BeginCombo("Selected Bone", m_selectedBoneName.c_str()))
             {
-                m_selectedBoneIndex = -1;
-                m_selectedBoneName = "None";
-            }
-
-            // Iterate through all bones in the map
-            int currentIndex = 0;
-            for (const auto& pair : m_AnimationData->boneInfoMap)
-            {
-                const std::string& boneName = pair.first;
-                bool isSelected = (m_selectedBoneName == boneName);
-
-                if (ImGui::Selectable(boneName.c_str(), isSelected))
+                // Add a "None" option
+                bool isNoneSelected = (m_selectedBoneIndex == -1);
+                if (ImGui::Selectable("None", isNoneSelected))
                 {
-                    m_selectedBoneName = boneName;
-                    m_selectedBoneIndex = currentIndex;
+                    m_selectedBoneIndex = -1;
+                    m_selectedBoneName = "None";
+                    m_selectedBoneID = -1;
                 }
-                if (isSelected)
+
+                // Iterate through cached bone names (thread-safe)
+                int currentIndex = 0;
+                for (const auto& boneName : m_cachedBoneNames)
                 {
-                    ImGui::SetItemDefaultFocus();
+                    bool isSelected = (m_selectedBoneName == boneName);
+
+                    if (ImGui::Selectable(boneName.c_str(), isSelected))
+                    {
+                        m_selectedBoneName = boneName;
+                        m_selectedBoneIndex = currentIndex;
+                        
+                        // Cache the bone ID to avoid map lookups every frame
+                        if (animData->boneInfoMap.count(boneName))
+                        {
+                            m_selectedBoneID = animData->boneInfoMap.at(boneName).id;
+                        }
+                        else
+                        {
+                            m_selectedBoneID = -1;
+                        }
+                    }
+                    if (isSelected)
+                    {
+                        ImGui::SetItemDefaultFocus();
+                    }
+                    currentIndex++;
                 }
-                currentIndex++;
+                ImGui::EndCombo();
             }
-            ImGui::EndCombo();
         }
     }
     
     
     // Animation playback controls
-    if (m_Animator && m_AnimationData)
+    if (currentAnimator != nullptr && currentAnimator->GetAnimationData() != nullptr)
     {
+        auto* animData = currentAnimator->GetAnimationData();
         ImGui::Text("Animation Controls:");
         
         // List available clips
-        if (!m_AnimationData->animationClips.empty())
+        if (!animData->animationClips.empty())
         {
             ImGui::Text("Available Clips:");
-            for (size_t i = 0; i < m_AnimationData->animationClips.size(); ++i)
+            for (size_t i = 0; i < animData->animationClips.size(); ++i)
             {
-                const auto& clip = m_AnimationData->animationClips[i];
+                const auto& clip = animData->animationClips[i];
                 if (ImGui::Button(clip.name.c_str(), ImVec2(itemWidth, 0)))
                 {
-                    const juce::ScopedLock lock(m_AnimatorLock);
-                    m_Animator->PlayAnimation(clip.name);
+                    // Safe to call directly - the animator pointer is valid for this frame
+                    currentAnimator->PlayAnimation(clip.name);
                 }
             }
         }
@@ -287,9 +451,16 @@ void AnimationModuleProcessor::drawParametersInNode(float itemWidth,
         static float speed = 1.0f;
         if (ImGui::SliderFloat("Speed", &speed, 0.1f, 3.0f, "%.2f"))
         {
-            const juce::ScopedLock lock(m_AnimatorLock);
-            m_Animator->SetAnimationSpeed(speed);
+            // Safe to call directly - the animator pointer is valid for this frame
+            currentAnimator->SetAnimationSpeed(speed);
         }
+        
+        // DEBUG: Display basic info (accessing animator state directly is unsafe due to audio thread)
+        ImGui::Separator();
+        ImGui::Text("Debug Info:");
+        ImGui::Text("Bones: %d", (int)animData->boneInfoMap.size());
+        ImGui::Text("Clips: %d", (int)animData->animationClips.size());
+        ImGui::Separator();
         
         
         // --- RENDERING VIEWPORT ---
@@ -304,10 +475,13 @@ void AnimationModuleProcessor::drawParametersInNode(float itemWidth,
         // Frame view button - auto-calculates optimal zoom and pan
         if (ImGui::Button("Frame View", ImVec2(itemWidth, 0)))
         {
-            glm::vec2 newPan;
-            m_Renderer->frameView(getFinalBoneMatrices(), m_zoom, newPan);
-            m_panX = newPan.x;
-            m_panY = newPan.y;
+            if (currentAnimator != nullptr)
+            {
+                glm::vec2 newPan;
+                m_Renderer->frameView(currentAnimator->GetBoneWorldTransforms(), m_zoom, newPan);
+                m_panX = newPan.x;
+                m_panY = newPan.y;
+            }
         }
         
         
@@ -325,8 +499,28 @@ void AnimationModuleProcessor::drawParametersInNode(float itemWidth,
         // Setup the renderer (it will only run once internally)
         m_Renderer->setup(static_cast<int>(viewportSize.x), static_cast<int>(viewportSize.y));
         
-        // Render the animation for this frame
-        m_Renderer->render(getFinalBoneMatrices());
+        // Get world transforms for visualization (NOT skinning matrices!)
+        const auto& worldTransforms = currentAnimator->GetBoneWorldTransforms();
+        
+        // --- DEBUG: Log bone positions to diagnose rendering issues ---
+        static int debugFrameCounter = 0;
+        if (++debugFrameCounter % 60 == 0 && !worldTransforms.empty()) // Log once per second at 60fps
+        {
+            juce::Logger::writeToLog("=== Animation Frame Debug ===");
+            juce::Logger::writeToLog("Total bones: " + juce::String(worldTransforms.size()));
+            
+            // Log the first 3 bone positions to see if they're all at origin or varying
+            for (size_t i = 0; i < std::min(size_t(3), worldTransforms.size()); ++i)
+            {
+                glm::vec3 pos = worldTransforms[i][3];
+                juce::Logger::writeToLog("Bone[" + juce::String(i) + "] Position: (" + 
+                    juce::String(pos.x, 2) + ", " + 
+                    juce::String(pos.y, 2) + ", " + 
+                    juce::String(pos.z, 2) + ")");
+            }
+        }
+        
+        m_Renderer->render(worldTransforms);
         
         // Display the texture from the FBO (flipped vertically)
         ImGui::Image((void*)(intptr_t)m_Renderer->getTextureID(), viewportSize, ImVec2(0, 1), ImVec2(1, 0));
@@ -338,58 +532,52 @@ void AnimationModuleProcessor::drawParametersInNode(float itemWidth,
         drawList->AddLine(ImVec2(p1.x, p1.y + m_groundY), ImVec2(p2.x, p1.y + m_groundY), IM_COL32(255, 0, 0, 255), 2.0f);
         
         // --- KINEMATIC CALCULATION BLOCK ---
-        if (m_selectedBoneIndex != -1 && m_Animator && m_AnimationData)
+        if (m_selectedBoneID != -1 && currentAnimator != nullptr)
         {
-            // 1. Get the bone's world matrix using a direct map lookup
-            const auto& boneInfoMap = m_AnimationData->boneInfoMap;
-            if (boneInfoMap.count(m_selectedBoneName)) // Check if the bone exists in the map
+            // 1. Get the bone's world matrix using the cached bone ID (thread-safe!)
+            const auto& worldTransforms = currentAnimator->GetBoneWorldTransforms();
+            
+            if (m_selectedBoneID >= 0 && m_selectedBoneID < worldTransforms.size())
             {
-                const BoneInfo& boneInfo = boneInfoMap.at(m_selectedBoneName);
-                int boneId = boneInfo.id;
-                const auto& finalMatrices = getFinalBoneMatrices();
-                
-                if (boneId >= 0 && boneId < finalMatrices.size())
+                glm::mat4 worldMatrix = worldTransforms[m_selectedBoneID];
+                glm::vec3 worldPos = worldMatrix[3];
+
+                // 2. Recreate the same projection used by the renderer
+                glm::mat4 projection = glm::ortho(-m_zoom + m_panX, m_zoom + m_panX, -m_zoom + m_panY, m_zoom + m_panY, -10.0f, 10.0f);
+                glm::mat4 view = glm::mat4(1.0f); // Identity view matrix
+
+                // 3. Project to screen space
+                ImVec2 viewportPos = ImGui::GetItemRectMin();
+                glm::vec2 currentScreenPos = worldToScreen(worldPos, view, projection, viewportPos, viewportSize);
+
+                // 4. Ground trigger detection
+                bool isBoneBelowGround = currentScreenPos.y > (viewportPos.y + m_groundY);
+                if (isBoneBelowGround && !m_wasBoneBelowGround)
                 {
-                    glm::mat4 worldMatrix = finalMatrices[boneId];
-                    glm::vec3 worldPos = worldMatrix[3];
-
-                    // 2. Recreate the same projection used by the renderer
-                    glm::mat4 projection = glm::ortho(-m_zoom + m_panX, m_zoom + m_panX, -m_zoom + m_panY, m_zoom + m_panY, -10.0f, 10.0f);
-                    glm::mat4 view = glm::mat4(1.0f); // Identity view matrix
-
-                    // 3. Project to screen space
-                    ImVec2 viewportPos = ImGui::GetItemRectMin();
-                    glm::vec2 currentScreenPos = worldToScreen(worldPos, view, projection, viewportPos, viewportSize);
-
-                    // 4. Ground trigger detection
-                    bool isBoneBelowGround = currentScreenPos.y > (viewportPos.y + m_groundY);
-                    if (isBoneBelowGround && !m_wasBoneBelowGround)
-                    {
-                        // The bone just crossed the line from above, send a trigger
-                        m_triggerState.store(true);
-                    }
-                    m_wasBoneBelowGround = isBoneBelowGround;
-
-                    // 5. Calculate velocity
-                    if (m_isFirstFrame)
-                    {
-                        m_lastScreenPos = currentScreenPos;
-                        m_isFirstFrame = false;
-                    }
-                    float deltaTime = ImGui::GetIO().DeltaTime;
-                    glm::vec2 velocity(0.0f);
-                    if (deltaTime > 0.0f)
-                    {
-                        velocity = (currentScreenPos - m_lastScreenPos) / deltaTime;
-                    }
-                    m_lastScreenPos = currentScreenPos;
-
-                    // 6. Store results in atomics for the audio thread
-                    m_outputPosX.store(currentScreenPos.x);
-                    m_outputPosY.store(currentScreenPos.y);
-                    m_outputVelX.store(velocity.x);
-                    m_outputVelY.store(velocity.y);
+                    // The bone just crossed the line from above, send a trigger
+                    m_triggerState.store(true);
                 }
+                m_wasBoneBelowGround = isBoneBelowGround;
+
+                // 5. Calculate velocity
+                if (m_isFirstFrame)
+                {
+                    m_lastScreenPos = currentScreenPos;
+                    m_isFirstFrame = false;
+                }
+                float deltaTime = ImGui::GetIO().DeltaTime;
+                glm::vec2 velocity(0.0f);
+                if (deltaTime > 0.0f)
+                {
+                    velocity = (currentScreenPos - m_lastScreenPos) / deltaTime;
+                }
+                m_lastScreenPos = currentScreenPos;
+
+                // 6. Store results in atomics for the audio thread
+                m_outputPosX.store(currentScreenPos.x);
+                m_outputPosY.store(currentScreenPos.y);
+                m_outputVelX.store(velocity.x);
+                m_outputVelY.store(velocity.y);
             }
         }
         else {

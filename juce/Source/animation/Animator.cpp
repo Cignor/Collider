@@ -8,39 +8,63 @@ Animator::Animator(AnimationData* animationData) {
     m_AnimationData = animationData;
     m_CurrentAnimation = nullptr;
     m_AnimationSpeed = 1.0f;
-
-    // THIS IS THE CRITICAL FIX: Check if the data is valid before using it.
-    if (m_AnimationData && !m_AnimationData->boneInfoMap.empty()) {
+    if(m_AnimationData && !m_AnimationData->boneInfoMap.empty()) {
         m_FinalBoneMatrices.resize(m_AnimationData->boneInfoMap.size(), glm::mat4(1.0f));
+        m_BoneWorldTransforms.resize(m_AnimationData->boneInfoMap.size(), glm::mat4(1.0f));
     }
 }
 
 void Animator::PlayAnimation(const std::string& animationName) {
-    if (!m_AnimationData) return;
+    if(!m_AnimationData) return;
     for (auto& clip : m_AnimationData->animationClips) {
         if (clip.name == animationName) {
             m_CurrentAnimation = &clip;
             m_CurrentTime = 0.0f;
+            
+            // Pre-link bone animations to nodes (MAIN THREAD ONLY - string operations here!)
+            // This eliminates ALL string lookups in the audio thread
+            LinkBoneAnimationsToNodes(&m_AnimationData->rootNode);
             return;
         }
     }
 }
 
+// Recursively pre-link bone animations to node tree (called on main thread)
+void Animator::LinkBoneAnimationsToNodes(NodeData* node) {
+    if (!node || !m_CurrentAnimation) return;
+    
+    // Try to find a bone animation for this node
+    if (m_CurrentAnimation->boneAnimations.count(node->name)) {
+        node->currentBoneAnimation = &m_CurrentAnimation->boneAnimations[node->name];
+    } else {
+        node->currentBoneAnimation = nullptr;
+    }
+    
+    // Recurse to children
+    for (auto& child : node->children) {
+        LinkBoneAnimationsToNodes(&child);
+    }
+}
+
 void Animator::Update(float deltaTime) {
-    if (!m_AnimationData || !m_CurrentAnimation || m_CurrentAnimation->durationInTicks <= 0.0f) return;
+    // NO LOGGING ALLOWED HERE - called from audio thread!
+    if (!m_AnimationData || !m_CurrentAnimation || m_CurrentAnimation->durationInTicks <= 0.0f) 
+    {
+        return;
+    }
+    
     m_CurrentTime += m_CurrentAnimation->ticksPerSecond * deltaTime * m_AnimationSpeed;
     m_CurrentTime = fmod(m_CurrentTime, m_CurrentAnimation->durationInTicks);
+    
     CalculateBoneTransform(&m_AnimationData->rootNode, glm::mat4(1.0f));
 }
 
 void Animator::CalculateBoneTransform(const NodeData* node, const glm::mat4& parentTransform) {
-    if (!node) return;
-    std::string nodeName = node->name;
+    if(!node) return;
     
-    BoneAnimation* boneAnim = nullptr;
-    if (m_CurrentAnimation && m_CurrentAnimation->boneAnimations.count(nodeName)) {
-        boneAnim = &m_CurrentAnimation->boneAnimations[nodeName];
-    }
+    // NO LOGGING ALLOWED - called from audio thread!
+    // Use PRE-LINKED bone animation pointer (NO string operations!)
+    BoneAnimation* boneAnim = node->currentBoneAnimation;
     
     glm::vec3 scale, translation;
     glm::quat rotation;
@@ -55,12 +79,19 @@ void Animator::CalculateBoneTransform(const NodeData* node, const glm::mat4& par
     glm::mat4 nodeTransform = glm::translate(glm::mat4(1.0f), translation) * glm::toMat4(rotation) * glm::scale(glm::mat4(1.0f), scale);
     glm::mat4 globalTransform = parentTransform * nodeTransform;
 
-    if (m_AnimationData->boneInfoMap.count(nodeName)) {
-        int boneIndex = m_AnimationData->boneInfoMap.at(nodeName).id;
-        if (boneIndex >= 0 && boneIndex < m_FinalBoneMatrices.size())
-            m_FinalBoneMatrices[boneIndex] = globalTransform;
+    // Use pre-linked bone index and offset matrix (NO string operations!)
+    if (node->boneIndex >= 0 && node->boneIndex < m_FinalBoneMatrices.size())
+    {
+        // Store world transform for visualization (without offset matrix)
+        m_BoneWorldTransforms[node->boneIndex] = globalTransform;
+        
+        // Apply the offset matrix to get the final skinning transform
+        // finalMatrix = globalTransform * offsetMatrix (inverse bind pose)
+        m_FinalBoneMatrices[node->boneIndex] = globalTransform * node->offsetMatrix;
     }
-    for (const auto& child : node->children) {
+
+    // THIS IS THE FIX: We get a non-const reference to the child.
+    for (auto& child : const_cast<NodeData*>(node)->children) {
         CalculateBoneTransform(&child, globalTransform);
     }
 }

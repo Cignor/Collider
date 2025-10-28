@@ -1133,7 +1133,7 @@ void ImGuiNodeEditorComponent::renderImGui()
                 {
                     if (synth != nullptr)
                     {
-                        auto newNodeId = synth->addModule("sample loader");
+                        auto newNodeId = synth->addModule("sample_loader");
                         auto newLogicalId = synth->getLogicalIdForNode(newNodeId);
                         pendingNodeScreenPositions[(int)newLogicalId] = ImGui::GetMousePos();
                         if (auto* sampleLoader = dynamic_cast<SampleLoaderModuleProcessor*>(synth->getModuleForLogical(newLogicalId)))
@@ -1307,7 +1307,7 @@ void ImGuiNodeEditorComponent::renderImGui()
                     {
                         if (synth != nullptr)
                         {
-                            auto newNodeId = synth->addModule("midi player");
+                            auto newNodeId = synth->addModule("midi_player");
                             auto newLogicalId = synth->getLogicalIdForNode(newNodeId);
                             pendingNodeScreenPositions[(int)newLogicalId] = ImGui::GetMousePos();
                             
@@ -2512,7 +2512,7 @@ if (auto* mp = synth->getModuleForLogical (lid))
                 }
 
                 // 2. Create and position the new mixer node intelligently
-                auto mixNodeIdGraph = synth->addModule("Mixer");
+                auto mixNodeIdGraph = synth->addModule("mixer");
                 const juce::uint32 mixLid = synth->getLogicalIdForNode(mixNodeIdGraph);
                 
                 ImVec2 srcPos = ImNodes::GetNodeGridSpacePos(selectedLogicalId);
@@ -4794,9 +4794,9 @@ void ImGuiNodeEditorComponent::handleRandomizePatch()
 
     // 3. --- ESTABLISH AN OBSERVATION POINT ---
     // Always add a Mixer and Scope. This is our window into the chaos.
-    auto mixerId = synth->getLogicalIdForNode(synth->addModule("Mixer"));
+    auto mixerId = synth->getLogicalIdForNode(synth->addModule("mixer"));
     addedModules.push_back({mixerId, "Mixer"});
-    auto scopeId = synth->getLogicalIdForNode(synth->addModule("Scope"));
+    auto scopeId = synth->getLogicalIdForNode(synth->addModule("scope"));
     addedModules.push_back({scopeId, "Scope"});
     
     // Connect the observation path: Mixer -> Scope -> Output
@@ -4909,8 +4909,8 @@ void ImGuiNodeEditorComponent::handleRandomizeConnections()
         if (mod.second == "Scope") scopeId = mod.first;
     }
     // Add Mixer/Scope if they don't exist, as they are crucial for listening
-    if (mixerId == 0) mixerId = synth->getLogicalIdForNode(synth->addModule("Mixer"));
-    if (scopeId == 0) scopeId = synth->getLogicalIdForNode(synth->addModule("Scope"));
+    if (mixerId == 0) mixerId = synth->getLogicalIdForNode(synth->addModule("mixer"));
+    if (scopeId == 0) scopeId = synth->getLogicalIdForNode(synth->addModule("scope"));
 
     auto outputNodeId = synth->getOutputNodeID();
     synth->connect(synth->getNodeIdForLogical(mixerId), 0, synth->getNodeIdForLogical(scopeId), 0);
@@ -5186,7 +5186,7 @@ void ImGuiNodeEditorComponent::handleConnectSelectedToTrackMixer()
     ImVec2 centerPos = ImVec2(totalX / numSelectedNodes, totalY / numSelectedNodes);
     
     // 3. Create the Value node and set its value to the number of selected nodes.
-    auto valueNodeId = synth->addModule("Value");
+    auto valueNodeId = synth->addModule("value");
     auto valueLid = synth->getLogicalIdForNode(valueNodeId);
     if (auto* valueProc = dynamic_cast<ValueModuleProcessor*>(synth->getModuleForLogical(valueLid)))
     {
@@ -5200,7 +5200,7 @@ void ImGuiNodeEditorComponent::handleConnectSelectedToTrackMixer()
     pendingNodePositions[(int)valueLid] = ImVec2(centerPos.x + 400.0f, centerPos.y);
 
     // 4. Create the Track Mixer node.
-    auto mixerNodeId = synth->addModule("trackmixer");
+    auto mixerNodeId = synth->addModule("track_mixer");
     auto mixerLid = synth->getLogicalIdForNode(mixerNodeId);
     // Position it to the right of the right-most selected node for a clean signal flow.
     pendingNodePositions[(int)mixerLid] = ImVec2(maxX + 800.0f, centerPos.y);
@@ -5248,7 +5248,7 @@ void ImGuiNodeEditorComponent::handleMidiPlayerAutoConnect(MIDIPlayerModuleProce
     synth->clearConnectionsForNode(midiPlayerNodeId);
 
     // --- FIX: Create and position the Track Mixer first ---
-    auto mixerNodeId = synth->addModule("trackmixer");
+    auto mixerNodeId = synth->addModule("track_mixer");
     auto mixerLid = synth->getLogicalIdForNode(mixerNodeId);
     pendingNodePositions[(int)mixerLid] = ImVec2(midiPlayerPos.x + 1200.0f, midiPlayerPos.y);
     juce::Logger::writeToLog("[AutoConnect] Created Track Mixer with logical ID " + juce::String(mixerLid));
@@ -5267,11 +5267,11 @@ void ImGuiNodeEditorComponent::handleMidiPlayerAutoConnect(MIDIPlayerModuleProce
         if (i >= MIDIPlayerModuleProcessor::kMaxTracks) break;
 
         // A. Create and position the new modules.
-        auto samplerNodeId = synth->addModule("sample loader");
+        auto samplerNodeId = synth->addModule("sample_loader");
         auto samplerLid = synth->getLogicalIdForNode(samplerNodeId);
         pendingNodePositions[(int)samplerLid] = ImVec2(midiPlayerPos.x + 800.0f, midiPlayerPos.y + (i * 350.0f));
 
-        auto mapRangeNodeId = synth->addModule("MapRange");
+        auto mapRangeNodeId = synth->addModule("map_range");
         auto mapRangeLid = synth->getLogicalIdForNode(mapRangeNodeId);
         pendingNodePositions[(int)mapRangeLid] = ImVec2(midiPlayerPos.x + 400.0f, midiPlayerPos.y + (i * 350.0f));
         
@@ -5338,7 +5338,7 @@ void ImGuiNodeEditorComponent::handleMidiPlayerAutoConnectVCO(MIDIPlayerModulePr
     pendingNodePositions[(int)polyVcoLid] = ImVec2(midiPlayerPos.x + 400.0f, midiPlayerPos.y);
     juce::Logger::writeToLog("[AutoConnectVCO] Created PolyVCO with logical ID " + juce::String(polyVcoLid));
 
-    auto mixerNodeId = synth->addModule("trackmixer");
+    auto mixerNodeId = synth->addModule("track_mixer");
     auto mixerLid = synth->getLogicalIdForNode(mixerNodeId);
     pendingNodePositions[(int)mixerLid] = ImVec2(midiPlayerPos.x + 800.0f, midiPlayerPos.y);
     juce::Logger::writeToLog("[AutoConnectVCO] Created Track Mixer with logical ID " + juce::String(mixerLid));
@@ -5444,7 +5444,7 @@ void ImGuiNodeEditorComponent::handleMidiPlayerAutoConnectHybrid(MIDIPlayerModul
     // 4. If we didn't find a TrackMixer to reuse after tracing, create a new one.
     if (trackMixerLid == 0)
     {
-        auto trackMixerNodeId = synth->addModule("trackmixer", false);
+        auto trackMixerNodeId = synth->addModule("track_mixer", false);
         trackMixerLid = synth->getLogicalIdForNode(trackMixerNodeId);
         pendingNodePositions[(int)trackMixerLid] = ImVec2(midiPos.x + 800.0f, midiPos.y);
     }
@@ -5456,7 +5456,7 @@ void ImGuiNodeEditorComponent::handleMidiPlayerAutoConnectHybrid(MIDIPlayerModul
     if (auto* vco = dynamic_cast<PolyVCOModuleProcessor*>(synth->getModuleForLogical(polyVcoLid)))
         if (auto* p = dynamic_cast<juce::AudioParameterInt*>(vco->getAPVTS().getParameter("numVoices"))) *p = numTracks;
     if (auto* mixer = dynamic_cast<TrackMixerModuleProcessor*>(synth->getModuleForLogical(trackMixerLid)))
-        if (auto* p = dynamic_cast<juce::AudioParameterFloat*>(mixer->getAPVTS().getParameter("numTracks"))) *p = (float)numTracks;
+        if (auto* p = dynamic_cast<juce::AudioParameterInt*>(mixer->getAPVTS().getParameter("numTracks"))) *p = numTracks;
 
     int voicesToConnect = std::min({numTracks, PolyVCOModuleProcessor::MAX_VOICES, 64});
     for (int i = 0; i < voicesToConnect; ++i)
@@ -5484,9 +5484,9 @@ void ImGuiNodeEditorComponent::handleStrokeSeqBuildDrumKit(StrokeSequencerModule
     ImVec2 seqPos = ImNodes::GetNodeGridSpacePos((int)strokeSeqLid);
 
     // 2. Create 3 Sample Loaders (for Floor, Mid, Ceiling triggers)
-    auto sampler1NodeId = synth->addModule("sample loader");
-    auto sampler2NodeId = synth->addModule("sample loader");
-    auto sampler3NodeId = synth->addModule("sample loader");
+    auto sampler1NodeId = synth->addModule("sample_loader");
+    auto sampler2NodeId = synth->addModule("sample_loader");
+    auto sampler3NodeId = synth->addModule("sample_loader");
     
     auto sampler1Lid = synth->getLogicalIdForNode(sampler1NodeId);
     auto sampler2Lid = synth->getLogicalIdForNode(sampler2NodeId);
@@ -5498,7 +5498,7 @@ void ImGuiNodeEditorComponent::handleStrokeSeqBuildDrumKit(StrokeSequencerModule
     pendingNodePositions[(int)sampler3Lid] = ImVec2(seqPos.x + 400.0f, seqPos.y + 440.0f);
 
     // 3. Create Track Mixer (will be set to 6 tracks by Value node)
-    auto mixerNodeId = synth->addModule("trackmixer");
+    auto mixerNodeId = synth->addModule("track_mixer");
     auto mixerLid = synth->getLogicalIdForNode(mixerNodeId);
     pendingNodePositions[(int)mixerLid] = ImVec2(seqPos.x + 800.0f, seqPos.y + 200.0f);
 
@@ -5553,7 +5553,7 @@ void ImGuiNodeEditorComponent::handleMultiSequencerAutoConnectSamplers(MultiSequ
     synth->clearConnectionsForNode(seqNodeId);
 
     // 2. Create the necessary Mixer
-    auto mixerNodeId = synth->addModule("trackmixer");
+    auto mixerNodeId = synth->addModule("track_mixer");
     auto mixerLid = synth->getLogicalIdForNode(mixerNodeId);
     pendingNodePositions[(int)mixerLid] = ImVec2(seqPos.x + 800.0f, seqPos.y + 100.0f);
     if (auto* mixer = dynamic_cast<TrackMixerModuleProcessor*>(synth->getModuleForLogical(mixerLid))) {
@@ -5563,7 +5563,7 @@ void ImGuiNodeEditorComponent::handleMultiSequencerAutoConnectSamplers(MultiSequ
     // 3. CREATE a Sample Loader for each step and connect its audio to the mixer
     for (int i = 0; i < numSteps; ++i)
     {
-        auto samplerNodeId = synth->addModule("sample loader");
+        auto samplerNodeId = synth->addModule("sample_loader");
         auto samplerLid = synth->getLogicalIdForNode(samplerNodeId);
         pendingNodePositions[(int)samplerLid] = ImVec2(seqPos.x + 400.0f, seqPos.y + (i * 220.0f));
 
@@ -5602,14 +5602,14 @@ void ImGuiNodeEditorComponent::handleMultiSequencerAutoConnectVCO(MultiSequencer
     auto polyVcoLid = synth->getLogicalIdForNode(polyVcoNodeId);
     pendingNodePositions[(int)polyVcoLid] = ImVec2(seqPos.x + 400.0f, seqPos.y);
     if (auto* vco = dynamic_cast<PolyVCOModuleProcessor*>(synth->getModuleForLogical(polyVcoLid))) {
-        *dynamic_cast<juce::AudioParameterInt*>(vco->getAPVTS().getParameter("numVoices")) = numSteps;
+        if (auto* p = dynamic_cast<juce::AudioParameterInt*>(vco->getAPVTS().getParameter("numVoices"))) *p = numSteps;
     }
     
-    auto mixerNodeId = synth->addModule("trackmixer");
+    auto mixerNodeId = synth->addModule("track_mixer");
     auto mixerLid = synth->getLogicalIdForNode(mixerNodeId);
     pendingNodePositions[(int)mixerLid] = ImVec2(seqPos.x + 800.0f, seqPos.y);
     if (auto* mixer = dynamic_cast<TrackMixerModuleProcessor*>(synth->getModuleForLogical(mixerLid))) {
-        *dynamic_cast<juce::AudioParameterInt*>(mixer->getAPVTS().getParameter("numTracks")) = numSteps;
+        if (auto* p = dynamic_cast<juce::AudioParameterInt*>(mixer->getAPVTS().getParameter("numTracks"))) *p = numSteps;
     }
 
     // 3. Connect CV, Audio, and Main Output
@@ -5965,7 +5965,7 @@ void ImGuiNodeEditorComponent::handleMIDIPlayerConnectionRequest(juce::uint32 mi
         juce::Logger::writeToLog("[MIDI Player Quick Connect] Created PolyVCO at LID " + juce::String((int)polyVCOLid));
         
         // 2. Create Track Mixer
-        auto mixerNodeId = synth->addModule("trackmixer");
+        auto mixerNodeId = synth->addModule("track_mixer");
         mixerLid = synth->getLogicalIdForNode(mixerNodeId);
         pendingNodeScreenPositions[(int)mixerLid] = ImVec2(playerPos.x + 700.0f, playerPos.y);
         juce::Logger::writeToLog("[MIDI Player Quick Connect] Created Track Mixer at LID " + juce::String((int)mixerLid));
@@ -6026,7 +6026,7 @@ void ImGuiNodeEditorComponent::handleMIDIPlayerConnectionRequest(juce::uint32 mi
         else
         {
             // 1. Create Track Mixer for Samplers-only mode
-            auto mixerNodeId = synth->addModule("trackmixer");
+            auto mixerNodeId = synth->addModule("track_mixer");
             mixerLid = synth->getLogicalIdForNode(mixerNodeId);
             pendingNodeScreenPositions[(int)mixerLid] = ImVec2(mixerX, playerPos.y);
             juce::Logger::writeToLog("[MIDI Player Quick Connect] Created Track Mixer at LID " + juce::String((int)mixerLid));
@@ -6043,7 +6043,7 @@ void ImGuiNodeEditorComponent::handleMIDIPlayerConnectionRequest(juce::uint32 mi
         {
             // Create SampleLoader
             float samplerY = playerPos.y + (trackIdx * 150.0f);
-            auto samplerNodeId = synth->addModule("Sample Loader");
+            auto samplerNodeId = synth->addModule("sample_loader");
             juce::uint32 samplerLid = synth->getLogicalIdForNode(samplerNodeId);
             pendingNodeScreenPositions[(int)samplerLid] = ImVec2(samplerX, samplerY);
             

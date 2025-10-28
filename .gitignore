@@ -68,6 +68,10 @@ audio_sdk_juce/*.zip
 # Large audio recordings
 audio/Recorder/*.wav
 
+# Large Blender files
+*.blend
+*.blend1
+
 # C# build artifacts
 **/obj/Debug/
 **/obj/Release/

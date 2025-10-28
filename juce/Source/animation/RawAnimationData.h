@@ -56,5 +56,20 @@ struct RawAnimationData
     std::vector<RawNodeData> nodes;
     std::vector<RawBoneInfo> bones;
     std::vector<RawAnimationClip> clips;
+    
+    /**
+     * @brief Validates the integrity of the raw animation data.
+     * 
+     * Checks for common issues that could cause crashes:
+     * - Empty or missing data
+     * - Invalid parent/child indices
+     * - Out-of-bounds node references
+     * - Malformed animation tracks
+     * 
+     * @param data The RawAnimationData object to validate.
+     * @param outErrorMessage A string that will be populated with a detailed error message if validation fails.
+     * @return True if the data is valid and safe to use, false otherwise.
+     */
+    static bool validate(const RawAnimationData& data, std::string& outErrorMessage);
 };
 

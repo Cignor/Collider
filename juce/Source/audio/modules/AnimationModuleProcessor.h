@@ -1,8 +1,7 @@
 #pragma once
 
 #include "ModuleProcessor.h"
-#include "../../animation/GltfLoader.h"
-#include "../../animation/FbxLoader.h"
+#include "../../animation/AnimationFileLoader.h"
 #include "../../animation/AnimationBinder.h"
 #include "../../animation/Animator.h"
 #include "../../animation/AnimationRenderer.h"
@@ -10,7 +9,9 @@
 #include <atomic>
 #include <glm/glm.hpp>
 
-class AnimationModuleProcessor : public ModuleProcessor
+// Inherit from juce::ChangeListener to receive notifications from the background loader
+class AnimationModuleProcessor : public ModuleProcessor,
+                                 public juce::ChangeListener
 {
 public:
     AnimationModuleProcessor();
@@ -37,20 +38,50 @@ public:
 #endif
 
     // --- Custom Functions ---
-    void loadFile(const juce::File& file); // Supports both .gltf/.glb and .fbx
+    
+    // Opens a file chooser and loads the selected animation file in the background
+    void openAnimationFile();
+    
+    // Check if an animation file is currently being loaded in the background
+    bool isCurrentlyLoading() const;
+    
+    // Callback executed on the main thread when background loading completes
+    void changeListenerCallback(juce::ChangeBroadcaster* source) override;
+    
     const std::vector<glm::mat4>& getFinalBoneMatrices() const;
 
 private:
+    // Called after raw data is loaded to bind and set up the animation
+    void setupAnimationFromRawData(std::unique_ptr<RawAnimationData> rawData);
+    
     // Parameter state (empty for this module, but required by ModuleProcessor)
     juce::AudioProcessorValueTreeState apvts;
 
-    // Our animation system!
-    std::unique_ptr<AnimationData> m_AnimationData;
-    std::unique_ptr<Animator> m_Animator;
-    std::unique_ptr<AnimationRenderer> m_Renderer;
+    // Background animation file loader
+    AnimationFileLoader m_fileLoader;
 
-    // A mutex to protect the bone matrices when accessed from the UI thread
-    juce::CriticalSection m_AnimatorLock;
+    // --- Thread-Safe Animation Data Management ---
+    
+    // The audio thread reads from this atomic pointer (lock-free).
+    // It points to the currently active Animator that's being used for audio processing.
+    std::atomic<Animator*> m_activeAnimator { nullptr };
+    
+    // This owns the AnimationData for the currently active animator.
+    // We must keep this alive as long as the active animator might be in use.
+    std::unique_ptr<AnimationData> m_activeData;
+    
+    // When new data is loaded, it's prepared here first, away from the audio thread.
+    std::unique_ptr<AnimationData> m_stagedAnimationData;
+    std::unique_ptr<Animator> m_stagedAnimator;
+    
+    // Old animators/data that need to be deleted safely after the audio thread is done with them.
+    // We can't delete immediately after swapping because the audio thread might still be using it.
+    std::vector<std::unique_ptr<Animator>> m_animatorsToFree;
+    std::vector<std::unique_ptr<AnimationData>> m_dataToFree;
+    juce::CriticalSection m_freeingLock; // Protects the above arrays
+    
+    // Rendering
+    std::unique_ptr<AnimationRenderer> m_Renderer;
 
     // File chooser (kept alive during async operation)
     std::unique_ptr<juce::FileChooser> m_FileChooser;
@@ -63,6 +94,8 @@ private:
     // Bone selection for parameter mapping
     int m_selectedBoneIndex = -1;
     std::string m_selectedBoneName = "None";
+    int m_selectedBoneID = -1; // Cached bone ID to avoid map lookups
+    std::vector<std::string> m_cachedBoneNames; // Thread-safe cache of bone names for UI
 
     // State for UI thread kinematic calculations
     glm::vec2 m_lastScreenPos { 0.0f, 0.0f };

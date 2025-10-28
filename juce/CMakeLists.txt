@@ -354,10 +354,13 @@ target_sources(ColliderApp PRIVATE
     Source/audio/modules/AnimationModuleProcessor.cpp
     Source/animation/AnimationData.h
     Source/animation/RawAnimationData.h
+    Source/animation/RawAnimationData.cpp
     Source/animation/AnimationBinder.h
     Source/animation/AnimationBinder.cpp
     Source/animation/Animator.h
     Source/animation/Animator.cpp
+    Source/animation/AnimationFileLoader.h
+    Source/animation/AnimationFileLoader.cpp
     Source/animation/GltfLoader.h
     Source/animation/GltfLoader.cpp
     Source/animation/FbxLoader.h
@@ -604,10 +607,13 @@ target_sources(PresetCreatorApp PRIVATE
     Source/audio/modules/AnimationModuleProcessor.cpp
     Source/animation/AnimationData.h
     Source/animation/RawAnimationData.h
+    Source/animation/RawAnimationData.cpp
     Source/animation/AnimationBinder.h
     Source/animation/AnimationBinder.cpp
     Source/animation/Animator.h
     Source/animation/Animator.cpp
+    Source/animation/AnimationFileLoader.h
+    Source/animation/AnimationFileLoader.cpp
     Source/animation/GltfLoader.h
     Source/animation/GltfLoader.cpp
     Source/animation/FbxLoader.h

@@ -49,6 +49,13 @@ public:
         }
     }
 
+    std::vector<DynamicPinInfo> getDynamicOutputPins() const override
+    {
+        return {
+            { "Audio Out", 0, PinDataType::Audio }
+        };
+    }
+
 private:
     // Internal helpers
     void updateCoefficients(float vowelShape, float formantShift, float instability);

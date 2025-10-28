@@ -5,8 +5,10 @@
 
 // Forward-declarations
 static void BuildNodeHierarchyRecursive(const RawAnimationData& rawData, NodeData& parentNode, int rawNodeIndex);
+static void SetParentPointersRecursive(NodeData& node);
 static void MapNodes(NodeData& node, std::map<std::string, NodeData*>& map);
 static void CalculateGlobalInitialTransforms(NodeData& node, const glm::mat4& parentTransform, std::map<std::string, glm::mat4>& globalTransforms);
+static void PreLinkBoneInfoToNodes(NodeData* node, const std::map<std::string, BoneInfo>& boneInfoMap);
 
 std::unique_ptr<AnimationData> AnimationBinder::Bind(const RawAnimationData& rawData)
 {
@@ -35,6 +37,12 @@ std::unique_ptr<AnimationData> AnimationBinder::Bind(const RawAnimationData& raw
     
     BuildNodeHierarchyRecursive(rawData, animData->rootNode, rootNodeIndex);
     juce::Logger::writeToLog("AnimationBinder: Node hierarchy built successfully.");
+    
+    // CRITICAL: Set parent pointers AFTER the entire hierarchy is built
+    // to avoid dangling pointers from vector reallocation
+    juce::Logger::writeToLog("AnimationBinder: Setting parent pointers...");
+    SetParentPointersRecursive(animData->rootNode);
+    juce::Logger::writeToLog("AnimationBinder: Parent pointers set successfully.");
 
     // Step 2: Create a map of all NodeData pointers by name for easy lookup.
     juce::Logger::writeToLog("AnimationBinder: Step 2 - Creating node map...");
@@ -51,19 +59,31 @@ std::unique_ptr<AnimationData> AnimationBinder::Bind(const RawAnimationData& raw
 
     // Step 4: Reconstruct the true LOCAL bind pose for every BONE.
     juce::Logger::writeToLog("AnimationBinder: Step 4 - Reconstructing bone local bind poses...");
+    juce::Logger::writeToLog("=== EXECUTING LATEST AnimationBinder CODE WITH DEFENSIVE CHECKS ===");
     int reconstructedCount = 0;
+    int rootBoneCount = 0;
     for (const auto& rawBone : rawData.bones) {
         if (nodeMap.count(rawBone.name)) {
             NodeData* boneNode = nodeMap.at(rawBone.name);
             glm::mat4 globalBindPose = glm::inverse(rawBone.offsetMatrix);
             glm::mat4 localBindPose = globalBindPose;
 
-            if (boneNode->parent && globalInitialTransforms.count(boneNode->parent->name)) {
+            // Check if this is a root bone (no parent)
+            if (!boneNode->parent) {
+                // This is a root bone - its local pose IS its global pose
+                localBindPose = globalBindPose;
+                rootBoneCount++;
+                juce::Logger::writeToLog("AnimationBinder: " + juce::String(rawBone.name) + " is a ROOT BONE. Using global pose as local pose.");
+            } 
+            else if (globalInitialTransforms.count(boneNode->parent->name)) {
+                // This bone has a valid parent - calculate local pose relative to parent
                 glm::mat4 parentGlobalInitial = globalInitialTransforms.at(boneNode->parent->name);
                 localBindPose = glm::inverse(parentGlobalInitial) * globalBindPose;
                 juce::Logger::writeToLog("AnimationBinder: " + juce::String(rawBone.name) + " local pose calculated relative to parent: " + juce::String(boneNode->parent->name));
-            } else {
-                juce::Logger::writeToLog("AnimationBinder: " + juce::String(rawBone.name) + " using global pose as local (root or no parent)");
+            } 
+            else {
+                // Parent exists but not in global transforms map - this is unexpected
+                juce::Logger::writeToLog("AnimationBinder WARNING: " + juce::String(rawBone.name) + " has parent " + juce::String(boneNode->parent->name) + " but parent not in global transforms. Using global pose as fallback.");
             }
             
             boneNode->transformation = localBindPose;
@@ -72,7 +92,7 @@ std::unique_ptr<AnimationData> AnimationBinder::Bind(const RawAnimationData& raw
             juce::Logger::writeToLog("AnimationBinder WARNING: Bone " + juce::String(rawBone.name) + " not found in node map.");
         }
     }
-    juce::Logger::writeToLog("AnimationBinder: Reconstructed " + juce::String(reconstructedCount) + " bone local bind poses.");
+    juce::Logger::writeToLog("AnimationBinder: Reconstructed " + juce::String(reconstructedCount) + " bone local bind poses (" + juce::String(rootBoneCount) + " root bones).");
     
     // Step 5: Copy over the simple bone and animation data.
     juce::Logger::writeToLog("AnimationBinder: Step 5 - Binding bones and clips...");
@@ -107,6 +127,10 @@ std::unique_ptr<AnimationData> AnimationBinder::Bind(const RawAnimationData& raw
         animData->animationClips.push_back(clip);
     }
 
+    // Step 6: Pre-link bone info to nodes for lock-free audio thread access
+    juce::Logger::writeToLog("AnimationBinder: Step 6 - Pre-linking bone info to nodes...");
+    PreLinkBoneInfoToNodes(&animData->rootNode, animData->boneInfoMap);
+    
     juce::Logger::writeToLog("AnimationBinder: Binding complete. Bones: " + juce::String(animData->boneInfoMap.size()) + ", Clips: " + juce::String(animData->animationClips.size()));
     return animData;
 }
@@ -116,13 +140,40 @@ void BuildNodeHierarchyRecursive(const RawAnimationData& rawData, NodeData& pare
     const RawNodeData& rawNode = rawData.nodes[rawNodeIndex];
     parentNode.name = rawNode.name;
     parentNode.transformation = rawNode.localTransform;
+    parentNode.parent = nullptr; // Will be set later in SetParentPointersRecursive
+    
+    // Recursively build child nodes
     for (int childIndex : rawNode.childIndices) {
-        if (childIndex >= 0 && childIndex < rawData.nodes.size()) {
-            parentNode.children.emplace_back();
-            NodeData& newChildNode = parentNode.children.back();
-            newChildNode.parent = &parentNode;
+        // CRITICAL: Validate child index before accessing the nodes array
+        // Root nodes and some edges cases may have invalid indices
+        if (childIndex >= 0 && childIndex < static_cast<int>(rawData.nodes.size())) {
+            // === THE DEFINITIVE FIX: Build child completely before adding to the parent's vector ===
+            
+            // 1. Create a temporary, stack-allocated child node.
+            NodeData newChildNode;
+            
+            // 2. Recursively build the full hierarchy FOR this new child.
+            //    This is safe because newChildNode is a local variable, not a reference into a vector.
+            juce::Logger::writeToLog("  [Binder] Building child '" + juce::String(rawData.nodes[childIndex].name) + "' before adding to parent '" + juce::String(parentNode.name) + "'");
             BuildNodeHierarchyRecursive(rawData, newChildNode, childIndex);
+            
+            // 3. Now that the child is fully built and stable, move it into the parent's vector.
+            //    This single push_back may reallocate, but it won't affect other children in this loop.
+            parentNode.children.push_back(std::move(newChildNode));
+            
+            // =====================================================================================
+        } else {
+            juce::Logger::writeToLog("AnimationBinder WARNING: Invalid child index " + juce::String(childIndex) + " for node " + juce::String(rawNode.name));
         }
+    }
+}
+
+// Set parent pointers after the hierarchy is fully built
+// This prevents dangling pointers from vector reallocations
+void SetParentPointersRecursive(NodeData& node) {
+    for (auto& child : node.children) {
+        child.parent = &node;
+        SetParentPointersRecursive(child);
     }
 }
 
@@ -138,5 +189,25 @@ void CalculateGlobalInitialTransforms(NodeData& node, const glm::mat4& parentTra
     globalTransforms[node.name] = globalTransform;
     for (auto& child : node.children) {
         CalculateGlobalInitialTransforms(child, globalTransform, globalTransforms);
+    }
+}
+
+// Pre-link bone info to nodes for lock-free audio thread access
+void PreLinkBoneInfoToNodes(NodeData* node, const std::map<std::string, BoneInfo>& boneInfoMap) {
+    if (!node) return;
+    
+    // Check if this node is a bone
+    if (boneInfoMap.count(node->name)) {
+        const BoneInfo& boneInfo = boneInfoMap.at(node->name);
+        node->boneIndex = boneInfo.id;
+        node->offsetMatrix = boneInfo.offsetMatrix;
+    } else {
+        node->boneIndex = -1;
+        node->offsetMatrix = glm::mat4(1.0f); // Identity
+    }
+    
+    // Recurse to children
+    for (auto& child : node->children) {
+        PreLinkBoneInfoToNodes(&child, boneInfoMap);
     }
 }

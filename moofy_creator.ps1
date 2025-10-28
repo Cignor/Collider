@@ -163,9 +163,22 @@
 "juce/Source/audio/modules/VstHostModuleProcessor.h",
 "juce/Source/audio/modules/WaveshaperModuleProcessor.cpp",
 "juce/Source/audio/modules/WaveshaperModuleProcessor.h",
+"juce/Source/audio/modules/AnimationModuleProcessor.cpp",
+"juce/Source/audio/modules/AnimationModuleProcessor.h",
 
-
-
+    # --- Animation System ---
+    "juce/Source/animation/AnimationData.h",
+    "juce/Source/animation/AnimationRenderer.h",
+    "juce/Source/animation/AnimationRenderer.cpp",
+    "juce/Source/animation/Animator.h",
+    "juce/Source/animation/Animator.cpp",
+    "juce/Source/animation/GltfLoader.h",
+    "juce/Source/animation/GltfLoader.cpp",
+    "juce/Source/animation/FbxLoader.h",
+    "juce/Source/animation/FbxLoader.cpp",
+    "juce/Source/animation/RawAnimationData.h",
+    "juce/Source/animation/AnimationBinder.h",
+    "juce/Source/animation/AnimationBinder.cpp",
 
 
 "juce/Source/audio/voices/ModularVoice.h",

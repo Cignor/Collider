@@ -53,13 +53,19 @@ struct BoneInfo
     glm::mat4 offsetMatrix; // Transforms vertices from model space to bone space
 };
 
+// Forward declare
+class BoneAnimation;
+
 // Represents a node in the skeleton's hierarchy. A node can be a bone or just a transform group.
 struct NodeData
 {
-    glm::mat4 transformation; // The node's local transform relative to its parent
+    glm::mat4 transformation = glm::mat4(1.0f); // The node's local transform relative to its parent
     std::string name;
     std::vector<NodeData> children;
     NodeData* parent = nullptr;
+    BoneAnimation* currentBoneAnimation = nullptr; // Pre-linked for current animation (NO string lookup needed!)
+    int boneIndex = -1; // Pre-linked bone index (-1 if not a bone)
+    glm::mat4 offsetMatrix = glm::mat4(1.0f); // Pre-linked offset matrix (identity if not a bone)
 };
 
 // The top-level container for all parsed animation and skeleton data from a single file

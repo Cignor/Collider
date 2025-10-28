@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<ModularSynthPreset version="1" bpm="120.0">
+  <modules>
+    <module logicalId="1" type="animation">
+      <params>
+        <AnimationParams/>
+      </params>
+    </module>
+    <module logicalId="2" type="sample_loader">
+      <params>
+        <SampleLoaderParameters samplePath="H:\0000_CODE\01_collider_pyo\audio\samples\percussion\KSHMR_Acoustic_Kick_01_Big.wav">
+          <PARAM id="engine" value="1.0"/>
+          <PARAM id="gate" value="0.7999999523162842"/>
+          <PARAM id="gate_mod" value="1.0"/>
+          <PARAM id="loop" value="0.0"/>
+          <PARAM id="pitch" value="0.0"/>
+          <PARAM id="pitch_mod" value="0.0"/>
+          <PARAM id="rangeEnd" value="1.0"/>
+          <PARAM id="rangeEnd_mod" value="1.0"/>
+          <PARAM id="rangeStart" value="0.0"/>
+          <PARAM id="rangeStart_mod" value="0.0"/>
+          <PARAM id="rbPhaseInd" value="1.0"/>
+          <PARAM id="rbWindowShort" value="1.0"/>
+          <PARAM id="speed" value="1.0"/>
+          <PARAM id="speed_mod" value="1.0"/>
+          <PARAM id="trigger_mod" value="0.0"/>
+        </SampleLoaderParameters>
+      </params>
+    </module>
+    <module logicalId="10" type="vco">
+      <params>
+        <VCOParams>
+          <PARAM id="frequency" value="440.0"/>
+          <PARAM id="waveform" value="0.0"/>
+        </VCOParams>
+      </params>
+    </module>
+  </modules>
+  <connections>
+    <connection srcId="1" srcChan="4" dstId="2" dstChan="3"/>
+    <connection srcId="1" srcChan="2" dstId="10" dstChan="0"/>
+    <connection srcId="1" srcChan="3" dstId="10" dstChan="1"/>
+    <connection srcId="2" srcChan="0" dstId="output" dstChan="0"/>
+    <connection srcId="2" srcChan="1" dstId="output" dstChan="1"/>
+    <connection srcId="10" srcChan="0" dstId="output" dstChan="0"/>
+  </connections>
+  <NodeEditorUI>
+    <node id="1" x="-166.0" y="574.0"/>
+    <node id="2" x="428.5" y="933.5"/>
+    <node id="10" x="359.3302612304688" y="341.9171752929688"/>
+    <node id="0" x="988.0" y="543.0"/>
+  </NodeEditorUI>
+</ModularSynthPreset>

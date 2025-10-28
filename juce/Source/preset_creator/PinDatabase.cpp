@@ -22,7 +22,7 @@ void populateModuleDescriptions()
     descriptions["midi buttons"] = "1-32 MIDI-learnable buttons with Gate/Toggle/Trigger modes.";
     descriptions["midi jog wheel"] = "A single MIDI-learnable jog wheel control for expressive modulation.";
     descriptions["Value"] = "Outputs a constant, adjustable numerical value.";
-    descriptions["sample loader"] = "Loads and plays audio samples with pitch/time control.";
+    descriptions["sample_loader"] = "Loads and plays audio samples with pitch/time control.";
     descriptions["best practice"] = "A template and example node demonstrating best practices.";
     // TTS Family
     descriptions["TTS Performer"] = "Advanced Text-to-Speech engine with word-level sequencing.";
@@ -110,7 +110,7 @@ void populatePinDatabase()
           AudioPin("Integer", 3, PinDataType::Raw), AudioPin("CV Out", 4, PinDataType::CV) },
         {}
     );
-    db["sample loader"] = ModulePinInfo(
+    db["sample_loader"] = ModulePinInfo(
         NodeWidth::Big,
         { AudioPin("Pitch Mod", 0, PinDataType::CV), AudioPin("Speed Mod", 1, PinDataType::CV), AudioPin("Gate Mod", 2, PinDataType::CV),
           AudioPin("Trigger Mod", 3, PinDataType::Gate), AudioPin("Range Start Mod", 4, PinDataType::CV), AudioPin("Range End Mod", 5, PinDataType::CV),
@@ -542,7 +542,7 @@ db["random"] = ModulePinInfo(
         {}
     );
 
-    db["sample loader"] = ModulePinInfo(
+    db["sample_loader"] = ModulePinInfo(
         NodeWidth::Big,
         {
             AudioPin("Pitch Mod", 0, PinDataType::CV),
