@@ -2,6 +2,8 @@
 
 #include "ModuleProcessor.h"
 #include "../../animation/GltfLoader.h"
+#include "../../animation/FbxLoader.h"
+#include "../../animation/AnimationBinder.h"
 #include "../../animation/Animator.h"
 #include "../../animation/AnimationRenderer.h"
 #include <memory>

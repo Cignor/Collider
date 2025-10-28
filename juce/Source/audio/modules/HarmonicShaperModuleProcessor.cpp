@@ -292,8 +292,33 @@ juce::String HarmonicShaperModuleProcessor::getAudioOutputLabel(int channel) con
         default: return {};
     }
 }
+#endif
 
-#endif // PRESET_CREATOR_UI
+std::vector<DynamicPinInfo> HarmonicShaperModuleProcessor::getDynamicInputPins() const
+{
+    std::vector<DynamicPinInfo> pins;
+    
+    // Audio inputs (bus 0, channels 0-1)
+    pins.push_back({"In L", 0, PinDataType::Audio});
+    pins.push_back({"In R", 1, PinDataType::Audio});
+    
+    // Modulation inputs (bus 1, channels 0-1, but appear as channels 2-3 in processBlock)
+    pins.push_back({"Freq Mod", 2, PinDataType::CV});
+    pins.push_back({"Drive Mod", 3, PinDataType::CV});
+    
+    return pins;
+}
+
+std::vector<DynamicPinInfo> HarmonicShaperModuleProcessor::getDynamicOutputPins() const
+{
+    std::vector<DynamicPinInfo> pins;
+    
+    // Audio outputs (channels 0-1)
+    pins.push_back({"Out L", 0, PinDataType::Audio});
+    pins.push_back({"Out R", 1, PinDataType::Audio});
+    
+    return pins;
+}
 
 bool HarmonicShaperModuleProcessor::getParamRouting(const juce::String& paramId, int& outBusIndex, int& outChannelIndexInBus) const
 {

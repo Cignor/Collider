@@ -15,7 +15,7 @@ public:
     AudioInputModuleProcessor();
     ~AudioInputModuleProcessor() override = default;
 
-    const juce::String getName() const override { return "audio input"; }
+    const juce::String getName() const override { return "audio_input"; }
 
     void prepareToPlay(double sampleRate, int samplesPerBlock) override;
     void releaseResources() override {}

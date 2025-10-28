@@ -14,6 +14,7 @@ LFOModuleProcessor::LFOModuleProcessor()
     waveParam = apvts.getRawParameterValue(paramIdWave);
     syncParam = apvts.getRawParameterValue(paramIdSync);
     rateDivisionParam = apvts.getRawParameterValue(paramIdRateDivision);
+    relativeModeParam = apvts.getRawParameterValue(paramIdRelativeMode);
     
     lastOutputValues.push_back(std::make_unique<std::atomic<float>>(0.0f));
     
@@ -30,6 +31,7 @@ juce::AudioProcessorValueTreeState::ParameterLayout LFOModuleProcessor::createPa
     p.push_back(std::make_unique<juce::AudioParameterBool>(paramIdSync, "Sync", false));
     p.push_back(std::make_unique<juce::AudioParameterChoice>(paramIdRateDivision, "Division", 
         juce::StringArray{ "1/32", "1/16", "1/8", "1/4", "1/2", "1", "2", "4", "8" }, 3)); // Default: 1/4 note
+    p.push_back(std::make_unique<juce::AudioParameterBool>(paramIdRelativeMode, "Relative Mod", true)); // Default: Relative (additive) mode
     return { p.begin(), p.end() };
 }
 
@@ -67,6 +69,7 @@ void LFOModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::Mi
     const int baseWave = static_cast<int>(waveParam->load());
     const bool bipolar = bipolarParam->load() > 0.5f;
     const bool syncEnabled = syncParam->load() > 0.5f;
+    const bool relativeMode = relativeModeParam->load() > 0.5f; // NEW: Read relative mode setting
     int rateDivisionIndex = static_cast<int>(rateDivisionParam->load());
     // If a global division is broadcast by a master clock, adopt it when sync is enabled
     // IMPORTANT: Read from parent's LIVE transport state, not cached copy (which is stale)
@@ -89,19 +92,32 @@ void LFOModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::Mi
         float finalRate = baseRate;
         if (isRateMod && rateCV != nullptr) {
             const float cv = juce::jlimit(0.0f, 1.0f, rateCV[i]);
-            finalRate = baseRate * std::pow(4.0f, cv - 0.5f); // Modulate by +/- 2 octaves
+            if (relativeMode) {
+                // RELATIVE MODE: Modulate around the base value
+                finalRate = baseRate * std::pow(4.0f, cv - 0.5f); // +/- 2 octaves from base
+            } else {
+                // ABSOLUTE MODE: CV directly controls the parameter
+                finalRate = juce::jmap(cv, 0.05f, 20.0f); // Full range 0.05Hz to 20Hz
+            }
         }
         
         float depth = baseDepth;
         if (isDepthMod && depthCV != nullptr) {
             const float cv = juce::jlimit(0.0f, 1.0f, depthCV[i]);
-            depth = juce::jlimit(0.0f, 1.0f, baseDepth + (cv - 0.5f)); // Additive modulation
+            if (relativeMode) {
+                // RELATIVE MODE: Add CV offset to base value
+                depth = juce::jlimit(0.0f, 1.0f, baseDepth + (cv - 0.5f)); // +/- 0.5 from base
+            } else {
+                // ABSOLUTE MODE: CV directly sets depth
+                depth = cv;
+            }
         }
         
         int w = baseWave;
         if (isWaveMod && waveCV != nullptr) {
             const float cv = juce::jlimit(0.0f, 1.0f, waveCV[i]);
-            w = static_cast<int>(cv * 2.99f); // Absolute control
+            // Waveform is always absolute (discrete selection)
+            w = static_cast<int>(cv * 2.99f);
         }
 
         lastRate = finalRate;
@@ -225,6 +241,20 @@ void LFOModuleProcessor::drawParametersInNode(float itemWidth, const std::functi
     if (ImGui::IsItemDeactivatedAfterEdit()) onModificationEnded();
     ImGui::SameLine();
     HelpMarkerLFO("Bipolar: -1 to +1\nUnipolar: 0 to +1");
+
+    ImGui::Spacing();
+    ImGui::Spacing();
+
+    // === MODULATION MODE SECTION ===
+    ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1.0f), "Modulation Mode");
+    ImGui::Spacing();
+
+    // Relative Mode checkbox
+    bool relativeMode = relativeModeParam->load() > 0.5f;
+    if (ImGui::Checkbox("Relative Modulation", &relativeMode)) *dynamic_cast<juce::AudioParameterBool*>(ap.getParameter(paramIdRelativeMode)) = relativeMode;
+    if (ImGui::IsItemDeactivatedAfterEdit()) onModificationEnded();
+    ImGui::SameLine();
+    HelpMarkerLFO("Relative: CV modulates around slider position\nAbsolute: CV completely replaces slider value\n\nExample:\n- Relative: Slider at 5Hz, CV adds ±2 octaves\n- Absolute: CV directly sets 0.05-20Hz range");
 
     ImGui::Spacing();
     ImGui::Spacing();

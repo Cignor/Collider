@@ -223,4 +223,31 @@ bool VCFModuleProcessor::getParamRouting(const juce::String& paramId, int& outBu
     return false;
 }
 
+std::vector<DynamicPinInfo> VCFModuleProcessor::getDynamicInputPins() const
+{
+    std::vector<DynamicPinInfo> pins;
+    
+    // Audio inputs (channels 0-1)
+    pins.push_back({"In L", 0, PinDataType::Audio});
+    pins.push_back({"In R", 1, PinDataType::Audio});
+    
+    // Modulation inputs (channels 2-4)
+    pins.push_back({"Cutoff Mod", 2, PinDataType::CV});
+    pins.push_back({"Resonance Mod", 3, PinDataType::CV});
+    pins.push_back({"Type Mod", 4, PinDataType::CV});
+    
+    return pins;
+}
+
+std::vector<DynamicPinInfo> VCFModuleProcessor::getDynamicOutputPins() const
+{
+    std::vector<DynamicPinInfo> pins;
+    
+    // Audio outputs (channels 0-1)
+    pins.push_back({"Out L", 0, PinDataType::Audio});
+    pins.push_back({"Out R", 1, PinDataType::Audio});
+    
+    return pins;
+}
+
 

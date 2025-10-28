@@ -10,7 +10,7 @@ public:
     SnapshotSequencerModuleProcessor();
     ~SnapshotSequencerModuleProcessor() override = default;
 
-    const juce::String getName() const override { return "Snapshot Sequencer"; }
+    const juce::String getName() const override { return "snapshot_sequencer"; }
 
     void prepareToPlay (double sampleRate, int samplesPerBlock) override;
     void releaseResources() override {}

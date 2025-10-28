@@ -8,7 +8,7 @@ public:
     SAndHModuleProcessor();
     ~SAndHModuleProcessor() override = default;
 
-    const juce::String getName() const override { return "s&h"; }
+    const juce::String getName() const override { return "s_and_h"; }
 
     void prepareToPlay (double sampleRate, int samplesPerBlock) override;
     void releaseResources() override {}

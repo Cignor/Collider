@@ -90,46 +90,66 @@ void AnimationModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, ju
 
 void AnimationModuleProcessor::loadFile(const juce::File& file)
 {
-    std::string path = file.getFullPathName().toStdString();
-    std::unique_ptr<AnimationData> loadedData;
+    juce::Logger::writeToLog("--- Animation File Load Started ---");
+    juce::Logger::writeToLog("File: " + file.getFullPathName());
 
-    // Choose the correct loader based on file extension
+    // --- Step 1: Load and Bind the data ---
+    std::unique_ptr<RawAnimationData> rawData;
+    std::string path = file.getFullPathName().toStdString();
+
     if (file.hasFileExtension(".fbx"))
     {
-        juce::Logger::writeToLog("[AnimationModule] Loading FBX file: " + file.getFullPathName());
-        loadedData = FbxLoader::LoadFromFile(path);
-    }
-    else if (file.hasFileExtension(".gltf") || file.hasFileExtension(".glb"))
-    {
-        juce::Logger::writeToLog("[AnimationModule] Loading glTF file: " + file.getFullPathName());
-        loadedData = GltfLoader::LoadFromFile(path);
+        juce::Logger::writeToLog("Using FBX Loader...");
+        rawData = FbxLoader::LoadFromFile(path);
     }
     else
     {
-        juce::Logger::writeToLog("[AnimationModule] ERROR: Unsupported file format: " + file.getFullPathName());
-        return;
+        juce::Logger::writeToLog("Using glTF Loader...");
+        rawData = GltfLoader::LoadFromFile(path);
     }
 
-    if (!loadedData)
+    if (!rawData)
     {
-        // Handle error: file failed to load
-        juce::Logger::writeToLog("[AnimationModule] ERROR: Failed to load file: " + file.getFullPathName());
+        juce::Logger::writeToLog("-> CRITICAL ERROR: Loader failed to produce RawAnimationData.");
         return;
     }
+    juce::Logger::writeToLog("-> Loader SUCCESS: Raw data created.");
+    juce::Logger::writeToLog("   Raw Nodes: " + juce::String(rawData->nodes.size()));
+    juce::Logger::writeToLog("   Raw Bones: " + juce::String(rawData->bones.size()));
+    juce::Logger::writeToLog("   Raw Clips: " + juce::String(rawData->clips.size()));
 
-    // Lock the mutex before swapping out the animation data and animator.
+    juce::Logger::writeToLog("Binding Raw Data...");
+    auto finalData = AnimationBinder::Bind(*rawData);
+
+    if (!finalData)
+    {
+        juce::Logger::writeToLog("-> CRITICAL ERROR: AnimationBinder failed to create final AnimationData.");
+        return;
+    }
+    juce::Logger::writeToLog("-> Binder SUCCESS: Final data created.");
+    juce::Logger::writeToLog("   Final Bones: " + juce::String(finalData->boneInfoMap.size()));
+    juce::Logger::writeToLog("   Final Clips: " + juce::String(finalData->animationClips.size()));
+
+    // --- Step 2: Safely swap the new data into the module ---
+    // THE CRITICAL FIX IS HERE: We lock and update ALL data members first.
     const juce::ScopedLock scopedLock(m_AnimatorLock);
 
-    m_AnimationData = std::move(loadedData);
+    m_AnimationData = std::move(finalData);
     m_Animator = std::make_unique<Animator>(m_AnimationData.get());
 
-    // Automatically play the first animation clip, if one exists.
-    if (!m_AnimationData->animationClips.empty())
+    // Reset UI state now that data is valid
+    m_selectedBoneIndex = -1;
+    m_selectedBoneName = "None";
+    m_isFirstFrame = true;
+
+    // --- Step 3: Play the animation AFTER the animator and data are valid ---
+    if (m_Animator && !m_AnimationData->animationClips.empty())
     {
+        juce::Logger::writeToLog("Playing first animation clip: " + juce::String(m_AnimationData->animationClips[0].name));
         m_Animator->PlayAnimation(m_AnimationData->animationClips[0].name);
     }
-
-    juce::Logger::writeToLog("[AnimationModule] Successfully loaded animation file");
+    
+    juce::Logger::writeToLog("--- Animation File Load Finished ---");
 }
 
 const std::vector<glm::mat4>& AnimationModuleProcessor::getFinalBoneMatrices() const
@@ -320,16 +340,15 @@ void AnimationModuleProcessor::drawParametersInNode(float itemWidth,
         // --- KINEMATIC CALCULATION BLOCK ---
         if (m_selectedBoneIndex != -1 && m_Animator && m_AnimationData)
         {
-            // 1. Get the bone's world matrix
+            // 1. Get the bone's world matrix using a direct map lookup
             const auto& boneInfoMap = m_AnimationData->boneInfoMap;
-            auto it = std::find_if(boneInfoMap.begin(), boneInfoMap.end(),
-                [this](const auto& pair){ return pair.second.name == m_selectedBoneName; });
-
-            if (it != boneInfoMap.end())
+            if (boneInfoMap.count(m_selectedBoneName)) // Check if the bone exists in the map
             {
-                int boneId = it->second.id;
+                const BoneInfo& boneInfo = boneInfoMap.at(m_selectedBoneName);
+                int boneId = boneInfo.id;
                 const auto& finalMatrices = getFinalBoneMatrices();
-                if (boneId < finalMatrices.size())
+                
+                if (boneId >= 0 && boneId < finalMatrices.size())
                 {
                     glm::mat4 worldMatrix = finalMatrices[boneId];
                     glm::vec3 worldPos = worldMatrix[3];

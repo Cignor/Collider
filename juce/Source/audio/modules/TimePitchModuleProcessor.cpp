@@ -269,4 +269,30 @@ void TimePitchModuleProcessor::drawIoPins (const NodePinHelpers& helpers)
 }
 #endif
 
+std::vector<DynamicPinInfo> TimePitchModuleProcessor::getDynamicInputPins() const
+{
+    std::vector<DynamicPinInfo> pins;
+    
+    // Audio inputs (channels 0-1)
+    pins.push_back({"In L", 0, PinDataType::Audio});
+    pins.push_back({"In R", 1, PinDataType::Audio});
+    
+    // Modulation inputs (channels 2-3)
+    pins.push_back({"Speed Mod", 2, PinDataType::CV});
+    pins.push_back({"Pitch Mod", 3, PinDataType::CV});
+    
+    return pins;
+}
+
+std::vector<DynamicPinInfo> TimePitchModuleProcessor::getDynamicOutputPins() const
+{
+    std::vector<DynamicPinInfo> pins;
+    
+    // Audio outputs (channels 0-1)
+    pins.push_back({"Out L", 0, PinDataType::Audio});
+    pins.push_back({"Out R", 1, PinDataType::Audio});
+    
+    return pins;
+}
+
 

@@ -4,6 +4,7 @@
 #include <string>
 #include "AnimationData.h"
 #include <glm/glm.hpp>
+#include <juce_core/juce_core.h> // For JUCE_ASSERT
 
 class Animator
 {
@@ -17,10 +18,9 @@ public:
     const std::vector<glm::mat4>& GetFinalBoneMatrices() const { return m_FinalBoneMatrices; }
 
 private:
-    // Helper methods for interpolation and kinematics
-    glm::mat4 InterpolatePosition(float animationTime, const BoneAnimation& boneAnim);
-    glm::mat4 InterpolateRotation(float animationTime, const BoneAnimation& boneAnim);
-    glm::mat4 InterpolateScale(float animationTime, const BoneAnimation& boneAnim);
+    glm::vec3 InterpolatePosition(float animationTime, const std::vector<KeyPosition>& keyframes, const glm::vec3& defaultPos);
+    glm::quat InterpolateRotation(float animationTime, const std::vector<KeyRotation>& keyframes, const glm::quat& defaultRot);
+    glm::vec3 InterpolateScale(float animationTime, const std::vector<KeyScale>& keyframes, const glm::vec3& defaultScale);
     void CalculateBoneTransform(const NodeData* node, const glm::mat4& parentTransform);
 
     std::vector<glm::mat4> m_FinalBoneMatrices;
@@ -29,4 +29,3 @@ private:
     float m_CurrentTime;
     float m_AnimationSpeed;
 };
-

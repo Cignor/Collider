@@ -130,6 +130,13 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(ufbx)
 
+# Get the path to the downloaded ufbx source code
+FetchContent_GetProperties(ufbx SOURCE_DIR ufbx_SOURCE_DIR)
+
+# Create a dedicated static library target for ufbx (single-header library needs separate compilation unit)
+add_library(ufbx_static STATIC ${ufbx_SOURCE_DIR}/ufbx.c)
+target_include_directories(ufbx_static PUBLIC ${ufbx_SOURCE_DIR})
+
 # --------------------------------------------------------------
 # Rubber Band (optional, real-time timestretcher/pitch-shifter)
 # --------------------------------------------------------------
@@ -346,6 +353,9 @@ target_sources(ColliderApp PRIVATE
     Source/audio/modules/AnimationModuleProcessor.h
     Source/audio/modules/AnimationModuleProcessor.cpp
     Source/animation/AnimationData.h
+    Source/animation/RawAnimationData.h
+    Source/animation/AnimationBinder.h
+    Source/animation/AnimationBinder.cpp
     Source/animation/Animator.h
     Source/animation/Animator.cpp
     Source/animation/GltfLoader.h
@@ -386,6 +396,7 @@ target_link_libraries(ColliderApp PRIVATE
     box2d
     glm::glm
     tinygltf
+    ufbx_static
     $<$<BOOL:${USE_RUBBERBAND}>:${RUBBERBAND_TARGET}>
     # Piper TTS libraries (pre-built)
     ${ONNXRUNTIME_DIR}/lib/onnxruntime.lib
@@ -592,6 +603,9 @@ target_sources(PresetCreatorApp PRIVATE
     Source/audio/modules/AnimationModuleProcessor.h
     Source/audio/modules/AnimationModuleProcessor.cpp
     Source/animation/AnimationData.h
+    Source/animation/RawAnimationData.h
+    Source/animation/AnimationBinder.h
+    Source/animation/AnimationBinder.cpp
     Source/animation/Animator.h
     Source/animation/Animator.cpp
     Source/animation/GltfLoader.h
@@ -645,6 +659,7 @@ target_link_libraries(PresetCreatorApp PRIVATE
     box2d
     glm::glm
     tinygltf
+    ufbx_static
     $<$<BOOL:${USE_RUBBERBAND}>:${RUBBERBAND_TARGET}>
     # Piper TTS libraries (pre-built)
     ${ONNXRUNTIME_DIR}/lib/onnxruntime.lib

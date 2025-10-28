@@ -172,4 +172,31 @@ bool DelayModuleProcessor::getParamRouting(const juce::String& paramId, int& out
     return false;
 }
 
+std::vector<DynamicPinInfo> DelayModuleProcessor::getDynamicInputPins() const
+{
+    std::vector<DynamicPinInfo> pins;
+    
+    // Audio inputs (bus 0, channels 0-1)
+    pins.push_back({"In L", 0, PinDataType::Audio});
+    pins.push_back({"In R", 1, PinDataType::Audio});
+    
+    // Modulation inputs (separate buses, but appear as channels 2-4 in the editor)
+    pins.push_back({"Time Mod", 2, PinDataType::CV});
+    pins.push_back({"Feedback Mod", 3, PinDataType::CV});
+    pins.push_back({"Mix Mod", 4, PinDataType::CV});
+    
+    return pins;
+}
+
+std::vector<DynamicPinInfo> DelayModuleProcessor::getDynamicOutputPins() const
+{
+    std::vector<DynamicPinInfo> pins;
+    
+    // Audio outputs (channels 0-1)
+    pins.push_back({"Out L", 0, PinDataType::Audio});
+    pins.push_back({"Out R", 1, PinDataType::Audio});
+    
+    return pins;
+}
+
 

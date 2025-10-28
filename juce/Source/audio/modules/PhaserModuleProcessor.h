@@ -39,6 +39,9 @@ public:
     bool getParamRouting(const juce::String& paramId, int& outBusIndex, int& outChannelIndexInBus) const override;
     juce::String getAudioInputLabel(int channel) const override;
     juce::String getAudioOutputLabel(int channel) const override;
+    
+    std::vector<DynamicPinInfo> getDynamicInputPins() const override;
+    std::vector<DynamicPinInfo> getDynamicOutputPins() const override;
 
 private:
     static juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout();

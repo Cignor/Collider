@@ -39,7 +39,7 @@ public:
     TTSPerformerModuleProcessor();
     ~TTSPerformerModuleProcessor() override;
 
-    const juce::String getName() const override { return "tts performer"; }
+    const juce::String getName() const override { return "tts_performer"; }
 
     void prepareToPlay(double sampleRate, int samplesPerBlock) override;
     void releaseResources() override {}

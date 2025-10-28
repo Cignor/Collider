@@ -202,11 +202,29 @@ void GraphicEQModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, ju
 
         // Check for modulation CV on this band (channels 2-9)
         int modChannel = 2 + bandIndex;
-        if (isParamInputConnected(paramId) && inBus.getNumChannels() > modChannel)
+        bool isConnected = isParamInputConnected(paramId);
+        bool hasChannels = inBus.getNumChannels() > modChannel;
+        
+        // DEBUG LOGGING
+        if (shouldLog && bandIndex == 0)
+        {
+            juce::Logger::writeToLog("[GraphicEQ] Band 1 - isConnected: " + juce::String(isConnected ? "YES" : "NO") + 
+                                   ", hasChannels: " + juce::String(hasChannels ? "YES" : "NO") +
+                                   ", inBus.getNumChannels(): " + juce::String(inBus.getNumChannels()));
+        }
+        
+        if (isConnected && hasChannels)
         {
             float modCV = inBus.getSample(modChannel, 0);
             gainDb = juce::jmap(modCV, 0.0f, 1.0f, -60.0f, 12.0f);
             setLiveParamValue(paramId + "_live", gainDb);
+            
+            // DEBUG LOGGING
+            if (shouldLog && bandIndex == 0)
+            {
+                juce::Logger::writeToLog("[GraphicEQ] Band 1 - modCV: " + juce::String(modCV, 6) + 
+                                       ", mapped gainDb: " + juce::String(gainDb, 2));
+            }
         }
 
         float gainLinear = juce::Decibels::decibelsToGain(gainDb);
@@ -441,6 +459,48 @@ void GraphicEQModuleProcessor::drawIoPins(const NodePinHelpers& helpers)
     helpers.drawAudioOutputPin("Trig Out", 3);
 }
 #endif
+
+std::vector<DynamicPinInfo> GraphicEQModuleProcessor::getDynamicInputPins() const
+{
+    std::vector<DynamicPinInfo> pins;
+    
+    // Audio inputs (channels 0-1)
+    pins.push_back({"In L", 0, PinDataType::Audio});
+    pins.push_back({"In R", 1, PinDataType::Audio});
+    
+    // Band gain modulation inputs (channels 2-9)
+    for (int i = 0; i < 8; ++i)
+    {
+        pins.push_back({"Band " + juce::String(i + 1) + " Mod", 2 + i, PinDataType::CV});
+    }
+    
+    // Threshold modulation inputs (channels 10-11)
+    pins.push_back({"Gate Thr Mod", 10, PinDataType::CV});
+    pins.push_back({"Trig Thr Mod", 11, PinDataType::CV});
+    
+    return pins;
+}
+
+std::vector<DynamicPinInfo> GraphicEQModuleProcessor::getDynamicOutputPins() const
+{
+    std::vector<DynamicPinInfo> pins;
+    
+    // Audio outputs (bus 0, channels 0-1)
+    pins.push_back({"Out L", 0, PinDataType::Audio});
+    pins.push_back({"Out R", 1, PinDataType::Audio});
+    
+    // CV/Gate outputs (bus 1, channels 0-1, but shown as output channels 2-3)
+    pins.push_back({"Gate Out", 2, PinDataType::Gate});
+    pins.push_back({"Trig Out", 3, PinDataType::Gate});
+    
+    // RMS CV outputs (bus 1, channels 2-9, but shown as output channels 4-11)
+    for (int i = 0; i < 8; ++i)
+    {
+        pins.push_back({"Band " + juce::String(i + 1) + " CV", 4 + i, PinDataType::CV});
+    }
+    
+    return pins;
+}
 
 void GraphicEQModuleProcessor::getStateInformation(juce::MemoryBlock& destData)
 {

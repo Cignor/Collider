@@ -9,7 +9,7 @@ public:
     LagProcessorModuleProcessor();
     ~LagProcessorModuleProcessor() override = default;
 
-    const juce::String getName() const override { return "lag processor"; }
+    const juce::String getName() const override { return "lag_processor"; }
 
     void prepareToPlay (double sampleRate, int samplesPerBlock) override;
     void releaseResources() override {}

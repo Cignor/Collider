@@ -16,6 +16,7 @@ public:
     static constexpr auto paramIdWaveMod = "wave_mod";
     static constexpr auto paramIdSync = "sync";
     static constexpr auto paramIdRateDivision = "rate_division";
+    static constexpr auto paramIdRelativeMode = "relative_mode";
 
     LFOModuleProcessor();
     ~LFOModuleProcessor() override = default;
@@ -54,6 +55,7 @@ private:
     std::atomic<float>* waveParam{ nullptr };
     std::atomic<float>* syncParam{ nullptr };
     std::atomic<float>* rateDivisionParam{ nullptr };
+    std::atomic<float>* relativeModeParam{ nullptr };
     
     int currentWaveform = -1;
     TransportState m_currentTransport;

@@ -7,7 +7,7 @@ public:
     MIDIJogWheelModuleProcessor();
     ~MIDIJogWheelModuleProcessor() override = default;
     
-    const juce::String getName() const override { return "MIDI Jog Wheel"; }
+    const juce::String getName() const override { return "midi_jog_wheel"; }
     
     void prepareToPlay(double, int) override;
     void releaseResources() override {}

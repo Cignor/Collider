@@ -27,7 +27,7 @@ public:
     MIDIPlayerModuleProcessor();
     ~MIDIPlayerModuleProcessor() override = default;
 
-    const juce::String getName() const override { return "midi player"; }
+    const juce::String getName() const override { return "midi_player"; }
     
     // Auto-connect trigger flags
     std::atomic<bool> autoConnectTriggered { false };

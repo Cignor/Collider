@@ -179,4 +179,31 @@ bool ReverbModuleProcessor::getParamRouting(const juce::String& paramId, int& ou
     return false;
 }
 
+std::vector<DynamicPinInfo> ReverbModuleProcessor::getDynamicInputPins() const
+{
+    std::vector<DynamicPinInfo> pins;
+    
+    // Audio inputs (channels 0-1)
+    pins.push_back({"In L", 0, PinDataType::Audio});
+    pins.push_back({"In R", 1, PinDataType::Audio});
+    
+    // Modulation inputs (channels 2-4)
+    pins.push_back({"Size Mod", 2, PinDataType::CV});
+    pins.push_back({"Damp Mod", 3, PinDataType::CV});
+    pins.push_back({"Mix Mod", 4, PinDataType::CV});
+    
+    return pins;
+}
+
+std::vector<DynamicPinInfo> ReverbModuleProcessor::getDynamicOutputPins() const
+{
+    std::vector<DynamicPinInfo> pins;
+    
+    // Audio outputs (channels 0-1)
+    pins.push_back({"Out L", 0, PinDataType::Audio});
+    pins.push_back({"Out R", 1, PinDataType::Audio});
+    
+    return pins;
+}
+
 

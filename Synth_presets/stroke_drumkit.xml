@@ -40,7 +40,7 @@
         </StrokeSequencerState>
       </extra>
     </module>
-    <module logicalId="2" type="sample loader">
+    <module logicalId="2" type="sample_loader">
       <params>
         <SampleLoaderParameters samplePath="H:\0000_CODE\01_collider_pyo\audio\samples\percussion\KSHMR_Acoustic_Kick_08_Clean.wav">
           <PARAM id="engine" value="1.0"/>
@@ -61,7 +61,7 @@
         </SampleLoaderParameters>
       </params>
     </module>
-    <module logicalId="3" type="sample loader">
+    <module logicalId="3" type="sample_loader">
       <params>
         <SampleLoaderParameters samplePath="H:\0000_CODE\01_collider_pyo\audio\samples\percussion\KSHMR_Acoustic_Ride_02.wav">
           <PARAM id="engine" value="1.0"/>
@@ -82,7 +82,7 @@
         </SampleLoaderParameters>
       </params>
     </module>
-    <module logicalId="4" type="sample loader">
+    <module logicalId="4" type="sample_loader">
       <params>
         <SampleLoaderParameters samplePath="H:\0000_CODE\01_collider_pyo\audio\samples\percussion\KSHMR_Acoustic_Kick_01_Big - Copy.wav">
           <PARAM id="engine" value="1.0"/>
@@ -103,9 +103,9 @@
         </SampleLoaderParameters>
       </params>
     </module>
-    <module logicalId="5" type="trackmixer">
+    <module logicalId="5" type="track_mixer">
       <params>
-        <TrackMixerParams>
+        <track_mixerParams>
           <PARAM id="numTracks" value="8.0"/>
           <PARAM id="numTracks_max" value="64.0"/>
           <PARAM id="track_gain_1" value="6.0"/>
@@ -236,7 +236,7 @@
           <PARAM id="track_pan_7" value="0.0"/>
           <PARAM id="track_pan_8" value="0.0"/>
           <PARAM id="track_pan_9" value="0.0"/>
-        </TrackMixerParams>
+        </track_mixerParams>
       </params>
     </module>
     <module logicalId="6" type="value">

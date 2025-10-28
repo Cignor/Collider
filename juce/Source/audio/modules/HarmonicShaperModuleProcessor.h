@@ -20,7 +20,7 @@ public:
     HarmonicShaperModuleProcessor();
     ~HarmonicShaperModuleProcessor() override = default;
 
-    const juce::String getName() const override { return "harmonic shaper"; }
+    const juce::String getName() const override { return "harmonic_shaper"; }
 
     void prepareToPlay(double sampleRate, int samplesPerBlock) override;
     void releaseResources() override {}
@@ -36,6 +36,9 @@ public:
 #endif
 
     bool getParamRouting(const juce::String& paramId, int& outBusIndex, int& outChannelIndexInBus) const override;
+    
+    std::vector<DynamicPinInfo> getDynamicInputPins() const override;
+    std::vector<DynamicPinInfo> getDynamicOutputPins() const override;
 
 private:
     static juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout();

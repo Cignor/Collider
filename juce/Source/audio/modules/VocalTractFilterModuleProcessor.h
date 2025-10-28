@@ -12,7 +12,7 @@ public:
     VocalTractFilterModuleProcessor();
     ~VocalTractFilterModuleProcessor() override = default;
 
-    const juce::String getName() const override { return "vocal tract filter"; }
+    const juce::String getName() const override { return "vocal_tract_filter"; }
 
     void prepareToPlay(double sampleRate, int samplesPerBlock) override;
     void releaseResources() override {}

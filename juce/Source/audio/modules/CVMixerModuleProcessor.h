@@ -17,7 +17,7 @@ public:
     CVMixerModuleProcessor();
     ~CVMixerModuleProcessor() override = default;
 
-    const juce::String getName() const override { return "cv mixer"; }
+    const juce::String getName() const override { return "cv_mixer"; }
 
     void prepareToPlay (double sampleRate, int samplesPerBlock) override;
     void releaseResources() override {}

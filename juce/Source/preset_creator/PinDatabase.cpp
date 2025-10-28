@@ -8,7 +8,7 @@ void populateModuleDescriptions()
     if (!descriptions.empty()) return; // Only run once
     
     // Sources
-    descriptions["audio input"] = "Brings hardware audio into the patch.";
+    descriptions["audio_input"] = "Brings hardware audio into the patch.";
     descriptions["VCO"] = "A standard Voltage-Controlled Oscillator.";
     descriptions["polyvco"] = "A multi-voice oscillator bank for polyphony.";
     descriptions["Noise"] = "Generates white, pink, or brown noise.";
@@ -84,7 +84,7 @@ void populatePinDatabase()
     if (!db.empty()) return; // Only run once
 
     // --- Sources ---
-    db["audio input"] = ModulePinInfo(
+    db["audio_input"] = ModulePinInfo(
         NodeWidth::Small,
         {},
         { AudioPin("Out 1", 0, PinDataType::Audio), AudioPin("Out 2", 1, PinDataType::Audio),

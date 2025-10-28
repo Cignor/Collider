@@ -55,7 +55,7 @@ public:
     //==============================================================================
     // ModuleProcessor Overrides
     //==============================================================================
-    const juce::String getName() const override { return "MIDI Logger"; }
+    const juce::String getName() const override { return "midi_logger"; }
     void prepareToPlay(double sampleRate, int samplesPerBlock) override;
     void releaseResources() override;
     void processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midiMessages) override;

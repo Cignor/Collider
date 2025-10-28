@@ -10,7 +10,7 @@ public:
     MIDIFadersModuleProcessor();
     ~MIDIFadersModuleProcessor() override = default;
     
-    const juce::String getName() const override { return "MIDI Faders"; }
+    const juce::String getName() const override { return "midi_faders"; }
     
     void prepareToPlay(double sampleRate, int samplesPerBlock) override;
     void releaseResources() override;

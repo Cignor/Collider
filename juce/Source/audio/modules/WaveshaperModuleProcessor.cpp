@@ -170,6 +170,32 @@ void WaveshaperModuleProcessor::drawIoPins(const NodePinHelpers& helpers)
 }
 #endif
 
+std::vector<DynamicPinInfo> WaveshaperModuleProcessor::getDynamicInputPins() const
+{
+    std::vector<DynamicPinInfo> pins;
+    
+    // Audio inputs (channels 0-1)
+    pins.push_back({"In L", 0, PinDataType::Audio});
+    pins.push_back({"In R", 1, PinDataType::Audio});
+    
+    // Modulation inputs (channels 2-3)
+    pins.push_back({"Drive Mod", 2, PinDataType::CV});
+    pins.push_back({"Type Mod", 3, PinDataType::CV});
+    
+    return pins;
+}
+
+std::vector<DynamicPinInfo> WaveshaperModuleProcessor::getDynamicOutputPins() const
+{
+    std::vector<DynamicPinInfo> pins;
+    
+    // Audio outputs (channels 0-1)
+    pins.push_back({"Out L", 0, PinDataType::Audio});
+    pins.push_back({"Out R", 1, PinDataType::Audio});
+    
+    return pins;
+}
+
 // Parameter bus contract implementation
 bool WaveshaperModuleProcessor::getParamRouting(const juce::String& paramId, int& outBusIndex, int& outChannelIndexInBus) const
 {

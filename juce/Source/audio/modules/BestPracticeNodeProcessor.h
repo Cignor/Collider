@@ -76,7 +76,7 @@ public:
     BestPracticeNodeProcessor();
     ~BestPracticeNodeProcessor() override = default;
 
-    const juce::String getName() const override { return "best practice"; }
+    const juce::String getName() const override { return "best_practice"; }
 
     void prepareToPlay (double sampleRate, int samplesPerBlock) override;
     void releaseResources() override {}

@@ -26,7 +26,7 @@ public:
     FrequencyGraphModuleProcessor();
     ~FrequencyGraphModuleProcessor() override = default;
 
-    const juce::String getName() const override { return "frequency graph"; }
+    const juce::String getName() const override { return "frequency_graph"; }
 
     void prepareToPlay(double sampleRate, int samplesPerBlock) override;
     void releaseResources() override {}

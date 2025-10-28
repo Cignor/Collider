@@ -314,3 +314,34 @@ void MultiBandShaperModuleProcessor::drawIoPins(const NodePinHelpers& helpers)
 }
 #endif
 
+std::vector<DynamicPinInfo> MultiBandShaperModuleProcessor::getDynamicInputPins() const
+{
+    std::vector<DynamicPinInfo> pins;
+    
+    // Audio inputs (channels 0-1)
+    pins.push_back({"In L", 0, PinDataType::Audio});
+    pins.push_back({"In R", 1, PinDataType::Audio});
+    
+    // Drive modulation inputs for each band (channels 2-9)
+    for (int i = 0; i < NUM_BANDS; ++i)
+    {
+        pins.push_back({"Drive " + juce::String(i + 1) + " Mod", 2 + i, PinDataType::CV});
+    }
+    
+    // Output gain modulation (channel 10)
+    pins.push_back({"Gain Mod", 2 + NUM_BANDS, PinDataType::CV});
+    
+    return pins;
+}
+
+std::vector<DynamicPinInfo> MultiBandShaperModuleProcessor::getDynamicOutputPins() const
+{
+    std::vector<DynamicPinInfo> pins;
+    
+    // Audio outputs (channels 0-1)
+    pins.push_back({"Out L", 0, PinDataType::Audio});
+    pins.push_back({"Out R", 1, PinDataType::Audio});
+    
+    return pins;
+}
+

@@ -9,7 +9,7 @@ public:
     DeCrackleModuleProcessor();
     ~DeCrackleModuleProcessor() override = default;
 
-    const juce::String getName() const override { return "de-crackle"; }
+    const juce::String getName() const override { return "de_crackle"; }
 
     void prepareToPlay (double sampleRate, int samplesPerBlock) override;
     void releaseResources() override {}

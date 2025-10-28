@@ -10,7 +10,7 @@ public:
     MIDIButtonsModuleProcessor();
     ~MIDIButtonsModuleProcessor() override = default;
     
-    const juce::String getName() const override { return "MIDI Buttons"; }
+    const juce::String getName() const override { return "midi_buttons"; }
     
     void prepareToPlay(double sampleRate, int samplesPerBlock) override;
     void releaseResources() override;

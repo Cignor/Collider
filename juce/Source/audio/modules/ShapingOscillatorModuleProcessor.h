@@ -19,7 +19,7 @@ public:
     ShapingOscillatorModuleProcessor();
     ~ShapingOscillatorModuleProcessor() override = default;
 
-    const juce::String getName() const override { return "shaping oscillator"; }
+    const juce::String getName() const override { return "shaping_oscillator"; }
 
     void prepareToPlay (double sampleRate, int samplesPerBlock) override;
     void releaseResources() override {}

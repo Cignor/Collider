@@ -10,7 +10,7 @@ public:
     MIDIKnobsModuleProcessor();
     ~MIDIKnobsModuleProcessor() override = default;
     
-    const juce::String getName() const override { return "MIDI Knobs"; }
+    const juce::String getName() const override { return "midi_knobs"; }
     
     void prepareToPlay(double sampleRate, int samplesPerBlock) override;
     void releaseResources() override;

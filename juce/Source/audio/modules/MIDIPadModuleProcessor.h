@@ -37,7 +37,7 @@ public:
     // Multi-MIDI device support
     void handleDeviceSpecificMidi(const std::vector<MidiMessageWithDevice>& midiMessages) override;
 
-    const juce::String getName() const override { return "MIDI Pads"; }
+    const juce::String getName() const override { return "midi_pads"; }
     
     juce::AudioProcessorValueTreeState& getAPVTS() override { return apvts; }
     

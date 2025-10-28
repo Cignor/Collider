@@ -9,7 +9,7 @@ public:
     MultiSequencerModuleProcessor();
     ~MultiSequencerModuleProcessor() override = default;
 
-    const juce::String getName() const override { return "multi sequencer"; }
+    const juce::String getName() const override { return "multi_sequencer"; }
 
     void prepareToPlay (double newSampleRate, int samplesPerBlock) override;
     void releaseResources() override {}

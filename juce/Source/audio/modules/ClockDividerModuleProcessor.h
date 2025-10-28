@@ -8,7 +8,7 @@ public:
     ClockDividerModuleProcessor();
     ~ClockDividerModuleProcessor() override = default;
 
-    const juce::String getName() const override { return "clockdivider"; }
+    const juce::String getName() const override { return "clock_divider"; }
 
     void prepareToPlay(double sampleRate, int samplesPerBlock) override;
     void releaseResources() override {}

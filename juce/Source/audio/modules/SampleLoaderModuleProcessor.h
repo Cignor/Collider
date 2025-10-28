@@ -13,7 +13,7 @@ public:
     SampleLoaderModuleProcessor();
     ~SampleLoaderModuleProcessor() override = default;
 
-    const juce::String getName() const override { return "sample loader"; }
+    const juce::String getName() const override { return "sample_loader"; }
 
     // --- Audio Processing ---
     void prepareToPlay(double sampleRate, int samplesPerBlock) override;

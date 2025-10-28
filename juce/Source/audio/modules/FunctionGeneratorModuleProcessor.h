@@ -33,7 +33,7 @@ public:
     FunctionGeneratorModuleProcessor();
     ~FunctionGeneratorModuleProcessor() override = default;
 
-    const juce::String getName() const override { return "function generator"; }
+    const juce::String getName() const override { return "function_generator"; }
 
     // --- Core functions ---
     void prepareToPlay(double sampleRate, int samplesPerBlock) override;

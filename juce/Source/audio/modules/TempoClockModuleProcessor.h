@@ -8,7 +8,7 @@ public:
     TempoClockModuleProcessor();
     ~TempoClockModuleProcessor() override = default;
 
-    const juce::String getName() const override { return "tempo clock"; }
+    const juce::String getName() const override { return "tempo_clock"; }
 
     void prepareToPlay(double sampleRate, int samplesPerBlock) override;
     void releaseResources() override {}

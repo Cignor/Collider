@@ -1,207 +1,210 @@
-// ufbx is a single-header library - we need to define the implementation in exactly one .cpp file
-// This MUST be defined before any includes
-#define UFBX_IMPLEMENTATION
-
 #define GLM_ENABLE_EXPERIMENTAL
 
 #include "FbxLoader.h"
 #include <ufbx.h>
 #include <iostream>
+#include <map>
 #include <glm/gtc/type_ptr.hpp>
 #include <glm/gtx/quaternion.hpp>
-
-// Forward-declare the recursive node parsing function
-static void ParseNodesRecursive(ufbx_node* ufbxNode, NodeData& parentNodeData);
-
-// Helper to convert ufbx matrix to glm::mat4
-static glm::mat4 ToGlmMat4(const ufbx_matrix& m)
-{
-    // ufbx stores matrices in column-major order (same as glm)
-    // We can directly construct from the cols array
-    return glm::mat4(
-        m.cols[0].x, m.cols[0].y, m.cols[0].z, 0.0f,
-        m.cols[1].x, m.cols[1].y, m.cols[1].z, 0.0f,
-        m.cols[2].x, m.cols[2].y, m.cols[2].z, 0.0f,
-        m.cols[3].x, m.cols[3].y, m.cols[3].z, 1.0f
-    );
-}
+#include <juce_core/juce_core.h>
 
 // Helper to convert ufbx transform to glm::mat4
-static glm::mat4 TransformToMat4(const ufbx_transform& t)
+static glm::mat4 ToGlmMat4(const ufbx_transform& t)
 {
-    // Convert the transform to a matrix using ufbx's built-in function
-    ufbx_matrix m = ufbx_transform_to_matrix(&t);
-    return ToGlmMat4(m);
+    glm::vec3 translation(t.translation.x, t.translation.y, t.translation.z);
+    // t.rotation is already a quaternion, not Euler angles
+    glm::quat rotation(t.rotation.w, t.rotation.x, t.rotation.y, t.rotation.z);
+    glm::vec3 scale(t.scale.x, t.scale.y, t.scale.z);
+
+    return glm::translate(glm::mat4(1.0f), translation) *
+           glm::toMat4(rotation) *
+           glm::scale(glm::mat4(1.0f), scale);
 }
 
-// Main public function
-std::unique_ptr<AnimationData> FbxLoader::LoadFromFile(const std::string& filePath)
+std::unique_ptr<RawAnimationData> FbxLoader::LoadFromFile(const std::string& filePath)
 {
+    juce::Logger::writeToLog("FbxLoader: Starting to load " + juce::String(filePath));
     ufbx_load_opts opts = {};
+    opts.target_axes.up = UFBX_COORDINATE_AXIS_POSITIVE_Y;
+    opts.target_axes.front = UFBX_COORDINATE_AXIS_POSITIVE_Z;
+    opts.target_axes.right = UFBX_COORDINATE_AXIS_POSITIVE_X;
+    opts.target_unit_meters = 1.0;
+
     ufbx_error error;
     ufbx_scene* scene = ufbx_load_file(filePath.c_str(), &opts, &error);
 
-    if (!scene)
-    {
-        std::cerr << "[FbxLoader] Failed to load FBX file: " << filePath << "\n" 
-                  << error.description.data << std::endl;
+    if (!scene) {
+        juce::Logger::writeToLog("FbxLoader ERROR: " + juce::String(error.description.data));
         return nullptr;
     }
+    juce::Logger::writeToLog("FbxLoader: Successfully parsed with ufbx.");
 
-    std::cout << "[FbxLoader] Successfully loaded FBX: " << filePath << std::endl;
-    std::cout << "[FbxLoader] Nodes: " << scene->nodes.count << std::endl;
-    std::cout << "[FbxLoader] Skins: " << scene->skin_deformers.count << std::endl;
-    std::cout << "[FbxLoader] Anim stacks: " << scene->anim_stacks.count << std::endl;
+    auto rawData = std::make_unique<RawAnimationData>();
+    std::map<uint32_t, int> nodeIdToIndexMap;
 
-    auto animData = std::make_unique<AnimationData>();
-
-    // Parse the node hierarchy
-    if (scene->root_node)
-    {
-        ParseNodesRecursive(scene->root_node, animData->rootNode);
-        std::cout << "[FbxLoader] Parsed node hierarchy" << std::endl;
+    // --- 1. Parse All Nodes ---
+    juce::Logger::writeToLog("FbxLoader: Parsing " + juce::String(scene->nodes.count) + " nodes...");
+    for (size_t i = 0; i < scene->nodes.count; ++i) {
+        ufbx_node* ufbNode = scene->nodes.data[i];
+        if (!ufbNode) continue;
+        
+        nodeIdToIndexMap[ufbNode->element_id] = rawData->nodes.size();
+        RawNodeData node;
+        node.name = ufbNode->name.data;
+        node.localTransform = ToGlmMat4(ufbNode->local_transform);
+        rawData->nodes.push_back(node);
     }
 
-    // --- Parse Skinning Data ---
-    // Use the first skin deformer found in the scene
-    if (scene->skin_deformers.count > 0)
+    // --- 2. Link Node Parents/Children ---
+    for (size_t i = 0; i < scene->nodes.count; ++i) {
+         ufbx_node* ufbNode = scene->nodes.data[i];
+         if (!ufbNode || !ufbNode->parent) continue;
+
+         if (nodeIdToIndexMap.count(ufbNode->parent->element_id)) {
+            int parentIndex = nodeIdToIndexMap[ufbNode->parent->element_id];
+            rawData->nodes[i].parentIndex = parentIndex;
+            rawData->nodes[parentIndex].childIndices.push_back(i);
+         }
+    }
+
+    // --- 3. Parse Bones (with robust fallback) ---
+    std::map<std::string, int> boneNameMap;
+    
+    juce::Logger::writeToLog("FbxLoader: Checking for skin data... (skin_deformers.count = " + juce::String(scene->skin_deformers.count) + ")");
+    
+    if (scene->skin_deformers.count > 0) 
     {
+        juce::Logger::writeToLog("FbxLoader: Found explicit skin data. Parsing bones from skin deformers.");
         ufbx_skin_deformer* skin = scene->skin_deformers.data[0];
-        for (size_t i = 0; i < skin->clusters.count; ++i)
-        {
+        juce::Logger::writeToLog("FbxLoader: Skin has " + juce::String(skin->clusters.count) + " clusters.");
+        
+        for (size_t i = 0; i < skin->clusters.count; ++i) {
             ufbx_skin_cluster* cluster = skin->clusters.data[i];
-            if (!cluster->bone_node) continue;
-
-            std::string boneName(cluster->bone_node->name.data, cluster->bone_node->name.length);
-
-            BoneInfo boneInfo;
-            boneInfo.id = static_cast<int>(i);
-            boneInfo.name = boneName;
-            boneInfo.offsetMatrix = ToGlmMat4(cluster->geometry_to_bone);
-
-            animData->boneInfoMap[boneName] = boneInfo;
-        }
-        std::cout << "[FbxLoader] Parsed " << animData->boneInfoMap.size() << " bones from skin" << std::endl;
-    }
-    else
-    {
-        std::cout << "[FbxLoader] No skin data found, bones will be extracted from node hierarchy if needed" << std::endl;
-    }
-
-    // --- Parse Animation Data ---
-    for (size_t stackIdx = 0; stackIdx < scene->anim_stacks.count; ++stackIdx)
-    {
-        ufbx_anim_stack* stack = scene->anim_stacks.data[stackIdx];
-        if (!stack->anim) continue;
-
-        AnimationClip clip;
-        clip.name = std::string(stack->name.data, stack->name.length);
-        clip.durationInTicks = stack->time_end - stack->time_begin;
-        clip.ticksPerSecond = static_cast<double>(scene->settings.frames_per_second);
-
-        std::cout << "[FbxLoader] Processing animation: " << clip.name 
-                  << " (duration: " << clip.durationInTicks << "s, fps: " << clip.ticksPerSecond << ")" << std::endl;
-
-        // Sample the animation at regular intervals (30 FPS)
-        const double sampleRate = 30.0;
-        const double timeStep = 1.0 / sampleRate;
-        const int numSamples = static_cast<int>(clip.durationInTicks * sampleRate) + 1;
-
-        // Iterate through all nodes that might be bones
-        for (auto& bonePair : animData->boneInfoMap)
-        {
-            const std::string& boneName = bonePair.first;
+            if (!cluster || !cluster->bone_node) continue;
             
-            // Find the corresponding node in the scene
-            ufbx_node* node = nullptr;
-            for (size_t i = 0; i < scene->nodes.count; ++i)
-            {
-                std::string nodeName(scene->nodes.data[i]->name.data, scene->nodes.data[i]->name.length);
-                if (nodeName == boneName)
-                {
-                    node = scene->nodes.data[i];
-                    break;
+            std::string boneName = cluster->bone_node->name.data;
+
+            if (boneNameMap.find(boneName) == boneNameMap.end()) {
+                boneNameMap[boneName] = rawData->bones.size();
+                RawBoneInfo boneInfo;
+                boneInfo.id = rawData->bones.size();
+                boneInfo.name = boneName;
+                boneInfo.offsetMatrix = glm::transpose(glm::make_mat4(&cluster->geometry_to_bone.m00));
+                rawData->bones.push_back(boneInfo);
+                juce::Logger::writeToLog("FbxLoader: Found skin bone #" + juce::String(boneInfo.id) + ": " + juce::String(boneName));
+            }
+        }
+    }
+    else 
+    {
+        juce::Logger::writeToLog("FbxLoader: No skin data found. Using fallback: creating bones from animation targets.");
+        juce::Logger::writeToLog("FbxLoader: Animation stacks count: " + juce::String(scene->anim_stacks.count));
+        
+        for (size_t i = 0; i < scene->anim_stacks.count; ++i) {
+            ufbx_anim_stack* stack = scene->anim_stacks.data[i];
+            if (!stack || !stack->anim) continue;
+            
+            ufbx_anim* anim = stack->anim;
+            juce::Logger::writeToLog("FbxLoader: Animation stack '" + juce::String(stack->name.data) + "' has " + juce::String(anim->layers.count) + " layers.");
+            
+            // Use anim->layers approach (more reliable for some FBX files)
+            for (size_t j = 0; j < anim->layers.count; ++j) {
+                ufbx_anim_layer* layer = anim->layers.data[j];
+                if (!layer) continue;
+                
+                for (size_t k = 0; k < layer->anim_props.count; ++k) {
+                    ufbx_anim_prop* prop = &layer->anim_props.data[k];
+                    if (!prop->anim_value || !prop->element) continue;
+                    
+                    ufbx_node* node = ufbx_as_node(prop->element);
+                    if (!node) continue;
+                    
+                    std::string boneName = node->name.data;
+                    if (boneName.empty()) continue;
+
+                    if (boneNameMap.find(boneName) == boneNameMap.end()) {
+                        boneNameMap[boneName] = rawData->bones.size();
+                        RawBoneInfo boneInfo;
+                        boneInfo.id = rawData->bones.size();
+                        boneInfo.name = boneName;
+                        boneInfo.offsetMatrix = glm::mat4(1.0f);
+                        rawData->bones.push_back(boneInfo);
+                        juce::Logger::writeToLog("FbxLoader: Created fallback bone #" + juce::String(boneInfo.id) + ": " + juce::String(boneName));
+                    }
                 }
             }
-
-            if (!node) continue;
-
-            BoneAnimation boneAnim;
-            boneAnim.boneName = boneName;
-
-            // Sample the animation at regular intervals
-            for (int sampleIdx = 0; sampleIdx < numSamples; ++sampleIdx)
-            {
-                double time = stack->time_begin + (sampleIdx * timeStep);
-                if (time > stack->time_end) time = stack->time_end;
-
-                // Evaluate the transform at this time
-                ufbx_transform transform = ufbx_evaluate_transform(stack->anim, node, time);
-
-                // Store position keyframe
-                KeyPosition posKey;
-                posKey.position = glm::vec3(
-                    static_cast<float>(transform.translation.x),
-                    static_cast<float>(transform.translation.y),
-                    static_cast<float>(transform.translation.z)
-                );
-                posKey.timeStamp = time - stack->time_begin;
-                boneAnim.positions.push_back(posKey);
-
-                // Store rotation keyframe
-                KeyRotation rotKey;
-                rotKey.orientation = glm::quat(
-                    static_cast<float>(transform.rotation.w),
-                    static_cast<float>(transform.rotation.x),
-                    static_cast<float>(transform.rotation.y),
-                    static_cast<float>(transform.rotation.z)
-                );
-                rotKey.timeStamp = time - stack->time_begin;
-                boneAnim.rotations.push_back(rotKey);
-
-                // Store scale keyframe
-                KeyScale scaleKey;
-                scaleKey.scale = glm::vec3(
-                    static_cast<float>(transform.scale.x),
-                    static_cast<float>(transform.scale.y),
-                    static_cast<float>(transform.scale.z)
-                );
-                scaleKey.timeStamp = time - stack->time_begin;
-                boneAnim.scales.push_back(scaleKey);
-            }
-
-            // Add this bone's animation to the clip
-            clip.boneAnimations[boneName] = boneAnim;
         }
+    }
+    
+    juce::Logger::writeToLog("FbxLoader: Total bones found: " + juce::String(rawData->bones.size()));
 
-        std::cout << "[FbxLoader] Animation contains " << clip.boneAnimations.size() << " bone tracks" << std::endl;
-        animData->animationClips.push_back(clip);
+    // --- 4. Parse Animations ---
+    juce::Logger::writeToLog("FbxLoader: Parsing animations...");
+    for (size_t i = 0; i < scene->anim_stacks.count; ++i) {
+        ufbx_anim_stack* stack = scene->anim_stacks.data[i];
+        if (!stack || !stack->anim) continue;
+        
+        ufbx_anim* anim = stack->anim;
+        RawAnimationClip clip;
+        clip.name = stack->name.data;
+        clip.duration = anim->time_end;
+        
+        juce::Logger::writeToLog("FbxLoader: Processing animation '" + juce::String(clip.name) + "' (duration: " + juce::String(clip.duration) + "s)");
+
+        for (size_t j = 0; j < anim->layers.count; ++j) {
+            ufbx_anim_layer* layer = anim->layers.data[j];
+            if (!layer) continue;
+            
+            for (size_t k = 0; k < layer->anim_props.count; ++k) {
+                ufbx_anim_prop* prop = &layer->anim_props.data[k];
+                if (!prop->anim_value || !prop->element) continue;
+                
+                ufbx_node* node = ufbx_as_node(prop->element);
+                if (!node) continue;
+                
+                std::string boneName = node->name.data;
+                RawBoneAnimation& boneAnim = clip.boneAnimations[boneName];
+                
+                // Translation
+                if (strcmp(prop->prop_name.data, "Lcl Translation") == 0) {
+                    if (prop->anim_value->curves[0]) {
+                        for (size_t m = 0; m < prop->anim_value->curves[0]->keyframes.count; ++m) {
+                            double time = prop->anim_value->curves[0]->keyframes.data[m].time;
+                            ufbx_vec3 value = ufbx_evaluate_anim_value_vec3(prop->anim_value, time);
+                            boneAnim.positions.keyframeTimes.push_back(time);
+                            boneAnim.positions.keyframeValues.push_back(glm::vec4(value.x, value.y, value.z, 0.0f));
+                        }
+                    }
+                }
+                // Rotation
+                else if (strcmp(prop->prop_name.data, "Lcl Rotation") == 0) {
+                    if (prop->anim_value->curves[0]) {
+                        for (size_t m = 0; m < prop->anim_value->curves[0]->keyframes.count; ++m) {
+                            double time = prop->anim_value->curves[0]->keyframes.data[m].time;
+                            ufbx_vec3 eulerDeg = ufbx_evaluate_anim_value_vec3(prop->anim_value, time);
+                            ufbx_quat q = ufbx_euler_to_quat(eulerDeg, UFBX_ROTATION_ORDER_XYZ);
+                            boneAnim.rotations.keyframeTimes.push_back(time);
+                            boneAnim.rotations.keyframeValues.push_back(glm::vec4(q.x, q.y, q.z, q.w));
+                        }
+                    }
+                }
+                // Scale
+                else if (strcmp(prop->prop_name.data, "Lcl Scaling") == 0) {
+                    if (prop->anim_value->curves[0]) {
+                        for (size_t m = 0; m < prop->anim_value->curves[0]->keyframes.count; ++m) {
+                            double time = prop->anim_value->curves[0]->keyframes.data[m].time;
+                            ufbx_vec3 value = ufbx_evaluate_anim_value_vec3(prop->anim_value, time);
+                            boneAnim.scales.keyframeTimes.push_back(time);
+                            boneAnim.scales.keyframeValues.push_back(glm::vec4(value.x, value.y, value.z, 0.0f));
+                        }
+                    }
+                }
+            }
+        }
+        rawData->clips.push_back(clip);
     }
 
+    juce::Logger::writeToLog("FbxLoader: Finished creating RawAnimationData. Bones: " + juce::String(rawData->bones.size()) + ", Clips: " + juce::String(rawData->clips.size()));
     ufbx_free_scene(scene);
-    std::cout << "[FbxLoader] Successfully loaded " << animData->animationClips.size() << " animation clips" << std::endl;
-    return animData;
-}
-
-// Recursive function to build our NodeData hierarchy
-static void ParseNodesRecursive(ufbx_node* ufbxNode, NodeData& parentNodeData)
-{
-    if (!ufbxNode) return;
-
-    parentNodeData.name = std::string(ufbxNode->name.data, ufbxNode->name.length);
-    parentNodeData.transformation = TransformToMat4(ufbxNode->local_transform);
-
-    // Recursively parse all children
-    for (size_t i = 0; i < ufbxNode->children.count; ++i)
-    {
-        ufbx_node* childUfbxNode = ufbxNode->children.data[i];
-        
-        // Create a new child node (not a unique_ptr, just a regular struct)
-        parentNodeData.children.emplace_back();
-        NodeData& newChild = parentNodeData.children.back();
-        newChild.parent = &parentNodeData;
-        
-        // Recursively parse this child
-        ParseNodesRecursive(childUfbxNode, newChild);
-    }
+    return rawData;
 }

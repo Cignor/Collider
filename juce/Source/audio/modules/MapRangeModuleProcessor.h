@@ -8,7 +8,7 @@ public:
     MapRangeModuleProcessor();
     ~MapRangeModuleProcessor() override = default;
 
-    const juce::String getName() const override { return "maprange"; }
+    const juce::String getName() const override { return "map_range"; }
 
     void prepareToPlay (double sampleRate, int samplesPerBlock) override;
     void releaseResources() override {}

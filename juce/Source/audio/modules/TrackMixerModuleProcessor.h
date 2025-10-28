@@ -10,7 +10,7 @@ public:
     TrackMixerModuleProcessor();
     ~TrackMixerModuleProcessor() override = default;
 
-    const juce::String getName() const override { return "track mixer"; }
+    const juce::String getName() const override { return "track_mixer"; }
 
     void prepareToPlay(double sampleRate, int samplesPerBlock) override;
     void releaseResources() override {}

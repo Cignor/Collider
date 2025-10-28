@@ -20,7 +20,7 @@ public:
     SequentialSwitchModuleProcessor();
     ~SequentialSwitchModuleProcessor() override = default;
 
-    const juce::String getName() const override { return "sequentialswitch"; }
+    const juce::String getName() const override { return "sequential_switch"; }
 
     void prepareToPlay (double sampleRate, int samplesPerBlock) override;
     void releaseResources() override {}

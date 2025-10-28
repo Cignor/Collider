@@ -1,256 +1,198 @@
 #define GLM_ENABLE_EXPERIMENTAL
+
 #include "GltfLoader.h"
-#include "tiny_gltf.h" // Include the actual library here
+#include "tiny_gltf.h"
 #include <iostream>
 #include <glm/gtc/type_ptr.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtx/quaternion.hpp>
+#include <juce_core/juce_core.h>
 
-// Template helper to read raw data from a glTF buffer
+// --- Helper function declarations ---
+static void ParseNodes(const tinygltf::Model& model, RawAnimationData& outData);
+static void ParseSkins(const tinygltf::Model& model, RawAnimationData& outData);
+static void ParseAnimations(const tinygltf::Model& model, RawAnimationData& outData);
+
 template <typename T>
-void GltfLoader::ReadDataFromBuffer(const tinygltf::Model& model, int accessorIndex, std::vector<T>& outData)
+static void ReadDataFromBuffer(const tinygltf::Model& model, int accessorIndex, std::vector<T>& outData);
+
+static glm::mat4 GetMatrix(const tinygltf::Node& node);
+static glm::vec3 GetVec3(const std::vector<double>& vec);
+static glm::quat GetQuat(const std::vector<double>& vec);
+// --- End of helpers ---
+
+std::unique_ptr<RawAnimationData> GltfLoader::LoadFromFile(const std::string& filePath)
 {
-    const tinygltf::Accessor& accessor = model.accessors[accessorIndex];
-    const tinygltf::BufferView& bufferView = model.bufferViews[accessor.bufferView];
-    const tinygltf::Buffer& buffer = model.buffers[bufferView.buffer];
-
-    // Get a pointer to the start of the data for this accessor
-    const unsigned char* dataPtr = buffer.data.data() + bufferView.byteOffset + accessor.byteOffset;
-    
-    // Get the number of elements to read
-    size_t numElements = accessor.count;
-    outData.resize(numElements);
-
-    // Copy the data from the buffer into our output vector
-    memcpy(outData.data(), dataPtr, numElements * sizeof(T));
-}
-
-// Main function to load a glTF file
-std::unique_ptr<AnimationData> GltfLoader::LoadFromFile(const std::string& filePath)
-{
+    juce::Logger::writeToLog("GltfLoader: Starting to load " + juce::String(filePath));
     tinygltf::Model model;
     tinygltf::TinyGLTF loader;
     std::string err;
     std::string warn;
 
     bool success = false;
-    // Check file extension to decide which loading method to use
     if (filePath.substr(filePath.length() - 4) == ".glb") {
+        juce::Logger::writeToLog("GltfLoader: Loading as Binary (.glb)");
         success = loader.LoadBinaryFromFile(&model, &err, &warn, filePath);
     } else {
+        juce::Logger::writeToLog("GltfLoader: Loading as ASCII (.gltf)");
         success = loader.LoadASCIIFromFile(&model, &err, &warn, filePath);
     }
 
-    if (!warn.empty()) {
-        std::cout << "glTF WARNING: " << warn << std::endl;
-    }
-    if (!err.empty()) {
-        std::cerr << "glTF ERROR: " << err << std::endl;
-    }
+    if (!warn.empty()) juce::Logger::writeToLog("GltfLoader WARNING: " + juce::String(warn));
+    if (!err.empty()) juce::Logger::writeToLog("GltfLoader ERROR: " + juce::String(err));
     if (!success) {
-        std::cerr << "Failed to load glTF file: " << filePath << std::endl;
+        juce::Logger::writeToLog("GltfLoader: FAILED to parse file with tinygltf.");
         return nullptr;
     }
+    juce::Logger::writeToLog("GltfLoader: Successfully parsed with tinygltf.");
 
-    // If loading was successful, create our AnimationData object
-    auto animData = std::make_unique<AnimationData>();
+    auto rawData = std::make_unique<RawAnimationData>();
 
-    // The glTF scene contains the root node(s) of the hierarchy
-    const auto& scene = model.scenes[model.defaultScene];
-    // We assume the first node in the scene is the root of our skeleton
-    const auto& rootNode = model.nodes[scene.nodes[0]];
-
-    // Call the helper functions to parse the data
-    ParseNodes(model, rootNode, animData->rootNode);
-    ParseSkin(model, *animData);
+    ParseNodes(model, *rawData);
+    ParseSkins(model, *rawData);
+    ParseAnimations(model, *rawData);
     
-    // If there's no skin data, extract bone info from the node hierarchy
-    if (model.skins.empty() && animData->boneInfoMap.empty())
+    juce::Logger::writeToLog("GltfLoader: Finished creating RawAnimationData.");
+    return rawData;
+}
+
+
+// --- Implementation of Helper Functions ---
+
+void ParseNodes(const tinygltf::Model& model, RawAnimationData& outData)
+{
+    outData.nodes.resize(model.nodes.size());
+
+    for (size_t i = 0; i < model.nodes.size(); ++i)
     {
-        int boneCounter = 0;
-        ExtractBonesFromNodes(animData->rootNode, *animData, boneCounter);
-        std::cout << "No skin data found. Extracted " << boneCounter << " bones from node hierarchy." << std::endl;
+        const auto& inputNode = model.nodes[i];
+        auto& outputNode = outData.nodes[i];
+
+        outputNode.name = inputNode.name;
+        outputNode.localTransform = GetMatrix(inputNode);
+
+        for (int childIndex : inputNode.children) {
+            outputNode.childIndices.push_back(childIndex);
+            // We find the parent later, but we need to know who the parent of the child is
+            // This is slightly inefficient but safe.
+            if(outData.nodes.size() > childIndex)
+                outData.nodes[childIndex].parentIndex = i;
+        }
     }
-    
-    ParseAnimations(model, *animData);
-    
-    return animData;
 }
 
-glm::mat4 GltfLoader::GetMatrix(const tinygltf::Node& node)
+void ParseSkins(const tinygltf::Model& model, RawAnimationData& outData)
 {
-    // If the node has a full matrix defined, use it
-    if (node.matrix.size() == 16) {
-        return glm::make_mat4(node.matrix.data());
-    }
-
-    // Otherwise, build the matrix from TRS (Translation, Rotation, Scale) components
-    glm::vec3 translation = node.translation.empty() ? glm::vec3(0.0f) : GetVec3(node.translation);
-    glm::quat rotation = node.rotation.empty() ? glm::quat(1.0f, 0.0f, 0.0f, 0.0f) : GetQuat(node.rotation);
-    glm::vec3 scale = node.scale.empty() ? glm::vec3(1.0f) : GetVec3(node.scale);
-
-    glm::mat4 transMat = glm::translate(glm::mat4(1.0f), translation);
-    glm::mat4 rotMat = glm::toMat4(rotation);
-    glm::mat4 scaleMat = glm::scale(glm::mat4(1.0f), scale);
-
-    return transMat * rotMat * scaleMat;
-}
-
-glm::vec3 GltfLoader::GetVec3(const std::vector<double>& vec)
-{
-    return glm::vec3(
-        static_cast<float>(vec[0]),
-        static_cast<float>(vec[1]),
-        static_cast<float>(vec[2])
-    );
-}
-
-glm::quat GltfLoader::GetQuat(const std::vector<double>& vec)
-{
-    // glTF quaternions are in (x, y, z, w) order
-    // GLM quaternions are in (w, x, y, z) order for the constructor
-    return glm::quat(
-        static_cast<float>(vec[3]), // w
-        static_cast<float>(vec[0]), // x
-        static_cast<float>(vec[1]), // y
-        static_cast<float>(vec[2])  // z
-    );
-}
-
-void GltfLoader::ParseNodes(const tinygltf::Model& model, const tinygltf::Node& inputNode, NodeData& parentNode)
-{
-    // Copy data from the glTF node to our custom NodeData struct
-    parentNode.name = inputNode.name;
-    parentNode.transformation = GetMatrix(inputNode);
-
-    // Recursively call this function for all children of the current node
-    for (int childNodeIndex : inputNode.children)
+    if (!model.skins.empty())
     {
-        const tinygltf::Node& childInputNode = model.nodes[childNodeIndex];
-        
-        // Create a new child in our hierarchy
-        parentNode.children.emplace_back();
-        NodeData& newChildNode = parentNode.children.back();
-        
-        // Set the parent pointer for the new child
-        newChildNode.parent = &parentNode;
-        
-        // Recurse
-        ParseNodes(model, childInputNode, newChildNode);
+        juce::Logger::writeToLog("GltfLoader: Found explicit skin data. Parsing bones from skin.");
+        const auto& skin = model.skins[0];
+        outData.bones.resize(skin.joints.size());
+
+        std::vector<glm::mat4> inverseBindMatrices;
+        ReadDataFromBuffer(model, skin.inverseBindMatrices, inverseBindMatrices);
+
+        for (size_t i = 0; i < skin.joints.size(); ++i)
+        {
+            int jointNodeIndex = skin.joints[i];
+            const auto& jointNode = model.nodes[jointNodeIndex];
+            
+            auto& boneInfo = outData.bones[i];
+            boneInfo.id = i;
+            boneInfo.name = jointNode.name;
+            boneInfo.offsetMatrix = inverseBindMatrices[i];
+        }
     }
-}
-
-void GltfLoader::ParseSkin(const tinygltf::Model& model, AnimationData& animData)
-{
-    // A model may not have skins, so we check first.
-    if (model.skins.empty()) {
-        return;
-    }
-
-    // We'll only process the first skin in the file.
-    const auto& skin = model.skins[0];
-
-    // Read all the inverse bind matrices from the buffer.
-    std::vector<glm::mat4> inverseBindMatrices;
-    ReadDataFromBuffer(model, skin.inverseBindMatrices, inverseBindMatrices);
-
-    // Iterate through all the joints (bones) defined in the skin.
-    // The order of joints here corresponds to the order of the matrices we just read.
-    for (size_t i = 0; i < skin.joints.size(); ++i)
+    else
     {
-        int jointNodeIndex = skin.joints[i];
-        const auto& jointNode = model.nodes[jointNodeIndex];
-        
-        std::string boneName = jointNode.name;
-        
-        BoneInfo boneInfo;
-        boneInfo.id = i; // The ID is the index in the joint array.
-        boneInfo.name = boneName;
-        boneInfo.offsetMatrix = inverseBindMatrices[i];
-        
-        // Add the new bone info to our map.
-        animData.boneInfoMap[boneName] = boneInfo;
+        juce::Logger::writeToLog("GltfLoader: No skin data found. Using fallback: creating bones from animation targets.");
+        // FALLBACK: Create bones from any node that is animated.
+        std::map<std::string, int> boneNameMap;
+        for (const auto& anim : model.animations) {
+            for (const auto& channel : anim.channels) {
+                std::string boneName = model.nodes[channel.target_node].name;
+                if (boneNameMap.find(boneName) == boneNameMap.end()) {
+                    boneNameMap[boneName] = outData.bones.size();
+                    RawBoneInfo boneInfo;
+                    boneInfo.id = boneNameMap[boneName];
+                    boneInfo.name = boneName;
+                    boneInfo.offsetMatrix = glm::mat4(1.0f); // Default to identity matrix
+                    outData.bones.push_back(boneInfo);
+                }
+            }
+        }
+        juce::Logger::writeToLog("GltfLoader: Fallback created " + juce::String(outData.bones.size()) + " bones from animation data.");
     }
 }
 
-void GltfLoader::ExtractBonesFromNodes(const NodeData& node, AnimationData& animData, int& boneCounter)
-{
-    // Create a BoneInfo entry for this node
-    BoneInfo boneInfo;
-    boneInfo.id = boneCounter++;
-    boneInfo.name = node.name;
-    // Use identity matrix as offset since there's no mesh binding
-    boneInfo.offsetMatrix = glm::mat4(1.0f);
-    
-    // Add to the bone info map
-    animData.boneInfoMap[node.name] = boneInfo;
-    
-    // Recursively process all children
-    for (const auto& child : node.children)
-    {
-        ExtractBonesFromNodes(child, animData, boneCounter);
-    }
-}
-
-void GltfLoader::ParseAnimations(const tinygltf::Model& model, AnimationData& animData)
+void ParseAnimations(const tinygltf::Model& model, RawAnimationData& outData)
 {
     for (const auto& anim : model.animations)
     {
-        AnimationClip clip;
+        RawAnimationClip clip;
         clip.name = anim.name;
-        clip.ticksPerSecond = 1.0; // In glTF, time is always in seconds.
         float maxTimestamp = 0.0f;
 
         for (const auto& channel : anim.channels)
         {
             const auto& sampler = anim.samplers[channel.sampler];
-            
-            // Get the node (bone) that this channel is targeting.
-            int targetNodeIndex = channel.target_node;
-            std::string boneName = model.nodes[targetNodeIndex].name;
+            std::string boneName = model.nodes[channel.target_node].name;
+            RawBoneAnimation& boneAnim = clip.boneAnimations[boneName];
 
-            // Get a reference to the BoneAnimation for this bone.
-            // If it doesn't exist, it will be created.
-            BoneAnimation& boneAnim = clip.boneAnimations[boneName];
-            boneAnim.boneName = boneName;
+            std::vector<float> timestampsFloat;
+            ReadDataFromBuffer(model, sampler.input, timestampsFloat);
 
-            // Read the keyframe timestamps (input).
-            std::vector<float> timestamps;
-            ReadDataFromBuffer(model, sampler.input, timestamps);
+            if (!timestampsFloat.empty()) maxTimestamp = std::max(maxTimestamp, timestampsFloat.back());
 
-            // Find the maximum timestamp to determine animation duration.
-            if (!timestamps.empty()) {
-                maxTimestamp = std::max(maxTimestamp, timestamps.back());
-            }
-
-            // Read the keyframe values (output) and populate the correct track.
+            // THIS IS THE FIX: Only assign timestamps and values to the correct track.
             if (channel.target_path == "translation")
             {
-                std::vector<glm::vec3> positions;
-                ReadDataFromBuffer(model, sampler.output, positions);
-                for (size_t i = 0; i < positions.size(); ++i) {
-                    boneAnim.positions.push_back({positions[i], timestamps[i]});
-                }
+                boneAnim.positions.keyframeTimes.assign(timestampsFloat.begin(), timestampsFloat.end());
+                std::vector<glm::vec3> values;
+                ReadDataFromBuffer(model, sampler.output, values);
+                for(const auto& v : values) boneAnim.positions.keyframeValues.emplace_back(v, 0.0f);
             }
             else if (channel.target_path == "rotation")
             {
-                std::vector<glm::quat> rotations;
-                ReadDataFromBuffer(model, sampler.output, rotations);
-                for (size_t i = 0; i < rotations.size(); ++i) {
-                    boneAnim.rotations.push_back({rotations[i], timestamps[i]});
-                }
+                boneAnim.rotations.keyframeTimes.assign(timestampsFloat.begin(), timestampsFloat.end());
+                std::vector<glm::quat> values;
+                ReadDataFromBuffer(model, sampler.output, values);
+                for(const auto& v : values) boneAnim.rotations.keyframeValues.emplace_back(v.x, v.y, v.z, v.w);
             }
             else if (channel.target_path == "scale")
             {
-                std::vector<glm::vec3> scales;
-                ReadDataFromBuffer(model, sampler.output, scales);
-                for (size_t i = 0; i < scales.size(); ++i) {
-                    boneAnim.scales.push_back({scales[i], timestamps[i]});
-                }
+                boneAnim.scales.keyframeTimes.assign(timestampsFloat.begin(), timestampsFloat.end());
+                std::vector<glm::vec3> values;
+                ReadDataFromBuffer(model, sampler.output, values);
+                for(const auto& v : values) boneAnim.scales.keyframeValues.emplace_back(v, 0.0f);
             }
         }
-        clip.durationInTicks = maxTimestamp;
-        animData.animationClips.push_back(clip);
+        clip.duration = maxTimestamp;
+        outData.clips.push_back(clip);
     }
 }
 
+
+template <typename T>
+void ReadDataFromBuffer(const tinygltf::Model& model, int accessorIndex, std::vector<T>& outData)
+{
+    const auto& accessor = model.accessors[accessorIndex];
+    const auto& bufferView = model.bufferViews[accessor.bufferView];
+    const auto& buffer = model.buffers[bufferView.buffer];
+    const unsigned char* dataPtr = buffer.data.data() + bufferView.byteOffset + accessor.byteOffset;
+    size_t numElements = accessor.count;
+    outData.resize(numElements);
+    memcpy(outData.data(), dataPtr, numElements * sizeof(T));
+}
+
+glm::mat4 GetMatrix(const tinygltf::Node& node)
+{
+    if (node.matrix.size() == 16) return glm::make_mat4(node.matrix.data());
+    glm::vec3 t = node.translation.empty() ? glm::vec3(0.0f) : GetVec3(node.translation);
+    glm::quat r = node.rotation.empty() ? glm::quat(1.0f, 0.0f, 0.0f, 0.0f) : GetQuat(node.rotation);
+    glm::vec3 s = node.scale.empty() ? glm::vec3(1.0f) : GetVec3(node.scale);
+    return glm::translate(glm::mat4(1.0f), t) * glm::toMat4(r) * glm::scale(glm::mat4(1.0f), s);
+}
+
+glm::vec3 GetVec3(const std::vector<double>& vec) { return { (float)vec[0], (float)vec[1], (float)vec[2] }; }
+glm::quat GetQuat(const std::vector<double>& vec) { return { (float)vec[3], (float)vec[0], (float)vec[1], (float)vec[2] }; }

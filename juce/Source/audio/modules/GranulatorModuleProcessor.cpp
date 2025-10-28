@@ -227,6 +227,36 @@ void GranulatorModuleProcessor::drawIoPins(const NodePinHelpers& helpers)
 }
 #endif
 
+std::vector<DynamicPinInfo> GranulatorModuleProcessor::getDynamicInputPins() const
+{
+    std::vector<DynamicPinInfo> pins;
+    
+    // Audio inputs (channels 0-1)
+    pins.push_back({"In L", 0, PinDataType::Audio});
+    pins.push_back({"In R", 1, PinDataType::Audio});
+    
+    // Modulation/trigger inputs (channels 2-7)
+    pins.push_back({"Trigger In", 2, PinDataType::Gate});
+    pins.push_back({"Density Mod", 3, PinDataType::CV});
+    pins.push_back({"Size Mod", 4, PinDataType::CV});
+    pins.push_back({"Position Mod", 5, PinDataType::CV});
+    pins.push_back({"Pitch Mod", 6, PinDataType::CV});
+    pins.push_back({"Gate Mod", 7, PinDataType::CV});
+    
+    return pins;
+}
+
+std::vector<DynamicPinInfo> GranulatorModuleProcessor::getDynamicOutputPins() const
+{
+    std::vector<DynamicPinInfo> pins;
+    
+    // Audio outputs (channels 0-1)
+    pins.push_back({"Out L", 0, PinDataType::Audio});
+    pins.push_back({"Out R", 1, PinDataType::Audio});
+    
+    return pins;
+}
+
 bool GranulatorModuleProcessor::getParamRouting(const juce::String& paramId, int& outBusIndex, int& outChannelIndexInBus) const
 {
     outBusIndex = 0; // All modulation is on the single input bus.

@@ -19,7 +19,7 @@ public:
     InputDebugModuleProcessor();
     ~InputDebugModuleProcessor() override = default;
 
-    const juce::String getName() const override { return "input debug"; }
+    const juce::String getName() const override { return "input_debug"; }
 
     void prepareToPlay(double sampleRate, int samplesPerBlock) override;
     void releaseResources() override {}
