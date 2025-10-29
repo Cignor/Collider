@@ -60,6 +60,10 @@ private:
     // --- Smoothed Values for Zipper-Free Modulation ---
     juce::SmoothedValue<float> smoothedMasterFreq;
     juce::SmoothedValue<float> smoothedMasterDrive;
+    
+    // Relative modulation parameters
+    std::atomic<float>* relativeFreqModParam { nullptr };
+    std::atomic<float>* relativeDriveModParam { nullptr };
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(HarmonicShaperModuleProcessor);
 };

@@ -7,6 +7,7 @@
 #include "../../animation/AnimationRenderer.h"
 #include <memory>
 #include <atomic>
+#include <map>
 #include <glm/glm.hpp>
 
 // Inherit from juce::ChangeListener to receive notifications from the background loader
@@ -50,7 +51,28 @@ public:
     
     const std::vector<glm::mat4>& getFinalBoneMatrices() const;
 
+    // --- State Management (for saving/loading presets) ---
+    juce::ValueTree getExtraStateTree() const override;
+    void setExtraStateTree(const juce::ValueTree& state) override;
+
 private:
+    // Helper structure for tracking multiple bones
+    struct TrackedBone
+    {
+        std::string name;
+        int boneId = -1;
+
+        // UI-thread state for kinematics
+        glm::vec2 lastScreenPos { 0.0f, 0.0f };
+        bool isFirstFrame = true;
+        bool wasBelowGround = false;
+
+        // Atomics for audio thread
+        std::atomic<float> velX { 0.0f };
+        std::atomic<float> velY { 0.0f };
+        std::atomic<bool> triggerState { false };
+    };
+
     // Called after raw data is loaded to bind and set up the animation
     void setupAnimationFromRawData(std::unique_ptr<RawAnimationData> rawData);
     
@@ -80,6 +102,9 @@ private:
     std::vector<std::unique_ptr<AnimationData>> m_dataToFree;
     juce::CriticalSection m_freeingLock; // Protects the above arrays
     
+    // Tracked bones (LeftFoot, RightFoot) for dedicated outputs
+    std::map<std::string, TrackedBone> m_trackedBones;
+    
     // Rendering
     std::unique_ptr<AnimationRenderer> m_Renderer;
 
@@ -91,26 +116,19 @@ private:
     float m_panX = 0.0f;
     float m_panY = 0.0f;
 
-    // Bone selection for parameter mapping
+    // View rotation angles (in radians)
+    float m_viewRotationX = 0.0f;
+    float m_viewRotationY = 0.0f;
+    float m_viewRotationZ = 0.0f;
+
+    // Ground line Y position for trigger detection
+    float m_groundY = 180.0f;
+    
+    // UI bone selection (for visualization, not directly tied to outputs anymore)
     int m_selectedBoneIndex = -1;
     std::string m_selectedBoneName = "None";
     int m_selectedBoneID = -1; // Cached bone ID to avoid map lookups
     std::vector<std::string> m_cachedBoneNames; // Thread-safe cache of bone names for UI
-
-    // State for UI thread kinematic calculations
-    glm::vec2 m_lastScreenPos { 0.0f, 0.0f };
-    bool m_isFirstFrame = true;
-
-    // Atomics for thread-safe data transfer to audio thread
-    std::atomic<float> m_outputPosX { 0.0f };
-    std::atomic<float> m_outputPosY { 0.0f };
-    std::atomic<float> m_outputVelX { 0.0f };
-    std::atomic<float> m_outputVelY { 0.0f };
-
-    // Ground trigger system
-    float m_groundY = 180.0f;
-    bool m_wasBoneBelowGround = false;
-    std::atomic<bool> m_triggerState { false };
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(AnimationModuleProcessor)
 };

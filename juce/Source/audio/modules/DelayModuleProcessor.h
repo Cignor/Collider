@@ -84,6 +84,52 @@ public:
         ImGui::Spacing();
         ImGui::Spacing();
 
+        // === MODULATION MODE SECTION ===
+        ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1.0f), "Modulation Mode");
+        ImGui::Spacing();
+        
+        bool relativeTimeMod = relativeTimeModParam ? (relativeTimeModParam->load() > 0.5f) : true;
+        if (ImGui::Checkbox("Relative Time Mod", &relativeTimeMod))
+        {
+            if (auto* p = dynamic_cast<juce::AudioParameterBool*>(ap.getParameter("relativeTimeMod")))
+            {
+                *p = relativeTimeMod;
+                juce::Logger::writeToLog("[Delay UI] Relative Time Mod changed to: " + juce::String(relativeTimeMod ? "TRUE" : "FALSE"));
+            }
+        }
+        if (ImGui::IsItemDeactivatedAfterEdit()) onModificationEnded();
+        ImGui::SameLine();
+        HelpMarkerDelay("Relative: CV modulates around slider time (±3 octaves)\nAbsolute: CV directly controls time (1-2000ms, ignores slider)");
+
+        bool relativeFeedbackMod = relativeFeedbackModParam ? (relativeFeedbackModParam->load() > 0.5f) : true;
+        if (ImGui::Checkbox("Relative Feedback Mod", &relativeFeedbackMod))
+        {
+            if (auto* p = dynamic_cast<juce::AudioParameterBool*>(ap.getParameter("relativeFeedbackMod")))
+            {
+                *p = relativeFeedbackMod;
+                juce::Logger::writeToLog("[Delay UI] Relative Feedback Mod changed to: " + juce::String(relativeFeedbackMod ? "TRUE" : "FALSE"));
+            }
+        }
+        if (ImGui::IsItemDeactivatedAfterEdit()) onModificationEnded();
+        ImGui::SameLine();
+        HelpMarkerDelay("Relative: CV adds offset to slider feedback (±0.5)\nAbsolute: CV directly controls feedback (0-95%, ignores slider)");
+
+        bool relativeMixMod = relativeMixModParam ? (relativeMixModParam->load() > 0.5f) : true;
+        if (ImGui::Checkbox("Relative Mix Mod", &relativeMixMod))
+        {
+            if (auto* p = dynamic_cast<juce::AudioParameterBool*>(ap.getParameter("relativeMixMod")))
+            {
+                *p = relativeMixMod;
+                juce::Logger::writeToLog("[Delay UI] Relative Mix Mod changed to: " + juce::String(relativeMixMod ? "TRUE" : "FALSE"));
+            }
+        }
+        if (ImGui::IsItemDeactivatedAfterEdit()) onModificationEnded();
+        ImGui::SameLine();
+        HelpMarkerDelay("Relative: CV adds offset to slider mix (±0.5)\nAbsolute: CV directly controls mix (0-100%, ignores slider)");
+
+        ImGui::Spacing();
+        ImGui::Spacing();
+
         // === VISUAL DELAY TAPS SECTION ===
         ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1.0f), "Delay Taps");
         ImGui::Spacing();
@@ -154,6 +200,9 @@ private:
     std::atomic<float>* timeMsParam { nullptr };
     std::atomic<float>* feedbackParam { nullptr };
     std::atomic<float>* mixParam { nullptr };
+    std::atomic<float>* relativeTimeModParam { nullptr };
+    std::atomic<float>* relativeFeedbackModParam { nullptr };
+    std::atomic<float>* relativeMixModParam { nullptr };
     double sr { 48000.0 };
     int maxDelaySamples { 48000 };
     

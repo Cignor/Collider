@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<ModularSynthPreset version="1" bpm="120.0">
+  <modules>
+    <module logicalId="1" type="animation">
+      <params>
+        <AnimationParams/>
+      </params>
+      <extra>
+        <AnimationModuleState animationFilePath="H:\0000_CODE\01_collider_pyo\animation_gltf\test_02.glb"
+                              zoom="0.8373496532440186" panX="0.1411763727664948" panY="0.6161443591117859"
+                              groundY="180.0" selectedBoneName="_1:LeftFoot"/>
+      </extra>
+    </module>
+    <module logicalId="3" type="sample_loader">
+      <params>
+        <SampleLoaderParameters samplePath="H:\0000_CODE\01_collider_pyo\audio\samples\percussion\KSHMR_Acoustic_Kick_04_Big.wav">
+          <PARAM id="engine" value="1.0"/>
+          <PARAM id="gate" value="0.7999999523162842"/>
+          <PARAM id="gate_mod" value="1.0"/>
+          <PARAM id="loop" value="0.0"/>
+          <PARAM id="pitch" value="0.0"/>
+          <PARAM id="pitch_mod" value="0.0"/>
+          <PARAM id="rangeEnd" value="1.0"/>
+          <PARAM id="rangeEnd_mod" value="1.0"/>
+          <PARAM id="rangeStart" value="0.0"/>
+          <PARAM id="rangeStart_mod" value="0.0"/>
+          <PARAM id="rbPhaseInd" value="1.0"/>
+          <PARAM id="rbWindowShort" value="1.0"/>
+          <PARAM id="speed" value="1.0"/>
+          <PARAM id="speed_mod" value="1.0"/>
+          <PARAM id="trigger_mod" value="0.0"/>
+        </SampleLoaderParameters>
+      </params>
+    </module>
+  </modules>
+  <connections>
+    <connection srcId="1" srcChan="4" dstId="3" dstChan="3"/>
+    <connection srcId="3" srcChan="0" dstId="output" dstChan="0"/>
+    <connection srcId="3" srcChan="1" dstId="output" dstChan="1"/>
+  </connections>
+  <NodeEditorUI>
+    <node id="1" x="-211.0" y="555.0"/>
+    <node id="3" x="444.0" y="655.0"/>
+    <node id="0" x="0.0" y="0.0"/>
+  </NodeEditorUI>
+</ModularSynthPreset>

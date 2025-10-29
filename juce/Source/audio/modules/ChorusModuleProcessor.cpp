@@ -8,6 +8,11 @@ juce::AudioProcessorValueTreeState::ParameterLayout ChorusModuleProcessor::creat
     params.push_back(std::make_unique<juce::AudioParameterFloat>(paramIdDepth, "Depth", 0.0f, 1.0f, 0.25f));
     params.push_back(std::make_unique<juce::AudioParameterFloat>(paramIdMix, "Mix", 0.0f, 1.0f, 0.5f));
     
+    // Relative modulation parameters
+    params.push_back(std::make_unique<juce::AudioParameterBool>("relativeRateMod", "Relative Rate Mod", true));
+    params.push_back(std::make_unique<juce::AudioParameterBool>("relativeDepthMod", "Relative Depth Mod", true));
+    params.push_back(std::make_unique<juce::AudioParameterBool>("relativeMixMod", "Relative Mix Mod", true));
+    
     return { params.begin(), params.end() };
 }
 
@@ -20,6 +25,9 @@ ChorusModuleProcessor::ChorusModuleProcessor()
     rateParam = apvts.getRawParameterValue(paramIdRate);
     depthParam = apvts.getRawParameterValue(paramIdDepth);
     mixParam = apvts.getRawParameterValue(paramIdMix);
+    relativeRateModParam = apvts.getRawParameterValue("relativeRateMod");
+    relativeDepthModParam = apvts.getRawParameterValue("relativeDepthMod");
+    relativeMixModParam = apvts.getRawParameterValue("relativeMixMod");
 
     // Initialize output value tracking for tooltips
     lastOutputValues.push_back(std::make_unique<std::atomic<float>>(0.0f)); // Out L
@@ -87,25 +95,50 @@ void ChorusModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce:
     const float baseRate = rateParam->load();
     const float baseDepth = depthParam->load();
     const float baseMix = mixParam->load();
+    const bool relativeRateMode = relativeRateModParam && relativeRateModParam->load() > 0.5f;
+    const bool relativeDepthMode = relativeDepthModParam && relativeDepthModParam->load() > 0.5f;
+    const bool relativeMixMode = relativeMixModParam && relativeMixModParam->load() > 0.5f;
 
-    // We can process per-block if not modulated, or per-sample if modulated.
-    // For simplicity and responsiveness, we'll just update the parameters once per block
-    // using the first sample of the CV input. A per-sample loop could be used for audio-rate modulation.
-    
+    // Apply CV modulation with relative/absolute modes
     float finalRate = baseRate;
     if (isRateMod && rateCV) {
-        // Map CV (0..1) to the full rate range, applied as an offset
-        finalRate += juce::jmap(rateCV[0], 0.0f, 1.0f, -baseRate, 5.0f - baseRate);
+        const float cv = juce::jlimit(0.0f, 1.0f, rateCV[0]);
+        if (relativeRateMode) {
+            // RELATIVE: Modulate ±2 octaves (0.25x to 4x)
+            const float octaveOffset = (cv - 0.5f) * 4.0f; // ±2 octaves
+            finalRate = baseRate * std::pow(2.0f, octaveOffset);
+        } else {
+            // ABSOLUTE: CV directly sets rate (0.05-5 Hz)
+            finalRate = juce::jmap(cv, 0.05f, 5.0f);
+        }
     }
 
     float finalDepth = baseDepth;
     if (isDepthMod && depthCV) {
-        finalDepth = juce::jlimit(0.0f, 1.0f, depthCV[0]); // Absolute control
+        const float cv = juce::jlimit(0.0f, 1.0f, depthCV[0]);
+        if (relativeDepthMode) {
+            // RELATIVE: CV adds offset to base depth (±0.5)
+            const float offset = (cv - 0.5f) * 1.0f;
+            finalDepth = baseDepth + offset;
+        } else {
+            // ABSOLUTE: CV directly sets depth
+            finalDepth = cv;
+        }
+        finalDepth = juce::jlimit(0.0f, 1.0f, finalDepth);
     }
 
     float finalMix = baseMix;
     if (isMixMod && mixCV) {
-        finalMix = juce::jlimit(0.0f, 1.0f, mixCV[0]); // Absolute control
+        const float cv = juce::jlimit(0.0f, 1.0f, mixCV[0]);
+        if (relativeMixMode) {
+            // RELATIVE: CV adds offset to base mix (±0.5)
+            const float offset = (cv - 0.5f) * 1.0f;
+            finalMix = baseMix + offset;
+        } else {
+            // ABSOLUTE: CV directly sets mix
+            finalMix = cv;
+        }
+        finalMix = juce::jlimit(0.0f, 1.0f, finalMix);
     }
     
     // --- Update the DSP Object ---
@@ -245,6 +278,53 @@ void ChorusModuleProcessor::drawParametersInNode(float itemWidth, const std::fun
     if (isMixMod) { ImGui::EndDisabled(); ImGui::SameLine(); ImGui::TextUnformatted("(mod)"); }
     ImGui::SameLine();
     HelpMarker("Dry/wet mix (0-1)\n0 = dry only, 1 = fully chorused");
+
+    ImGui::Spacing();
+    ImGui::Separator();
+    ImGui::Spacing();
+
+    // === RELATIVE MODULATION SECTION ===
+    ImGui::TextColored(ImVec4(0.6f, 0.8f, 1.0f, 1.0f), "CV Input Modes");
+    ImGui::Spacing();
+    
+    // Relative Rate Mod checkbox
+    bool relativeRateMod = relativeRateModParam != nullptr && relativeRateModParam->load() > 0.5f;
+    if (ImGui::Checkbox("Relative Rate Mod", &relativeRateMod))
+    {
+        if (auto* p = dynamic_cast<juce::AudioParameterBool*>(ap.getParameter("relativeRateMod")))
+            *p = relativeRateMod;
+        juce::Logger::writeToLog("[Chorus UI] Relative Rate Mod: " + juce::String(relativeRateMod ? "ON" : "OFF"));
+    }
+    if (ImGui::IsItemHovered())
+    {
+        ImGui::SetTooltip("ON: CV modulates around slider (±2 octaves)\nOFF: CV directly sets rate (0.05-5 Hz)");
+    }
+    
+    // Relative Depth Mod checkbox
+    bool relativeDepthMod = relativeDepthModParam != nullptr && relativeDepthModParam->load() > 0.5f;
+    if (ImGui::Checkbox("Relative Depth Mod", &relativeDepthMod))
+    {
+        if (auto* p = dynamic_cast<juce::AudioParameterBool*>(ap.getParameter("relativeDepthMod")))
+            *p = relativeDepthMod;
+        juce::Logger::writeToLog("[Chorus UI] Relative Depth Mod: " + juce::String(relativeDepthMod ? "ON" : "OFF"));
+    }
+    if (ImGui::IsItemHovered())
+    {
+        ImGui::SetTooltip("ON: CV modulates around slider (±0.5)\nOFF: CV directly sets depth (0-1)");
+    }
+    
+    // Relative Mix Mod checkbox
+    bool relativeMixMod = relativeMixModParam != nullptr && relativeMixModParam->load() > 0.5f;
+    if (ImGui::Checkbox("Relative Mix Mod", &relativeMixMod))
+    {
+        if (auto* p = dynamic_cast<juce::AudioParameterBool*>(ap.getParameter("relativeMixMod")))
+            *p = relativeMixMod;
+        juce::Logger::writeToLog("[Chorus UI] Relative Mix Mod: " + juce::String(relativeMixMod ? "ON" : "OFF"));
+    }
+    if (ImGui::IsItemHovered())
+    {
+        ImGui::SetTooltip("ON: CV modulates around slider (±0.5)\nOFF: CV directly sets mix (0-1)");
+    }
 
     ImGui::PopItemWidth();
 }

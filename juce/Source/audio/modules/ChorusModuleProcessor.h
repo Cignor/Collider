@@ -51,5 +51,10 @@ private:
     std::atomic<float>* rateParam { nullptr };
     std::atomic<float>* depthParam { nullptr };
     std::atomic<float>* mixParam { nullptr };
+    
+    // Relative modulation parameters
+    std::atomic<float>* relativeRateModParam { nullptr };
+    std::atomic<float>* relativeDepthModParam { nullptr };
+    std::atomic<float>* relativeMixModParam { nullptr };
 };
 

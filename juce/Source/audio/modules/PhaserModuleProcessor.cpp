@@ -11,6 +11,13 @@ juce::AudioProcessorValueTreeState::ParameterLayout PhaserModuleProcessor::creat
     params.push_back(std::make_unique<juce::AudioParameterFloat>(paramIdFeedback, "Feedback", -0.95f, 0.95f, 0.0f));
     params.push_back(std::make_unique<juce::AudioParameterFloat>(paramIdMix, "Mix", 0.0f, 1.0f, 0.5f));
     
+    // Relative modulation parameters
+    params.push_back(std::make_unique<juce::AudioParameterBool>("relativeRateMod", "Relative Rate Mod", true));
+    params.push_back(std::make_unique<juce::AudioParameterBool>("relativeDepthMod", "Relative Depth Mod", true));
+    params.push_back(std::make_unique<juce::AudioParameterBool>("relativeCentreMod", "Relative Centre Mod", true));
+    params.push_back(std::make_unique<juce::AudioParameterBool>("relativeFeedbackMod", "Relative Feedback Mod", true));
+    params.push_back(std::make_unique<juce::AudioParameterBool>("relativeMixMod", "Relative Mix Mod", true));
+    
     return { params.begin(), params.end() };
 }
 
@@ -25,6 +32,11 @@ PhaserModuleProcessor::PhaserModuleProcessor()
     centreHzParam = apvts.getRawParameterValue(paramIdCentreHz);
     feedbackParam = apvts.getRawParameterValue(paramIdFeedback);
     mixParam = apvts.getRawParameterValue(paramIdMix);
+    relativeRateModParam = apvts.getRawParameterValue("relativeRateMod");
+    relativeDepthModParam = apvts.getRawParameterValue("relativeDepthMod");
+    relativeCentreModParam = apvts.getRawParameterValue("relativeCentreMod");
+    relativeFeedbackModParam = apvts.getRawParameterValue("relativeFeedbackMod");
+    relativeMixModParam = apvts.getRawParameterValue("relativeMixMod");
 
     lastOutputValues.push_back(std::make_unique<std::atomic<float>>(0.0f)); // Out L
     lastOutputValues.push_back(std::make_unique<std::atomic<float>>(0.0f)); // Out R
@@ -95,12 +107,87 @@ void PhaserModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce:
     float feedbackCv = readCv(paramIdFeedbackMod, 5);
     float mixCv = readCv(paramIdMixMod, 6);
 
+    // --- Get base values and relative modes ---
+    const float baseRate = rateParam->load();
+    const float baseDepth = depthParam->load();
+    const float baseCentre = centreHzParam->load();
+    const float baseFeedback = feedbackParam->load();
+    const float baseMix = mixParam->load();
+    const bool relativeRateMode = relativeRateModParam && relativeRateModParam->load() > 0.5f;
+    const bool relativeDepthMode = relativeDepthModParam && relativeDepthModParam->load() > 0.5f;
+    const bool relativeCentreMode = relativeCentreModParam && relativeCentreModParam->load() > 0.5f;
+    const bool relativeFeedbackMode = relativeFeedbackModParam && relativeFeedbackModParam->load() > 0.5f;
+    const bool relativeMixMode = relativeMixModParam && relativeMixModParam->load() > 0.5f;
+
     // --- Update DSP Parameters (once per block) ---
-    float finalRate = (rateCv >= 0.0f) ? juce::jmap(rateCv, 0.0f, 1.0f, 0.01f, 10.0f) : rateParam->load();
-    float finalDepth = (depthCv >= 0.0f) ? depthCv : depthParam->load();
-    float finalCentre = (centreCv >= 0.0f) ? juce::jmap(centreCv, 0.0f, 1.0f, 20.0f, 10000.0f) : centreHzParam->load();
-    float finalFeedback = (feedbackCv >= 0.0f) ? juce::jmap(feedbackCv, 0.0f, 1.0f, -0.95f, 0.95f) : feedbackParam->load();
-    float finalMix = (mixCv >= 0.0f) ? mixCv : mixParam->load();
+    float finalRate = baseRate;
+    if (rateCv >= 0.0f) {
+        const float cv = juce::jlimit(0.0f, 1.0f, rateCv);
+        if (relativeRateMode) {
+            // RELATIVE: ±2 octaves (0.25x to 4x)
+            const float octaveOffset = (cv - 0.5f) * 4.0f;
+            finalRate = baseRate * std::pow(2.0f, octaveOffset);
+        } else {
+            // ABSOLUTE: CV directly sets rate (0.01-10 Hz)
+            finalRate = juce::jmap(cv, 0.01f, 10.0f);
+        }
+    }
+    
+    float finalDepth = baseDepth;
+    if (depthCv >= 0.0f) {
+        const float cv = juce::jlimit(0.0f, 1.0f, depthCv);
+        if (relativeDepthMode) {
+            // RELATIVE: ±0.5 offset
+            const float offset = (cv - 0.5f) * 1.0f;
+            finalDepth = baseDepth + offset;
+        } else {
+            // ABSOLUTE: CV directly sets depth
+            finalDepth = cv;
+        }
+        finalDepth = juce::jlimit(0.0f, 1.0f, finalDepth);
+    }
+    
+    float finalCentre = baseCentre;
+    if (centreCv >= 0.0f) {
+        const float cv = juce::jlimit(0.0f, 1.0f, centreCv);
+        if (relativeCentreMode) {
+            // RELATIVE: ±4 octaves around base frequency
+            const float octaveOffset = (cv - 0.5f) * 8.0f;
+            finalCentre = baseCentre * std::pow(2.0f, octaveOffset);
+        } else {
+            // ABSOLUTE: CV directly sets frequency (20-10000 Hz)
+            finalCentre = juce::jmap(cv, 20.0f, 10000.0f);
+        }
+        finalCentre = juce::jlimit(20.0f, 10000.0f, finalCentre);
+    }
+    
+    float finalFeedback = baseFeedback;
+    if (feedbackCv >= 0.0f) {
+        const float cv = juce::jlimit(0.0f, 1.0f, feedbackCv);
+        if (relativeFeedbackMode) {
+            // RELATIVE: ±0.5 offset
+            const float offset = (cv - 0.5f) * 1.0f;
+            finalFeedback = baseFeedback + offset;
+        } else {
+            // ABSOLUTE: CV directly sets feedback
+            finalFeedback = juce::jmap(cv, -0.95f, 0.95f);
+        }
+        finalFeedback = juce::jlimit(-0.95f, 0.95f, finalFeedback);
+    }
+    
+    float finalMix = baseMix;
+    if (mixCv >= 0.0f) {
+        const float cv = juce::jlimit(0.0f, 1.0f, mixCv);
+        if (relativeMixMode) {
+            // RELATIVE: ±0.5 offset
+            const float offset = (cv - 0.5f) * 1.0f;
+            finalMix = baseMix + offset;
+        } else {
+            // ABSOLUTE: CV directly sets mix
+            finalMix = cv;
+        }
+        finalMix = juce::jlimit(0.0f, 1.0f, finalMix);
+    }
 
     phaser.setRate(finalRate);
     phaser.setDepth(finalDepth);
@@ -203,6 +290,79 @@ void PhaserModuleProcessor::drawParametersInNode(float itemWidth, const std::fun
     drawSlider("Centre", paramIdCentreHz, paramIdCentreHzMod, 20.0f, 10000.0f, "%.0f Hz", "Center frequency of phase shift", ImGuiSliderFlags_Logarithmic);
     drawSlider("Feedback", paramIdFeedback, paramIdFeedbackMod, -0.95f, 0.95f, "%.2f", "Feedback amount\nNegative = darker, Positive = brighter", 0);
     drawSlider("Mix", paramIdMix, paramIdMixMod, 0.0f, 1.0f, "%.2f", "Dry/wet mix (0-1)", 0);
+
+    ImGui::Spacing();
+    ImGui::Separator();
+    ImGui::Spacing();
+
+    // === RELATIVE MODULATION SECTION ===
+    ImGui::TextColored(ImVec4(0.6f, 0.8f, 1.0f, 1.0f), "CV Input Modes");
+    ImGui::Spacing();
+    
+    // Relative Rate Mod checkbox
+    bool relativeRateMod = relativeRateModParam != nullptr && relativeRateModParam->load() > 0.5f;
+    if (ImGui::Checkbox("Relative Rate Mod", &relativeRateMod))
+    {
+        if (auto* p = dynamic_cast<juce::AudioParameterBool*>(ap.getParameter("relativeRateMod")))
+            *p = relativeRateMod;
+        juce::Logger::writeToLog("[Phaser UI] Relative Rate Mod: " + juce::String(relativeRateMod ? "ON" : "OFF"));
+    }
+    if (ImGui::IsItemHovered())
+    {
+        ImGui::SetTooltip("ON: CV modulates around slider (±2 octaves)\nOFF: CV directly sets rate (0.01-10 Hz)");
+    }
+    
+    // Relative Depth Mod checkbox
+    bool relativeDepthMod = relativeDepthModParam != nullptr && relativeDepthModParam->load() > 0.5f;
+    if (ImGui::Checkbox("Relative Depth Mod", &relativeDepthMod))
+    {
+        if (auto* p = dynamic_cast<juce::AudioParameterBool*>(ap.getParameter("relativeDepthMod")))
+            *p = relativeDepthMod;
+        juce::Logger::writeToLog("[Phaser UI] Relative Depth Mod: " + juce::String(relativeDepthMod ? "ON" : "OFF"));
+    }
+    if (ImGui::IsItemHovered())
+    {
+        ImGui::SetTooltip("ON: CV modulates around slider (±0.5)\nOFF: CV directly sets depth (0-1)");
+    }
+    
+    // Relative Centre Mod checkbox
+    bool relativeCentreMod = relativeCentreModParam != nullptr && relativeCentreModParam->load() > 0.5f;
+    if (ImGui::Checkbox("Relative Centre Mod", &relativeCentreMod))
+    {
+        if (auto* p = dynamic_cast<juce::AudioParameterBool*>(ap.getParameter("relativeCentreMod")))
+            *p = relativeCentreMod;
+        juce::Logger::writeToLog("[Phaser UI] Relative Centre Mod: " + juce::String(relativeCentreMod ? "ON" : "OFF"));
+    }
+    if (ImGui::IsItemHovered())
+    {
+        ImGui::SetTooltip("ON: CV modulates around slider (±4 octaves)\nOFF: CV directly sets freq (20-10000 Hz)");
+    }
+    
+    // Relative Feedback Mod checkbox
+    bool relativeFeedbackMod = relativeFeedbackModParam != nullptr && relativeFeedbackModParam->load() > 0.5f;
+    if (ImGui::Checkbox("Relative Feedback Mod", &relativeFeedbackMod))
+    {
+        if (auto* p = dynamic_cast<juce::AudioParameterBool*>(ap.getParameter("relativeFeedbackMod")))
+            *p = relativeFeedbackMod;
+        juce::Logger::writeToLog("[Phaser UI] Relative Feedback Mod: " + juce::String(relativeFeedbackMod ? "ON" : "OFF"));
+    }
+    if (ImGui::IsItemHovered())
+    {
+        ImGui::SetTooltip("ON: CV modulates around slider (±0.5)\nOFF: CV directly sets feedback (-0.95 to 0.95)");
+    }
+    
+    // Relative Mix Mod checkbox
+    bool relativeMixMod = relativeMixModParam != nullptr && relativeMixModParam->load() > 0.5f;
+    if (ImGui::Checkbox("Relative Mix Mod", &relativeMixMod))
+    {
+        if (auto* p = dynamic_cast<juce::AudioParameterBool*>(ap.getParameter("relativeMixMod")))
+            *p = relativeMixMod;
+        juce::Logger::writeToLog("[Phaser UI] Relative Mix Mod: " + juce::String(relativeMixMod ? "ON" : "OFF"));
+    }
+    if (ImGui::IsItemHovered())
+    {
+        ImGui::SetTooltip("ON: CV modulates around slider (±0.5)\nOFF: CV directly sets mix (0-1)");
+    }
 
     ImGui::PopItemWidth();
 }

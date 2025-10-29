@@ -12,6 +12,9 @@ DelayModuleProcessor::DelayModuleProcessor()
     timeMsParam   = apvts.getRawParameterValue ("timeMs");
     feedbackParam = apvts.getRawParameterValue ("feedback");
     mixParam      = apvts.getRawParameterValue ("mix");
+    relativeTimeModParam = apvts.getRawParameterValue("relativeTimeMod");
+    relativeFeedbackModParam = apvts.getRawParameterValue("relativeFeedbackMod");
+    relativeMixModParam = apvts.getRawParameterValue("relativeMixMod");
     
     // Initialize output value tracking for tooltips
     lastOutputValues.push_back(std::make_unique<std::atomic<float>>(0.0f)); // For Out L
@@ -29,6 +32,11 @@ juce::AudioProcessorValueTreeState::ParameterLayout DelayModuleProcessor::create
     p.push_back (std::make_unique<juce::AudioParameterFloat> ("timeMs",  "Time (ms)", juce::NormalisableRange<float> (1.0f, 2000.0f, 0.01f, 0.4f), 400.0f));
     p.push_back (std::make_unique<juce::AudioParameterFloat> ("feedback","Feedback",  juce::NormalisableRange<float> (0.0f, 0.95f), 0.4f));
     p.push_back (std::make_unique<juce::AudioParameterFloat> ("mix",     "Mix",       juce::NormalisableRange<float> (0.0f, 1.0f), 0.3f));
+    
+    p.push_back (std::make_unique<juce::AudioParameterBool>("relativeTimeMod", "Relative Time Mod", true));
+    p.push_back (std::make_unique<juce::AudioParameterBool>("relativeFeedbackMod", "Relative Feedback Mod", true));
+    p.push_back (std::make_unique<juce::AudioParameterBool>("relativeMixMod", "Relative Mix Mod", true));
+    
     return { p.begin(), p.end() };
 }
 
@@ -69,6 +77,9 @@ void DelayModuleProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce:
     const float baseTimeMs = timeMsParam != nullptr ? timeMsParam->load() : 400.0f;
     const float baseFeedback = feedbackParam != nullptr ? feedbackParam->load() : 0.4f;
     const float baseMix = mixParam != nullptr ? mixParam->load() : 0.3f;
+    const bool relativeTimeMode = relativeTimeModParam && relativeTimeModParam->load() > 0.5f;
+    const bool relativeFeedbackMode = relativeFeedbackModParam && relativeFeedbackModParam->load() > 0.5f;
+    const bool relativeMixMode = relativeMixModParam && relativeMixModParam->load() > 0.5f;
 
     // Variables to store last calculated values for UI feedback
     float lastTimeMs = baseTimeMs;
@@ -84,10 +95,16 @@ void DelayModuleProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce:
             float timeMs = baseTimeMs;
             if (isTimeMod && timeCV != nullptr) {
                 const float cv = juce::jlimit(0.0f, 1.0f, timeCV[i]);
-                // ADDITIVE MODULATION FIX: Add CV offset to base delay time
-                const float octaveRange = 3.0f; // CV can modulate +/- 3 octaves of delay time
-                const float octaveOffset = (cv - 0.5f) * octaveRange; // Center around 0, range [-1.5, +1.5] octaves
-                timeMs = baseTimeMs * std::pow(2.0f, octaveOffset);
+                
+                if (relativeTimeMode) {
+                    // RELATIVE: CV modulates around base time (±3 octaves)
+                    const float octaveRange = 3.0f;
+                    const float octaveOffset = (cv - 0.5f) * octaveRange;
+                    timeMs = baseTimeMs * std::pow(2.0f, octaveOffset);
+                } else {
+                    // ABSOLUTE: CV directly maps to full time range
+                    timeMs = juce::jmap(cv, 1.0f, 2000.0f);
+                }
                 timeMs = juce::jlimit(1.0f, 2000.0f, timeMs);
             }
             
@@ -101,10 +118,16 @@ void DelayModuleProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce:
             float fb = baseFeedback;
             if (isFeedbackMod && feedbackCV != nullptr) {
                 const float cv = juce::jlimit(0.0f, 1.0f, feedbackCV[i]);
-                // ADDITIVE MODULATION FIX: Add CV offset to base feedback
-                const float feedbackRange = 0.3f; // CV can modulate feedback by +/- 0.3
-                const float feedbackOffset = (cv - 0.5f) * feedbackRange; // Center around 0
-                fb = baseFeedback + feedbackOffset;
+                
+                if (relativeFeedbackMode) {
+                    // RELATIVE: CV adds offset to base feedback (±0.5)
+                    const float feedbackRange = 1.0f;
+                    const float feedbackOffset = (cv - 0.5f) * feedbackRange;
+                    fb = baseFeedback + feedbackOffset;
+                } else {
+                    // ABSOLUTE: CV directly sets feedback
+                    fb = juce::jmap(cv, 0.0f, 0.95f);
+                }
                 fb = juce::jlimit(0.0f, 0.95f, fb);
             }
             
@@ -118,10 +141,16 @@ void DelayModuleProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce:
             float mix = baseMix;
             if (isMixMod && mixCV != nullptr) {
                 const float cv = juce::jlimit(0.0f, 1.0f, mixCV[i]);
-                // ADDITIVE MODULATION FIX: Add CV offset to base mix
-                const float mixRange = 0.5f; // CV can modulate mix by +/- 0.5
-                const float mixOffset = (cv - 0.5f) * mixRange; // Center around 0
-                mix = baseMix + mixOffset;
+                
+                if (relativeMixMode) {
+                    // RELATIVE: CV adds offset to base mix (±0.5)
+                    const float mixRange = 1.0f;
+                    const float mixOffset = (cv - 0.5f) * mixRange;
+                    mix = baseMix + mixOffset;
+                } else {
+                    // ABSOLUTE: CV directly sets mix
+                    mix = cv;
+                }
                 mix = juce::jlimit(0.0f, 1.0f, mix);
             }
             

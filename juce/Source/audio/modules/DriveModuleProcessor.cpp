@@ -8,6 +8,9 @@ juce::AudioProcessorValueTreeState::ParameterLayout DriveModuleProcessor::create
     params.push_back(std::make_unique<juce::AudioParameterFloat>(paramIdDrive, "Drive", 0.0f, 2.0f, 0.0f));
     params.push_back(std::make_unique<juce::AudioParameterFloat>(paramIdMix, "Mix", 0.0f, 1.0f, 1.0f));
     
+    params.push_back(std::make_unique<juce::AudioParameterBool>("relativeDriveMod", "Relative Drive Mod", true));
+    params.push_back(std::make_unique<juce::AudioParameterBool>("relativeMixMod", "Relative Mix Mod", true));
+    
     return { params.begin(), params.end() };
 }
 
@@ -19,6 +22,8 @@ DriveModuleProcessor::DriveModuleProcessor()
 {
     driveParam = apvts.getRawParameterValue(paramIdDrive);
     mixParam = apvts.getRawParameterValue(paramIdMix);
+    relativeDriveModParam = apvts.getRawParameterValue("relativeDriveMod");
+    relativeMixModParam = apvts.getRawParameterValue("relativeMixMod");
 
     lastOutputValues.push_back(std::make_unique<std::atomic<float>>(0.0f)); // Out L
     lastOutputValues.push_back(std::make_unique<std::atomic<float>>(0.0f)); // Out R

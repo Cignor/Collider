@@ -25,6 +25,9 @@ public:
     // Set pan offset (affects orthographic projection)
     void setPan(const glm::vec2& pan) { m_pan = pan; }
     
+    // Set the view rotation in radians
+    void setViewRotation(const glm::vec3& rotation) { m_viewRotation = rotation; }
+    
     // Calculate optimal zoom and pan to frame all bones in view
     void frameView(const std::vector<glm::mat4>& boneMatrices, float& outZoom, glm::vec2& outPan);
 
@@ -43,5 +46,6 @@ private:
     bool m_isInitialized = false; // Track if setup has been called
     float m_zoom = 10.0f; // Zoom level for orthographic projection
     glm::vec2 m_pan = { 0.0f, 0.0f }; // Pan offset for orthographic projection
+    glm::vec3 m_viewRotation = { 0.0f, 0.0f, 0.0f }; // View rotation angles in radians
 };
 

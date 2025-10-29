@@ -22,6 +22,15 @@ juce::AudioProcessorValueTreeState::ParameterLayout MultiBandShaperModuleProcess
     params.push_back(std::make_unique<juce::AudioParameterFloat>(
         "outputGain", "Output Gain",
         juce::NormalisableRange<float>(-24.0f, 24.0f, 0.1f), 0.0f));
+    
+    // Relative modulation parameters
+    for (int i = 0; i < NUM_BANDS; ++i)
+    {
+        auto paramId = "relativeDriveMod_" + juce::String(i + 1);
+        auto paramName = "Relative Drive Mod " + juce::String(i + 1);
+        params.push_back(std::make_unique<juce::AudioParameterBool>(paramId, paramName, true));
+    }
+    params.push_back(std::make_unique<juce::AudioParameterBool>("relativeGainMod", "Relative Gain Mod", true));
 
     return { params.begin(), params.end() };
 }
@@ -35,8 +44,10 @@ MultiBandShaperModuleProcessor::MultiBandShaperModuleProcessor()
     for (int i = 0; i < NUM_BANDS; ++i)
     {
         driveParams[i] = apvts.getRawParameterValue("drive_" + juce::String(i + 1));
+        relativeDriveModParams[i] = apvts.getRawParameterValue("relativeDriveMod_" + juce::String(i + 1));
     }
     outputGainParam = apvts.getRawParameterValue("outputGain");
+    relativeGainModParam = apvts.getRawParameterValue("relativeGainMod");
 
     lastOutputValues.push_back(std::make_unique<std::atomic<float>>(0.0f));
     lastOutputValues.push_back(std::make_unique<std::atomic<float>>(0.0f));
@@ -102,7 +113,9 @@ void MultiBandShaperModuleProcessor::processBlock(juce::AudioBuffer<float>& buff
         }
 
         // 2. Apply waveshaping to the filtered band
-        float drive = driveParams[band]->load();
+        float baseDrive = driveParams[band]->load();
+        float drive = baseDrive;
+        const bool relativeDriveMode = relativeDriveModParams[band] && relativeDriveModParams[band]->load() > 0.5f;
         
         // Check for modulation input from unified input bus (channels 2-9)
         if (isParamInputConnected("drive_" + juce::String(band + 1)))
@@ -110,9 +123,16 @@ void MultiBandShaperModuleProcessor::processBlock(juce::AudioBuffer<float>& buff
             int modChannel = 2 + band; // Channels 2-9 are drive mods for bands 0-7
             if (inBus.getNumChannels() > modChannel)
             {
-                // Simple 0..1 CV to full drive range mapping (0-100)
-                float modValue = inBus.getSample(modChannel, 0);
-                drive = juce::jmap(modValue, 0.0f, 1.0f, 0.0f, 100.0f);
+                const float cv = juce::jlimit(0.0f, 1.0f, inBus.getSample(modChannel, 0));
+                if (relativeDriveMode) {
+                    // RELATIVE: ±3 octaves (0.125x to 8x)
+                    const float octaveOffset = (cv - 0.5f) * 6.0f;
+                    drive = baseDrive * std::pow(2.0f, octaveOffset);
+                } else {
+                    // ABSOLUTE: CV directly sets drive (0-100)
+                    drive = juce::jmap(cv, 0.0f, 100.0f);
+                }
+                drive = juce::jlimit(0.0f, 100.0f, drive);
             }
         }
         setLiveParamValue("drive_" + juce::String(band + 1) + "_live", drive);
@@ -137,7 +157,9 @@ void MultiBandShaperModuleProcessor::processBlock(juce::AudioBuffer<float>& buff
     }
 
     // 4. Apply output gain and copy to the final output bus
-    float gainDb = outputGainParam->load();
+    float baseGainDb = outputGainParam->load();
+    float gainDb = baseGainDb;
+    const bool relativeGainMode = relativeGainModParam && relativeGainModParam->load() > 0.5f;
     
     // Check for modulation on output gain from unified input bus
     if (isParamInputConnected("outputGain"))
@@ -145,8 +167,16 @@ void MultiBandShaperModuleProcessor::processBlock(juce::AudioBuffer<float>& buff
         int gainModChannel = 2 + NUM_BANDS; // Channel 10
         if (inBus.getNumChannels() > gainModChannel)
         {
-            float modValue = inBus.getSample(gainModChannel, 0);
-            gainDb = juce::jmap(modValue, 0.0f, 1.0f, -24.0f, 24.0f);
+            const float cv = juce::jlimit(0.0f, 1.0f, inBus.getSample(gainModChannel, 0));
+            if (relativeGainMode) {
+                // RELATIVE: ±24dB offset
+                const float offset = (cv - 0.5f) * 48.0f;
+                gainDb = baseGainDb + offset;
+            } else {
+                // ABSOLUTE: CV directly sets gain (-24dB to +24dB)
+                gainDb = juce::jmap(cv, -24.0f, 24.0f);
+            }
+            gainDb = juce::jlimit(-24.0f, 24.0f, gainDb);
         }
     }
     setLiveParamValue("outputGain_live", gainDb);
@@ -284,6 +314,52 @@ void MultiBandShaperModuleProcessor::drawParametersInNode(
     ImGui::PopItemWidth();
     
     if (isGainModulated) { ImGui::EndDisabled(); ImGui::SameLine(); ImGui::TextUnformatted("(mod)"); }
+    
+    ImGui::Spacing();
+    ImGui::Separator();
+    ImGui::Spacing();
+
+    // === RELATIVE MODULATION SECTION ===
+    ImGui::TextColored(ImVec4(0.6f, 0.8f, 1.0f, 1.0f), "CV Input Modes (Per Band)");
+    ImGui::Spacing();
+    
+    // Show relative modulation checkboxes for each band in a compact two-column layout
+    const int numColumns = 2;
+    for (int i = 0; i < NUM_BANDS; ++i)
+    {
+        auto paramId = "relativeDriveMod_" + juce::String(i + 1);
+        bool relDriveMod = relativeDriveModParams[i] != nullptr && relativeDriveModParams[i]->load() > 0.5f;
+        
+        if (ImGui::Checkbox(("B" + juce::String(i + 1) + " Rel").toRawUTF8(), &relDriveMod))
+        {
+            if (auto* p = dynamic_cast<juce::AudioParameterBool*>(ap.getParameter(paramId)))
+                *p = relDriveMod;
+            juce::Logger::writeToLog("[MultiBandShaper UI] Band " + juce::String(i + 1) + " Relative: " + juce::String(relDriveMod ? "ON" : "OFF"));
+        }
+        if (ImGui::IsItemHovered())
+        {
+            ImGui::SetTooltip("Band %d: ON = CV modulates around slider (±3 oct)\nOFF = CV directly sets drive (0-100)", i + 1);
+        }
+        
+        // Add to next column or next row
+        if ((i + 1) % numColumns != 0 && i < NUM_BANDS - 1)
+            ImGui::SameLine();
+    }
+    
+    ImGui::Spacing();
+    
+    // Output Gain relative modulation
+    bool relativeGainMod = relativeGainModParam != nullptr && relativeGainModParam->load() > 0.5f;
+    if (ImGui::Checkbox("Relative Gain Mod", &relativeGainMod))
+    {
+        if (auto* p = dynamic_cast<juce::AudioParameterBool*>(ap.getParameter("relativeGainMod")))
+            *p = relativeGainMod;
+        juce::Logger::writeToLog("[MultiBandShaper UI] Relative Gain Mod: " + juce::String(relativeGainMod ? "ON" : "OFF"));
+    }
+    if (ImGui::IsItemHovered())
+    {
+        ImGui::SetTooltip("ON: CV modulates around slider (±24dB)\nOFF: CV directly sets gain (-24dB to +24dB)");
+    }
 }
 
 void MultiBandShaperModuleProcessor::drawIoPins(const NodePinHelpers& helpers)

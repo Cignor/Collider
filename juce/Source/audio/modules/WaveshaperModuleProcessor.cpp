@@ -8,6 +8,10 @@ juce::AudioProcessorValueTreeState::ParameterLayout WaveshaperModuleProcessor::c
         juce::NormalisableRange<float>(1.0f, 100.0f, 0.01f, 0.3f), 1.0f));
     p.push_back(std::make_unique<juce::AudioParameterChoice>("type", "Type",
         juce::StringArray{ "Soft Clip (tanh)", "Hard Clip", "Foldback" }, 0));
+    
+    // Relative modulation parameters
+    p.push_back(std::make_unique<juce::AudioParameterBool>("relativeDriveMod", "Relative Drive Mod", true));
+    
     return { p.begin(), p.end() };
 }
 
@@ -19,6 +23,7 @@ WaveshaperModuleProcessor::WaveshaperModuleProcessor()
 {
     driveParam = dynamic_cast<juce::AudioParameterFloat*>(apvts.getParameter("drive"));
     typeParam = dynamic_cast<juce::AudioParameterChoice*>(apvts.getParameter("type"));
+    relativeDriveModParam = apvts.getRawParameterValue("relativeDriveMod");
     
     // Initialize output value tracking for tooltips
     lastOutputValues.push_back(std::make_unique<std::atomic<float>>(0.0f)); // For Out L
@@ -39,6 +44,7 @@ void WaveshaperModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
     // Get base parameter values ONCE
     const float baseDrive = driveParam != nullptr ? driveParam->get() : 1.0f;
     const int baseType = typeParam != nullptr ? typeParam->getIndex() : 0;
+    const bool relativeDriveMode = relativeDriveModParam && relativeDriveModParam->load() > 0.5f;
     
     for (int ch = 0; ch < buffer.getNumChannels(); ++ch)
     {
@@ -49,10 +55,15 @@ void WaveshaperModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
             float drive = baseDrive;
             if (isDriveMod && driveCV != nullptr) {
                 const float cv = juce::jlimit(0.0f, 1.0f, driveCV[i]);
-                // ADDITIVE MODULATION FIX: Add CV offset to base drive value
-                const float octaveRange = 3.0f; // CV can modulate drive by +/- 3 octaves
-                const float octaveOffset = (cv - 0.5f) * octaveRange; // Center around 0, range [-1.5, +1.5] octaves
-                drive = baseDrive * std::pow(2.0f, octaveOffset);
+                if (relativeDriveMode) {
+                    // RELATIVE: ±3 octaves (0.125x to 8x)
+                    const float octaveRange = 3.0f;
+                    const float octaveOffset = (cv - 0.5f) * (octaveRange * 2.0f);
+                    drive = baseDrive * std::pow(2.0f, octaveOffset);
+                } else {
+                    // ABSOLUTE: CV directly sets drive (1-100)
+                    drive = juce::jmap(cv, 1.0f, 100.0f);
+                }
                 drive = juce::jlimit(1.0f, 100.0f, drive);
             }
             
@@ -85,9 +96,15 @@ void WaveshaperModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
     float finalDrive = baseDrive;
     if (isDriveMod && driveCV != nullptr) {
         const float cv = juce::jlimit(0.0f, 1.0f, driveCV[buffer.getNumSamples() - 1]);
-        const float octaveRange = 3.0f;
-        const float octaveOffset = (cv - 0.5f) * octaveRange;
-        finalDrive = baseDrive * std::pow(2.0f, octaveOffset);
+        if (relativeDriveMode) {
+            // RELATIVE: ±3 octaves
+            const float octaveRange = 3.0f;
+            const float octaveOffset = (cv - 0.5f) * (octaveRange * 2.0f);
+            finalDrive = baseDrive * std::pow(2.0f, octaveOffset);
+        } else {
+            // ABSOLUTE: CV directly sets drive
+            finalDrive = juce::jmap(cv, 1.0f, 100.0f);
+        }
         finalDrive = juce::jlimit(1.0f, 100.0f, finalDrive);
     }
     setLiveParamValue("drive_live", finalDrive);
@@ -149,6 +166,27 @@ void WaveshaperModuleProcessor::drawParametersInNode(float itemWidth, const std:
     if (isTypeModulated) { ImGui::EndDisabled(); ImGui::SameLine(); ImGui::TextUnformatted("(mod)"); }
     ImGui::SameLine();
     HelpMarker("Shaping algorithm:\nSoft Clip = smooth saturation\nHard Clip = digital clipping\nFoldback = wave folding distortion");
+
+    ImGui::Spacing();
+    ImGui::Separator();
+    ImGui::Spacing();
+
+    // === RELATIVE MODULATION SECTION ===
+    ImGui::TextColored(ImVec4(0.6f, 0.8f, 1.0f, 1.0f), "CV Input Modes");
+    ImGui::Spacing();
+    
+    // Relative Drive Mod checkbox
+    bool relativeDriveMod = relativeDriveModParam != nullptr && relativeDriveModParam->load() > 0.5f;
+    if (ImGui::Checkbox("Relative Drive Mod", &relativeDriveMod))
+    {
+        if (auto* p = dynamic_cast<juce::AudioParameterBool*>(ap.getParameter("relativeDriveMod")))
+            *p = relativeDriveMod;
+        juce::Logger::writeToLog("[Waveshaper UI] Relative Drive Mod: " + juce::String(relativeDriveMod ? "ON" : "OFF"));
+    }
+    if (ImGui::IsItemHovered())
+    {
+        ImGui::SetTooltip("ON: CV modulates around slider (±3 octaves)\nOFF: CV directly sets drive (1-100)");
+    }
 
     ImGui::PopItemWidth();
 }

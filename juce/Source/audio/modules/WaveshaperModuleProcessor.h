@@ -55,4 +55,7 @@ private:
     
     juce::AudioParameterFloat* driveParam { nullptr };
     juce::AudioParameterChoice* typeParam { nullptr };
+    
+    // Relative modulation parameters
+    std::atomic<float>* relativeDriveModParam { nullptr };
 };

@@ -82,6 +82,53 @@ public:
         HelpMarkerReverb("Dry/wet mix (0-1)\n0 = dry only, 1 = wet only");
 
         ImGui::Spacing();
+        ImGui::Separator();
+        ImGui::Spacing();
+
+        // === RELATIVE MODULATION SECTION ===
+        ImGui::TextColored(ImVec4(0.6f, 0.8f, 1.0f, 1.0f), "CV Input Modes");
+        ImGui::Spacing();
+        
+        // Relative Size Mod checkbox
+        bool relativeSizeMod = relativeSizeModParam != nullptr && relativeSizeModParam->load() > 0.5f;
+        if (ImGui::Checkbox("Relative Size Mod", &relativeSizeMod))
+        {
+            if (auto* p = dynamic_cast<juce::AudioParameterBool*>(ap.getParameter("relativeSizeMod")))
+                *p = relativeSizeMod;
+            juce::Logger::writeToLog("[Reverb UI] Relative Size Mod: " + juce::String(relativeSizeMod ? "ON" : "OFF"));
+        }
+        if (ImGui::IsItemHovered())
+        {
+            ImGui::SetTooltip("ON: CV modulates around slider value (±0.5)\nOFF: CV directly sets size (0-1)");
+        }
+        
+        // Relative Damp Mod checkbox
+        bool relativeDampMod = relativeDampModParam != nullptr && relativeDampModParam->load() > 0.5f;
+        if (ImGui::Checkbox("Relative Damp Mod", &relativeDampMod))
+        {
+            if (auto* p = dynamic_cast<juce::AudioParameterBool*>(ap.getParameter("relativeDampMod")))
+                *p = relativeDampMod;
+            juce::Logger::writeToLog("[Reverb UI] Relative Damp Mod: " + juce::String(relativeDampMod ? "ON" : "OFF"));
+        }
+        if (ImGui::IsItemHovered())
+        {
+            ImGui::SetTooltip("ON: CV modulates around slider value (±0.5)\nOFF: CV directly sets damp (0-1)");
+        }
+        
+        // Relative Mix Mod checkbox
+        bool relativeMixMod = relativeMixModParam != nullptr && relativeMixModParam->load() > 0.5f;
+        if (ImGui::Checkbox("Relative Mix Mod", &relativeMixMod))
+        {
+            if (auto* p = dynamic_cast<juce::AudioParameterBool*>(ap.getParameter("relativeMixMod")))
+                *p = relativeMixMod;
+            juce::Logger::writeToLog("[Reverb UI] Relative Mix Mod: " + juce::String(relativeMixMod ? "ON" : "OFF"));
+        }
+        if (ImGui::IsItemHovered())
+        {
+            ImGui::SetTooltip("ON: CV modulates around slider value (±0.5)\nOFF: CV directly sets mix (0-1)");
+        }
+
+        ImGui::Spacing();
         ImGui::Spacing();
 
         // === REVERB VISUALIZATION SECTION ===
@@ -161,6 +208,9 @@ private:
     std::atomic<float>* sizeParam { nullptr };
     std::atomic<float>* dampParam { nullptr };
     std::atomic<float>* mixParam { nullptr };
+    std::atomic<float>* relativeSizeModParam { nullptr };
+    std::atomic<float>* relativeDampModParam { nullptr };
+    std::atomic<float>* relativeMixModParam { nullptr };
 };
 
 

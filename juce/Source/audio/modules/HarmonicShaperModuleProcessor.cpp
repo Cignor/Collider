@@ -23,6 +23,10 @@ juce::AudioProcessorValueTreeState::ParameterLayout HarmonicShaperModuleProcesso
         params.push_back(std::make_unique<juce::AudioParameterFloat>("drive_" + idx, "Drive " + idx, 0.0f, 1.0f, 0.5f));
         params.push_back(std::make_unique<juce::AudioParameterFloat>("level_" + idx, "Level " + idx, 0.0f, 1.0f, i == 0 ? 1.0f : 0.0f));
     }
+    
+    // Relative modulation parameters
+    params.push_back(std::make_unique<juce::AudioParameterBool>("relativeFreqMod", "Relative Freq Mod", true));
+    params.push_back(std::make_unique<juce::AudioParameterBool>("relativeDriveMod", "Relative Drive Mod", true));
 
     return { params.begin(), params.end() };
 }
@@ -52,6 +56,9 @@ HarmonicShaperModuleProcessor::HarmonicShaperModuleProcessor()
         driveParams[i] = apvts.getRawParameterValue("drive_" + idx);
         levelParams[i] = apvts.getRawParameterValue("level_" + idx);
     }
+    
+    relativeFreqModParam = apvts.getRawParameterValue("relativeFreqMod");
+    relativeDriveModParam = apvts.getRawParameterValue("relativeDriveMod");
 }
 
 void HarmonicShaperModuleProcessor::prepareToPlay(double sampleRate, int samplesPerBlock)
@@ -82,6 +89,8 @@ void HarmonicShaperModuleProcessor::processBlock(juce::AudioBuffer<float>& buffe
     const float baseFrequency = masterFreqParam->load();
     const float baseMasterDrive = masterDriveParam->load();
     const float outputGain = outputGainParam->load();
+    const bool relativeFreqMode = relativeFreqModParam && relativeFreqModParam->load() > 0.5f;
+    const bool relativeDriveMode = relativeDriveModParam && relativeDriveModParam->load() > 0.5f;
     
     auto* outL = outBus.getWritePointer(0);
     auto* outR = outBus.getNumChannels() > 1 ? outBus.getWritePointer(1) : outL;
@@ -95,14 +104,31 @@ void HarmonicShaperModuleProcessor::processBlock(juce::AudioBuffer<float>& buffe
         float currentMasterFreq = baseFrequency;
         if (freqCV) {
             const float cv = juce::jlimit(0.0f, 1.0f, freqCV[i]);
-            const float spanOct = std::log2(20000.0f / 20.0f);
-            currentMasterFreq = 20.0f * std::pow(2.0f, cv * spanOct);
+            if (relativeFreqMode) {
+                // RELATIVE: ±4 octaves around base frequency
+                const float octaveOffset = (cv - 0.5f) * 8.0f;
+                currentMasterFreq = baseFrequency * std::pow(2.0f, octaveOffset);
+            } else {
+                // ABSOLUTE: CV directly sets frequency (20-20000 Hz)
+                const float spanOct = std::log2(20000.0f / 20.0f);
+                currentMasterFreq = 20.0f * std::pow(2.0f, cv * spanOct);
+            }
+            currentMasterFreq = juce::jlimit(20.0f, 20000.0f, currentMasterFreq);
         }
         smoothedMasterFreq.setTargetValue(currentMasterFreq);
 
         float currentMasterDrive = baseMasterDrive;
         if (driveCV) {
-            currentMasterDrive = juce::jlimit(0.0f, 1.0f, driveCV[i]);
+            const float cv = juce::jlimit(0.0f, 1.0f, driveCV[i]);
+            if (relativeDriveMode) {
+                // RELATIVE: ±0.5 offset
+                const float offset = (cv - 0.5f) * 1.0f;
+                currentMasterDrive = baseMasterDrive + offset;
+            } else {
+                // ABSOLUTE: CV directly sets drive
+                currentMasterDrive = cv;
+            }
+            currentMasterDrive = juce::jlimit(0.0f, 1.0f, currentMasterDrive);
         }
         smoothedMasterDrive.setTargetValue(currentMasterDrive);
         
@@ -260,6 +286,40 @@ void HarmonicShaperModuleProcessor::drawParametersInNode(float itemWidth, const 
         ImGui::PopItemWidth();
 
         ImGui::PopID();
+    }
+    
+    ImGui::Spacing();
+    ImGui::Separator();
+    ImGui::Spacing();
+
+    // === RELATIVE MODULATION SECTION ===
+    ImGui::TextColored(ImVec4(0.6f, 0.8f, 1.0f, 1.0f), "CV Input Modes");
+    ImGui::Spacing();
+    
+    // Relative Freq Mod checkbox
+    bool relativeFreqMod = relativeFreqModParam != nullptr && relativeFreqModParam->load() > 0.5f;
+    if (ImGui::Checkbox("Relative Freq Mod", &relativeFreqMod))
+    {
+        if (auto* p = dynamic_cast<juce::AudioParameterBool*>(ap.getParameter("relativeFreqMod")))
+            *p = relativeFreqMod;
+        juce::Logger::writeToLog("[HarmonicShaper UI] Relative Freq Mod: " + juce::String(relativeFreqMod ? "ON" : "OFF"));
+    }
+    if (ImGui::IsItemHovered())
+    {
+        ImGui::SetTooltip("ON: CV modulates around slider (±4 octaves)\nOFF: CV directly sets freq (20-20000 Hz)");
+    }
+    
+    // Relative Drive Mod checkbox
+    bool relativeDriveMod = relativeDriveModParam != nullptr && relativeDriveModParam->load() > 0.5f;
+    if (ImGui::Checkbox("Relative Drive Mod", &relativeDriveMod))
+    {
+        if (auto* p = dynamic_cast<juce::AudioParameterBool*>(ap.getParameter("relativeDriveMod")))
+            *p = relativeDriveMod;
+        juce::Logger::writeToLog("[HarmonicShaper UI] Relative Drive Mod: " + juce::String(relativeDriveMod ? "ON" : "OFF"));
+    }
+    if (ImGui::IsItemHovered())
+    {
+        ImGui::SetTooltip("ON: CV modulates around slider (±0.5)\nOFF: CV directly sets drive (0-1)");
     }
 }
 

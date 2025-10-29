@@ -9,6 +9,9 @@ ReverbModuleProcessor::ReverbModuleProcessor()
     sizeParam = apvts.getRawParameterValue ("size");
     dampParam = apvts.getRawParameterValue ("damp");
     mixParam  = apvts.getRawParameterValue ("mix");
+    relativeSizeModParam = apvts.getRawParameterValue("relativeSizeMod");
+    relativeDampModParam = apvts.getRawParameterValue("relativeDampMod");
+    relativeMixModParam = apvts.getRawParameterValue("relativeMixMod");
     
     // Initialize output value tracking for tooltips
     lastOutputValues.push_back(std::make_unique<std::atomic<float>>(0.0f)); // For Out L
@@ -21,6 +24,11 @@ juce::AudioProcessorValueTreeState::ParameterLayout ReverbModuleProcessor::creat
     p.push_back (std::make_unique<juce::AudioParameterFloat> ("size", "Size", juce::NormalisableRange<float> (0.0f, 1.0f), 0.5f));
     p.push_back (std::make_unique<juce::AudioParameterFloat> ("damp", "Damp", juce::NormalisableRange<float> (0.0f, 1.0f), 0.3f));
     p.push_back (std::make_unique<juce::AudioParameterFloat> ("mix",  "Mix",  juce::NormalisableRange<float> (0.0f, 1.0f), 0.8f));
+    
+    p.push_back (std::make_unique<juce::AudioParameterBool>("relativeSizeMod", "Relative Size Mod", true));
+    p.push_back (std::make_unique<juce::AudioParameterBool>("relativeDampMod", "Relative Damp Mod", true));
+    p.push_back (std::make_unique<juce::AudioParameterBool>("relativeMixMod", "Relative Mix Mod", true));
+    
     return { p.begin(), p.end() };
 }
 
@@ -97,38 +105,58 @@ void ReverbModuleProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce
         mixModCV = inBus.getReadPointer(4)[0]; // Read first sample from channel 4
     }
 
+    // Get base parameter values
+    const float baseSize = sizeParam != nullptr ? sizeParam->load() : 0.5f;
+    const float baseDamp = dampParam != nullptr ? dampParam->load() : 0.3f;
+    const float baseMix = mixParam != nullptr ? mixParam->load() : 0.8f;
+    const bool relativeSizeMode = relativeSizeModParam && relativeSizeModParam->load() > 0.5f;
+    const bool relativeDampMode = relativeDampModParam && relativeDampModParam->load() > 0.5f;
+    const bool relativeMixMode = relativeMixModParam && relativeMixModParam->load() > 0.5f;
+    
     // Apply modulation or use parameter values
-    float size = 0.0f;
-    if (isParamInputConnected("size")) // Size Mod bus connected
+    float size = baseSize;
+    if (isParamInputConnected("size"))
     {
-        // Map CV [0,1] to size [0, 1]
-        size = sizeModCV;
-    }
-    else
-    {
-        size = sizeParam != nullptr ? sizeParam->load() : 0.5f;
-    }
-    
-    float damp = 0.0f;
-    if (isParamInputConnected("damp")) // Damp Mod bus connected
-    {
-        // Map CV [0,1] to damp [0, 1]
-        damp = dampModCV;
-    }
-    else
-    {
-        damp = dampParam != nullptr ? dampParam->load() : 0.3f;
+        const float cv = juce::jlimit(0.0f, 1.0f, sizeModCV);
+        if (relativeSizeMode) {
+            // RELATIVE: CV adds offset to base size (±0.5)
+            const float offset = (cv - 0.5f) * 1.0f;
+            size = baseSize + offset;
+        } else {
+            // ABSOLUTE: CV directly sets size
+            size = cv;
+        }
+        size = juce::jlimit(0.0f, 1.0f, size);
     }
     
-    float mix = 0.0f;
-    if (isParamInputConnected("mix")) // Mix Mod bus connected
+    float damp = baseDamp;
+    if (isParamInputConnected("damp"))
     {
-        // Map CV [0,1] to mix [0, 1]
-        mix = mixModCV;
+        const float cv = juce::jlimit(0.0f, 1.0f, dampModCV);
+        if (relativeDampMode) {
+            // RELATIVE: CV adds offset to base damp (±0.5)
+            const float offset = (cv - 0.5f) * 1.0f;
+            damp = baseDamp + offset;
+        } else {
+            // ABSOLUTE: CV directly sets damp
+            damp = cv;
+        }
+        damp = juce::jlimit(0.0f, 1.0f, damp);
     }
-    else
+    
+    float mix = baseMix;
+    if (isParamInputConnected("mix"))
     {
-        mix = mixParam != nullptr ? mixParam->load() : 0.8f;
+        const float cv = juce::jlimit(0.0f, 1.0f, mixModCV);
+        if (relativeMixMode) {
+            // RELATIVE: CV adds offset to base mix (±0.5)
+            const float offset = (cv - 0.5f) * 1.0f;
+            mix = baseMix + offset;
+        } else {
+            // ABSOLUTE: CV directly sets mix
+            mix = cv;
+        }
+        mix = juce::jlimit(0.0f, 1.0f, mix);
     }
     
     // Clamp parameters to valid ranges

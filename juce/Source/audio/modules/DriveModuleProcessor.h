@@ -40,5 +40,7 @@ private:
     // Cached atomic pointers to parameters
     std::atomic<float>* driveParam { nullptr };
     std::atomic<float>* mixParam { nullptr };
+    std::atomic<float>* relativeDriveModParam { nullptr };
+    std::atomic<float>* relativeMixModParam { nullptr };
 };
 

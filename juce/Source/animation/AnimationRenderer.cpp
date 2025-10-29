@@ -92,13 +92,24 @@ void AnimationRenderer::render(const std::vector<glm::mat4>& finalBoneMatrices)
     // --- DRAW OUR SCENE ---
     glUseProgram(shaderProgramID);
 
-    // Set up projection matrix (zoom and pan controlled by m_zoom and m_pan)
+    // 1. Set up orthographic projection matrix (zoom and pan controlled by m_zoom and m_pan)
     glm::mat4 projection = glm::ortho(
         -m_zoom + m_pan.x, m_zoom + m_pan.x,
         -m_zoom + m_pan.y, m_zoom + m_pan.y,
         -10.0f, 10.0f
     );
-    glUniformMatrix4fv(glGetUniformLocation(shaderProgramID, "projection"), 1, GL_FALSE, &projection[0][0]);
+
+    // 2. Create the view matrix from our rotation angles
+    glm::mat4 view = glm::mat4(1.0f);
+    view = glm::rotate(view, m_viewRotation.x, glm::vec3(1.0f, 0.0f, 0.0f)); // X-axis rotation
+    view = glm::rotate(view, m_viewRotation.y, glm::vec3(0.0f, 1.0f, 0.0f)); // Y-axis rotation
+    view = glm::rotate(view, m_viewRotation.z, glm::vec3(0.0f, 0.0f, 1.0f)); // Z-axis rotation
+
+    // 3. Combine them into a final projection-view matrix
+    glm::mat4 projectionView = projection * view;
+
+    // 4. Send the combined matrix to the shader's 'projection' uniform
+    glUniformMatrix4fv(glGetUniformLocation(shaderProgramID, "projection"), 1, GL_FALSE, &projectionView[0][0]);
 
     // Send the bone matrices to the shader
     glUniformMatrix4fv(glGetUniformLocation(shaderProgramID, "boneMatrices"), 

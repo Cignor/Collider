@@ -60,5 +60,12 @@ private:
     std::atomic<float>* centreHzParam { nullptr };
     std::atomic<float>* feedbackParam { nullptr };
     std::atomic<float>* mixParam { nullptr };
+    
+    // Relative modulation parameters
+    std::atomic<float>* relativeRateModParam { nullptr };
+    std::atomic<float>* relativeDepthModParam { nullptr };
+    std::atomic<float>* relativeCentreModParam { nullptr };
+    std::atomic<float>* relativeFeedbackModParam { nullptr };
+    std::atomic<float>* relativeMixModParam { nullptr };
 };
 

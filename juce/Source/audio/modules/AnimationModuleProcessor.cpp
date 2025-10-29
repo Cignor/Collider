@@ -4,7 +4,7 @@
 
 AnimationModuleProcessor::AnimationModuleProcessor()
     : ModuleProcessor(BusesProperties()
-                        .withOutput("Output", juce::AudioChannelSet::discreteChannels(5), true)), // X Pos, Y Pos, X Vel, Y Vel, Ground Trigger
+                        .withOutput("Output", juce::AudioChannelSet::discreteChannels(6), true)), // L Foot Vel X/Y, L Hit, R Foot Vel X/Y, R Hit
       apvts(*this, nullptr, "AnimationParams", {})
 {
     // Constructor: m_AnimationData and m_Animator are nullptrs initially.
@@ -12,6 +12,13 @@ AnimationModuleProcessor::AnimationModuleProcessor()
     
     // Register this class to listen for changes from our file loader
     m_fileLoader.addChangeListener(this);
+    
+    // Initialize tracked bones (using operator[] which default-constructs the struct)
+    m_trackedBones["LeftFoot"];
+    m_trackedBones["LeftFoot"].name = "LeftFoot";
+    
+    m_trackedBones["RightFoot"];
+    m_trackedBones["RightFoot"].name = "RightFoot";
     
     // DEBUG: Verify output channel count
     juce::Logger::writeToLog("[AnimationModule] Constructor: getTotalNumOutputChannels() = " + 
@@ -81,43 +88,46 @@ void AnimationModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, ju
     
     // Clear the output buffer first
     buffer.clear();
-    
-    // --- OUTPUT KINEMATIC DATA ---
-    // Load the thread-safe atomic values
-    float posX = m_outputPosX.load();
-    float posY = m_outputPosY.load();
-    float velX = m_outputVelX.load();
-    float velY = m_outputVelY.load();
-    
-    // Debug logging removed - was causing "string too long" exceptions in audio thread
 
-    // Write the values to the corresponding output buffers (first sample of each channel)
-    if (buffer.getNumChannels() >= 5 && buffer.getNumSamples() > 0)
+    // --- OUTPUT KINEMATIC DATA FOR BOTH FEET ---
+    if (buffer.getNumChannels() >= 6 && buffer.getNumSamples() > 0)
     {
-        buffer.setSample(0, 0, posX); // Output 0: X Position
-        buffer.setSample(1, 0, posY); // Output 1: Y Position
-        buffer.setSample(2, 0, velX); // Output 2: X Velocity
-        buffer.setSample(3, 0, velY); // Output 3: Y Velocity
+        // Load atomic values for both feet
+        float lVelX = m_trackedBones.at("LeftFoot").velX.load();
+        float lVelY = m_trackedBones.at("LeftFoot").velY.load();
+        float rVelX = m_trackedBones.at("RightFoot").velX.load();
+        float rVelY = m_trackedBones.at("RightFoot").velY.load();
+
+        // Handle ground triggers (single sample pulses)
+        bool lFootHit = m_trackedBones.at("LeftFoot").triggerState.load();
+        bool rFootHit = m_trackedBones.at("RightFoot").triggerState.load();
         
-        // Output 4: Ground Trigger (single sample pulse)
-        if (m_triggerState.load())
+        if (lFootHit)
         {
-            buffer.setSample(4, 0, 1.0f); // Send trigger pulse
-            m_triggerState.store(false);  // Reset immediately
-        }
-        else
-        {
-            buffer.setSample(4, 0, 0.0f);
+            buffer.setSample(2, 0, 1.0f); // Left foot trigger
+            m_trackedBones.at("LeftFoot").triggerState.store(false); // Reset
         }
         
-        // Fill the rest of the buffer with the same values (DC signals for channels 0-3, silence for trigger)
-        for (int sample = 1; sample < buffer.getNumSamples(); ++sample)
+        if (rFootHit)
         {
-            buffer.setSample(0, sample, posX);
-            buffer.setSample(1, sample, posY);
-            buffer.setSample(2, sample, velX);
-            buffer.setSample(3, sample, velY);
-            buffer.setSample(4, sample, 0.0f); // Trigger only on first sample
+            buffer.setSample(5, 0, 1.0f); // Right foot trigger
+            m_trackedBones.at("RightFoot").triggerState.store(false); // Reset
+        }
+
+        // Write DC velocity signals and clear trigger pulses for remaining samples
+        for (int sample = 0; sample < buffer.getNumSamples(); ++sample)
+        {
+            buffer.setSample(0, sample, lVelX);
+            buffer.setSample(1, sample, lVelY);
+            buffer.setSample(3, sample, rVelX);
+            buffer.setSample(4, sample, rVelY);
+            
+            // Triggers only on first sample, then silence
+            if (sample > 0)
+            {
+                buffer.setSample(2, sample, 0.0f);
+                buffer.setSample(5, sample, 0.0f);
+            }
         }
     }
 }
@@ -253,6 +263,29 @@ void AnimationModuleProcessor::setupAnimationFromRawData(std::unique_ptr<RawAnim
     }
     juce::Logger::writeToLog("AnimationModule: Cached " + juce::String((int)m_cachedBoneNames.size()) + " bone names for UI.");
     
+    // Find and cache foot bone IDs for dedicated outputs
+    for (auto& pair : m_trackedBones)
+    {
+        pair.second.boneId = -1; // Reset
+    }
+    
+    for (const auto& pair : m_stagedAnimationData->boneInfoMap)
+    {
+        const std::string& boneName = pair.first;
+        const BoneInfo& boneInfo = pair.second;
+
+        if (juce::String(boneName).endsWithIgnoreCase("LeftFoot"))
+        {
+            m_trackedBones["LeftFoot"].boneId = boneInfo.id;
+            juce::Logger::writeToLog("AnimationModule: Found Left Foot bone: '" + juce::String(boneName) + "' with ID " + juce::String(boneInfo.id));
+        }
+        else if (juce::String(boneName).endsWithIgnoreCase("RightFoot"))
+        {
+            m_trackedBones["RightFoot"].boneId = boneInfo.id;
+            juce::Logger::writeToLog("AnimationModule: Found Right Foot bone: '" + juce::String(boneName) + "' with ID " + juce::String(boneInfo.id));
+        }
+    }
+    
     juce::Logger::writeToLog("AnimationModule: Preparing to swap animation data...");
     
     // 1. Release the raw pointer for the new animator from its unique_ptr.
@@ -289,7 +322,6 @@ void AnimationModuleProcessor::setupAnimationFromRawData(std::unique_ptr<RawAnim
     // Reset UI state now that new data is active
     m_selectedBoneIndex = -1;
     m_selectedBoneName = "None";
-    m_isFirstFrame = true;
     
     juce::Logger::writeToLog("AnimationModule: Animation atomically swapped and ready for audio thread!");
 }
@@ -472,9 +504,22 @@ void AnimationModuleProcessor::drawParametersInNode(float itemWidth,
         ImGui::SliderFloat("Pan X", &m_panX, -20.0f, 20.0f, "%.1f");
         ImGui::SliderFloat("Pan Y", &m_panY, -20.0f, 20.0f, "%.1f");
         
-        // Frame view button - auto-calculates optimal zoom and pan
-        if (ImGui::Button("Frame View", ImVec2(itemWidth, 0)))
+        // View rotation controls
+        ImGui::Text("View Rotation:");
+        ImGui::PushItemWidth(itemWidth / 3.0f - 5.0f); // Adjust width for 3 buttons side-by-side
+        if (ImGui::Button("Rot X")) { m_viewRotationX += glm::radians(90.0f); }
+        ImGui::SameLine();
+        if (ImGui::Button("Rot Y")) { m_viewRotationY += glm::radians(90.0f); }
+        ImGui::SameLine();
+        if (ImGui::Button("Rot Z")) { m_viewRotationZ += glm::radians(90.0f); }
+        ImGui::PopItemWidth();
+
+        // Reset view button - resets rotation and frames the animation
+        if (ImGui::Button("Reset View", ImVec2(itemWidth, 0)))
         {
+            m_viewRotationX = 0.0f;
+            m_viewRotationY = 0.0f;
+            m_viewRotationZ = 0.0f;
             if (currentAnimator != nullptr)
             {
                 glm::vec2 newPan;
@@ -492,6 +537,7 @@ void AnimationModuleProcessor::drawParametersInNode(float itemWidth,
         // Pass the latest values to the renderer before drawing
         m_Renderer->setZoom(m_zoom);
         m_Renderer->setPan({m_panX, m_panY});
+        m_Renderer->setViewRotation({m_viewRotationX, m_viewRotationY, m_viewRotationZ});
         
         // Define the size of our viewport
         const ImVec2 viewportSize(200, 200);
@@ -531,58 +577,63 @@ void AnimationModuleProcessor::drawParametersInNode(float itemWidth,
         ImVec2 p2 = ImGui::GetItemRectMax();
         drawList->AddLine(ImVec2(p1.x, p1.y + m_groundY), ImVec2(p2.x, p1.y + m_groundY), IM_COL32(255, 0, 0, 255), 2.0f);
         
-        // --- KINEMATIC CALCULATION BLOCK ---
-        if (m_selectedBoneID != -1 && currentAnimator != nullptr)
+        // --- KINEMATIC CALCULATION BLOCK FOR BOTH FEET ---
+        for (auto& pair : m_trackedBones)
         {
-            // 1. Get the bone's world matrix using the cached bone ID (thread-safe!)
-            const auto& worldTransforms = currentAnimator->GetBoneWorldTransforms();
-            
-            if (m_selectedBoneID >= 0 && m_selectedBoneID < worldTransforms.size())
+            TrackedBone& bone = pair.second;
+
+            if (bone.boneId != -1 && currentAnimator != nullptr)
             {
-                glm::mat4 worldMatrix = worldTransforms[m_selectedBoneID];
-                glm::vec3 worldPos = worldMatrix[3];
-
-                // 2. Recreate the same projection used by the renderer
-                glm::mat4 projection = glm::ortho(-m_zoom + m_panX, m_zoom + m_panX, -m_zoom + m_panY, m_zoom + m_panY, -10.0f, 10.0f);
-                glm::mat4 view = glm::mat4(1.0f); // Identity view matrix
-
-                // 3. Project to screen space
-                ImVec2 viewportPos = ImGui::GetItemRectMin();
-                glm::vec2 currentScreenPos = worldToScreen(worldPos, view, projection, viewportPos, viewportSize);
-
-                // 4. Ground trigger detection
-                bool isBoneBelowGround = currentScreenPos.y > (viewportPos.y + m_groundY);
-                if (isBoneBelowGround && !m_wasBoneBelowGround)
+                const auto& worldTransforms = currentAnimator->GetBoneWorldTransforms();
+                if (bone.boneId >= 0 && bone.boneId < worldTransforms.size())
                 {
-                    // The bone just crossed the line from above, send a trigger
-                    m_triggerState.store(true);
-                }
-                m_wasBoneBelowGround = isBoneBelowGround;
+                    glm::mat4 worldMatrix = worldTransforms[bone.boneId];
+                    glm::vec3 worldPos = worldMatrix[3];
 
-                // 5. Calculate velocity
-                if (m_isFirstFrame)
-                {
-                    m_lastScreenPos = currentScreenPos;
-                    m_isFirstFrame = false;
-                }
-                float deltaTime = ImGui::GetIO().DeltaTime;
-                glm::vec2 velocity(0.0f);
-                if (deltaTime > 0.0f)
-                {
-                    velocity = (currentScreenPos - m_lastScreenPos) / deltaTime;
-                }
-                m_lastScreenPos = currentScreenPos;
+                    // Recreate the projection and view matrices used by the renderer
+                    glm::mat4 projection = glm::ortho(-m_zoom + m_panX, m_zoom + m_panX, -m_zoom + m_panY, m_zoom + m_panY, -10.0f, 10.0f);
+                    glm::mat4 view = glm::mat4(1.0f);
+                    view = glm::rotate(view, m_viewRotationX, glm::vec3(1.0f, 0.0f, 0.0f));
+                    view = glm::rotate(view, m_viewRotationY, glm::vec3(0.0f, 1.0f, 0.0f));
+                    view = glm::rotate(view, m_viewRotationZ, glm::vec3(0.0f, 0.0f, 1.0f));
 
-                // 6. Store results in atomics for the audio thread
-                m_outputPosX.store(currentScreenPos.x);
-                m_outputPosY.store(currentScreenPos.y);
-                m_outputVelX.store(velocity.x);
-                m_outputVelY.store(velocity.y);
+                    // Project to screen space
+                    ImVec2 viewportPos = ImGui::GetItemRectMin();
+                    glm::vec2 currentScreenPos = worldToScreen(worldPos, view, projection, viewportPos, viewportSize);
+
+                    // Ground trigger detection
+                    bool isBoneBelowGround = currentScreenPos.y > (viewportPos.y + m_groundY);
+                    if (isBoneBelowGround && !bone.wasBelowGround)
+                    {
+                        bone.triggerState.store(true);
+                    }
+                    bone.wasBelowGround = isBoneBelowGround;
+
+                    // Calculate velocity
+                    if (bone.isFirstFrame)
+                    {
+                        bone.lastScreenPos = currentScreenPos;
+                        bone.isFirstFrame = false;
+                    }
+                    float deltaTime = ImGui::GetIO().DeltaTime;
+                    glm::vec2 velocity(0.0f);
+                    if (deltaTime > 0.0f)
+                    {
+                        velocity = (currentScreenPos - bone.lastScreenPos) / deltaTime;
+                    }
+                    bone.lastScreenPos = currentScreenPos;
+
+                    // Store results in this bone's specific atomics
+                    bone.velX.store(velocity.x);
+                    bone.velY.store(velocity.y);
+                }
             }
-        }
-        else {
-            m_wasBoneBelowGround = false; // Reset trigger state
-            m_isFirstFrame = true; // Reset when no bone is selected
+            else
+            {
+                // Reset state if this bone isn't found in the current animation
+                bone.wasBelowGround = false;
+                bone.isFirstFrame = true;
+            }
         }
     }
     else
@@ -598,20 +649,98 @@ void AnimationModuleProcessor::drawParametersInNode(float itemWidth,
 
 bool AnimationModuleProcessor::isBusesLayoutSupported(const BusesLayout& layouts) const
 {
-    // We support 5 discrete output channels (X/Y position, X/Y velocity, and ground trigger), and no inputs.
-    return layouts.getMainOutputChannelSet() == juce::AudioChannelSet::discreteChannels(5)
+    // We support 6 discrete output channels (L/R foot velocities and ground triggers), and no inputs.
+    return layouts.getMainOutputChannelSet() == juce::AudioChannelSet::discreteChannels(6)
            && layouts.getMainInputChannelSet() == juce::AudioChannelSet::disabled();
 }
 
 std::vector<DynamicPinInfo> AnimationModuleProcessor::getDynamicOutputPins() const
 {
-    // Define our 5 output pins for the Animation module
+    // Define our 6 output pins for the Animation module
     return {
-        { "Pos X",      0, PinDataType::CV },    // Selected bone X position
-        { "Pos Y",      1, PinDataType::CV },    // Selected bone Y position
-        { "Vel X",      2, PinDataType::CV },    // Selected bone X velocity
-        { "Vel Y",      3, PinDataType::CV },    // Selected bone Y velocity
-        { "Ground Hit", 4, PinDataType::Gate }   // Ground trigger (pulse when bone crosses ground line)
+        { "L Foot Vel X",  0, PinDataType::CV },    // Left foot X velocity
+        { "L Foot Vel Y",  1, PinDataType::CV },    // Left foot Y velocity
+        { "L Foot Hit",    2, PinDataType::Gate },  // Left foot ground trigger
+        { "R Foot Vel X",  3, PinDataType::CV },    // Right foot X velocity
+        { "R Foot Vel Y",  4, PinDataType::CV },    // Right foot Y velocity
+        { "R Foot Hit",    5, PinDataType::Gate }   // Right foot ground trigger
     };
+}
+
+// === State Management (for saving/loading presets) ===
+
+juce::ValueTree AnimationModuleProcessor::getExtraStateTree() const
+{
+    // This function is called by the synth when saving a preset.
+    // We create a ValueTree to hold our module's unique state.
+    juce::ValueTree state("AnimationModuleState");
+
+    // 1. Save the absolute path of the currently loaded animation file.
+    state.setProperty("animationFilePath", m_fileLoader.getLoadedFilePath(), nullptr);
+
+    // 2. Save the viewport/camera settings.
+    state.setProperty("zoom", m_zoom, nullptr);
+    state.setProperty("panX", m_panX, nullptr);
+    state.setProperty("panY", m_panY, nullptr);
+    state.setProperty("groundY", m_groundY, nullptr);
+    state.setProperty("viewRotationX", m_viewRotationX, nullptr);
+    state.setProperty("viewRotationY", m_viewRotationY, nullptr);
+    state.setProperty("viewRotationZ", m_viewRotationZ, nullptr);
+
+    // 3. Save the name of the currently selected bone.
+    state.setProperty("selectedBoneName", juce::String(m_selectedBoneName), nullptr);
+
+    juce::Logger::writeToLog("[AnimationModule] Saving state: file='" + 
+                              m_fileLoader.getLoadedFilePath() + 
+                              "', bone='" + juce::String(m_selectedBoneName) + "'");
+    
+    return state;
+}
+
+void AnimationModuleProcessor::setExtraStateTree(const juce::ValueTree& state)
+{
+    // This function is called by the synth when loading a preset.
+    // We restore our state from the provided ValueTree.
+    
+    if (!state.hasType("AnimationModuleState"))
+        return;
+
+    juce::Logger::writeToLog("[AnimationModule] Loading state from preset...");
+
+    // 1. Restore the viewport/camera settings.
+    m_zoom = state.getProperty("zoom", 10.0f);
+    m_panX = state.getProperty("panX", 0.0f);
+    m_panY = state.getProperty("panY", 0.0f);
+    m_groundY = state.getProperty("groundY", 180.0f);
+    m_viewRotationX = state.getProperty("viewRotationX", 0.0f);
+    m_viewRotationY = state.getProperty("viewRotationY", 0.0f);
+    m_viewRotationZ = state.getProperty("viewRotationZ", 0.0f);
+
+    // 2. Restore the selected bone name. The UI will pick this up on the next frame.
+    m_selectedBoneName = state.getProperty("selectedBoneName", "None").toString().toStdString();
+    
+    // 3. Load the animation file from the saved path.
+    juce::String filePath = state.getProperty("animationFilePath", "").toString();
+    
+    if (filePath.isNotEmpty())
+    {
+        juce::File fileToLoad(filePath);
+        
+        if (fileToLoad.existsAsFile())
+        {
+            // We use our existing non-blocking loader to load the file in the background.
+            // The UI will remain responsive while this happens.
+            juce::Logger::writeToLog("[AnimationModule] Restoring animation from preset: " + fileToLoad.getFullPathName());
+            m_fileLoader.startLoadingFile(fileToLoad);
+        }
+        else
+        {
+            juce::Logger::writeToLog("[AnimationModule] Warning: Animation file not found at: " + filePath);
+        }
+    }
+    else
+    {
+        juce::Logger::writeToLog("[AnimationModule] No animation file path in preset.");
+    }
 }
 

@@ -7,6 +7,7 @@ VCAModuleProcessor::VCAModuleProcessor()
       apvts(*this, nullptr, "VCAParams", createParameterLayout())
 {
     gainParam = apvts.getRawParameterValue("gain");
+    relativeGainModParam = apvts.getRawParameterValue("relativeGainMod");
     
     // Initialize output value tracking for tooltips
     lastOutputValues.push_back(std::make_unique<std::atomic<float>>(0.0f)); // For Out L
@@ -20,6 +21,9 @@ juce::AudioProcessorValueTreeState::ParameterLayout VCAModuleProcessor::createPa
     params.push_back(std::make_unique<juce::AudioParameterFloat>(
         "gain", "Gain",
         juce::NormalisableRange<float>(-60.0f, 6.0f, 0.1f), 0.0f));
+
+    params.push_back(std::make_unique<juce::AudioParameterBool>(
+        "relativeGainMod", "Relative Gain Mod", true));
 
     return { params.begin(), params.end() };
 }
@@ -35,14 +39,18 @@ void VCAModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::Mi
     juce::ignoreUnused(midi);
     
     // Read CV from unified input bus (if connected)
-    float gainModCV = 1.0f; // Default to no modulation
+    float gainModCV = 0.5f; // Default to neutral (0.5 for relative mode)
+    const bool isGainMod = isParamInputConnected("gain");
     
-    if (isParamInputConnected("gain"))
+    if (isGainMod)
     {
         const auto& inBus = getBusBuffer(buffer, true, 0);
         if (inBus.getNumChannels() > 2)
             gainModCV = inBus.getReadPointer(2)[0]; // Read first sample from channel 2
     }
+    
+    const float baseGainDb = gainParam != nullptr ? gainParam->load() : 0.0f;
+    const bool relativeMode = relativeGainModParam && relativeGainModParam->load() > 0.5f;
     
     // Process sample by sample to apply modulation
     for (int channel = 0; channel < buffer.getNumChannels(); ++channel)
@@ -50,21 +58,47 @@ void VCAModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::Mi
         float* channelData = buffer.getWritePointer(channel);
         for (int i = 0; i < buffer.getNumSamples(); ++i)
         {
-            // Get base gain from the dB parameter
-            const float gainFromParam = juce::Decibels::decibelsToGain(gainParam != nullptr ? gainParam->load() : 0.0f);
+            float finalGainDb = baseGainDb;
             
-            // Use CV modulation (0-1 range)
-            const float finalGain = gainFromParam * gainModCV;
+            if (isGainMod)
+            {
+                const float cv = juce::jlimit(0.0f, 1.0f, gainModCV);
+                
+                if (relativeMode)
+                {
+                    // RELATIVE: CV modulates around base gain (±30dB range)
+                    const float dbOffset = (cv - 0.5f) * 60.0f; // ±30dB
+                    finalGainDb = baseGainDb + dbOffset;
+                }
+                else
+                {
+                    // ABSOLUTE: CV directly maps to full gain range (-60dB to +6dB)
+                    finalGainDb = juce::jmap(cv, -60.0f, 6.0f);
+                }
+            }
+            
+            finalGainDb = juce::jlimit(-60.0f, 6.0f, finalGainDb);
+            const float finalGain = juce::Decibels::decibelsToGain(finalGainDb);
             channelData[i] *= finalGain;
         }
     }
     
     // Store live modulated values for UI display
-    const float gainFromParam = juce::Decibels::decibelsToGain(gainParam != nullptr ? gainParam->load() : 0.0f);
-    const float finalGainDb = isParamInputConnected("gain") ? 
-        juce::Decibels::gainToDecibels(gainFromParam * gainModCV) : 
-        (gainParam != nullptr ? gainParam->load() : 0.0f);
-    setLiveParamValue("gain_live", finalGainDb);
+    float displayGainDb = baseGainDb;
+    if (isGainMod)
+    {
+        const float cv = juce::jlimit(0.0f, 1.0f, gainModCV);
+        if (relativeMode)
+        {
+            const float dbOffset = (cv - 0.5f) * 60.0f;
+            displayGainDb = baseGainDb + dbOffset;
+        }
+        else
+        {
+            displayGainDb = juce::jmap(cv, -60.0f, 6.0f);
+        }
+    }
+    setLiveParamValue("gain_live", juce::jlimit(-60.0f, 6.0f, displayGainDb));
 
     // Update output values for tooltips
     if (lastOutputValues.size() >= 2)

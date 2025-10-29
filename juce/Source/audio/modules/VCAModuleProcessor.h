@@ -37,6 +37,22 @@ public:
         if (ImGui::IsItemDeactivatedAfterEdit()) { onModificationEnded(); }
         if (isGainModulated) { ImGui::EndDisabled(); ImGui::SameLine(); ImGui::TextUnformatted("(mod)"); }
 
+        ImGui::Spacing();
+        ImGui::Spacing();
+
+        // Modulation mode
+        bool relativeGainMod = relativeGainModParam ? (relativeGainModParam->load() > 0.5f) : true;
+        if (ImGui::Checkbox("Relative Gain Mod", &relativeGainMod))
+        {
+            if (auto* p = dynamic_cast<juce::AudioParameterBool*>(ap.getParameter("relativeGainMod")))
+            {
+                *p = relativeGainMod;
+                juce::Logger::writeToLog("[VCA UI] Relative Gain Mod changed to: " + juce::String(relativeGainMod ? "TRUE" : "FALSE"));
+            }
+        }
+        if (ImGui::IsItemDeactivatedAfterEdit()) onModificationEnded();
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip("Relative: CV modulates around slider gain (±30dB)\nAbsolute: CV directly controls gain (-60dB to +6dB, ignores slider)");
+
         ImGui::PopItemWidth();
     }
 
@@ -82,6 +98,7 @@ private:
     juce::dsp::Gain<float> gain;
 
     std::atomic<float>* gainParam = nullptr;
+    std::atomic<float>* relativeGainModParam = nullptr;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (VCAModuleProcessor)
 };
