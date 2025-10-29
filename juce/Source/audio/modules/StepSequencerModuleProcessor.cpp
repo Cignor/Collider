@@ -213,6 +213,7 @@ void StepSequencerModuleProcessor::processBlock (juce::AudioBuffer<float>& buffe
     const int baseSteps = numStepsParam != nullptr ? (int) numStepsParam->load() : 8;
     const int boundMax = stepsModMaxParam != nullptr ? juce::jlimit (1, MAX_STEPS, (int) stepsModMaxParam->load()) : MAX_STEPS;
     const float gateThreshold = gateThresholdParam != nullptr ? juce::jlimit(0.0f, 1.0f, gateThresholdParam->load()) : 0.5f;
+    
 
     // --- UI Telemetry Bootstrap ---
     // Publish per-step live values for ALL steps this block (use first-sample snapshot)
@@ -269,8 +270,10 @@ void StepSequencerModuleProcessor::processBlock (juce::AudioBuffer<float>& buffe
         int activeSteps = baseSteps;
         if (isStepsMod && stepsCV != nullptr) {
             const float cv = juce::jlimit(0.0f, 1.0f, stepsCV[i]);
-            const int mapped = 1 + (int) std::round(cv * (MAX_STEPS - 1));
-            activeSteps = juce::jlimit(1, boundMax, mapped);
+            // CV adds/subtracts steps around base (±8 steps)
+            const int offset = (int)std::round((cv - 0.5f) * 16.0f);
+            activeSteps = baseSteps + offset;
+            activeSteps = juce::jlimit(1, boundMax, activeSteps);
         }
         // FIX: clamp playhead immediately when steps shrink
         if (currentStep.load() >= activeSteps)
@@ -279,15 +282,20 @@ void StepSequencerModuleProcessor::processBlock (juce::AudioBuffer<float>& buffe
         float rate = baseRate;
         if (isRateMod && rateCV != nullptr) {
             const float cv = juce::jlimit(0.0f, 1.0f, rateCV[i]);
-            const float modRateHz = 0.01f + cv * (50.0f - 0.01f);
-            rate = modRateHz;
+            // CV modulates ±2 octaves (0.25x to 4x)
+            const float octaveOffset = (cv - 0.5f) * 4.0f;
+            rate = baseRate * std::pow(2.0f, octaveOffset);
+            rate = juce::jlimit(0.1f, 20.0f, rate);
         }
         lastRateLive = rate;
         
         float gateLen = baseGate;
         if (isGateLenMod && gateLenCV != nullptr) {
             const float cv = juce::jlimit(0.0f, 1.0f, gateLenCV[i]);
-            gateLen = juce::jlimit(0.0f, 1.0f, cv);
+            // CV adds offset to base gate length (±0.5)
+            const float offset = (cv - 0.5f) * 1.0f;
+            gateLen = baseGate + offset;
+            gateLen = juce::jlimit(0.0f, 1.0f, gateLen);
         }
         lastGateLive = gateLen;
         

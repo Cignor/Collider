@@ -57,5 +57,12 @@ private:
     std::atomic<float>* attackParam { nullptr };
     std::atomic<float>* releaseParam { nullptr };
     std::atomic<float>* makeupParam { nullptr };
+    
+    // Relative modulation parameters
+    std::atomic<float>* relativeThresholdModParam { nullptr };
+    std::atomic<float>* relativeRatioModParam { nullptr };
+    std::atomic<float>* relativeAttackModParam { nullptr };
+    std::atomic<float>* relativeReleaseModParam { nullptr };
+    std::atomic<float>* relativeMakeupModParam { nullptr };
 };
 

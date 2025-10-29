@@ -10,6 +10,13 @@ juce::AudioProcessorValueTreeState::ParameterLayout CompressorModuleProcessor::c
     params.push_back(std::make_unique<juce::AudioParameterFloat>(paramIdRelease, "Release", 5.0f, 1000.0f, 100.0f));
     params.push_back(std::make_unique<juce::AudioParameterFloat>(paramIdMakeup, "Makeup Gain", -12.0f, 12.0f, 0.0f));
     
+    // Relative modulation parameters
+    params.push_back(std::make_unique<juce::AudioParameterBool>("relativeThresholdMod", "Relative Threshold Mod", true));
+    params.push_back(std::make_unique<juce::AudioParameterBool>("relativeRatioMod", "Relative Ratio Mod", true));
+    params.push_back(std::make_unique<juce::AudioParameterBool>("relativeAttackMod", "Relative Attack Mod", true));
+    params.push_back(std::make_unique<juce::AudioParameterBool>("relativeReleaseMod", "Relative Release Mod", true));
+    params.push_back(std::make_unique<juce::AudioParameterBool>("relativeMakeupMod", "Relative Makeup Mod", true));
+    
     return { params.begin(), params.end() };
 }
 
@@ -24,6 +31,11 @@ CompressorModuleProcessor::CompressorModuleProcessor()
     attackParam = apvts.getRawParameterValue(paramIdAttack);
     releaseParam = apvts.getRawParameterValue(paramIdRelease);
     makeupParam = apvts.getRawParameterValue(paramIdMakeup);
+    relativeThresholdModParam = apvts.getRawParameterValue("relativeThresholdMod");
+    relativeRatioModParam = apvts.getRawParameterValue("relativeRatioMod");
+    relativeAttackModParam = apvts.getRawParameterValue("relativeAttackMod");
+    relativeReleaseModParam = apvts.getRawParameterValue("relativeReleaseMod");
+    relativeMakeupModParam = apvts.getRawParameterValue("relativeMakeupMod");
 
     lastOutputValues.push_back(std::make_unique<std::atomic<float>>(0.0f)); // Out L
     lastOutputValues.push_back(std::make_unique<std::atomic<float>>(0.0f)); // Out R
@@ -76,26 +88,88 @@ void CompressorModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
         outBus.clear();
     }
 
+    // --- Get base parameter values and relative modes ---
+    const float baseThreshold = thresholdParam->load();
+    const float baseRatio = ratioParam->load();
+    const float baseAttack = attackParam->load();
+    const float baseRelease = releaseParam->load();
+    const float baseMakeup = makeupParam->load();
+    const bool relativeThresholdMode = relativeThresholdModParam && relativeThresholdModParam->load() > 0.5f;
+    const bool relativeRatioMode = relativeRatioModParam && relativeRatioModParam->load() > 0.5f;
+    const bool relativeAttackMode = relativeAttackModParam && relativeAttackModParam->load() > 0.5f;
+    const bool relativeReleaseMode = relativeReleaseModParam && relativeReleaseModParam->load() > 0.5f;
+    const bool relativeMakeupMode = relativeMakeupModParam && relativeMakeupModParam->load() > 0.5f;
+    
     // --- Update DSP Parameters from unified input bus (once per block) ---
-    float finalThreshold = thresholdParam->load();
-    if (isParamInputConnected(paramIdThresholdMod) && inBus.getNumChannels() > 2)
-        finalThreshold = juce::jmap(inBus.getSample(2, 0), 0.0f, 1.0f, -60.0f, 0.0f);
+    float finalThreshold = baseThreshold;
+    if (isParamInputConnected(paramIdThresholdMod) && inBus.getNumChannels() > 2) {
+        const float cv = juce::jlimit(0.0f, 1.0f, inBus.getSample(2, 0));
+        if (relativeThresholdMode) {
+            // RELATIVE: ±30dB offset
+            const float offset = (cv - 0.5f) * 60.0f;
+            finalThreshold = baseThreshold + offset;
+        } else {
+            // ABSOLUTE: CV directly sets threshold
+            finalThreshold = juce::jmap(cv, -60.0f, 0.0f);
+        }
+        finalThreshold = juce::jlimit(-60.0f, 0.0f, finalThreshold);
+    }
         
-    float finalRatio = ratioParam->load();
-    if (isParamInputConnected(paramIdRatioMod) && inBus.getNumChannels() > 3)
-        finalRatio = juce::jmap(inBus.getSample(3, 0), 0.0f, 1.0f, 1.0f, 20.0f);
+    float finalRatio = baseRatio;
+    if (isParamInputConnected(paramIdRatioMod) && inBus.getNumChannels() > 3) {
+        const float cv = juce::jlimit(0.0f, 1.0f, inBus.getSample(3, 0));
+        if (relativeRatioMode) {
+            // RELATIVE: 0.25x to 4x multiplier
+            const float octaveOffset = (cv - 0.5f) * 4.0f;
+            finalRatio = baseRatio * std::pow(2.0f, octaveOffset);
+        } else {
+            // ABSOLUTE: CV directly sets ratio
+            finalRatio = juce::jmap(cv, 1.0f, 20.0f);
+        }
+        finalRatio = juce::jlimit(1.0f, 20.0f, finalRatio);
+    }
 
-    float finalAttack = attackParam->load();
-    if (isParamInputConnected(paramIdAttackMod) && inBus.getNumChannels() > 4)
-        finalAttack = juce::jmap(inBus.getSample(4, 0), 0.0f, 1.0f, 0.1f, 200.0f);
+    float finalAttack = baseAttack;
+    if (isParamInputConnected(paramIdAttackMod) && inBus.getNumChannels() > 4) {
+        const float cv = juce::jlimit(0.0f, 1.0f, inBus.getSample(4, 0));
+        if (relativeAttackMode) {
+            // RELATIVE: 0.25x to 4x time scaling
+            const float octaveOffset = (cv - 0.5f) * 4.0f;
+            finalAttack = baseAttack * std::pow(2.0f, octaveOffset);
+        } else {
+            // ABSOLUTE: CV directly sets attack
+            finalAttack = juce::jmap(cv, 0.1f, 200.0f);
+        }
+        finalAttack = juce::jlimit(0.1f, 200.0f, finalAttack);
+    }
 
-    float finalRelease = releaseParam->load();
-    if (isParamInputConnected(paramIdReleaseMod) && inBus.getNumChannels() > 5)
-        finalRelease = juce::jmap(inBus.getSample(5, 0), 0.0f, 1.0f, 5.0f, 1000.0f);
+    float finalRelease = baseRelease;
+    if (isParamInputConnected(paramIdReleaseMod) && inBus.getNumChannels() > 5) {
+        const float cv = juce::jlimit(0.0f, 1.0f, inBus.getSample(5, 0));
+        if (relativeReleaseMode) {
+            // RELATIVE: 0.25x to 4x time scaling
+            const float octaveOffset = (cv - 0.5f) * 4.0f;
+            finalRelease = baseRelease * std::pow(2.0f, octaveOffset);
+        } else {
+            // ABSOLUTE: CV directly sets release
+            finalRelease = juce::jmap(cv, 5.0f, 1000.0f);
+        }
+        finalRelease = juce::jlimit(5.0f, 1000.0f, finalRelease);
+    }
         
-    float finalMakeup = makeupParam->load();
-    if (isParamInputConnected(paramIdMakeupMod) && inBus.getNumChannels() > 6)
-        finalMakeup = juce::jmap(inBus.getSample(6, 0), 0.0f, 1.0f, -12.0f, 12.0f);
+    float finalMakeup = baseMakeup;
+    if (isParamInputConnected(paramIdMakeupMod) && inBus.getNumChannels() > 6) {
+        const float cv = juce::jlimit(0.0f, 1.0f, inBus.getSample(6, 0));
+        if (relativeMakeupMode) {
+            // RELATIVE: ±12dB offset
+            const float offset = (cv - 0.5f) * 24.0f;
+            finalMakeup = baseMakeup + offset;
+        } else {
+            // ABSOLUTE: CV directly sets makeup gain
+            finalMakeup = juce::jmap(cv, -12.0f, 12.0f);
+        }
+        finalMakeup = juce::jlimit(-12.0f, 12.0f, finalMakeup);
+    }
 
     compressor.setThreshold(finalThreshold);
     compressor.setRatio(finalRatio);
@@ -232,6 +306,79 @@ void CompressorModuleProcessor::drawParametersInNode(float itemWidth, const std:
     ImGui::ProgressBar(simulatedGR, ImVec2(itemWidth, 0), "");
     ImGui::PopStyleColor();
     ImGui::Text("GR: ~%.1f dB", simulatedGR * -12.0f);
+
+    ImGui::Spacing();
+    ImGui::Separator();
+    ImGui::Spacing();
+
+    // === RELATIVE MODULATION SECTION ===
+    ImGui::TextColored(ImVec4(0.6f, 0.8f, 1.0f, 1.0f), "CV Input Modes");
+    ImGui::Spacing();
+    
+    // Relative Threshold Mod checkbox
+    bool relativeThresholdMod = relativeThresholdModParam != nullptr && relativeThresholdModParam->load() > 0.5f;
+    if (ImGui::Checkbox("Relative Threshold Mod", &relativeThresholdMod))
+    {
+        if (auto* p = dynamic_cast<juce::AudioParameterBool*>(ap.getParameter("relativeThresholdMod")))
+            *p = relativeThresholdMod;
+        juce::Logger::writeToLog("[Compressor UI] Relative Threshold Mod: " + juce::String(relativeThresholdMod ? "ON" : "OFF"));
+    }
+    if (ImGui::IsItemHovered())
+    {
+        ImGui::SetTooltip("ON: CV modulates around slider (±30dB)\nOFF: CV directly sets threshold (-60dB to 0dB)");
+    }
+    
+    // Relative Ratio Mod checkbox
+    bool relativeRatioMod = relativeRatioModParam != nullptr && relativeRatioModParam->load() > 0.5f;
+    if (ImGui::Checkbox("Relative Ratio Mod", &relativeRatioMod))
+    {
+        if (auto* p = dynamic_cast<juce::AudioParameterBool*>(ap.getParameter("relativeRatioMod")))
+            *p = relativeRatioMod;
+        juce::Logger::writeToLog("[Compressor UI] Relative Ratio Mod: " + juce::String(relativeRatioMod ? "ON" : "OFF"));
+    }
+    if (ImGui::IsItemHovered())
+    {
+        ImGui::SetTooltip("ON: CV modulates around slider (0.25x to 4x)\nOFF: CV directly sets ratio (1:1 to 20:1)");
+    }
+    
+    // Relative Attack Mod checkbox
+    bool relativeAttackMod = relativeAttackModParam != nullptr && relativeAttackModParam->load() > 0.5f;
+    if (ImGui::Checkbox("Relative Attack Mod", &relativeAttackMod))
+    {
+        if (auto* p = dynamic_cast<juce::AudioParameterBool*>(ap.getParameter("relativeAttackMod")))
+            *p = relativeAttackMod;
+        juce::Logger::writeToLog("[Compressor UI] Relative Attack Mod: " + juce::String(relativeAttackMod ? "ON" : "OFF"));
+    }
+    if (ImGui::IsItemHovered())
+    {
+        ImGui::SetTooltip("ON: CV modulates around slider (0.25x to 4x)\nOFF: CV directly sets attack (0.1-200ms)");
+    }
+    
+    // Relative Release Mod checkbox
+    bool relativeReleaseMod = relativeReleaseModParam != nullptr && relativeReleaseModParam->load() > 0.5f;
+    if (ImGui::Checkbox("Relative Release Mod", &relativeReleaseMod))
+    {
+        if (auto* p = dynamic_cast<juce::AudioParameterBool*>(ap.getParameter("relativeReleaseMod")))
+            *p = relativeReleaseMod;
+        juce::Logger::writeToLog("[Compressor UI] Relative Release Mod: " + juce::String(relativeReleaseMod ? "ON" : "OFF"));
+    }
+    if (ImGui::IsItemHovered())
+    {
+        ImGui::SetTooltip("ON: CV modulates around slider (0.25x to 4x)\nOFF: CV directly sets release (5-1000ms)");
+    }
+    
+    // Relative Makeup Mod checkbox
+    bool relativeMakeupMod = relativeMakeupModParam != nullptr && relativeMakeupModParam->load() > 0.5f;
+    if (ImGui::Checkbox("Relative Makeup Mod", &relativeMakeupMod))
+    {
+        if (auto* p = dynamic_cast<juce::AudioParameterBool*>(ap.getParameter("relativeMakeupMod")))
+            *p = relativeMakeupMod;
+        juce::Logger::writeToLog("[Compressor UI] Relative Makeup Mod: " + juce::String(relativeMakeupMod ? "ON" : "OFF"));
+    }
+    if (ImGui::IsItemHovered())
+    {
+        ImGui::SetTooltip("ON: CV modulates around slider (±12dB)\nOFF: CV directly sets makeup (-12dB to +12dB)");
+    }
 
     ImGui::PopItemWidth();
 }

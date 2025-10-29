@@ -1,8 +1,8 @@
 #=============================================================
 #       MOOFY ANIMATION SCRIPT: Complete Animation System Archive
 #Archives all animation-related files including the Animation
-#Module, loaders, renderers, and supporting infrastructure for
-#comprehensive code review and debugging.
+#Module, loaders, renderers, preset files, and supporting 
+#infrastructure for comprehensive code review and debugging.
 #=============================================================
 
 #--- Configuration ---
@@ -40,14 +40,7 @@ $sourceFiles = @(
     "juce/CMakeLists.txt",
     
     # --- Animation Documentation & Guides ---
-    "guides/ANIMATION_DEBUG_GUIDE.md",
-    "guides/ANIMATION_FILE_LOADER_TASK1.md",
-    "guides/ANIMATION_FILE_LOADER_TASK2.md",
-    "guides/ANIMATION_FILE_LOADER_TASK3.md",
-    "guides/BACKGROUND_LOADING_COMPLETE.md",
-    "guides/ROOT_BONE_FIX_COMPLETE.md",
-    "guides/TASK1_COMPLETION_SUMMARY.md",
-    "guides/TASK2_COMPLETION_SUMMARY.md",
+
     
     # --- Core Engine (Animation Context) ---
     "juce/Source/audio/AudioEngine.h",
@@ -56,8 +49,12 @@ $sourceFiles = @(
     # --- UI Components (Animation Integration) ---
     "juce/Source/preset_creator/ImGuiNodeEditorComponent.h",
     "juce/Source/preset_creator/ImGuiNodeEditorComponent.cpp",
-    "juce/Source/ui/VisualiserComponent.h",
-    "juce/Source/ui/VisualiserComponent.cpp"
+    
+    # --- Animation Preset Files ---
+    "Synth_presets/animation.xml",
+    "Synth_presets/animation_load.xml",
+    "Synth_presets/animation_load2.xml",
+    "Synth_presets/animation_glb_working.xml"
 )
 
 #--- Auto-discover additional animation-related files ---
@@ -108,6 +105,7 @@ This archive contains all files related to the Animation system including:
   - Animation core system (Animator, AnimationBinder, etc.)
   - File loaders (GLTF, FBX)
   - Animation rendering
+  - Animation preset files (.xml)
   - Related documentation and guides
 
 Generated: $(Get-Date -Format "yyyy-MM-dd HH:mm:ss")

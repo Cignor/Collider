@@ -23,6 +23,7 @@
 #include "../audio/modules/StepSequencerModuleProcessor.h"
 #include "../audio/modules/MultiSequencerModuleProcessor.h"
 #include "../audio/modules/StrokeSequencerModuleProcessor.h"
+#include "../audio/modules/AnimationModuleProcessor.h"
 #include "../audio/modules/MapRangeModuleProcessor.h"
 #include "../audio/modules/LagProcessorModuleProcessor.h"
 #include "../audio/modules/DeCrackleModuleProcessor.h"
@@ -5542,6 +5543,96 @@ void ImGuiNodeEditorComponent::handleStrokeSeqBuildDrumKit(StrokeSequencerModule
     graphNeedsRebuild = true;
 }
 
+void ImGuiNodeEditorComponent::handleAnimationBuildTriggersAudio(AnimationModuleProcessor* animModule, juce::uint32 animModuleLid)
+{
+    if (!synth || !animModule) return;
+
+    // Query the dynamic output pins to determine how many bones are tracked
+    auto dynamicPins = animModule->getDynamicOutputPins();
+    
+    // Each bone has 3 outputs: Vel X, Vel Y, Hit
+    // So number of bones = number of pins / 3
+    int numTrackedBones = (int)dynamicPins.size() / 3;
+    
+    if (numTrackedBones == 0)
+    {
+        juce::Logger::writeToLog("🦶 BUILD TRIGGERS AUDIO: No tracked bones! Add bones first.");
+        return;
+    }
+
+    juce::Logger::writeToLog("🦶 BUILD TRIGGERS AUDIO handler called! Creating modules for " + 
+                             juce::String(numTrackedBones) + " tracked bones...");
+
+    // 1. Get Animation Module position
+    auto animNodeId = synth->getNodeIdForLogical(animModuleLid);
+    ImVec2 animPos = ImNodes::GetNodeGridSpacePos((int)animModuleLid);
+
+    // 2. Create one Sample Loader per tracked bone
+    std::vector<juce::AudioProcessorGraph::NodeID> samplerNodeIds;
+    std::vector<juce::uint32> samplerLids;
+    
+    for (int i = 0; i < numTrackedBones; ++i)
+    {
+        auto samplerNodeId = synth->addModule("sample_loader");
+        samplerNodeIds.push_back(samplerNodeId);
+        samplerLids.push_back(synth->getLogicalIdForNode(samplerNodeId));
+        
+        // Position samplers in a vertical stack to the right
+        pendingNodePositions[(int)samplerLids[i]] = ImVec2(animPos.x + 400.0f, animPos.y + i * 220.0f);
+    }
+
+    // 3. Create Track Mixer (num_bones * 2 for stereo pairs)
+    auto mixerNodeId = synth->addModule("track_mixer");
+    auto mixerLid = synth->getLogicalIdForNode(mixerNodeId);
+    pendingNodePositions[(int)mixerLid] = ImVec2(animPos.x + 800.0f, animPos.y + (numTrackedBones * 110.0f));
+
+    // 4. Create Value node for mixer track count
+    int numMixerTracks = numTrackedBones * 2; // 2 channels per sampler (stereo)
+    auto valueNodeId = synth->addModule("value");
+    auto valueLid = synth->getLogicalIdForNode(valueNodeId);
+    pendingNodePositions[(int)valueLid] = ImVec2(animPos.x + 600.0f, animPos.y + (numTrackedBones * 220.0f));
+
+    if (auto* valueNode = dynamic_cast<ValueModuleProcessor*>(synth->getModuleForLogical(valueLid)))
+    {
+        *dynamic_cast<juce::AudioParameterFloat*>(valueNode->getAPVTS().getParameter("value")) = (float)numMixerTracks;
+    }
+
+    // 5. Connect Animation Module TRIGGERS to Sample Loader TRIGGER MOD inputs
+    // Animation Module Output Channels (per bone):
+    //   i*3 + 0: Bone Vel X
+    //   i*3 + 1: Bone Vel Y
+    //   i*3 + 2: Bone Hit (trigger) ← Connect this to sampler
+    for (int i = 0; i < numTrackedBones; ++i)
+    {
+        int triggerChannel = i * 3 + 2; // Every 3rd channel starting at 2 (2, 5, 8, 11, ...)
+        synth->connect(animNodeId, triggerChannel, samplerNodeIds[i], 3); // Bone Hit -> Sampler Trigger Mod
+    }
+
+    // 6. Connect Sample Loader AUDIO OUTPUTS to Track Mixer AUDIO INPUTS (stereo pairs)
+    for (int i = 0; i < numTrackedBones; ++i)
+    {
+        int mixerChannelL = i * 2;       // 0, 2, 4, 6, ...
+        int mixerChannelR = i * 2 + 1;   // 1, 3, 5, 7, ...
+        
+        synth->connect(samplerNodeIds[i], 0, mixerNodeId, mixerChannelL); // Sampler L -> Mixer Audio L
+        synth->connect(samplerNodeIds[i], 1, mixerNodeId, mixerChannelR); // Sampler R -> Mixer Audio R
+    }
+
+    // 7. Connect Value node to Track Mixer's "Num Tracks" input
+    synth->connect(valueNodeId, 0, mixerNodeId, 64); // Value -> Num Tracks Mod
+
+    // 8. Connect Track Mixer output to global output
+    auto outputNodeId = synth->getOutputNodeID();
+    synth->connect(mixerNodeId, 0, outputNodeId, 0); // Mixer Out L -> Global Out L
+    synth->connect(mixerNodeId, 1, outputNodeId, 1); // Mixer Out R -> Global Out R
+
+    synth->commitChanges();
+    graphNeedsRebuild = true;
+    
+    juce::Logger::writeToLog("🦶 BUILD TRIGGERS AUDIO complete! " + juce::String(numTrackedBones) + 
+                             " samplers + mixer + wiring created.");
+}
+
 void ImGuiNodeEditorComponent::handleMultiSequencerAutoConnectSamplers(MultiSequencerModuleProcessor* sequencer, juce::uint32 sequencerLid)
 {
     if (!synth || !sequencer) return;
@@ -5902,6 +5993,17 @@ void ImGuiNodeEditorComponent::handleAutoConnectionRequests()
             if (strokeSeq->autoBuildDrumKitTriggered.exchange(false))
             {
                 handleStrokeSeqBuildDrumKit(strokeSeq, modInfo.first);
+                pushSnapshot();
+                return;
+            }
+        }
+        
+        // --- Check AnimationModule Flags ---
+        if (auto* animModule = dynamic_cast<AnimationModuleProcessor*>(module))
+        {
+            if (animModule->autoBuildTriggersAudioTriggered.exchange(false))
+            {
+                handleAnimationBuildTriggersAudio(animModule, modInfo.first);
                 pushSnapshot();
                 return;
             }

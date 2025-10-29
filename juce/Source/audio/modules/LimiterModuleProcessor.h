@@ -48,5 +48,9 @@ private:
     // Cached atomic pointers to parameters
     std::atomic<float>* thresholdParam { nullptr };
     std::atomic<float>* releaseParam { nullptr };
+    
+    // Relative modulation parameters
+    std::atomic<float>* relativeThresholdModParam { nullptr };
+    std::atomic<float>* relativeReleaseModParam { nullptr };
 };
 

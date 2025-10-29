@@ -19,6 +19,7 @@ struct ImGuiContext; struct ImGuiIO; struct ImNodesContext;
 class MIDIPlayerModuleProcessor;
 class MultiSequencerModuleProcessor;
 class StrokeSequencerModuleProcessor;
+class AnimationModuleProcessor;
 
 // === NODE SIZING SYSTEM ===
 // Standardized node width categories for consistent visual layout
@@ -139,6 +140,9 @@ public:
     
     // StrokeSequencer specific handler
     void handleStrokeSeqBuildDrumKit(StrokeSequencerModuleProcessor* strokeSeq, juce::uint32 strokeSeqLid);
+    
+    // AnimationModule specific handler
+    void handleAnimationBuildTriggersAudio(AnimationModuleProcessor* animModule, juce::uint32 animModuleLid);
     
     // MultiSequencer specific handlers
     void handleMultiSequencerAutoConnectSamplers(MultiSequencerModuleProcessor* sequencer, juce::uint32 sequencerLid);

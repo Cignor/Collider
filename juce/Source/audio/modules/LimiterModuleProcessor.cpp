@@ -7,6 +7,10 @@ juce::AudioProcessorValueTreeState::ParameterLayout LimiterModuleProcessor::crea
     params.push_back(std::make_unique<juce::AudioParameterFloat>(paramIdThreshold, "Threshold", -20.0f, 0.0f, 0.0f));
     params.push_back(std::make_unique<juce::AudioParameterFloat>(paramIdRelease, "Release", 1.0f, 200.0f, 10.0f));
     
+    // Relative modulation parameters
+    params.push_back(std::make_unique<juce::AudioParameterBool>("relativeThresholdMod", "Relative Threshold Mod", true));
+    params.push_back(std::make_unique<juce::AudioParameterBool>("relativeReleaseMod", "Relative Release Mod", true));
+    
     return { params.begin(), params.end() };
 }
 
@@ -18,6 +22,8 @@ LimiterModuleProcessor::LimiterModuleProcessor()
 {
     thresholdParam = apvts.getRawParameterValue(paramIdThreshold);
     releaseParam = apvts.getRawParameterValue(paramIdRelease);
+    relativeThresholdModParam = apvts.getRawParameterValue("relativeThresholdMod");
+    relativeReleaseModParam = apvts.getRawParameterValue("relativeReleaseMod");
 
     lastOutputValues.push_back(std::make_unique<std::atomic<float>>(0.0f)); // Out L
     lastOutputValues.push_back(std::make_unique<std::atomic<float>>(0.0f)); // Out R
@@ -70,14 +76,40 @@ void LimiterModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce
         outBus.clear();
     }
 
+    // --- Get base parameter values and relative modes ---
+    const float baseThreshold = thresholdParam->load();
+    const float baseRelease = releaseParam->load();
+    const bool relativeThresholdMode = relativeThresholdModParam && relativeThresholdModParam->load() > 0.5f;
+    const bool relativeReleaseMode = relativeReleaseModParam && relativeReleaseModParam->load() > 0.5f;
+    
     // --- Update DSP Parameters from unified input bus (once per block) ---
-    float finalThreshold = thresholdParam->load();
-    if (isParamInputConnected(paramIdThresholdMod) && inBus.getNumChannels() > 2)
-        finalThreshold = juce::jmap(inBus.getSample(2, 0), 0.0f, 1.0f, -20.0f, 0.0f);
+    float finalThreshold = baseThreshold;
+    if (isParamInputConnected(paramIdThresholdMod) && inBus.getNumChannels() > 2) {
+        const float cv = juce::jlimit(0.0f, 1.0f, inBus.getSample(2, 0));
+        if (relativeThresholdMode) {
+            // RELATIVE: ±10dB offset
+            const float offset = (cv - 0.5f) * 20.0f;
+            finalThreshold = baseThreshold + offset;
+        } else {
+            // ABSOLUTE: CV directly sets threshold
+            finalThreshold = juce::jmap(cv, -20.0f, 0.0f);
+        }
+        finalThreshold = juce::jlimit(-20.0f, 0.0f, finalThreshold);
+    }
         
-    float finalRelease = releaseParam->load();
-    if (isParamInputConnected(paramIdReleaseMod) && inBus.getNumChannels() > 3)
-        finalRelease = juce::jmap(inBus.getSample(3, 0), 0.0f, 1.0f, 1.0f, 200.0f);
+    float finalRelease = baseRelease;
+    if (isParamInputConnected(paramIdReleaseMod) && inBus.getNumChannels() > 3) {
+        const float cv = juce::jlimit(0.0f, 1.0f, inBus.getSample(3, 0));
+        if (relativeReleaseMode) {
+            // RELATIVE: 0.25x to 4x time scaling
+            const float octaveOffset = (cv - 0.5f) * 4.0f;
+            finalRelease = baseRelease * std::pow(2.0f, octaveOffset);
+        } else {
+            // ABSOLUTE: CV directly sets release
+            finalRelease = juce::jmap(cv, 1.0f, 200.0f);
+        }
+        finalRelease = juce::jlimit(1.0f, 200.0f, finalRelease);
+    }
 
     limiter.setThreshold(finalThreshold);
     limiter.setRelease(finalRelease);
@@ -153,6 +185,40 @@ void LimiterModuleProcessor::drawParametersInNode(float itemWidth, const std::fu
 
     drawSlider("Threshold", paramIdThreshold, paramIdThresholdMod, -20.0f, 0.0f, "%.1f dB", "Maximum output level (-20 to 0 dB)\nSignal peaks above this are limited");
     drawSlider("Release", paramIdRelease, paramIdReleaseMod, 1.0f, 200.0f, "%.0f ms", "Release time (1-200 ms)\nHow fast the limiter recovers");
+
+    ImGui::Spacing();
+    ImGui::Separator();
+    ImGui::Spacing();
+
+    // === RELATIVE MODULATION SECTION ===
+    ImGui::TextColored(ImVec4(0.6f, 0.8f, 1.0f, 1.0f), "CV Input Modes");
+    ImGui::Spacing();
+    
+    // Relative Threshold Mod checkbox
+    bool relativeThresholdMod = relativeThresholdModParam != nullptr && relativeThresholdModParam->load() > 0.5f;
+    if (ImGui::Checkbox("Relative Threshold Mod", &relativeThresholdMod))
+    {
+        if (auto* p = dynamic_cast<juce::AudioParameterBool*>(ap.getParameter("relativeThresholdMod")))
+            *p = relativeThresholdMod;
+        juce::Logger::writeToLog("[Limiter UI] Relative Threshold Mod: " + juce::String(relativeThresholdMod ? "ON" : "OFF"));
+    }
+    if (ImGui::IsItemHovered())
+    {
+        ImGui::SetTooltip("ON: CV modulates around slider (±10dB)\nOFF: CV directly sets threshold (-20dB to 0dB)");
+    }
+    
+    // Relative Release Mod checkbox
+    bool relativeReleaseMod = relativeReleaseModParam != nullptr && relativeReleaseModParam->load() > 0.5f;
+    if (ImGui::Checkbox("Relative Release Mod", &relativeReleaseMod))
+    {
+        if (auto* p = dynamic_cast<juce::AudioParameterBool*>(ap.getParameter("relativeReleaseMod")))
+            *p = relativeReleaseMod;
+        juce::Logger::writeToLog("[Limiter UI] Relative Release Mod: " + juce::String(relativeReleaseMod ? "ON" : "OFF"));
+    }
+    if (ImGui::IsItemHovered())
+    {
+        ImGui::SetTooltip("ON: CV modulates around slider (0.25x to 4x)\nOFF: CV directly sets release (1-200ms)");
+    }
 
     ImGui::PopItemWidth();
 }

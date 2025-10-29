@@ -50,12 +50,31 @@ public:
     void changeListenerCallback(juce::ChangeBroadcaster* source) override;
     
     const std::vector<glm::mat4>& getFinalBoneMatrices() const;
+    
+    // Dynamic bone tracking
+    void addTrackedBone(const std::string& boneName);
+    void removeTrackedBone(const std::string& boneName);
+    
+    // Dynamic ground planes
+    void addGroundPlane(float initialY = 0.0f);
+    void removeGroundPlane(int index = -1);
+    std::vector<float> getGroundPlanes() const;
 
     // --- State Management (for saving/loading presets) ---
     juce::ValueTree getExtraStateTree() const override;
     void setExtraStateTree(const juce::ValueTree& state) override;
 
+#if defined(PRESET_CREATOR_UI)
+    // Auto-connection feature flags
+    std::atomic<bool> autoBuildTriggersAudioTriggered { false };
+#endif
+
 private:
+    static constexpr int MAX_TRACKED_BONES = 10; // Maximum number of bones we can track simultaneously
+    
+    // Update bone IDs for all tracked bones from the currently loaded animation
+    void updateTrackedBoneIDs();
+    
     // Helper structure for tracking multiple bones
     struct TrackedBone
     {
@@ -102,8 +121,13 @@ private:
     std::vector<std::unique_ptr<AnimationData>> m_dataToFree;
     juce::CriticalSection m_freeingLock; // Protects the above arrays
     
-    // Tracked bones (LeftFoot, RightFoot) for dedicated outputs
+    // Tracked bones (dynamic list) for dedicated outputs
     std::map<std::string, TrackedBone> m_trackedBones;
+    juce::CriticalSection m_trackedBonesLock; // Protects m_trackedBones from concurrent access
+    
+    // Dynamic ground planes for multi-level trigger detection
+    std::vector<float> m_groundPlanes;
+    mutable juce::CriticalSection m_groundPlanesLock; // Protects m_groundPlanes from concurrent access
     
     // Rendering
     std::unique_ptr<AnimationRenderer> m_Renderer;
