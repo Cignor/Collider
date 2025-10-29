@@ -23,7 +23,7 @@ void populateModuleDescriptions()
     descriptions["midi jog wheel"] = "A single MIDI-learnable jog wheel control for expressive modulation.";
     descriptions["Value"] = "Outputs a constant, adjustable numerical value.";
     descriptions["sample_loader"] = "Loads and plays audio samples with pitch/time control.";
-    descriptions["best practice"] = "A template and example node demonstrating best practices.";
+    descriptions["best_practice"] = "A template and example node demonstrating best practices.";
     // TTS Family
     descriptions["TTS Performer"] = "Advanced Text-to-Speech engine with word-level sequencing.";
     descriptions["Vocal Tract Filter"] = "A formant filter that simulates human vowel sounds.";
@@ -38,7 +38,7 @@ void populateModuleDescriptions()
     descriptions["gate"] = "A stereo noise gate to silence signals below a threshold.";
     descriptions["drive"] = "A waveshaping distortion effect.";
     descriptions["graphic_eq"] = "An 8-band graphic equalizer.";
-    descriptions["Frequency Graph"] = "A high-resolution, real-time spectrum analyzer.";
+    descriptions["frequency_graph"] = "A high-resolution, real-time spectrum analyzer.";
     descriptions["Waveshaper"] = "A distortion effect with multiple shaping algorithms.";
     descriptions["8bandshaper"] = "A multi-band waveshaper for frequency-specific distortion.";
     descriptions["Granulator"] = "A granular synthesizer/effect that plays small grains of a sample.";
@@ -46,13 +46,13 @@ void populateModuleDescriptions()
     descriptions["timepitch"] = "Real-time pitch and time manipulation using RubberBand.";
     descriptions["De-Crackle"] = "A utility to reduce clicks from discontinuous signals.";
     descriptions["recorder"] = "Records incoming audio to a WAV, AIFF, or FLAC file.";
-    descriptions["tempo clock"] = "Global clock generator with BPM control, transport, and clock outputs.";
+    descriptions["tempo_clock"] = "Global clock generator with BPM control, transport, and clock outputs.";
     // Modulators
     descriptions["LFO"] = "A Low-Frequency Oscillator for modulation.";
     descriptions["ADSR"] = "An Attack-Decay-Sustain-Release envelope generator.";
     descriptions["Random"] = "A random value generator with internal sample & hold.";
     descriptions["S&H"] = "A classic Sample and Hold module.";
-    descriptions["Function Generator"] = "A complex, drawable envelope/LFO generator.";
+    descriptions["function_generator"] = "A complex, drawable envelope/LFO generator.";
     descriptions["shaping_oscillator"] = "An oscillator with a built-in waveshaper.";
     // Utilities & Logic
     descriptions["VCA"] = "A Voltage-Controlled Amplifier to control signal level.";
@@ -72,7 +72,13 @@ void populateModuleDescriptions()
     // Analysis
     descriptions["Scope"] = "Visualizes an audio or CV signal.";
     descriptions["debug"] = "A tool for logging signal value changes.";
-    descriptions["input debug"] = "A passthrough version of the Debug node for inspecting signals on a cable.";
+    descriptions["input_debug"] = "A passthrough version of the Debug node for inspecting signals on a cable.";
+    
+    // Add aliases for underscore naming conventions
+    descriptions["clock_divider"] = descriptions["ClockDivider"];
+    descriptions["sequential_switch"] = descriptions["SequentialSwitch"];
+    descriptions["s_and_h"] = descriptions["S&H"];
+    descriptions["snapshot_sequencer"] = "A sequencer that stores and recalls complete patch states.";
 }
 
 void populatePinDatabase()
@@ -206,7 +212,7 @@ void populatePinDatabase()
           AudioPin("Gate Out", 2, PinDataType::Gate), AudioPin("Trig Out", 3, PinDataType::Gate) },
         {}
     );
-    db["frequency graph"] = ModulePinInfo(
+    db["frequency_graph"] = ModulePinInfo(
         NodeWidth::ExtraWide,
         { AudioPin("In", 0, PinDataType::Audio) }, // Mono Audio Input
         { // Outputs: Stereo audio pass-through + 8 Gate/Trigger outputs
@@ -427,7 +433,7 @@ db["random"] = ModulePinInfo(
         { AudioPin("Audio Out", 0, PinDataType::Audio) },
         { ModPin("Vowel", "vowelShape", PinDataType::CV), ModPin("Formant", "formantShift", PinDataType::CV), ModPin("Instability", "instability", PinDataType::CV), ModPin("Gain", "formantGain", PinDataType::CV) }
     );
-    db["best practice"] = ModulePinInfo(
+    db["best_practice"] = ModulePinInfo(
         NodeWidth::Medium,
         { AudioPin("In L", 0, PinDataType::Audio), AudioPin("In R", 1, PinDataType::Audio), AudioPin("Freq Mod", 2, PinDataType::CV), AudioPin("Wave Mod", 3, PinDataType::CV), AudioPin("Drive Mod", 4, PinDataType::CV) },
         { AudioPin("Out L", 0, PinDataType::Audio), AudioPin("Out R", 1, PinDataType::Audio) },
@@ -445,7 +451,7 @@ db["random"] = ModulePinInfo(
         { AudioPin("Out L", 0, PinDataType::Audio), AudioPin("Out R", 1, PinDataType::Audio) },
         { ModPin("Master Frequency", "masterFrequency_mod", PinDataType::CV), ModPin("Master Drive", "masterDrive_mod", PinDataType::CV) }
     );
-    db["function generator"] = ModulePinInfo(
+    db["function_generator"] = ModulePinInfo(
         NodeWidth::Big,
         { 
             AudioPin("Gate In", 0, PinDataType::Gate),
@@ -817,9 +823,9 @@ db["random"] = ModulePinInfo(
         {}
     );
 
-    db["snapshot sequencer"] = ModulePinInfo(
+    db["snapshot_sequencer"] = ModulePinInfo(
         NodeWidth::ExtraWide,
-        { AudioPin("Clock In", 0, PinDataType::Gate), AudioPin("Reset In", 1, PinDataType::Gate) },
+        { AudioPin("Clock", 0, PinDataType::Gate), AudioPin("Reset", 1, PinDataType::Gate) },
         {}, // No audio outputs
         {}
     );
@@ -882,7 +888,7 @@ db["random"] = ModulePinInfo(
     );
 
     // Tempo Clock
-    db["tempo clock"] = ModulePinInfo(
+    db["tempo_clock"] = ModulePinInfo(
         NodeWidth::ExtraWide,
         {
             AudioPin("BPM Mod", 0, PinDataType::CV),
@@ -922,6 +928,11 @@ db["random"] = ModulePinInfo(
         {}, // Dynamic outputs defined by module
         {}
     );
+
+    // Add aliases for nodes with underscore naming convention
+    db["clock_divider"] = db["ClockDivider"];
+    db["sequential_switch"] = db["SequentialSwitch"];
+    db["s_and_h"] = db["s&h"];
 
 }
 
