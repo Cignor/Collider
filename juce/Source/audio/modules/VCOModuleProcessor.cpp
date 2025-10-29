@@ -8,6 +8,8 @@ VCOModuleProcessor::VCOModuleProcessor()
 {
     frequencyParam = apvts.getRawParameterValue(paramIdFrequency);
     waveformParam  = apvts.getRawParameterValue(paramIdWaveform);
+    relativeFreqModParam = apvts.getRawParameterValue(paramIdRelativeFreqMod);
+    portamentoParam = apvts.getRawParameterValue(paramIdPortamento);
 
     lastOutputValues.push_back(std::make_unique<std::atomic<float>>(0.0f));
 
@@ -23,13 +25,20 @@ juce::AudioProcessorValueTreeState::ParameterLayout VCOModuleProcessor::createPa
     params.push_back(std::make_unique<juce::AudioParameterChoice>(
         paramIdWaveform, "Waveform",
         juce::StringArray { "Sine", "Sawtooth", "Square" }, 0));
+    params.push_back(std::make_unique<juce::AudioParameterBool>(
+        paramIdRelativeFreqMod, "Relative Freq Mod", true)); // Default: Relative mode
+    params.push_back(std::make_unique<juce::AudioParameterFloat>(
+        paramIdPortamento, "Portamento",
+        juce::NormalisableRange<float>(0.0f, 2.0f, 0.001f, 0.5f), 0.0f)); // 0-2 seconds
     return { params.begin(), params.end() };
 }
 
-void VCOModuleProcessor::prepareToPlay(double sampleRate, int samplesPerBlock)
+void VCOModuleProcessor::prepareToPlay(double sr, int samplesPerBlock)
 {
+    sampleRate = sr;
     juce::dsp::ProcessSpec spec { sampleRate, (juce::uint32) samplesPerBlock, 1 };
     oscillator.prepare(spec);
+    currentFrequency = frequencyParam != nullptr ? frequencyParam->load() : 440.0f;
 }
 
 void VCOModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midi)
@@ -64,9 +73,28 @@ void VCOModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::Mi
 
     const float baseFrequency = frequencyParam != nullptr ? frequencyParam->load() : 440.0f;
     const int baseWaveform = (int) (waveformParam != nullptr ? waveformParam->load() : 0.0f);
+    const bool relativeMode = relativeFreqModParam != nullptr && relativeFreqModParam->load() > 0.5f;
+    const float portamentoTime = portamentoParam != nullptr ? portamentoParam->load() : 0.0f;
+
+    // DEBUG: Log relative mode status periodically
+    static int vcoLogCounter = 0;
+    if (freqActive && ++vcoLogCounter % 100 == 0)
+    {
+        juce::Logger::writeToLog("[VCO] Relative Freq Mod = " + juce::String(relativeMode ? "TRUE (around slider)" : "FALSE (absolute)"));
+        juce::Logger::writeToLog("[VCO] Base Frequency = " + juce::String(baseFrequency, 1) + " Hz");
+    }
 
     // Define smoothing factor for click-free gating
     constexpr float GATE_SMOOTHING_FACTOR = 0.002f;
+    
+    // Calculate portamento coefficient (time-based smoothing)
+    // Using exponential smoothing: coefficient = 1 - exp(-1 / (time * sampleRate))
+    float portamentoCoeff = 1.0f; // Instant (no smoothing)
+    if (portamentoTime > 0.001f) // Only smooth if portamento time is meaningful
+    {
+        const double timeInSamples = portamentoTime * sampleRate;
+        portamentoCoeff = static_cast<float>(1.0 - std::exp(-1.0 / timeInSamples));
+    }
 
     for (int i = 0; i < buffer.getNumSamples(); ++i)
     {
@@ -86,13 +114,53 @@ void VCOModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::Mi
             const float cv01  = (cvRaw >= 0.0f && cvRaw <= 1.0f)
                                 ? juce::jlimit(0.0f, 1.0f, cvRaw)
                                 : juce::jlimit(0.0f, 1.0f, (cvRaw + 1.0f) * 0.5f);
-            // Absolute mapping: 20 Hz .. 20000 Hz (log scale)
-            constexpr float fMin = 20.0f;
-            constexpr float fMax = 20000.0f;
-            const float spanOct = std::log2(fMax / fMin);
-            freq = fMin * std::pow(2.0f, cv01 * spanOct);
+            
+            // Check relative mode setting
+            const bool relativeModeNow = relativeFreqModParam != nullptr && relativeFreqModParam->load() > 0.5f;
+            
+            if (relativeModeNow)
+            {
+                // RELATIVE MODE: CV modulates around base frequency (±4 octaves from slider position)
+                // cv01=0.5 means no change, cv01=0 means -4 octaves, cv01=1 means +4 octaves
+                const float octaveOffset = (cv01 - 0.5f) * 8.0f; // ±4 octaves
+                freq = baseFrequency * std::pow(2.0f, octaveOffset);
+                
+                // DEBUG: Log first sample calculation
+                if (i == 0 && vcoLogCounter % 100 == 0)
+                {
+                    juce::Logger::writeToLog("[VCO Freq] RELATIVE mode: CV=" + juce::String(cv01, 3) + 
+                                           ", baseFreq=" + juce::String(baseFrequency, 1) + 
+                                           " Hz, octaveOffset=" + juce::String(octaveOffset, 2) +
+                                           ", finalFreq=" + juce::String(freq, 1) + " Hz");
+                }
+            }
+            else
+            {
+                // ABSOLUTE MODE: CV directly maps to full frequency range (20Hz - 20kHz)
+                constexpr float fMin = 20.0f;
+                constexpr float fMax = 20000.0f;
+                const float spanOct = std::log2(fMax / fMin);
+                freq = fMin * std::pow(2.0f, cv01 * spanOct);
+                
+                // DEBUG: Log first sample calculation
+                if (i == 0 && vcoLogCounter % 100 == 0)
+                {
+                    juce::Logger::writeToLog("[VCO Freq] ABSOLUTE mode: CV=" + juce::String(cv01, 3) + 
+                                           ", finalFreq=" + juce::String(freq, 1) + " Hz (ignores slider)");
+                }
+            }
         }
         freq = juce::jlimit(20.0f, 20000.0f, freq);
+        
+        // Apply portamento/glide smoothing to frequency
+        if (portamentoTime > 0.001f)
+        {
+            currentFrequency += (freq - currentFrequency) * portamentoCoeff;
+        }
+        else
+        {
+            currentFrequency = freq; // Instant, no glide
+        }
 
         if (currentWaveform != waveform)
         {
@@ -102,7 +170,7 @@ void VCOModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::Mi
             currentWaveform = waveform;
         }
 
-        oscillator.setFrequency(freq, false);
+        oscillator.setFrequency(currentFrequency, false);
         const float s = oscillator.processSample(0.0f);
         
         // Apply gate with click-free smoothing

@@ -43,6 +43,8 @@ private:
 
     // Global control
     juce::AudioParameterInt* numVoicesParam { nullptr };
+    juce::AudioParameterBool* relativeFreqModParam { nullptr };
+    juce::AudioParameterFloat* portamentoParam { nullptr };
 
     // Per-voice parameters
     std::vector<juce::AudioParameterFloat*> voiceFreqParams;
@@ -63,4 +65,8 @@ private:
     // Clickless gate: per-voice envelope and hysteresis state
     std::array<float, MAX_VOICES> gateEnvelope {};
     std::array<uint8_t, MAX_VOICES> gateOnState {}; // 0/1 with hysteresis
+    
+    // Portamento/glide: per-voice smoothed frequency
+    std::array<float, MAX_VOICES> currentFrequencies {};
+    double sampleRate { 44100.0 };
 };

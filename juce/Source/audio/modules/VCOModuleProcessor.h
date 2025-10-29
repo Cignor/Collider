@@ -11,6 +11,8 @@ public:
     static constexpr auto paramIdWaveform    = "waveform";
     // Virtual target only (no APVTS param needed) – used for routing to select waveform
     static constexpr auto paramIdWaveformMod = "waveform_mod";
+    static constexpr auto paramIdRelativeFreqMod = "relative_freq_mod";
+    static constexpr auto paramIdPortamento  = "portamento";
 
     VCOModuleProcessor();
     ~VCOModuleProcessor() override = default;
@@ -143,6 +145,100 @@ public:
         ImGui::Spacing();
         ImGui::Spacing();
 
+        // === MODULATION MODE SECTION ===
+        ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1.0f), "Frequency Modulation");
+        ImGui::Spacing();
+        
+        bool relativeFreqMod = true;
+        if (auto* p = dynamic_cast<juce::AudioParameterBool*>(ap.getParameter(paramIdRelativeFreqMod)))
+            relativeFreqMod = p->get();
+        
+        if (ImGui::Checkbox("Relative Frequency Mod", &relativeFreqMod))
+        {
+            if (auto* p = dynamic_cast<juce::AudioParameterBool*>(ap.getParameter(paramIdRelativeFreqMod)))
+            {
+                *p = relativeFreqMod;
+                juce::Logger::writeToLog("[VCO UI] Relative Frequency Mod changed to: " + juce::String(relativeFreqMod ? "TRUE" : "FALSE"));
+            }
+        }
+        if (ImGui::IsItemDeactivatedAfterEdit()) onModificationEnded();
+        HelpMarker("Relative: CV modulates around slider frequency (±4 octaves)\nAbsolute: CV directly controls frequency (20Hz-20kHz, ignores slider)\n\nExample with slider at 440Hz:\n- Relative: CV=0.5 → 440Hz, CV=0.625 → ~622Hz (+1 oct)\n- Absolute: CV=0.5 → ~632Hz, ignores slider position");
+
+        ImGui::Spacing();
+        ImGui::Spacing();
+
+        // === PORTAMENTO SECTION ===
+        ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1.0f), "Glide");
+        ImGui::Spacing();
+        
+        float portamentoTime = 0.0f;
+        if (auto* p = dynamic_cast<juce::AudioParameterFloat*>(ap.getParameter(paramIdPortamento)))
+            portamentoTime = p->get();
+        
+        if (ImGui::SliderFloat("##portamento", &portamentoTime, 0.0f, 2.0f, "%.3f s", ImGuiSliderFlags_Logarithmic))
+        {
+            if (auto* p = dynamic_cast<juce::AudioParameterFloat*>(ap.getParameter(paramIdPortamento)))
+                *p = portamentoTime;
+        }
+        if (ImGui::IsItemDeactivatedAfterEdit()) { onModificationEnded(); }
+        adjustParamOnWheel(ap.getParameter(paramIdPortamento), "portamentoTime", portamentoTime);
+        
+        ImGui::SameLine();
+        ImGui::Text("Portamento");
+        HelpMarker("Pitch glide time between frequency changes\n0s = instant (no glide)\n0.1s = fast slide\n0.5s = smooth glide\n2s = slow portamento\nWorks with both CV modulation and manual changes");
+
+        // Quick preset buttons
+        ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(4, 4));
+        float btnWidth = (itemWidth - 12) / 4.0f;
+        
+        if (ImGui::Button("Off", ImVec2(btnWidth, 0)))
+        {
+            if (auto* p = dynamic_cast<juce::AudioParameterFloat*>(ap.getParameter(paramIdPortamento)))
+            {
+                *p = 0.0f;
+                onModificationEnded();
+            }
+        }
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip("No glide (instant)");
+        
+        ImGui::SameLine();
+        if (ImGui::Button("Fast", ImVec2(btnWidth, 0)))
+        {
+            if (auto* p = dynamic_cast<juce::AudioParameterFloat*>(ap.getParameter(paramIdPortamento)))
+            {
+                *p = 0.05f;
+                onModificationEnded();
+            }
+        }
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip("50ms glide");
+        
+        ImGui::SameLine();
+        if (ImGui::Button("Medium", ImVec2(btnWidth, 0)))
+        {
+            if (auto* p = dynamic_cast<juce::AudioParameterFloat*>(ap.getParameter(paramIdPortamento)))
+            {
+                *p = 0.2f;
+                onModificationEnded();
+            }
+        }
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip("200ms glide");
+        
+        ImGui::SameLine();
+        if (ImGui::Button("Slow", ImVec2(btnWidth, 0)))
+        {
+            if (auto* p = dynamic_cast<juce::AudioParameterFloat*>(ap.getParameter(paramIdPortamento)))
+            {
+                *p = 0.5f;
+                onModificationEnded();
+            }
+        }
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip("500ms glide");
+        
+        ImGui::PopStyleVar();
+
+        ImGui::Spacing();
+        ImGui::Spacing();
+
         // === WAVEFORM SECTION ===
         ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1.0f), "Waveform");
         ImGui::Spacing();
@@ -262,9 +358,15 @@ private:
     // Cached parameter pointers
     std::atomic<float>* frequencyParam { nullptr };
     std::atomic<float>* waveformParam  { nullptr };
+    std::atomic<float>* relativeFreqModParam { nullptr };
+    std::atomic<float>* portamentoParam { nullptr };
 
     // Click-free gating
     float smoothedGate { 0.0f };
+    
+    // Portamento/glide
+    float currentFrequency { 440.0f };
+    double sampleRate { 44100.0 };
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (VCOModuleProcessor)
 };

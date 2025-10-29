@@ -6,6 +6,10 @@
 #include "../../preset_creator/ControllerPresetManager.h"
 #endif
 
+// ==============================================================================
+// StrokeSequencerModuleProcessor Implementation
+// ==============================================================================
+
 StrokeSequencerModuleProcessor::StrokeSequencerModuleProcessor()
     : ModuleProcessor(BusesProperties()
                           .withInput("Inputs", juce::AudioChannelSet::discreteChannels(5), true) // Reset, Rate, 3x Thresholds
@@ -60,6 +64,12 @@ void StrokeSequencerModuleProcessor::setTimingInfo(const TransportState& state)
         // Reset to the beginning when play is pressed
         playheadPosition = 0.0;
         phase = 0.0;
+        
+        // Initialize previous position to avoid spurious triggers on start
+        previousPlayheadPos = 0.0;
+        previousStrokeY = 0.5f; // Center
+        
+        juce::Logger::writeToLog("[StrokeSeq] Transport started - reset positions");
     }
     wasPlaying = state.isPlaying;
     
@@ -162,6 +172,9 @@ void StrokeSequencerModuleProcessor::processBlock(juce::AudioBuffer<float>& buff
     {
         playheadPosition = 0.0;
         phase = 0.0;
+        previousPlayheadPos = 0.0;
+        previousStrokeY = 0.5f;
+        juce::Logger::writeToLog("[StrokeSeq] RESET triggered");
     }
 
     // --- Calculate Playhead Increment (DJ Platter - Always Spinning Underneath) ---
@@ -246,24 +259,42 @@ void StrokeSequencerModuleProcessor::processBlock(juce::AudioBuffer<float>& buff
         currentStrokeYValue.store(currentStrokeY);
         valueOut[i] = currentStrokeY;
 
-        // Direct Intersection Logic - write triggers directly at the sample they occur
-        // Floor
-        bool isAboveFloor = currentStrokeY >= finalThresholds[0];
-        if (isAboveFloor && !wasAboveThreshold[0])
-            floorTrigOut[i] = 1.0f; // Single-sample pulse
-        wasAboveThreshold[0] = isAboveFloor;
-
-        // Mid
-        bool isAboveMid = currentStrokeY >= finalThresholds[1];
-        if (isAboveMid && !wasAboveThreshold[1])
-            midTrigOut[i] = 1.0f; // Single-sample pulse
-        wasAboveThreshold[1] = isAboveMid;
-
-        // Ceiling
-        bool isAboveCeil = currentStrokeY >= finalThresholds[2];
-        if (isAboveCeil && !wasAboveThreshold[2])
-            ceilTrigOut[i] = 1.0f; // Single-sample pulse
-        wasAboveThreshold[2] = isAboveCeil;
+        // === Line Segment Intersection Detection ===
+        // Check if playhead movement from previous position to current position crosses any threshold
+        
+        // Test Floor threshold
+        if (lineSegmentCrossesHorizontalLine(
+                static_cast<float>(previousPlayheadPos), previousStrokeY,
+                static_cast<float>(playheadPosition), currentStrokeY,
+                finalThresholds[0]))
+        {
+            floorTrigOut[i] = 1.0f; // Trigger!
+            juce::Logger::writeToLog("[StrokeSeq] *** FLOOR TRIGGER at sample " + juce::String(i));
+        }
+        
+        // Test Mid threshold
+        if (lineSegmentCrossesHorizontalLine(
+                static_cast<float>(previousPlayheadPos), previousStrokeY,
+                static_cast<float>(playheadPosition), currentStrokeY,
+                finalThresholds[1]))
+        {
+            midTrigOut[i] = 1.0f; // Trigger!
+            juce::Logger::writeToLog("[StrokeSeq] *** MID TRIGGER at sample " + juce::String(i));
+        }
+        
+        // Test Ceiling threshold
+        if (lineSegmentCrossesHorizontalLine(
+                static_cast<float>(previousPlayheadPos), previousStrokeY,
+                static_cast<float>(playheadPosition), currentStrokeY,
+                finalThresholds[2]))
+        {
+            ceilTrigOut[i] = 1.0f; // Trigger!
+            juce::Logger::writeToLog("[StrokeSeq] *** CEILING TRIGGER at sample " + juce::String(i));
+        }
+        
+        // Store current position for next sample
+        previousStrokeY = currentStrokeY;
+        previousPlayheadPos = playheadPosition;
     }
     
     // Report live playhead position for UI
@@ -282,9 +313,27 @@ void StrokeSequencerModuleProcessor::clearStrokes()
 {
     userStrokes.clear();
     audioStrokePoints.clear();
-    for (auto& b : wasAboveThreshold)
-        b = false;
     strokeDataDirty = true;
+}
+
+// ==============================================================================
+// Line Segment Intersection Math
+// ==============================================================================
+
+bool StrokeSequencerModuleProcessor::lineSegmentCrossesHorizontalLine(float x1, float y1, float x2, float y2, float lineY) const
+{
+    // Check if line segment from (x1, y1) to (x2, y2) crosses horizontal line at y = lineY
+    // ONLY trigger on UPWARD crossings (below -> above) to avoid double triggers
+    
+    // Must cross from below to at-or-above
+    if (y1 < lineY && y2 >= lineY)
+    {
+        juce::Logger::writeToLog("[StrokeSeq] UPWARD CROSS: y1=" + juce::String(y1, 4) + 
+                                 " -> y2=" + juce::String(y2, 4) + " crosses lineY=" + juce::String(lineY, 4));
+        return true;
+    }
+    
+    return false;
 }
 
 #if defined(PRESET_CREATOR_UI)

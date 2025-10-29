@@ -107,6 +107,39 @@ public:
         ImGui::Spacing();
         ImGui::Spacing();
 
+        // === MODULATION MODE SECTION ===
+        ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1.0f), "Modulation Mode");
+        ImGui::Spacing();
+        
+        bool relativeCutoffMod = relativeCutoffModParam ? (relativeCutoffModParam->load() > 0.5f) : true;
+        if (ImGui::Checkbox("Relative Cutoff Mod", &relativeCutoffMod))
+        {
+            if (auto* p = dynamic_cast<juce::AudioParameterBool*>(ap.getParameter("relativeCutoffMod")))
+            {
+                *p = relativeCutoffMod;
+                juce::Logger::writeToLog("[VCF UI] Relative Cutoff Mod changed to: " + juce::String(relativeCutoffMod ? "TRUE" : "FALSE"));
+            }
+        }
+        if (ImGui::IsItemDeactivatedAfterEdit()) onModificationEnded();
+        ImGui::SameLine();
+        HelpMarkerVCF("Relative: CV modulates around slider cutoff (±4 octaves)\nAbsolute: CV directly controls cutoff (20Hz-20kHz, ignores slider)");
+
+        bool relativeResonanceMod = relativeResonanceModParam ? (relativeResonanceModParam->load() > 0.5f) : true;
+        if (ImGui::Checkbox("Relative Resonance Mod", &relativeResonanceMod))
+        {
+            if (auto* p = dynamic_cast<juce::AudioParameterBool*>(ap.getParameter("relativeResonanceMod")))
+            {
+                *p = relativeResonanceMod;
+                juce::Logger::writeToLog("[VCF UI] Relative Resonance Mod changed to: " + juce::String(relativeResonanceMod ? "TRUE" : "FALSE"));
+            }
+        }
+        if (ImGui::IsItemDeactivatedAfterEdit()) onModificationEnded();
+        ImGui::SameLine();
+        HelpMarkerVCF("Relative: CV adds offset to slider resonance (±5 units)\nAbsolute: CV directly controls resonance (0.1-10.0, ignores slider)");
+
+        ImGui::Spacing();
+        ImGui::Spacing();
+
         // === FILTER RESPONSE SECTION ===
         ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1.0f), "Filter Response");
         ImGui::Spacing();
@@ -199,6 +232,8 @@ private:
     std::atomic<float>* resonanceParam = nullptr;
     std::atomic<float>* typeParam = nullptr;
     std::atomic<float>* typeModParam = nullptr;
+    std::atomic<float>* relativeCutoffModParam = nullptr;
+    std::atomic<float>* relativeResonanceModParam = nullptr;
     
     // Smoothed values to prevent zipper noise
     juce::SmoothedValue<float> cutoffSm;

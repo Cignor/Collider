@@ -89,6 +89,10 @@ private:
     std::atomic<float>* decayModParam { nullptr };
     std::atomic<float>* sustainModParam { nullptr };
     std::atomic<float>* releaseModParam { nullptr };
+    std::atomic<float>* relativeAttackModParam { nullptr };
+    std::atomic<float>* relativeDecayModParam { nullptr };
+    std::atomic<float>* relativeSustainModParam { nullptr };
+    std::atomic<float>* relativeReleaseModParam { nullptr };
     // Simple RT-safe envelope state (custom, replaces juce::ADSR to avoid surprises)
     enum class Stage { Idle, Attack, Decay, Sustain, Release };
     Stage stage { Stage::Idle };

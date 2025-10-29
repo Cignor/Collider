@@ -37,7 +37,7 @@ void populateModuleDescriptions()
     descriptions["limiter"] = "Prevents a signal from exceeding a set level.";
     descriptions["gate"] = "A stereo noise gate to silence signals below a threshold.";
     descriptions["drive"] = "A waveshaping distortion effect.";
-    descriptions["graphic eq"] = "An 8-band graphic equalizer.";
+    descriptions["graphic_eq"] = "An 8-band graphic equalizer.";
     descriptions["Frequency Graph"] = "A high-resolution, real-time spectrum analyzer.";
     descriptions["Waveshaper"] = "A distortion effect with multiple shaping algorithms.";
     descriptions["8bandshaper"] = "A multi-band waveshaper for frequency-specific distortion.";
@@ -53,7 +53,7 @@ void populateModuleDescriptions()
     descriptions["Random"] = "A random value generator with internal sample & hold.";
     descriptions["S&H"] = "A classic Sample and Hold module.";
     descriptions["Function Generator"] = "A complex, drawable envelope/LFO generator.";
-    descriptions["shaping oscillator"] = "An oscillator with a built-in waveshaper.";
+    descriptions["shaping_oscillator"] = "An oscillator with a built-in waveshaper.";
     // Utilities & Logic
     descriptions["VCA"] = "A Voltage-Controlled Amplifier to control signal level.";
     descriptions["Mixer"] = "A stereo audio mixer with crossfading and panning.";
@@ -194,14 +194,16 @@ void populatePinDatabase()
         { AudioPin("Out", 0, PinDataType::Audio) },
         {}
     );
-    db["graphic eq"] = ModulePinInfo(
+    db["graphic_eq"] = ModulePinInfo(
         NodeWidth::Big,
         { AudioPin("In L", 0, PinDataType::Audio), AudioPin("In R", 1, PinDataType::Audio),
           AudioPin("Band 1 Mod", 2, PinDataType::CV), AudioPin("Band 2 Mod", 3, PinDataType::CV),
           AudioPin("Band 3 Mod", 4, PinDataType::CV), AudioPin("Band 4 Mod", 5, PinDataType::CV),
           AudioPin("Band 5 Mod", 6, PinDataType::CV), AudioPin("Band 6 Mod", 7, PinDataType::CV),
-          AudioPin("Band 7 Mod", 8, PinDataType::CV), AudioPin("Band 8 Mod", 9, PinDataType::CV) },
-        { AudioPin("Out L", 0, PinDataType::Audio), AudioPin("Out R", 1, PinDataType::Audio) },
+          AudioPin("Band 7 Mod", 8, PinDataType::CV), AudioPin("Band 8 Mod", 9, PinDataType::CV),
+          AudioPin("Gate Thresh Mod", 10, PinDataType::CV), AudioPin("Trig Thresh Mod", 11, PinDataType::CV) },
+        { AudioPin("Out L", 0, PinDataType::Audio), AudioPin("Out R", 1, PinDataType::Audio),
+          AudioPin("Gate Out", 2, PinDataType::Gate), AudioPin("Trig Out", 3, PinDataType::Gate) },
         {}
     );
     db["frequency graph"] = ModulePinInfo(
@@ -431,10 +433,10 @@ db["random"] = ModulePinInfo(
         { AudioPin("Out L", 0, PinDataType::Audio), AudioPin("Out R", 1, PinDataType::Audio) },
         { ModPin("Frequency", "frequency_mod", PinDataType::CV), ModPin("Waveform", "waveform_mod", PinDataType::CV), ModPin("Drive", "drive_mod", PinDataType::CV) }
     );
-    db["shaping oscillator"] = ModulePinInfo(
+    db["shaping_oscillator"] = ModulePinInfo(
         NodeWidth::Medium,
         { AudioPin("In L", 0, PinDataType::Audio), AudioPin("In R", 1, PinDataType::Audio), AudioPin("Freq Mod", 2, PinDataType::CV), AudioPin("Wave Mod", 3, PinDataType::CV), AudioPin("Drive Mod", 4, PinDataType::CV) },
-        { AudioPin("Out L", 0, PinDataType::Audio), AudioPin("Out R", 1, PinDataType::Audio) },
+        { AudioPin("Out", 0, PinDataType::Audio) },
         { ModPin("Frequency", "frequency_mod", PinDataType::CV), ModPin("Waveform", "waveform_mod", PinDataType::CV), ModPin("Drive", "drive_mod", PinDataType::CV) }
     );
     db["harmonic shaper"] = ModulePinInfo(

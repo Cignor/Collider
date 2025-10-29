@@ -83,9 +83,17 @@ void GraphicEQModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, ju
 {
     juce::ScopedNoDenormals noDenormals;
 
+    // CRITICAL BUFFER ALIASING WARNING:
+    // This module has 2 output buses: Bus 0 (audio L/R) and Bus 1 (CV gate/trig).
+    // In JUCE's AudioProcessorGraph, output buses can share the SAME memory as input channels!
+    // Specifically: Output Bus 1 channels 0-1 map to Input Bus 0 channels 2-3.
+    // 
+    // SOLUTION: Get output bus references ONLY AFTER reading all input CVs that may be aliased.
+    // Order: 1) Get inBus, 2) Read all CV inputs, 3) THEN get output busses, 4) Write outputs
+    
     auto inBus = getBusBuffer(buffer, true, 0);
-    auto audioOutBus = getBusBuffer(buffer, false, 0); // Audio is on bus 0
-    auto cvOutBus = getBusBuffer(buffer, false, 1);    // CV is on bus 1
+    // CRITICAL: Do NOT get output busses until AFTER reading all CV inputs to prevent aliasing
+    // audioOutBus and cvOutBus will be obtained AFTER reading CV inputs!
 
     const int numSamples = buffer.getNumSamples();
     if (numSamples <= 0) return;
@@ -95,11 +103,29 @@ void GraphicEQModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, ju
     static int debugCounter = 0;
     const bool shouldLog = ((debugCounter++ % 100) == 0);
 
-    // LOG POINT 1: Check input signal at entry
+    // LOG POINT 1: Check input signal at entry + CV CHANNELS
     if (shouldLog && inBus.getNumChannels() > 0)
     {
         float inputRms = inBus.getRMSLevel(0, 0, numSamples);
         juce::Logger::writeToLog("[GraphicEQ Debug] At Entry - Input RMS: " + juce::String(inputRms, 6));
+        
+        // CRITICAL: Log the actual RAW values in channels 2, 3, 4 (Bands 1, 2, 3 mods)
+        if (inBus.getNumChannels() >= 5)
+        {
+            float ch2_sample0 = inBus.getSample(2, 0);
+            float ch3_sample0 = inBus.getSample(3, 0);
+            float ch4_sample0 = inBus.getSample(4, 0);
+            float ch2_rms = inBus.getRMSLevel(2, 0, numSamples);
+            float ch3_rms = inBus.getRMSLevel(3, 0, numSamples);
+            float ch4_rms = inBus.getRMSLevel(4, 0, numSamples);
+            
+            juce::Logger::writeToLog("[GraphicEQ CHANNELS] Ch2[0]=" + juce::String(ch2_sample0, 6) + 
+                                   " RMS=" + juce::String(ch2_rms, 6) +
+                                   ", Ch3[0]=" + juce::String(ch3_sample0, 6) + 
+                                   " RMS=" + juce::String(ch3_rms, 6) +
+                                   ", Ch4[0]=" + juce::String(ch4_sample0, 6) + 
+                                   " RMS=" + juce::String(ch4_rms, 6));
+        }
     }
 
     // --- CRITICAL FIX: Capture input audio BEFORE any write operations ---
@@ -119,8 +145,8 @@ void GraphicEQModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, ju
     }
     // --- END OF CRITICAL FIX ---
 
-    // --- 1. Gate/Trigger Analysis (now on the SAFE captured input signal) ---
-    // Read threshold parameters and check for modulation CVs
+    // --- 1. CRITICAL: Read ALL CV modulation inputs BEFORE any output writes ---
+    // Cache threshold parameters first
     float gateThreshDb = gateThresholdParam->load();
     float trigThreshDb = triggerThresholdParam->load();
 
@@ -143,7 +169,69 @@ void GraphicEQModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, ju
     const float gateThreshLin = juce::Decibels::decibelsToGain(gateThreshDb);
     const float trigThreshLin = juce::Decibels::decibelsToGain(trigThreshDb);
 
-    // --- 2. Write Gate/Trigger CVs (using a mono sum of the captured stereo input) ---
+    // --- 2. Read and cache ALL band modulation CVs BEFORE writing outputs ---
+    // This prevents output writes from corrupting input CV data
+    float bandGainValues[8];
+    
+    for (int bandIndex = 0; bandIndex < 8; ++bandIndex)
+    {
+        float gainDb = bandGainParams[bandIndex]->load();
+        juce::String paramId = "gainBand" + juce::String(bandIndex + 1);
+
+        // Check for modulation CV on this band (channels 2-9)
+        int modChannel = 2 + bandIndex;
+        bool isConnected = isParamInputConnected(paramId);
+        bool hasChannels = inBus.getNumChannels() > modChannel;
+        
+        // EXTENSIVE DEBUG LOGGING FOR BANDS 1 & 2
+        if (shouldLog && (bandIndex == 0 || bandIndex == 1))
+        {
+            juce::Logger::writeToLog("[GraphicEQ] Band " + juce::String(bandIndex + 1) + 
+                                   " - paramId: " + paramId +
+                                   ", modChannel: " + juce::String(modChannel) +
+                                   ", isConnected: " + juce::String(isConnected ? "YES" : "NO") + 
+                                   ", hasChannels: " + juce::String(hasChannels ? "YES" : "NO") +
+                                   ", inBus.getNumChannels(): " + juce::String(inBus.getNumChannels()));
+        }
+        
+        if (isConnected && hasChannels)
+        {
+            float modCV = inBus.getSample(modChannel, 0);
+            gainDb = juce::jmap(modCV, 0.0f, 1.0f, -60.0f, 12.0f);
+            setLiveParamValue(paramId + "_live", gainDb);
+            
+            // DEBUG LOGGING
+            if (shouldLog && (bandIndex == 0 || bandIndex == 1))
+            {
+                juce::Logger::writeToLog("[GraphicEQ] Band " + juce::String(bandIndex + 1) + 
+                                       " - modCV: " + juce::String(modCV, 6) + 
+                                       ", mapped gainDb: " + juce::String(gainDb, 2));
+            }
+        }
+        else if (shouldLog && (bandIndex == 0 || bandIndex == 1))
+        {
+            juce::Logger::writeToLog("[GraphicEQ] Band " + juce::String(bandIndex + 1) + 
+                                   " - NO MODULATION (using base gainDb: " + juce::String(gainDb, 2) + ")");
+        }
+
+        // Cache the gain value for later filter update
+        bandGainValues[bandIndex] = gainDb;
+
+        // LOG POINT 3: Log filter parameters for Band 1 as a sample
+        if (shouldLog && bandIndex == 0)
+        {
+            float gainLinear = juce::Decibels::decibelsToGain(gainDb);
+            juce::Logger::writeToLog("[GraphicEQ Debug] Band 1 - Gain (dB): " + juce::String(gainDb, 2) + 
+                                   ", Gain (Linear): " + juce::String(gainLinear, 6));
+        }
+    }
+
+    // --- 3. NOW get output busses - all CV inputs have been read and cached ---
+    auto audioOutBus = getBusBuffer(buffer, false, 0);
+    auto cvOutBus = getBusBuffer(buffer, false, 1);
+    
+    // --- 4. Write Gate/Trigger CVs (now SAFE - all input CVs are cached) ---
+    
     if (cvOutBus.getNumChannels() >= 2)
     {
         float* gateOut = cvOutBus.getWritePointer(GateOut);
@@ -169,7 +257,7 @@ void GraphicEQModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, ju
         }
     }
 
-    // --- 3. Copy Captured Input to AUDIO Output Bus (true stereo) ---
+    // --- 5. Copy Captured Input to AUDIO Output Bus ---
     if (audioOutBus.getNumChannels() >= 2)
     {
         audioOutBus.copyFrom(0, 0, inputCopy, 0, 0, numSamples);
@@ -184,70 +272,34 @@ void GraphicEQModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, ju
         audioOutBus.clear();
     }
 
-    // LOG POINT 2: Check signal after copying to output bus
+    // LOG POINT 2: Check signal after copying
     if (shouldLog && audioOutBus.getNumChannels() > 0)
     {
         float afterCopyRms = audioOutBus.getRMSLevel(0, 0, numSamples);
         juce::Logger::writeToLog("[GraphicEQ Debug] After Copy - Audio Out RMS: " + juce::String(afterCopyRms, 6));
     }
 
-    // --- 4. Update Filter Coefficients ---
-    double sampleRate = getSampleRate();
-    const float q = 1.414f;
+    // --- 6. Update Filter Coefficients (using cached gain values) ---
+    const double currentSampleRate = getSampleRate();
+    const float filterQ = 1.414f;
 
     for (int bandIndex = 0; bandIndex < 8; ++bandIndex)
     {
-        float gainDb = bandGainParams[bandIndex]->load();
-        juce::String paramId = "gainBand" + juce::String(bandIndex + 1);
-
-        // Check for modulation CV on this band (channels 2-9)
-        int modChannel = 2 + bandIndex;
-        bool isConnected = isParamInputConnected(paramId);
-        bool hasChannels = inBus.getNumChannels() > modChannel;
-        
-        // DEBUG LOGGING
-        if (shouldLog && bandIndex == 0)
-        {
-            juce::Logger::writeToLog("[GraphicEQ] Band 1 - isConnected: " + juce::String(isConnected ? "YES" : "NO") + 
-                                   ", hasChannels: " + juce::String(hasChannels ? "YES" : "NO") +
-                                   ", inBus.getNumChannels(): " + juce::String(inBus.getNumChannels()));
-        }
-        
-        if (isConnected && hasChannels)
-        {
-            float modCV = inBus.getSample(modChannel, 0);
-            gainDb = juce::jmap(modCV, 0.0f, 1.0f, -60.0f, 12.0f);
-            setLiveParamValue(paramId + "_live", gainDb);
-            
-            // DEBUG LOGGING
-            if (shouldLog && bandIndex == 0)
-            {
-                juce::Logger::writeToLog("[GraphicEQ] Band 1 - modCV: " + juce::String(modCV, 6) + 
-                                       ", mapped gainDb: " + juce::String(gainDb, 2));
-            }
-        }
-
+        float gainDb = bandGainValues[bandIndex];
         float gainLinear = juce::Decibels::decibelsToGain(gainDb);
 
-        // LOG POINT 3: Log filter parameters for Band 1 as a sample
-        if (shouldLog && bandIndex == 0)
-        {
-            juce::Logger::writeToLog("[GraphicEQ Debug] Band 1 - Gain (dB): " + juce::String(gainDb, 2) + 
-                                   ", Gain (Linear): " + juce::String(gainLinear, 6));
-        }
-
-        // CRITICAL FIX: ProcessorDuplicator needs the shared_ptr, not dereferenced coefficients
+        // Update filter coefficients based on band type
         if (bandIndex == 0)
         {
-            *processorChain.get<0>().state = *juce::dsp::IIR::Coefficients<float>::makeLowShelf(sampleRate, centerFrequencies[bandIndex], q, gainLinear);
+            *processorChain.get<0>().state = *juce::dsp::IIR::Coefficients<float>::makeLowShelf(currentSampleRate, centerFrequencies[bandIndex], filterQ, gainLinear);
         }
         else if (bandIndex == 7)
         {
-            *processorChain.get<7>().state = *juce::dsp::IIR::Coefficients<float>::makeHighShelf(sampleRate, centerFrequencies[bandIndex], q, gainLinear);
+            *processorChain.get<7>().state = *juce::dsp::IIR::Coefficients<float>::makeHighShelf(currentSampleRate, centerFrequencies[bandIndex], filterQ, gainLinear);
         }
         else if (bandIndex >= 1 && bandIndex <= 6) // Peak filters for bands 1-6
         {
-            auto newCoefficients = juce::dsp::IIR::Coefficients<float>::makePeakFilter(sampleRate, centerFrequencies[bandIndex], q, gainLinear);
+            auto newCoefficients = juce::dsp::IIR::Coefficients<float>::makePeakFilter(currentSampleRate, centerFrequencies[bandIndex], filterQ, gainLinear);
             switch (bandIndex)
             {
                 case 1: *processorChain.get<1>().state = *newCoefficients; break;
@@ -260,7 +312,7 @@ void GraphicEQModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, ju
         }
     }
 
-    // --- 5. Process Entire Chain in Series (in-place on audioOutBus) ---
+    // --- 7. Process Entire Chain in Series (in-place on audioOutBus) ---
     if (audioOutBus.getNumChannels() > 0)
     {
         juce::dsp::AudioBlock<float> audioBlock(audioOutBus.getArrayOfWritePointers(), 
@@ -276,7 +328,7 @@ void GraphicEQModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, ju
             juce::Logger::writeToLog("[GraphicEQ Debug] After Filter Chain - Audio Out RMS: " + juce::String(afterChainRms, 6));
         }
 
-        // --- 6. Apply Output Gain ---
+        // --- 8. Apply Output Gain ---
         float outputGain = juce::Decibels::decibelsToGain(outputLevelParam->load());
         audioOutBus.applyGain(0, 0, numSamples, outputGain);
         if (audioOutBus.getNumChannels() > 1)
@@ -492,12 +544,6 @@ std::vector<DynamicPinInfo> GraphicEQModuleProcessor::getDynamicOutputPins() con
     // CV/Gate outputs (bus 1, channels 0-1, but shown as output channels 2-3)
     pins.push_back({"Gate Out", 2, PinDataType::Gate});
     pins.push_back({"Trig Out", 3, PinDataType::Gate});
-    
-    // RMS CV outputs (bus 1, channels 2-9, but shown as output channels 4-11)
-    for (int i = 0; i < 8; ++i)
-    {
-        pins.push_back({"Band " + juce::String(i + 1) + " CV", 4 + i, PinDataType::CV});
-    }
     
     return pins;
 }

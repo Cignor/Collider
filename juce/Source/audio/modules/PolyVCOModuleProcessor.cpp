@@ -6,6 +6,13 @@ juce::AudioProcessorValueTreeState::ParameterLayout PolyVCOModuleProcessor::crea
 
     // The single parameter for controlling the voice count.
     p.push_back(std::make_unique<juce::AudioParameterInt>("numVoices", "Num Voices", 1, MAX_VOICES, 8));
+    
+    // Global relative frequency modulation mode
+    p.push_back(std::make_unique<juce::AudioParameterBool>("relativeFreqMod", "Relative Freq Mod", true));
+    
+    // Global portamento time
+    p.push_back(std::make_unique<juce::AudioParameterFloat>("portamento", "Portamento",
+        juce::NormalisableRange<float>(0.0f, 2.0f, 0.001f, 0.5f), 0.0f));
 
     // Create all 32 potential per-voice parameters up-front.
     for (int i = 0; i < MAX_VOICES; ++i)
@@ -28,6 +35,8 @@ PolyVCOModuleProcessor::PolyVCOModuleProcessor()
       apvts(*this, nullptr, "PolyVCOParams", createParameterLayout())
 {
     numVoicesParam = dynamic_cast<juce::AudioParameterInt*>(apvts.getParameter("numVoices"));
+    relativeFreqModParam = dynamic_cast<juce::AudioParameterBool*>(apvts.getParameter("relativeFreqMod"));
+    portamentoParam = dynamic_cast<juce::AudioParameterFloat*>(apvts.getParameter("portamento"));
     
     // RACE CONDITION FIX: Pre-initialize all oscillators for each waveform type
     // This avoids dangerous memory allocations on the audio thread
@@ -60,8 +69,9 @@ PolyVCOModuleProcessor::PolyVCOModuleProcessor()
     }
 }
 
-void PolyVCOModuleProcessor::prepareToPlay(double sampleRate, int samplesPerBlock)
+void PolyVCOModuleProcessor::prepareToPlay(double sr, int samplesPerBlock)
 {
+    sampleRate = sr;
     juce::dsp::ProcessSpec spec { sampleRate, (juce::uint32)samplesPerBlock, 1 }; // Mono spec
     
     // Prepare all pre-initialized oscillators
@@ -73,6 +83,7 @@ void PolyVCOModuleProcessor::prepareToPlay(double sampleRate, int samplesPerBloc
         smoothedGateLevels[i] = 0.0f;
         gateEnvelope[i] = 0.0f;
         gateOnState[i] = 0;
+        currentFrequencies[i] = 440.0f; // Initialize portamento frequencies
     }
 }
 
@@ -92,6 +103,15 @@ void PolyVCOModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce
     constexpr float GATE_RELEASE_SECONDS = 0.002f;
     const float gateAttackCoeff = (float)((1.0 - std::exp(-1.0 / juce::jmax(1.0, getSampleRate() * GATE_ATTACK_SECONDS))));
     const float gateReleaseCoeff = (float)((1.0 - std::exp(-1.0 / juce::jmax(1.0, getSampleRate() * GATE_RELEASE_SECONDS))));
+    
+    // Calculate portamento coefficient
+    const float portamentoTime = portamentoParam ? portamentoParam->get() : 0.0f;
+    float portamentoCoeff = 1.0f; // Instant (no smoothing)
+    if (portamentoTime > 0.001f)
+    {
+        const double timeInSamples = portamentoTime * sampleRate;
+        portamentoCoeff = static_cast<float>(1.0 - std::exp(-1.0 / timeInSamples));
+    }
 
     const bool isNumVoicesModulated = isParamInputConnected("numVoices");
     std::array<bool, MAX_VOICES> freqIsModulated, waveIsModulated, gateIsModulated;
@@ -133,8 +153,20 @@ void PolyVCOModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce
                 {
                     freqModCV = modInBus.getReadPointer(chan)[sample];
                     const float cv01 = (freqModCV >= 0.0f && freqModCV <= 1.0f) ? freqModCV : (freqModCV + 1.0f) * 0.5f;
-                    constexpr float fMin = 20.0f, fMax = 20000.0f;
-                    freq = fMin * std::pow(2.0f, juce::jlimit(0.0f, 1.0f, cv01) * std::log2(fMax / fMin));
+                    
+                    const bool relativeMode = relativeFreqModParam != nullptr && relativeFreqModParam->get();
+                    if (relativeMode)
+                    {
+                        // RELATIVE: CV modulates around base frequency (±4 octaves)
+                        const float octaveOffset = (juce::jlimit(0.0f, 1.0f, cv01) - 0.5f) * 8.0f;
+                        freq = freq * std::pow(2.0f, octaveOffset);
+                    }
+                    else
+                    {
+                        // ABSOLUTE: CV directly maps to full frequency range
+                        constexpr float fMin = 20.0f, fMax = 20000.0f;
+                        freq = fMin * std::pow(2.0f, juce::jlimit(0.0f, 1.0f, cv01) * std::log2(fMax / fMin));
+                    }
                 }
             }
             if (waveIsModulated[voice])
@@ -142,6 +174,16 @@ void PolyVCOModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce
                 int chan = 1 + MAX_VOICES + voice;
                 if (chan < modInBus.getNumChannels())
                     waveChoice = static_cast<int>(juce::jlimit(0.0f, 1.0f, (modInBus.getReadPointer(chan)[sample] + 1.0f) * 0.5f) * 2.99f);
+            }
+            
+            // Apply portamento/glide smoothing to frequency
+            if (portamentoTime > 0.001f)
+            {
+                currentFrequencies[voice] += (freq - currentFrequencies[voice]) * portamentoCoeff;
+            }
+            else
+            {
+                currentFrequencies[voice] = freq; // Instant, no glide
             }
             
             // --- THIS IS THE DEFINITIVE FIX ---
@@ -182,7 +224,7 @@ void PolyVCOModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce
                 currentWaveforms[voice] = waveChoice;
             }
 
-            currentOscillator->setFrequency(freq, false);
+            currentOscillator->setFrequency(currentFrequencies[voice], false);
             const float sampleValue = currentOscillator->processSample(0.0f);
             
             outBus.setSample(voice, sample, sampleValue * finalGateMultiplier);
@@ -318,6 +360,98 @@ void PolyVCOModuleProcessor::drawParametersInNode(float itemWidth, const std::fu
     ImGui::Text("Voices");
     ImGui::SameLine();
     HelpMarkerPoly("Number of active voices (1-32)\nEach voice is an independent oscillator");
+
+    ImGui::Spacing();
+    ImGui::Spacing();
+
+    // === FREQUENCY MODULATION MODE SECTION ===
+    ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1.0f), "Frequency Modulation");
+    ImGui::Spacing();
+    
+    bool relativeFreqMod = relativeFreqModParam ? relativeFreqModParam->get() : true;
+    if (ImGui::Checkbox("Relative Frequency Mod", &relativeFreqMod))
+    {
+        if (relativeFreqModParam)
+        {
+            *relativeFreqModParam = relativeFreqMod;
+            juce::Logger::writeToLog("[PolyVCO UI] Relative Frequency Mod changed to: " + juce::String(relativeFreqMod ? "TRUE" : "FALSE"));
+        }
+    }
+    if (ImGui::IsItemDeactivatedAfterEdit()) onModificationEnded();
+    ImGui::SameLine();
+    HelpMarkerPoly("Relative: CV modulates around slider frequency (±4 octaves)\nAbsolute: CV directly controls frequency (20Hz-20kHz, ignores sliders)\n\nApplies to all voice frequency inputs");
+
+    ImGui::Spacing();
+    ImGui::Spacing();
+
+    // === PORTAMENTO SECTION ===
+    ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1.0f), "Glide");
+    ImGui::Spacing();
+    
+    float portamentoTime = portamentoParam ? portamentoParam->get() : 0.0f;
+    ImGui::SetNextItemWidth(itemWidth * 0.6f);
+    if (ImGui::SliderFloat("##portamento", &portamentoTime, 0.0f, 2.0f, "%.3f s", ImGuiSliderFlags_Logarithmic))
+    {
+        if (portamentoParam)
+        {
+            *portamentoParam = portamentoTime;
+        }
+    }
+    if (ImGui::IsItemDeactivatedAfterEdit()) onModificationEnded();
+    
+    ImGui::SameLine();
+    ImGui::Text("Portamento");
+    ImGui::SameLine();
+    HelpMarkerPoly("Pitch glide time for all voices\n0s = instant (no glide)\n0.05s = fast slide\n0.2s = smooth glide\n0.5s+ = slow portamento");
+
+    // Quick preset buttons
+    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(4, 4));
+    float btnWidth = (itemWidth - 12) / 4.0f;
+    
+    if (ImGui::Button("Off", ImVec2(btnWidth, 0)))
+    {
+        if (portamentoParam)
+        {
+            *portamentoParam = 0.0f;
+            onModificationEnded();
+        }
+    }
+    if (ImGui::IsItemHovered()) ImGui::SetTooltip("No glide");
+    
+    ImGui::SameLine();
+    if (ImGui::Button("Fast", ImVec2(btnWidth, 0)))
+    {
+        if (portamentoParam)
+        {
+            *portamentoParam = 0.05f;
+            onModificationEnded();
+        }
+    }
+    if (ImGui::IsItemHovered()) ImGui::SetTooltip("50ms");
+    
+    ImGui::SameLine();
+    if (ImGui::Button("Medium", ImVec2(btnWidth, 0)))
+    {
+        if (portamentoParam)
+        {
+            *portamentoParam = 0.2f;
+            onModificationEnded();
+        }
+    }
+    if (ImGui::IsItemHovered()) ImGui::SetTooltip("200ms");
+    
+    ImGui::SameLine();
+    if (ImGui::Button("Slow", ImVec2(btnWidth, 0)))
+    {
+        if (portamentoParam)
+        {
+            *portamentoParam = 0.5f;
+            onModificationEnded();
+        }
+    }
+    if (ImGui::IsItemHovered()) ImGui::SetTooltip("500ms");
+    
+    ImGui::PopStyleVar();
 
     ImGui::Spacing();
     ImGui::Spacing();

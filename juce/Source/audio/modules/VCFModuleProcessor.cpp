@@ -10,6 +10,8 @@ VCFModuleProcessor::VCFModuleProcessor()
     resonanceParam = apvts.getRawParameterValue(paramIdResonance);
     typeParam = apvts.getRawParameterValue(paramIdType);
     typeModParam = apvts.getRawParameterValue(paramIdTypeMod);
+    relativeCutoffModParam = apvts.getRawParameterValue("relativeCutoffMod");
+    relativeResonanceModParam = apvts.getRawParameterValue("relativeResonanceMod");
     
     // Initialize output value tracking for tooltips
     lastOutputValues.push_back(std::make_unique<std::atomic<float>>(0.0f)); // For Out L
@@ -39,6 +41,13 @@ juce::AudioProcessorValueTreeState::ParameterLayout VCFModuleProcessor::createPa
     // Add modulation parameter for filter type
     params.push_back(std::make_unique<juce::AudioParameterFloat>(
         paramIdTypeMod, "Type Mod", 0.0f, 1.0f, 0.0f));
+
+    // Relative modulation modes
+    params.push_back(std::make_unique<juce::AudioParameterBool>(
+        "relativeCutoffMod", "Relative Cutoff Mod", true));
+    
+    params.push_back(std::make_unique<juce::AudioParameterBool>(
+        "relativeResonanceMod", "Relative Resonance Mod", true));
 
     return { params.begin(), params.end() };
 }
@@ -82,6 +91,8 @@ void VCFModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::Mi
     const float baseCutoff = cutoffParam != nullptr ? cutoffParam->load() : 1000.0f;
     const float baseResonance = resonanceParam != nullptr ? resonanceParam->load() : 1.0f;
     const int baseType = static_cast<int>(typeParam != nullptr ? typeParam->load() : 0);
+    const bool relativeCutoffMode = relativeCutoffModParam != nullptr && relativeCutoffModParam->load() > 0.5f;
+    const bool relativeResonanceMode = relativeResonanceModParam != nullptr && relativeResonanceModParam->load() > 0.5f;
 
     // Create a temporary buffer for single-sample processing (always 2 channels)
     juce::AudioBuffer<float> sampleBuffer(2, 1);
@@ -99,10 +110,22 @@ void VCFModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::Mi
         float cutoff = baseCutoff;
         if (isCutoffMod && cutoffCV != nullptr) {
             const float cv = juce::jlimit(0.0f, 1.0f, cutoffCV[i]);
-            // ADDITIVE MODULATION FIX: Add CV offset to base cutoff value
-            const float octaveRange = 4.0f; // CV can modulate +/- 4 octaves
-            const float octaveOffset = (cv - 0.5f) * octaveRange; // Center around 0, range [-2, +2] octaves
-            cutoff = baseCutoff * std::pow(2.0f, octaveOffset);
+            
+            if (relativeCutoffMode)
+            {
+                // RELATIVE MODE: CV modulates around base cutoff (±4 octaves)
+                const float octaveRange = 4.0f; // CV can modulate +/- 4 octaves
+                const float octaveOffset = (cv - 0.5f) * octaveRange; // Center around 0, range [-2, +2] octaves
+                cutoff = baseCutoff * std::pow(2.0f, octaveOffset);
+            }
+            else
+            {
+                // ABSOLUTE MODE: CV directly maps to full cutoff range (20Hz-20kHz)
+                constexpr float fMin = 20.0f;
+                constexpr float fMax = 20000.0f;
+                const float spanOct = std::log2(fMax / fMin);
+                cutoff = fMin * std::pow(2.0f, cv * spanOct);
+            }
             cutoff = juce::jlimit(20.0f, 20000.0f, cutoff);
         }
         
@@ -113,10 +136,19 @@ void VCFModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::Mi
         float resonance = baseResonance;
         if (isResoMod && resoCV != nullptr) {
             const float cv = juce::jlimit(0.0f, 1.0f, resoCV[i]);
-            // ADDITIVE MODULATION FIX: Add CV offset to base resonance value
-            const float resoRange = 2.0f; // CV can modulate resonance by +/- 2 units
-            const float resoOffset = (cv - 0.5f) * resoRange; // Center around 0
-            resonance = baseResonance + resoOffset;
+            
+            if (relativeResonanceMode)
+            {
+                // RELATIVE MODE: CV adds offset to base resonance (±5 units)
+                const float resoRange = 10.0f; // CV can modulate resonance by +/- 5 units
+                const float resoOffset = (cv - 0.5f) * resoRange; // Center around 0
+                resonance = baseResonance + resoOffset;
+            }
+            else
+            {
+                // ABSOLUTE MODE: CV directly maps to full resonance range (0.1 - 10.0)
+                resonance = juce::jmap(cv, 0.1f, 10.0f);
+            }
             resonance = juce::jlimit(0.1f, 10.0f, resonance);
         }
         

@@ -210,6 +210,15 @@ void AnimationRenderer::frameView(const std::vector<glm::mat4>& boneMatrices, fl
     for (const auto& matrix : boneMatrices)
     {
         glm::vec3 position = matrix[3]; // Position is in the 4th column
+
+        // === START FIX: Ignore bones at or very near the origin ===
+        // This prevents non-skeleton helper nodes from ruining the auto-frame.
+        if (glm::length(position) < 0.001f)
+        {
+            continue; // Skip this bone
+        }
+        // === END FIX ===
+
         minPoint.x = std::min(minPoint.x, position.x);
         minPoint.y = std::min(minPoint.y, position.y);
         maxPoint.x = std::max(maxPoint.x, position.x);

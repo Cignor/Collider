@@ -12,7 +12,7 @@
 static glm::mat4 ToGlmMat4(const ufbx_transform& t)
 {
     glm::vec3 translation(t.translation.x, t.translation.y, t.translation.z);
-    // t.rotation is already a quaternion, not Euler angles
+    // ufbx provides rotation as a quaternion directly. Use it.
     glm::quat rotation(t.rotation.w, t.rotation.x, t.rotation.y, t.rotation.z);
     glm::vec3 scale(t.scale.x, t.scale.y, t.scale.z);
 
@@ -60,7 +60,9 @@ std::unique_ptr<RawAnimationData> FbxLoader::LoadFromFile(const std::string& fil
             juce::Logger::writeToLog("FbxLoader: Found node with empty name at index " + juce::String(i) + ". Assigning default name '" + juce::String(node.name) + "'.");
         }
         
+        // Use the local transform from the node
         node.localTransform = ToGlmMat4(ufbNode->local_transform);
+        
         rawData->nodes.push_back(node);
     }
 
@@ -133,6 +135,16 @@ std::unique_ptr<RawAnimationData> FbxLoader::LoadFromFile(const std::string& fil
                     
                     std::string boneName = node->name.data;
                     if (boneName.empty()) continue;
+
+                    // === START FIX: Only add nodes that look like they belong to a rig ===
+                    // This is a heuristic to filter out cameras, lights, etc.
+                    // It checks for common rig naming conventions.
+                    if (!(boneName.rfind("_1:", 0) == 0 || boneName.rfind("mixamorig:", 0) == 0))
+                    {
+                        juce::Logger::writeToLog("FbxLoader: Skipping non-rig animated node: '" + juce::String(boneName) + "'");
+                        continue; // Skip this node
+                    }
+                    // === END FIX ===
 
                     if (boneNameMap.find(boneName) == boneNameMap.end()) {
                         boneNameMap[boneName] = rawData->bones.size();
@@ -231,7 +243,9 @@ std::unique_ptr<RawAnimationData> FbxLoader::LoadFromFile(const std::string& fil
                         for (size_t m = 0; m < prop->anim_value->curves[0]->keyframes.count; ++m) {
                             double time = prop->anim_value->curves[0]->keyframes.data[m].time;
                             ufbx_vec3 eulerDeg = ufbx_evaluate_anim_value_vec3(prop->anim_value, time);
-                            ufbx_quat q = ufbx_euler_to_quat(eulerDeg, UFBX_ROTATION_ORDER_XYZ);
+                            // === THE FIX: Use the rotation order from the node itself, not a fixed guess ===
+                            ufbx_quat q = ufbx_euler_to_quat(eulerDeg, node->rotation_order);
+                            // ==============================================================================
                             boneAnim.rotations.keyframeTimes.push_back(time);
                             boneAnim.rotations.keyframeValues.push_back(glm::vec4(q.x, q.y, q.z, q.w));
                         }

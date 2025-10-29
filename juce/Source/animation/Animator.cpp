@@ -59,24 +59,40 @@ void Animator::Update(float deltaTime) {
     CalculateBoneTransform(&m_AnimationData->rootNode, glm::mat4(1.0f));
 }
 
-void Animator::CalculateBoneTransform(const NodeData* node, const glm::mat4& parentTransform) {
+void Animator::CalculateBoneTransform(NodeData* node, const glm::mat4& parentTransform) {
     if(!node) return;
-    
-    // NO LOGGING ALLOWED - called from audio thread!
-    // Use PRE-LINKED bone animation pointer (NO string operations!)
-    BoneAnimation* boneAnim = node->currentBoneAnimation;
-    
-    glm::vec3 scale, translation;
-    glm::quat rotation;
-    glm::vec3 skew;
-    glm::vec4 perspective;
-    glm::decompose(node->transformation, scale, rotation, translation, skew, perspective);
 
-    translation = InterpolatePosition(m_CurrentTime, boneAnim ? boneAnim->positions : std::vector<KeyPosition>(), translation);
-    rotation = InterpolateRotation(m_CurrentTime, boneAnim ? boneAnim->rotations : std::vector<KeyRotation>(), rotation);
-    scale = InterpolateScale(m_CurrentTime, boneAnim ? boneAnim->scales : std::vector<KeyScale>(), scale);
-    
-    glm::mat4 nodeTransform = glm::translate(glm::mat4(1.0f), translation) * glm::toMat4(rotation) * glm::scale(glm::mat4(1.0f), scale);
+    BoneAnimation* boneAnim = node->currentBoneAnimation;
+    glm::mat4 nodeTransform; // This will hold the final local transform for this node.
+
+    // === START: THE DEFINITIVE FIX ===
+    // If there is an active animation clip affecting this specific bone...
+    if (boneAnim)
+    {
+        // ...then we decompose the bone's base transform, apply the animation keyframes,
+        // and recompose a new transform matrix for this frame.
+        glm::vec3 scale, translation;
+        glm::quat rotation;
+        glm::vec3 skew;
+        glm::vec4 perspective;
+        glm::decompose(node->transformation, scale, rotation, translation, skew, perspective);
+
+        // These calls are safe even if a track (e.g., scale) is missing from the animation
+        translation = InterpolatePosition(m_CurrentTime, boneAnim->positions, translation);
+        rotation    = InterpolateRotation(m_CurrentTime, boneAnim->rotations, rotation);
+        scale       = InterpolateScale(m_CurrentTime, boneAnim->scales, scale);
+        
+        nodeTransform = glm::translate(glm::mat4(1.0f), translation) * glm::toMat4(rotation) * glm::scale(glm::mat4(1.0f), scale);
+    }
+    else
+    {
+        // ...otherwise, if this bone is NOT animated, we use its original, unmodified
+        // transformation matrix. This prevents the decompose/recompose cycle that was
+        // corrupting the transforms by introducing accumulating floating-point errors.
+        nodeTransform = node->transformation;
+    }
+    // === END: THE DEFINITIVE FIX ===
+
     glm::mat4 globalTransform = parentTransform * nodeTransform;
 
     // Use pre-linked bone index and offset matrix (NO string operations!)
@@ -84,14 +100,11 @@ void Animator::CalculateBoneTransform(const NodeData* node, const glm::mat4& par
     {
         // Store world transform for visualization (without offset matrix)
         m_BoneWorldTransforms[node->boneIndex] = globalTransform;
-        
         // Apply the offset matrix to get the final skinning transform
-        // finalMatrix = globalTransform * offsetMatrix (inverse bind pose)
         m_FinalBoneMatrices[node->boneIndex] = globalTransform * node->offsetMatrix;
     }
 
-    // THIS IS THE FIX: We get a non-const reference to the child.
-    for (auto& child : const_cast<NodeData*>(node)->children) {
+    for (auto& child : node->children) {
         CalculateBoneTransform(&child, globalTransform);
     }
 }

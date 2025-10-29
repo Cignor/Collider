@@ -14,6 +14,10 @@ ADSRModuleProcessor::ADSRModuleProcessor()
     decayModParam   = apvts.getRawParameterValue (paramIdDecayMod);
     sustainModParam = apvts.getRawParameterValue (paramIdSustainMod);
     releaseModParam = apvts.getRawParameterValue (paramIdReleaseMod);
+    relativeAttackModParam = apvts.getRawParameterValue("relativeAttackMod");
+    relativeDecayModParam = apvts.getRawParameterValue("relativeDecayMod");
+    relativeSustainModParam = apvts.getRawParameterValue("relativeSustainMod");
+    relativeReleaseModParam = apvts.getRawParameterValue("relativeReleaseMod");
     
     // CORRECTED INITIALIZATION:
     // Create unique_ptrs to heap-allocated atomics for each output channel.
@@ -36,6 +40,13 @@ juce::AudioProcessorValueTreeState::ParameterLayout ADSRModuleProcessor::createP
     p.push_back (std::make_unique<juce::AudioParameterFloat> (paramIdDecayMod,   "Decay Mod",   0.0f, 1.0f, 0.0f));
     p.push_back (std::make_unique<juce::AudioParameterFloat> (paramIdSustainMod, "Sustain Mod", 0.0f, 1.0f, 0.0f));
     p.push_back (std::make_unique<juce::AudioParameterFloat> (paramIdReleaseMod, "Release Mod", 0.0f, 1.0f, 0.0f));
+    
+    // Relative modulation modes
+    p.push_back (std::make_unique<juce::AudioParameterBool>("relativeAttackMod", "Relative Attack Mod", true));
+    p.push_back (std::make_unique<juce::AudioParameterBool>("relativeDecayMod", "Relative Decay Mod", true));
+    p.push_back (std::make_unique<juce::AudioParameterBool>("relativeSustainMod", "Relative Sustain Mod", true));
+    p.push_back (std::make_unique<juce::AudioParameterBool>("relativeReleaseMod", "Relative Release Mod", true));
+    
     return { p.begin(), p.end() };
 }
 
@@ -79,16 +90,40 @@ void ADSRModuleProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::
     const float dBase = decayParam   ? decayParam->load()   : 0.10f;
     const float sBase = sustainParam ? sustainParam->load() : 0.70f;
     const float rBase = releaseParam ? releaseParam->load() : 0.20f;
+    
+    const bool relativeAttackMode = relativeAttackModParam && relativeAttackModParam->load() > 0.5f;
+    const bool relativeDecayMode = relativeDecayModParam && relativeDecayModParam->load() > 0.5f;
+    const bool relativeSustainMode = relativeSustainModParam && relativeSustainModParam->load() > 0.5f;
+    const bool relativeReleaseMode = relativeReleaseModParam && relativeReleaseModParam->load() > 0.5f;
 
     // Relative modulation: 0.5 = neutral. Times scaled roughly 0.25x..4x; sustain +/-0.5.
     auto timeScale = [](float norm){ return juce::jlimit(0.25f, 4.0f, std::pow(2.0f, (norm - 0.5f) * 2.0f)); }; // 0.25..4.0
     auto sustDelta = [](float norm){ return juce::jlimit(-0.5f, 0.5f, norm - 0.5f); };
 
     // Apply CV modulation or fallback to parameter values
-    const float aEff = juce::jlimit(0.001f, 5.0f, aBase * (isParamInputConnected(paramIdAttackMod) ? timeScale(attackModCV) : 1.0f));
-    const float dEff = juce::jlimit(0.001f, 5.0f, dBase * (isParamInputConnected(paramIdDecayMod) ? timeScale(decayModCV) : 1.0f));
-    const float sEff = juce::jlimit(0.0f,   1.0f, sBase + (isParamInputConnected(paramIdSustainMod) ? sustDelta(sustainModCV) : 0.0f));
-    const float rEff = juce::jlimit(0.001f, 5.0f, rBase * (isParamInputConnected(paramIdReleaseMod) ? timeScale(releaseModCV) : 1.0f));
+    float aEff = aBase;
+    if (isParamInputConnected(paramIdAttackMod)) {
+        aEff = relativeAttackMode ? (aBase * timeScale(attackModCV)) : juce::jmap(attackModCV, 0.001f, 5.0f);
+    }
+    aEff = juce::jlimit(0.001f, 5.0f, aEff);
+    
+    float dEff = dBase;
+    if (isParamInputConnected(paramIdDecayMod)) {
+        dEff = relativeDecayMode ? (dBase * timeScale(decayModCV)) : juce::jmap(decayModCV, 0.001f, 5.0f);
+    }
+    dEff = juce::jlimit(0.001f, 5.0f, dEff);
+    
+    float sEff = sBase;
+    if (isParamInputConnected(paramIdSustainMod)) {
+        sEff = relativeSustainMode ? (sBase + sustDelta(sustainModCV)) : sustainModCV;
+    }
+    sEff = juce::jlimit(0.0f, 1.0f, sEff);
+    
+    float rEff = rBase;
+    if (isParamInputConnected(paramIdReleaseMod)) {
+        rEff = relativeReleaseMode ? (rBase * timeScale(releaseModCV)) : juce::jmap(releaseModCV, 0.001f, 5.0f);
+    }
+    rEff = juce::jlimit(0.001f, 5.0f, rEff);
 
     // Ensure UI reflects effective modulation in tooltips (optional debug)
 
@@ -269,6 +304,65 @@ void ADSRModuleProcessor::drawParametersInNode(float itemWidth, const std::funct
     if (isReleaseModulated) { ImGui::EndDisabled(); ImGui::SameLine(); ImGui::TextUnformatted("(mod)"); }
     ImGui::SameLine();
     HelpMarkerADSR("Release time in seconds\nTime to fade to zero after gate off");
+
+    ImGui::Spacing();
+    ImGui::Spacing();
+
+    // === MODULATION MODE SECTION ===
+    ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1.0f), "Modulation Mode");
+    ImGui::Spacing();
+    
+    bool relativeAttackMod = relativeAttackModParam ? (relativeAttackModParam->load() > 0.5f) : true;
+    if (ImGui::Checkbox("Relative Attack Mod", &relativeAttackMod))
+    {
+        if (auto* p = dynamic_cast<juce::AudioParameterBool*>(ap.getParameter("relativeAttackMod")))
+        {
+            *p = relativeAttackMod;
+            juce::Logger::writeToLog("[ADSR UI] Relative Attack Mod changed to: " + juce::String(relativeAttackMod ? "TRUE" : "FALSE"));
+        }
+    }
+    if (ImGui::IsItemDeactivatedAfterEdit()) onModificationEnded();
+    ImGui::SameLine();
+    HelpMarkerADSR("Relative: CV scales around slider time (0.25x-4x)\nAbsolute: CV directly sets time (0.001s-5s)");
+
+    bool relativeDecayMod = relativeDecayModParam ? (relativeDecayModParam->load() > 0.5f) : true;
+    if (ImGui::Checkbox("Relative Decay Mod", &relativeDecayMod))
+    {
+        if (auto* p = dynamic_cast<juce::AudioParameterBool*>(ap.getParameter("relativeDecayMod")))
+        {
+            *p = relativeDecayMod;
+            juce::Logger::writeToLog("[ADSR UI] Relative Decay Mod changed to: " + juce::String(relativeDecayMod ? "TRUE" : "FALSE"));
+        }
+    }
+    if (ImGui::IsItemDeactivatedAfterEdit()) onModificationEnded();
+    ImGui::SameLine();
+    HelpMarkerADSR("Relative: CV scales around slider time (0.25x-4x)\nAbsolute: CV directly sets time (0.001s-5s)");
+
+    bool relativeSustainMod = relativeSustainModParam ? (relativeSustainModParam->load() > 0.5f) : true;
+    if (ImGui::Checkbox("Relative Sustain Mod", &relativeSustainMod))
+    {
+        if (auto* p = dynamic_cast<juce::AudioParameterBool*>(ap.getParameter("relativeSustainMod")))
+        {
+            *p = relativeSustainMod;
+            juce::Logger::writeToLog("[ADSR UI] Relative Sustain Mod changed to: " + juce::String(relativeSustainMod ? "TRUE" : "FALSE"));
+        }
+    }
+    if (ImGui::IsItemDeactivatedAfterEdit()) onModificationEnded();
+    ImGui::SameLine();
+    HelpMarkerADSR("Relative: CV adds offset to slider (±0.5)\nAbsolute: CV directly sets level (0-1)");
+
+    bool relativeReleaseMod = relativeReleaseModParam ? (relativeReleaseModParam->load() > 0.5f) : true;
+    if (ImGui::Checkbox("Relative Release Mod", &relativeReleaseMod))
+    {
+        if (auto* p = dynamic_cast<juce::AudioParameterBool*>(ap.getParameter("relativeReleaseMod")))
+        {
+            *p = relativeReleaseMod;
+            juce::Logger::writeToLog("[ADSR UI] Relative Release Mod changed to: " + juce::String(relativeReleaseMod ? "TRUE" : "FALSE"));
+        }
+    }
+    if (ImGui::IsItemDeactivatedAfterEdit()) onModificationEnded();
+    ImGui::SameLine();
+    HelpMarkerADSR("Relative: CV scales around slider time (0.25x-4x)\nAbsolute: CV directly sets time (0.001s-5s)");
 
     ImGui::Spacing();
     ImGui::Spacing();

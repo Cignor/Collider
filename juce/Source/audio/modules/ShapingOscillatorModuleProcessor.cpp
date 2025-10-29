@@ -16,6 +16,12 @@ juce::AudioProcessorValueTreeState::ParameterLayout ShapingOscillatorModuleProce
         paramIdDrive, "Drive",
         juce::NormalisableRange<float>(1.0f, 50.0f, 0.01f, 0.5f), 1.0f));
 
+    params.push_back(std::make_unique<juce::AudioParameterBool>(
+        "relativeFreqMod", "Relative Freq Mod", true));
+    
+    params.push_back(std::make_unique<juce::AudioParameterBool>(
+        "relativeDriveMod", "Relative Drive Mod", true));
+
     return { params.begin(), params.end() };
 }
 
@@ -28,6 +34,8 @@ ShapingOscillatorModuleProcessor::ShapingOscillatorModuleProcessor()
     frequencyParam = apvts.getRawParameterValue(paramIdFrequency);
     waveformParam  = apvts.getRawParameterValue(paramIdWaveform);
     driveParam     = apvts.getRawParameterValue(paramIdDrive);
+    relativeFreqModParam = apvts.getRawParameterValue("relativeFreqMod");
+    relativeDriveModParam = apvts.getRawParameterValue("relativeDriveMod");
 
     lastOutputValues.push_back(std::make_unique<std::atomic<float>>(0.0f));
 
@@ -64,6 +72,8 @@ void ShapingOscillatorModuleProcessor::processBlock(juce::AudioBuffer<float>& bu
     const float baseFrequency = frequencyParam != nullptr ? frequencyParam->load() : 440.0f;
     const int   baseWaveform  = waveformParam  != nullptr ? (int) waveformParam->load()  : 0;
     const float baseDrive     = driveParam     != nullptr ? driveParam->load()     : 1.0f;
+    const bool relativeFreqMode = relativeFreqModParam != nullptr && relativeFreqModParam->load() > 0.5f;
+    const bool relativeDriveMode = relativeDriveModParam != nullptr && relativeDriveModParam->load() > 0.5f;
 
     for (int i = 0; i < buffer.getNumSamples(); ++i)
     {
@@ -71,10 +81,21 @@ void ShapingOscillatorModuleProcessor::processBlock(juce::AudioBuffer<float>& bu
         if (isFreqMod && freqCV)
         {
             const float cv = juce::jlimit(0.0f, 1.0f, freqCV[i]);
-            constexpr float fMin = 20.0f;
-            constexpr float fMax = 20000.0f;
-            const float spanOct = std::log2(fMax / fMin);
-            currentFreq = fMin * std::pow(2.0f, cv * spanOct);
+            
+            if (relativeFreqMode)
+            {
+                // RELATIVE: CV modulates around base frequency (±4 octaves)
+                const float octaveOffset = (cv - 0.5f) * 8.0f;
+                currentFreq = baseFrequency * std::pow(2.0f, octaveOffset);
+            }
+            else
+            {
+                // ABSOLUTE: CV directly maps to full frequency range
+                constexpr float fMin = 20.0f;
+                constexpr float fMax = 20000.0f;
+                const float spanOct = std::log2(fMax / fMin);
+                currentFreq = fMin * std::pow(2.0f, cv * spanOct);
+            }
         }
 
         int currentWave = baseWaveform;
@@ -88,7 +109,18 @@ void ShapingOscillatorModuleProcessor::processBlock(juce::AudioBuffer<float>& bu
         if (isDriveMod && driveCV)
         {
             const float cv = juce::jlimit(0.0f, 1.0f, driveCV[i]);
-            currentDrive = juce::jmap(cv, 1.0f, 50.0f);
+            
+            if (relativeDriveMode)
+            {
+                // RELATIVE: CV modulates around base drive (±2x multiplier)
+                const float driveMultiplier = std::pow(4.0f, cv - 0.5f); // 0.25x to 4x range
+                currentDrive = baseDrive * driveMultiplier;
+            }
+            else
+            {
+                // ABSOLUTE: CV directly maps to full drive range
+                currentDrive = juce::jmap(cv, 1.0f, 50.0f);
+            }
         }
 
         smoothedFrequency.setTargetValue(currentFreq);
@@ -168,6 +200,36 @@ void ShapingOscillatorModuleProcessor::drawParametersInNode (float itemWidth,
     if (ImGui::IsItemDeactivatedAfterEdit()) onModificationEnded();
     if (waveIsMod) { ImGui::EndDisabled(); ImGui::SameLine(); ImGui::TextUnformatted("(mod)"); }
     if (ImGui::IsItemHovered()) ImGui::SetTooltip("Oscillator waveform shape");
+
+    ImGui::Spacing();
+    ImGui::Spacing();
+
+    // === SECTION: Modulation Mode ===
+    ImGui::TextColored(ImVec4(0.6f, 0.9f, 1.0f, 1.0f), "MODULATION MODE");
+    
+    bool relativeFreqMod = relativeFreqModParam ? (relativeFreqModParam->load() > 0.5f) : true;
+    if (ImGui::Checkbox("Relative Frequency Mod", &relativeFreqMod))
+    {
+        if (auto* p = dynamic_cast<juce::AudioParameterBool*>(ap.getParameter("relativeFreqMod")))
+        {
+            *p = relativeFreqMod;
+            juce::Logger::writeToLog("[ShapingOsc UI] Relative Freq Mod changed to: " + juce::String(relativeFreqMod ? "TRUE" : "FALSE"));
+        }
+    }
+    if (ImGui::IsItemDeactivatedAfterEdit()) onModificationEnded();
+    if (ImGui::IsItemHovered()) ImGui::SetTooltip("Relative: CV modulates around slider frequency\nAbsolute: CV directly controls frequency");
+
+    bool relativeDriveMod = relativeDriveModParam ? (relativeDriveModParam->load() > 0.5f) : true;
+    if (ImGui::Checkbox("Relative Drive Mod", &relativeDriveMod))
+    {
+        if (auto* p = dynamic_cast<juce::AudioParameterBool*>(ap.getParameter("relativeDriveMod")))
+        {
+            *p = relativeDriveMod;
+            juce::Logger::writeToLog("[ShapingOsc UI] Relative Drive Mod changed to: " + juce::String(relativeDriveMod ? "TRUE" : "FALSE"));
+        }
+    }
+    if (ImGui::IsItemDeactivatedAfterEdit()) onModificationEnded();
+    if (ImGui::IsItemHovered()) ImGui::SetTooltip("Relative: CV modulates around slider drive\nAbsolute: CV directly controls drive");
 
     ImGui::Spacing();
     ImGui::Spacing();

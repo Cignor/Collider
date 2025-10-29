@@ -48,6 +48,8 @@ private:
     std::atomic<float>* frequencyParam { nullptr };
     std::atomic<float>* waveformParam  { nullptr };
     std::atomic<float>* driveParam     { nullptr };
+    std::atomic<float>* relativeFreqModParam { nullptr };
+    std::atomic<float>* relativeDriveModParam { nullptr };
 
     // Smoothed values to prevent zipper noise
     juce::SmoothedValue<float> smoothedFrequency;

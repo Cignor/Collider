@@ -25,7 +25,7 @@ private:
     glm::vec3 InterpolatePosition(float animationTime, const std::vector<KeyPosition>& keyframes, const glm::vec3& defaultPos);
     glm::quat InterpolateRotation(float animationTime, const std::vector<KeyRotation>& keyframes, const glm::quat& defaultRot);
     glm::vec3 InterpolateScale(float animationTime, const std::vector<KeyScale>& keyframes, const glm::vec3& defaultScale);
-    void CalculateBoneTransform(const NodeData* node, const glm::mat4& parentTransform);
+    void CalculateBoneTransform(NodeData* node, const glm::mat4& parentTransform);
     void LinkBoneAnimationsToNodes(NodeData* node); // Pre-link animations to nodes (called on main thread)
 
     std::vector<glm::mat4> m_FinalBoneMatrices; // For skinning (includes offset matrix)

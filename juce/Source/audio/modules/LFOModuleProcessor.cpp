@@ -71,6 +71,16 @@ void LFOModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::Mi
     const bool syncEnabled = syncParam->load() > 0.5f;
     const bool relativeMode = relativeModeParam->load() > 0.5f; // NEW: Read relative mode setting
     int rateDivisionIndex = static_cast<int>(rateDivisionParam->load());
+    
+    // DEBUG: Log relative mode status (once per buffer)
+    static int logCounter = 0;
+    if (++logCounter % 100 == 0) // Log every 100th buffer to avoid spam
+    {
+        juce::Logger::writeToLog("[LFO] Relative Mode = " + juce::String(relativeMode ? "TRUE (additive)" : "FALSE (absolute)"));
+        juce::Logger::writeToLog("[LFO] Base Rate = " + juce::String(baseRate) + " Hz, Base Depth = " + juce::String(baseDepth));
+        juce::Logger::writeToLog("[LFO] Rate CV connected = " + juce::String(isRateMod ? "YES" : "NO") + 
+                   ", Depth CV connected = " + juce::String(isDepthMod ? "YES" : "NO"));
+    }
     // If a global division is broadcast by a master clock, adopt it when sync is enabled
     // IMPORTANT: Read from parent's LIVE transport state, not cached copy (which is stale)
     if (syncEnabled && getParent())
@@ -95,9 +105,22 @@ void LFOModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::Mi
             if (relativeMode) {
                 // RELATIVE MODE: Modulate around the base value
                 finalRate = baseRate * std::pow(4.0f, cv - 0.5f); // +/- 2 octaves from base
+                
+                // DEBUG: Log first sample calculation
+                if (i == 0 && logCounter % 100 == 0) {
+                    juce::Logger::writeToLog("[LFO Rate] RELATIVE mode: CV=" + juce::String(cv, 3) + 
+                               ", baseRate=" + juce::String(baseRate, 3) + 
+                               " Hz, finalRate=" + juce::String(finalRate, 3) + " Hz");
+                }
             } else {
                 // ABSOLUTE MODE: CV directly controls the parameter
                 finalRate = juce::jmap(cv, 0.05f, 20.0f); // Full range 0.05Hz to 20Hz
+                
+                // DEBUG: Log first sample calculation
+                if (i == 0 && logCounter % 100 == 0) {
+                    juce::Logger::writeToLog("[LFO Rate] ABSOLUTE mode: CV=" + juce::String(cv, 3) + 
+                               ", finalRate=" + juce::String(finalRate, 3) + " Hz (ignores slider)");
+                }
             }
         }
         
@@ -107,9 +130,22 @@ void LFOModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::Mi
             if (relativeMode) {
                 // RELATIVE MODE: Add CV offset to base value
                 depth = juce::jlimit(0.0f, 1.0f, baseDepth + (cv - 0.5f)); // +/- 0.5 from base
+                
+                // DEBUG: Log first sample calculation
+                if (i == 0 && logCounter % 100 == 0) {
+                    juce::Logger::writeToLog("[LFO Depth] RELATIVE mode: CV=" + juce::String(cv, 3) + 
+                               ", baseDepth=" + juce::String(baseDepth, 3) + 
+                               ", finalDepth=" + juce::String(depth, 3));
+                }
             } else {
                 // ABSOLUTE MODE: CV directly sets depth
                 depth = cv;
+                
+                // DEBUG: Log first sample calculation
+                if (i == 0 && logCounter % 100 == 0) {
+                    juce::Logger::writeToLog("[LFO Depth] ABSOLUTE mode: CV=" + juce::String(cv, 3) + 
+                               ", finalDepth=" + juce::String(depth, 3) + " (ignores slider)");
+                }
             }
         }
         
@@ -251,7 +287,11 @@ void LFOModuleProcessor::drawParametersInNode(float itemWidth, const std::functi
 
     // Relative Mode checkbox
     bool relativeMode = relativeModeParam->load() > 0.5f;
-    if (ImGui::Checkbox("Relative Modulation", &relativeMode)) *dynamic_cast<juce::AudioParameterBool*>(ap.getParameter(paramIdRelativeMode)) = relativeMode;
+    if (ImGui::Checkbox("Relative Modulation", &relativeMode)) 
+    {
+        *dynamic_cast<juce::AudioParameterBool*>(ap.getParameter(paramIdRelativeMode)) = relativeMode;
+        juce::Logger::writeToLog("[LFO UI] Relative Modulation checkbox changed to: " + juce::String(relativeMode ? "TRUE" : "FALSE"));
+    }
     if (ImGui::IsItemDeactivatedAfterEdit()) onModificationEnded();
     ImGui::SameLine();
     HelpMarkerLFO("Relative: CV modulates around slider position\nAbsolute: CV completely replaces slider value\n\nExample:\n- Relative: Slider at 5Hz, CV adds ±2 octaves\n- Absolute: CV directly sets 0.05-20Hz range");

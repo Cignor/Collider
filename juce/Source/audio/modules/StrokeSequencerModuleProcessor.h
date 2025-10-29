@@ -2,6 +2,7 @@
 
 #include "ModuleProcessor.h"
 #include <juce_dsp/juce_dsp.h>
+#include <box2d/box2d.h>
 
 // ==============================================================================
 class StrokeSequencerModuleProcessor : public ModuleProcessor, private juce::Timer
@@ -34,6 +35,9 @@ private:
     void timerCallback() override; // For UI updates
     void setTimingInfo(const TransportState& state) override;
     void clearStrokes(); // Helper to reset all stroke data
+    
+    // --- Line Segment Intersection Detection ---
+    bool lineSegmentCrossesHorizontalLine(float x1, float y1, float x2, float y2, float lineY) const;
 
     // --- Data Structures ---
     struct StrokePoint {
@@ -47,8 +51,9 @@ private:
     double playheadPosition = 0.0; // Range 0.0 to 1.0
     double phase = 0.0; // For free-running mode
     double sampleRate = 44100.0;
-    std::array<bool, 3> wasAboveThreshold { false, false, false }; // State for edge detection
     std::atomic<float> currentStrokeYValue { 0.0f }; // For UI telemetry
+    float previousStrokeY = 0.5f; // Track previous Y for intersection detection
+    double previousPlayheadPos = 0.0; // Track previous X for intersection detection
     std::atomic<bool> isUnderManualControl { false }; // True when user is actively dragging the playhead slider
     std::atomic<double> livePlayheadPosition { 0.0 }; // Live playhead position for UI tracking
     

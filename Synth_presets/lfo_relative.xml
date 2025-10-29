@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<ModularSynthPreset version="1" bpm="120.0">
+  <modules>
+    <module logicalId="1" type="lfo">
+      <params>
+        <LFOParams>
+          <PARAM id="bipolar" value="1.0"/>
+          <PARAM id="depth" value="0.5"/>
+          <PARAM id="rate" value="1.0"/>
+          <PARAM id="rate_division" value="3.0"/>
+          <PARAM id="relative_mode" value="1.0"/>
+          <PARAM id="sync" value="0.0"/>
+          <PARAM id="wave" value="0.0"/>
+        </LFOParams>
+      </params>
+    </module>
+    <module logicalId="2" type="vco">
+      <params>
+        <VCOParams>
+          <PARAM id="frequency" value="6638.0"/>
+          <PARAM id="waveform" value="0.0"/>
+        </VCOParams>
+      </params>
+    </module>
+  </modules>
+  <connections>
+    <connection srcId="1" srcChan="0" dstId="2" dstChan="0"/>
+  </connections>
+  <NodeEditorUI>
+    <node id="1" x="314.0" y="294.0"/>
+    <node id="2" x="889.0" y="294.0"/>
+    <node id="0" x="0.0" y="0.0"/>
+  </NodeEditorUI>
+</ModularSynthPreset>

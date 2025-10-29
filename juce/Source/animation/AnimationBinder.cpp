@@ -20,22 +20,35 @@ std::unique_ptr<AnimationData> AnimationBinder::Bind(const RawAnimationData& raw
     
     auto animData = std::make_unique<AnimationData>();
 
-    // Step 1: Build the initial hierarchy with parent pointers from the raw data.
-    juce::Logger::writeToLog("AnimationBinder: Step 1 - Building node hierarchy from raw data...");
-    int rootNodeIndex = -1;
+    // === START: Universal Multi-Root Handling ===
+    juce::Logger::writeToLog("AnimationBinder: Step 1 - Unifying hierarchy under a master root...");
+    
+    // 1. Create our own master root node. This will be the single root of our final hierarchy.
+    animData->rootNode.name = "MASTER_ROOT";
+    animData->rootNode.transformation = glm::mat4(1.0f);
+
+    // 2. Iterate through ALL raw nodes and find every node that is a root (parentIndex == -1).
+    int rootsFound = 0;
     for(size_t i = 0; i < rawData.nodes.size(); ++i) {
         if(rawData.nodes[i].parentIndex == -1) { 
-            rootNodeIndex = i; 
-            juce::Logger::writeToLog("AnimationBinder: Found root node: " + juce::String(rawData.nodes[i].name));
-            break; 
+            rootsFound++;
+            juce::Logger::writeToLog("  [Binder] Found root node '" + juce::String(rawData.nodes[i].name) + "' from file. Attaching to MASTER_ROOT.");
+            
+            // 3. For each root found, build its entire child hierarchy and add it as a child of our master root.
+            NodeData newChildRoot;
+            BuildNodeHierarchyRecursive(rawData, newChildRoot, i);
+            animData->rootNode.children.push_back(std::move(newChildRoot));
         }
     }
-    if(rootNodeIndex == -1) {
-        juce::Logger::writeToLog("AnimationBinder ERROR: No root node found.");
+
+    if (rootsFound == 0) {
+        juce::Logger::writeToLog("AnimationBinder ERROR: No root node found in raw data.");
         return nullptr;
     }
     
-    BuildNodeHierarchyRecursive(rawData, animData->rootNode, rootNodeIndex);
+    juce::Logger::writeToLog("AnimationBinder: Successfully attached " + juce::String(rootsFound) + " root node(s) to MASTER_ROOT.");
+    // === END: Universal Multi-Root Handling ===
+    
     juce::Logger::writeToLog("AnimationBinder: Node hierarchy built successfully.");
     
     // CRITICAL: Set parent pointers AFTER the entire hierarchy is built
@@ -62,7 +75,21 @@ std::unique_ptr<AnimationData> AnimationBinder::Bind(const RawAnimationData& raw
     juce::Logger::writeToLog("=== EXECUTING LATEST AnimationBinder CODE WITH DEFENSIVE CHECKS ===");
     int reconstructedCount = 0;
     int rootBoneCount = 0;
+    int skippedCount = 0;
     for (const auto& rawBone : rawData.bones) {
+        
+        // === START: CONDITIONAL RECONSTRUCTION CHECK ===
+        // If the offset matrix is identity, it means we're using a loader fallback (no skin data).
+        // In this case, we MUST trust the localTransform from the file and NOT try to reconstruct it.
+        if (rawBone.offsetMatrix == glm::mat4(1.0f))
+        {
+            // Log that we are intentionally skipping this bone's reconstruction.
+            juce::Logger::writeToLog("AnimationBinder: Skipping reconstruction for bone '" + juce::String(rawBone.name) + "' (using fallback with identity offset matrix).");
+            skippedCount++;
+            continue; // Skip to the next bone.
+        }
+        // === END: CONDITIONAL RECONSTRUCTION CHECK ===
+        
         if (nodeMap.count(rawBone.name)) {
             NodeData* boneNode = nodeMap.at(rawBone.name);
             glm::mat4 globalBindPose = glm::inverse(rawBone.offsetMatrix);
@@ -92,7 +119,7 @@ std::unique_ptr<AnimationData> AnimationBinder::Bind(const RawAnimationData& raw
             juce::Logger::writeToLog("AnimationBinder WARNING: Bone " + juce::String(rawBone.name) + " not found in node map.");
         }
     }
-    juce::Logger::writeToLog("AnimationBinder: Reconstructed " + juce::String(reconstructedCount) + " bone local bind poses (" + juce::String(rootBoneCount) + " root bones).");
+    juce::Logger::writeToLog("AnimationBinder: Reconstructed " + juce::String(reconstructedCount) + " bone local bind poses (" + juce::String(rootBoneCount) + " root bones). Skipped " + juce::String(skippedCount) + " bones with identity offset matrices.");
     
     // Step 5: Copy over the simple bone and animation data.
     juce::Logger::writeToLog("AnimationBinder: Step 5 - Binding bones and clips...");

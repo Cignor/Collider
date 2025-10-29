@@ -140,6 +140,16 @@ void ParseSkins(const tinygltf::Model& model, RawAnimationData& outData)
                                            " has empty name. Assigning default name '" + juce::String(boneName) + "'.");
                 }
                 
+                // === START FIX: Only add nodes that look like they belong to a rig ===
+                // This is a heuristic to filter out cameras, lights, etc.
+                // It checks for common rig naming conventions.
+                if (!(boneName.rfind("_1:", 0) == 0 || boneName.rfind("mixamorig:", 0) == 0 || boneName.rfind("gltf_bone_", 0) == 0))
+                {
+                    juce::Logger::writeToLog("GltfLoader: Skipping non-rig animated node: '" + juce::String(boneName) + "'");
+                    continue; // Skip this node
+                }
+                // === END FIX ===
+                
                 if (boneNameMap.find(boneName) == boneNameMap.end()) {
                     boneNameMap[boneName] = outData.bones.size();
                     RawBoneInfo boneInfo;
