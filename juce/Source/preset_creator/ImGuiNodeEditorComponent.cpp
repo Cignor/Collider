@@ -24,6 +24,7 @@
 #include "../audio/modules/MultiSequencerModuleProcessor.h"
 #include "../audio/modules/StrokeSequencerModuleProcessor.h"
 #include "../audio/modules/AnimationModuleProcessor.h"
+#include "../audio/modules/TempoClockModuleProcessor.h"
 #include "../audio/modules/MapRangeModuleProcessor.h"
 #include "../audio/modules/LagProcessorModuleProcessor.h"
 #include "../audio/modules/DeCrackleModuleProcessor.h"

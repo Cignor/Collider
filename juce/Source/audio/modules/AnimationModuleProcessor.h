@@ -7,7 +7,7 @@
 #include "../../animation/AnimationRenderer.h"
 #include <memory>
 #include <atomic>
-#include <map>
+#include <algorithm>
 #include <glm/glm.hpp>
 
 // Inherit from juce::ChangeListener to receive notifications from the background loader
@@ -84,12 +84,48 @@ private:
         // UI-thread state for kinematics
         glm::vec2 lastScreenPos { 0.0f, 0.0f };
         bool isFirstFrame = true;
-        bool wasBelowGround = false;
+        bool wasBelowGround = false; // Legacy screen-space flag
+        bool wasBelowWorldGround = false; // Legacy single-plane flag
+        std::vector<bool> wasBelowPlanes; // Per-plane state for robust multi-plane hit detection
+        float previousScreenY = 0.0f; // Kept for compatibility
 
         // Atomics for audio thread
         std::atomic<float> velX { 0.0f };
         std::atomic<float> velY { 0.0f };
         std::atomic<bool> triggerState { false };
+        
+        // Copy constructor (atomics can't be copied, so load/store their values)
+        TrackedBone(const TrackedBone& other)
+            : name(other.name), boneId(other.boneId),
+              lastScreenPos(other.lastScreenPos), isFirstFrame(other.isFirstFrame),
+              wasBelowGround(other.wasBelowGround), wasBelowWorldGround(other.wasBelowWorldGround),
+              wasBelowPlanes(other.wasBelowPlanes), previousScreenY(other.previousScreenY),
+              velX(other.velX.load()), velY(other.velY.load()),
+              triggerState(other.triggerState.load())
+        {}
+        
+        // Copy assignment operator
+        TrackedBone& operator=(const TrackedBone& other)
+        {
+            if (this != &other)
+            {
+                name = other.name;
+                boneId = other.boneId;
+                lastScreenPos = other.lastScreenPos;
+                isFirstFrame = other.isFirstFrame;
+                wasBelowGround = other.wasBelowGround;
+                wasBelowWorldGround = other.wasBelowWorldGround;
+                wasBelowPlanes = other.wasBelowPlanes;
+                previousScreenY = other.previousScreenY;
+                velX.store(other.velX.load());
+                velY.store(other.velY.load());
+                triggerState.store(other.triggerState.load());
+            }
+            return *this;
+        }
+        
+        // Default constructor
+        TrackedBone() = default;
     };
 
     // Called after raw data is loaded to bind and set up the animation
@@ -121,8 +157,8 @@ private:
     std::vector<std::unique_ptr<AnimationData>> m_dataToFree;
     juce::CriticalSection m_freeingLock; // Protects the above arrays
     
-    // Tracked bones (dynamic list) for dedicated outputs
-    std::map<std::string, TrackedBone> m_trackedBones;
+    // Tracked bones (dynamic list) for dedicated outputs - preserves insertion order
+    std::vector<TrackedBone> m_trackedBones;
     juce::CriticalSection m_trackedBonesLock; // Protects m_trackedBones from concurrent access
     
     // Dynamic ground planes for multi-level trigger detection

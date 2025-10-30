@@ -818,8 +818,19 @@ db["random"] = ModulePinInfo(
 
     db["SequentialSwitch"] = ModulePinInfo(
         NodeWidth::Small,
-        { AudioPin("CV In", 0, PinDataType::CV), AudioPin("Gate In", 1, PinDataType::Gate) },
-        { AudioPin("Out", 0, PinDataType::CV) },
+        { 
+            AudioPin("Gate In", 0, PinDataType::Audio),
+            AudioPin("Thresh 1 CV", 1, PinDataType::CV),
+            AudioPin("Thresh 2 CV", 2, PinDataType::CV),
+            AudioPin("Thresh 3 CV", 3, PinDataType::CV),
+            AudioPin("Thresh 4 CV", 4, PinDataType::CV)
+        },
+        { 
+            AudioPin("Out 1", 0, PinDataType::Audio),
+            AudioPin("Out 2", 1, PinDataType::Audio),
+            AudioPin("Out 3", 2, PinDataType::Audio),
+            AudioPin("Out 4", 3, PinDataType::Audio)
+        },
         {}
     );
 

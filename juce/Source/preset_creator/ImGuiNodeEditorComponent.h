@@ -141,7 +141,7 @@ public:
     // StrokeSequencer specific handler
     void handleStrokeSeqBuildDrumKit(StrokeSequencerModuleProcessor* strokeSeq, juce::uint32 strokeSeqLid);
     
-    // AnimationModule specific handler
+    // AnimationModule specific handlers
     void handleAnimationBuildTriggersAudio(AnimationModuleProcessor* animModule, juce::uint32 animModuleLid);
     
     // MultiSequencer specific handlers

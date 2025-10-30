@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<ModularSynthPreset version="1" bpm="20.0">
+  <modules>
+    <module logicalId="1" type="tempo_clock">
+      <params>
+        <TempoClockParams>
+          <PARAM id="bpm" value="120.0000076293945"/>
+          <PARAM id="division" value="3.0"/>
+          <PARAM id="divisionOverride" value="0.0"/>
+          <PARAM id="gateWidth" value="0.5"/>
+          <PARAM id="swing" value="0.0"/>
+          <PARAM id="syncToHost" value="0.0"/>
+        </TempoClockParams>
+      </params>
+    </module>
+    <module logicalId="2" type="random">
+      <params>
+        <RandomParams>
+          <PARAM id="cvMax" value="1.0"/>
+          <PARAM id="cvMin" value="0.0"/>
+          <PARAM id="max" value="1.0"/>
+          <PARAM id="min" value="0.0"/>
+          <PARAM id="normMax" value="1.0"/>
+          <PARAM id="normMin" value="0.0"/>
+          <PARAM id="rate" value="8.470000267028809"/>
+          <PARAM id="rate_division" value="3.0"/>
+          <PARAM id="slew" value="0.0"/>
+          <PARAM id="sync" value="0.0"/>
+          <PARAM id="trigThreshold" value="0.5"/>
+        </RandomParams>
+      </params>
+      <extra>
+        <RandomState sync="0.0" rate_division="3.0"/>
+      </extra>
+    </module>
+  </modules>
+  <connections>
+    <connection srcId="2" srcChan="0" dstId="1" dstChan="0"/>
+    <connection srcId="2" srcChan="0" dstId="1" dstChan="7"/>
+  </connections>
+  <NodeEditorUI>
+    <node id="1" x="-167.0" y="508.0"/>
+    <node id="2" x="-755.0" y="492.0"/>
+    <node id="0" x="0.0" y="0.0"/>
+  </NodeEditorUI>
+</ModularSynthPreset>

@@ -28,7 +28,6 @@
 "juce/Source/audio/modules/AudioInputModuleProcessor.h",
 "juce/Source/audio/modules/BestPracticeNodeProcessor.cpp",
 "juce/Source/audio/modules/BestPracticeNodeProcessor.h",
-"juce/Source/audio/modules/BestPracticeNodeProcessor.md",
 "juce/Source/audio/modules/ChorusModuleProcessor.cpp",
 "juce/Source/audio/modules/ChorusModuleProcessor.h",
 "juce/Source/audio/modules/ClockDividerModuleProcessor.cpp",
@@ -236,24 +235,15 @@ if (Test-Path $modulesRoot) {
     }
 }
 
-#--- Include entire imnode_examples directory ---
+#--- Include entire imnode_examples directory (exclude .md files) ---
 $imnodeDir = Join-Path $projectRoot "imnode_examples"
 if (Test-Path $imnodeDir) {
-    $imnodeFiles = Get-ChildItem -Path $imnodeDir -Recurse -File
+    $imnodeFiles = Get-ChildItem -Path $imnodeDir -Recurse -File | Where-Object { $_.Extension -ne '.md' }
     foreach ($item in $imnodeFiles) {
         $relativePath = $item.FullName.Substring($projectRoot.Length + 1).Replace('\\','/')
         if (-not ($sourceFiles -contains $relativePath)) {
             $sourceFiles += $relativePath
         }
-    }
-}
-
-#--- Ensure IMGUI_NODE_DESIGN_GUIDE.md is included ---
-$imguiGuide = Join-Path $projectRoot "IMGUI_NODE_DESIGN_GUIDE.md"
-if (Test-Path $imguiGuide) {
-    $relativePath = $imguiGuide.Substring($projectRoot.Length + 1).Replace('\\','/')
-    if (-not ($sourceFiles -contains $relativePath)) {
-        $sourceFiles += $relativePath
     }
 }
 

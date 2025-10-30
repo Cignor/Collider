@@ -4,7 +4,7 @@
 
 AnimationModuleProcessor::AnimationModuleProcessor()
     : ModuleProcessor(BusesProperties()
-                        .withOutput("Output", juce::AudioChannelSet::discreteChannels(MAX_TRACKED_BONES * 3), true)), // Up to 10 bones * 3 outputs each
+                        .withOutput("Output", juce::AudioChannelSet::discreteChannels(30), true)), // Max 10 bones * 3 outputs each
       apvts(*this, nullptr, "AnimationParams", {})
 {
     // Constructor: m_AnimationData and m_Animator are nullptrs initially.
@@ -16,7 +16,7 @@ AnimationModuleProcessor::AnimationModuleProcessor()
     // Tracked bones start empty - they will be added when an animation is loaded
     
     // Initialize with one default ground plane at Y=0
-    m_groundPlanes.push_back(180.0f);
+    m_groundPlanes.push_back(0.0f);
     
     // DEBUG: Verify output channel count
     juce::Logger::writeToLog("[AnimationModule] Constructor: getTotalNumOutputChannels() = " + 
@@ -86,49 +86,36 @@ void AnimationModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, ju
     
     // Clear the output buffer first
     buffer.clear();
-
-    // --- OUTPUT KINEMATIC DATA FOR ALL TRACKED BONES (DYNAMIC) ---
+    
+    // --- Bone Trigger and Velocity Outputs (Starting from Channel 0) ---
     const juce::ScopedTryLock tryLock(m_trackedBonesLock);
-    if (!tryLock.isLocked())
+    if (tryLock.isLocked() && !m_trackedBones.empty())
     {
-        // Failed to get the lock, means the UI thread is modifying the map.
-        // Output silence this block and try again next time.
-        return;
-    }
-
-    if (buffer.getNumSamples() > 0 && !m_trackedBones.empty())
-    {
-        int channelIndex = 0;
-        for (auto& pair : m_trackedBones)
+        for (int i = 0; i < m_trackedBones.size(); ++i)
         {
-            // Ensure we don't write past the buffer's channel count
-            if (channelIndex + 2 >= buffer.getNumChannels())
-                break;
-
-            TrackedBone& bone = pair.second;
-            float velX = bone.velX.load();
-            float velY = bone.velY.load();
-            bool hit = bone.triggerState.load();
-
-            if (hit)
+            auto& bone = m_trackedBones[i];
+            if (bone.boneId != -1)
             {
-                // Write trigger pulse on the first sample
-                buffer.setSample(channelIndex + 2, 0, 1.0f);
-                bone.triggerState.store(false); // Reset atomic flag
-            }
+                int baseChannel = i * 3; // Correct base channel
 
-            // Write DC velocity signals and clear trigger pulses for remaining samples
-            for (int sample = 0; sample < buffer.getNumSamples(); ++sample)
-            {
-                buffer.setSample(channelIndex + 0, sample, velX);
-                buffer.setSample(channelIndex + 1, sample, velY);
-                if (sample > 0)
+                if (baseChannel + 2 >= buffer.getNumChannels()) break;
+
+                // --- Velocity Outputs (Continuous) ---
+                float* velX_ptr = buffer.getWritePointer(baseChannel + 0);
+                float* velY_ptr = buffer.getWritePointer(baseChannel + 1);
+                juce::FloatVectorOperations::fill(velX_ptr, bone.velX.load(), buffer.getNumSamples());
+                juce::FloatVectorOperations::fill(velY_ptr, bone.velY.load(), buffer.getNumSamples());
+                
+                // --- Hit Trigger Output (Single-Sample Pulse) ---
+                if (bone.triggerState.load())
                 {
-                    buffer.setSample(channelIndex + 2, sample, 0.0f);
+                    buffer.setSample(baseChannel + 2, 0, 1.0f); // Fire trigger
+                    bone.triggerState.store(false);             // Reset the flag
+                    
+                    // Log ONLY when a trigger is fired
+                    juce::Logger::writeToLog("AnimationModule: Fired trigger for bone '" + bone.name + "'");
                 }
             }
-            
-            channelIndex += 3;
         }
     }
 }
@@ -194,23 +181,30 @@ void AnimationModuleProcessor::addTrackedBone(const std::string& boneName)
         return;
     }
 
-    if (m_trackedBones.find(boneName) == m_trackedBones.end())
+    // Check if the bone is already being tracked
+    auto it = std::find_if(m_trackedBones.begin(), m_trackedBones.end(),
+                           [&](const TrackedBone& bone) { return bone.name == boneName; });
+
+    if (it != m_trackedBones.end())
+        return; // Already exists, do nothing
+
+    // Add the new bone to the END of the list (preserves insertion order)
+    TrackedBone newBone;
+    newBone.name = boneName;
+    
+    // Find the bone ID if an animation is already loaded
+    if (m_activeData)
     {
-        m_trackedBones[boneName];
-        m_trackedBones[boneName].name = boneName;
-        
-        // Find the bone ID if an animation is already loaded
-        if (m_activeData)
+        if (m_activeData->boneInfoMap.count(boneName))
         {
-            if (m_activeData->boneInfoMap.count(boneName))
-            {
-                m_trackedBones[boneName].boneId = m_activeData->boneInfoMap.at(boneName).id;
-                juce::Logger::writeToLog("AnimationModule: Added tracked bone '" + juce::String(boneName) + "' with ID " + juce::String(m_trackedBones[boneName].boneId));
-            }
+            newBone.boneId = m_activeData->boneInfoMap.at(boneName).id;
+            juce::Logger::writeToLog("AnimationModule: Added tracked bone '" + juce::String(boneName) + "' with ID " + juce::String(newBone.boneId));
         }
-        
-        // Note: Pins will update on next module reload/patch load
     }
+    
+    m_trackedBones.push_back(newBone); // This preserves the order!
+    
+    // Note: Pins will update on next module reload/patch load
 }
 
 void AnimationModuleProcessor::removeTrackedBone(const std::string& boneName)
@@ -220,9 +214,13 @@ void AnimationModuleProcessor::removeTrackedBone(const std::string& boneName)
 
     const juce::ScopedLock lock(m_trackedBonesLock);
 
-    if (m_trackedBones.find(boneName) != m_trackedBones.end())
+    // Use the erase-remove idiom to find and remove the bone by name
+    auto it = std::remove_if(m_trackedBones.begin(), m_trackedBones.end(),
+                             [&](const TrackedBone& bone) { return bone.name == boneName; });
+    
+    if (it != m_trackedBones.end())
     {
-        m_trackedBones.erase(boneName);
+        m_trackedBones.erase(it, m_trackedBones.end());
         juce::Logger::writeToLog("AnimationModule: Removed tracked bone '" + juce::String(boneName) + "'");
 
         // Note: Pins will update on next module reload/patch load
@@ -267,9 +265,9 @@ void AnimationModuleProcessor::updateTrackedBoneIDs()
     const juce::ScopedLock lock(m_trackedBonesLock);
     
     // Go through all currently tracked bones and find matching bone IDs in the animation
-    for (auto& trackedBonePair : m_trackedBones)
+    for (auto& bone : m_trackedBones)
     {
-        const std::string& trackedBoneName = trackedBonePair.first;
+        const std::string& trackedBoneName = bone.name;
         int foundId = -1;
 
         // Search for this bone name in the animation's bone info map
@@ -285,7 +283,7 @@ void AnimationModuleProcessor::updateTrackedBoneIDs()
                                      "' not found in animation");
         }
         
-        trackedBonePair.second.boneId = foundId;
+        bone.boneId = foundId;
     }
 }
 
@@ -380,17 +378,21 @@ void AnimationModuleProcessor::setupAnimationFromRawData(std::unique_ptr<RawAnim
         // If this is a completely fresh load (no bones tracked yet), add defaults
         if (m_trackedBones.empty())
         {
-            m_trackedBones["LeftFoot"];
-            m_trackedBones["LeftFoot"].name = "LeftFoot";
-            m_trackedBones["RightFoot"];
-            m_trackedBones["RightFoot"].name = "RightFoot";
+            TrackedBone leftFoot;
+            leftFoot.name = "LeftFoot";
+            m_trackedBones.push_back(leftFoot);
+            
+            TrackedBone rightFoot;
+            rightFoot.name = "RightFoot";
+            m_trackedBones.push_back(rightFoot);
+            
             juce::Logger::writeToLog("AnimationModule: Initialized default tracked bones (LeftFoot, RightFoot)");
         }
         
         // Update bone IDs for ALL currently tracked bones from the new animation
-        for (auto& trackedBonePair : m_trackedBones)
+        for (auto& bone : m_trackedBones)
         {
-            const std::string& trackedBoneName = trackedBonePair.first;
+            const std::string& trackedBoneName = bone.name;
             int foundId = -1;
 
             // Search for a matching bone in the animation
@@ -407,7 +409,7 @@ void AnimationModuleProcessor::setupAnimationFromRawData(std::unique_ptr<RawAnim
                 }
             }
             
-            trackedBonePair.second.boneId = foundId;
+            bone.boneId = foundId;
             
             if (foundId == -1)
             {
@@ -605,7 +607,9 @@ void AnimationModuleProcessor::drawParametersInNode(float itemWidth,
             if (isSelected)
             {
                 const juce::ScopedLock lock(m_trackedBonesLock);
-                isAlreadyTracked = m_trackedBones.count(m_selectedBoneName);
+                auto it = std::find_if(m_trackedBones.begin(), m_trackedBones.end(),
+                                       [this](const TrackedBone& bone) { return bone.name == m_selectedBoneName; });
+                isAlreadyTracked = (it != m_trackedBones.end());
             }
 
             // "Add Bone Output" button
@@ -723,7 +727,7 @@ void AnimationModuleProcessor::drawParametersInNode(float itemWidth,
         // Add/Remove Buttons
         if (ImGui::Button("Add Ground Plane", ImVec2(itemWidth / 2 - 2, 0)))
         {
-            addGroundPlane(180.0f);
+            addGroundPlane(0.0f);
             onModificationEnded(); // Trigger undo/redo snapshot
         }
         ImGui::SameLine();
@@ -755,7 +759,7 @@ void AnimationModuleProcessor::drawParametersInNode(float itemWidth,
                 ImGui::PushStyleColor(ImGuiCol_FrameBgActive, (ImVec4)ImColor::HSV(hue, 0.7f, 0.7f));
                 ImGui::PushStyleColor(ImGuiCol_SliderGrab, (ImVec4)ImColor::HSV(hue, 0.9f, 0.9f));
 
-                ImGui::SliderFloat("Ground Y", &m_groundPlanes[i], 0.0f, 400.0f, "%.0f");
+                ImGui::SliderFloat("Ground Y", &m_groundPlanes[i], -5.0f, 5.0f, "%.2f");
 
                 // Trigger snapshot only when slider is released (best practice)
                 if (ImGui::IsItemDeactivatedAfterEdit())
@@ -814,21 +818,33 @@ void AnimationModuleProcessor::drawParametersInNode(float itemWidth,
         
         // Draw each ground plane with its corresponding color
         std::vector<float> groundPlanesToDraw = getGroundPlanes();
+        
+        // Recreate matrices used for rendering to project the lines correctly
+        glm::mat4 projection = glm::ortho(-m_zoom + m_panX, m_zoom + m_panX, -m_zoom + m_panY, m_zoom + m_panY, -10.0f, 10.0f);
+        glm::mat4 view = glm::mat4(1.0f);
+        view = glm::rotate(view, m_viewRotationX, glm::vec3(1.0f, 0.0f, 0.0f));
+        view = glm::rotate(view, m_viewRotationY, glm::vec3(0.0f, 1.0f, 0.0f));
+        view = glm::rotate(view, m_viewRotationZ, glm::vec3(0.0f, 0.0f, 1.0f));
+        
         for (int i = 0; i < (int)groundPlanesToDraw.size(); ++i)
         {
-            float groundY = groundPlanesToDraw[i];
+            // Project the world-space ground plane to screen space for drawing
+            float groundPlaneWorldY = groundPlanesToDraw[i];
+            
+            // Project two points on the ground plane to get the screen-space line
+            glm::vec2 screenPosStart = worldToScreen(glm::vec3(-1000.0f, groundPlaneWorldY, 0.0f), view, projection, p1, viewportSize);
+            glm::vec2 screenPosEnd = worldToScreen(glm::vec3(1000.0f, groundPlaneWorldY, 0.0f), view, projection, p1, viewportSize);
+            
             float hue = fmodf((float)i * 0.2f, 1.0f);
             ImVec4 colorVec = (ImVec4)ImColor::HSV(hue, 0.9f, 0.9f);
             ImU32 color = IM_COL32((int)(colorVec.x * 255), (int)(colorVec.y * 255), (int)(colorVec.z * 255), 255);
-            drawList->AddLine(ImVec2(p1.x, p1.y + groundY), ImVec2(p2.x, p1.y + groundY), color, 2.0f);
+            drawList->AddLine(ImVec2(p1.x, screenPosStart.y), ImVec2(p2.x, screenPosEnd.y), color, 2.0f);
         }
         
         // --- KINEMATIC CALCULATION BLOCK FOR ALL TRACKED BONES ---
         const juce::ScopedLock lock(m_trackedBonesLock);
-        for (auto& pair : m_trackedBones)
+        for (auto& bone : m_trackedBones)
         {
-            TrackedBone& bone = pair.second;
-
             if (bone.boneId != -1 && currentAnimator != nullptr)
             {
                 const auto& worldTransforms = currentAnimator->GetBoneWorldTransforms();
@@ -837,6 +853,38 @@ void AnimationModuleProcessor::drawParametersInNode(float itemWidth,
                     glm::mat4 worldMatrix = worldTransforms[bone.boneId];
                     glm::vec3 worldPos = worldMatrix[3];
 
+                    // --- PER-PLANE HIT DETECTION (ROBUST AND CORRECT) ---
+                    // Each bone tracks its state relative to EACH ground plane independently.
+                    // This allows detecting crossings of multiple planes.
+                    
+                    // Ensure the state vector is the correct size
+                    if (bone.wasBelowPlanes.size() != groundPlanesToDraw.size())
+                    {
+                        bone.wasBelowPlanes.resize(groundPlanesToDraw.size(), false);
+                    }
+
+                    // Iterate through each plane and check its state individually
+                    for (size_t i = 0; i < groundPlanesToDraw.size(); ++i)
+                    {
+                        const float planeWorldY = groundPlanesToDraw[i];
+                        
+                        // Get the previous state for THIS specific plane
+                        bool wasBelowThisPlane = bone.wasBelowPlanes[i];
+                        
+                        // Determine the current state for THIS specific plane
+                        bool isBelowThisPlane = (worldPos.y <= planeWorldY);
+
+                        // Fire trigger only on the transition from above to below for THIS plane
+                        if (isBelowThisPlane && !wasBelowThisPlane)
+                        {
+                            bone.triggerState.store(true);
+                        }
+                        
+                        // Update the state for THIS specific plane for the next frame
+                        bone.wasBelowPlanes[i] = isBelowThisPlane;
+                    }
+
+                    // --- SCREEN-SPACE PROJECTION (for visualization and velocity only) ---
                     // Recreate the projection and view matrices used by the renderer
                     glm::mat4 projection = glm::ortho(-m_zoom + m_panX, m_zoom + m_panX, -m_zoom + m_panY, m_zoom + m_panY, -10.0f, 10.0f);
                     glm::mat4 view = glm::mat4(1.0f);
@@ -848,24 +896,7 @@ void AnimationModuleProcessor::drawParametersInNode(float itemWidth,
                     ImVec2 viewportPos = ImGui::GetItemRectMin();
                     glm::vec2 currentScreenPos = worldToScreen(worldPos, view, projection, viewportPos, viewportSize);
 
-                    // Ground trigger detection - check against ALL ground planes
-                    bool hitDetected = false;
-                    for (const float groundY : groundPlanesToDraw)
-                    {
-                        bool isBoneBelowGround = currentScreenPos.y > (viewportPos.y + groundY);
-                        bool wasBoneBelowGround = bone.lastScreenPos.y > (viewportPos.y + groundY);
-                        
-                        // Trigger on downward crossing of this plane
-                        if (isBoneBelowGround && !wasBoneBelowGround)
-                        {
-                            hitDetected = true;
-                            break; // One hit is enough, no need to check other planes
-                        }
-                    }
-                    bone.triggerState.store(hitDetected);
-                    bone.wasBelowGround = false; // Not used anymore, but kept for compatibility
-
-                    // Calculate velocity
+                    // --- VELOCITY CALCULATION (Screen-space dependent) ---
                     if (bone.isFirstFrame)
                     {
                         bone.lastScreenPos = currentScreenPos;
@@ -887,7 +918,7 @@ void AnimationModuleProcessor::drawParametersInNode(float itemWidth,
             else
             {
                 // Reset state if this bone isn't found in the current animation
-                bone.wasBelowGround = false;
+                bone.wasBelowPlanes.assign(bone.wasBelowPlanes.size(), false);
                 bone.isFirstFrame = true;
             }
         }
@@ -905,28 +936,26 @@ void AnimationModuleProcessor::drawParametersInNode(float itemWidth,
 
 bool AnimationModuleProcessor::isBusesLayoutSupported(const BusesLayout& layouts) const
 {
-    // Support up to our max channels (dynamic bone outputs), and no inputs.
-    const int maxChannels = MAX_TRACKED_BONES * 3;
+    // Support up to our max channels (10 bones * 3 outputs), and no inputs.
+    const int maxChannels = 30; // Max 10 bones
     return layouts.getMainOutputChannelSet().size() <= maxChannels
            && layouts.getMainInputChannelSet() == juce::AudioChannelSet::disabled();
 }
 
 std::vector<DynamicPinInfo> AnimationModuleProcessor::getDynamicOutputPins() const
 {
-    // Dynamically generate output pins based on currently tracked bones
+    std::vector<DynamicPinInfo> pins;
     const juce::ScopedLock lock(m_trackedBonesLock);
     
-    std::vector<DynamicPinInfo> pins;
-    pins.reserve(m_trackedBones.size() * 3);
-    
-    int channelIndex = 0;
-    for (const auto& pair : m_trackedBones)
+    // The loop now starts correctly at channel 0
+    for (int i = 0; i < m_trackedBones.size(); ++i)
     {
-        const std::string& boneName = pair.first;
+        const auto& bone = m_trackedBones[i];
+        int baseChannel = i * 3; // Correct base channel
         
-        pins.push_back({ juce::String(boneName) + " Vel X", channelIndex++, PinDataType::CV });
-        pins.push_back({ juce::String(boneName) + " Vel Y", channelIndex++, PinDataType::CV });
-        pins.push_back({ juce::String(boneName) + " Hit",   channelIndex++, PinDataType::Gate });
+        pins.push_back({ juce::String(bone.name) + " Vel X", baseChannel + 0, PinDataType::CV });
+        pins.push_back({ juce::String(bone.name) + " Vel Y", baseChannel + 1, PinDataType::CV });
+        pins.push_back({ juce::String(bone.name) + " Hit",   baseChannel + 2, PinDataType::Gate });
     }
     
     return pins;
@@ -964,14 +993,14 @@ juce::ValueTree AnimationModuleProcessor::getExtraStateTree() const
     }
     state.addChild(groundPlanesNode, -1, nullptr);
 
-    // 4. Save the list of tracked bones
+    // 4. Save the list of tracked bones (preserves insertion order)
     juce::ValueTree trackedBonesNode("TrackedBones");
     {
         const juce::ScopedLock lock(m_trackedBonesLock);
-        for (const auto& pair : m_trackedBones)
+        for (const auto& bone : m_trackedBones)
         {
             juce::ValueTree boneNode("Bone");
-            boneNode.setProperty("name", juce::String(pair.first), nullptr);
+            boneNode.setProperty("name", juce::String(bone.name), nullptr);
             trackedBonesNode.addChild(boneNode, -1, nullptr);
         }
     }
@@ -1035,7 +1064,7 @@ void AnimationModuleProcessor::setExtraStateTree(const juce::ValueTree& state)
         juce::Logger::writeToLog("[AnimationModule] No animation file path in preset.");
     }
 
-    // 4. Restore the list of tracked bones from the preset.
+    // 4. Restore the list of tracked bones from the preset (preserves saved order).
     // This happens AFTER we've started loading the file (which is async).
     // Since setupAnimationFromRawData is now non-destructive, it won't clear this list.
     if (auto trackedBonesNode = state.getChildWithName("TrackedBones"); trackedBonesNode.isValid())
@@ -1049,8 +1078,9 @@ void AnimationModuleProcessor::setExtraStateTree(const juce::ValueTree& state)
                 juce::String boneName = boneNode.getProperty("name").toString();
                 if (boneName.isNotEmpty())
                 {
-                    m_trackedBones[boneName.toStdString()];
-                    m_trackedBones[boneName.toStdString()].name = boneName.toStdString();
+                    TrackedBone newBone;
+                    newBone.name = boneName.toStdString();
+                    m_trackedBones.push_back(newBone); // Preserves order!
                     juce::Logger::writeToLog("[AnimationModule] Restored tracked bone: " + boneName);
                 }
             }
@@ -1066,19 +1096,19 @@ void AnimationModuleProcessor::setExtraStateTree(const juce::ValueTree& state)
         {
             if (planeNode.hasType("Plane"))
             {
-                m_groundPlanes.push_back(planeNode.getProperty("y", 180.0f));
+                m_groundPlanes.push_back(planeNode.getProperty("y", 0.0f));
             }
         }
         // Fallback: if loading results in no ground planes, add one as a safety
         if (m_groundPlanes.empty())
         {
-            m_groundPlanes.push_back(180.0f);
+            m_groundPlanes.push_back(0.0f);
         }
     }
     else
     {
         // Legacy support: try to load single groundY value
-        float legacyGroundY = state.getProperty("groundY", 180.0f);
+        float legacyGroundY = state.getProperty("groundY", 0.0f);
         const juce::ScopedLock lock(m_groundPlanesLock);
         m_groundPlanes.clear();
         m_groundPlanes.push_back(legacyGroundY);

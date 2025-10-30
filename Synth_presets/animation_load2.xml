@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 
-<ModularSynthPreset version="1" bpm="120.0">
+<ModularSynthPreset version="1" bpm="225.5940856933594">
   <modules>
     <module logicalId="1" type="animation">
       <params>
@@ -8,7 +8,7 @@
       </params>
       <extra>
         <AnimationModuleState animationFilePath="H:\0000_CODE\01_collider_pyo\animation_gltf\walking_new.fbx"
-                              zoom="0.9672579765319824" panX="0.1349686533212662" panY="0.8789944648742676"
+                              zoom="0.97394198179245" panX="0.1199558973312378" panY="0.8850991129875183"
                               viewRotationX="0.0" viewRotationY="0.0" viewRotationZ="0.0" selectedBoneName="None">
           <GroundPlanes>
             <Plane y="179.0"/>
@@ -91,7 +91,7 @@
         <TrackMixerParams>
           <PARAM id="numTracks" value="8.0"/>
           <PARAM id="numTracks_max" value="64.0"/>
-          <PARAM id="track_gain_1" value="-18.39999771118164"/>
+          <PARAM id="track_gain_1" value="2.100002288818359"/>
           <PARAM id="track_gain_10" value="0.0"/>
           <PARAM id="track_gain_11" value="0.0"/>
           <PARAM id="track_gain_12" value="0.0"/>
@@ -102,7 +102,7 @@
           <PARAM id="track_gain_17" value="0.0"/>
           <PARAM id="track_gain_18" value="0.0"/>
           <PARAM id="track_gain_19" value="0.0"/>
-          <PARAM id="track_gain_2" value="-27.0"/>
+          <PARAM id="track_gain_2" value="-2.599998474121094"/>
           <PARAM id="track_gain_20" value="0.0"/>
           <PARAM id="track_gain_21" value="0.0"/>
           <PARAM id="track_gain_22" value="0.0"/>
@@ -113,7 +113,7 @@
           <PARAM id="track_gain_27" value="0.0"/>
           <PARAM id="track_gain_28" value="0.0"/>
           <PARAM id="track_gain_29" value="0.0"/>
-          <PARAM id="track_gain_3" value="-21.5"/>
+          <PARAM id="track_gain_3" value="-1.899997711181641"/>
           <PARAM id="track_gain_30" value="0.0"/>
           <PARAM id="track_gain_31" value="0.0"/>
           <PARAM id="track_gain_32" value="0.0"/>
@@ -124,7 +124,7 @@
           <PARAM id="track_gain_37" value="0.0"/>
           <PARAM id="track_gain_38" value="0.0"/>
           <PARAM id="track_gain_39" value="0.0"/>
-          <PARAM id="track_gain_4" value="-24.59999847412109"/>
+          <PARAM id="track_gain_4" value="-1.899997711181641"/>
           <PARAM id="track_gain_40" value="0.0"/>
           <PARAM id="track_gain_41" value="0.0"/>
           <PARAM id="track_gain_42" value="0.0"/>
@@ -135,7 +135,7 @@
           <PARAM id="track_gain_47" value="0.0"/>
           <PARAM id="track_gain_48" value="0.0"/>
           <PARAM id="track_gain_49" value="0.0"/>
-          <PARAM id="track_gain_5" value="-22.29999923706055"/>
+          <PARAM id="track_gain_5" value="-6.599998474121094"/>
           <PARAM id="track_gain_50" value="0.0"/>
           <PARAM id="track_gain_51" value="0.0"/>
           <PARAM id="track_gain_52" value="0.0"/>
@@ -146,7 +146,7 @@
           <PARAM id="track_gain_57" value="0.0"/>
           <PARAM id="track_gain_58" value="0.0"/>
           <PARAM id="track_gain_59" value="0.0"/>
-          <PARAM id="track_gain_6" value="-12.89999771118164"/>
+          <PARAM id="track_gain_6" value="-1.899997711181641"/>
           <PARAM id="track_gain_60" value="0.0"/>
           <PARAM id="track_gain_61" value="0.0"/>
           <PARAM id="track_gain_62" value="0.0"/>
@@ -231,14 +231,24 @@
         </ValueParams>
       </params>
     </module>
+    <module logicalId="41" type="tempo_clock">
+      <params>
+        <TempoClockParams>
+          <PARAM id="bpm" value="120.0000076293945"/>
+          <PARAM id="division" value="3.0"/>
+          <PARAM id="divisionOverride" value="0.0"/>
+          <PARAM id="gateWidth" value="0.5"/>
+          <PARAM id="swing" value="0.0"/>
+          <PARAM id="syncToHost" value="0.0"/>
+        </TempoClockParams>
+      </params>
+    </module>
   </modules>
   <connections>
-    <connection srcId="1" srcChan="0" dstId="30" dstChan="0"/>
-    <connection srcId="1" srcChan="2" dstId="30" dstChan="3"/>
-    <connection srcId="1" srcChan="3" dstId="31" dstChan="0"/>
-    <connection srcId="1" srcChan="5" dstId="31" dstChan="3"/>
-    <connection srcId="1" srcChan="6" dstId="32" dstChan="0"/>
-    <connection srcId="1" srcChan="8" dstId="32" dstChan="3"/>
+    <connection srcId="1" srcChan="3" dstId="30" dstChan="3"/>
+    <connection srcId="1" srcChan="6" dstId="31" dstChan="3"/>
+    <connection srcId="1" srcChan="9" dstId="32" dstChan="3"/>
+    <connection srcId="1" srcChan="0" dstId="41" dstChan="0"/>
     <connection srcId="30" srcChan="0" dstId="33" dstChan="0"/>
     <connection srcId="30" srcChan="1" dstId="33" dstChan="1"/>
     <connection srcId="31" srcChan="0" dstId="33" dstChan="2"/>
@@ -256,6 +266,7 @@
     <node id="32" x="-504.0" y="1483.0"/>
     <node id="33" x="473.0" y="1020.0"/>
     <node id="34" x="-124.0" y="1408.0"/>
+    <node id="41" x="37.0" y="668.0"/>
     <node id="0" x="1154.0" y="645.0"/>
   </NodeEditorUI>
 </ModularSynthPreset>

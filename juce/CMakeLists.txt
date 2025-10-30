@@ -138,6 +138,55 @@ add_library(ufbx_static STATIC ${ufbx_SOURCE_DIR}/ufbx.c)
 target_include_directories(ufbx_static PUBLIC ${ufbx_SOURCE_DIR})
 
 # --------------------------------------------------------------
+# OpenCV (Computer Vision Library - used for Preset Creator UI)
+# --------------------------------------------------------------
+
+# Add /FS flag for MSVC BEFORE declaring OpenCV to fix parallel compilation PDB access issues
+if(MSVC)
+    # Save current flags
+    set(SAVED_CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}")
+    set(SAVED_CMAKE_C_FLAGS "${CMAKE_C_FLAGS}")
+    
+    # Add /FS flag to init variables (used by subprojects)
+    set(CMAKE_CXX_FLAGS_INIT "${CMAKE_CXX_FLAGS_INIT} /FS" CACHE STRING "" FORCE)
+    set(CMAKE_C_FLAGS_INIT "${CMAKE_C_FLAGS_INIT} /FS" CACHE STRING "" FORCE)
+    
+    # Also add to current flags
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /FS")
+    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} /FS")
+endif()
+
+FetchContent_Declare(
+  opencv
+  GIT_REPOSITORY https://github.com/opencv/opencv.git
+  GIT_TAG        4.9.0 # Pin to a specific, stable version
+)
+
+# Configure the OpenCV build
+# Disable features we don't need to speed up the build and reduce size
+set(BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE) # Build as a static library
+set(BUILD_opencv_apps OFF CACHE BOOL "" FORCE)
+set(BUILD_TESTS OFF CACHE BOOL "" FORCE)
+set(BUILD_PERF_TESTS OFF CACHE BOOL "" FORCE)
+set(BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
+set(WITH_CUDA OFF CACHE BOOL "" FORCE)
+set(BUILD_opencv_world ON CACHE BOOL "" FORCE) # Combine into a single library
+set(ENABLE_PRECOMPILED_HEADERS OFF CACHE BOOL "" FORCE) # Disable PCH to avoid PDB issues
+
+# === CRITICAL FIX ===
+# Force OpenCV to use the dynamic runtime library (/MD), matching JUCE's default.
+# This prevents runtime library mismatch errors (LNK2005, LNK2038).
+set(BUILD_WITH_STATIC_CRT OFF CACHE BOOL "" FORCE)
+
+FetchContent_MakeAvailable(opencv)
+
+# Restore flags after OpenCV if needed
+if(MSVC)
+    set(CMAKE_CXX_FLAGS "${SAVED_CMAKE_CXX_FLAGS} /FS")
+    set(CMAKE_C_FLAGS "${SAVED_CMAKE_C_FLAGS} /FS")
+endif()
+
+# --------------------------------------------------------------
 # Rubber Band (optional, real-time timestretcher/pitch-shifter)
 # --------------------------------------------------------------
 set(USE_RUBBERBAND ON CACHE BOOL "Enable Rubber Band time/pitch processing")
@@ -400,6 +449,7 @@ target_link_libraries(ColliderApp PRIVATE
     glm::glm
     tinygltf
     ufbx_static
+    opencv_world
     $<$<BOOL:${USE_RUBBERBAND}>:${RUBBERBAND_TARGET}>
     # Piper TTS libraries (pre-built)
     ${ONNXRUNTIME_DIR}/lib/onnxruntime.lib
@@ -413,6 +463,7 @@ target_include_directories(ColliderApp PRIVATE
     ${CMAKE_SOURCE_DIR}/../soundtouch/include
     ${CMAKE_SOURCE_DIR}/../soundtouch/source/SoundTouch
     ${ufbx_SOURCE_DIR}
+    ${opencv_SOURCE_DIR}/include
     $<$<BOOL:${USE_RUBBERBAND}>:${RUBBERBAND_INCLUDE_DIR}>
 )
 
@@ -634,6 +685,7 @@ target_include_directories(PresetCreatorApp PRIVATE
     ${CMAKE_SOURCE_DIR}/../soundtouch/include
     ${CMAKE_SOURCE_DIR}/../soundtouch/source/SoundTouch
     ${ufbx_SOURCE_DIR}
+    ${opencv_SOURCE_DIR}/include
     $<$<BOOL:${USE_RUBBERBAND}>:${RUBBERBAND_INCLUDE_DIR}>
 )
 
@@ -666,6 +718,7 @@ target_link_libraries(PresetCreatorApp PRIVATE
     glm::glm
     tinygltf
     ufbx_static
+    opencv_world
     $<$<BOOL:${USE_RUBBERBAND}>:${RUBBERBAND_TARGET}>
     # Piper TTS libraries (pre-built)
     ${ONNXRUNTIME_DIR}/lib/onnxruntime.lib

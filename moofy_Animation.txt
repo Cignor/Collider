@@ -9,7 +9,7 @@ This archive contains all files related to the Animation system including:
   - Animation preset files (.xml)
   - Related documentation and guides
 
-Generated: 2025-10-29 11:42:45
+Generated: 2025-10-30 09:08:18
 ================================================================================
 
 
@@ -25,7 +25,7 @@ FILE: juce\Source\audio\modules\AnimationModuleProcessor.cpp
 
 AnimationModuleProcessor::AnimationModuleProcessor()
     : ModuleProcessor(BusesProperties()
-                        .withOutput("Output", juce::AudioChannelSet::discreteChannels(6), true)), // L Foot Vel X/Y, L Hit, R Foot Vel X/Y, R Hit
+                        .withOutput("Output", juce::AudioChannelSet::discreteChannels(30), true)), // Max 10 bones * 3 outputs each
       apvts(*this, nullptr, "AnimationParams", {})
 {
     // Constructor: m_AnimationData and m_Animator are nullptrs initially.
@@ -34,12 +34,10 @@ AnimationModuleProcessor::AnimationModuleProcessor()
     // Register this class to listen for changes from our file loader
     m_fileLoader.addChangeListener(this);
     
-    // Initialize tracked bones (using operator[] which default-constructs the struct)
-    m_trackedBones["LeftFoot"];
-    m_trackedBones["LeftFoot"].name = "LeftFoot";
+    // Tracked bones start empty - they will be added when an animation is loaded
     
-    m_trackedBones["RightFoot"];
-    m_trackedBones["RightFoot"].name = "RightFoot";
+    // Initialize with one default ground plane at Y=0
+    m_groundPlanes.push_back(180.0f);
     
     // DEBUG: Verify output channel count
     juce::Logger::writeToLog("[AnimationModule] Constructor: getTotalNumOutputChannels() = " + 
@@ -109,45 +107,35 @@ void AnimationModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, ju
     
     // Clear the output buffer first
     buffer.clear();
-
-    // --- OUTPUT KINEMATIC DATA FOR BOTH FEET ---
-    if (buffer.getNumChannels() >= 6 && buffer.getNumSamples() > 0)
+    
+    // --- Bone Trigger and Velocity Outputs (Starting from Channel 0) ---
+    const juce::ScopedTryLock tryLock(m_trackedBonesLock);
+    if (tryLock.isLocked() && !m_trackedBones.empty())
     {
-        // Load atomic values for both feet
-        float lVelX = m_trackedBones.at("LeftFoot").velX.load();
-        float lVelY = m_trackedBones.at("LeftFoot").velY.load();
-        float rVelX = m_trackedBones.at("RightFoot").velX.load();
-        float rVelY = m_trackedBones.at("RightFoot").velY.load();
-
-        // Handle ground triggers (single sample pulses)
-        bool lFootHit = m_trackedBones.at("LeftFoot").triggerState.load();
-        bool rFootHit = m_trackedBones.at("RightFoot").triggerState.load();
-        
-        if (lFootHit)
+        for (int i = 0; i < m_trackedBones.size(); ++i)
         {
-            buffer.setSample(2, 0, 1.0f); // Left foot trigger
-            m_trackedBones.at("LeftFoot").triggerState.store(false); // Reset
-        }
-        
-        if (rFootHit)
-        {
-            buffer.setSample(5, 0, 1.0f); // Right foot trigger
-            m_trackedBones.at("RightFoot").triggerState.store(false); // Reset
-        }
-
-        // Write DC velocity signals and clear trigger pulses for remaining samples
-        for (int sample = 0; sample < buffer.getNumSamples(); ++sample)
-        {
-            buffer.setSample(0, sample, lVelX);
-            buffer.setSample(1, sample, lVelY);
-            buffer.setSample(3, sample, rVelX);
-            buffer.setSample(4, sample, rVelY);
-            
-            // Triggers only on first sample, then silence
-            if (sample > 0)
+            auto& bone = m_trackedBones[i];
+            if (bone.boneId != -1)
             {
-                buffer.setSample(2, sample, 0.0f);
-                buffer.setSample(5, sample, 0.0f);
+                int baseChannel = i * 3; // Correct base channel
+
+                if (baseChannel + 2 >= buffer.getNumChannels()) break;
+
+                // --- Velocity Outputs (Continuous) ---
+                float* velX_ptr = buffer.getWritePointer(baseChannel + 0);
+                float* velY_ptr = buffer.getWritePointer(baseChannel + 1);
+                juce::FloatVectorOperations::fill(velX_ptr, bone.velX.load(), buffer.getNumSamples());
+                juce::FloatVectorOperations::fill(velY_ptr, bone.velY.load(), buffer.getNumSamples());
+                
+                // --- Hit Trigger Output (Single-Sample Pulse) ---
+                if (bone.triggerState.load())
+                {
+                    buffer.setSample(baseChannel + 2, 0, 1.0f); // Fire trigger
+                    bone.triggerState.store(false);             // Reset the flag
+                    
+                    // Log ONLY when a trigger is fired
+                    juce::Logger::writeToLog("AnimationModule: Fired trigger for bone '" + bone.name + "'");
+                }
             }
         }
     }
@@ -199,6 +187,125 @@ void AnimationModuleProcessor::openAnimationFile()
         // The UI will remain responsive while this happens!
         m_fileLoader.startLoadingFile(file);
     });
+}
+
+void AnimationModuleProcessor::addTrackedBone(const std::string& boneName)
+{
+    if (boneName == "None" || boneName.empty())
+        return;
+
+    const juce::ScopedLock lock(m_trackedBonesLock);
+
+    if (m_trackedBones.size() >= MAX_TRACKED_BONES)
+    {
+        juce::Logger::writeToLog("AnimationModule: Cannot add more than " + juce::String(MAX_TRACKED_BONES) + " tracked bones.");
+        return;
+    }
+
+    // Check if the bone is already being tracked
+    auto it = std::find_if(m_trackedBones.begin(), m_trackedBones.end(),
+                           [&](const TrackedBone& bone) { return bone.name == boneName; });
+
+    if (it != m_trackedBones.end())
+        return; // Already exists, do nothing
+
+    // Add the new bone to the END of the list (preserves insertion order)
+    TrackedBone newBone;
+    newBone.name = boneName;
+    
+    // Find the bone ID if an animation is already loaded
+    if (m_activeData)
+    {
+        if (m_activeData->boneInfoMap.count(boneName))
+        {
+            newBone.boneId = m_activeData->boneInfoMap.at(boneName).id;
+            juce::Logger::writeToLog("AnimationModule: Added tracked bone '" + juce::String(boneName) + "' with ID " + juce::String(newBone.boneId));
+        }
+    }
+    
+    m_trackedBones.push_back(newBone); // This preserves the order!
+    
+    // Note: Pins will update on next module reload/patch load
+}
+
+void AnimationModuleProcessor::removeTrackedBone(const std::string& boneName)
+{
+    if (boneName == "None" || boneName.empty())
+        return;
+
+    const juce::ScopedLock lock(m_trackedBonesLock);
+
+    // Use the erase-remove idiom to find and remove the bone by name
+    auto it = std::remove_if(m_trackedBones.begin(), m_trackedBones.end(),
+                             [&](const TrackedBone& bone) { return bone.name == boneName; });
+    
+    if (it != m_trackedBones.end())
+    {
+        m_trackedBones.erase(it, m_trackedBones.end());
+        juce::Logger::writeToLog("AnimationModule: Removed tracked bone '" + juce::String(boneName) + "'");
+
+        // Note: Pins will update on next module reload/patch load
+    }
+}
+
+void AnimationModuleProcessor::addGroundPlane(float initialY)
+{
+    const juce::ScopedLock lock(m_groundPlanesLock);
+    m_groundPlanes.push_back(initialY);
+    juce::Logger::writeToLog("AnimationModule: Added ground plane at Y=" + juce::String(initialY));
+}
+
+void AnimationModuleProcessor::removeGroundPlane(int index)
+{
+    const juce::ScopedLock lock(m_groundPlanesLock);
+    if (m_groundPlanes.empty()) return;
+
+    if (index < 0 || index >= (int)m_groundPlanes.size())
+    {
+        m_groundPlanes.pop_back(); // Default to removing the last one
+    }
+    else
+    {
+        m_groundPlanes.erase(m_groundPlanes.begin() + index);
+    }
+    juce::Logger::writeToLog("AnimationModule: Removed ground plane (count now: " + juce::String((int)m_groundPlanes.size()) + ")");
+}
+
+std::vector<float> AnimationModuleProcessor::getGroundPlanes() const
+{
+    const juce::ScopedLock lock(m_groundPlanesLock);
+    return m_groundPlanes;
+}
+
+void AnimationModuleProcessor::updateTrackedBoneIDs()
+{
+    // No animation loaded, nothing to do
+    if (m_activeData == nullptr)
+        return;
+
+    const juce::ScopedLock lock(m_trackedBonesLock);
+    
+    // Go through all currently tracked bones and find matching bone IDs in the animation
+    for (auto& bone : m_trackedBones)
+    {
+        const std::string& trackedBoneName = bone.name;
+        int foundId = -1;
+
+        // Search for this bone name in the animation's bone info map
+        if (m_activeData->boneInfoMap.count(trackedBoneName))
+        {
+            foundId = m_activeData->boneInfoMap.at(trackedBoneName).id;
+            juce::Logger::writeToLog("AnimationModule: Mapped tracked bone '" + juce::String(trackedBoneName) + 
+                                     "' to ID " + juce::String(foundId));
+        }
+        else
+        {
+            juce::Logger::writeToLog("AnimationModule: WARNING - Tracked bone '" + juce::String(trackedBoneName) + 
+                                     "' not found in animation");
+        }
+        
+        bone.boneId = foundId;
+    }
 }
 
 // THIS IS THE MOST IMPORTANT PART
@@ -284,26 +391,52 @@ void AnimationModuleProcessor::setupAnimationFromRawData(std::unique_ptr<RawAnim
     }
     juce::Logger::writeToLog("AnimationModule: Cached " + juce::String((int)m_cachedBoneNames.size()) + " bone names for UI.");
     
-    // Find and cache foot bone IDs for dedicated outputs
-    for (auto& pair : m_trackedBones)
+    // Update tracked bone IDs for the new animation (NON-DESTRUCTIVE)
+    // This does NOT clear the list - it only refreshes the IDs
     {
-        pair.second.boneId = -1; // Reset
-    }
-    
-    for (const auto& pair : m_stagedAnimationData->boneInfoMap)
-    {
-        const std::string& boneName = pair.first;
-        const BoneInfo& boneInfo = pair.second;
-
-        if (juce::String(boneName).endsWithIgnoreCase("LeftFoot"))
+        const juce::ScopedLock lock(m_trackedBonesLock);
+        
+        // If this is a completely fresh load (no bones tracked yet), add defaults
+        if (m_trackedBones.empty())
         {
-            m_trackedBones["LeftFoot"].boneId = boneInfo.id;
-            juce::Logger::writeToLog("AnimationModule: Found Left Foot bone: '" + juce::String(boneName) + "' with ID " + juce::String(boneInfo.id));
+            TrackedBone leftFoot;
+            leftFoot.name = "LeftFoot";
+            m_trackedBones.push_back(leftFoot);
+            
+            TrackedBone rightFoot;
+            rightFoot.name = "RightFoot";
+            m_trackedBones.push_back(rightFoot);
+            
+            juce::Logger::writeToLog("AnimationModule: Initialized default tracked bones (LeftFoot, RightFoot)");
         }
-        else if (juce::String(boneName).endsWithIgnoreCase("RightFoot"))
+        
+        // Update bone IDs for ALL currently tracked bones from the new animation
+        for (auto& bone : m_trackedBones)
         {
-            m_trackedBones["RightFoot"].boneId = boneInfo.id;
-            juce::Logger::writeToLog("AnimationModule: Found Right Foot bone: '" + juce::String(boneName) + "' with ID " + juce::String(boneInfo.id));
+            const std::string& trackedBoneName = bone.name;
+            int foundId = -1;
+
+            // Search for a matching bone in the animation
+            for (const auto& boneInfoPair : m_stagedAnimationData->boneInfoMap)
+            {
+                const std::string& boneNameFromFile = boneInfoPair.first;
+                
+                if (juce::String(boneNameFromFile).endsWithIgnoreCase(trackedBoneName))
+                {
+                    foundId = boneInfoPair.second.id;
+                    juce::Logger::writeToLog("AnimationModule: Refreshed tracked bone '" + juce::String(trackedBoneName) + 
+                                             "' with ID " + juce::String(foundId));
+                    break;
+                }
+            }
+            
+            bone.boneId = foundId;
+            
+            if (foundId == -1)
+            {
+                juce::Logger::writeToLog("AnimationModule: WARNING - Tracked bone '" + juce::String(trackedBoneName) + 
+                                         "' not found in new animation");
+            }
         }
     }
     
@@ -488,6 +621,37 @@ void AnimationModuleProcessor::drawParametersInNode(float itemWidth,
                 }
                 ImGui::EndCombo();
             }
+            
+            // Add/Remove Bone Output Buttons (with Undo/Redo support)
+            bool isSelected = (m_selectedBoneName != "None" && !m_selectedBoneName.empty());
+            bool isAlreadyTracked = false;
+            if (isSelected)
+            {
+                const juce::ScopedLock lock(m_trackedBonesLock);
+                auto it = std::find_if(m_trackedBones.begin(), m_trackedBones.end(),
+                                       [this](const TrackedBone& bone) { return bone.name == m_selectedBoneName; });
+                isAlreadyTracked = (it != m_trackedBones.end());
+            }
+
+            // "Add Bone Output" button
+            if (!isSelected || isAlreadyTracked) ImGui::BeginDisabled();
+            if (ImGui::Button("Add Bone Output", ImVec2(itemWidth / 2 - 2, 0)))
+            {
+                addTrackedBone(m_selectedBoneName);
+                onModificationEnded(); // Trigger undo/redo snapshot
+            }
+            if (!isSelected || isAlreadyTracked) ImGui::EndDisabled();
+
+            ImGui::SameLine();
+
+            // "Remove Bone Output" button
+            if (!isSelected || !isAlreadyTracked) ImGui::BeginDisabled();
+            if (ImGui::Button("Remove Bone Output", ImVec2(itemWidth / 2 - 2, 0)))
+            {
+                removeTrackedBone(m_selectedBoneName);
+                onModificationEnded(); // Trigger undo/redo snapshot
+            }
+            if (!isSelected || !isAlreadyTracked) ImGui::EndDisabled();
         }
     }
     
@@ -501,7 +665,7 @@ void AnimationModuleProcessor::drawParametersInNode(float itemWidth,
         autoBuildTriggersAudioTriggered = true;
     }
     ImGui::PopStyleColor(4);
-    HelpMarker("Auto-create 2 samplers + mixer, wire foot triggers to pads.");
+    HelpMarker("Auto-create samplers + mixer, wire triggers to pads.");
     
     
     // Animation playback controls
@@ -577,8 +741,58 @@ void AnimationModuleProcessor::drawParametersInNode(float itemWidth,
         }
         
         
-        // Ground trigger line position
-        ImGui::SliderFloat("Ground Y", &m_groundY, 0.0f, 200.0f, "%.0f");
+        // === GROUND PLANE CONTROLS ===
+        ImGui::Separator();
+        ImGui::Text("Ground Planes:");
+        
+        // Add/Remove Buttons
+        if (ImGui::Button("Add Ground Plane", ImVec2(itemWidth / 2 - 2, 0)))
+        {
+            addGroundPlane(180.0f);
+            onModificationEnded(); // Trigger undo/redo snapshot
+        }
+        ImGui::SameLine();
+        
+        bool canRemove = false;
+        {
+            const juce::ScopedLock lock(m_groundPlanesLock);
+            canRemove = m_groundPlanes.size() > 1;
+        }
+        if (!canRemove) ImGui::BeginDisabled();
+        if (ImGui::Button("Remove Ground Plane", ImVec2(itemWidth / 2 - 2, 0)))
+        {
+            removeGroundPlane();
+            onModificationEnded(); // Trigger undo/redo snapshot
+        }
+        if (!canRemove) ImGui::EndDisabled();
+
+        // Colored Sliders for each ground plane
+        {
+            const juce::ScopedLock lock(m_groundPlanesLock);
+            for (int i = 0; i < (int)m_groundPlanes.size(); ++i)
+            {
+                ImGui::PushID(i); // Unique ID for each slider
+                
+                // Generate a distinct color for each slider
+                float hue = fmodf((float)i * 0.2f, 1.0f); // 0.2 step for distinct hues
+                ImGui::PushStyleColor(ImGuiCol_FrameBg, (ImVec4)ImColor::HSV(hue, 0.5f, 0.5f));
+                ImGui::PushStyleColor(ImGuiCol_FrameBgHovered, (ImVec4)ImColor::HSV(hue, 0.6f, 0.6f));
+                ImGui::PushStyleColor(ImGuiCol_FrameBgActive, (ImVec4)ImColor::HSV(hue, 0.7f, 0.7f));
+                ImGui::PushStyleColor(ImGuiCol_SliderGrab, (ImVec4)ImColor::HSV(hue, 0.9f, 0.9f));
+
+                ImGui::SliderFloat("Ground Y", &m_groundPlanes[i], 0.0f, 400.0f, "%.0f");
+
+                // Trigger snapshot only when slider is released (best practice)
+                if (ImGui::IsItemDeactivatedAfterEdit())
+                {
+                    onModificationEnded();
+                }
+
+                ImGui::PopStyleColor(4);
+                ImGui::PopID();
+            }
+        }
+        ImGui::Separator();
         
         
         // Pass the latest values to the renderer before drawing
@@ -618,17 +832,26 @@ void AnimationModuleProcessor::drawParametersInNode(float itemWidth,
         // Display the texture from the FBO (flipped vertically)
         ImGui::Image((void*)(intptr_t)m_Renderer->getTextureID(), viewportSize, ImVec2(0, 1), ImVec2(1, 0));
         
-        // --- DRAW GROUND LINE ---
+        // --- DRAW ALL GROUND LINES (colored) ---
         ImDrawList* drawList = ImGui::GetWindowDrawList();
         ImVec2 p1 = ImGui::GetItemRectMin();
         ImVec2 p2 = ImGui::GetItemRectMax();
-        drawList->AddLine(ImVec2(p1.x, p1.y + m_groundY), ImVec2(p2.x, p1.y + m_groundY), IM_COL32(255, 0, 0, 255), 2.0f);
         
-        // --- KINEMATIC CALCULATION BLOCK FOR BOTH FEET ---
-        for (auto& pair : m_trackedBones)
+        // Draw each ground plane with its corresponding color
+        std::vector<float> groundPlanesToDraw = getGroundPlanes();
+        for (int i = 0; i < (int)groundPlanesToDraw.size(); ++i)
         {
-            TrackedBone& bone = pair.second;
-
+            float groundY = groundPlanesToDraw[i];
+            float hue = fmodf((float)i * 0.2f, 1.0f);
+            ImVec4 colorVec = (ImVec4)ImColor::HSV(hue, 0.9f, 0.9f);
+            ImU32 color = IM_COL32((int)(colorVec.x * 255), (int)(colorVec.y * 255), (int)(colorVec.z * 255), 255);
+            drawList->AddLine(ImVec2(p1.x, p1.y + groundY), ImVec2(p2.x, p1.y + groundY), color, 2.0f);
+        }
+        
+        // --- KINEMATIC CALCULATION BLOCK FOR ALL TRACKED BONES ---
+        const juce::ScopedLock lock(m_trackedBonesLock);
+        for (auto& bone : m_trackedBones)
+        {
             if (bone.boneId != -1 && currentAnimator != nullptr)
             {
                 const auto& worldTransforms = currentAnimator->GetBoneWorldTransforms();
@@ -637,6 +860,7 @@ void AnimationModuleProcessor::drawParametersInNode(float itemWidth,
                     glm::mat4 worldMatrix = worldTransforms[bone.boneId];
                     glm::vec3 worldPos = worldMatrix[3];
 
+                    // --- SCREEN-SPACE PROJECTION (for both hit detection and velocity) ---
                     // Recreate the projection and view matrices used by the renderer
                     glm::mat4 projection = glm::ortho(-m_zoom + m_panX, m_zoom + m_panX, -m_zoom + m_panY, m_zoom + m_panY, -10.0f, 10.0f);
                     glm::mat4 view = glm::mat4(1.0f);
@@ -648,15 +872,31 @@ void AnimationModuleProcessor::drawParametersInNode(float itemWidth,
                     ImVec2 viewportPos = ImGui::GetItemRectMin();
                     glm::vec2 currentScreenPos = worldToScreen(worldPos, view, projection, viewportPos, viewportSize);
 
-                    // Ground trigger detection
-                    bool isBoneBelowGround = currentScreenPos.y > (viewportPos.y + m_groundY);
-                    if (isBoneBelowGround && !bone.wasBelowGround)
+                    // --- STATE-BASED HIT DETECTION (ROBUST AND CORRECT) ---
+                    // Determine if the bone is currently below ANY ground plane
+                    bool isCurrentlyBelowGround = false;
+                    for (const float groundY : groundPlanesToDraw)
                     {
+                        if (currentScreenPos.y >= groundY)
+                        {
+                            isCurrentlyBelowGround = true;
+                            break;
+                        }
+                    }
+
+                    // --- TRIGGER LOGIC: Fire only on state transition from "not below" to "below" ---
+                    // This eliminates false triggers from floating-point fluctuations
+                    if (isCurrentlyBelowGround && !bone.wasBelowGround)
+                    {
+                        // This is a new hit - fire the trigger
                         bone.triggerState.store(true);
                     }
-                    bone.wasBelowGround = isBoneBelowGround;
+                    
+                    // Update the state for the next frame
+                    bone.wasBelowGround = isCurrentlyBelowGround;
+                    bone.previousScreenY = currentScreenPos.y; // Kept for compatibility
 
-                    // Calculate velocity
+                    // --- VELOCITY CALCULATION (was already working correctly) ---
                     if (bone.isFirstFrame)
                     {
                         bone.lastScreenPos = currentScreenPos;
@@ -696,22 +936,29 @@ void AnimationModuleProcessor::drawParametersInNode(float itemWidth,
 
 bool AnimationModuleProcessor::isBusesLayoutSupported(const BusesLayout& layouts) const
 {
-    // We support 6 discrete output channels (L/R foot velocities and ground triggers), and no inputs.
-    return layouts.getMainOutputChannelSet() == juce::AudioChannelSet::discreteChannels(6)
+    // Support up to our max channels (10 bones * 3 outputs), and no inputs.
+    const int maxChannels = 30; // Max 10 bones
+    return layouts.getMainOutputChannelSet().size() <= maxChannels
            && layouts.getMainInputChannelSet() == juce::AudioChannelSet::disabled();
 }
 
 std::vector<DynamicPinInfo> AnimationModuleProcessor::getDynamicOutputPins() const
 {
-    // Define our 6 output pins for the Animation module
-    return {
-        { "L Foot Vel X",  0, PinDataType::CV },    // Left foot X velocity
-        { "L Foot Vel Y",  1, PinDataType::CV },    // Left foot Y velocity
-        { "L Foot Hit",    2, PinDataType::Gate },  // Left foot ground trigger
-        { "R Foot Vel X",  3, PinDataType::CV },    // Right foot X velocity
-        { "R Foot Vel Y",  4, PinDataType::CV },    // Right foot Y velocity
-        { "R Foot Hit",    5, PinDataType::Gate }   // Right foot ground trigger
-    };
+    std::vector<DynamicPinInfo> pins;
+    const juce::ScopedLock lock(m_trackedBonesLock);
+    
+    // The loop now starts correctly at channel 0
+    for (int i = 0; i < m_trackedBones.size(); ++i)
+    {
+        const auto& bone = m_trackedBones[i];
+        int baseChannel = i * 3; // Correct base channel
+        
+        pins.push_back({ juce::String(bone.name) + " Vel X", baseChannel + 0, PinDataType::CV });
+        pins.push_back({ juce::String(bone.name) + " Vel Y", baseChannel + 1, PinDataType::CV });
+        pins.push_back({ juce::String(bone.name) + " Hit",   baseChannel + 2, PinDataType::Gate });
+    }
+    
+    return pins;
 }
 
 // === State Management (for saving/loading presets) ===
@@ -729,12 +976,37 @@ juce::ValueTree AnimationModuleProcessor::getExtraStateTree() const
     state.setProperty("zoom", m_zoom, nullptr);
     state.setProperty("panX", m_panX, nullptr);
     state.setProperty("panY", m_panY, nullptr);
-    state.setProperty("groundY", m_groundY, nullptr);
     state.setProperty("viewRotationX", m_viewRotationX, nullptr);
     state.setProperty("viewRotationY", m_viewRotationY, nullptr);
     state.setProperty("viewRotationZ", m_viewRotationZ, nullptr);
 
-    // 3. Save the name of the currently selected bone.
+    // 3. Save the list of ground planes
+    juce::ValueTree groundPlanesNode("GroundPlanes");
+    {
+        const juce::ScopedLock lock(m_groundPlanesLock);
+        for (const float y : m_groundPlanes)
+        {
+            juce::ValueTree planeNode("Plane");
+            planeNode.setProperty("y", y, nullptr);
+            groundPlanesNode.addChild(planeNode, -1, nullptr);
+        }
+    }
+    state.addChild(groundPlanesNode, -1, nullptr);
+
+    // 4. Save the list of tracked bones (preserves insertion order)
+    juce::ValueTree trackedBonesNode("TrackedBones");
+    {
+        const juce::ScopedLock lock(m_trackedBonesLock);
+        for (const auto& bone : m_trackedBones)
+        {
+            juce::ValueTree boneNode("Bone");
+            boneNode.setProperty("name", juce::String(bone.name), nullptr);
+            trackedBonesNode.addChild(boneNode, -1, nullptr);
+        }
+    }
+    state.addChild(trackedBonesNode, -1, nullptr);
+
+    // 5. Save the name of the currently selected bone.
     state.setProperty("selectedBoneName", juce::String(m_selectedBoneName), nullptr);
 
     juce::Logger::writeToLog("[AnimationModule] Saving state: file='" + 
@@ -754,19 +1026,21 @@ void AnimationModuleProcessor::setExtraStateTree(const juce::ValueTree& state)
 
     juce::Logger::writeToLog("[AnimationModule] Loading state from preset...");
 
+    // === CRITICAL: ORDER OF OPERATIONS FOR PRESET LOADING ===
+    // We must load the animation file FIRST so that bone names can be matched to IDs afterward.
+    
     // 1. Restore the viewport/camera settings.
     m_zoom = state.getProperty("zoom", 10.0f);
     m_panX = state.getProperty("panX", 0.0f);
     m_panY = state.getProperty("panY", 0.0f);
-    m_groundY = state.getProperty("groundY", 180.0f);
     m_viewRotationX = state.getProperty("viewRotationX", 0.0f);
     m_viewRotationY = state.getProperty("viewRotationY", 0.0f);
     m_viewRotationZ = state.getProperty("viewRotationZ", 0.0f);
 
-    // 2. Restore the selected bone name. The UI will pick this up on the next frame.
+    // 2. Restore the selected bone name (for UI dropdown).
     m_selectedBoneName = state.getProperty("selectedBoneName", "None").toString().toStdString();
-    
-    // 3. Load the animation file from the saved path.
+
+    // 3. IMPORTANT: Load the animation file BEFORE restoring tracked bones.
     juce::String filePath = state.getProperty("animationFilePath", "").toString();
     
     if (filePath.isNotEmpty())
@@ -775,10 +1049,10 @@ void AnimationModuleProcessor::setExtraStateTree(const juce::ValueTree& state)
         
         if (fileToLoad.existsAsFile())
         {
-            // We use our existing non-blocking loader to load the file in the background.
-            // The UI will remain responsive while this happens.
             juce::Logger::writeToLog("[AnimationModule] Restoring animation from preset: " + fileToLoad.getFullPathName());
             m_fileLoader.startLoadingFile(fileToLoad);
+            // Note: This is async, but setupAnimationFromRawData is now non-destructive, so the
+            // tracked bones we restore next won't be cleared.
         }
         else
         {
@@ -789,6 +1063,58 @@ void AnimationModuleProcessor::setExtraStateTree(const juce::ValueTree& state)
     {
         juce::Logger::writeToLog("[AnimationModule] No animation file path in preset.");
     }
+
+    // 4. Restore the list of tracked bones from the preset (preserves saved order).
+    // This happens AFTER we've started loading the file (which is async).
+    // Since setupAnimationFromRawData is now non-destructive, it won't clear this list.
+    if (auto trackedBonesNode = state.getChildWithName("TrackedBones"); trackedBonesNode.isValid())
+    {
+        const juce::ScopedLock lock(m_trackedBonesLock);
+        m_trackedBones.clear(); // Clear the current list
+        for (const auto& boneNode : trackedBonesNode)
+        {
+            if (boneNode.hasType("Bone"))
+            {
+                juce::String boneName = boneNode.getProperty("name").toString();
+                if (boneName.isNotEmpty())
+                {
+                    TrackedBone newBone;
+                    newBone.name = boneName.toStdString();
+                    m_trackedBones.push_back(newBone); // Preserves order!
+                    juce::Logger::writeToLog("[AnimationModule] Restored tracked bone: " + boneName);
+                }
+            }
+        }
+    }
+
+    // 5. Restore the list of ground planes.
+    if (auto groundPlanesNode = state.getChildWithName("GroundPlanes"); groundPlanesNode.isValid())
+    {
+        const juce::ScopedLock lock(m_groundPlanesLock);
+        m_groundPlanes.clear();
+        for (const auto& planeNode : groundPlanesNode)
+        {
+            if (planeNode.hasType("Plane"))
+            {
+                m_groundPlanes.push_back(planeNode.getProperty("y", 180.0f));
+            }
+        }
+        // Fallback: if loading results in no ground planes, add one as a safety
+        if (m_groundPlanes.empty())
+        {
+            m_groundPlanes.push_back(180.0f);
+        }
+    }
+    else
+    {
+        // Legacy support: try to load single groundY value
+        float legacyGroundY = state.getProperty("groundY", 180.0f);
+        const juce::ScopedLock lock(m_groundPlanesLock);
+        m_groundPlanes.clear();
+        m_groundPlanes.push_back(legacyGroundY);
+    }
+    
+    juce::Logger::writeToLog("[AnimationModule] Preset loading complete.");
 }
 
 
@@ -807,7 +1133,7 @@ FILE: juce\Source\audio\modules\AnimationModuleProcessor.h
 #include "../../animation/AnimationRenderer.h"
 #include <memory>
 #include <atomic>
-#include <map>
+#include <algorithm>
 #include <glm/glm.hpp>
 
 // Inherit from juce::ChangeListener to receive notifications from the background loader
@@ -850,6 +1176,15 @@ public:
     void changeListenerCallback(juce::ChangeBroadcaster* source) override;
     
     const std::vector<glm::mat4>& getFinalBoneMatrices() const;
+    
+    // Dynamic bone tracking
+    void addTrackedBone(const std::string& boneName);
+    void removeTrackedBone(const std::string& boneName);
+    
+    // Dynamic ground planes
+    void addGroundPlane(float initialY = 0.0f);
+    void removeGroundPlane(int index = -1);
+    std::vector<float> getGroundPlanes() const;
 
     // --- State Management (for saving/loading presets) ---
     juce::ValueTree getExtraStateTree() const override;
@@ -861,21 +1196,57 @@ public:
 #endif
 
 private:
+    static constexpr int MAX_TRACKED_BONES = 10; // Maximum number of bones we can track simultaneously
+    
+    // Update bone IDs for all tracked bones from the currently loaded animation
+    void updateTrackedBoneIDs();
+    
     // Helper structure for tracking multiple bones
     struct TrackedBone
     {
         std::string name;
         int boneId = -1;
 
-        // UI-thread state for kinematics
+        // UI-thread state for kinematics (SCREEN-SPACE for hit detection)
         glm::vec2 lastScreenPos { 0.0f, 0.0f };
         bool isFirstFrame = true;
-        bool wasBelowGround = false;
+        bool wasBelowGround = false; // State flag for hit detection
+        float previousScreenY = 0.0f; // Kept for compatibility
 
         // Atomics for audio thread
         std::atomic<float> velX { 0.0f };
         std::atomic<float> velY { 0.0f };
         std::atomic<bool> triggerState { false };
+        
+        // Copy constructor (atomics can't be copied, so load/store their values)
+        TrackedBone(const TrackedBone& other)
+            : name(other.name), boneId(other.boneId),
+              lastScreenPos(other.lastScreenPos), isFirstFrame(other.isFirstFrame),
+              wasBelowGround(other.wasBelowGround), previousScreenY(other.previousScreenY),
+              velX(other.velX.load()), velY(other.velY.load()),
+              triggerState(other.triggerState.load())
+        {}
+        
+        // Copy assignment operator
+        TrackedBone& operator=(const TrackedBone& other)
+        {
+            if (this != &other)
+            {
+                name = other.name;
+                boneId = other.boneId;
+                lastScreenPos = other.lastScreenPos;
+                isFirstFrame = other.isFirstFrame;
+                wasBelowGround = other.wasBelowGround;
+                previousScreenY = other.previousScreenY;
+                velX.store(other.velX.load());
+                velY.store(other.velY.load());
+                triggerState.store(other.triggerState.load());
+            }
+            return *this;
+        }
+        
+        // Default constructor
+        TrackedBone() = default;
     };
 
     // Called after raw data is loaded to bind and set up the animation
@@ -907,8 +1278,13 @@ private:
     std::vector<std::unique_ptr<AnimationData>> m_dataToFree;
     juce::CriticalSection m_freeingLock; // Protects the above arrays
     
-    // Tracked bones (LeftFoot, RightFoot) for dedicated outputs
-    std::map<std::string, TrackedBone> m_trackedBones;
+    // Tracked bones (dynamic list) for dedicated outputs - preserves insertion order
+    std::vector<TrackedBone> m_trackedBones;
+    juce::CriticalSection m_trackedBonesLock; // Protects m_trackedBones from concurrent access
+    
+    // Dynamic ground planes for multi-level trigger detection
+    std::vector<float> m_groundPlanes;
+    mutable juce::CriticalSection m_groundPlanesLock; // Protects m_groundPlanes from concurrent access
     
     // Rendering
     std::unique_ptr<AnimationRenderer> m_Renderer;
@@ -3130,6 +3506,55 @@ add_library(ufbx_static STATIC ${ufbx_SOURCE_DIR}/ufbx.c)
 target_include_directories(ufbx_static PUBLIC ${ufbx_SOURCE_DIR})
 
 # --------------------------------------------------------------
+# OpenCV (Computer Vision Library - used for Preset Creator UI)
+# --------------------------------------------------------------
+
+# Add /FS flag for MSVC BEFORE declaring OpenCV to fix parallel compilation PDB access issues
+if(MSVC)
+    # Save current flags
+    set(SAVED_CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}")
+    set(SAVED_CMAKE_C_FLAGS "${CMAKE_C_FLAGS}")
+    
+    # Add /FS flag to init variables (used by subprojects)
+    set(CMAKE_CXX_FLAGS_INIT "${CMAKE_CXX_FLAGS_INIT} /FS" CACHE STRING "" FORCE)
+    set(CMAKE_C_FLAGS_INIT "${CMAKE_C_FLAGS_INIT} /FS" CACHE STRING "" FORCE)
+    
+    # Also add to current flags
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /FS")
+    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} /FS")
+endif()
+
+FetchContent_Declare(
+  opencv
+  GIT_REPOSITORY https://github.com/opencv/opencv.git
+  GIT_TAG        4.9.0 # Pin to a specific, stable version
+)
+
+# Configure the OpenCV build
+# Disable features we don't need to speed up the build and reduce size
+set(BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE) # Build as a static library
+set(BUILD_opencv_apps OFF CACHE BOOL "" FORCE)
+set(BUILD_TESTS OFF CACHE BOOL "" FORCE)
+set(BUILD_PERF_TESTS OFF CACHE BOOL "" FORCE)
+set(BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
+set(WITH_CUDA OFF CACHE BOOL "" FORCE)
+set(BUILD_opencv_world ON CACHE BOOL "" FORCE) # Combine into a single library
+set(ENABLE_PRECOMPILED_HEADERS OFF CACHE BOOL "" FORCE) # Disable PCH to avoid PDB issues
+
+# === CRITICAL FIX ===
+# Force OpenCV to use the dynamic runtime library (/MD), matching JUCE's default.
+# This prevents runtime library mismatch errors (LNK2005, LNK2038).
+set(BUILD_WITH_STATIC_CRT OFF CACHE BOOL "" FORCE)
+
+FetchContent_MakeAvailable(opencv)
+
+# Restore flags after OpenCV if needed
+if(MSVC)
+    set(CMAKE_CXX_FLAGS "${SAVED_CMAKE_CXX_FLAGS} /FS")
+    set(CMAKE_C_FLAGS "${SAVED_CMAKE_C_FLAGS} /FS")
+endif()
+
+# --------------------------------------------------------------
 # Rubber Band (optional, real-time timestretcher/pitch-shifter)
 # --------------------------------------------------------------
 set(USE_RUBBERBAND ON CACHE BOOL "Enable Rubber Band time/pitch processing")
@@ -3392,6 +3817,7 @@ target_link_libraries(ColliderApp PRIVATE
     glm::glm
     tinygltf
     ufbx_static
+    opencv_world
     $<$<BOOL:${USE_RUBBERBAND}>:${RUBBERBAND_TARGET}>
     # Piper TTS libraries (pre-built)
     ${ONNXRUNTIME_DIR}/lib/onnxruntime.lib
@@ -3405,6 +3831,7 @@ target_include_directories(ColliderApp PRIVATE
     ${CMAKE_SOURCE_DIR}/../soundtouch/include
     ${CMAKE_SOURCE_DIR}/../soundtouch/source/SoundTouch
     ${ufbx_SOURCE_DIR}
+    ${opencv_SOURCE_DIR}/include
     $<$<BOOL:${USE_RUBBERBAND}>:${RUBBERBAND_INCLUDE_DIR}>
 )
 
@@ -3626,6 +4053,7 @@ target_include_directories(PresetCreatorApp PRIVATE
     ${CMAKE_SOURCE_DIR}/../soundtouch/include
     ${CMAKE_SOURCE_DIR}/../soundtouch/source/SoundTouch
     ${ufbx_SOURCE_DIR}
+    ${opencv_SOURCE_DIR}/include
     $<$<BOOL:${USE_RUBBERBAND}>:${RUBBERBAND_INCLUDE_DIR}>
 )
 
@@ -3658,6 +4086,7 @@ target_link_libraries(PresetCreatorApp PRIVATE
     glm::glm
     tinygltf
     ufbx_static
+    opencv_world
     $<$<BOOL:${USE_RUBBERBAND}>:${RUBBERBAND_TARGET}>
     # Piper TTS libraries (pre-built)
     ${ONNXRUNTIME_DIR}/lib/onnxruntime.lib
@@ -4895,7 +5324,7 @@ public:
     // StrokeSequencer specific handler
     void handleStrokeSeqBuildDrumKit(StrokeSequencerModuleProcessor* strokeSeq, juce::uint32 strokeSeqLid);
     
-    // AnimationModule specific handler
+    // AnimationModule specific handlers
     void handleAnimationBuildTriggersAudio(AnimationModuleProcessor* animModule, juce::uint32 animModuleLid);
     
     // MultiSequencer specific handlers
@@ -5183,6 +5612,7 @@ FILE: juce\Source\preset_creator\ImGuiNodeEditorComponent.cpp
 #include "../audio/modules/MultiSequencerModuleProcessor.h"
 #include "../audio/modules/StrokeSequencerModuleProcessor.h"
 #include "../audio/modules/AnimationModuleProcessor.h"
+#include "../audio/modules/TempoClockModuleProcessor.h"
 #include "../audio/modules/MapRangeModuleProcessor.h"
 #include "../audio/modules/LagProcessorModuleProcessor.h"
 #include "../audio/modules/DeCrackleModuleProcessor.h"
@@ -10706,60 +11136,79 @@ void ImGuiNodeEditorComponent::handleAnimationBuildTriggersAudio(AnimationModule
 {
     if (!synth || !animModule) return;
 
-    juce::Logger::writeToLog("🦶 BUILD TRIGGERS AUDIO handler called! Creating modules...");
+    // Query the dynamic output pins to determine how many bones are tracked
+    auto dynamicPins = animModule->getDynamicOutputPins();
+    
+    // Each bone has 3 outputs: Vel X, Vel Y, Hit
+    // So number of bones = number of pins / 3
+    int numTrackedBones = (int)dynamicPins.size() / 3;
+    
+    if (numTrackedBones == 0)
+    {
+        juce::Logger::writeToLog("🦶 BUILD TRIGGERS AUDIO: No tracked bones! Add bones first.");
+        return;
+    }
+
+    juce::Logger::writeToLog("🦶 BUILD TRIGGERS AUDIO handler called! Creating modules for " + 
+                             juce::String(numTrackedBones) + " tracked bones...");
 
     // 1. Get Animation Module position
     auto animNodeId = synth->getNodeIdForLogical(animModuleLid);
     ImVec2 animPos = ImNodes::GetNodeGridSpacePos((int)animModuleLid);
 
-    // 2. Create 2 Sample Loaders (for L Foot Hit, R Foot Hit triggers)
-    auto sampler1NodeId = synth->addModule("sample_loader");
-    auto sampler2NodeId = synth->addModule("sample_loader");
+    // 2. Create one Sample Loader per tracked bone
+    std::vector<juce::AudioProcessorGraph::NodeID> samplerNodeIds;
+    std::vector<juce::uint32> samplerLids;
+    
+    for (int i = 0; i < numTrackedBones; ++i)
+    {
+        auto samplerNodeId = synth->addModule("sample_loader");
+        samplerNodeIds.push_back(samplerNodeId);
+        samplerLids.push_back(synth->getLogicalIdForNode(samplerNodeId));
+        
+        // Position samplers in a vertical stack to the right
+        pendingNodePositions[(int)samplerLids[i]] = ImVec2(animPos.x + 400.0f, animPos.y + i * 220.0f);
+    }
 
-    auto sampler1Lid = synth->getLogicalIdForNode(sampler1NodeId);
-    auto sampler2Lid = synth->getLogicalIdForNode(sampler2NodeId);
-
-    // Position samplers in a vertical stack to the right
-    pendingNodePositions[(int)sampler1Lid] = ImVec2(animPos.x + 400.0f, animPos.y);
-    pendingNodePositions[(int)sampler2Lid] = ImVec2(animPos.x + 400.0f, animPos.y + 220.0f);
-
-    // 3. Create Track Mixer (will be set to 4 tracks by Value node - 2 stereo pairs)
+    // 3. Create Track Mixer (num_bones * 2 for stereo pairs)
     auto mixerNodeId = synth->addModule("track_mixer");
     auto mixerLid = synth->getLogicalIdForNode(mixerNodeId);
-    pendingNodePositions[(int)mixerLid] = ImVec2(animPos.x + 800.0f, animPos.y + 100.0f);
+    pendingNodePositions[(int)mixerLid] = ImVec2(animPos.x + 800.0f, animPos.y + (numTrackedBones * 110.0f));
 
-    // 4. Create Value node set to 4.0 (for 2 stereo tracks = 4 channels)
+    // 4. Create Value node for mixer track count
+    int numMixerTracks = numTrackedBones * 2; // 2 channels per sampler (stereo)
     auto valueNodeId = synth->addModule("value");
     auto valueLid = synth->getLogicalIdForNode(valueNodeId);
-    pendingNodePositions[(int)valueLid] = ImVec2(animPos.x + 600.0f, animPos.y + 400.0f);
+    pendingNodePositions[(int)valueLid] = ImVec2(animPos.x + 600.0f, animPos.y + (numTrackedBones * 220.0f));
 
     if (auto* valueNode = dynamic_cast<ValueModuleProcessor*>(synth->getModuleForLogical(valueLid)))
     {
-        *dynamic_cast<juce::AudioParameterFloat*>(valueNode->getAPVTS().getParameter("value")) = 4.0f;
+        *dynamic_cast<juce::AudioParameterFloat*>(valueNode->getAPVTS().getParameter("value")) = (float)numMixerTracks;
     }
 
-    // 5. Connect Animation Module TRIGGERS to Sample Loader TRIGGER MOD inputs (channel 3)
-    // Animation Module Output Channels:
-    //   0: L Foot Vel X
-    //   1: L Foot Vel Y
-    //   2: L Foot Hit (trigger) ← Connect this
-    //   3: R Foot Vel X
-    //   4: R Foot Vel Y
-    //   5: R Foot Hit (trigger) ← Connect this
-    synth->connect(animNodeId, 2, sampler1NodeId, 3); // L Foot Hit   -> Sampler 1 Trigger Mod
-    synth->connect(animNodeId, 5, sampler2NodeId, 3); // R Foot Hit   -> Sampler 2 Trigger Mod
+    // 5. Connect Animation Module TRIGGERS to Sample Loader TRIGGER MOD inputs
+    // Animation Module Output Channels (per bone):
+    //   i*3 + 0: Bone Vel X
+    //   i*3 + 1: Bone Vel Y
+    //   i*3 + 2: Bone Hit (trigger) ← Connect this to sampler
+    for (int i = 0; i < numTrackedBones; ++i)
+    {
+        int triggerChannel = i * 3 + 2; // Every 3rd channel starting at 2 (2, 5, 8, 11, ...)
+        synth->connect(animNodeId, triggerChannel, samplerNodeIds[i], 3); // Bone Hit -> Sampler Trigger Mod
+    }
 
     // 6. Connect Sample Loader AUDIO OUTPUTS to Track Mixer AUDIO INPUTS (stereo pairs)
-    // Sampler 1 (L+R) -> Mixer Audio 1+2
-    synth->connect(sampler1NodeId, 0, mixerNodeId, 0); // Sampler 1 L -> Mixer Audio 1
-    synth->connect(sampler1NodeId, 1, mixerNodeId, 1); // Sampler 1 R -> Mixer Audio 2
+    for (int i = 0; i < numTrackedBones; ++i)
+    {
+        int mixerChannelL = i * 2;       // 0, 2, 4, 6, ...
+        int mixerChannelR = i * 2 + 1;   // 1, 3, 5, 7, ...
+        
+        synth->connect(samplerNodeIds[i], 0, mixerNodeId, mixerChannelL); // Sampler L -> Mixer Audio L
+        synth->connect(samplerNodeIds[i], 1, mixerNodeId, mixerChannelR); // Sampler R -> Mixer Audio R
+    }
 
-    // Sampler 2 (L+R) -> Mixer Audio 3+4
-    synth->connect(sampler2NodeId, 0, mixerNodeId, 2); // Sampler 2 L -> Mixer Audio 3
-    synth->connect(sampler2NodeId, 1, mixerNodeId, 3); // Sampler 2 R -> Mixer Audio 4
-
-    // 7. Connect Value node (4.0) to Track Mixer's "Num Tracks" input
-    synth->connect(valueNodeId, 0, mixerNodeId, 64); // Value (4) -> Num Tracks Mod
+    // 7. Connect Value node to Track Mixer's "Num Tracks" input
+    synth->connect(valueNodeId, 0, mixerNodeId, 64); // Value -> Num Tracks Mod
 
     // 8. Connect Track Mixer output to global output
     auto outputNodeId = synth->getOutputNodeID();
@@ -10769,7 +11218,8 @@ void ImGuiNodeEditorComponent::handleAnimationBuildTriggersAudio(AnimationModule
     synth->commitChanges();
     graphNeedsRebuild = true;
     
-    juce::Logger::writeToLog("🦶 BUILD TRIGGERS AUDIO complete! 2 samplers + mixer + wiring created.");
+    juce::Logger::writeToLog("🦶 BUILD TRIGGERS AUDIO complete! " + juce::String(numTrackedBones) + 
+                             " samplers + mixer + wiring created.");
 }
 
 void ImGuiNodeEditorComponent::handleMultiSequencerAutoConnectSamplers(MultiSequencerModuleProcessor* sequencer, juce::uint32 sequencerLid)
@@ -13051,7 +13501,7 @@ FILE: Synth_presets\animation_load2.xml
 
 <?xml version="1.0" encoding="UTF-8"?>
 
-<ModularSynthPreset version="1" bpm="120.0">
+<ModularSynthPreset version="1" bpm="225.5940856933594">
   <modules>
     <module logicalId="1" type="animation">
       <params>
@@ -13059,14 +13509,24 @@ FILE: Synth_presets\animation_load2.xml
       </params>
       <extra>
         <AnimationModuleState animationFilePath="H:\0000_CODE\01_collider_pyo\animation_gltf\walking_new.fbx"
-                              zoom="0.9849744439125061" panX="0.02038478851318359" panY="0.8957729339599609"
-                              groundY="168.0" viewRotationX="0.0" viewRotationY="0.0" viewRotationZ="0.0"
-                              selectedBoneName="None"/>
+                              zoom="0.97394198179245" panX="0.1199558973312378" panY="0.8850991129875183"
+                              viewRotationX="0.0" viewRotationY="0.0" viewRotationZ="0.0" selectedBoneName="None">
+          <GroundPlanes>
+            <Plane y="179.0"/>
+            <Plane y="77.0"/>
+            <Plane y="120.0"/>
+          </GroundPlanes>
+          <TrackedBones>
+            <Bone name="LeftFoot"/>
+            <Bone name="RightFoot"/>
+            <Bone name="mixamorig:LeftForeArm"/>
+          </TrackedBones>
+        </AnimationModuleState>
       </extra>
     </module>
-    <module logicalId="12" type="sample_loader">
+    <module logicalId="30" type="sample_loader">
       <params>
-        <SampleLoaderParameters samplePath="H:\0000_CODE\01_collider_pyo\audio\samples\percussion\KSHMR_Acoustic_Crash_08 - Copy.wav">
+        <SampleLoaderParameters samplePath="H:\0000_CODE\01_collider_pyo\audio\samples\melodic\KSHMR_Instrumental_Fill_08_128_Bansuri_Em.wav">
           <PARAM id="engine" value="1.0"/>
           <PARAM id="gate" value="0.7999999523162842"/>
           <PARAM id="gate_mod" value="1.0"/>
@@ -13085,9 +13545,9 @@ FILE: Synth_presets\animation_load2.xml
         </SampleLoaderParameters>
       </params>
     </module>
-    <module logicalId="13" type="sample_loader">
+    <module logicalId="31" type="sample_loader">
       <params>
-        <SampleLoaderParameters samplePath="H:\0000_CODE\01_collider_pyo\audio\samples\percussion\KSHMR_Acoustic_Ride_02 - Copy.wav">
+        <SampleLoaderParameters samplePath="H:\0000_CODE\01_collider_pyo\audio\samples\melodic\KSHMR_Orchestra_Fill_12_Strings_128_Dm.wav">
           <PARAM id="engine" value="1.0"/>
           <PARAM id="gate" value="0.7999999523162842"/>
           <PARAM id="gate_mod" value="1.0"/>
@@ -13106,12 +13566,33 @@ FILE: Synth_presets\animation_load2.xml
         </SampleLoaderParameters>
       </params>
     </module>
-    <module logicalId="14" type="track_mixer">
+    <module logicalId="32" type="sample_loader">
+      <params>
+        <SampleLoaderParameters samplePath="H:\0000_CODE\01_collider_pyo\audio\samples\melodic\KSHMR_Sax_12_Melody_110_F#m.wav">
+          <PARAM id="engine" value="1.0"/>
+          <PARAM id="gate" value="0.7999999523162842"/>
+          <PARAM id="gate_mod" value="1.0"/>
+          <PARAM id="loop" value="0.0"/>
+          <PARAM id="pitch" value="0.0"/>
+          <PARAM id="pitch_mod" value="0.0"/>
+          <PARAM id="rangeEnd" value="1.0"/>
+          <PARAM id="rangeEnd_mod" value="1.0"/>
+          <PARAM id="rangeStart" value="0.0"/>
+          <PARAM id="rangeStart_mod" value="0.0"/>
+          <PARAM id="rbPhaseInd" value="1.0"/>
+          <PARAM id="rbWindowShort" value="1.0"/>
+          <PARAM id="speed" value="1.0"/>
+          <PARAM id="speed_mod" value="1.0"/>
+          <PARAM id="trigger_mod" value="0.0"/>
+        </SampleLoaderParameters>
+      </params>
+    </module>
+    <module logicalId="33" type="track_mixer">
       <params>
         <TrackMixerParams>
           <PARAM id="numTracks" value="8.0"/>
           <PARAM id="numTracks_max" value="64.0"/>
-          <PARAM id="track_gain_1" value="-5.5"/>
+          <PARAM id="track_gain_1" value="2.100002288818359"/>
           <PARAM id="track_gain_10" value="0.0"/>
           <PARAM id="track_gain_11" value="0.0"/>
           <PARAM id="track_gain_12" value="0.0"/>
@@ -13122,7 +13603,7 @@ FILE: Synth_presets\animation_load2.xml
           <PARAM id="track_gain_17" value="0.0"/>
           <PARAM id="track_gain_18" value="0.0"/>
           <PARAM id="track_gain_19" value="0.0"/>
-          <PARAM id="track_gain_2" value="-3.899997711181641"/>
+          <PARAM id="track_gain_2" value="-2.599998474121094"/>
           <PARAM id="track_gain_20" value="0.0"/>
           <PARAM id="track_gain_21" value="0.0"/>
           <PARAM id="track_gain_22" value="0.0"/>
@@ -13133,7 +13614,7 @@ FILE: Synth_presets\animation_load2.xml
           <PARAM id="track_gain_27" value="0.0"/>
           <PARAM id="track_gain_28" value="0.0"/>
           <PARAM id="track_gain_29" value="0.0"/>
-          <PARAM id="track_gain_3" value="-1.599998474121094"/>
+          <PARAM id="track_gain_3" value="-1.899997711181641"/>
           <PARAM id="track_gain_30" value="0.0"/>
           <PARAM id="track_gain_31" value="0.0"/>
           <PARAM id="track_gain_32" value="0.0"/>
@@ -13144,7 +13625,7 @@ FILE: Synth_presets\animation_load2.xml
           <PARAM id="track_gain_37" value="0.0"/>
           <PARAM id="track_gain_38" value="0.0"/>
           <PARAM id="track_gain_39" value="0.0"/>
-          <PARAM id="track_gain_4" value="-5.5"/>
+          <PARAM id="track_gain_4" value="-1.899997711181641"/>
           <PARAM id="track_gain_40" value="0.0"/>
           <PARAM id="track_gain_41" value="0.0"/>
           <PARAM id="track_gain_42" value="0.0"/>
@@ -13155,7 +13636,7 @@ FILE: Synth_presets\animation_load2.xml
           <PARAM id="track_gain_47" value="0.0"/>
           <PARAM id="track_gain_48" value="0.0"/>
           <PARAM id="track_gain_49" value="0.0"/>
-          <PARAM id="track_gain_5" value="0.0"/>
+          <PARAM id="track_gain_5" value="-6.599998474121094"/>
           <PARAM id="track_gain_50" value="0.0"/>
           <PARAM id="track_gain_51" value="0.0"/>
           <PARAM id="track_gain_52" value="0.0"/>
@@ -13166,7 +13647,7 @@ FILE: Synth_presets\animation_load2.xml
           <PARAM id="track_gain_57" value="0.0"/>
           <PARAM id="track_gain_58" value="0.0"/>
           <PARAM id="track_gain_59" value="0.0"/>
-          <PARAM id="track_gain_6" value="0.0"/>
+          <PARAM id="track_gain_6" value="-1.899997711181641"/>
           <PARAM id="track_gain_60" value="0.0"/>
           <PARAM id="track_gain_61" value="0.0"/>
           <PARAM id="track_gain_62" value="0.0"/>
@@ -13175,7 +13656,7 @@ FILE: Synth_presets\animation_load2.xml
           <PARAM id="track_gain_7" value="0.0"/>
           <PARAM id="track_gain_8" value="0.0"/>
           <PARAM id="track_gain_9" value="0.0"/>
-          <PARAM id="track_pan_1" value="-0.550000011920929"/>
+          <PARAM id="track_pan_1" value="0.0"/>
           <PARAM id="track_pan_10" value="0.0"/>
           <PARAM id="track_pan_11" value="0.0"/>
           <PARAM id="track_pan_12" value="0.0"/>
@@ -13186,7 +13667,7 @@ FILE: Synth_presets\animation_load2.xml
           <PARAM id="track_pan_17" value="0.0"/>
           <PARAM id="track_pan_18" value="0.0"/>
           <PARAM id="track_pan_19" value="0.0"/>
-          <PARAM id="track_pan_2" value="-0.2900000214576721"/>
+          <PARAM id="track_pan_2" value="0.0"/>
           <PARAM id="track_pan_20" value="0.0"/>
           <PARAM id="track_pan_21" value="0.0"/>
           <PARAM id="track_pan_22" value="0.0"/>
@@ -13197,7 +13678,7 @@ FILE: Synth_presets\animation_load2.xml
           <PARAM id="track_pan_27" value="0.0"/>
           <PARAM id="track_pan_28" value="0.0"/>
           <PARAM id="track_pan_29" value="0.0"/>
-          <PARAM id="track_pan_3" value="0.3999999761581421"/>
+          <PARAM id="track_pan_3" value="0.0"/>
           <PARAM id="track_pan_30" value="0.0"/>
           <PARAM id="track_pan_31" value="0.0"/>
           <PARAM id="track_pan_32" value="0.0"/>
@@ -13208,7 +13689,7 @@ FILE: Synth_presets\animation_load2.xml
           <PARAM id="track_pan_37" value="0.0"/>
           <PARAM id="track_pan_38" value="0.0"/>
           <PARAM id="track_pan_39" value="0.0"/>
-          <PARAM id="track_pan_4" value="0.6200000047683716"/>
+          <PARAM id="track_pan_4" value="0.0"/>
           <PARAM id="track_pan_40" value="0.0"/>
           <PARAM id="track_pan_41" value="0.0"/>
           <PARAM id="track_pan_42" value="0.0"/>
@@ -13242,33 +13723,51 @@ FILE: Synth_presets\animation_load2.xml
         </TrackMixerParams>
       </params>
     </module>
-    <module logicalId="15" type="value">
+    <module logicalId="34" type="value">
       <params>
         <ValueParams>
           <PARAM id="cvMax" value="1.0"/>
           <PARAM id="cvMin" value="0.0"/>
-          <PARAM id="value" value="4.0"/>
+          <PARAM id="value" value="6.0"/>
         </ValueParams>
+      </params>
+    </module>
+    <module logicalId="41" type="tempo_clock">
+      <params>
+        <TempoClockParams>
+          <PARAM id="bpm" value="120.0000076293945"/>
+          <PARAM id="division" value="3.0"/>
+          <PARAM id="divisionOverride" value="0.0"/>
+          <PARAM id="gateWidth" value="0.5"/>
+          <PARAM id="swing" value="0.0"/>
+          <PARAM id="syncToHost" value="0.0"/>
+        </TempoClockParams>
       </params>
     </module>
   </modules>
   <connections>
-    <connection srcId="1" srcChan="2" dstId="12" dstChan="3"/>
-    <connection srcId="1" srcChan="5" dstId="13" dstChan="3"/>
-    <connection srcId="12" srcChan="0" dstId="14" dstChan="0"/>
-    <connection srcId="12" srcChan="1" dstId="14" dstChan="1"/>
-    <connection srcId="13" srcChan="0" dstId="14" dstChan="2"/>
-    <connection srcId="13" srcChan="1" dstId="14" dstChan="3"/>
-    <connection srcId="14" srcChan="0" dstId="output" dstChan="0"/>
-    <connection srcId="14" srcChan="1" dstId="output" dstChan="1"/>
-    <connection srcId="15" srcChan="0" dstId="14" dstChan="64"/>
+    <connection srcId="1" srcChan="3" dstId="30" dstChan="3"/>
+    <connection srcId="1" srcChan="6" dstId="31" dstChan="3"/>
+    <connection srcId="1" srcChan="9" dstId="32" dstChan="3"/>
+    <connection srcId="1" srcChan="0" dstId="41" dstChan="0"/>
+    <connection srcId="30" srcChan="0" dstId="33" dstChan="0"/>
+    <connection srcId="30" srcChan="1" dstId="33" dstChan="1"/>
+    <connection srcId="31" srcChan="0" dstId="33" dstChan="2"/>
+    <connection srcId="31" srcChan="1" dstId="33" dstChan="3"/>
+    <connection srcId="32" srcChan="0" dstId="33" dstChan="4"/>
+    <connection srcId="32" srcChan="1" dstId="33" dstChan="5"/>
+    <connection srcId="33" srcChan="0" dstId="output" dstChan="0"/>
+    <connection srcId="33" srcChan="1" dstId="output" dstChan="1"/>
+    <connection srcId="34" srcChan="0" dstId="33" dstChan="64"/>
   </connections>
   <NodeEditorUI>
-    <node id="1" x="-417.0" y="512.0"/>
-    <node id="12" x="149.0" y="520.0"/>
-    <node id="13" x="107.0" y="996.0"/>
-    <node id="14" x="632.0" y="647.0"/>
-    <node id="15" x="601.0" y="1109.0"/>
+    <node id="1" x="-1183.0" y="568.0"/>
+    <node id="30" x="-565.6322021484375" y="270.589111328125"/>
+    <node id="31" x="-531.0" y="821.0"/>
+    <node id="32" x="-504.0" y="1483.0"/>
+    <node id="33" x="473.0" y="1020.0"/>
+    <node id="34" x="-124.0" y="1408.0"/>
+    <node id="41" x="37.0" y="668.0"/>
     <node id="0" x="1154.0" y="645.0"/>
   </NodeEditorUI>
 </ModularSynthPreset>

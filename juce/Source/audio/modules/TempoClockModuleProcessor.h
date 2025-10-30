@@ -8,6 +8,24 @@ public:
     TempoClockModuleProcessor();
     ~TempoClockModuleProcessor() override = default;
 
+    // Parameter IDs for APVTS
+    static constexpr auto paramIdBpm              = "bpm";
+    static constexpr auto paramIdSwing            = "swing";
+    static constexpr auto paramIdDivision         = "division";
+    static constexpr auto paramIdGateWidth        = "gateWidth";
+    static constexpr auto paramIdSyncToHost       = "syncToHost";
+    static constexpr auto paramIdDivisionOverride = "divisionOverride";
+
+    // Virtual modulation/control input IDs (no APVTS parameters required)
+    static constexpr auto paramIdBpmMod       = "bpm_mod";
+    static constexpr auto paramIdTapMod       = "tap_mod";
+    static constexpr auto paramIdNudgeUpMod   = "nudge_up_mod";
+    static constexpr auto paramIdNudgeDownMod = "nudge_down_mod";
+    static constexpr auto paramIdPlayMod      = "play_mod";
+    static constexpr auto paramIdStopMod      = "stop_mod";
+    static constexpr auto paramIdResetMod     = "reset_mod";
+    static constexpr auto paramIdSwingMod     = "swing_mod";
+
     const juce::String getName() const override { return "tempo_clock"; }
 
     void prepareToPlay(double sampleRate, int samplesPerBlock) override;
@@ -83,6 +101,11 @@ private:
     bool lastNudgeUpHigh { false };
     bool lastNudgeDownHigh { false };
     double samplesSinceLastTap { 0.0 };
+    bool hasPreviousTap { false };  // Track if we have a valid previous tap for BPM calculation
+    
+    // UI tap button state (for GUI thread to trigger taps)
+    std::atomic<double> uiTapTimestamp { 0.0 };  // Timestamp of last UI tap (in seconds)
+    double lastProcessedUiTap { 0.0 };  // Last tap timestamp we've processed (audio thread)
 };
 
 

@@ -7,23 +7,23 @@ TempoClockModuleProcessor::TempoClockModuleProcessor()
           .withOutput("Clock", juce::AudioChannelSet::discreteChannels(7), true)), // clock, beatTrig, barTrig, beatGate, phase, bpmCv, downbeat
       apvts(*this, nullptr, "TempoClockParams", createParameterLayout())
 {
-    bpmParam = apvts.getRawParameterValue("bpm");
-    swingParam = apvts.getRawParameterValue("swing");
-    divisionParam = apvts.getRawParameterValue("division");
-    gateWidthParam = apvts.getRawParameterValue("gateWidth");
-    syncToHostParam = apvts.getRawParameterValue("syncToHost");
-    divisionOverrideParam = apvts.getRawParameterValue("divisionOverride");
+    bpmParam = apvts.getRawParameterValue(paramIdBpm);
+    swingParam = apvts.getRawParameterValue(paramIdSwing);
+    divisionParam = apvts.getRawParameterValue(paramIdDivision);
+    gateWidthParam = apvts.getRawParameterValue(paramIdGateWidth);
+    syncToHostParam = apvts.getRawParameterValue(paramIdSyncToHost);
+    divisionOverrideParam = apvts.getRawParameterValue(paramIdDivisionOverride);
 }
 
 juce::AudioProcessorValueTreeState::ParameterLayout TempoClockModuleProcessor::createParameterLayout()
 {
     std::vector<std::unique_ptr<juce::RangedAudioParameter>> params;
-    params.push_back(std::make_unique<juce::AudioParameterFloat>("bpm", "BPM", juce::NormalisableRange<float>(20.0f, 300.0f, 0.01f, 0.3f), 120.0f));
-    params.push_back(std::make_unique<juce::AudioParameterFloat>("swing", "Swing", juce::NormalisableRange<float>(0.0f, 0.75f, 0.0f, 1.0f), 0.0f));
-    params.push_back(std::make_unique<juce::AudioParameterChoice>("division", "Division", juce::StringArray{"1/32","1/16","1/8","1/4","1/2","1","2","4"}, 3));
-    params.push_back(std::make_unique<juce::AudioParameterFloat>("gateWidth", "Gate Width", juce::NormalisableRange<float>(0.01f, 0.99f, 0.0f, 1.0f), 0.5f));
-    params.push_back(std::make_unique<juce::AudioParameterBool>("syncToHost", "Sync to Host", false));
-    params.push_back(std::make_unique<juce::AudioParameterBool>("divisionOverride", "Division Override", false));
+    params.push_back(std::make_unique<juce::AudioParameterFloat>(paramIdBpm, "BPM", juce::NormalisableRange<float>(20.0f, 300.0f, 0.01f, 0.3f), 120.0f));
+    params.push_back(std::make_unique<juce::AudioParameterFloat>(paramIdSwing, "Swing", juce::NormalisableRange<float>(0.0f, 0.75f, 0.0f, 1.0f), 0.0f));
+    params.push_back(std::make_unique<juce::AudioParameterChoice>(paramIdDivision, "Division", juce::StringArray{"1/32","1/16","1/8","1/4","1/2","1","2","4"}, 3));
+    params.push_back(std::make_unique<juce::AudioParameterFloat>(paramIdGateWidth, "Gate Width", juce::NormalisableRange<float>(0.01f, 0.99f, 0.0f, 1.0f), 0.5f));
+    params.push_back(std::make_unique<juce::AudioParameterBool>(paramIdSyncToHost, "Sync to Host", false));
+    params.push_back(std::make_unique<juce::AudioParameterBool>(paramIdDivisionOverride, "Division Override", false));
     return { params.begin(), params.end() };
 }
 
@@ -38,21 +38,23 @@ void TempoClockModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
     juce::ignoreUnused(midi);
     auto in = getBusBuffer(buffer, true, 0);
     auto out = getBusBuffer(buffer, false, 0);
-    out.clear();
-
+    
     const int numSamples = buffer.getNumSamples();
     if (numSamples <= 0 || sampleRateHz <= 0.0)
         return;
+    
+    // FIX: DON'T clear output buffer yet - it might alias with input buffer!
+    // We'll write to all output channels explicitly, so no need to clear.
 
     // Read CV inputs ONLY if connected (BestPractice/TTS pattern)
-    const bool bpmMod = isParamInputConnected("bpm_mod");
-    const bool tapMod = isParamInputConnected("tap_mod");
-    const bool nudgeUpMod = isParamInputConnected("nudge_up_mod");
-    const bool nudgeDownMod = isParamInputConnected("nudge_down_mod");
-    const bool playMod = isParamInputConnected("play_mod");
-    const bool stopMod = isParamInputConnected("stop_mod");
-    const bool resetMod = isParamInputConnected("reset_mod");
-    const bool swingMod = isParamInputConnected("swing_mod");
+    const bool bpmMod = isParamInputConnected(paramIdBpmMod);
+    const bool tapMod = isParamInputConnected(paramIdTapMod);
+    const bool nudgeUpMod = isParamInputConnected(paramIdNudgeUpMod);
+    const bool nudgeDownMod = isParamInputConnected(paramIdNudgeDownMod);
+    const bool playMod = isParamInputConnected(paramIdPlayMod);
+    const bool stopMod = isParamInputConnected(paramIdStopMod);
+    const bool resetMod = isParamInputConnected(paramIdResetMod);
+    const bool swingMod = isParamInputConnected(paramIdSwingMod);
 
     const float* bpmCV       = (bpmMod       && in.getNumChannels() > 0) ? in.getReadPointer(0) : nullptr;
     const float* tapCV       = (tapMod       && in.getNumChannels() > 1) ? in.getReadPointer(1) : nullptr;
@@ -64,35 +66,102 @@ void TempoClockModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
     const float* swingCV     = (swingMod     && in.getNumChannels() > 7) ? in.getReadPointer(7) : nullptr;
 
     float bpm = bpmParam->load();
+    
+    // FIX: Set flag when BPM comes from CV so other sources won't override it (MultiBandShaper pattern)
+    bool bpmFromCV = false;
     if (bpmCV)
     {
         const float cv = juce::jlimit(0.0f, 1.0f, bpmCV[0]);
         // Map 0..1 -> 20..300 with perceptual curve
         bpm = juce::jmap(std::pow(cv, 0.3f), 0.0f, 1.0f, 20.0f, 300.0f);
+        bpmFromCV = true;
     }
 
     float swing = swingParam ? swingParam->load() : 0.0f;
     if (swingCV)
         swing = juce::jlimit(0.0f, 0.75f, swingCV[0]);
 
-    // Publish live telemetry
-    setLiveParamValue("bpm_live", bpm);
-    setLiveParamValue("swing_live", swing);
+    // Increment tap counter each block (if we're waiting for a second tap)
+    if (hasPreviousTap)
+    {
+        samplesSinceLastTap += numSamples;
+    }
 
     // Handle edge controls (play/stop/reset/tap/nudge)
+    // FIX: Only allow these to modify BPM if CV is NOT connected
     auto edge = [&](const float* cv, bool& last){ bool now = (cv && cv[0] > 0.5f); bool rising = now && !last; last = now; return rising; };
     if (edge(playCV, lastPlayHigh))   if (auto* p = getParent()) p->setPlaying(true);
     if (edge(stopCV, lastStopHigh))   if (auto* p = getParent()) p->setPlaying(false);
     if (edge(resetCV, lastResetHigh)) if (auto* p = getParent()) p->resetTransportPosition();
-    if (edge(tapCV, lastTapHigh))   { samplesSinceLastTap = 0.0; }
-    if (edge(nudgeUpCV, lastNudgeUpHigh))   { bpm = juce::jlimit(20.0f, 300.0f, bpm + 0.5f); }
-    if (edge(nudgeDownCV, lastNudgeDownHigh)) { bpm = juce::jlimit(20.0f, 300.0f, bpm - 0.5f); }
+    
+    // TAP TEMPO (CV Input): Calculate BPM from interval between taps (ONLY if BPM CV not connected)
+    bool tapDetected = false;
+    if (!bpmFromCV && edge(tapCV, lastTapHigh))
+    {
+        tapDetected = true;
+    }
+    
+    // TAP TEMPO (UI Button): Detect if UI button was pressed
+    if (!bpmFromCV)
+    {
+        const double currentUiTap = uiTapTimestamp.load();
+        if (currentUiTap != lastProcessedUiTap && currentUiTap > 0.0)
+        {
+            tapDetected = true;
+            lastProcessedUiTap = currentUiTap;
+        }
+    }
+    
+    // Process tap (from CV or UI button)
+    if (tapDetected)
+    {
+        if (hasPreviousTap && samplesSinceLastTap > 0.0)
+        {
+            // Calculate BPM from time between taps
+            const double secondsBetweenTaps = samplesSinceLastTap / sampleRateHz;
+            
+            // Sanity check: prevent extreme values (20-300 BPM range)
+            // Min interval: 0.2 seconds (300 BPM), Max interval: 3.0 seconds (20 BPM)
+            if (secondsBetweenTaps >= 0.2 && secondsBetweenTaps <= 3.0)
+            {
+                float newBPM = 60.0f / static_cast<float>(secondsBetweenTaps);
+                bpm = juce::jlimit(20.0f, 300.0f, newBPM);
+                
+                // Update the parameter so it persists
+                if (auto* p = dynamic_cast<juce::AudioParameterFloat*>(apvts.getParameter(paramIdBpm)))
+                    *p = bpm;
+                
+                juce::Logger::writeToLog("[TempoClock] Tap tempo: " + 
+                    juce::String(secondsBetweenTaps, 3) + "s interval = " + 
+                    juce::String(bpm, 1) + " BPM");
+            }
+        }
+        
+        // Reset counter and mark that we have a valid tap
+        samplesSinceLastTap = 0.0;
+        hasPreviousTap = true;
+    }
+    
+    // TAP TIMEOUT: Reset if no tap for 4 seconds
+    if (hasPreviousTap && samplesSinceLastTap > sampleRateHz * 4.0)
+    {
+        hasPreviousTap = false;
+        samplesSinceLastTap = 0.0;
+    }
+    
+    // NUDGE: Only allow if BPM CV not connected
+    if (!bpmFromCV)
+    {
+        if (edge(nudgeUpCV, lastNudgeUpHigh))   { bpm = juce::jlimit(20.0f, 300.0f, bpm + 0.5f); }
+        if (edge(nudgeDownCV, lastNudgeDownHigh)) { bpm = juce::jlimit(20.0f, 300.0f, bpm - 0.5f); }
+    }
 
     // Sync to Host: Use host transport tempo OR control it
+    // FIX: BPM CV always takes priority over sync-to-host
     bool syncToHost = syncToHostParam && syncToHostParam->load() > 0.5f;
     if (auto* parent = getParent())
     {
-        if (syncToHost)
+        if (syncToHost && !bpmFromCV)  // FIX: Only sync from host if BPM CV is NOT connected
         {
             // Pull tempo FROM host transport (Tempo Clock follows)
             bpm = (float)m_currentTransport.bpm;
@@ -101,10 +170,15 @@ void TempoClockModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
         else
         {
             // Push tempo TO host transport (Tempo Clock controls the global BPM)
+            // This includes: manual BPM, BPM CV, tap tempo, and nudge
             parent->setBPM(bpm);
             parent->setTempoControlledByModule(true);  // Controlling - UI should be greyed
         }
     }
+    
+    // Publish live telemetry AFTER all BPM sources resolved (including sync)
+    setLiveParamValue("bpm_live", bpm);
+    setLiveParamValue("swing_live", swing);
 
     // Compute outputs
     float* clockOut = out.getNumChannels() > 0 ? out.getWritePointer(0) : nullptr;
@@ -181,14 +255,14 @@ void TempoClockModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
 bool TempoClockModuleProcessor::getParamRouting(const juce::String& paramId, int& outBusIndex, int& outChannelIndexInBus) const
 {
     outBusIndex = 0;
-    if (paramId == "bpm_mod") { outChannelIndexInBus = 0; return true; }
-    if (paramId == "tap_mod") { outChannelIndexInBus = 1; return true; }
-    if (paramId == "nudge_up_mod") { outChannelIndexInBus = 2; return true; }
-    if (paramId == "nudge_down_mod") { outChannelIndexInBus = 3; return true; }
-    if (paramId == "play_mod") { outChannelIndexInBus = 4; return true; }
-    if (paramId == "stop_mod") { outChannelIndexInBus = 5; return true; }
-    if (paramId == "reset_mod") { outChannelIndexInBus = 6; return true; }
-    if (paramId == "swing_mod") { outChannelIndexInBus = 7; return true; }
+    if (paramId == paramIdBpmMod) { outChannelIndexInBus = 0; return true; }
+    if (paramId == paramIdTapMod) { outChannelIndexInBus = 1; return true; }
+    if (paramId == paramIdNudgeUpMod) { outChannelIndexInBus = 2; return true; }
+    if (paramId == paramIdNudgeDownMod) { outChannelIndexInBus = 3; return true; }
+    if (paramId == paramIdPlayMod) { outChannelIndexInBus = 4; return true; }
+    if (paramId == paramIdStopMod) { outChannelIndexInBus = 5; return true; }
+    if (paramId == paramIdResetMod) { outChannelIndexInBus = 6; return true; }
+    if (paramId == paramIdSwingMod) { outChannelIndexInBus = 7; return true; }
     return false;
 }
 
@@ -213,8 +287,8 @@ void TempoClockModuleProcessor::drawParametersInNode(float itemWidth, const std:
     ImGui::Spacing();
 
     // BPM slider with live display
-    bool bpmMod = isParamModulated("bpm_mod");
-    float bpm = bpmMod ? getLiveParamValueFor("bpm_mod", "bpm_live", bpmParam->load()) : bpmParam->load();
+    bool bpmMod = isParamInputConnected(paramIdBpmMod);  // FIX: Use isParamInputConnected, not isParamModulated
+    float bpm = bpmMod ? getLiveParamValueFor(paramIdBpmMod, "bpm_live", bpmParam->load()) : bpmParam->load();
     bool syncToHost = syncToHostParam && syncToHostParam->load() > 0.5f;
     
     // Disable BPM control if synced to host
@@ -223,30 +297,41 @@ void TempoClockModuleProcessor::drawParametersInNode(float itemWidth, const std:
     {
         if (!bpmMod && !syncToHost)
         {
-            if (auto* p = dynamic_cast<juce::AudioParameterFloat*>(apvts.getParameter("bpm"))) *p = bpm;
+            if (auto* p = dynamic_cast<juce::AudioParameterFloat*>(apvts.getParameter(paramIdBpm))) *p = bpm;
         }
         onModificationEnded();
     }
-    if (!bpmMod && !syncToHost) adjustParamOnWheel(apvts.getParameter("bpm"), "bpm", bpm);
+    if (!bpmMod && !syncToHost) adjustParamOnWheel(apvts.getParameter(paramIdBpm), paramIdBpm, bpm);
     if (bpmMod) { ImGui::SameLine(); ImGui::TextUnformatted("(mod)"); }
     if (syncToHost) { ImGui::SameLine(); ImGui::TextColored(ImVec4(0.2f, 1.0f, 0.8f, 1.0f), "(synced)"); }
     if (bpmMod || syncToHost) { ImGui::EndDisabled(); }
     ImGui::SameLine();
     HelpMarkerClock("Beats per minute (20-300 BPM)\nDisabled when synced to host");
+    
+    // TAP TEMPO BUTTON
+    if (bpmMod || syncToHost) { ImGui::BeginDisabled(); }
+    if (ImGui::Button("TAP", ImVec2(itemWidth * 0.3f, 30)))
+    {
+        // Record tap timestamp (audio thread will detect the change)
+        uiTapTimestamp.store(juce::Time::getMillisecondCounterHiRes() / 1000.0);
+    }
+    if (bpmMod || syncToHost) { ImGui::EndDisabled(); }
+    ImGui::SameLine();
+    HelpMarkerClock("Click repeatedly to set tempo by tapping\nTap at least twice to calculate BPM");
 
     // Swing
-    bool swingM = isParamModulated("swing_mod");
-    float swing = swingM ? getLiveParamValueFor("swing_mod", "swing_live", swingParam->load()) : swingParam->load();
+    bool swingM = isParamInputConnected(paramIdSwingMod);  // FIX: Use isParamInputConnected, not isParamModulated
+    float swing = swingM ? getLiveParamValueFor(paramIdSwingMod, "swing_live", swingParam->load()) : swingParam->load();
     if (swingM) ImGui::BeginDisabled();
     if (ImGui::SliderFloat("Swing", &swing, 0.0f, 0.75f, "%.2f"))
     {
         if (!swingM)
         {
-            if (auto* p = dynamic_cast<juce::AudioParameterFloat*>(apvts.getParameter("swing"))) *p = swing;
+            if (auto* p = dynamic_cast<juce::AudioParameterFloat*>(apvts.getParameter(paramIdSwing))) *p = swing;
         }
         onModificationEnded();
     }
-    if (!swingM) adjustParamOnWheel(apvts.getParameter("swing"), "swing", swing);
+    if (!swingM) adjustParamOnWheel(apvts.getParameter(paramIdSwing), paramIdSwing, swing);
     if (swingM) { ImGui::EndDisabled(); ImGui::SameLine(); ImGui::TextUnformatted("(mod)"); }
     ImGui::SameLine();
     HelpMarkerClock("Swing amount (0-75%)\nDelays every other beat for shuffle feel");
@@ -264,7 +349,7 @@ void TempoClockModuleProcessor::drawParametersInNode(float itemWidth, const std:
     ImGui::SetNextItemWidth(itemWidth * 0.5f);
     if (ImGui::Combo("Division", &div, items, 8))
     {
-        if (auto* p = dynamic_cast<juce::AudioParameterChoice*>(apvts.getParameter("division"))) *p = div;
+        if (auto* p = dynamic_cast<juce::AudioParameterChoice*>(apvts.getParameter(paramIdDivision))) *p = div;
         onModificationEnded();
     }
     ImGui::SameLine();
@@ -274,7 +359,7 @@ void TempoClockModuleProcessor::drawParametersInNode(float itemWidth, const std:
     ImGui::SetNextItemWidth(itemWidth);
     if (ImGui::SliderFloat("Gate Width", &gw, 0.01f, 0.99f, "%.2f"))
     {
-        if (auto* p = dynamic_cast<juce::AudioParameterFloat*>(apvts.getParameter("gateWidth"))) *p = gw;
+        if (auto* p = dynamic_cast<juce::AudioParameterFloat*>(apvts.getParameter(paramIdGateWidth))) *p = gw;
         onModificationEnded();
     }
     ImGui::SameLine();
@@ -324,7 +409,7 @@ void TempoClockModuleProcessor::drawParametersInNode(float itemWidth, const std:
     bool sync = syncToHost;
     if (ImGui::Checkbox("Sync to Host", &sync))
     {
-        if (auto* p = dynamic_cast<juce::AudioParameterBool*>(apvts.getParameter("syncToHost"))) *p = sync;
+        if (auto* p = dynamic_cast<juce::AudioParameterBool*>(apvts.getParameter(paramIdSyncToHost))) *p = sync;
         onModificationEnded();
     }
     ImGui::SameLine();
@@ -343,7 +428,7 @@ void TempoClockModuleProcessor::drawParametersInNode(float itemWidth, const std:
     bool divOverride = divisionOverrideParam && divisionOverrideParam->load() > 0.5f;
     if (ImGui::Checkbox("Division Override", &divOverride))
     {
-        if (auto* p = dynamic_cast<juce::AudioParameterBool*>(apvts.getParameter("divisionOverride"))) *p = divOverride;
+        if (auto* p = dynamic_cast<juce::AudioParameterBool*>(apvts.getParameter(paramIdDivisionOverride))) *p = divOverride;
         onModificationEnded();
     }
     ImGui::SameLine();
