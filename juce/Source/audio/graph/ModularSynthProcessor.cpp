@@ -66,6 +66,8 @@
 #include "../modules/PhysicsModuleProcessor.h"
 #include "../modules/StrokeSequencerModuleProcessor.h"
 #include "../modules/AnimationModuleProcessor.h"
+#include "../modules/WebcamLoaderModule.h"
+#include "../modules/VideoFileLoaderModule.h"
 #include "../modules/MovementDetectorModule.h"
 #include "../modules/HumanDetectorModule.h"
 #include "../modules/InletModuleProcessor.h"
@@ -715,6 +717,8 @@ namespace {
             reg("tempo_clock", []{ return std::make_unique<TempoClockModuleProcessor>(); });
             reg("physics", []{ return std::make_unique<PhysicsModuleProcessor>(); });
             reg("animation", []{ return std::make_unique<AnimationModuleProcessor>(); });
+            reg("webcam_loader", []{ return std::make_unique<WebcamLoaderModule>(); });
+            reg("video_file_loader", []{ return std::make_unique<VideoFileLoaderModule>(); });
             reg("movement_detector", []{ return std::make_unique<MovementDetectorModule>(); });
             reg("human_detector", []{ return std::make_unique<HumanDetectorModule>(); });
             reg("stroke_sequencer", []{ return std::make_unique<StrokeSequencerModuleProcessor>(); });

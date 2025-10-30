@@ -295,3 +295,4 @@ The current tap tempo implementation is **completely non-functional** - it only 
 **Recommended**: Implement Option 1 (simple two-tap) for immediate, predictable results.
 
 
+

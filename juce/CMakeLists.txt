@@ -408,6 +408,11 @@ target_sources(ColliderApp PRIVATE
     Source/audio/modules/StrokeSequencerModuleProcessor.cpp
     Source/audio/modules/AnimationModuleProcessor.h
     Source/audio/modules/AnimationModuleProcessor.cpp
+    Source/video/VideoFrameManager.h
+    Source/audio/modules/WebcamLoaderModule.h
+    Source/audio/modules/WebcamLoaderModule.cpp
+    Source/audio/modules/VideoFileLoaderModule.h
+    Source/audio/modules/VideoFileLoaderModule.cpp
     Source/audio/modules/MovementDetectorModule.h
     Source/audio/modules/MovementDetectorModule.cpp
     Source/audio/modules/HumanDetectorModule.h
@@ -679,6 +684,11 @@ target_sources(PresetCreatorApp PRIVATE
     Source/audio/modules/StrokeSequencerModuleProcessor.cpp
     Source/audio/modules/AnimationModuleProcessor.h
     Source/audio/modules/AnimationModuleProcessor.cpp
+    Source/video/VideoFrameManager.h
+    Source/audio/modules/WebcamLoaderModule.h
+    Source/audio/modules/WebcamLoaderModule.cpp
+    Source/audio/modules/VideoFileLoaderModule.h
+    Source/audio/modules/VideoFileLoaderModule.cpp
     Source/audio/modules/MovementDetectorModule.h
     Source/audio/modules/MovementDetectorModule.cpp
     Source/audio/modules/HumanDetectorModule.h

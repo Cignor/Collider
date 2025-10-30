@@ -8,8 +8,9 @@
       </params>
       <extra>
         <AnimationModuleState animationFilePath="H:\0000_CODE\01_collider_pyo\animation_gltf\walking_new.fbx"
-                              zoom="0.9735803008079529" panX="-0.01195856928825378" panY="0.8851638436317444"
-                              viewRotationX="0.0" viewRotationY="0.0" viewRotationZ="0.0" selectedBoneName="mixamorig:LeftForeArm">
+                              zoom="0.9770553708076477" panX="-0.0181465744972229" panY="0.8877606391906738"
+                              viewRotationX="0.0" viewRotationY="0.0" viewRotationZ="0.0" animationClipName="Armature|Armature|mixamo.com|Layer0.001"
+                              selectedBoneName="None">
           <GroundPlanes>
             <Plane y="0.1000000014901161" depth="0.2800000011920929"/>
             <Plane y="1.100000023841858" depth="0.1400000005960464"/>

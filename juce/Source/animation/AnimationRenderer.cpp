@@ -98,20 +98,47 @@ const char* fragmentShaderSource = R"glsl(
     }
 )glsl";
 
+const char* lineVertexShaderSource = R"glsl(
+    #version 330 core
+    layout (location = 0) in vec3 aPos;
+
+    uniform mat4 projectionView;
+
+    void main()
+    {
+        gl_Position = projectionView * vec4(aPos, 1.0);
+    }
+)glsl";
+
+const char* lineFragmentShaderSource = R"glsl(
+    #version 330 core
+    out vec4 FragColor;
+
+    void main()
+    {
+        // Light, semi-transparent grey for the edges
+        FragColor = vec4(0.8, 0.8, 0.8, 0.6);
+    }
+)glsl";
+
 AnimationRenderer::AnimationRenderer()
 {
 }
 
 AnimationRenderer::~AnimationRenderer()
 {
-    if (shaderProgramID != 0)
-        glDeleteProgram(shaderProgramID);
+    if (pointShaderProgramID != 0) glDeleteProgram(pointShaderProgramID);
+    if (lineShaderProgramID != 0) glDeleteProgram(lineShaderProgramID);
+
     if (fboTextureID != 0)
         glDeleteTextures(1, &fboTextureID);
     if (rboDepthID != 0)
         glDeleteRenderbuffers(1, &rboDepthID);
     if (fboID != 0)
         glDeleteFramebuffers(1, &fboID);
+
+    if (lineVBO != 0) glDeleteBuffers(1, &lineVBO);
+    if (lineVAO != 0) glDeleteVertexArrays(1, &lineVAO);
 }
 
 void AnimationRenderer::setup(int width, int height)
@@ -121,12 +148,27 @@ void AnimationRenderer::setup(int width, int height)
 
     createShaders();
     createFramebuffer(width, height);
+
+    // NEW: Setup VAO/VBO for line drawing
+    glGenVertexArrays(1, &lineVAO);
+    glGenBuffers(1, &lineVBO);
+
+    glBindVertexArray(lineVAO);
+    glBindBuffer(GL_ARRAY_BUFFER, lineVBO);
+    // The data will be uploaded each frame, so we just set up the attribute pointer here
+    glBufferData(GL_ARRAY_BUFFER, 0, nullptr, GL_DYNAMIC_DRAW);
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
+    glEnableVertexAttribArray(0);
+
+    glBindBuffer(GL_ARRAY_BUFFER, 0);
+    glBindVertexArray(0);
+
     m_isInitialized = true;
 }
 
-void AnimationRenderer::render(const std::vector<glm::mat4>& finalBoneMatrices, const std::vector<glm::vec3>& boneColors)
+void AnimationRenderer::render(const std::vector<glm::mat4>& finalBoneMatrices, const std::vector<glm::vec3>& boneColors, const std::vector<glm::vec3>& boneEdges)
 {
-    if (finalBoneMatrices.empty() || shaderProgramID == 0)
+    if (finalBoneMatrices.empty() || pointShaderProgramID == 0)
         return;
 
     // --- SAVE IMGUI'S OPENGL STATE ---
@@ -146,39 +188,53 @@ void AnimationRenderer::render(const std::vector<glm::mat4>& finalBoneMatrices, 
     glBindFramebuffer(GL_FRAMEBUFFER, fboID);
     glViewport(0, 0, textureWidth, textureHeight);
     glDisable(GL_SCISSOR_TEST); // We want to clear and draw to the whole FBO
+    glEnable(GL_BLEND); // Enable blending for semi-transparent lines
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
     // Clear the framebuffer
     glClearColor(0.1f, 0.1f, 0.1f, 1.0f);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-    // --- DRAW OUR SCENE ---
-    glUseProgram(shaderProgramID);
-
+    // --- CREATE PROJECTION-VIEW MATRIX ---
     // 1. Set up orthographic projection matrix (zoom and pan controlled by m_zoom and m_pan)
-    glm::mat4 projection = glm::ortho(
-        -m_zoom + m_pan.x, m_zoom + m_pan.x,
-        -m_zoom + m_pan.y, m_zoom + m_pan.y,
-        -10.0f, 10.0f
-    );
+    glm::mat4 projection = glm::ortho(-m_zoom + m_pan.x, m_zoom + m_pan.x, -m_zoom + m_pan.y, m_zoom + m_pan.y, -10.0f, 10.0f);
 
     // 2. Create the view matrix from our rotation angles
     glm::mat4 view = glm::mat4(1.0f);
-    view = glm::rotate(view, m_viewRotation.x, glm::vec3(1.0f, 0.0f, 0.0f)); // X-axis rotation
-    view = glm::rotate(view, m_viewRotation.y, glm::vec3(0.0f, 1.0f, 0.0f)); // Y-axis rotation
-    view = glm::rotate(view, m_viewRotation.z, glm::vec3(0.0f, 0.0f, 1.0f)); // Z-axis rotation
+    view = glm::rotate(view, m_viewRotation.x, glm::vec3(1.0f, 0.0f, 0.0f));
+    view = glm::rotate(view, m_viewRotation.y, glm::vec3(0.0f, 1.0f, 0.0f));
+    view = glm::rotate(view, m_viewRotation.z, glm::vec3(0.0f, 0.0f, 1.0f));
 
     // 3. Combine them into a final projection-view matrix
     glm::mat4 projectionView = projection * view;
 
-    // 4. Send matrices and radius to the shader uniforms
-    glUniformMatrix4fv(glGetUniformLocation(shaderProgramID, "projection"), 1, GL_FALSE, &projectionView[0][0]);
+    // --- PASS 1: DRAW LINES (Edges) ---
+    if (!boneEdges.empty())
+    {
+        glUseProgram(lineShaderProgramID);
+        glUniformMatrix4fv(glGetUniformLocation(lineShaderProgramID, "projectionView"), 1, GL_FALSE, &projectionView[0][0]);
 
-    // FIX: Define a world-space radius for the points. This will scale with zoom.
-    // 0.02 is a good starting point for a noticeable size.
-    glUniform1f(glGetUniformLocation(shaderProgramID, "pointRadius"), 0.02f);
+        glBindVertexArray(lineVAO);
+        glBindBuffer(GL_ARRAY_BUFFER, lineVBO);
+        // Upload vertex data for the lines for this frame
+        glBufferData(GL_ARRAY_BUFFER, boneEdges.size() * sizeof(glm::vec3), boneEdges.data(), GL_DYNAMIC_DRAW);
+        
+        glDrawArrays(GL_LINES, 0, static_cast<GLsizei>(boneEdges.size()));
+        
+        glBindBuffer(GL_ARRAY_BUFFER, 0);
+        glBindVertexArray(0);
+    }
+    
+    // --- PASS 2: DRAW POINTS (Bones) ---
+    glEnable(GL_PROGRAM_POINT_SIZE); // Required for gl_PointSize in shader to work
+    glUseProgram(pointShaderProgramID);
+    
+    // 4. Send matrices and radius to the shader uniforms
+    glUniformMatrix4fv(glGetUniformLocation(pointShaderProgramID, "projection"), 1, GL_FALSE, &projectionView[0][0]);
+    glUniform1f(glGetUniformLocation(pointShaderProgramID, "pointRadius"), 0.02f);
 
     // Send the bone matrices to the shader
-    glUniformMatrix4fv(glGetUniformLocation(shaderProgramID, "boneMatrices"), 
+    glUniformMatrix4fv(glGetUniformLocation(pointShaderProgramID, "boneMatrices"), 
                       static_cast<GLsizei>(finalBoneMatrices.size()), 
                       GL_FALSE, 
                       &finalBoneMatrices[0][0][0]);
@@ -186,7 +242,7 @@ void AnimationRenderer::render(const std::vector<glm::mat4>& finalBoneMatrices, 
     // Send the bone colors to the shader (default to white if no colors provided)
     if (!boneColors.empty() && boneColors.size() >= finalBoneMatrices.size())
     {
-        glUniform3fv(glGetUniformLocation(shaderProgramID, "boneColors"),
+        glUniform3fv(glGetUniformLocation(pointShaderProgramID, "boneColors"),
                      static_cast<GLsizei>(finalBoneMatrices.size()),
                      &boneColors[0][0]);
     }
@@ -194,16 +250,17 @@ void AnimationRenderer::render(const std::vector<glm::mat4>& finalBoneMatrices, 
     {
         // Default all bones to white if no color data provided
         std::vector<glm::vec3> defaultColors(finalBoneMatrices.size(), glm::vec3(1.0f, 1.0f, 1.0f));
-        glUniform3fv(glGetUniformLocation(shaderProgramID, "boneColors"),
+        glUniform3fv(glGetUniformLocation(pointShaderProgramID, "boneColors"),
                      static_cast<GLsizei>(defaultColors.size()),
                      &defaultColors[0][0]);
     }
 
     glDrawArrays(GL_POINTS, 0, static_cast<GLsizei>(finalBoneMatrices.size()));
-
+    glDisable(GL_PROGRAM_POINT_SIZE);
 
     // --- RESTORE IMGUI'S OPENGL STATE ---
     glBindFramebuffer(GL_FRAMEBUFFER, 0); // Unbind FBO first
+    glDisable(GL_BLEND);
     glUseProgram(last_program);
     glBindTexture(GL_TEXTURE_2D, last_texture);
     glBindBuffer(GL_ARRAY_BUFFER, last_array_buffer);
@@ -243,66 +300,72 @@ void AnimationRenderer::createFramebuffer(int width, int height)
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
 }
 
-void AnimationRenderer::createShaders()
+// Shader helper function to avoid duplicating compilation/linking code
+GLuint AnimationRenderer::createShaderProgram(const char* vsSource, const char* gsSource, const char* fsSource)
 {
-    // --- Compile Vertex Shader ---
-    GLuint vs = glCreateShader(GL_VERTEX_SHADER);
-    glShaderSource(vs, 1, &vertexShaderSource, NULL);
-    glCompileShader(vs);
-    
-    // Check for vertex shader compile errors
     GLint success;
     GLchar infoLog[512];
+
+    // Vertex Shader
+    GLuint vs = glCreateShader(GL_VERTEX_SHADER);
+    glShaderSource(vs, 1, &vsSource, NULL);
+    glCompileShader(vs);
     glGetShaderiv(vs, GL_COMPILE_STATUS, &success);
-    if (!success)
-    {
+    if (!success) {
         glGetShaderInfoLog(vs, 512, NULL, infoLog);
         DBG("ERROR::SHADER::VERTEX::COMPILATION_FAILED: " + juce::String(infoLog));
     }
 
-    // --- Compile Geometry Shader (NEW) ---
-    GLuint gs = glCreateShader(GL_GEOMETRY_SHADER);
-    glShaderSource(gs, 1, &geometryShaderSource, NULL);
-    glCompileShader(gs);
-    
-    glGetShaderiv(gs, GL_COMPILE_STATUS, &success);
-    if (!success)
-    {
-        glGetShaderInfoLog(gs, 512, NULL, infoLog);
-        DBG("ERROR::SHADER::GEOMETRY::COMPILATION_FAILED: " + juce::String(infoLog));
+    // Geometry Shader (optional)
+    GLuint gs = 0;
+    if (gsSource != nullptr) {
+        gs = glCreateShader(GL_GEOMETRY_SHADER);
+        glShaderSource(gs, 1, &gsSource, NULL);
+        glCompileShader(gs);
+        glGetShaderiv(gs, GL_COMPILE_STATUS, &success);
+        if (!success) {
+            glGetShaderInfoLog(gs, 512, NULL, infoLog);
+            DBG("ERROR::SHADER::GEOMETRY::COMPILATION_FAILED: " + juce::String(infoLog));
+        }
     }
 
-    // --- Compile Fragment Shader ---
+    // Fragment Shader
     GLuint fs = glCreateShader(GL_FRAGMENT_SHADER);
-    glShaderSource(fs, 1, &fragmentShaderSource, NULL);
+    glShaderSource(fs, 1, &fsSource, NULL);
     glCompileShader(fs);
-    
-    // Check for fragment shader compile errors
     glGetShaderiv(fs, GL_COMPILE_STATUS, &success);
-    if (!success)
-    {
+    if (!success) {
         glGetShaderInfoLog(fs, 512, NULL, infoLog);
         DBG("ERROR::SHADER::FRAGMENT::COMPILATION_FAILED: " + juce::String(infoLog));
     }
 
-    // Link Shaders into a Program
-    shaderProgramID = glCreateProgram();
-    glAttachShader(shaderProgramID, vs);
-    glAttachShader(shaderProgramID, gs); // Attach the new geometry shader
-    glAttachShader(shaderProgramID, fs);
-    glLinkProgram(shaderProgramID);
-    
-    // Check for linking errors
-    glGetProgramiv(shaderProgramID, GL_LINK_STATUS, &success);
-    if (!success)
-    {
-        glGetProgramInfoLog(shaderProgramID, 512, NULL, infoLog);
+    // Shader Program
+    GLuint programID = glCreateProgram();
+    glAttachShader(programID, vs);
+    if (gs != 0) glAttachShader(programID, gs);
+    glAttachShader(programID, fs);
+    glLinkProgram(programID);
+    glGetProgramiv(programID, GL_LINK_STATUS, &success);
+    if (!success) {
+        glGetProgramInfoLog(programID, 512, NULL, infoLog);
         DBG("ERROR::SHADER::PROGRAM::LINKING_FAILED: " + juce::String(infoLog));
     }
 
+    // Delete shaders as they're now linked into our program
     glDeleteShader(vs);
-    glDeleteShader(gs);
+    if (gs != 0) glDeleteShader(gs);
     glDeleteShader(fs);
+    
+    return programID;
+}
+
+void AnimationRenderer::createShaders()
+{
+    // Create the shader program for drawing points
+    pointShaderProgramID = createShaderProgram(vertexShaderSource, geometryShaderSource, fragmentShaderSource);
+    
+    // Create the shader program for drawing lines
+    lineShaderProgramID = createShaderProgram(lineVertexShaderSource, nullptr, lineFragmentShaderSource);
 }
 
 void AnimationRenderer::frameView(const std::vector<glm::mat4>& boneMatrices, float& outZoom, glm::vec2& outPan)

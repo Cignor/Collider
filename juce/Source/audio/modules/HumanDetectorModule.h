@@ -2,7 +2,12 @@
 
 #pragma once
 
-#include "OpenCVModuleProcessor.h" // Include the base class
+#include "ModuleProcessor.h"
+#include <opencv2/core.hpp>
+#include <opencv2/objdetect.hpp>
+#include <juce_core/juce_core.h>
+#include <juce_audio_processors/juce_audio_processors.h>
+#include <juce_graphics/juce_graphics.h>
 
 // We can reuse the same POD struct as it fits our needs perfectly.
 struct DetectionResult
@@ -15,21 +20,38 @@ struct DetectionResult
     float height[maxDetections] = {0};
 };
 
-class HumanDetectorModule : public OpenCVModuleProcessor<DetectionResult>
+/**
+ * Processing node that detects humans from a video source via the VideoFrameManager.
+ * Requires a "Source ID" input connection from a Webcam or Video File Loader.
+ */
+class HumanDetectorModule : public ModuleProcessor, private juce::Thread
 {
 public:
     HumanDetectorModule();
-    ~HumanDetectorModule() override = default;
+    ~HumanDetectorModule() override;
 
     const juce::String getName() const override { return "human_detector"; }
     juce::AudioProcessorValueTreeState& getAPVTS() override { return apvts; }
+    
+    void prepareToPlay(double sampleRate, int samplesPerBlock) override;
+    void releaseResources() override;
+    void processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midi) override;
+    
+    // For UI: get latest annotated frame
+    juce::Image getLatestFrame();
 
-protected:
-    // Implement the pure virtual methods from the base class
-    DetectionResult processFrame(const cv::Mat& inputFrame) override;
-    void consumeResult(const DetectionResult& result, juce::AudioBuffer<float>& outputBuffer) override;
+#if defined(PRESET_CREATOR_UI)
+    void drawParametersInNode(float itemWidth,
+                              const std::function<bool(const juce::String& paramId)>& isParamModulated,
+                              const std::function<void()>& onModificationEnded) override;
+    void drawIoPins(const NodePinHelpers& helpers) override;
+#endif
 
 private:
+    void run() override;
+    void updateGuiFrame(const cv::Mat& frame);
+    DetectionResult analyzeFrame(const cv::Mat& inputFrame);
+    
     static juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout();
 
     juce::AudioProcessorValueTreeState apvts;
@@ -43,5 +65,17 @@ private:
     
     // State for trigger generation
     int gateSamplesRemaining = 0;
+    
+    // Thread-safe data transfer from video thread to audio thread
+    juce::AbstractFifo fifo { 16 };
+    std::vector<DetectionResult> fifoBuffer;
+    DetectionResult lastResultForAudio;
+    
+    // Current source ID (read from input pin)
+    std::atomic<juce::uint32> currentSourceId { 0 };
+    
+    // GUI preview
+    juce::Image latestFrameForGui;
+    juce::CriticalSection imageLock;
 };
 

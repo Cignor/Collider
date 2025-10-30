@@ -74,6 +74,17 @@ void populateModuleDescriptions()
     descriptions["debug"] = "A tool for logging signal value changes.";
     descriptions["input_debug"] = "A passthrough version of the Debug node for inspecting signals on a cable.";
     
+    // Physics
+    descriptions["physics"] = "A 2D physics simulation that outputs collision and contact data.";
+    descriptions["animation"] = "Loads and plays 3D animations, outputs joint positions and velocities.";
+    descriptions["stroke_sequencer"] = "Gesture-based sequencer that records and plays back drawn patterns.";
+    
+    // OpenCV (Computer Vision)
+    descriptions["webcam_loader"] = "Captures video from a webcam and publishes it as a source for vision processing modules.";
+    descriptions["video_file_loader"] = "Loads and plays a video file, publishes it as a source for vision processing modules.";
+    descriptions["movement_detector"] = "Analyzes video source for motion via optical flow or background subtraction, outputs motion data as CV.";
+    descriptions["human_detector"] = "Detects faces or bodies in video source via Haar Cascades or HOG, outputs position and size as CV.";
+    
     // Add aliases for underscore naming conventions
     descriptions["clock_divider"] = descriptions["ClockDivider"];
     descriptions["sequential_switch"] = descriptions["SequentialSwitch"];
@@ -940,9 +951,29 @@ db["random"] = ModulePinInfo(
         {}
     );
 
+    db["webcam_loader"] = ModulePinInfo(
+        NodeWidth::Exception, // Custom size for video display
+        {}, // No inputs
+        { 
+            AudioPin("Source ID", 0, PinDataType::Raw)
+        },
+        {}
+    );
+
+    db["video_file_loader"] = ModulePinInfo(
+        NodeWidth::Exception, // Custom size for video display
+        {}, // No inputs
+        { 
+            AudioPin("Source ID", 0, PinDataType::Raw)
+        },
+        {}
+    );
+
     db["movement_detector"] = ModulePinInfo(
         NodeWidth::Medium,
-        {}, // No inputs
+        { 
+            AudioPin("Source In", 0, PinDataType::Raw)
+        },
         { 
             AudioPin("Motion X", 0, PinDataType::CV),
             AudioPin("Motion Y", 1, PinDataType::CV),
@@ -954,7 +985,9 @@ db["random"] = ModulePinInfo(
 
     db["human_detector"] = ModulePinInfo(
         NodeWidth::Medium,
-        {}, // No inputs
+        { 
+            AudioPin("Source In", 0, PinDataType::Raw)
+        },
         { 
             AudioPin("X", 0, PinDataType::CV),
             AudioPin("Y", 1, PinDataType::CV),

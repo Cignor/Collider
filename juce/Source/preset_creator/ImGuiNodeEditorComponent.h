@@ -310,6 +310,7 @@ public:
     
     // SampleLoader texture management (use JUCE OpenGLTexture to avoid raw GL includes)
     std::unordered_map<int, std::unique_ptr<juce::OpenGLTexture>> sampleLoaderTextureIds;
+    std::unordered_map<int, std::unique_ptr<juce::OpenGLTexture>> visionModuleTextures;
 
     // Preset status tracking
     juce::String currentPresetFile;
@@ -385,7 +386,7 @@ public:
     void handleCollapseToMetaModule();
     
     // --- Module Category Color Coding ---
-    enum class ModuleCategory { Source, Effect, Modulator, Utility, Analysis, Comment, Plugin, MIDI, Physics };
+    enum class ModuleCategory { Source, Effect, Modulator, Utility, Seq, MIDI, Analysis, TTS_Voice, Special_Exp, OpenCV, Sys, Comment, Plugin };
     ModuleCategory getModuleCategory(const juce::String& moduleType);
     unsigned int getImU32ForCategory(ModuleCategory category, bool hovered = false);
     

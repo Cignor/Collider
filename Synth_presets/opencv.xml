@@ -1,0 +1,75 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<ModularSynthPreset version="1" bpm="120.0">
+  <modules>
+    <module logicalId="1" type="webcam_loader">
+      <params>
+        <WebcamLoaderParams>
+          <PARAM id="cameraIndex" value="2.0"/>
+        </WebcamLoaderParams>
+      </params>
+    </module>
+    <module logicalId="2" type="movement_detector">
+      <params>
+        <MovementParams>
+          <PARAM id="mode" value="0.0"/>
+          <PARAM id="sensitivity" value="0.2000000029802322"/>
+        </MovementParams>
+      </params>
+    </module>
+    <module logicalId="3" type="vco">
+      <params>
+        <VCOParams>
+          <PARAM id="frequency" value="440.0"/>
+          <PARAM id="portamento" value="0.0"/>
+          <PARAM id="relative_freq_mod" value="1.0"/>
+          <PARAM id="waveform" value="0.0"/>
+        </VCOParams>
+      </params>
+    </module>
+    <module logicalId="4" type="human_detector">
+      <params>
+        <HumanParams>
+          <PARAM id="minNeighbors" value="3.0"/>
+          <PARAM id="mode" value="1.0"/>
+          <PARAM id="scaleFactor" value="1.099999904632568"/>
+        </HumanParams>
+      </params>
+    </module>
+    <module logicalId="5" type="vco">
+      <params>
+        <VCOParams>
+          <PARAM id="frequency" value="440.0"/>
+          <PARAM id="portamento" value="0.0"/>
+          <PARAM id="relative_freq_mod" value="1.0"/>
+          <PARAM id="waveform" value="0.0"/>
+        </VCOParams>
+      </params>
+    </module>
+    <module logicalId="6" type="video_file_loader">
+      <params>
+        <VideoFileLoaderParams>
+          <PARAM id="loop" value="1.0"/>
+        </VideoFileLoaderParams>
+      </params>
+      <extra>
+        <VideoFileLoaderState videoFilePath="C:\Users\PIMP-TOWERPRIMUS\Videos\2025-10-28 15-12-07.mp4"/>
+      </extra>
+    </module>
+  </modules>
+  <connections>
+    <connection srcId="1" srcChan="0" dstId="2" dstChan="0"/>
+    <connection srcId="2" srcChan="0" dstId="3" dstChan="0"/>
+    <connection srcId="4" srcChan="0" dstId="5" dstChan="0"/>
+    <connection srcId="6" srcChan="0" dstId="4" dstChan="0"/>
+  </connections>
+  <NodeEditorUI>
+    <node id="1" x="-664.0" y="192.0"/>
+    <node id="2" x="178.0" y="415.0"/>
+    <node id="3" x="729.0" y="355.0"/>
+    <node id="4" x="181.0" y="1114.0"/>
+    <node id="5" x="709.0" y="847.0"/>
+    <node id="6" x="-591.0" y="854.0"/>
+    <node id="0" x="743.0" y="168.0"/>
+  </NodeEditorUI>
+</ModularSynthPreset>

@@ -14,7 +14,7 @@ public:
     void setup(int width, int height);
 
     // Call every frame to draw the skeleton
-    void render(const std::vector<glm::mat4>& finalBoneMatrices, const std::vector<glm::vec3>& boneColors = {});
+    void render(const std::vector<glm::mat4>& finalBoneMatrices, const std::vector<glm::vec3>& boneColors = {}, const std::vector<glm::vec3>& boneEdges = {});
 
     // Get the ID of the final texture to display in ImGui
     GLuint getTextureID() const { return fboTextureID; }
@@ -34,11 +34,19 @@ public:
 private:
     void createFramebuffer(int width, int height);
     void createShaders();
+    // Helper for compiling and linking shader programs
+    GLuint createShaderProgram(const char* vsSource, const char* gsSource, const char* fsSource);
 
     GLuint fboID = 0;
     GLuint fboTextureID = 0;
     GLuint rboDepthID = 0; // Renderbuffer for depth testing
-    GLuint shaderProgramID = 0;
+    
+    // Resources for drawing points
+    GLuint pointShaderProgramID = 0;
+
+    // NEW: Resources for drawing lines
+    GLuint lineShaderProgramID = 0;
+    GLuint lineVBO = 0, lineVAO = 0;
 
     int textureWidth = 0;
     int textureHeight = 0;

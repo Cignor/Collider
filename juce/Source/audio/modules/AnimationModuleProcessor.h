@@ -178,6 +178,9 @@ private:
     // Per-frame bone colors for rendering (green=tracked, red=hit flash, white=default)
     std::vector<glm::vec3> m_boneColors;
 
+    // NEW: Per-frame vertex pairs for bone edges
+    std::vector<glm::vec3> m_boneEdges;
+
     // File chooser (kept alive during async operation)
     std::unique_ptr<juce::FileChooser> m_FileChooser;
 
@@ -199,6 +202,9 @@ private:
     std::string m_selectedBoneName = "None";
     int m_selectedBoneID = -1; // Cached bone ID to avoid map lookups
     std::vector<std::string> m_cachedBoneNames; // Thread-safe cache of bone names for UI
+
+    // Name of the animation clip to play when a preset is loaded
+    juce::String m_clipToPlayOnLoad;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(AnimationModuleProcessor)
 };

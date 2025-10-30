@@ -25,6 +25,10 @@
 #include "../audio/modules/StrokeSequencerModuleProcessor.h"
 #include "../audio/modules/AnimationModuleProcessor.h"
 #include "../audio/modules/TempoClockModuleProcessor.h"
+#include "../audio/modules/WebcamLoaderModule.h"
+#include "../audio/modules/VideoFileLoaderModule.h"
+#include "../audio/modules/MovementDetectorModule.h"
+#include "../audio/modules/HumanDetectorModule.h"
 #include "../audio/modules/MapRangeModuleProcessor.h"
 #include "../audio/modules/LagProcessorModuleProcessor.h"
 #include "../audio/modules/DeCrackleModuleProcessor.h"
@@ -689,48 +693,66 @@ void ImGuiNodeEditorComponent::renderImGui()
         {
             bool isNodeSelected = (selectedLogicalId != 0);
             
-            if (ImGui::BeginMenu("Audio Path", isNodeSelected))
+            if (ImGui::BeginMenu("Effects", isNodeSelected))
             {
-                if (ImGui::MenuItem("VCF")) { insertNodeBetween("VCF"); }
-                if (ImGui::MenuItem("VCA")) { insertNodeBetween("VCA"); }
-                if (ImGui::MenuItem("Delay")) { insertNodeBetween("Delay"); }
-                if (ImGui::MenuItem("Reverb")) { insertNodeBetween("Reverb"); }
+                if (ImGui::MenuItem("VCF")) { insertNodeBetween("vcf"); }
+                if (ImGui::MenuItem("Delay")) { insertNodeBetween("delay"); }
+                if (ImGui::MenuItem("Reverb")) { insertNodeBetween("reverb"); }
                 if (ImGui::MenuItem("Chorus")) { insertNodeBetween("chorus"); }
                 if (ImGui::MenuItem("Phaser")) { insertNodeBetween("phaser"); }
                 if (ImGui::MenuItem("Compressor")) { insertNodeBetween("compressor"); }
                 if (ImGui::MenuItem("Limiter")) { insertNodeBetween("limiter"); }
-                if (ImGui::MenuItem("Gate")) { insertNodeBetween("gate"); }
+                if (ImGui::MenuItem("Noise Gate")) { insertNodeBetween("gate"); }
                 if (ImGui::MenuItem("Drive")) { insertNodeBetween("drive"); }
-                if (ImGui::MenuItem("Graphic EQ")) { insertNodeBetween("graphic eq"); }
-                if (ImGui::MenuItem("Waveshaper")) { insertNodeBetween("Waveshaper"); }
-                if (ImGui::MenuItem("Time/Pitch Shifter")) { insertNodeBetween("timepitch"); }
-                if (ImGui::MenuItem("De-Crackle")) { insertNodeBetween("De-Crackle"); }
-                if (ImGui::MenuItem("Recorder")) { insertNodeBetween("recorder"); }
-                if (ImGui::MenuItem("Mixer")) { insertNodeBetween("Mixer"); }
-                if (ImGui::MenuItem("Shaping Oscillator")) { insertNodeBetween("shaping oscillator"); }
-                if (ImGui::MenuItem("Function Generator")) { insertNodeBetween("Function Generator"); }
+                if (ImGui::MenuItem("Graphic EQ")) { insertNodeBetween("graphic_eq"); }
+                if (ImGui::MenuItem("Waveshaper")) { insertNodeBetween("waveshaper"); }
                 if (ImGui::MenuItem("8-Band Shaper")) { insertNodeBetween("8bandshaper"); }
-                if (ImGui::MenuItem("Granulator")) { insertNodeBetween("Granulator"); }
-                if (ImGui::MenuItem("Harmonic Shaper")) { insertNodeBetween("harmonic shaper"); }
-                if (ImGui::MenuItem("Vocal Tract Filter")) { insertNodeBetween("Vocal Tract Filter"); }
-                if (ImGui::MenuItem("Scope")) { insertNodeBetween("Scope"); }
-                if (ImGui::MenuItem("Frequency Graph")) { insertNodeBetween("Frequency Graph"); }
+                if (ImGui::MenuItem("Granulator")) { insertNodeBetween("granulator"); }
+                if (ImGui::MenuItem("Harmonic Shaper")) { insertNodeBetween("harmonic_shaper"); }
+                if (ImGui::MenuItem("Time/Pitch Shifter")) { insertNodeBetween("timepitch"); }
+                if (ImGui::MenuItem("De-Crackle")) { insertNodeBetween("de_crackle"); }
                 ImGui::EndMenu();
             }
             
-            if (ImGui::BeginMenu("Modulation Path", isNodeSelected))
+            if (ImGui::BeginMenu("Modulators", isNodeSelected))
             {
-                if (ImGui::MenuItem("Attenuverter")) { insertNodeBetween("Attenuverter"); }
-                if (ImGui::MenuItem("Lag Processor")) { insertNodeBetween("Lag Processor"); }
-                if (ImGui::MenuItem("Math")) { insertNodeBetween("Math"); }
-                if (ImGui::MenuItem("MapRange")) { insertNodeBetween("MapRange"); }
-                if (ImGui::MenuItem("Quantizer")) { insertNodeBetween("Quantizer"); }
-                if (ImGui::MenuItem("S&H")) { insertNodeBetween("S&H"); }
-                if (ImGui::MenuItem("Rate")) { insertNodeBetween("Rate"); }
-                if (ImGui::MenuItem("Logic")) { insertNodeBetween("Logic"); }
-                if (ImGui::MenuItem("Comparator")) { insertNodeBetween("Comparator"); }
-                if (ImGui::MenuItem("CV Mixer")) { insertNodeBetween("CV Mixer"); }
-                if (ImGui::MenuItem("Sequential Switch")) { insertNodeBetween("Sequential Switch"); }
+                if (ImGui::MenuItem("LFO")) { insertNodeBetween("lfo"); }
+                if (ImGui::MenuItem("ADSR")) { insertNodeBetween("adsr"); }
+                if (ImGui::MenuItem("Random")) { insertNodeBetween("random"); }
+                if (ImGui::MenuItem("S&H")) { insertNodeBetween("s_and_h"); }
+                if (ImGui::MenuItem("Function Generator")) { insertNodeBetween("function_generator"); }
+                if (ImGui::MenuItem("Shaping Oscillator")) { insertNodeBetween("shaping_oscillator"); }
+                ImGui::EndMenu();
+            }
+            
+            if (ImGui::BeginMenu("Utilities & Logic", isNodeSelected))
+            {
+                if (ImGui::MenuItem("VCA")) { insertNodeBetween("vca"); }
+                if (ImGui::MenuItem("Mixer")) { insertNodeBetween("mixer"); }
+                if (ImGui::MenuItem("CV Mixer")) { insertNodeBetween("cv_mixer"); }
+                if (ImGui::MenuItem("Attenuverter")) { insertNodeBetween("attenuverter"); }
+                if (ImGui::MenuItem("Lag Processor")) { insertNodeBetween("lag_processor"); }
+                if (ImGui::MenuItem("Math")) { insertNodeBetween("math"); }
+                if (ImGui::MenuItem("Map Range")) { insertNodeBetween("map_range"); }
+                if (ImGui::MenuItem("Quantizer")) { insertNodeBetween("quantizer"); }
+                if (ImGui::MenuItem("Rate")) { insertNodeBetween("rate"); }
+                if (ImGui::MenuItem("Comparator")) { insertNodeBetween("comparator"); }
+                if (ImGui::MenuItem("Logic")) { insertNodeBetween("logic"); }
+                if (ImGui::MenuItem("Sequential Switch")) { insertNodeBetween("sequential_switch"); }
+                ImGui::EndMenu();
+            }
+            
+            if (ImGui::BeginMenu("TTS", isNodeSelected))
+            {
+                if (ImGui::MenuItem("TTS Performer")) { insertNodeBetween("tts_performer"); }
+                if (ImGui::MenuItem("Vocal Tract Filter")) { insertNodeBetween("vocal_tract_filter"); }
+                ImGui::EndMenu();
+            }
+            
+            if (ImGui::BeginMenu("Analysis", isNodeSelected))
+            {
+                if (ImGui::MenuItem("Scope")) { insertNodeBetween("scope"); }
+                if (ImGui::MenuItem("Frequency Graph")) { insertNodeBetween("frequency_graph"); }
                 ImGui::EndMenu();
             }
             
@@ -1409,25 +1431,105 @@ void ImGuiNodeEditorComponent::renderImGui()
     // This ensures consistent module identification across the system.
     // ═══════════════════════════════════════════════════════════════════════════════
     
+    // ═══════════════════════════════════════════════════════════════════════════════
+    // 1. SOURCES - Signal generators and inputs
+    // ═══════════════════════════════════════════════════════════════════════════════
     pushCategoryColor(ModuleCategory::Source);
     bool sourcesExpanded = ImGui::CollapsingHeader("Sources", ImGuiTreeNodeFlags_DefaultOpen);
     ImGui::PopStyleColor(3);
     if (sourcesExpanded) {
-    addModuleButton("Audio Input", "audio_input");
-    addModuleButton("VCO", "vco");
-    addModuleButton("Polyphonic VCO", "polyvco");
-    addModuleButton("Noise", "noise");
-        addModuleButton("Sequencer", "sequencer");
-        addModuleButton("Multi Sequencer", "multi_sequencer");
-        addModuleButton("Stroke Sequencer", "stroke_sequencer");
-        addModuleButton("Value", "value");
+        addModuleButton("VCO", "vco");
+        addModuleButton("Polyphonic VCO", "polyvco");
+        addModuleButton("Noise", "noise");
+        addModuleButton("Audio Input", "audio_input");
         addModuleButton("Sample Loader", "sample_loader");
+        addModuleButton("Value", "value");
     }
     
-    pushCategoryColor(ModuleCategory::MIDI);
-    bool midiFamilyExpanded = ImGui::CollapsingHeader("MIDI Family", ImGuiTreeNodeFlags_DefaultOpen);
+    // ═══════════════════════════════════════════════════════════════════════════════
+    // 2. EFFECTS - Audio processing and tone shaping
+    // ═══════════════════════════════════════════════════════════════════════════════
+    pushCategoryColor(ModuleCategory::Effect);
+    bool effectsExpanded = ImGui::CollapsingHeader("Effects", ImGuiTreeNodeFlags_DefaultOpen);
     ImGui::PopStyleColor(3);
-    if (midiFamilyExpanded) {
+    if (effectsExpanded) {
+        addModuleButton("VCF", "vcf");
+        addModuleButton("Delay", "delay");
+        addModuleButton("Reverb", "reverb");
+        addModuleButton("Chorus", "chorus");
+        addModuleButton("Phaser", "phaser");
+        addModuleButton("Compressor", "compressor");
+        addModuleButton("Limiter", "limiter");
+        addModuleButton("Noise Gate", "gate");
+        addModuleButton("Drive", "drive");
+        addModuleButton("Graphic EQ", "graphic_eq");
+        addModuleButton("Waveshaper", "waveshaper");
+        addModuleButton("8-Band Shaper", "8bandshaper");
+        addModuleButton("Granulator", "granulator");
+        addModuleButton("Harmonic Shaper", "harmonic_shaper");
+        addModuleButton("Time/Pitch Shifter", "timepitch");
+        addModuleButton("De-Crackle", "de_crackle");
+    }
+    
+    // ═══════════════════════════════════════════════════════════════════════════════
+    // 3. MODULATORS - CV generation and modulation sources
+    // ═══════════════════════════════════════════════════════════════════════════════
+    pushCategoryColor(ModuleCategory::Modulator);
+    bool modulatorsExpanded = ImGui::CollapsingHeader("Modulators", ImGuiTreeNodeFlags_DefaultOpen);
+    ImGui::PopStyleColor(3);
+    if (modulatorsExpanded) {
+        addModuleButton("LFO", "lfo");
+        addModuleButton("ADSR", "adsr");
+        addModuleButton("Random", "random");
+        addModuleButton("S&H", "s_and_h");
+        addModuleButton("Function Generator", "function_generator");
+        addModuleButton("Shaping Oscillator", "shaping_oscillator");
+    }
+    
+    // ═══════════════════════════════════════════════════════════════════════════════
+    // 4. UTILITIES & LOGIC - Signal processing and routing
+    // ═══════════════════════════════════════════════════════════════════════════════
+    pushCategoryColor(ModuleCategory::Utility);
+    bool utilitiesExpanded = ImGui::CollapsingHeader("Utilities & Logic", ImGuiTreeNodeFlags_DefaultOpen);
+    ImGui::PopStyleColor(3);
+    if (utilitiesExpanded) {
+        addModuleButton("VCA", "vca");
+        addModuleButton("Mixer", "mixer");
+        addModuleButton("CV Mixer", "cv_mixer");
+        addModuleButton("Track Mixer", "track_mixer");
+        addModuleButton("Attenuverter", "attenuverter");
+        addModuleButton("Lag Processor", "lag_processor");
+        addModuleButton("Math", "math");
+        addModuleButton("Map Range", "map_range");
+        addModuleButton("Quantizer", "quantizer");
+        addModuleButton("Rate", "rate");
+        addModuleButton("Comparator", "comparator");
+        addModuleButton("Logic", "logic");
+        addModuleButton("Clock Divider", "clock_divider");
+        addModuleButton("Sequential Switch", "sequential_switch");
+    }
+    
+    // ═══════════════════════════════════════════════════════════════════════════════
+    // 5. SEQUENCERS - Pattern and rhythm generation
+    // ═══════════════════════════════════════════════════════════════════════════════
+    pushCategoryColor(ModuleCategory::Seq);
+    bool sequencersExpanded = ImGui::CollapsingHeader("Sequencers", ImGuiTreeNodeFlags_DefaultOpen);
+    ImGui::PopStyleColor(3);
+    if (sequencersExpanded) {
+        addModuleButton("Sequencer", "sequencer");
+        addModuleButton("Multi Sequencer", "multi_sequencer");
+        addModuleButton("Tempo Clock", "tempo_clock");
+        addModuleButton("Snapshot Sequencer", "snapshot_sequencer");
+        addModuleButton("Stroke Sequencer", "stroke_sequencer");
+    }
+    
+    // ═══════════════════════════════════════════════════════════════════════════════
+    // 6. MIDI - MIDI input/output and controllers
+    // ═══════════════════════════════════════════════════════════════════════════════
+    pushCategoryColor(ModuleCategory::MIDI);
+    bool midiExpanded = ImGui::CollapsingHeader("MIDI", ImGuiTreeNodeFlags_DefaultOpen);
+    ImGui::PopStyleColor(3);
+    if (midiExpanded) {
         addModuleButton("MIDI CV", "midi_cv");
         addModuleButton("MIDI Player", "midi_player");
         ImGui::Separator();
@@ -1438,86 +1540,11 @@ void ImGuiNodeEditorComponent::renderImGui()
         addModuleButton("MIDI Pads", "midi_pads");
         ImGui::Separator();
         addModuleButton("MIDI Logger", "midi_logger");
-        ImGui::Separator();
     }
     
-    pushCategoryColor(ModuleCategory::Source);
-    bool ttsFamilyExpanded = ImGui::CollapsingHeader("TTS Family", ImGuiTreeNodeFlags_DefaultOpen);
-    ImGui::PopStyleColor(3);
-    if (ttsFamilyExpanded) {
-
-        addModuleButton("TTS Performer", "tts_performer");
-        addModuleButton("Vocal Tract Filter", "vocal_tract_filter");
-    }
-    
-    pushCategoryColor(ModuleCategory::Physics);
-    bool physicsFamilyExpanded = ImGui::CollapsingHeader("Physics Family", ImGuiTreeNodeFlags_DefaultOpen);
-    ImGui::PopStyleColor(3);
-    if (physicsFamilyExpanded) {
-        addModuleButton("Physics", "physics");
-        addModuleButton("Animation", "animation");
-    }
-    
-    pushCategoryColor(ModuleCategory::Effect);
-    bool effectsExpanded = ImGui::CollapsingHeader("Effects", ImGuiTreeNodeFlags_DefaultOpen);
-    ImGui::PopStyleColor(3);
-    if (effectsExpanded) {
-        addModuleButton("VCF", "vcf");
-        // addModuleButton("Vocal Tract Filter", "vocal_tract_filter");
-        addModuleButton("Delay", "delay");
-        addModuleButton("Reverb", "reverb");
-        addModuleButton("Chorus", "chorus");
-        addModuleButton("Phaser", "phaser");
-        addModuleButton("Compressor", "compressor");
-        addModuleButton("Recorder", "recorder");
-        addModuleButton("Limiter", "limiter");
-        addModuleButton("Noise Gate", "gate");
-        addModuleButton("Drive", "drive");
-        addModuleButton("Graphic EQ", "graphic_eq");
-        addModuleButton("Time/Pitch Shifter", "timepitch");
-        addModuleButton("Waveshaper", "waveshaper");
-        addModuleButton("8-Band Shaper", "8bandshaper");
-        addModuleButton("Granulator", "granulator");
-        addModuleButton("Harmonic Shaper", "harmonic_shaper");
-    }
-    
-    pushCategoryColor(ModuleCategory::Modulator);
-    bool modulatorsExpanded = ImGui::CollapsingHeader("Modulators", ImGuiTreeNodeFlags_DefaultOpen);
-    ImGui::PopStyleColor(3);
-    if (modulatorsExpanded) {
-        addModuleButton("LFO", "lfo");
-        addModuleButton("ADSR", "adsr");
-        addModuleButton("Random", "random");
-    addModuleButton("S&H", "s_and_h");
-            addModuleButton("Function Generator", "function_generator");
-        addModuleButton("Shaping Oscillator", "shaping_oscillator");
-
-    }
-    
-    pushCategoryColor(ModuleCategory::Utility);
-    bool utilitiesExpanded = ImGui::CollapsingHeader("Utilities & Logic", ImGuiTreeNodeFlags_DefaultOpen);
-    ImGui::PopStyleColor(3);
-    if (utilitiesExpanded) {
-        addModuleButton("VCA", "vca");
-        addModuleButton("Mixer", "mixer");
-        addModuleButton("CV Mixer", "cv_mixer");
-        addModuleButton("Track Mixer", "track_mixer");
-    addModuleButton("Attenuverter", "attenuverter");
-        addModuleButton("Lag Processor", "lag_processor");
-        addModuleButton("De-Crackle", "de_crackle");
-        addModuleButton("Math", "math");
-        addModuleButton("Map Range", "map_range");
-        addModuleButton("Quantizer", "quantizer");
-        addModuleButton("Rate", "rate");
-        addModuleButton("Comparator", "comparator");
-        addModuleButton("Logic", "logic");
-        addModuleButton("Clock Divider", "clock_divider");
-        addModuleButton("Sequential Switch", "sequential_switch");
-        addModuleButton("Tempo Clock", "tempo_clock");
-        addModuleButton("Snapshot Sequencer", "snapshot_sequencer");
-        addModuleButton("Best Practice", "best_practice");
-    }
-    
+    // ═══════════════════════════════════════════════════════════════════════════════
+    // 7. ANALYSIS - Signal visualization and debugging
+    // ═══════════════════════════════════════════════════════════════════════════════
     pushCategoryColor(ModuleCategory::Analysis);
     bool analysisExpanded = ImGui::CollapsingHeader("Analysis", ImGuiTreeNodeFlags_DefaultOpen);
     ImGui::PopStyleColor(3);
@@ -1528,15 +1555,72 @@ void ImGuiNodeEditorComponent::renderImGui()
         addModuleButton("Frequency Graph", "frequency_graph");
     }
     
-    } // End of Modules collapsing header
+    // ═══════════════════════════════════════════════════════════════════════════════
+    // 8. TTS - Text-to-Speech and vocal synthesis
+    // ═══════════════════════════════════════════════════════════════════════════════
+    pushCategoryColor(ModuleCategory::TTS_Voice);
+    bool ttsExpanded = ImGui::CollapsingHeader("TTS", ImGuiTreeNodeFlags_DefaultOpen);
+    ImGui::PopStyleColor(3);
+    if (ttsExpanded) {
+        addModuleButton("TTS Performer", "tts_performer");
+        addModuleButton("Vocal Tract Filter", "vocal_tract_filter");
+    }
     
-    // VST Plugins section
+    // ═══════════════════════════════════════════════════════════════════════════════
+    // 9. SPECIAL - Physics, animation, and experimental
+    // ═══════════════════════════════════════════════════════════════════════════════
+    pushCategoryColor(ModuleCategory::Special_Exp);
+    bool specialExpanded = ImGui::CollapsingHeader("Special", ImGuiTreeNodeFlags_DefaultOpen);
+    ImGui::PopStyleColor(3);
+    if (specialExpanded) {
+        addModuleButton("Physics", "physics");
+        addModuleButton("Animation", "animation");
+    }
+    
+    // ═══════════════════════════════════════════════════════════════════════════════
+    // 10. COMPUTER VISION - Video processing and analysis
+    // ═══════════════════════════════════════════════════════════════════════════════
+    pushCategoryColor(ModuleCategory::OpenCV);
+    bool openCVExpanded = ImGui::CollapsingHeader("Computer Vision", ImGuiTreeNodeFlags_DefaultOpen);
+    ImGui::PopStyleColor(3);
+    if (openCVExpanded) {
+        ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1.0f), "Sources:");
+        addModuleButton("Webcam Loader", "webcam_loader");
+        addModuleButton("Video File Loader", "video_file_loader");
+        ImGui::Spacing();
+        ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1.0f), "Processors:");
+        addModuleButton("Movement Detector", "movement_detector");
+        addModuleButton("Human Detector", "human_detector");
+    }
+    
+    // ═══════════════════════════════════════════════════════════════════════════════
+    // 11. PLUGINS / VST - Third-party audio plugins
+    // ═══════════════════════════════════════════════════════════════════════════════
     pushCategoryColor(ModuleCategory::Plugin);
-    bool pluginsExpanded = ImGui::CollapsingHeader("Plugins", ImGuiTreeNodeFlags_DefaultOpen);
+    bool pluginsExpanded = ImGui::CollapsingHeader("Plugins / VST", ImGuiTreeNodeFlags_DefaultOpen);
     ImGui::PopStyleColor(3);
     if (pluginsExpanded) {
         addPluginModules();
     }
+    
+    // ═══════════════════════════════════════════════════════════════════════════════
+    // 12. SYSTEM - Patch organization and system utilities
+    // ═══════════════════════════════════════════════════════════════════════════════
+    pushCategoryColor(ModuleCategory::Sys);
+    bool systemExpanded = ImGui::CollapsingHeader("System", ImGuiTreeNodeFlags_DefaultOpen);
+    ImGui::PopStyleColor(3);
+    if (systemExpanded) {
+        addModuleButton("Meta", "meta");
+        addModuleButton("Inlet", "inlet");
+        addModuleButton("Outlet", "outlet");
+        addModuleButton("Comment", "comment");
+        addModuleButton("Recorder", "recorder");
+        addModuleButton("VST Host", "vst_host");
+        ImGui::Separator();
+        addModuleButton("Best Practice", "best_practice");
+    }
+    
+    } // End of Modules collapsing header
 
     // End the scrolling region
     ImGui::EndChild();
@@ -2096,6 +2180,123 @@ if (auto* mp = synth->getModuleForLogical (lid))
             ImGui::PopID();
         }
     }*/
+    // --- SPECIAL RENDERING FOR OPENCV MODULES (WITH VIDEO FEED) ---
+    else if (auto* webcamModule = dynamic_cast<WebcamLoaderModule*>(mp))
+    {
+        juce::Image frame = webcamModule->getLatestFrame();
+        if (!frame.isNull())
+        {
+            if (visionModuleTextures.find((int)lid) == visionModuleTextures.end())
+            {
+                visionModuleTextures[(int)lid] = std::make_unique<juce::OpenGLTexture>();
+            }
+            juce::OpenGLTexture* texture = visionModuleTextures[(int)lid].get();
+            texture->loadImage(frame);
+            if (texture->getTextureID() != 0)
+            {
+                // Calculate aspect ratio dynamically from the actual frame dimensions
+                float nativeWidth = (float)frame.getWidth();
+                float nativeHeight = (float)frame.getHeight();
+                
+                // Preserve the video's native aspect ratio (handles portrait, landscape, square, etc.)
+                float aspectRatio = (nativeWidth > 0.0f) ? nativeHeight / nativeWidth : 0.75f; // Default to 4:3
+                
+                // Width is fixed at itemWidth (480px for video modules), height scales proportionally
+                ImVec2 renderSize = ImVec2(nodeContentWidth, nodeContentWidth * aspectRatio);
+                
+                // Flip Y-coordinates to fix upside-down video (OpenCV uses top-left origin, OpenGL uses bottom-left)
+                ImGui::Image((void*)(intptr_t)texture->getTextureID(), renderSize, ImVec2(0, 1), ImVec2(1, 0));
+            }
+        }
+        webcamModule->drawParametersInNode(nodeContentWidth, isParamModulated, onModificationEnded);
+    }
+    else if (auto* videoFileModule = dynamic_cast<VideoFileLoaderModule*>(mp))
+    {
+        juce::Image frame = videoFileModule->getLatestFrame();
+        if (!frame.isNull())
+        {
+            if (visionModuleTextures.find((int)lid) == visionModuleTextures.end())
+            {
+                visionModuleTextures[(int)lid] = std::make_unique<juce::OpenGLTexture>();
+            }
+            juce::OpenGLTexture* texture = visionModuleTextures[(int)lid].get();
+            texture->loadImage(frame);
+            if (texture->getTextureID() != 0)
+            {
+                // Calculate aspect ratio dynamically from the actual frame dimensions
+                float nativeWidth = (float)frame.getWidth();
+                float nativeHeight = (float)frame.getHeight();
+                
+                // Preserve the video's native aspect ratio (handles portrait, landscape, square, etc.)
+                float aspectRatio = (nativeWidth > 0.0f) ? nativeHeight / nativeWidth : 0.75f; // Default to 4:3
+                
+                // Width is fixed at itemWidth (480px for video modules), height scales proportionally
+                ImVec2 renderSize = ImVec2(nodeContentWidth, nodeContentWidth * aspectRatio);
+                
+                // Flip Y-coordinates to fix upside-down video (OpenCV uses top-left origin, OpenGL uses bottom-left)
+                ImGui::Image((void*)(intptr_t)texture->getTextureID(), renderSize, ImVec2(0, 1), ImVec2(1, 0));
+            }
+        }
+        videoFileModule->drawParametersInNode(nodeContentWidth, isParamModulated, onModificationEnded);
+    }
+    else if (auto* movementModule = dynamic_cast<MovementDetectorModule*>(mp))
+    {
+        juce::Image frame = movementModule->getLatestFrame();
+        if (!frame.isNull())
+        {
+            if (visionModuleTextures.find((int)lid) == visionModuleTextures.end())
+            {
+                visionModuleTextures[(int)lid] = std::make_unique<juce::OpenGLTexture>();
+            }
+            juce::OpenGLTexture* texture = visionModuleTextures[(int)lid].get();
+            texture->loadImage(frame);
+            if (texture->getTextureID() != 0)
+            {
+                // Calculate aspect ratio dynamically from the actual frame dimensions
+                float nativeWidth = (float)frame.getWidth();
+                float nativeHeight = (float)frame.getHeight();
+                
+                // Preserve the video's native aspect ratio (handles portrait, landscape, square, etc.)
+                float aspectRatio = (nativeWidth > 0.0f) ? nativeHeight / nativeWidth : 0.75f; // Default to 4:3
+                
+                // Width is fixed at itemWidth (480px for video modules), height scales proportionally
+                ImVec2 renderSize = ImVec2(nodeContentWidth, nodeContentWidth * aspectRatio);
+                
+                // Flip Y-coordinates to fix upside-down video (OpenCV uses top-left origin, OpenGL uses bottom-left)
+                ImGui::Image((void*)(intptr_t)texture->getTextureID(), renderSize, ImVec2(0, 1), ImVec2(1, 0));
+            }
+        }
+        movementModule->drawParametersInNode(nodeContentWidth, isParamModulated, onModificationEnded);
+    }
+    else if (auto* humanModule = dynamic_cast<HumanDetectorModule*>(mp))
+    {
+        juce::Image frame = humanModule->getLatestFrame();
+        if (!frame.isNull())
+        {
+            if (visionModuleTextures.find((int)lid) == visionModuleTextures.end())
+            {
+                visionModuleTextures[(int)lid] = std::make_unique<juce::OpenGLTexture>();
+            }
+            juce::OpenGLTexture* texture = visionModuleTextures[(int)lid].get();
+            texture->loadImage(frame);
+            if (texture->getTextureID() != 0)
+            {
+                // Calculate aspect ratio dynamically from the actual frame dimensions
+                float nativeWidth = (float)frame.getWidth();
+                float nativeHeight = (float)frame.getHeight();
+                
+                // Preserve the video's native aspect ratio (handles portrait, landscape, square, etc.)
+                float aspectRatio = (nativeWidth > 0.0f) ? nativeHeight / nativeWidth : 0.75f; // Default to 4:3
+                
+                // Width is fixed at itemWidth (480px for video modules), height scales proportionally
+                ImVec2 renderSize = ImVec2(nodeContentWidth, nodeContentWidth * aspectRatio);
+                
+                // Flip Y-coordinates to fix upside-down video (OpenCV uses top-left origin, OpenGL uses bottom-left)
+                ImGui::Image((void*)(intptr_t)texture->getTextureID(), renderSize, ImVec2(0, 1), ImVec2(1, 0));
+            }
+        }
+        humanModule->drawParametersInNode(nodeContentWidth, isParamModulated, onModificationEnded);
+    }
     else
     {
         mp->drawParametersInNode (nodeContentWidth, isParamModulated, onModificationEnded);
@@ -3431,42 +3632,18 @@ if (auto* mp = synth->getModuleForLogical (lid))
             if (filter.isEmpty())
             {
                 // --- BROWSE MODE (No text in search bar) ---
+                // Reorganized to match the new category structure
+                
                 if (ImGui::BeginMenu("Sources")) {
-                    if (ImGui::MenuItem("Audio Input")) addAtMouse("audio_input");
                     if (ImGui::MenuItem("VCO")) addAtMouse("vco");
                     if (ImGui::MenuItem("Polyphonic VCO")) addAtMouse("polyvco");
                     if (ImGui::MenuItem("Noise")) addAtMouse("noise");
-                    if (ImGui::MenuItem("Sequencer")) addAtMouse("sequencer");
-                    if (ImGui::MenuItem("Multi Sequencer")) addAtMouse("multi_sequencer");
-                    if (ImGui::MenuItem("Snapshot Sequencer")) addAtMouse("snapshot_sequencer");
-                    if (ImGui::MenuItem("Stroke Sequencer")) addAtMouse("stroke_sequencer");
-                    if (ImGui::MenuItem("Value")) addAtMouse("value");
+                    if (ImGui::MenuItem("Audio Input")) addAtMouse("audio_input");
                     if (ImGui::MenuItem("Sample Loader")) addAtMouse("sample_loader");
+                    if (ImGui::MenuItem("Value")) addAtMouse("value");
                     ImGui::EndMenu();
                 }
-                if (ImGui::BeginMenu("MIDI Family")) {
-                    if (ImGui::MenuItem("MIDI CV")) addAtMouse("midi_cv");
-                    if (ImGui::MenuItem("MIDI Player")) addAtMouse("midi_player");
-                    ImGui::Separator();
-                    if (ImGui::MenuItem("MIDI Faders")) addAtMouse("midi_faders");
-                    if (ImGui::MenuItem("MIDI Knobs")) addAtMouse("midi_knobs");
-                    if (ImGui::MenuItem("MIDI Buttons")) addAtMouse("midi_buttons");
-                    if (ImGui::MenuItem("MIDI Jog Wheel")) addAtMouse("midi_jog_wheel");
-                    if (ImGui::MenuItem("MIDI Pads")) addAtMouse("midi_pads");
-                    ImGui::Separator();
-                    if (ImGui::MenuItem("MIDI Logger")) addAtMouse("midi_logger");
-                    ImGui::EndMenu();
-                }
-                if (ImGui::BeginMenu("TTS")) {
-                    if (ImGui::MenuItem("TTS Performer")) addAtMouse("tts_performer");
-                    if (ImGui::MenuItem("Vocal Tract Filter")) addAtMouse("vocal_tract_filter");
-                    ImGui::EndMenu();
-                }
-                if (ImGui::BeginMenu("Physics Family")) {
-                    if (ImGui::MenuItem("Physics")) addAtMouse("physics");
-                    if (ImGui::MenuItem("Animation")) addAtMouse("animation");
-                    ImGui::EndMenu();
-                }
+                
                 if (ImGui::BeginMenu("Effects")) {
                     if (ImGui::MenuItem("VCF")) addAtMouse("vcf");
                     if (ImGui::MenuItem("Delay")) addAtMouse("delay");
@@ -3474,7 +3651,6 @@ if (auto* mp = synth->getModuleForLogical (lid))
                     if (ImGui::MenuItem("Chorus")) addAtMouse("chorus");
                     if (ImGui::MenuItem("Phaser")) addAtMouse("phaser");
                     if (ImGui::MenuItem("Compressor")) addAtMouse("compressor");
-                    if (ImGui::MenuItem("Recorder")) addAtMouse("recorder");
                     if (ImGui::MenuItem("Limiter")) addAtMouse("limiter");
                     if (ImGui::MenuItem("Noise Gate")) addAtMouse("gate");
                     if (ImGui::MenuItem("Drive")) addAtMouse("drive");
@@ -3487,16 +3663,17 @@ if (auto* mp = synth->getModuleForLogical (lid))
                     if (ImGui::MenuItem("De-Crackle")) addAtMouse("de_crackle");
                     ImGui::EndMenu();
                 }
+                
                 if (ImGui::BeginMenu("Modulators")) {
                     if (ImGui::MenuItem("LFO")) addAtMouse("lfo");
                     if (ImGui::MenuItem("ADSR")) addAtMouse("adsr");
                     if (ImGui::MenuItem("Random")) addAtMouse("random");
                     if (ImGui::MenuItem("S&H")) addAtMouse("s_and_h");
-                    if (ImGui::MenuItem("Tempo Clock")) addAtMouse("tempo_clock");
                     if (ImGui::MenuItem("Function Generator")) addAtMouse("function_generator");
                     if (ImGui::MenuItem("Shaping Oscillator")) addAtMouse("shaping_oscillator");
                     ImGui::EndMenu();
                 }
+                
                 if (ImGui::BeginMenu("Utilities & Logic")) {
                     if (ImGui::MenuItem("VCA")) addAtMouse("vca");
                     if (ImGui::MenuItem("Mixer")) addAtMouse("mixer");
@@ -3512,10 +3689,32 @@ if (auto* mp = synth->getModuleForLogical (lid))
                     if (ImGui::MenuItem("Logic")) addAtMouse("logic");
                     if (ImGui::MenuItem("Clock Divider")) addAtMouse("clock_divider");
                     if (ImGui::MenuItem("Sequential Switch")) addAtMouse("sequential_switch");
-                    if (ImGui::MenuItem("Comment")) addAtMouse("comment");
-                    if (ImGui::MenuItem("Best Practice")) addAtMouse("best_practice");
                     ImGui::EndMenu();
                 }
+                
+                if (ImGui::BeginMenu("Sequencers")) {
+                    if (ImGui::MenuItem("Sequencer")) addAtMouse("sequencer");
+                    if (ImGui::MenuItem("Multi Sequencer")) addAtMouse("multi_sequencer");
+                    if (ImGui::MenuItem("Tempo Clock")) addAtMouse("tempo_clock");
+                    if (ImGui::MenuItem("Snapshot Sequencer")) addAtMouse("snapshot_sequencer");
+                    if (ImGui::MenuItem("Stroke Sequencer")) addAtMouse("stroke_sequencer");
+                    ImGui::EndMenu();
+                }
+                
+                if (ImGui::BeginMenu("MIDI")) {
+                    if (ImGui::MenuItem("MIDI CV")) addAtMouse("midi_cv");
+                    if (ImGui::MenuItem("MIDI Player")) addAtMouse("midi_player");
+                    ImGui::Separator();
+                    if (ImGui::MenuItem("MIDI Faders")) addAtMouse("midi_faders");
+                    if (ImGui::MenuItem("MIDI Knobs")) addAtMouse("midi_knobs");
+                    if (ImGui::MenuItem("MIDI Buttons")) addAtMouse("midi_buttons");
+                    if (ImGui::MenuItem("MIDI Jog Wheel")) addAtMouse("midi_jog_wheel");
+                    if (ImGui::MenuItem("MIDI Pads")) addAtMouse("midi_pads");
+                    ImGui::Separator();
+                    if (ImGui::MenuItem("MIDI Logger")) addAtMouse("midi_logger");
+                    ImGui::EndMenu();
+                }
+                
                 if (ImGui::BeginMenu("Analysis")) {
                     if (ImGui::MenuItem("Scope")) addAtMouse("scope");
                     if (ImGui::MenuItem("Debug")) addAtMouse("debug");
@@ -3523,8 +3722,39 @@ if (auto* mp = synth->getModuleForLogical (lid))
                     if (ImGui::MenuItem("Frequency Graph")) addAtMouse("frequency_graph");
                     ImGui::EndMenu();
                 }
-                if (ImGui::BeginMenu("VST Plugins")) {
+                if (ImGui::BeginMenu("TTS")) {
+                    if (ImGui::MenuItem("TTS Performer")) addAtMouse("tts_performer");
+                    if (ImGui::MenuItem("Vocal Tract Filter")) addAtMouse("vocal_tract_filter");
+                    ImGui::EndMenu();
+                }
+                if (ImGui::BeginMenu("Special")) {
+                    if (ImGui::MenuItem("Physics")) addAtMouse("physics");
+                    if (ImGui::MenuItem("Animation")) addAtMouse("animation");
+                    ImGui::EndMenu();
+                }
+                if (ImGui::BeginMenu("Computer Vision")) {
+                    if (ImGui::MenuItem("Webcam Loader")) addAtMouse("webcam_loader");
+                    if (ImGui::MenuItem("Video File Loader")) addAtMouse("video_file_loader");
+                    ImGui::Separator();
+                    if (ImGui::MenuItem("Movement Detector")) addAtMouse("movement_detector");
+                    if (ImGui::MenuItem("Human Detector")) addAtMouse("human_detector");
+                    ImGui::EndMenu();
+                }
+                
+                if (ImGui::BeginMenu("Plugins / VST")) {
                     addPluginModules(); // Re-use your existing plugin menu logic
+                    ImGui::EndMenu();
+                }
+                
+                if (ImGui::BeginMenu("System")) {
+                    if (ImGui::MenuItem("Meta")) addAtMouse("meta");
+                    if (ImGui::MenuItem("Inlet")) addAtMouse("inlet");
+                    if (ImGui::MenuItem("Outlet")) addAtMouse("outlet");
+                    if (ImGui::MenuItem("Comment")) addAtMouse("comment");
+                    if (ImGui::MenuItem("Recorder")) addAtMouse("recorder");
+                    if (ImGui::MenuItem("VST Host")) addAtMouse("vst_host");
+                    ImGui::Separator();
+                    if (ImGui::MenuItem("Best Practice")) addAtMouse("best_practice");
                     ImGui::EndMenu();
                 }
             }
@@ -4476,6 +4706,19 @@ void ImGuiNodeEditorComponent::handleDeletion()
         for (int nid : nodeIds)
         {
             if (nid == 0) continue; // don't delete output sink
+            
+            // Clean up vision module textures if exists
+            if (visionModuleTextures.count(nid))
+            {
+                visionModuleTextures.erase(nid);
+            }
+            
+            // Clean up sample loader textures if exists
+            if (sampleLoaderTextureIds.count(nid))
+            {
+                sampleLoaderTextureIds.erase(nid);
+            }
+            
             mutedNodeStates.erase((juce::uint32)nid); // Clean up muted state if exists
             lastKnownNodePositions.erase(nid); // Clean up position cache
             synth->removeModule(synth->getNodeIdForLogical((juce::uint32) nid));
@@ -6205,25 +6448,35 @@ void ImGuiNodeEditorComponent::drawInsertNodeOnLinkPopup()
         const int numSelected = ImNodes::NumSelectedLinks();
         const bool isMultiInsert = numSelected > 1;
 
-        // --- FIX: Use map to separate display names from internal type names ---
+        // --- Module Insertion on Cables (Organized by Category) ---
         // Map format: {Display Name, Internal Type}
         // Internal types use lowercase with underscores for spaces
         const std::map<const char*, const char*> audioInsertable = {
-            {"VCF", "vcf"}, {"VCA", "vca"}, {"Delay", "delay"}, {"Reverb", "reverb"},
+            // Effects
+            {"VCF", "vcf"}, {"Delay", "delay"}, {"Reverb", "reverb"},
             {"Chorus", "chorus"}, {"Phaser", "phaser"}, {"Compressor", "compressor"},
-            {"Recorder", "recorder"}, {"Limiter", "limiter"}, {"Gate", "gate"}, {"Drive", "drive"},
-            {"Graphic EQ", "graphic_eq"}, {"Waveshaper", "waveshaper"}, {"Time/Pitch Shifter", "timepitch"},
-            {"Attenuverter", "attenuverter"}, {"De-Crackle", "de_crackle"}, {"Mixer", "mixer"},
-            {"Shaping Oscillator", "shaping_oscillator"}, {"Function Generator", "function_generator"},
-            {"8-Band Shaper", "8bandshaper"},
-            {"Granulator", "granulator"}, {"Harmonic Shaper", "harmonic_shaper"},
-            {"Vocal Tract Filter", "vocal_tract_filter"}, {"Scope", "scope"}
+            {"Limiter", "limiter"}, {"Noise Gate", "gate"}, {"Drive", "drive"},
+            {"Graphic EQ", "graphic_eq"}, {"Waveshaper", "waveshaper"}, 
+            {"8-Band Shaper", "8bandshaper"}, {"Granulator", "granulator"}, 
+            {"Harmonic Shaper", "harmonic_shaper"}, {"Time/Pitch Shifter", "timepitch"},
+            {"De-Crackle", "de_crackle"},
+            // Utilities
+            {"VCA", "vca"}, {"Mixer", "mixer"}, {"Attenuverter", "attenuverter"},
+            // Modulators
+            {"Function Generator", "function_generator"}, {"Shaping Oscillator", "shaping_oscillator"},
+            // TTS
+            {"Vocal Tract Filter", "vocal_tract_filter"},
+            // Analysis
+            {"Scope", "scope"}, {"Frequency Graph", "frequency_graph"}
         };
         const std::map<const char*, const char*> modInsertable = {
-            {"Attenuverter", "attenuverter"}, {"Lag Processor", "lag_processor"}, {"Math", "math"},
-            {"MapRange", "map_range"}, {"Quantizer", "quantizer"}, {"S&H", "s_and_h"},
-            {"Rate", "rate"}, {"Logic", "logic"}, {"Comparator", "comparator"},
-            {"CV Mixer", "cv_mixer"}, {"Sequential Switch", "sequential_switch"}
+            // Utilities
+            {"Attenuverter", "attenuverter"}, {"Lag Processor", "lag_processor"}, 
+            {"Math", "math"}, {"Map Range", "map_range"}, {"Quantizer", "quantizer"},
+            {"Rate", "rate"}, {"Comparator", "comparator"}, {"Logic", "logic"},
+            {"CV Mixer", "cv_mixer"}, {"Sequential Switch", "sequential_switch"},
+            // Modulators
+            {"S&H", "s_and_h"}, {"Function Generator", "function_generator"}
         };
         const auto& listToShow = linkToInsertOn.isMod ? modInsertable : audioInsertable;
 
@@ -7040,61 +7293,80 @@ ImGuiNodeEditorComponent::ModuleCategory ImGuiNodeEditorComponent::getModuleCate
 {
     juce::String lower = moduleType.toLowerCase();
     
-    // --- MIDI Family (Vibrant Purple) ---
-    if (lower.contains("midi"))
-        return ModuleCategory::MIDI;
+    // === CATEGORY CLASSIFICATION (Following Dictionary Structure) ===
     
-    // --- Physics Family (Cyan) ---
-    if (lower.contains("physics"))
-        return ModuleCategory::Physics;
-    
-    // --- Sources (Green) ---
-    // Check specific matches first to avoid substring conflicts
-    if (lower == "tts performer")  // Explicit TTS categorization
+    // --- 1. SOURCES (Green) ---
+    if (lower.contains("vco") || lower.contains("polyvco") ||
+        lower.contains("noise") || lower == "audio_input" || 
+        lower.contains("sample") || lower == "value")
         return ModuleCategory::Source;
     
-    if (lower.contains("vco") || lower.contains("noise") || 
-        lower.contains("sequencer") || lower.contains("sample") || 
-        lower.contains("input") ||
-        lower.contains("polyvco") || lower.contains("value")) 
-        return ModuleCategory::Source;
-    
-    // --- Effects (Red) ---
-    // Check "Vocal Tract Filter" before general "filter" check
-    if (lower == "vocal tract filter")
-        return ModuleCategory::Effect;
-    
+    // --- 2. EFFECTS (Red) ---
+    // Note: Recorder moved to System, Vocal Tract Filter moved to TTS
     if (lower.contains("vcf") || lower.contains("delay") || 
         lower.contains("reverb") || lower.contains("chorus") || 
         lower.contains("phaser") || lower.contains("compressor") || 
-        lower.contains("drive") || lower.contains("shaper") ||  // Note: "shaping oscillator" handled above
-        lower.contains("filter") || lower.contains("waveshaper") ||
-        lower.contains("limiter") || lower.contains("gate") ||
-        lower.contains("granulator") || lower.contains("eq") ||
-        lower.contains("crackle") || lower.contains("timepitch") ||
-        lower.contains("recorder"))  // Moved from Analysis
+        lower.contains("limiter") || lower == "gate" ||
+        lower.contains("drive") || lower.contains("eq") ||
+        lower.contains("waveshaper") || lower.contains("8bandshaper") ||
+        lower.contains("granulator") || lower.contains("harmonic_shaper") ||
+        lower.contains("timepitch") || lower.contains("crackle"))
         return ModuleCategory::Effect;
     
-    // --- Modulators (Blue) ---
+    // --- 3. MODULATORS (Blue) ---
     if (lower.contains("lfo") || lower.contains("adsr") || 
         lower.contains("random") || lower.contains("s&h") || 
-        lower.contains("function")) 
+        lower.contains("function_generator") || lower.contains("shaping_oscillator"))
         return ModuleCategory::Modulator;
     
-    // --- Analysis (Purple) ---
+    // --- 4. UTILITIES & LOGIC (Orange) ---
+    if (lower.contains("vca") || lower.contains("mixer") || 
+        lower.contains("attenuverter") || lower.contains("lag_processor") ||
+        lower.contains("math") || lower.contains("map_range") ||
+        lower.contains("quantizer") || lower.contains("rate") ||
+        lower.contains("comparator") || lower.contains("logic") ||
+        lower.contains("clock_divider") || lower.contains("sequential_switch"))
+        return ModuleCategory::Utility;
+    
+    // --- 5. SEQUENCERS (Light Green) ---
+    if (lower.contains("sequencer") || lower.contains("tempo_clock"))
+        return ModuleCategory::Seq;
+    
+    // --- 6. MIDI (Vibrant Purple) ---
+    if (lower.contains("midi"))
+        return ModuleCategory::MIDI;
+    
+    // --- 7. ANALYSIS (Purple) ---
     if (lower.contains("scope") || lower.contains("debug") || 
-        lower.contains("graph")) 
+        lower.contains("frequency_graph"))
         return ModuleCategory::Analysis;
     
-    // --- Comment (Grey) ---
-    if (lower.contains("comment")) 
-        return ModuleCategory::Comment;
+    // --- 8. TTS (Peach/Coral) ---
+    if (lower.contains("tts") || lower.contains("vocal_tract"))
+        return ModuleCategory::TTS_Voice;
     
-    // --- Plugins (Teal) ---
+    // --- 9. SPECIAL (Cyan) - Physics & Animation ---
+    if (lower.contains("physics") || lower.contains("animation"))
+        return ModuleCategory::Special_Exp;
+    
+    // --- 10. COMPUTER VISION (Bright Orange) ---
+    if (lower.contains("webcam") || lower.contains("video_file") ||
+        lower.contains("movement") || lower.contains("detector") || 
+        lower.contains("opencv") || lower.contains("vision"))
+        return ModuleCategory::OpenCV;
+    
+    // --- 11. SYSTEM (Lavender) ---
+    if (lower.contains("meta") || lower.contains("inlet") || 
+        lower.contains("outlet") || lower.contains("comment") ||
+        lower.contains("recorder") || lower.contains("vst_host") ||
+        lower.contains("best_practice"))
+        return ModuleCategory::Sys;
+    
+    // --- 12. PLUGINS (Teal) ---
     if (lower.contains("vst") || lower.contains("plugin"))
         return ModuleCategory::Plugin;
     
-    // --- Utilities & Logic (Orange) - Default ---
+    // --- Default: Utility ---
     return ModuleCategory::Utility;
 }
 
@@ -7103,15 +7375,19 @@ unsigned int ImGuiNodeEditorComponent::getImU32ForCategory(ModuleCategory catego
     ImU32 color;
     switch (category)
     {
-        case ModuleCategory::Source:     color = IM_COL32(50, 120, 50, 255); break;   // Green
-        case ModuleCategory::Effect:     color = IM_COL32(130, 60, 60, 255); break;   // Red
-        case ModuleCategory::Modulator:  color = IM_COL32(50, 50, 130, 255); break;   // Blue
-        case ModuleCategory::Utility:    color = IM_COL32(110, 80, 50, 255); break;   // Orange
-        case ModuleCategory::Analysis:   color = IM_COL32(100, 50, 110, 255); break;  // Purple
-        case ModuleCategory::Comment:    color = IM_COL32(80, 80, 80, 255); break;    // Grey
-        case ModuleCategory::Plugin:     color = IM_COL32(50, 110, 110, 255); break;  // Teal
-        case ModuleCategory::MIDI:       color = IM_COL32(180, 120, 255, 255); break; // Vibrant Purple
-        case ModuleCategory::Physics:    color = IM_COL32(50, 200, 200, 255); break;  // Cyan
+        case ModuleCategory::Source:      color = IM_COL32(50, 120, 50, 255); break;     // Green
+        case ModuleCategory::Effect:      color = IM_COL32(130, 60, 60, 255); break;     // Red
+        case ModuleCategory::Modulator:   color = IM_COL32(50, 50, 130, 255); break;     // Blue
+        case ModuleCategory::Utility:     color = IM_COL32(110, 80, 50, 255); break;     // Orange
+        case ModuleCategory::Seq:         color = IM_COL32(90, 140, 90, 255); break;     // Light Green
+        case ModuleCategory::MIDI:        color = IM_COL32(180, 120, 255, 255); break;   // Vibrant Purple
+        case ModuleCategory::Analysis:    color = IM_COL32(100, 50, 110, 255); break;    // Purple
+        case ModuleCategory::TTS_Voice:   color = IM_COL32(255, 180, 100, 255); break;   // Peach/Coral
+        case ModuleCategory::Special_Exp: color = IM_COL32(50, 200, 200, 255); break;    // Cyan
+        case ModuleCategory::OpenCV:      color = IM_COL32(255, 140, 0, 255); break;     // Bright Orange
+        case ModuleCategory::Sys:         color = IM_COL32(120, 100, 140, 255); break;   // Lavender
+        case ModuleCategory::Comment:     color = IM_COL32(80, 80, 80, 255); break;      // Grey
+        case ModuleCategory::Plugin:      color = IM_COL32(50, 110, 110, 255); break;    // Teal
         default:                         color = IM_COL32(70, 70, 70, 255); break;
     }
     
@@ -7156,6 +7432,12 @@ std::map<juce::String, std::pair<const char*, const char*>> ImGuiNodeEditorCompo
         // Physics & Animation
         {"Physics", {"physics", "2D physics simulation for audio modulation"}},
         {"Animation", {"animation", "Skeletal animation system with glTF file support"}},
+        
+        // OpenCV (Computer Vision)
+        {"Webcam Loader", {"webcam_loader", "Captures video from a webcam and publishes it as a source for vision processing modules"}},
+        {"Video File Loader", {"video_file_loader", "Loads and plays a video file, publishes it as a source for vision processing modules"}},
+        {"Movement Detector", {"movement_detector", "Analyzes video source for motion via optical flow or background subtraction, outputs motion data as CV"}},
+        {"Human Detector", {"human_detector", "Detects faces or bodies in video source via Haar Cascades or HOG, outputs position and size as CV"}},
         
         // Effects
         {"VCF", {"vcf", "Voltage Controlled Filter"}},

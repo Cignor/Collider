@@ -1,6 +1,43 @@
 #include "AnimationModuleProcessor.h"
+#include "../../animation/AnimationData.h"
 #include <glm/gtc/matrix_transform.hpp>
 #include <algorithm>
+
+// Helper function to recursively build edge list from skeleton hierarchy
+void buildEdgeListRecursive(
+    const NodeData& node,
+    const std::vector<glm::mat4>& worldTransforms,
+    const std::map<std::string, BoneInfo>& boneInfoMap,
+    std::vector<glm::vec3>& outEdges)
+{
+    // Check if the current node is a bone and has a valid transform
+    if (boneInfoMap.count(node.name))
+    {
+        const int boneId = boneInfoMap.at(node.name).id;
+        
+        // If this node has a parent which is also a bone, create an edge
+        if (node.parent && boneInfoMap.count(node.parent->name))
+        {
+            const int parentBoneId = boneInfoMap.at(node.parent->name).id;
+            
+            if (boneId < worldTransforms.size() && parentBoneId < worldTransforms.size())
+            {
+                glm::vec3 childPos = worldTransforms[boneId][3];
+                glm::vec3 parentPos = worldTransforms[parentBoneId][3];
+                
+                // Add the two vertices that form the line segment
+                outEdges.push_back(parentPos);
+                outEdges.push_back(childPos);
+            }
+        }
+    }
+
+    // Recurse to children
+    for (const auto& child : node.children)
+    {
+        buildEdgeListRecursive(child, worldTransforms, boneInfoMap, outEdges);
+    }
+}
 
 AnimationModuleProcessor::AnimationModuleProcessor()
     : ModuleProcessor(BusesProperties()
@@ -354,12 +391,30 @@ void AnimationModuleProcessor::setupAnimationFromRawData(std::unique_ptr<RawAnim
     m_stagedAnimationData = std::move(finalData);
     m_stagedAnimator = std::make_unique<Animator>(m_stagedAnimationData.get());
     
-    // Play the first animation clip if available
-    if (!m_stagedAnimationData->animationClips.empty())
+    // --- FIX: Play the correct animation clip from the preset ---
+    bool playedSpecificClip = false;
+    if (m_clipToPlayOnLoad.isNotEmpty())
     {
-        juce::Logger::writeToLog("AnimationModule: Playing first animation clip: " + 
-                               juce::String(m_stagedAnimationData->animationClips[0].name));
-        m_stagedAnimator->PlayAnimation(m_stagedAnimationData->animationClips[0].name);
+        // Try to find and play the clip saved in the preset.
+        for (const auto& clip : m_stagedAnimationData->animationClips)
+        {
+            if (clip.name == m_clipToPlayOnLoad.toStdString())
+            {
+                m_stagedAnimator->PlayAnimation(clip.name);
+                juce::Logger::writeToLog("AnimationModule: Playing saved animation clip: " + juce::String(clip.name));
+                playedSpecificClip = true;
+                break;
+            }
+        }
+        m_clipToPlayOnLoad.clear(); // Clear after use
+    }
+
+    // Fallback: If no specific clip was played (or none was saved), play the first one.
+    if (!playedSpecificClip && !m_stagedAnimationData->animationClips.empty())
+    {
+        const auto& firstClip = m_stagedAnimationData->animationClips[0];
+        m_stagedAnimator->PlayAnimation(firstClip.name);
+        juce::Logger::writeToLog("AnimationModule: No saved clip found. Playing first clip: " + juce::String(firstClip.name));
     }
     
     // Cache bone names for thread-safe UI access (on main thread, before audio thread gets it)
@@ -816,6 +871,14 @@ void AnimationModuleProcessor::drawParametersInNode(float itemWidth,
         
         // Get world transforms for visualization (NOT skinning matrices!)
         const auto& worldTransforms = currentAnimator->GetBoneWorldTransforms();
+
+        // --- NEW: Build the edge list for drawing lines between bones ---
+        m_boneEdges.clear();
+        if (currentAnimator->GetAnimationData())
+        {
+            const auto* animData = currentAnimator->GetAnimationData();
+            buildEdgeListRecursive(animData->rootNode, worldTransforms, animData->boneInfoMap, m_boneEdges);
+        }
         
         // --- DEBUG: Log bone positions to diagnose rendering issues ---
         static int debugFrameCounter = 0;
@@ -918,8 +981,8 @@ void AnimationModuleProcessor::drawParametersInNode(float itemWidth,
             }
         }
 
-        // FIX: Call render AFTER calculating colors and pass the color data
-        m_Renderer->render(worldTransforms, m_boneColors);
+        // FIX: Call render AFTER calculating colors and pass the color AND edge data
+        m_Renderer->render(worldTransforms, m_boneColors, m_boneEdges);
         
         // Display the texture from the FBO (flipped vertically)
         ImGui::Image((void*)(intptr_t)m_Renderer->getTextureID(), viewportSize, ImVec2(0, 1), ImVec2(1, 0));
@@ -1009,6 +1072,15 @@ juce::ValueTree AnimationModuleProcessor::getExtraStateTree() const
     state.setProperty("viewRotationY", m_viewRotationY, nullptr);
     state.setProperty("viewRotationZ", m_viewRotationZ, nullptr);
 
+    // Save the name of the currently playing animation clip
+    juce::String currentClipName;
+    Animator* currentAnimator = m_activeAnimator.load(std::memory_order_acquire);
+    if (currentAnimator != nullptr && currentAnimator->GetCurrentAnimation() != nullptr)
+    {
+        currentClipName = currentAnimator->GetCurrentAnimation()->name;
+    }
+    state.setProperty("animationClipName", currentClipName, nullptr);
+
     // 3. Save the list of ground planes
     juce::ValueTree groundPlanesNode("GroundPlanes");
     {
@@ -1069,6 +1141,9 @@ void AnimationModuleProcessor::setExtraStateTree(const juce::ValueTree& state)
 
     // 2. Restore the selected bone name (for UI dropdown).
     m_selectedBoneName = state.getProperty("selectedBoneName", "None").toString().toStdString();
+
+    // Restore the name of the animation clip to be played after the file loads.
+    m_clipToPlayOnLoad = state.getProperty("animationClipName", "").toString();
 
     // 3. IMPORTANT: Load the animation file BEFORE restoring tracked bones.
     juce::String filePath = state.getProperty("animationFilePath", "").toString();

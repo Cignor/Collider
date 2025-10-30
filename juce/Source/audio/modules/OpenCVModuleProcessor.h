@@ -83,6 +83,33 @@ public:
         const juce::ScopedLock lock(imageLock);
         return latestFrameForGui;
     }
+    
+    // Public method for the UI to trigger the file chooser
+    void chooseVideoFile()
+    {
+        fileChooser = std::make_unique<juce::FileChooser>("Select a video file...", juce::File{}, "*.mp4;*.mov;*.avi;*.mkv;*.wmv");
+        auto chooserFlags = juce::FileBrowserComponent::openMode | juce::FileBrowserComponent::canSelectFiles;
+        
+        fileChooser->launchAsync(chooserFlags, [this](const juce::FileChooser& fc)
+        {
+            auto file = fc.getResult();
+            if (file.existsAsFile())
+            {
+                // This is thread-safe because it just sets a variable.
+                // The video thread will pick it up on its next loop.
+                videoFileToLoad = file;
+                useCameraIndex = -1; // Prioritize file over camera
+            }
+        });
+    }
+    
+    // Get/Set camera index (for UI control)
+    int getCameraIndex() const { return useCameraIndex.load(); }
+    void setCameraIndex(int index) 
+    { 
+        useCameraIndex = index; 
+        videoFileToLoad = juce::File{}; // Clear file path to switch to camera
+    }
 
 protected:
     //==============================================================================
@@ -105,48 +132,11 @@ protected:
     */
     virtual void consumeResult(const ResultStruct& result, juce::AudioBuffer<float>& outputBuffer) = 0;
 
-private:
-    //==============================================================================
-    //== THREADING AND DATA MARSHALLING ============================================
-    //==============================================================================
-
-    void run() override
-    {
-        // This is the main loop for the background video thread.
-        
-        // Open the default camera. Error handling should be added here.
-        videoCapture.open(0);
-        if (!videoCapture.isOpened())
-        {
-            // Handle error: camera not found.
-            return;
-        }
-
-        while (!threadShouldExit())
-        {
-            cv::Mat frame;
-            if (videoCapture.read(frame))
-            {
-                // 1. Perform the subclass-specific CV analysis.
-                ResultStruct result = processFrame(frame);
-
-                // 2. Push the analysis result to the lock-free FIFO for the audio thread.
-                if (fifo.getFreeSpace() >= 1)
-                {
-                    auto writeScope = fifo.write(1);
-                    if(writeScope.blockSize1 > 0)
-                        fifoBuffer[writeScope.startIndex1] = result;
-                }
-
-                // 3. Convert and share the frame with the GUI thread.
-                updateGuiFrame(frame);
-            }
-            
-            // Control the frame rate to conserve CPU.
-            wait(66); // ~15 FPS
-        }
-    }
-    
+    /**
+        Updates the frame displayed in the GUI with annotations.
+        Subclasses should call this with their annotated displayFrame.
+        @param frame The frame to display (can include overlays).
+    */
     void updateGuiFrame(const cv::Mat& frame)
     {
         // Convert from OpenCV's BGR to JUCE's ARGB format.
@@ -163,6 +153,90 @@ private:
         memcpy(destData.data, bgraFrame.data, bgraFrame.total() * bgraFrame.elemSize());
     }
 
+private:
+    //==============================================================================
+    //== THREADING AND DATA MARSHALLING ============================================
+    //==============================================================================
+
+    void run() override
+    {
+        // This is the main loop for the background video thread.
+        bool sourceIsOpen = false;
+
+        while (!threadShouldExit())
+        {
+            // --- Source Management Logic ---
+            // Check if a new video file has been requested
+            if (videoFileToLoad.existsAsFile())
+            {
+                if (videoCapture.isOpened())
+                    videoCapture.release();
+                    
+                videoCapture.open(videoFileToLoad.getFullPathName().toStdString());
+                sourceIsOpen = videoCapture.isOpened();
+                
+                if (sourceIsOpen)
+                {
+                    juce::Logger::writeToLog("[OpenCV] Opened video file: " + videoFileToLoad.getFileName());
+                }
+                
+                videoFileToLoad = juce::File{}; // Clear the request
+            }
+            // If no source is open and we're supposed to use a camera
+            else if (!sourceIsOpen && useCameraIndex >= 0)
+            {
+                videoCapture.open(useCameraIndex.load());
+                sourceIsOpen = videoCapture.isOpened();
+                
+                if (sourceIsOpen)
+                {
+                    juce::Logger::writeToLog("[OpenCV] Opened camera " + juce::String(useCameraIndex.load()));
+                }
+            }
+            
+            // If still no source, wait and retry
+            if (!sourceIsOpen)
+            {
+                wait(500);
+                continue;
+            }
+
+            // Read and process frame
+            cv::Mat frame;
+            if (videoCapture.read(frame))
+            {
+                // 1. Perform the subclass-specific CV analysis.
+                ResultStruct result = processFrame(frame);
+
+                // 2. Push the analysis result to the lock-free FIFO for the audio thread.
+                if (fifo.getFreeSpace() >= 1)
+                {
+                    auto writeScope = fifo.write(1);
+                    if(writeScope.blockSize1 > 0)
+                        fifoBuffer[writeScope.startIndex1] = result;
+                }
+                
+                // 3. Note: Subclasses should call updateGuiFrame() with their annotated frame
+            }
+            else
+            {
+                // End of file or camera disconnected
+                sourceIsOpen = false;
+                videoCapture.release();
+                
+                // If it was a file, loop it by reopening
+                // (useCameraIndex will be -1 for files)
+                if (useCameraIndex < 0)
+                {
+                    // Signal that we want to reopen (will be handled next iteration)
+                }
+            }
+            
+            // Control the frame rate to conserve CPU.
+            wait(66); // ~15 FPS
+        }
+    }
+
     // --- Thread-safe data transfer members ---
     juce::AbstractFifo fifo { 16 };
     std::vector<ResultStruct> fifoBuffer;
@@ -170,6 +244,9 @@ private:
 
     // --- Video source ---
     cv::VideoCapture videoCapture;
+    std::atomic<int> useCameraIndex { 0 };  // -1 means use file, >= 0 means camera index
+    juce::File videoFileToLoad;             // Set by UI thread, read by video thread
+    std::unique_ptr<juce::FileChooser> fileChooser;
 
     // --- GUI communication members ---
     juce::Image latestFrameForGui;
