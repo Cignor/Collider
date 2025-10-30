@@ -181,6 +181,10 @@ private:
     float m_viewRotationY = 0.0f;
     float m_viewRotationZ = 0.0f;
 
+    // Cached animation bounds for dynamic slider range
+    float m_animMinY = -5.0f;
+    float m_animMaxY = 5.0f;
+
     // Ground line Y position for trigger detection
     float m_groundY = 180.0f;
     

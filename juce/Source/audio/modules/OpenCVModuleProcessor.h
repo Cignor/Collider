@@ -3,8 +3,17 @@
 #pragma once
 
 // CRITICAL: Always include external libraries before JUCE headers.
-#include <opencv2/opencv.hpp>
-#include <JuceHeader.h>
+// Include only the specific OpenCV headers we need to avoid build issues
+#include <opencv2/core.hpp>
+#include <opencv2/imgproc.hpp>
+#include <opencv2/video.hpp>
+#include <opencv2/videoio.hpp>
+#include <opencv2/objdetect.hpp>
+
+// JUCE includes
+#include <juce_core/juce_core.h>
+#include <juce_audio_processors/juce_audio_processors.h>
+#include <juce_graphics/juce_graphics.h>
 
 #include "ModuleProcessor.h"
 

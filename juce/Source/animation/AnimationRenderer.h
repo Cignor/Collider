@@ -29,7 +29,7 @@ public:
     void setViewRotation(const glm::vec3& rotation) { m_viewRotation = rotation; }
     
     // Calculate optimal zoom and pan to frame all bones in view
-    void frameView(const std::vector<glm::mat4>& boneMatrices, float& outZoom, glm::vec2& outPan);
+    void frameView(const std::vector<glm::mat4>& boneMatrices, float& outZoom, glm::vec2& outPan, float& outMinY, float& outMaxY);
 
 private:
     void createFramebuffer(int width, int height);

@@ -8,12 +8,12 @@
       </params>
       <extra>
         <AnimationModuleState animationFilePath="H:\0000_CODE\01_collider_pyo\animation_gltf\walking_new.fbx"
-                              zoom="0.9845929741859436" panX="0.07223433256149292" panY="0.8951462507247925"
-                              viewRotationX="0.0" viewRotationY="0.0" viewRotationZ="0.0" selectedBoneName="mixamorig:Neck">
+                              zoom="0.9735803008079529" panX="-0.01195856928825378" panY="0.8851638436317444"
+                              viewRotationX="0.0" viewRotationY="0.0" viewRotationZ="0.0" selectedBoneName="None">
           <GroundPlanes>
-            <Plane y="0.1299999952316284"/>
-            <Plane y="0.8500000238418579"/>
-            <Plane y="1.490000009536743"/>
+            <Plane y="0.2199999988079071"/>
+            <Plane y="1.519999980926514"/>
+            <Plane y="0.8700000047683716"/>
           </GroundPlanes>
           <TrackedBones>
             <Bone name="LeftFoot"/>

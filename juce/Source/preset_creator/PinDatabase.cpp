@@ -940,6 +940,31 @@ db["random"] = ModulePinInfo(
         {}
     );
 
+    db["movement_detector"] = ModulePinInfo(
+        NodeWidth::Medium,
+        {}, // No inputs
+        { 
+            AudioPin("Motion X", 0, PinDataType::CV),
+            AudioPin("Motion Y", 1, PinDataType::CV),
+            AudioPin("Amount", 2, PinDataType::CV),
+            AudioPin("Trigger", 3, PinDataType::Gate)
+        },
+        {}
+    );
+
+    db["human_detector"] = ModulePinInfo(
+        NodeWidth::Medium,
+        {}, // No inputs
+        { 
+            AudioPin("X", 0, PinDataType::CV),
+            AudioPin("Y", 1, PinDataType::CV),
+            AudioPin("Width", 2, PinDataType::CV),
+            AudioPin("Height", 3, PinDataType::CV),
+            AudioPin("Gate", 4, PinDataType::Gate)
+        },
+        {}
+    );
+
     // Add aliases for nodes with underscore naming convention
     db["clock_divider"] = db["ClockDivider"];
     db["sequential_switch"] = db["SequentialSwitch"];

@@ -209,7 +209,7 @@ void AnimationRenderer::createShaders()
     glDeleteShader(fs);
 }
 
-void AnimationRenderer::frameView(const std::vector<glm::mat4>& boneMatrices, float& outZoom, glm::vec2& outPan)
+void AnimationRenderer::frameView(const std::vector<glm::mat4>& boneMatrices, float& outZoom, glm::vec2& outPan, float& outMinY, float& outMaxY)
 {
     if (boneMatrices.empty())
         return;
@@ -235,6 +235,10 @@ void AnimationRenderer::frameView(const std::vector<glm::mat4>& boneMatrices, fl
         maxPoint.x = std::max(maxPoint.x, position.x);
         maxPoint.y = std::max(maxPoint.y, position.y);
     }
+
+    // Pass the calculated world-space Y bounds back to the caller
+    outMinY = minPoint.y;
+    outMaxY = maxPoint.y;
 
     // Calculate the center of the bounding box
     outPan = (minPoint + maxPoint) * 0.5f;

@@ -361,6 +361,29 @@ void AnimationModuleProcessor::setupAnimationFromRawData(std::unique_ptr<RawAnim
                                juce::String(m_stagedAnimationData->animationClips[0].name));
         m_stagedAnimator->PlayAnimation(m_stagedAnimationData->animationClips[0].name);
     }
+
+    // --- FIX: Auto-frame the view and clamp ground planes when a new file is loaded ---
+    {
+        // We need to run one update cycle to get valid bone transforms for the new animation
+        m_stagedAnimator->Update(0.0f);
+        glm::vec2 newPan;
+        // Use the renderer to calculate the new bounds from the staged (new) animation data
+        m_Renderer->frameView(m_stagedAnimator->GetBoneWorldTransforms(), m_zoom, newPan, m_animMinY, m_animMaxY);
+        m_panX = newPan.x;
+        m_panY = newPan.y;
+
+        // Now, clamp the existing ground planes to these new, correct bounds
+        const float yRange = m_animMaxY - m_animMinY;
+        const float padding = (yRange > 0.01f) ? yRange * 0.5f : 2.0f;
+        const float sliderMin = m_animMinY - padding;
+        const float sliderMax = m_animMaxY + padding;
+
+        const juce::ScopedLock lock(m_groundPlanesLock);
+        for (auto& planeY : m_groundPlanes)
+        {
+            planeY = juce::jlimit(sliderMin, sliderMax, planeY);
+        }
+    }
     
     // Cache bone names for thread-safe UI access (on main thread, before audio thread gets it)
     m_cachedBoneNames.clear();
@@ -712,26 +735,47 @@ void AnimationModuleProcessor::drawParametersInNode(float itemWidth,
             m_viewRotationZ = 0.0f;
             if (currentAnimator != nullptr)
             {
+                // FIX: Update the call to also receive and store the Y-bounds
                 glm::vec2 newPan;
-                m_Renderer->frameView(currentAnimator->GetBoneWorldTransforms(), m_zoom, newPan);
+                m_Renderer->frameView(currentAnimator->GetBoneWorldTransforms(), m_zoom, newPan, m_animMinY, m_animMaxY);
                 m_panX = newPan.x;
                 m_panY = newPan.y;
+
+                // --- FIX: Clamp existing ground planes to the new view bounds ---
+                const float yRange = m_animMaxY - m_animMinY;
+                const float padding = (yRange > 0.01f) ? yRange * 0.5f : 2.0f;
+                const float sliderMin = m_animMinY - padding;
+                const float sliderMax = m_animMaxY + padding;
+
+                const juce::ScopedLock lock(m_groundPlanesLock);
+                for (auto& planeY : m_groundPlanes)
+                {
+                    // Force the plane's value to be within the new visible range.
+                    planeY = juce::jlimit(sliderMin, sliderMax, planeY);
+                }
+                onModificationEnded(); // Make this action undoable
             }
         }
         
         
-        // === GROUND PLANE CONTROLS ===
+        // === GROUND PLANE CONTROLS (FIXED) ===
         ImGui::Separator();
         ImGui::Text("Ground Planes:");
+
+        // --- Step 1: Define the slider range based on our stored bounds ---
+        // These bounds are updated when "Reset View" is clicked
+        const float yRange = m_animMaxY - m_animMinY;
+        const float padding = (yRange > 0.01f) ? yRange * 0.5f : 2.0f; // Add 50% padding
+        const float sliderMin = m_animMinY - padding;
+        const float sliderMax = m_animMaxY + padding;
         
         // Add/Remove Buttons
         if (ImGui::Button("Add Ground Plane", ImVec2(itemWidth / 2 - 2, 0)))
         {
-            addGroundPlane(0.0f);
-            onModificationEnded(); // Trigger undo/redo snapshot
+            addGroundPlane(0.0f); // Default to world origin
+            onModificationEnded(); 
         }
         ImGui::SameLine();
-        
         bool canRemove = false;
         {
             const juce::ScopedLock lock(m_groundPlanesLock);
@@ -741,7 +785,7 @@ void AnimationModuleProcessor::drawParametersInNode(float itemWidth,
         if (ImGui::Button("Remove Ground Plane", ImVec2(itemWidth / 2 - 2, 0)))
         {
             removeGroundPlane();
-            onModificationEnded(); // Trigger undo/redo snapshot
+            onModificationEnded();
         }
         if (!canRemove) ImGui::EndDisabled();
 
@@ -750,18 +794,16 @@ void AnimationModuleProcessor::drawParametersInNode(float itemWidth,
             const juce::ScopedLock lock(m_groundPlanesLock);
             for (int i = 0; i < (int)m_groundPlanes.size(); ++i)
             {
-                ImGui::PushID(i); // Unique ID for each slider
-                
-                // Generate a distinct color for each slider
-                float hue = fmodf((float)i * 0.2f, 1.0f); // 0.2 step for distinct hues
+                ImGui::PushID(i);
+                float hue = fmodf((float)i * 0.2f, 1.0f);
                 ImGui::PushStyleColor(ImGuiCol_FrameBg, (ImVec4)ImColor::HSV(hue, 0.5f, 0.5f));
                 ImGui::PushStyleColor(ImGuiCol_FrameBgHovered, (ImVec4)ImColor::HSV(hue, 0.6f, 0.6f));
                 ImGui::PushStyleColor(ImGuiCol_FrameBgActive, (ImVec4)ImColor::HSV(hue, 0.7f, 0.7f));
                 ImGui::PushStyleColor(ImGuiCol_SliderGrab, (ImVec4)ImColor::HSV(hue, 0.9f, 0.9f));
 
-                ImGui::SliderFloat("Ground Y", &m_groundPlanes[i], -5.0f, 5.0f, "%.2f");
+                // FIX: Use the new dynamic world-space range for the slider.
+                ImGui::SliderFloat("Ground Y", &m_groundPlanes[i], sliderMin, sliderMax, "%.2f");
 
-                // Trigger snapshot only when slider is released (best practice)
                 if (ImGui::IsItemDeactivatedAfterEdit())
                 {
                     onModificationEnded();

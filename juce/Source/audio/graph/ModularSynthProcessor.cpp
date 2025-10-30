@@ -66,6 +66,8 @@
 #include "../modules/PhysicsModuleProcessor.h"
 #include "../modules/StrokeSequencerModuleProcessor.h"
 #include "../modules/AnimationModuleProcessor.h"
+#include "../modules/MovementDetectorModule.h"
+#include "../modules/HumanDetectorModule.h"
 #include "../modules/InletModuleProcessor.h"
 #include "../modules/OutletModuleProcessor.h"
 #include "../modules/MetaModuleProcessor.h"
@@ -713,6 +715,8 @@ namespace {
             reg("tempo_clock", []{ return std::make_unique<TempoClockModuleProcessor>(); });
             reg("physics", []{ return std::make_unique<PhysicsModuleProcessor>(); });
             reg("animation", []{ return std::make_unique<AnimationModuleProcessor>(); });
+            reg("movement_detector", []{ return std::make_unique<MovementDetectorModule>(); });
+            reg("human_detector", []{ return std::make_unique<HumanDetectorModule>(); });
             reg("stroke_sequencer", []{ return std::make_unique<StrokeSequencerModuleProcessor>(); });
             
             reg("meta module", []{ return std::make_unique<MetaModuleProcessor>(); });

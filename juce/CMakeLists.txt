@@ -180,6 +180,13 @@ set(BUILD_WITH_STATIC_CRT OFF CACHE BOOL "" FORCE)
 
 FetchContent_MakeAvailable(opencv)
 
+# Get the OpenCV build directory for generated headers
+FetchContent_GetProperties(opencv)
+if(NOT opencv_POPULATED)
+    FetchContent_Populate(opencv)
+endif()
+set(OPENCV_BUILD_DIR "${CMAKE_BINARY_DIR}/_deps/opencv-build")
+
 # Restore flags after OpenCV if needed
 if(MSVC)
     set(CMAKE_CXX_FLAGS "${SAVED_CMAKE_CXX_FLAGS} /FS")
@@ -401,6 +408,10 @@ target_sources(ColliderApp PRIVATE
     Source/audio/modules/StrokeSequencerModuleProcessor.cpp
     Source/audio/modules/AnimationModuleProcessor.h
     Source/audio/modules/AnimationModuleProcessor.cpp
+    Source/audio/modules/MovementDetectorModule.h
+    Source/audio/modules/MovementDetectorModule.cpp
+    Source/audio/modules/HumanDetectorModule.h
+    Source/audio/modules/HumanDetectorModule.cpp
     Source/animation/AnimationData.h
     Source/animation/RawAnimationData.h
     Source/animation/RawAnimationData.cpp
@@ -463,7 +474,19 @@ target_include_directories(ColliderApp PRIVATE
     ${CMAKE_SOURCE_DIR}/../soundtouch/include
     ${CMAKE_SOURCE_DIR}/../soundtouch/source/SoundTouch
     ${ufbx_SOURCE_DIR}
+    # OpenCV include directories - source and generated headers
     ${opencv_SOURCE_DIR}/include
+    ${opencv_SOURCE_DIR}/modules/core/include
+    ${opencv_SOURCE_DIR}/modules/imgproc/include
+    ${opencv_SOURCE_DIR}/modules/imgcodecs/include
+    ${opencv_SOURCE_DIR}/modules/videoio/include
+    ${opencv_SOURCE_DIR}/modules/highgui/include
+    ${opencv_SOURCE_DIR}/modules/video/include
+    ${opencv_SOURCE_DIR}/modules/objdetect/include
+    ${opencv_SOURCE_DIR}/modules/features2d/include
+    ${opencv_SOURCE_DIR}/modules/calib3d/include
+    ${OPENCV_BUILD_DIR}
+    ${OPENCV_BUILD_DIR}/modules/world
     $<$<BOOL:${USE_RUBBERBAND}>:${RUBBERBAND_INCLUDE_DIR}>
 )
 
@@ -656,6 +679,10 @@ target_sources(PresetCreatorApp PRIVATE
     Source/audio/modules/StrokeSequencerModuleProcessor.cpp
     Source/audio/modules/AnimationModuleProcessor.h
     Source/audio/modules/AnimationModuleProcessor.cpp
+    Source/audio/modules/MovementDetectorModule.h
+    Source/audio/modules/MovementDetectorModule.cpp
+    Source/audio/modules/HumanDetectorModule.h
+    Source/audio/modules/HumanDetectorModule.cpp
     Source/animation/AnimationData.h
     Source/animation/RawAnimationData.h
     Source/animation/RawAnimationData.cpp
@@ -685,7 +712,19 @@ target_include_directories(PresetCreatorApp PRIVATE
     ${CMAKE_SOURCE_DIR}/../soundtouch/include
     ${CMAKE_SOURCE_DIR}/../soundtouch/source/SoundTouch
     ${ufbx_SOURCE_DIR}
+    # OpenCV include directories - source and generated headers
     ${opencv_SOURCE_DIR}/include
+    ${opencv_SOURCE_DIR}/modules/core/include
+    ${opencv_SOURCE_DIR}/modules/imgproc/include
+    ${opencv_SOURCE_DIR}/modules/imgcodecs/include
+    ${opencv_SOURCE_DIR}/modules/videoio/include
+    ${opencv_SOURCE_DIR}/modules/highgui/include
+    ${opencv_SOURCE_DIR}/modules/video/include
+    ${opencv_SOURCE_DIR}/modules/objdetect/include
+    ${opencv_SOURCE_DIR}/modules/features2d/include
+    ${opencv_SOURCE_DIR}/modules/calib3d/include
+    ${OPENCV_BUILD_DIR}
+    ${OPENCV_BUILD_DIR}/modules/world
     $<$<BOOL:${USE_RUBBERBAND}>:${RUBBERBAND_INCLUDE_DIR}>
 )
 
@@ -746,7 +785,10 @@ if(WIN32)
         COMMAND ${CMAKE_COMMAND} -E copy_directory
                 "${PIPER_DIR}/espeak-ng-data"
                 "$<TARGET_FILE_DIR:ColliderApp>/espeak-ng-data"
-        COMMENT "Copying Piper TTS runtime files to ColliderApp output directory"
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                "${opencv_SOURCE_DIR}/data/haarcascades/haarcascade_frontalface_default.xml"
+                "$<TARGET_FILE_DIR:ColliderApp>"
+        COMMENT "Copying Piper TTS and OpenCV data files to ColliderApp output directory"
     )
     add_custom_command(
         TARGET PresetCreatorApp POST_BUILD
@@ -768,6 +810,9 @@ if(WIN32)
         COMMAND ${CMAKE_COMMAND} -E copy_directory
                 "${PIPER_DIR}/espeak-ng-data"
                 "$<TARGET_FILE_DIR:PresetCreatorApp>/espeak-ng-data"
-        COMMENT "Copying Piper TTS runtime files to PresetCreatorApp output directory"
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                "${opencv_SOURCE_DIR}/data/haarcascades/haarcascade_frontalface_default.xml"
+                "$<TARGET_FILE_DIR:PresetCreatorApp>"
+        COMMENT "Copying Piper TTS and OpenCV data files to PresetCreatorApp output directory"
     )
 endif()
