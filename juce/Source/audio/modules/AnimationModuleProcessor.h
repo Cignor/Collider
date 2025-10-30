@@ -55,10 +55,14 @@ public:
     void addTrackedBone(const std::string& boneName);
     void removeTrackedBone(const std::string& boneName);
     
-    // Dynamic ground planes
-    void addGroundPlane(float initialY = 0.0f);
+    // Ground Plane data structure with depth
+    struct GroundPlane {
+        float y = 0.0f;
+        float depth = 0.0f;
+    };
+    void addGroundPlane(float initialY = 0.0f, float initialDepth = 0.0f);
     void removeGroundPlane(int index = -1);
-    std::vector<float> getGroundPlanes() const;
+    std::vector<GroundPlane> getGroundPlanes() const;
 
     // --- State Management (for saving/loading presets) ---
     juce::ValueTree getExtraStateTree() const override;
@@ -86,8 +90,9 @@ private:
         bool isFirstFrame = true;
         bool wasBelowGround = false; // Legacy screen-space flag
         bool wasBelowWorldGround = false; // Legacy single-plane flag
-        std::vector<bool> wasBelowPlanes; // Per-plane state for robust multi-plane hit detection
+        std::vector<bool> wasAboveCenter; // NEW: Tracks if bone was above the plane's center line last frame
         float previousScreenY = 0.0f; // Kept for compatibility
+        float hitFlashTimer = 0.0f; // Countdown timer for red flash visual feedback
 
         // Atomics for audio thread
         std::atomic<float> velX { 0.0f };
@@ -99,7 +104,8 @@ private:
             : name(other.name), boneId(other.boneId),
               lastScreenPos(other.lastScreenPos), isFirstFrame(other.isFirstFrame),
               wasBelowGround(other.wasBelowGround), wasBelowWorldGround(other.wasBelowWorldGround),
-              wasBelowPlanes(other.wasBelowPlanes), previousScreenY(other.previousScreenY),
+              wasAboveCenter(other.wasAboveCenter), previousScreenY(other.previousScreenY),
+              hitFlashTimer(other.hitFlashTimer),
               velX(other.velX.load()), velY(other.velY.load()),
               triggerState(other.triggerState.load())
         {}
@@ -115,8 +121,9 @@ private:
                 isFirstFrame = other.isFirstFrame;
                 wasBelowGround = other.wasBelowGround;
                 wasBelowWorldGround = other.wasBelowWorldGround;
-                wasBelowPlanes = other.wasBelowPlanes;
+                wasAboveCenter = other.wasAboveCenter;
                 previousScreenY = other.previousScreenY;
+                hitFlashTimer = other.hitFlashTimer;
                 velX.store(other.velX.load());
                 velY.store(other.velY.load());
                 triggerState.store(other.triggerState.load());
@@ -162,11 +169,14 @@ private:
     juce::CriticalSection m_trackedBonesLock; // Protects m_trackedBones from concurrent access
     
     // Dynamic ground planes for multi-level trigger detection
-    std::vector<float> m_groundPlanes;
+    std::vector<GroundPlane> m_groundPlanes;
     mutable juce::CriticalSection m_groundPlanesLock; // Protects m_groundPlanes from concurrent access
     
     // Rendering
     std::unique_ptr<AnimationRenderer> m_Renderer;
+    
+    // Per-frame bone colors for rendering (green=tracked, red=hit flash, white=default)
+    std::vector<glm::vec3> m_boneColors;
 
     // File chooser (kept alive during async operation)
     std::unique_ptr<juce::FileChooser> m_FileChooser;
@@ -180,10 +190,6 @@ private:
     float m_viewRotationX = 0.0f;
     float m_viewRotationY = 0.0f;
     float m_viewRotationZ = 0.0f;
-
-    // Cached animation bounds for dynamic slider range
-    float m_animMinY = -5.0f;
-    float m_animMaxY = 5.0f;
 
     // Ground line Y position for trigger detection
     float m_groundY = 180.0f;

@@ -16,7 +16,7 @@ AnimationModuleProcessor::AnimationModuleProcessor()
     // Tracked bones start empty - they will be added when an animation is loaded
     
     // Initialize with one default ground plane at Y=0
-    m_groundPlanes.push_back(0.0f);
+    m_groundPlanes.push_back({0.0f, 0.0f}); // y=0, depth=0
     
     // DEBUG: Verify output channel count
     juce::Logger::writeToLog("[AnimationModule] Constructor: getTotalNumOutputChannels() = " + 
@@ -227,11 +227,11 @@ void AnimationModuleProcessor::removeTrackedBone(const std::string& boneName)
     }
 }
 
-void AnimationModuleProcessor::addGroundPlane(float initialY)
+void AnimationModuleProcessor::addGroundPlane(float initialY, float initialDepth)
 {
     const juce::ScopedLock lock(m_groundPlanesLock);
-    m_groundPlanes.push_back(initialY);
-    juce::Logger::writeToLog("AnimationModule: Added ground plane at Y=" + juce::String(initialY));
+    m_groundPlanes.push_back({initialY, initialDepth});
+    juce::Logger::writeToLog("AnimationModule: Added ground plane at Y=" + juce::String(initialY) + " with Depth=" + juce::String(initialDepth));
 }
 
 void AnimationModuleProcessor::removeGroundPlane(int index)
@@ -250,7 +250,7 @@ void AnimationModuleProcessor::removeGroundPlane(int index)
     juce::Logger::writeToLog("AnimationModule: Removed ground plane (count now: " + juce::String((int)m_groundPlanes.size()) + ")");
 }
 
-std::vector<float> AnimationModuleProcessor::getGroundPlanes() const
+std::vector<AnimationModuleProcessor::GroundPlane> AnimationModuleProcessor::getGroundPlanes() const
 {
     const juce::ScopedLock lock(m_groundPlanesLock);
     return m_groundPlanes;
@@ -360,29 +360,6 @@ void AnimationModuleProcessor::setupAnimationFromRawData(std::unique_ptr<RawAnim
         juce::Logger::writeToLog("AnimationModule: Playing first animation clip: " + 
                                juce::String(m_stagedAnimationData->animationClips[0].name));
         m_stagedAnimator->PlayAnimation(m_stagedAnimationData->animationClips[0].name);
-    }
-
-    // --- FIX: Auto-frame the view and clamp ground planes when a new file is loaded ---
-    {
-        // We need to run one update cycle to get valid bone transforms for the new animation
-        m_stagedAnimator->Update(0.0f);
-        glm::vec2 newPan;
-        // Use the renderer to calculate the new bounds from the staged (new) animation data
-        m_Renderer->frameView(m_stagedAnimator->GetBoneWorldTransforms(), m_zoom, newPan, m_animMinY, m_animMaxY);
-        m_panX = newPan.x;
-        m_panY = newPan.y;
-
-        // Now, clamp the existing ground planes to these new, correct bounds
-        const float yRange = m_animMaxY - m_animMinY;
-        const float padding = (yRange > 0.01f) ? yRange * 0.5f : 2.0f;
-        const float sliderMin = m_animMinY - padding;
-        const float sliderMax = m_animMaxY + padding;
-
-        const juce::ScopedLock lock(m_groundPlanesLock);
-        for (auto& planeY : m_groundPlanes)
-        {
-            planeY = juce::jlimit(sliderMin, sliderMax, planeY);
-        }
     }
     
     // Cache bone names for thread-safe UI access (on main thread, before audio thread gets it)
@@ -735,25 +712,10 @@ void AnimationModuleProcessor::drawParametersInNode(float itemWidth,
             m_viewRotationZ = 0.0f;
             if (currentAnimator != nullptr)
             {
-                // FIX: Update the call to also receive and store the Y-bounds
                 glm::vec2 newPan;
-                m_Renderer->frameView(currentAnimator->GetBoneWorldTransforms(), m_zoom, newPan, m_animMinY, m_animMaxY);
+                m_Renderer->frameView(currentAnimator->GetBoneWorldTransforms(), m_zoom, newPan);
                 m_panX = newPan.x;
                 m_panY = newPan.y;
-
-                // --- FIX: Clamp existing ground planes to the new view bounds ---
-                const float yRange = m_animMaxY - m_animMinY;
-                const float padding = (yRange > 0.01f) ? yRange * 0.5f : 2.0f;
-                const float sliderMin = m_animMinY - padding;
-                const float sliderMax = m_animMaxY + padding;
-
-                const juce::ScopedLock lock(m_groundPlanesLock);
-                for (auto& planeY : m_groundPlanes)
-                {
-                    // Force the plane's value to be within the new visible range.
-                    planeY = juce::jlimit(sliderMin, sliderMax, planeY);
-                }
-                onModificationEnded(); // Make this action undoable
             }
         }
         
@@ -762,17 +724,42 @@ void AnimationModuleProcessor::drawParametersInNode(float itemWidth,
         ImGui::Separator();
         ImGui::Text("Ground Planes:");
 
-        // --- Step 1: Define the slider range based on our stored bounds ---
-        // These bounds are updated when "Reset View" is clicked
-        const float yRange = m_animMaxY - m_animMinY;
-        const float padding = (yRange > 0.01f) ? yRange * 0.5f : 2.0f; // Add 50% padding
-        const float sliderMin = m_animMinY - padding;
-        const float sliderMax = m_animMaxY + padding;
+        // --- Step 1: Calculate the animation's current Y-bounds for a sensible slider range ---
+        float sliderMin = -5.0f;
+        float sliderMax = 5.0f;
+        if (currentAnimator && !currentAnimator->GetBoneWorldTransforms().empty())
+        {
+            const auto& worldTransforms = currentAnimator->GetBoneWorldTransforms();
+            float minY = 0.0f, maxY = 0.0f;
+            bool boundsInitialized = false;
+            for (const auto& matrix : worldTransforms)
+            {
+                glm::vec3 pos = matrix[3];
+                if (glm::length(pos) < 0.001f) continue; // Ignore bones at origin
+
+                if (!boundsInitialized) {
+                    minY = maxY = pos.y;
+                    boundsInitialized = true;
+                } else {
+                    minY = std::min(minY, pos.y);
+                    maxY = std::max(maxY, pos.y);
+                }
+            }
+
+            // Add padding to the range to allow placing planes above/below the animation
+            if (boundsInitialized)
+            {
+                const float yRange = maxY - minY;
+                const float padding = (yRange > 0.01f) ? yRange * 0.5f : 2.0f;
+                sliderMin = minY - padding;
+                sliderMax = maxY + padding;
+            }
+        }
         
         // Add/Remove Buttons
         if (ImGui::Button("Add Ground Plane", ImVec2(itemWidth / 2 - 2, 0)))
         {
-            addGroundPlane(0.0f); // Default to world origin
+            addGroundPlane(0.0f, 0.0f); // Default: line at world origin
             onModificationEnded(); 
         }
         ImGui::SameLine();
@@ -801,13 +788,13 @@ void AnimationModuleProcessor::drawParametersInNode(float itemWidth,
                 ImGui::PushStyleColor(ImGuiCol_FrameBgActive, (ImVec4)ImColor::HSV(hue, 0.7f, 0.7f));
                 ImGui::PushStyleColor(ImGuiCol_SliderGrab, (ImVec4)ImColor::HSV(hue, 0.9f, 0.9f));
 
-                // FIX: Use the new dynamic world-space range for the slider.
-                ImGui::SliderFloat("Ground Y", &m_groundPlanes[i], sliderMin, sliderMax, "%.2f");
+                // Slider for Y position (center line)
+                ImGui::SliderFloat("Ground Y", &m_groundPlanes[i].y, sliderMin, sliderMax, "%.2f");
+                if (ImGui::IsItemDeactivatedAfterEdit()) onModificationEnded();
 
-                if (ImGui::IsItemDeactivatedAfterEdit())
-                {
-                    onModificationEnded();
-                }
+                // Slider for Depth (monitoring zone size)
+                ImGui::SliderFloat("Depth", &m_groundPlanes[i].depth, 0.0f, 2.0f, "%.2f");
+                if (ImGui::IsItemDeactivatedAfterEdit()) onModificationEnded();
 
                 ImGui::PopStyleColor(4);
                 ImGui::PopID();
@@ -822,7 +809,7 @@ void AnimationModuleProcessor::drawParametersInNode(float itemWidth,
         m_Renderer->setViewRotation({m_viewRotationX, m_viewRotationY, m_viewRotationZ});
         
         // Define the size of our viewport
-        const ImVec2 viewportSize(200, 200);
+        const ImVec2 viewportSize(400, 400);
         
         // Setup the renderer (it will only run once internally)
         m_Renderer->setup(static_cast<int>(viewportSize.x), static_cast<int>(viewportSize.y));
@@ -848,120 +835,120 @@ void AnimationModuleProcessor::drawParametersInNode(float itemWidth,
             }
         }
         
-        m_Renderer->render(worldTransforms);
+        // --- BONE COLOR, KINEMATIC, AND HIT-DETECTION LOGIC (MOVED BEFORE RENDER) ---
+        const int numBones = worldTransforms.size();
+        m_boneColors.assign(numBones, glm::vec3(1.0f, 1.0f, 1.0f)); // Default all to white
+
+        const float deltaTime = ImGui::GetIO().DeltaTime;
+        auto groundPlanesToDraw = getGroundPlanes();
         
-        // Display the texture from the FBO (flipped vertically)
-        ImGui::Image((void*)(intptr_t)m_Renderer->getTextureID(), viewportSize, ImVec2(0, 1), ImVec2(1, 0));
-        
-        // --- DRAW ALL GROUND LINES (colored) ---
-        ImDrawList* drawList = ImGui::GetWindowDrawList();
-        ImVec2 p1 = ImGui::GetItemRectMin();
-        ImVec2 p2 = ImGui::GetItemRectMax();
-        
-        // Draw each ground plane with its corresponding color
-        std::vector<float> groundPlanesToDraw = getGroundPlanes();
-        
-        // Recreate matrices used for rendering to project the lines correctly
+        // Recreate matrices for hit detection and velocity
         glm::mat4 projection = glm::ortho(-m_zoom + m_panX, m_zoom + m_panX, -m_zoom + m_panY, m_zoom + m_panY, -10.0f, 10.0f);
         glm::mat4 view = glm::mat4(1.0f);
         view = glm::rotate(view, m_viewRotationX, glm::vec3(1.0f, 0.0f, 0.0f));
         view = glm::rotate(view, m_viewRotationY, glm::vec3(0.0f, 1.0f, 0.0f));
         view = glm::rotate(view, m_viewRotationZ, glm::vec3(0.0f, 0.0f, 1.0f));
         
+        const juce::ScopedLock lock(m_trackedBonesLock);
+
+        // First, set the base green color for all currently tracked bones
+        for (const auto& bone : m_trackedBones) {
+            if (bone.boneId != -1 && bone.boneId < numBones) {
+                m_boneColors[bone.boneId] = glm::vec3(0.0f, 1.0f, 0.0f); // Green
+            }
+        }
+
+        // Now iterate again to handle hits, timers, and velocity
+        for (auto& bone : m_trackedBones)
+        {
+            // Update this bone's flash timer
+            bone.hitFlashTimer = std::max(0.0f, bone.hitFlashTimer - deltaTime);
+
+            if (bone.boneId != -1 && bone.boneId < numBones)
+            {
+                // Ensure the state vector is the correct size
+                if (bone.wasAboveCenter.size() != groundPlanesToDraw.size()) {
+                    bone.wasAboveCenter.assign(groundPlanesToDraw.size(), false);
+                }
+
+                glm::mat4 worldMatrix = worldTransforms[bone.boneId];
+                glm::vec3 worldPos = worldMatrix[3];
+
+                // Per-plane world-space hit detection
+                for (int i = 0; i < (int)groundPlanesToDraw.size(); ++i) {
+                    const auto& plane = groundPlanesToDraw[i];
+                    float centerY = plane.y;
+                    float topY = plane.y + plane.depth / 2.0f;
+                    float bottomY = plane.y - plane.depth / 2.0f;
+                    bool isCurrentlyInsideZone = (worldPos.y >= bottomY && worldPos.y <= topY);
+                    
+                    // Fire only if we are inside the zone AND we just crossed the center line downwards
+                    if (isCurrentlyInsideZone && bone.wasAboveCenter[i] && worldPos.y <= centerY) {
+                        bone.triggerState.store(true);
+                        bone.hitFlashTimer = 0.5f;
+                    }
+                    bone.wasAboveCenter[i] = (worldPos.y > centerY);
+                }
+
+                // Velocity calculation
+                ImVec2 viewportPos = ImGui::GetItemRectMin();
+                glm::vec2 currentScreenPos = worldToScreen(worldPos, view, projection, viewportPos, viewportSize);
+                if (bone.isFirstFrame) {
+                    bone.lastScreenPos = currentScreenPos;
+                    bone.isFirstFrame = false;
+                }
+                glm::vec2 velocity(0.0f);
+                if (deltaTime > 0.0f) {
+                    velocity = (currentScreenPos - bone.lastScreenPos) / deltaTime;
+                }
+                bone.lastScreenPos = currentScreenPos;
+                bone.velX.store(velocity.x);
+                bone.velY.store(velocity.y);
+            } else {
+                bone.wasAboveCenter.clear();
+                bone.isFirstFrame = true;
+                bone.hitFlashTimer = 0.0f;
+            }
+
+            // After all updates, set the final color for this bone
+            if (bone.boneId != -1 && bone.boneId < numBones) {
+                if (bone.hitFlashTimer > 0.0f) {
+                    m_boneColors[bone.boneId] = glm::vec3(1.0f, 0.0f, 0.0f); // Red flash
+                }
+            }
+        }
+
+        // FIX: Call render AFTER calculating colors and pass the color data
+        m_Renderer->render(worldTransforms, m_boneColors);
+        
+        // Display the texture from the FBO (flipped vertically)
+        ImGui::Image((void*)(intptr_t)m_Renderer->getTextureID(), viewportSize, ImVec2(0, 1), ImVec2(1, 0));
+
+        // --- DRAW GROUND ZONES WITH CENTER LINES ---
+        ImDrawList* drawList = ImGui::GetWindowDrawList();
+        ImVec2 p1 = ImGui::GetItemRectMin();
+        ImVec2 p2 = ImGui::GetItemRectMax();
+        
         for (int i = 0; i < (int)groundPlanesToDraw.size(); ++i)
         {
-            // Project the world-space ground plane to screen space for drawing
-            float groundPlaneWorldY = groundPlanesToDraw[i];
+            const auto& plane = groundPlanesToDraw[i];
+            float topY = plane.y + plane.depth / 2.0f;
+            float bottomY = plane.y - plane.depth / 2.0f;
             
-            // Project two points on the ground plane to get the screen-space line
-            glm::vec2 screenPosStart = worldToScreen(glm::vec3(-1000.0f, groundPlaneWorldY, 0.0f), view, projection, p1, viewportSize);
-            glm::vec2 screenPosEnd = worldToScreen(glm::vec3(1000.0f, groundPlaneWorldY, 0.0f), view, projection, p1, viewportSize);
-            
+            glm::vec2 screenTop = worldToScreen({0.0f, topY, 0.0f}, view, projection, p1, viewportSize);
+            glm::vec2 screenBottom = worldToScreen({0.0f, bottomY, 0.0f}, view, projection, p1, viewportSize);
+            glm::vec2 screenCenter = worldToScreen({0.0f, plane.y, 0.0f}, view, projection, p1, viewportSize);
+
             float hue = fmodf((float)i * 0.2f, 1.0f);
             ImVec4 colorVec = (ImVec4)ImColor::HSV(hue, 0.9f, 0.9f);
             ImU32 color = IM_COL32((int)(colorVec.x * 255), (int)(colorVec.y * 255), (int)(colorVec.z * 255), 255);
-            drawList->AddLine(ImVec2(p1.x, screenPosStart.y), ImVec2(p2.x, screenPosEnd.y), color, 2.0f);
-        }
-        
-        // --- KINEMATIC CALCULATION BLOCK FOR ALL TRACKED BONES ---
-        const juce::ScopedLock lock(m_trackedBonesLock);
-        for (auto& bone : m_trackedBones)
-        {
-            if (bone.boneId != -1 && currentAnimator != nullptr)
-            {
-                const auto& worldTransforms = currentAnimator->GetBoneWorldTransforms();
-                if (bone.boneId >= 0 && bone.boneId < worldTransforms.size())
-                {
-                    glm::mat4 worldMatrix = worldTransforms[bone.boneId];
-                    glm::vec3 worldPos = worldMatrix[3];
+            ImU32 fillColor = IM_COL32((int)(colorVec.x * 255), (int)(colorVec.y * 255), (int)(colorVec.z * 255), 50);
 
-                    // --- PER-PLANE HIT DETECTION (ROBUST AND CORRECT) ---
-                    // Each bone tracks its state relative to EACH ground plane independently.
-                    // This allows detecting crossings of multiple planes.
-                    
-                    // Ensure the state vector is the correct size
-                    if (bone.wasBelowPlanes.size() != groundPlanesToDraw.size())
-                    {
-                        bone.wasBelowPlanes.resize(groundPlanesToDraw.size(), false);
-                    }
-
-                    // Iterate through each plane and check its state individually
-                    for (size_t i = 0; i < groundPlanesToDraw.size(); ++i)
-                    {
-                        const float planeWorldY = groundPlanesToDraw[i];
-                        
-                        // Get the previous state for THIS specific plane
-                        bool wasBelowThisPlane = bone.wasBelowPlanes[i];
-                        
-                        // Determine the current state for THIS specific plane
-                        bool isBelowThisPlane = (worldPos.y <= planeWorldY);
-
-                        // Fire trigger only on the transition from above to below for THIS plane
-                        if (isBelowThisPlane && !wasBelowThisPlane)
-                        {
-                            bone.triggerState.store(true);
-                        }
-                        
-                        // Update the state for THIS specific plane for the next frame
-                        bone.wasBelowPlanes[i] = isBelowThisPlane;
-                    }
-
-                    // --- SCREEN-SPACE PROJECTION (for visualization and velocity only) ---
-                    // Recreate the projection and view matrices used by the renderer
-                    glm::mat4 projection = glm::ortho(-m_zoom + m_panX, m_zoom + m_panX, -m_zoom + m_panY, m_zoom + m_panY, -10.0f, 10.0f);
-                    glm::mat4 view = glm::mat4(1.0f);
-                    view = glm::rotate(view, m_viewRotationX, glm::vec3(1.0f, 0.0f, 0.0f));
-                    view = glm::rotate(view, m_viewRotationY, glm::vec3(0.0f, 1.0f, 0.0f));
-                    view = glm::rotate(view, m_viewRotationZ, glm::vec3(0.0f, 0.0f, 1.0f));
-
-                    // Project to screen space
-                    ImVec2 viewportPos = ImGui::GetItemRectMin();
-                    glm::vec2 currentScreenPos = worldToScreen(worldPos, view, projection, viewportPos, viewportSize);
-
-                    // --- VELOCITY CALCULATION (Screen-space dependent) ---
-                    if (bone.isFirstFrame)
-                    {
-                        bone.lastScreenPos = currentScreenPos;
-                        bone.isFirstFrame = false;
-                    }
-                    float deltaTime = ImGui::GetIO().DeltaTime;
-                    glm::vec2 velocity(0.0f);
-                    if (deltaTime > 0.0f)
-                    {
-                        velocity = (currentScreenPos - bone.lastScreenPos) / deltaTime;
-                    }
-                    bone.lastScreenPos = currentScreenPos;
-
-                    // Store results in this bone's specific atomics
-                    bone.velX.store(velocity.x);
-                    bone.velY.store(velocity.y);
-                }
-            }
-            else
-            {
-                // Reset state if this bone isn't found in the current animation
-                bone.wasBelowPlanes.assign(bone.wasBelowPlanes.size(), false);
-                bone.isFirstFrame = true;
+            if (plane.depth > 0.001f) {
+                drawList->AddRectFilled(ImVec2(p1.x, screenTop.y), ImVec2(p2.x, screenBottom.y), fillColor);
+                drawList->AddLine(ImVec2(p1.x, screenCenter.y), ImVec2(p2.x, screenCenter.y), color, 1.5f);
+            } else {
+                drawList->AddLine(ImVec2(p1.x, screenCenter.y), ImVec2(p2.x, screenCenter.y), color, 2.0f);
             }
         }
     }
@@ -969,7 +956,7 @@ void AnimationModuleProcessor::drawParametersInNode(float itemWidth,
     {
         // Show a placeholder when no animation is loaded to maintain consistent node size
         ImGui::TextDisabled("Load an animation file to see animation");
-        ImGui::Dummy(ImVec2(200, 200)); // Reserve space for the viewport
+        ImGui::Dummy(ImVec2(400, 400)); // Reserve space for the viewport
     }
     
     ImGui::PopItemWidth();
@@ -1026,10 +1013,11 @@ juce::ValueTree AnimationModuleProcessor::getExtraStateTree() const
     juce::ValueTree groundPlanesNode("GroundPlanes");
     {
         const juce::ScopedLock lock(m_groundPlanesLock);
-        for (const float y : m_groundPlanes)
+        for (const auto& plane : m_groundPlanes)
         {
             juce::ValueTree planeNode("Plane");
-            planeNode.setProperty("y", y, nullptr);
+            planeNode.setProperty("y", plane.y, nullptr);
+            planeNode.setProperty("depth", plane.depth, nullptr);
             groundPlanesNode.addChild(planeNode, -1, nullptr);
         }
     }
@@ -1138,22 +1126,23 @@ void AnimationModuleProcessor::setExtraStateTree(const juce::ValueTree& state)
         {
             if (planeNode.hasType("Plane"))
             {
-                m_groundPlanes.push_back(planeNode.getProperty("y", 0.0f));
+                // Read both y and depth, providing a default of 0.0 for depth for old presets.
+                m_groundPlanes.push_back({ (float)planeNode.getProperty("y", 0.0f), (float)planeNode.getProperty("depth", 0.0f) });
             }
         }
         // Fallback: if loading results in no ground planes, add one as a safety
         if (m_groundPlanes.empty())
         {
-            m_groundPlanes.push_back(0.0f);
+            m_groundPlanes.push_back({0.0f, 0.0f});
         }
     }
     else
     {
-        // Legacy support: try to load single groundY value
+        // Legacy support: try to load single groundY value (depth will be 0)
         float legacyGroundY = state.getProperty("groundY", 0.0f);
         const juce::ScopedLock lock(m_groundPlanesLock);
         m_groundPlanes.clear();
-        m_groundPlanes.push_back(legacyGroundY);
+        m_groundPlanes.push_back({legacyGroundY, 0.0f});
     }
     
     juce::Logger::writeToLog("[AnimationModule] Preset loading complete.");

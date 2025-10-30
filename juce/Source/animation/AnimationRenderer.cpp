@@ -13,16 +13,71 @@ const char* vertexShaderSource = R"glsl(
     #version 330 core
     layout (location = 0) in vec3 aPos;
 
-    uniform mat4 projection;
-    uniform mat4 boneMatrices[100]; // Max 100 bones
+    out VS_OUT {
+        vec3 color;
+    } vs_out;
+
+    uniform mat4 boneMatrices[100];
+    uniform vec3 boneColors[100];
 
     void main()
     {
-        // For simplicity, we assume the input position is the bone's position
-        // and its index is passed via gl_VertexID.
+        // Pass the bone's world position and color directly to the geometry shader
         mat4 boneTransform = boneMatrices[gl_VertexID];
-        gl_Position = projection * boneTransform * vec4(0.0, 0.0, 0.0, 1.0);
-        gl_PointSize = 10.0;  // Set point size in shader
+        gl_Position = boneTransform * vec4(0.0, 0.0, 0.0, 1.0);
+        vs_out.color = boneColors[gl_VertexID];
+    }
+)glsl";
+
+const char* geometryShaderSource = R"glsl(
+    #version 330 core
+    layout (points) in;
+    layout (triangle_strip, max_vertices = 4) out;
+
+    in VS_OUT {
+        vec3 color;
+    } gs_in[];
+
+    out vec3 fColor;
+    out vec2 quadCoord;
+
+    uniform mat4 projection;
+    uniform float pointRadius; // New uniform to control size in world units
+
+    void main() {
+        fColor = gs_in[0].color;
+        
+        // Get the world position from the vertex shader
+        vec3 worldPos = gl_in[0].gl_Position.xyz;
+
+        // Calculate billboard corner offsets that always face the camera
+        // We get these from the inverse of the projection matrix
+        vec3 camRight_worldspace = vec3(1.0, 0.0, 0.0);
+        vec3 camUp_worldspace = vec3(0.0, 1.0, 0.0);
+        
+        float radius = pointRadius;
+
+        // Bottom-left
+        quadCoord = vec2(-1.0, -1.0);
+        gl_Position = projection * vec4(worldPos - camRight_worldspace * radius - camUp_worldspace * radius, 1.0);
+        EmitVertex();
+
+        // Top-left
+        quadCoord = vec2(-1.0, 1.0);
+        gl_Position = projection * vec4(worldPos - camRight_worldspace * radius + camUp_worldspace * radius, 1.0);
+        EmitVertex();
+
+        // Bottom-right
+        quadCoord = vec2(1.0, -1.0);
+        gl_Position = projection * vec4(worldPos + camRight_worldspace * radius - camUp_worldspace * radius, 1.0);
+        EmitVertex();
+
+        // Top-right
+        quadCoord = vec2(1.0, 1.0);
+        gl_Position = projection * vec4(worldPos + camRight_worldspace * radius + camUp_worldspace * radius, 1.0);
+        EmitVertex();
+
+        EndPrimitive();
     }
 )glsl";
 
@@ -30,9 +85,16 @@ const char* fragmentShaderSource = R"glsl(
     #version 330 core
     out vec4 FragColor;
 
+    in vec3 fColor;
+    in vec2 quadCoord;
+
     void main()
     {
-        FragColor = vec4(1.0, 1.0, 1.0, 1.0); // White
+        // Create a circular shape instead of a square
+        if (dot(quadCoord, quadCoord) > 1.0) {
+            discard;
+        }
+        FragColor = vec4(fColor, 1.0);
     }
 )glsl";
 
@@ -62,7 +124,7 @@ void AnimationRenderer::setup(int width, int height)
     m_isInitialized = true;
 }
 
-void AnimationRenderer::render(const std::vector<glm::mat4>& finalBoneMatrices)
+void AnimationRenderer::render(const std::vector<glm::mat4>& finalBoneMatrices, const std::vector<glm::vec3>& boneColors)
 {
     if (finalBoneMatrices.empty() || shaderProgramID == 0)
         return;
@@ -108,14 +170,34 @@ void AnimationRenderer::render(const std::vector<glm::mat4>& finalBoneMatrices)
     // 3. Combine them into a final projection-view matrix
     glm::mat4 projectionView = projection * view;
 
-    // 4. Send the combined matrix to the shader's 'projection' uniform
+    // 4. Send matrices and radius to the shader uniforms
     glUniformMatrix4fv(glGetUniformLocation(shaderProgramID, "projection"), 1, GL_FALSE, &projectionView[0][0]);
+
+    // FIX: Define a world-space radius for the points. This will scale with zoom.
+    // 0.02 is a good starting point for a noticeable size.
+    glUniform1f(glGetUniformLocation(shaderProgramID, "pointRadius"), 0.02f);
 
     // Send the bone matrices to the shader
     glUniformMatrix4fv(glGetUniformLocation(shaderProgramID, "boneMatrices"), 
                       static_cast<GLsizei>(finalBoneMatrices.size()), 
                       GL_FALSE, 
                       &finalBoneMatrices[0][0][0]);
+    
+    // Send the bone colors to the shader (default to white if no colors provided)
+    if (!boneColors.empty() && boneColors.size() >= finalBoneMatrices.size())
+    {
+        glUniform3fv(glGetUniformLocation(shaderProgramID, "boneColors"),
+                     static_cast<GLsizei>(finalBoneMatrices.size()),
+                     &boneColors[0][0]);
+    }
+    else
+    {
+        // Default all bones to white if no color data provided
+        std::vector<glm::vec3> defaultColors(finalBoneMatrices.size(), glm::vec3(1.0f, 1.0f, 1.0f));
+        glUniform3fv(glGetUniformLocation(shaderProgramID, "boneColors"),
+                     static_cast<GLsizei>(defaultColors.size()),
+                     &defaultColors[0][0]);
+    }
 
     glDrawArrays(GL_POINTS, 0, static_cast<GLsizei>(finalBoneMatrices.size()));
 
@@ -163,7 +245,7 @@ void AnimationRenderer::createFramebuffer(int width, int height)
 
 void AnimationRenderer::createShaders()
 {
-    // Compile Vertex Shader
+    // --- Compile Vertex Shader ---
     GLuint vs = glCreateShader(GL_VERTEX_SHADER);
     glShaderSource(vs, 1, &vertexShaderSource, NULL);
     glCompileShader(vs);
@@ -178,7 +260,19 @@ void AnimationRenderer::createShaders()
         DBG("ERROR::SHADER::VERTEX::COMPILATION_FAILED: " + juce::String(infoLog));
     }
 
-    // Compile Fragment Shader
+    // --- Compile Geometry Shader (NEW) ---
+    GLuint gs = glCreateShader(GL_GEOMETRY_SHADER);
+    glShaderSource(gs, 1, &geometryShaderSource, NULL);
+    glCompileShader(gs);
+    
+    glGetShaderiv(gs, GL_COMPILE_STATUS, &success);
+    if (!success)
+    {
+        glGetShaderInfoLog(gs, 512, NULL, infoLog);
+        DBG("ERROR::SHADER::GEOMETRY::COMPILATION_FAILED: " + juce::String(infoLog));
+    }
+
+    // --- Compile Fragment Shader ---
     GLuint fs = glCreateShader(GL_FRAGMENT_SHADER);
     glShaderSource(fs, 1, &fragmentShaderSource, NULL);
     glCompileShader(fs);
@@ -194,6 +288,7 @@ void AnimationRenderer::createShaders()
     // Link Shaders into a Program
     shaderProgramID = glCreateProgram();
     glAttachShader(shaderProgramID, vs);
+    glAttachShader(shaderProgramID, gs); // Attach the new geometry shader
     glAttachShader(shaderProgramID, fs);
     glLinkProgram(shaderProgramID);
     
@@ -206,10 +301,11 @@ void AnimationRenderer::createShaders()
     }
 
     glDeleteShader(vs);
+    glDeleteShader(gs);
     glDeleteShader(fs);
 }
 
-void AnimationRenderer::frameView(const std::vector<glm::mat4>& boneMatrices, float& outZoom, glm::vec2& outPan, float& outMinY, float& outMaxY)
+void AnimationRenderer::frameView(const std::vector<glm::mat4>& boneMatrices, float& outZoom, glm::vec2& outPan)
 {
     if (boneMatrices.empty())
         return;
@@ -235,10 +331,6 @@ void AnimationRenderer::frameView(const std::vector<glm::mat4>& boneMatrices, fl
         maxPoint.x = std::max(maxPoint.x, position.x);
         maxPoint.y = std::max(maxPoint.y, position.y);
     }
-
-    // Pass the calculated world-space Y bounds back to the caller
-    outMinY = minPoint.y;
-    outMaxY = maxPoint.y;
 
     // Calculate the center of the bounding box
     outPan = (minPoint + maxPoint) * 0.5f;

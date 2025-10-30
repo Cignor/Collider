@@ -14,7 +14,7 @@ public:
     void setup(int width, int height);
 
     // Call every frame to draw the skeleton
-    void render(const std::vector<glm::mat4>& finalBoneMatrices);
+    void render(const std::vector<glm::mat4>& finalBoneMatrices, const std::vector<glm::vec3>& boneColors = {});
 
     // Get the ID of the final texture to display in ImGui
     GLuint getTextureID() const { return fboTextureID; }
@@ -29,7 +29,7 @@ public:
     void setViewRotation(const glm::vec3& rotation) { m_viewRotation = rotation; }
     
     // Calculate optimal zoom and pan to frame all bones in view
-    void frameView(const std::vector<glm::mat4>& boneMatrices, float& outZoom, glm::vec2& outPan, float& outMinY, float& outMaxY);
+    void frameView(const std::vector<glm::mat4>& boneMatrices, float& outZoom, glm::vec2& outPan);
 
 private:
     void createFramebuffer(int width, int height);

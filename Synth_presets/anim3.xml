@@ -9,17 +9,17 @@
       <extra>
         <AnimationModuleState animationFilePath="H:\0000_CODE\01_collider_pyo\animation_gltf\walking_new.fbx"
                               zoom="0.9735803008079529" panX="-0.01195856928825378" panY="0.8851638436317444"
-                              viewRotationX="0.0" viewRotationY="0.0" viewRotationZ="0.0" selectedBoneName="None">
+                              viewRotationX="0.0" viewRotationY="0.0" viewRotationZ="0.0" selectedBoneName="mixamorig:LeftForeArm">
           <GroundPlanes>
-            <Plane y="0.2199999988079071"/>
-            <Plane y="1.519999980926514"/>
-            <Plane y="0.8700000047683716"/>
+            <Plane y="0.1000000014901161" depth="0.2800000011920929"/>
+            <Plane y="1.100000023841858" depth="0.1400000005960464"/>
+            <Plane y="0.9200000166893005" depth="0.3799999952316284"/>
           </GroundPlanes>
           <TrackedBones>
             <Bone name="LeftFoot"/>
             <Bone name="RightFoot"/>
             <Bone name="mixamorig:LeftHand"/>
-            <Bone name="mixamorig:Neck"/>
+            <Bone name="mixamorig:LeftForeArm"/>
           </TrackedBones>
         </AnimationModuleState>
       </extra>
@@ -280,7 +280,7 @@
     <connection srcId="69" srcChan="1" dstId="53" dstChan="7"/>
   </connections>
   <NodeEditorUI>
-    <node id="1" x="-2717.0" y="474.0"/>
+    <node id="1" x="-2813.0" y="447.0"/>
     <node id="50" x="-1012.0" y="519.0"/>
     <node id="51" x="-1030.0" y="914.0"/>
     <node id="52" x="-1252.0" y="1464.0"/>
