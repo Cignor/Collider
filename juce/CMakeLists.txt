@@ -173,6 +173,18 @@ set(WITH_CUDA OFF CACHE BOOL "" FORCE)
 set(BUILD_opencv_world ON CACHE BOOL "" FORCE) # Combine into a single library
 set(ENABLE_PRECOMPILED_HEADERS OFF CACHE BOOL "" FORCE) # Disable PCH to avoid PDB issues
 
+# === EXPLICITLY ENABLE MODULES FOR ADVANCED FEATURES ===
+# These modules are required for computer vision features:
+# - dnn: Deep Neural Networks (for Pose Estimation / YOLO / Object Detection)
+# - tracking: Object tracking algorithms
+# - features2d: Feature detection and matching
+# - video: Dense optical flow and motion analysis
+set(BUILD_opencv_dnn ON CACHE BOOL "" FORCE)
+set(BUILD_opencv_tracking ON CACHE BOOL "" FORCE)
+set(BUILD_opencv_features2d ON CACHE BOOL "" FORCE)
+set(BUILD_opencv_video ON CACHE BOOL "" FORCE)
+set(OPENCV_DNN_CAFFE ON CACHE BOOL "" FORCE)  # Enable Caffe model support for DNN
+
 # === CRITICAL FIX ===
 # Force OpenCV to use the dynamic runtime library (/MD), matching JUCE's default.
 # This prevents runtime library mismatch errors (LNK2005, LNK2038).
@@ -186,6 +198,46 @@ if(NOT opencv_POPULATED)
     FetchContent_Populate(opencv)
 endif()
 set(OPENCV_BUILD_DIR "${CMAKE_BINARY_DIR}/_deps/opencv-build")
+
+# ==============================================================================
+# AUTO-GENERATE opencv_modules.hpp
+# ==============================================================================
+# OpenCV's build system should generate this file, but sometimes it doesn't
+# create it during the initial configuration. This ensures it always exists.
+set(OPENCV_MODULES_HPP "${OPENCV_BUILD_DIR}/opencv2/opencv_modules.hpp")
+if(NOT EXISTS "${OPENCV_MODULES_HPP}")
+    message(STATUS "Generating missing opencv_modules.hpp...")
+    file(MAKE_DIRECTORY "${OPENCV_BUILD_DIR}/opencv2")
+    file(WRITE "${OPENCV_MODULES_HPP}"
+"/*
+ * This file is auto-generated. Do not edit!
+ */
+
+#ifndef OPENCV_MODULES_HPP
+#define OPENCV_MODULES_HPP
+
+#define HAVE_OPENCV_CALIB3D
+#define HAVE_OPENCV_CORE
+#define HAVE_OPENCV_DNN
+#define HAVE_OPENCV_FEATURES2D
+#define HAVE_OPENCV_FLANN
+#define HAVE_OPENCV_GAPI
+#define HAVE_OPENCV_HIGHGUI
+#define HAVE_OPENCV_IMGCODECS
+#define HAVE_OPENCV_IMGPROC
+#define HAVE_OPENCV_ML
+#define HAVE_OPENCV_OBJDETECT
+#define HAVE_OPENCV_PHOTO
+#define HAVE_OPENCV_STITCHING
+#define HAVE_OPENCV_VIDEO
+#define HAVE_OPENCV_VIDEOIO
+#define HAVE_OPENCV_WORLD
+
+#endif
+")
+    message(STATUS "Generated opencv_modules.hpp at ${OPENCV_MODULES_HPP}")
+endif()
+# ==============================================================================
 
 # Restore flags after OpenCV if needed
 if(MSVC)
@@ -406,6 +458,10 @@ target_sources(ColliderApp PRIVATE
     Source/audio/modules/PhysicsModuleProcessor.cpp
     Source/audio/modules/StrokeSequencerModuleProcessor.h
     Source/audio/modules/StrokeSequencerModuleProcessor.cpp
+    Source/audio/modules/TapTempo.h
+    Source/audio/modules/TapTempo.cpp
+    Source/audio/modules/BPMMonitorModuleProcessor.h
+    Source/audio/modules/BPMMonitorModuleProcessor.cpp
     Source/audio/modules/AnimationModuleProcessor.h
     Source/audio/modules/AnimationModuleProcessor.cpp
     Source/video/VideoFrameManager.h
@@ -417,6 +473,8 @@ target_sources(ColliderApp PRIVATE
     Source/audio/modules/MovementDetectorModule.cpp
     Source/audio/modules/HumanDetectorModule.h
     Source/audio/modules/HumanDetectorModule.cpp
+    Source/audio/modules/PoseEstimatorModule.h
+    Source/audio/modules/PoseEstimatorModule.cpp
     Source/animation/AnimationData.h
     Source/animation/RawAnimationData.h
     Source/animation/RawAnimationData.cpp
@@ -490,6 +548,7 @@ target_include_directories(ColliderApp PRIVATE
     ${opencv_SOURCE_DIR}/modules/objdetect/include
     ${opencv_SOURCE_DIR}/modules/features2d/include
     ${opencv_SOURCE_DIR}/modules/calib3d/include
+    ${opencv_SOURCE_DIR}/modules/dnn/include              # For DNN headers (dnn.hpp)
     ${OPENCV_BUILD_DIR}
     ${OPENCV_BUILD_DIR}/modules/world
     $<$<BOOL:${USE_RUBBERBAND}>:${RUBBERBAND_INCLUDE_DIR}>
@@ -682,6 +741,10 @@ target_sources(PresetCreatorApp PRIVATE
     Source/audio/modules/PhysicsModuleProcessor.cpp
     Source/audio/modules/StrokeSequencerModuleProcessor.h
     Source/audio/modules/StrokeSequencerModuleProcessor.cpp
+    Source/audio/modules/TapTempo.h
+    Source/audio/modules/TapTempo.cpp
+    Source/audio/modules/BPMMonitorModuleProcessor.h
+    Source/audio/modules/BPMMonitorModuleProcessor.cpp
     Source/audio/modules/AnimationModuleProcessor.h
     Source/audio/modules/AnimationModuleProcessor.cpp
     Source/video/VideoFrameManager.h
@@ -693,6 +756,8 @@ target_sources(PresetCreatorApp PRIVATE
     Source/audio/modules/MovementDetectorModule.cpp
     Source/audio/modules/HumanDetectorModule.h
     Source/audio/modules/HumanDetectorModule.cpp
+    Source/audio/modules/PoseEstimatorModule.h
+    Source/audio/modules/PoseEstimatorModule.cpp
     Source/animation/AnimationData.h
     Source/animation/RawAnimationData.h
     Source/animation/RawAnimationData.cpp
@@ -733,6 +798,7 @@ target_include_directories(PresetCreatorApp PRIVATE
     ${opencv_SOURCE_DIR}/modules/objdetect/include
     ${opencv_SOURCE_DIR}/modules/features2d/include
     ${opencv_SOURCE_DIR}/modules/calib3d/include
+    ${opencv_SOURCE_DIR}/modules/dnn/include              # For DNN headers (dnn.hpp)
     ${OPENCV_BUILD_DIR}
     ${OPENCV_BUILD_DIR}/modules/world
     $<$<BOOL:${USE_RUBBERBAND}>:${RUBBERBAND_INCLUDE_DIR}>
@@ -820,9 +886,13 @@ if(WIN32)
         COMMAND ${CMAKE_COMMAND} -E copy_directory
                 "${PIPER_DIR}/espeak-ng-data"
                 "$<TARGET_FILE_DIR:PresetCreatorApp>/espeak-ng-data"
+        # NEW (Corrected): Copy the entire assets folder
+        COMMAND ${CMAKE_COMMAND} -E copy_directory
+                "${CMAKE_SOURCE_DIR}/assets"
+                "$<TARGET_FILE_DIR:PresetCreatorApp>/assets"
         COMMAND ${CMAKE_COMMAND} -E copy_if_different
                 "${opencv_SOURCE_DIR}/data/haarcascades/haarcascade_frontalface_default.xml"
                 "$<TARGET_FILE_DIR:PresetCreatorApp>"
-        COMMENT "Copying Piper TTS and OpenCV data files to PresetCreatorApp output directory"
+        COMMENT "Copying Piper TTS, OpenPose, and other runtime assets to PresetCreatorApp output directory"
     )
 endif()

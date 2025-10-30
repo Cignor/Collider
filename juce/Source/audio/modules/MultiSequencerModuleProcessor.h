@@ -24,6 +24,9 @@ public:
     juce::String getAudioOutputLabel(int channel) const override;
     juce::String getAudioInputLabel(int channel) const override;
     bool getParamRouting(const juce::String& paramId, int& outBusIndex, int& outChannelIndexInBus) const override;
+    
+    // Rhythm reporting for BPM Monitor
+    std::optional<RhythmInfo> getRhythmInfo() const override;
 
 #if defined(PRESET_CREATOR_UI)
     std::atomic<bool> autoConnectSamplersTriggered { false };

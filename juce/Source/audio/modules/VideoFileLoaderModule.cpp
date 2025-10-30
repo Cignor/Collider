@@ -11,7 +11,8 @@ juce::AudioProcessorValueTreeState::ParameterLayout VideoFileLoaderModule::creat
     std::vector<std::unique_ptr<juce::RangedAudioParameter>> params;
     
     params.push_back(std::make_unique<juce::AudioParameterBool>("loop", "Loop", true));
-    params.push_back(std::make_unique<juce::AudioParameterBool>("isZoomed", "Zoom", false));
+    params.push_back(std::make_unique<juce::AudioParameterChoice>(
+        "zoomLevel", "Zoom Level", juce::StringArray{ "Small", "Normal", "Large" }, 1));
     
     return { params.begin(), params.end() };
 }
@@ -23,7 +24,7 @@ VideoFileLoaderModule::VideoFileLoaderModule()
       apvts(*this, nullptr, "VideoFileLoaderParams", createParameterLayout())
 {
     loopParam = apvts.getRawParameterValue("loop");
-    isZoomedParam = dynamic_cast<juce::AudioParameterBool*>(apvts.getParameter("isZoomed"));
+    zoomLevelParam = apvts.getRawParameterValue("zoomLevel");
 }
 
 VideoFileLoaderModule::~VideoFileLoaderModule()
@@ -232,12 +233,11 @@ void VideoFileLoaderModule::setExtraStateTree(const juce::ValueTree& state)
 #if defined(PRESET_CREATOR_UI)
 ImVec2 VideoFileLoaderModule::getCustomNodeSize() const
 {
-    // Return different width based on zoom state
-    if (isZoomedParam && isZoomedParam->get())
-    {
-        return ImVec2(960.0f, 0.0f); // Doubled width when zoomed
-    }
-    return ImVec2(480.0f, 0.0f); // Normal width
+    // Return different width based on zoom level (0=240,1=480,2=960)
+    int level = zoomLevelParam ? (int) zoomLevelParam->load() : 1;
+    level = juce::jlimit(0, 2, level);
+    const float widths[3] { 240.0f, 480.0f, 960.0f };
+    return ImVec2(widths[level], 0.0f);
 }
 
 void VideoFileLoaderModule::drawParametersInNode(float itemWidth,
@@ -269,29 +269,34 @@ void VideoFileLoaderModule::drawParametersInNode(float itemWidth,
     
     ImGui::Separator();
     
-    // Zoom buttons (+ to zoom in, - to zoom out)
-    bool isZoomed = isZoomedParam->get();
+    // Zoom buttons (+/-) across 3 levels
+    int level = zoomLevelParam ? (int) zoomLevelParam->load() : 1;
+    level = juce::jlimit(0, 2, level);
     float buttonWidth = (itemWidth / 2.0f) - 4.0f;
-    
-    // '-' button (zoom out) - disabled when already normal size
-    if (!isZoomed) ImGui::BeginDisabled();
+    const bool atMin = (level <= 0);
+    const bool atMax = (level >= 2);
+
+    if (atMin) ImGui::BeginDisabled();
     if (ImGui::Button("-", ImVec2(buttonWidth, 0)))
     {
-        *isZoomedParam = false;
+        int newLevel = juce::jmax(0, level - 1);
+        if (auto* p = apvts.getParameter("zoomLevel"))
+            p->setValueNotifyingHost((float)newLevel / 2.0f);
         onModificationEnded();
     }
-    if (!isZoomed) ImGui::EndDisabled();
-    
+    if (atMin) ImGui::EndDisabled();
+
     ImGui::SameLine();
-    
-    // '+' button (zoom in) - disabled when already zoomed
-    if (isZoomed) ImGui::BeginDisabled();
+
+    if (atMax) ImGui::BeginDisabled();
     if (ImGui::Button("+", ImVec2(buttonWidth, 0)))
     {
-        *isZoomedParam = true;
+        int newLevel = juce::jmin(2, level + 1);
+        if (auto* p = apvts.getParameter("zoomLevel"))
+            p->setValueNotifyingHost((float)newLevel / 2.0f);
         onModificationEnded();
     }
-    if (isZoomed) ImGui::EndDisabled();
+    if (atMax) ImGui::EndDisabled();
     
     ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1.0f), "Source ID: %d", (int)getLogicalId());
     

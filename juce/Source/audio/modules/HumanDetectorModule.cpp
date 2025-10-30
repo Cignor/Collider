@@ -13,6 +13,8 @@ juce::AudioProcessorValueTreeState::ParameterLayout HumanDetectorModule::createP
     params.push_back(std::make_unique<juce::AudioParameterChoice>("mode", "Detection Mode", juce::StringArray{"Faces (Haar)", "Bodies (HOG)"}, 0));
     params.push_back(std::make_unique<juce::AudioParameterFloat>("scaleFactor", "Scale Factor", 1.05f, 2.0f, 1.1f));
     params.push_back(std::make_unique<juce::AudioParameterInt>("minNeighbors", "Min Neighbors", 1, 10, 3));
+    params.push_back(std::make_unique<juce::AudioParameterChoice>(
+        "zoomLevel", "Zoom Level", juce::StringArray{ "Small", "Normal", "Large" }, 1));
     return { params.begin(), params.end() };
 }
 
@@ -26,6 +28,7 @@ HumanDetectorModule::HumanDetectorModule()
     modeParam = apvts.getRawParameterValue("mode");
     scaleFactorParam = apvts.getRawParameterValue("scaleFactor");
     minNeighborsParam = apvts.getRawParameterValue("minNeighbors");
+    zoomLevelParam = apvts.getRawParameterValue("zoomLevel");
 
     // Load Haar Cascade
     juce::File cascadeFile = juce::File::getSpecialLocation(juce::File::currentApplicationFile)
@@ -265,6 +268,33 @@ void HumanDetectorModule::drawParametersInNode(float itemWidth,
             onModificationEnded();
         }
     }
+    
+    ImGui::Separator();
+    // Zoom controls (-/+) Small/Normal/Large
+    int level = zoomLevelParam ? (int) zoomLevelParam->load() : 1;
+    level = juce::jlimit(0, 2, level);
+    float buttonWidth = (itemWidth / 2.0f) - 4.0f;
+    const bool atMin = (level <= 0);
+    const bool atMax = (level >= 2);
+    if (atMin) ImGui::BeginDisabled();
+    if (ImGui::Button("-", ImVec2(buttonWidth, 0)))
+    {
+        int newLevel = juce::jmax(0, level - 1);
+        if (auto* p = apvts.getParameter("zoomLevel"))
+            p->setValueNotifyingHost((float)newLevel / 2.0f);
+        onModificationEnded();
+    }
+    if (atMin) ImGui::EndDisabled();
+    ImGui::SameLine();
+    if (atMax) ImGui::BeginDisabled();
+    if (ImGui::Button("+", ImVec2(buttonWidth, 0)))
+    {
+        int newLevel = juce::jmin(2, level + 1);
+        if (auto* p = apvts.getParameter("zoomLevel"))
+            p->setValueNotifyingHost((float)newLevel / 2.0f);
+        onModificationEnded();
+    }
+    if (atMax) ImGui::EndDisabled();
     
     // Show current source ID
     juce::uint32 sourceId = currentSourceId.load();

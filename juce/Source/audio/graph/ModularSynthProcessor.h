@@ -36,6 +36,7 @@ public:
 public:
     using Node = juce::AudioProcessorGraph::Node;
     using NodeID = juce::AudioProcessorGraph::NodeID;
+    
 
     NodeID addModule(const juce::String& moduleType, bool commit = true);
     NodeID addVstModule(juce::AudioPluginFormatManager& formatManager, const juce::PluginDescription& vstDesc);
@@ -52,6 +53,7 @@ public:
     
     void commitChanges();
     NodeID getOutputNodeID() const { return audioOutputNode ? audioOutputNode->nodeID : NodeID{}; }
+    NodeID getBPMMonitorNodeID() const { return bpmMonitorNode ? bpmMonitorNode->nodeID : NodeID{}; }
     // Introspection for editor
     std::vector<std::pair<juce::uint32, juce::String>> getModulesInfo() const;
     juce::AudioProcessorGraph::NodeID getNodeIdForLogical (juce::uint32 logicalId) const;
@@ -173,6 +175,7 @@ private:
     Node::Ptr audioOutputNode;
     Node::Ptr midiInputNode;
     
+    
     // MIDI activity indicator (mutable because hasMidiActivity() is const)
     mutable std::atomic<bool> m_midiActivityFlag{false};
     
@@ -206,6 +209,9 @@ private:
     // Probe scope for instant signal debugging (hidden from user, not saved in presets)
     Node::Ptr probeScopeNode;
     NodeID probeScopeNodeId;
+    
+    // BPM Monitor node (always present, undeletable like output node)
+    Node::Ptr bpmMonitorNode;
     
     // Transport state
     TransportState m_transportState;

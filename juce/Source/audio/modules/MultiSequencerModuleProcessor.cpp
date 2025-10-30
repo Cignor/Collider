@@ -719,3 +719,57 @@ bool MultiSequencerModuleProcessor::getParamRouting(const juce::String& paramId,
 	}
 	return false;
 }
+
+std::optional<RhythmInfo> MultiSequencerModuleProcessor::getRhythmInfo() const
+{
+    RhythmInfo info;
+    
+    // Build display name with logical ID
+    info.displayName = "Multi Seq #" + juce::String(getLogicalId());
+    info.sourceType = "multi_sequencer";
+    
+    // Check if synced to transport
+    const bool syncEnabled = apvts.getRawParameterValue("sync")->load() > 0.5f;
+    info.isSynced = syncEnabled;
+    
+    // Check if active
+    if (syncEnabled)
+    {
+        info.isActive = m_currentTransport.isPlaying;
+    }
+    else
+    {
+        info.isActive = true; // Free-running is always active
+    }
+    
+    // Calculate effective BPM (same logic as StepSequencer)
+    if (syncEnabled && info.isActive)
+    {
+        int divisionIndex = (int)apvts.getRawParameterValue("rate_division")->load();
+        
+        if (getParent())
+        {
+            int globalDiv = getParent()->getTransportState().globalDivisionIndex.load();
+            if (globalDiv >= 0)
+                divisionIndex = globalDiv;
+        }
+        
+        static const double divisions[] = { 1.0/32.0, 1.0/16.0, 1.0/8.0, 1.0/4.0, 1.0/2.0, 1.0, 2.0, 4.0, 8.0 };
+        const double beatDivision = divisions[juce::jlimit(0, 8, divisionIndex)];
+        
+        const int numSteps = numStepsParam ? (int)numStepsParam->load() : 8;
+        info.bpm = static_cast<float>(m_currentTransport.bpm * beatDivision * numSteps);
+    }
+    else if (!syncEnabled)
+    {
+        const float rate = rateParam ? rateParam->load() : 2.0f;
+        const int numSteps = numStepsParam ? (int)numStepsParam->load() : 8;
+        info.bpm = (rate / static_cast<float>(numSteps)) * 60.0f;
+    }
+    else
+    {
+        info.bpm = 0.0f;
+    }
+    
+    return info;
+}

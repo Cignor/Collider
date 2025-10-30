@@ -31,6 +31,9 @@ public:
     
     // Tell the UI about our output pins
     std::vector<DynamicPinInfo> getDynamicOutputPins() const override;
+    
+    // Rhythm reporting for BPM Monitor
+    std::optional<RhythmInfo> getRhythmInfo() const override;
 
 #if defined(PRESET_CREATOR_UI)
     void drawParametersInNode(float itemWidth,

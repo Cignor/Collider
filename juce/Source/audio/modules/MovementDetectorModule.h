@@ -43,6 +43,13 @@ public:
                               const std::function<bool(const juce::String& paramId)>& isParamModulated,
                               const std::function<void()>& onModificationEnded) override;
     void drawIoPins(const NodePinHelpers& helpers) override;
+    // Allow custom width (Small=240, Normal=480, Large=960)
+    ImVec2 getCustomNodeSize() const override { 
+        int level = zoomLevelParam ? (int) zoomLevelParam->load() : 1; 
+        level = juce::jlimit(0, 2, level); 
+        const float widths[3] { 240.0f, 480.0f, 960.0f }; 
+        return ImVec2(widths[level], 0.0f); 
+    }
 #endif
 
 private:
@@ -55,6 +62,13 @@ private:
     juce::AudioProcessorValueTreeState apvts;
     std::atomic<float>* modeParam = nullptr;
     std::atomic<float>* sensitivityParam = nullptr;
+    // 0=Small,1=Normal,2=Large
+    std::atomic<float>* zoomLevelParam = nullptr;
+
+    // NEW: Algorithm-specific tuning parameters
+    juce::AudioParameterInt* maxFeaturesParam = nullptr;
+    juce::AudioParameterInt* pyramidLevelsParam = nullptr;
+    juce::AudioParameterBool* noiseReductionParam = nullptr;
 
     // State for Optical Flow mode
     cv::Mat prevGrayFrame;

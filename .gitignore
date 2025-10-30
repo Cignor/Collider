@@ -89,3 +89,10 @@ audio/Recorder/*.wav
 *.o
 *.vst3
 *.vst
+\n# Exclude large OpenPose model binaries\njuce/assets/openpose_models/**/*.caffemodel
+# Exclude large OpenPose model binaries
+juce/assets/openpose_models/**/*.caffemodel
+# Exclude large OpenPose model binaries 
+juce/assets/openpose_models/**/*.caffemodel 
+# Exclude large OpenPose model binaries 
+juce/assets/openpose_models/**/*.caffemodel 

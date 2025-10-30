@@ -94,6 +94,7 @@
 - [Video File Loader](#video-file-loader) - Video File Source
 - [Movement Detector](#movement-detector) - Motion Detection
 - [Human Detector](#human-detector) - Face/Body Detection
+- [Pose Estimator](#pose-estimator) - Body Keypoint Detection
 
 #### 11. SYSTEM NODES
 - [Meta](#meta) - Meta Module Container
@@ -1763,7 +1764,74 @@ Detects faces or bodies in video via Haar Cascades or HOG.
 
 ---
 
-## 10. SYSTEM NODES
+### Pose Estimator
+**Body Keypoint Detection**
+
+Uses OpenPose MPI model to detect 15 human body keypoints in real-time video, providing precise tracking of head, limbs, and torso positions.
+
+**Inputs:**
+- `Source In` (Raw) - Video source ID from webcam or video file loader
+
+**Outputs:**
+- `Head X/Y` (CV) - Head position
+- `Neck X/Y` (CV) - Neck position
+- `R Shoulder X/Y` (CV) - Right shoulder position
+- `R Elbow X/Y` (CV) - Right elbow position
+- `R Wrist X/Y` (CV) - Right wrist position
+- `L Shoulder X/Y` (CV) - Left shoulder position
+- `L Elbow X/Y` (CV) - Left elbow position
+- `L Wrist X/Y` (CV) - Left wrist position
+- `R Hip X/Y` (CV) - Right hip position
+- `R Knee X/Y` (CV) - Right knee position
+- `R Ankle X/Y` (CV) - Right ankle position
+- `L Hip X/Y` (CV) - Left hip position
+- `L Knee X/Y` (CV) - Left knee position
+- `L Ankle X/Y` (CV) - Left ankle position
+- `Chest X/Y` (CV) - Chest/torso center position
+
+**Parameters:**
+- `Confidence` (0.0-1.0) - Detection confidence threshold (default: 0.1). Lower values detect more keypoints but may include false positives
+- `Draw Skeleton` (Bool) - Toggle skeleton overlay on video preview
+- `Zoom` (+/-) - Toggle between normal (480px) and zoomed (960px) video preview
+
+**How to Use:**
+1. **Setup:** Download OpenPose MPI model files (see `guides/POSE_ESTIMATOR_SETUP.md`)
+2. **Connect Video Source:** Connect a Webcam Loader or Video File Loader's `Source ID` output to `Source In`
+3. **Adjust Confidence:** Lower threshold for more sensitive detection, higher for more reliable detection
+4. **Map Keypoints:** Connect individual keypoint X/Y outputs to any CV modulation input
+5. **Example Patches:**
+   - **Hand-Controlled Oscillator:** Connect `R Wrist X` → VCO Frequency, `R Wrist Y` → VCF Cutoff
+   - **Body-Driven Rhythm:** Connect `R Knee Y` → Sequencer Rate, `L Knee Y` → Gate threshold
+   - **Dance Performance:** Map multiple keypoints to different parameters for full-body control
+6. **Performance Tips:**
+   - Good lighting improves detection accuracy
+   - Stand 1-3 meters from camera for best results
+   - Keep full body in frame for all keypoints to be detected
+   - Simple backgrounds work best
+
+**Technical Details:**
+- Uses OpenPose MPI (faster) model with 15 keypoints
+- Runs at ~15 FPS on CPU (computationally intensive)
+- Outputs normalized coordinates (0-1 range)
+- Real-time safe: Processing runs on separate thread, lock-free FIFO to audio thread
+- Video preview shows skeleton overlay when enabled
+
+**Creative Applications:**
+- **Interactive Installations:** Create body-responsive soundscapes
+- **Live Performance:** Control synthesis with gestures and movement
+- **Accessibility:** Hands-free instrument control for performers with mobility constraints
+- **Dance + Music:** Choreography-driven composition
+- **Fitness Apps:** Exercise-triggered sound design
+- **Game Controllers:** Full-body game audio integration
+
+**Requirements:**
+- OpenPose MPI model files (~200 MB download)
+- Webcam or video file source
+- OpenCV with DNN module (included in build)
+
+---
+
+## 11. SYSTEM NODES
 
 System nodes provide special functionality for patch organization.
 

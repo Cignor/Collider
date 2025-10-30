@@ -40,6 +40,7 @@
 #include "../modules/MIDIPlayerModuleProcessor.h"
 #include "../modules/PolyVCOModuleProcessor.h"
 #include "../modules/BestPracticeNodeProcessor.h"
+#include "../modules/BPMMonitorModuleProcessor.h"
 #include "../modules/ShapingOscillatorModuleProcessor.h"
 #include "../modules/MultiSequencerModuleProcessor.h"
 #include "../modules/LagProcessorModuleProcessor.h"
@@ -70,6 +71,7 @@
 #include "../modules/VideoFileLoaderModule.h"
 #include "../modules/MovementDetectorModule.h"
 #include "../modules/HumanDetectorModule.h"
+#include "../modules/PoseEstimatorModule.h"
 #include "../modules/InletModuleProcessor.h"
 #include "../modules/OutletModuleProcessor.h"
 #include "../modules/MetaModuleProcessor.h"
@@ -93,6 +95,14 @@ ModularSynthProcessor::ModularSynthProcessor()
     probeScopeNode = internalGraph->addNode(std::make_unique<ScopeModuleProcessor>());
     probeScopeNodeId = probeScopeNode->nodeID;
     juce::Logger::writeToLog("[ModularSynth] Initialized probe scope with nodeID: " + juce::String(probeScopeNodeId.uid));
+    
+    // Create BPM Monitor node (always present, undeletable like output node)
+    auto bpmMonitor = std::make_unique<BPMMonitorModuleProcessor>();
+    bpmMonitor->setLogicalId(999); // Special ID to make it undeletable
+    bpmMonitorNode = internalGraph->addNode(std::move(bpmMonitor));
+    if (auto* processor = dynamic_cast<ModuleProcessor*>(bpmMonitorNode->getProcessor()))
+        processor->setParent(this);
+    juce::Logger::writeToLog("[ModularSynth] Initialized BPM Monitor with logicalID: 999");
     
     activeAudioProcessors.store(std::make_shared<const std::vector<std::shared_ptr<ModuleProcessor>>>());
     
@@ -717,10 +727,12 @@ namespace {
             reg("tempo_clock", []{ return std::make_unique<TempoClockModuleProcessor>(); });
             reg("physics", []{ return std::make_unique<PhysicsModuleProcessor>(); });
             reg("animation", []{ return std::make_unique<AnimationModuleProcessor>(); });
+            reg("bpm_monitor", []{ return std::make_unique<BPMMonitorModuleProcessor>(); });
             reg("webcam_loader", []{ return std::make_unique<WebcamLoaderModule>(); });
             reg("video_file_loader", []{ return std::make_unique<VideoFileLoaderModule>(); });
             reg("movement_detector", []{ return std::make_unique<MovementDetectorModule>(); });
             reg("human_detector", []{ return std::make_unique<HumanDetectorModule>(); });
+            reg("pose_estimator", []{ return std::make_unique<PoseEstimatorModule>(); });
             reg("stroke_sequencer", []{ return std::make_unique<StrokeSequencerModuleProcessor>(); });
             
             reg("meta module", []{ return std::make_unique<MetaModuleProcessor>(); });

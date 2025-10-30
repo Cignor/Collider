@@ -35,7 +35,7 @@ public:
     void drawIoPins(const NodePinHelpers& helpers) override;
     
     // Override to specify custom node width. Height is calculated dynamically based on video aspect ratio.
-    // Width changes based on zoom state (480px normal, 960px zoomed).
+    // Width changes based on zoom level (Small=240px, Normal=480px, Large=960px).
     ImVec2 getCustomNodeSize() const override;
 #endif
 
@@ -47,7 +47,8 @@ private:
     juce::AudioProcessorValueTreeState apvts;
     
     std::atomic<float>* cameraIndexParam = nullptr;
-    juce::AudioParameterBool* isZoomedParam = nullptr;
+    // 0 = Small (240), 1 = Normal (480), 2 = Large (960)
+    std::atomic<float>* zoomLevelParam = nullptr;
     
     cv::VideoCapture videoCapture;
     juce::Image latestFrameForGui;

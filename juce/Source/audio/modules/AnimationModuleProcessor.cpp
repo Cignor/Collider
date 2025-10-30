@@ -1223,3 +1223,36 @@ void AnimationModuleProcessor::setExtraStateTree(const juce::ValueTree& state)
     juce::Logger::writeToLog("[AnimationModule] Preset loading complete.");
 }
 
+std::optional<RhythmInfo> AnimationModuleProcessor::getRhythmInfo() const
+{
+    // Load animator atomically (thread-safe)
+    Animator* currentAnimator = m_activeAnimator.load(std::memory_order_acquire);
+    
+    if (!currentAnimator || !currentAnimator->GetCurrentAnimation())
+        return std::nullopt; // No animation loaded or playing
+    
+    RhythmInfo info;
+    info.displayName = "Animation #" + juce::String(getLogicalId());
+    info.sourceType = "animation";
+    info.isActive = true; // Animation is playing if we got here
+    info.isSynced = false; // Animations are always free-running
+    
+    // Calculate BPM from animation clip duration
+    const auto* currentClip = currentAnimator->GetCurrentAnimation();
+    if (currentClip && currentClip->durationInTicks > 0.0 && currentClip->ticksPerSecond > 0.0)
+    {
+        // Calculate duration in seconds
+        const double durationSeconds = currentClip->durationInTicks / currentClip->ticksPerSecond;
+        
+        // One loop = one "beat" in BPM terms
+        // Note: This is the base BPM without considering animation speed modifier
+        info.bpm = static_cast<float>(60.0 / durationSeconds);
+    }
+    else
+    {
+        info.bpm = 0.0f;
+    }
+    
+    return info;
+}
+

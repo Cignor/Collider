@@ -20,6 +20,10 @@ public:
 
     juce::AudioProcessorValueTreeState& getAPVTS() override { return apvts; }
 
+    // Dynamic pins for editor rendering
+    std::vector<DynamicPinInfo> getDynamicInputPins() const override;
+    std::vector<DynamicPinInfo> getDynamicOutputPins() const override;
+
 #if defined(PRESET_CREATOR_UI)
     void drawParametersInNode(float itemWidth, const std::function<bool(const juce::String& paramId)>& isParamModulated, const std::function<void()>& onModificationEnded) override;
     void drawIoPins(const NodePinHelpers& helpers) override;
@@ -47,13 +51,6 @@ public:
             case 0: return "Audio Out";
             default: return juce::String("Out ") + juce::String(channel + 1);
         }
-    }
-
-    std::vector<DynamicPinInfo> getDynamicOutputPins() const override
-    {
-        return {
-            { "Audio Out", 0, PinDataType::Audio }
-        };
     }
 
 private:

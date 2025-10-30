@@ -51,6 +51,40 @@ struct TransportState {
     }
 };
 
+// === RHYTHM REPORTING SYSTEM ===
+// Allows modules to report their rhythmic timing for the BPM Monitor node
+
+/**
+ * Rhythm information reported by modules that produce rhythmic patterns
+ */
+struct RhythmInfo
+{
+    juce::String displayName;    // e.g., "Sequencer #3", "Animation: Walk Cycle"
+    float bpm;                    // Current BPM (can be modulated live value)
+    bool isActive;                // Is this source currently producing rhythm?
+    bool isSynced;                // Is it synced to global transport?
+    juce::String sourceType;      // "sequencer", "animation", "physics", etc.
+    
+    RhythmInfo() : bpm(0.0f), isActive(false), isSynced(false) {}
+    RhythmInfo(const juce::String& name, float bpmValue, bool active, bool synced, const juce::String& type = "")
+        : displayName(name), bpm(bpmValue), isActive(active), isSynced(synced), sourceType(type) {}
+};
+
+/**
+ * Beat detection source (from audio input analysis)
+ * Used by the BPM Monitor's tap tempo engine
+ */
+struct DetectedRhythmSource
+{
+    juce::String name;            // e.g., "Input 1 (Detected)"
+    int inputChannel;             // Which input is being analyzed
+    float detectedBPM;            // Calculated BPM from beat detection
+    float confidence;             // 0.0-1.0 (how stable is the detection)
+    bool isActive;                // Currently detecting beats?
+    
+    DetectedRhythmSource() : inputChannel(-1), detectedBPM(0.0f), confidence(0.0f), isActive(false) {}
+};
+
 // <<< MULTI-MIDI DEVICE SUPPORT >>>
 // MIDI message with device source information
 // This struct allows modules to filter MIDI by device and channel
@@ -352,6 +386,11 @@ public:
     // Optional timing info hook for modules that need global clock/transport
     // Default: ignore (modules that don't need timing can skip implementing this)
     virtual void setTimingInfo(const TransportState& state) { juce::ignoreUnused(state); }
+    
+    // Optional rhythm reporting hook for BPM Monitor node
+    // Modules that produce rhythmic patterns can implement this to report their BPM
+    // Default: return empty (module doesn't produce rhythm)
+    virtual std::optional<RhythmInfo> getRhythmInfo() const { return std::nullopt; }
     
     // Optional dynamic pin interface for modules with variable I/O (e.g., polyphonic modules)
     // Default: return empty vector (no dynamic pins)

@@ -1,0 +1,131 @@
+#pragma once
+
+#include "ModuleProcessor.h"
+#include <opencv2/core.hpp>
+#include <opencv2/dnn.hpp>
+#include <juce_core/juce_core.h>
+#include <juce_audio_processors/juce_audio_processors.h>
+#include <juce_graphics/juce_graphics.h>
+#if defined(PRESET_CREATOR_UI)
+#include <juce_gui_basics/juce_gui_basics.h>
+#endif
+
+// The MPI model detects 15 keypoints per person
+constexpr int MPI_NUM_KEYPOINTS = 15;
+
+/**
+ * A real-time safe struct to hold the (x, y) coordinates of each keypoint.
+ * Used to pass pose data from the processing thread to the audio thread via a lock-free FIFO.
+ */
+struct PoseResult
+{
+    float keypoints[MPI_NUM_KEYPOINTS][2] = {{0}}; // [point_index][x or y]
+    int detectedPoints = 0;
+    bool isValid = false;
+};
+
+/**
+ * Pose Estimator Module
+ * Uses OpenPose MPI model to detect human body keypoints in real-time video.
+ * Connects to a video source (webcam or video file) and outputs 30 CV signals
+ * (x,y coordinates for 15 body keypoints: head, shoulders, elbows, wrists, hips, knees, ankles, etc.)
+ */
+class PoseEstimatorModule : public ModuleProcessor, private juce::Thread
+{
+public:
+    PoseEstimatorModule();
+    ~PoseEstimatorModule() override;
+
+    const juce::String getName() const override { return "pose_estimator"; }
+    
+    void prepareToPlay(double sampleRate, int samplesPerBlock) override;
+    void releaseResources() override;
+    void processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midi) override;
+    
+    juce::AudioProcessorValueTreeState& getAPVTS() override { return apvts; }
+
+    // Persist extra state (e.g., assets path)
+    juce::ValueTree getExtraStateTree() const override;
+    void setExtraStateTree(const juce::ValueTree& state) override;
+
+    // For UI: get latest frame with skeleton overlay for preview
+    juce::Image getLatestFrame();
+
+#if defined(PRESET_CREATOR_UI)
+    void drawParametersInNode(float itemWidth,
+                              const std::function<bool(const juce::String& paramId)>& isParamModulated,
+                              const std::function<void()>& onModificationEnded) override;
+    void drawIoPins(const NodePinHelpers& helpers) override;
+    
+    // Override to specify custom node width based on zoom level (Small/Normal/Large)
+    ImVec2 getCustomNodeSize() const override;
+#endif
+
+private:
+    void run() override; // Thread entry point - processes video frames
+    void updateGuiFrame(const cv::Mat& frame);
+    void parsePoseOutput(const cv::Mat& netOutput, int frameWidth, int frameHeight, PoseResult& result);
+        void loadModel(int modelIndex);
+    
+    static juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout();
+    juce::AudioProcessorValueTreeState apvts;
+    
+        // Parameters
+    std::atomic<float>* sourceIdParam = nullptr;
+        // 0 = Small (240), 1 = Normal (480), 2 = Large (960)
+    std::atomic<float>* zoomLevelParam = nullptr;
+    std::atomic<float>* confidenceThresholdParam = nullptr;
+    juce::AudioParameterBool* drawSkeletonParam = nullptr;
+    // Store custom assets directory as plain string (saved via extra state)
+    juce::String assetsPath;
+#if defined(PRESET_CREATOR_UI)
+    std::unique_ptr<juce::FileChooser> pathChooser;
+#endif
+        juce::AudioParameterChoice* modelChoiceParam = nullptr;
+    
+    // Deep Neural Network for pose estimation
+    cv::dnn::Net net;
+    bool modelLoaded = false;
+    juce::AudioParameterChoice* qualityParam = nullptr;
+        
+        // Signal for the background thread to reload the model
+        std::atomic<int> requestedModelIndex { -1 };
+    
+    // Source ID (read from input cable in audio thread, used by processing thread)
+    std::atomic<juce::uint32> currentSourceId { 0 };
+    
+    // Lock-free FIFO for passing results from processing thread to audio thread
+    PoseResult lastResultForAudio;
+    juce::AbstractFifo fifo { 16 };
+    std::vector<PoseResult> fifoBuffer;
+    
+    // UI preview
+    juce::Image latestFrameForGui;
+    juce::CriticalSection imageLock;
+};
+
+// Keypoint names for the MPI model (for UI labels and debugging)
+const std::vector<std::string> MPI_KEYPOINT_NAMES = {
+    "Head", "Neck", "R Shoulder", "R Elbow", "R Wrist",
+    "L Shoulder", "L Elbow", "L Wrist", "R Hip", "R Knee",
+    "R Ankle", "L Hip", "L Knee", "L Ankle", "Chest"
+};
+
+// Skeleton connections (pairs of keypoint indices to draw as lines)
+const std::vector<std::pair<int, int>> MPI_SKELETON_PAIRS = {
+    {0, 1},   // Head -> Neck
+    {1, 14},  // Neck -> Chest
+    {1, 2},   // Neck -> R Shoulder
+    {2, 3},   // R Shoulder -> R Elbow
+    {3, 4},   // R Elbow -> R Wrist
+    {1, 5},   // Neck -> L Shoulder
+    {5, 6},   // L Shoulder -> L Elbow
+    {6, 7},   // L Elbow -> L Wrist
+    {14, 8},  // Chest -> R Hip
+    {8, 9},   // R Hip -> R Knee
+    {9, 10},  // R Knee -> R Ankle
+    {14, 11}, // Chest -> L Hip
+    {11, 12}, // L Hip -> L Knee
+    {12, 13}  // L Knee -> L Ankle
+};
+

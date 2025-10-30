@@ -29,6 +29,7 @@
 #include "../audio/modules/VideoFileLoaderModule.h"
 #include "../audio/modules/MovementDetectorModule.h"
 #include "../audio/modules/HumanDetectorModule.h"
+#include "../audio/modules/PoseEstimatorModule.h"
 #include "../audio/modules/MapRangeModuleProcessor.h"
 #include "../audio/modules/LagProcessorModuleProcessor.h"
 #include "../audio/modules/DeCrackleModuleProcessor.h"
@@ -1591,6 +1592,7 @@ void ImGuiNodeEditorComponent::renderImGui()
         ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1.0f), "Processors:");
         addModuleButton("Movement Detector", "movement_detector");
         addModuleButton("Human Detector", "human_detector");
+        addModuleButton("Pose Estimator", "pose_estimator");
     }
     
     // ═══════════════════════════════════════════════════════════════════════════════
@@ -1834,8 +1836,16 @@ const juce::String& type = mod.second;
             ImGui::TextUnformatted (type.toRawUTF8());
             ImNodes::EndNodeTitleBar();
 
-            // Constrain node content width for compact layout and predictable label placement
-            const float nodeContentWidth = 240.0f;
+            // Get node content width - check if module has custom size, otherwise use default
+            float nodeContentWidth = 240.0f; // Default width
+            if (auto* mp = synth->getModuleForLogical(lid))
+            {
+                ImVec2 customSize = mp->getCustomNodeSize();
+                if (customSize.x > 0.0f) // Module specified a custom width
+                {
+                    nodeContentWidth = customSize.x;
+                }
+            }
 
             // Inline parameter controls per module type
             if (synth != nullptr)
@@ -2297,6 +2307,35 @@ if (auto* mp = synth->getModuleForLogical (lid))
         }
         humanModule->drawParametersInNode(nodeContentWidth, isParamModulated, onModificationEnded);
     }
+    else if (auto* poseModule = dynamic_cast<PoseEstimatorModule*>(mp))
+    {
+        juce::Image frame = poseModule->getLatestFrame();
+        if (!frame.isNull())
+        {
+            if (visionModuleTextures.find((int)lid) == visionModuleTextures.end())
+            {
+                visionModuleTextures[(int)lid] = std::make_unique<juce::OpenGLTexture>();
+            }
+            juce::OpenGLTexture* texture = visionModuleTextures[(int)lid].get();
+            texture->loadImage(frame);
+            if (texture->getTextureID() != 0)
+            {
+                // Calculate aspect ratio dynamically from the actual frame dimensions
+                float nativeWidth = (float)frame.getWidth();
+                float nativeHeight = (float)frame.getHeight();
+                
+                // Preserve the video's native aspect ratio (handles portrait, landscape, square, etc.)
+                float aspectRatio = (nativeWidth > 0.0f) ? nativeHeight / nativeWidth : 0.75f; // Default to 4:3
+                
+                // Width is fixed at itemWidth (480px for video modules), height scales proportionally
+                ImVec2 renderSize = ImVec2(nodeContentWidth, nodeContentWidth * aspectRatio);
+                
+                // Flip Y-coordinates to fix upside-down video (OpenCV uses top-left origin, OpenGL uses bottom-left)
+                ImGui::Image((void*)(intptr_t)texture->getTextureID(), renderSize, ImVec2(0, 1), ImVec2(1, 0));
+            }
+        }
+        poseModule->drawParametersInNode(nodeContentWidth, isParamModulated, onModificationEnded);
+    }
     else
     {
         mp->drawParametersInNode (nodeContentWidth, isParamModulated, onModificationEnded);
@@ -2644,7 +2683,7 @@ if (auto* mp = synth->getModuleForLogical (lid))
         bool triggerInsertMixer = false;
         if (ImGui::BeginPopup("NodeActionPopup"))
         {
-            if (ImGui::MenuItem("Delete") && selectedLogicalId != 0)
+            if (ImGui::MenuItem("Delete") && selectedLogicalId != 0 && selectedLogicalId != 999)
             {
                 mutedNodeStates.erase((juce::uint32)selectedLogicalId); // Clean up muted state if exists
                 synth->removeModule (synth->getNodeIdForLogical ((juce::uint32) selectedLogicalId));
@@ -3261,6 +3300,15 @@ if (auto* mp = synth->getModuleForLogical (lid))
                                       " dstAttr=" + juce::String(attrs.second));
             linkToInsertOn.srcPin = decodePinId(attrs.first);
             linkToInsertOn.dstPin = decodePinId(attrs.second);
+            // Decide list based on pin data types (treat CV/Gate/Raw as modulation list)
+            const PinDataType srcType = getPinDataTypeForPin(linkToInsertOn.srcPin);
+            const PinDataType dstType = getPinDataTypeForPin(linkToInsertOn.dstPin);
+            if (srcType == PinDataType::CV || dstType == PinDataType::CV ||
+                srcType == PinDataType::Gate || dstType == PinDataType::Gate ||
+                srcType == PinDataType::Raw || dstType == PinDataType::Raw)
+            {
+                linkToInsertOn.isMod = true;
+            }
             juce::Logger::writeToLog("[InsertNode][RC] Audio pins: src(lid=" + juce::String((int)linkToInsertOn.srcPin.logicalId) +
                                       ",ch=" + juce::String(linkToInsertOn.srcPin.channel) +
                                       ",in=" + juce::String((int)linkToInsertOn.srcPin.isInput) + ") -> dst(lid=" +
@@ -3432,8 +3480,17 @@ if (auto* mp = synth->getModuleForLogical (lid))
             linkToInsertOn.isMod = false;
             linkToInsertOn.srcPin = decodePinId(it->second.first);
             linkToInsertOn.dstPin = decodePinId(it->second.second);
+            // Infer modulation vs audio list from pin data types
+            const PinDataType srcType = getPinDataTypeForPin(linkToInsertOn.srcPin);
+            const PinDataType dstType = getPinDataTypeForPin(linkToInsertOn.dstPin);
+            if (srcType == PinDataType::CV || dstType == PinDataType::CV ||
+                srcType == PinDataType::Gate || dstType == PinDataType::Gate ||
+                srcType == PinDataType::Raw || dstType == PinDataType::Raw)
+            {
+                linkToInsertOn.isMod = true;
+            }
             captured = true;
-            juce::Logger::writeToLog("[InsertNode][RC-Fallback] Audio link captured id=" + juce::String(id));
+            juce::Logger::writeToLog("[InsertNode][RC-Fallback] Link captured id=" + juce::String(id));
         }
         if (captured)
         {
@@ -3529,8 +3586,16 @@ if (auto* mp = synth->getModuleForLogical (lid))
             linkToInsertOn.isMod = false;
             linkToInsertOn.srcPin = decodePinId(it->second.first);
             linkToInsertOn.dstPin = decodePinId(it->second.second);
+            const PinDataType srcType = getPinDataTypeForPin(linkToInsertOn.srcPin);
+            const PinDataType dstType = getPinDataTypeForPin(linkToInsertOn.dstPin);
+            if (srcType == PinDataType::CV || dstType == PinDataType::CV ||
+                srcType == PinDataType::Gate || dstType == PinDataType::Gate ||
+                srcType == PinDataType::Raw || dstType == PinDataType::Raw)
+            {
+                linkToInsertOn.isMod = true;
+            }
             captured = true;
-            juce::Logger::writeToLog("[InsertNode][KeyI] Audio link captured id=" + juce::String(lastHoveredLinkId));
+            juce::Logger::writeToLog("[InsertNode][KeyI] Link captured id=" + juce::String(lastHoveredLinkId));
         }
         if (captured)
         {
@@ -3573,18 +3638,23 @@ if (auto* mp = synth->getModuleForLogical (lid))
         if (ImGui::BeginPopup("AddModulePopup"))
         {
             static char searchQuery[128] = "";
+            static int selectedIndex = 0;  // Track keyboard navigation
 
             // Auto-focus the search bar when the popup opens and clear any previous search
             if (ImGui::IsWindowAppearing()) {
                 ImGui::SetKeyboardFocusHere(0);
+                ImGui::SetWindowFocus();  // Ensure immediate keyboard input capture
                 searchQuery[0] = '\0';
+                selectedIndex = 0;  // Reset selection
             }
             
             ImGui::Text("Add Module");
             ImGui::PushItemWidth(250.0f);
-            if (ImGui::InputText("Search##addmodule", searchQuery, sizeof(searchQuery))) {
-                // Text was changed
-            }
+            
+            // Enable Enter key detection for instant module creation
+            bool enterPressed = ImGui::InputText("Search##addmodule", searchQuery, sizeof(searchQuery), 
+                                                  ImGuiInputTextFlags_EnterReturnsTrue);
+            
             ImGui::PopItemWidth();
             ImGui::Separator();
             
@@ -3738,6 +3808,7 @@ if (auto* mp = synth->getModuleForLogical (lid))
                     ImGui::Separator();
                     if (ImGui::MenuItem("Movement Detector")) addAtMouse("movement_detector");
                     if (ImGui::MenuItem("Human Detector")) addAtMouse("human_detector");
+                    if (ImGui::MenuItem("Pose Estimator")) addAtMouse("pose_estimator");
                     ImGui::EndMenu();
                 }
                 
@@ -3761,29 +3832,79 @@ if (auto* mp = synth->getModuleForLogical (lid))
             else
             {
                 // --- SEARCH MODE (Text has been entered) ---
-                // Use the new registry to get display names and internal types
+                // Build list of matching modules first for keyboard navigation
+                struct MatchedModule {
+                    juce::String displayName;
+                    const char* internalType;
+                    const char* description;
+                };
+                std::vector<MatchedModule> matches;
+                
                 for (const auto& entry : getModuleRegistry())
                 {
                     const juce::String& displayName = entry.first;
                     const char* internalType = entry.second.first;
                     const char* description = entry.second.second;
-
-                    // Search against the display name, not the internal type
+                    
                     if (displayName.containsIgnoreCase(filter))
                     {
-                        if (ImGui::Selectable(displayName.toRawUTF8()))
-                        {
-                            // Use the correct internal type name!
-                            addAtMouse(internalType);
-                        }
-                        if (ImGui::IsItemHovered())
-                        {
-                            ImGui::BeginTooltip();
-                            ImGui::TextUnformatted(description);
-                            ImGui::EndTooltip();
-                        }
+                        matches.push_back({displayName, internalType, description});
                     }
                 }
+                
+                // Handle keyboard navigation (arrow keys)
+                if (ImGui::IsKeyPressed(ImGuiKey_DownArrow)) 
+                {
+                    selectedIndex++;
+                    if (selectedIndex >= (int)matches.size()) 
+                        selectedIndex = (int)matches.size() - 1;
+                }
+                if (ImGui::IsKeyPressed(ImGuiKey_UpArrow)) 
+                {
+                    selectedIndex--;
+                    if (selectedIndex < 0) 
+                        selectedIndex = 0;
+                }
+                
+                // Handle Enter key to create selected module
+                if (enterPressed && !matches.empty())
+                {
+                    if (selectedIndex >= 0 && selectedIndex < (int)matches.size())
+                    {
+                        addAtMouse(matches[selectedIndex].internalType);
+                    }
+                }
+                
+                // Display the matching modules with selection highlight
+                for (int i = 0; i < (int)matches.size(); ++i)
+                {
+                    const auto& match = matches[i];
+                    bool isSelected = (i == selectedIndex);
+                    
+                    if (ImGui::Selectable(match.displayName.toRawUTF8(), isSelected))
+                    {
+                        addAtMouse(match.internalType);
+                    }
+                    
+                    // Auto-scroll to keep selected item visible
+                    if (isSelected && ImGui::IsItemVisible() == false)
+                    {
+                        ImGui::SetScrollHereY(0.5f);
+                    }
+                    
+                    if (ImGui::IsItemHovered())
+                    {
+                        ImGui::BeginTooltip();
+                        ImGui::TextUnformatted(match.description);
+                        ImGui::EndTooltip();
+                    }
+                }
+                
+                // Reset selection if out of bounds
+                if (selectedIndex >= (int)matches.size())
+                    selectedIndex = (int)matches.size() - 1;
+                if (selectedIndex < 0)
+                    selectedIndex = 0;
             }
 
             ImGui::EndChild();
@@ -4486,7 +4607,7 @@ juce::String ImGuiNodeEditorComponent::getTypeForLogical (juce::uint32 logicalId
 // Parameters are now drawn inline within each node; side panel removed
 
 
-juce::ValueTree ImGuiNodeEditorComponent::getUiValueTree()
+juce::ValueTree ImGuiNodeEditorComponent::getUiValueTree() const
 {
     juce::ValueTree ui ("NodeEditorUI");
     if (synth == nullptr) return ui;
@@ -4499,7 +4620,7 @@ juce::ValueTree ImGuiNodeEditorComponent::getUiValueTree()
         ImVec2 pos;
         if (lastKnownNodePositions.count(nid) > 0)
         {
-            pos = lastKnownNodePositions[nid];
+            pos = lastKnownNodePositions.at(nid);
         }
         else if (graphNeedsRebuild.load())
         {
@@ -4533,7 +4654,7 @@ juce::ValueTree ImGuiNodeEditorComponent::getUiValueTree()
     // Prefer cached output position; avoid ImNodes when rebuilding
     ImVec2 outputPos;
     if (lastKnownNodePositions.count(0) > 0)
-        outputPos = lastKnownNodePositions[0];
+        outputPos = lastKnownNodePositions.at(0);
     else if (graphNeedsRebuild.load())
     {
         auto it0 = pendingNodePositions.find(0);
@@ -7438,6 +7559,7 @@ std::map<juce::String, std::pair<const char*, const char*>> ImGuiNodeEditorCompo
         {"Video File Loader", {"video_file_loader", "Loads and plays a video file, publishes it as a source for vision processing modules"}},
         {"Movement Detector", {"movement_detector", "Analyzes video source for motion via optical flow or background subtraction, outputs motion data as CV"}},
         {"Human Detector", {"human_detector", "Detects faces or bodies in video source via Haar Cascades or HOG, outputs position and size as CV"}},
+        {"Pose Estimator", {"pose_estimator", "Uses OpenPose to detect 15 body keypoints (head, shoulders, elbows, wrists, hips, knees, ankles) and outputs their positions as CV signals"}},
         
         // Effects
         {"VCF", {"vcf", "Voltage Controlled Filter"}},

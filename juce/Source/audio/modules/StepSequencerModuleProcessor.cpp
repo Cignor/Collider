@@ -919,4 +919,70 @@ bool StepSequencerModuleProcessor::getParamRouting(const juce::String& paramId, 
     return false;
 }
 
+std::optional<RhythmInfo> StepSequencerModuleProcessor::getRhythmInfo() const
+{
+    RhythmInfo info;
+    
+    // Build display name with logical ID
+    info.displayName = "Sequencer #" + juce::String(getLogicalId());
+    info.sourceType = "sequencer";
+    
+    // Check if synced to transport
+    const bool syncEnabled = apvts.getRawParameterValue("sync")->load() > 0.5f;
+    info.isSynced = syncEnabled;
+    
+    // Check if active (transport playing in sync mode, or always active in free-running)
+    if (syncEnabled)
+    {
+        info.isActive = m_currentTransport.isPlaying;
+    }
+    else
+    {
+        info.isActive = true; // Free-running is always active
+    }
+    
+    // Calculate effective BPM
+    if (syncEnabled && info.isActive)
+    {
+        // In sync mode: calculate effective BPM from transport + division
+        int divisionIndex = (int)apvts.getRawParameterValue("rate_division")->load();
+        
+        // Check for global division override from Tempo Clock
+        if (getParent())
+        {
+            int globalDiv = getParent()->getTransportState().globalDivisionIndex.load();
+            if (globalDiv >= 0)
+                divisionIndex = globalDiv;
+        }
+        
+        // Division multipliers: 1/32, 1/16, 1/8, 1/4, 1/2, 1, 2, 4, 8
+        static const double divisions[] = { 1.0/32.0, 1.0/16.0, 1.0/8.0, 1.0/4.0, 1.0/2.0, 1.0, 2.0, 4.0, 8.0 };
+        const double beatDivision = divisions[juce::jlimit(0, 8, divisionIndex)];
+        
+        // Effective BPM = transport BPM * division * num_steps
+        // (Each complete cycle through all steps = one "measure" in BPM terms)
+        const int numSteps = numStepsParam ? (int)numStepsParam->load() : 8;
+        info.bpm = static_cast<float>(m_currentTransport.bpm * beatDivision * numSteps);
+    }
+    else if (!syncEnabled)
+    {
+        // Free-running mode: convert Hz rate to BPM
+        // Rate is in steps per second, convert to beats per minute
+        const float rate = rateParam ? rateParam->load() : 2.0f;
+        const int numSteps = numStepsParam ? (int)numStepsParam->load() : 8;
+        
+        // One full cycle through all steps = one "beat"
+        // BPM = (cycles_per_second) * 60
+        // cycles_per_second = rate_hz / num_steps
+        info.bpm = (rate / static_cast<float>(numSteps)) * 60.0f;
+    }
+    else
+    {
+        // Synced but transport stopped
+        info.bpm = 0.0f;
+    }
+    
+    return info;
+}
+
 

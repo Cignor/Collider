@@ -64,8 +64,8 @@ public:
     // Input is handled by imgui_juce backend; no JUCE overrides needed
     
     void setMidiActivityFrames(int frames) { midiActivityFrames = frames; }
-
-    void setModel (ModularSynthProcessor* model) 
+    
+    void setModel (ModularSynthProcessor* model)
     { 
         synth = model; 
         undoStack.clear(); 
@@ -76,7 +76,7 @@ public:
     std::function<void()> onShowAudioSettings;
     
     // UI state roundtrip
-    juce::ValueTree getUiValueTree();
+    juce::ValueTree getUiValueTree() const;
     // Thread-safe: queues UI state to be applied on next render frame
     void applyUiValueTree (const juce::ValueTree& uiState);
     void applyUiValueTreeNow (const juce::ValueTree& uiState);

@@ -205,6 +205,29 @@ juce::AudioProcessorValueTreeState::ParameterLayout VocalTractFilterModuleProces
     return { p.begin(), p.end() };
 }
 
+#include <vector>
+std::vector<DynamicPinInfo> VocalTractFilterModuleProcessor::getDynamicInputPins() const
+{
+    std::vector<DynamicPinInfo> pins;
+    // Map each input bus (all mono) to its absolute channel index in the process buffer
+    // Bus 0: Audio In (Audio)
+    pins.push_back({ "Audio In", getChannelIndexInProcessBlockBuffer(true, 0, 0), PinDataType::Audio });
+    // Bus 1-4: CV Mod inputs
+    pins.push_back({ "Vowel Mod",       getChannelIndexInProcessBlockBuffer(true, 1, 0), PinDataType::CV });
+    pins.push_back({ "Formant Mod",     getChannelIndexInProcessBlockBuffer(true, 2, 0), PinDataType::CV });
+    pins.push_back({ "Instability Mod", getChannelIndexInProcessBlockBuffer(true, 3, 0), PinDataType::CV });
+    pins.push_back({ "Gain Mod",        getChannelIndexInProcessBlockBuffer(true, 4, 0), PinDataType::CV });
+    return pins;
+}
+
+std::vector<DynamicPinInfo> VocalTractFilterModuleProcessor::getDynamicOutputPins() const
+{
+    std::vector<DynamicPinInfo> pins;
+    // Single mono output on bus 0, channel 0 maps to absolute 0
+    pins.push_back({ "Audio Out", 0, PinDataType::Audio });
+    return pins;
+}
+
 #if defined(PRESET_CREATOR_UI)
 void VocalTractFilterModuleProcessor::drawParametersInNode(float itemWidth, const std::function<bool(const juce::String& paramId)>& isParamModulated, const std::function<void()>& onModificationEnded)
 {

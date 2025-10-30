@@ -27,6 +27,9 @@ public:
     
     // Parameter bus contract implementation
     bool getParamRouting(const juce::String& paramId, int& outBusIndex, int& outChannelIndexInBus) const override;
+    
+    // Rhythm reporting for BPM Monitor
+    std::optional<RhythmInfo> getRhythmInfo() const override;
 
 #if defined(PRESET_CREATOR_UI)
     void drawParametersInNode (float itemWidth, const std::function<bool(const juce::String& paramId)>& isParamModulated, const std::function<void()>& onModificationEnded) override;

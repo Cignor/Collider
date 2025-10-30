@@ -33,7 +33,9 @@ PresetCreatorComponent::PresetCreatorComponent(juce::AudioDeviceManager& adm,
     
     juce::Logger::writeToLog("Setting model on editor...");
     if (editor != nullptr)
+    {
         editor->setModel (synth.get());
+    }
     synth->prepareToPlay (sampleRate, blockSize);
 
     // Use the shared AudioDeviceManager settings

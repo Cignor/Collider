@@ -12,6 +12,12 @@ juce::AudioProcessorValueTreeState::ParameterLayout MovementDetectorModule::crea
     std::vector<std::unique_ptr<juce::RangedAudioParameter>> params;
     params.push_back(std::make_unique<juce::AudioParameterChoice>("mode", "Mode", juce::StringArray{"Optical Flow", "Background Subtraction"}, 0));
     params.push_back(std::make_unique<juce::AudioParameterFloat>("sensitivity", "Sensitivity", 0.01f, 1.0f, 0.1f));
+    params.push_back(std::make_unique<juce::AudioParameterChoice>(
+        "zoomLevel", "Zoom Level", juce::StringArray{ "Small", "Normal", "Large" }, 1));
+    // NEW: tuning parameters
+    params.push_back(std::make_unique<juce::AudioParameterInt>("maxFeatures", "Max Features", 20, 500, 100));
+    params.push_back(std::make_unique<juce::AudioParameterInt>("pyramidLevels", "Pyramid Levels", 1, 5, 3));
+    params.push_back(std::make_unique<juce::AudioParameterBool>("noiseReduction", "Noise Reduction", false));
     return { params.begin(), params.end() };
 }
 
@@ -24,6 +30,11 @@ MovementDetectorModule::MovementDetectorModule()
 {
     modeParam = apvts.getRawParameterValue("mode");
     sensitivityParam = apvts.getRawParameterValue("sensitivity");
+    zoomLevelParam = apvts.getRawParameterValue("zoomLevel");
+    // NEW: init parameter pointers
+    maxFeaturesParam = dynamic_cast<juce::AudioParameterInt*>(apvts.getParameter("maxFeatures"));
+    pyramidLevelsParam = dynamic_cast<juce::AudioParameterInt*>(apvts.getParameter("pyramidLevels"));
+    noiseReductionParam = dynamic_cast<juce::AudioParameterBool*>(apvts.getParameter("noiseReduction"));
     pBackSub = cv::createBackgroundSubtractorMOG2();
     
     fifoBuffer.resize(16);
@@ -98,14 +109,17 @@ MovementResult MovementDetectorModule::analyzeFrame(const cv::Mat& inputFrame)
     {
         if (prevPoints.size() < 50)
         {
-            cv::goodFeaturesToTrack(gray, prevPoints, 100, 0.3, 7);
+            int maxFeatures = maxFeaturesParam ? maxFeaturesParam->get() : 100;
+            cv::goodFeaturesToTrack(gray, prevPoints, maxFeatures, 0.3, 7);
         }
 
         if (!prevGrayFrame.empty() && !prevPoints.empty())
         {
             std::vector<cv::Point2f> nextPoints;
             std::vector<uchar> status;
-            cv::calcOpticalFlowPyrLK(prevGrayFrame, gray, prevPoints, nextPoints, status, cv::noArray());
+            int levels = pyramidLevelsParam ? pyramidLevelsParam->get() : 3;
+            cv::calcOpticalFlowPyrLK(prevGrayFrame, gray, prevPoints, nextPoints, status, cv::noArray(),
+                                     cv::Size(15, 15), levels);
 
             float sumX = 0.0f, sumY = 0.0f;
             int trackedCount = 0;
@@ -141,6 +155,11 @@ MovementResult MovementDetectorModule::analyzeFrame(const cv::Mat& inputFrame)
     {
         cv::Mat fgMask;
         pBackSub->apply(gray, fgMask);
+        if (noiseReductionParam && noiseReductionParam->get())
+        {
+            cv::erode(fgMask, fgMask, cv::Mat(), cv::Point(-1, -1), 1);
+            cv::dilate(fgMask, fgMask, cv::Mat(), cv::Point(-1, -1), 2);
+        }
         
         cv::Moments m = cv::moments(fgMask, true);
         result.motionAmount = juce::jlimit(0.0f, 1.0f, (float)(m.m00 / (320 * 240)));
@@ -272,6 +291,61 @@ void MovementDetectorModule::drawParametersInNode(float itemWidth,
         onModificationEnded();
     }
     
+    ImGui::Separator();
+    // Zoom controls (-/+) Small/Normal/Large
+    int level = zoomLevelParam ? (int) zoomLevelParam->load() : 1;
+    level = juce::jlimit(0, 2, level);
+    float buttonWidth = (itemWidth / 2.0f) - 4.0f;
+    const bool atMin = (level <= 0);
+    const bool atMax = (level >= 2);
+    if (atMin) ImGui::BeginDisabled();
+    if (ImGui::Button("-", ImVec2(buttonWidth, 0)))
+    {
+        int newLevel = juce::jmax(0, level - 1);
+        if (auto* p = apvts.getParameter("zoomLevel"))
+            p->setValueNotifyingHost((float)newLevel / 2.0f);
+        onModificationEnded();
+    }
+    if (atMin) ImGui::EndDisabled();
+    ImGui::SameLine();
+    if (atMax) ImGui::BeginDisabled();
+    if (ImGui::Button("+", ImVec2(buttonWidth, 0)))
+    {
+        int newLevel = juce::jmin(2, level + 1);
+        if (auto* p = apvts.getParameter("zoomLevel"))
+            p->setValueNotifyingHost((float)newLevel / 2.0f);
+        onModificationEnded();
+    }
+    if (atMax) ImGui::EndDisabled();
+
+    // NEW: Algorithm tuning controls
+    ImGui::Separator();
+    if (mode == 0) // Optical Flow
+    {
+        ImGui::Text("Optical Flow Settings");
+        if (maxFeaturesParam)
+        {
+            int maxF = maxFeaturesParam->get();
+            if (ImGui::SliderInt("Max Features", &maxF, 20, 500)) { *maxFeaturesParam = maxF; }
+            if (ImGui::IsItemDeactivatedAfterEdit()) onModificationEnded();
+        }
+        if (pyramidLevelsParam)
+        {
+            int lv = pyramidLevelsParam->get();
+            if (ImGui::SliderInt("Pyramid Levels", &lv, 1, 5)) { *pyramidLevelsParam = lv; }
+            if (ImGui::IsItemDeactivatedAfterEdit()) onModificationEnded();
+        }
+    }
+    else
+    {
+        ImGui::Text("Background Subtraction Settings");
+        if (noiseReductionParam)
+        {
+            bool nr = noiseReductionParam->get();
+            if (ImGui::Checkbox("Noise Reduction", &nr)) { *noiseReductionParam = nr; onModificationEnded(); }
+        }
+    }
+
     // Show current source ID
     juce::uint32 sourceId = currentSourceId.load();
     if (sourceId > 0)

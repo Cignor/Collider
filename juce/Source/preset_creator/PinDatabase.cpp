@@ -47,6 +47,7 @@ void populateModuleDescriptions()
     descriptions["De-Crackle"] = "A utility to reduce clicks from discontinuous signals.";
     descriptions["recorder"] = "Records incoming audio to a WAV, AIFF, or FLAC file.";
     descriptions["tempo_clock"] = "Global clock generator with BPM control, transport, and clock outputs.";
+    descriptions["bpm_monitor"] = "Monitors and reports BPM from rhythm-producing modules (sequencers, animations). Always present and undeletable.";
     // Modulators
     descriptions["LFO"] = "A Low-Frequency Oscillator for modulation.";
     descriptions["ADSR"] = "An Attack-Decay-Sustain-Release envelope generator.";
@@ -84,6 +85,7 @@ void populateModuleDescriptions()
     descriptions["video_file_loader"] = "Loads and plays a video file, publishes it as a source for vision processing modules.";
     descriptions["movement_detector"] = "Analyzes video source for motion via optical flow or background subtraction, outputs motion data as CV.";
     descriptions["human_detector"] = "Detects faces or bodies in video source via Haar Cascades or HOG, outputs position and size as CV.";
+    descriptions["pose_estimator"] = "Uses OpenPose to detect 15 body keypoints (head, shoulders, elbows, wrists, hips, knees, ankles) and outputs their positions as CV signals.";
     
     // Add aliases for underscore naming conventions
     descriptions["clock_divider"] = descriptions["ClockDivider"];
@@ -943,6 +945,14 @@ db["random"] = ModulePinInfo(
         }
     );
 
+    // BPM Monitor - Uses dynamic pins based on detected rhythm sources
+    db["bpm_monitor"] = ModulePinInfo(
+        NodeWidth::Big,
+        {}, // Dynamic inputs defined by module (beat detection inputs)
+        {}, // Dynamic outputs defined by module (per-source BPM/CV/Active)
+        {}
+    );
+
     // Physics Module - Exception size (custom dimensions defined by module)
     db["physics"] = ModulePinInfo(
         NodeWidth::Exception,
@@ -997,6 +1007,22 @@ db["random"] = ModulePinInfo(
         },
         {}
     );
+
+    // Pose Estimator: 15 keypoints x 2 coordinates = 30 output pins
+    db["pose_estimator"] = ModulePinInfo();
+    db["pose_estimator"].defaultWidth = NodeWidth::Exception; // Custom size with zoom support
+    db["pose_estimator"].audioIns.emplace_back("Source In", 0, PinDataType::Raw);
+    // Programmatically add all 30 output pins (15 keypoints x 2 coordinates)
+    const std::vector<std::string> keypointNames = {
+        "Head", "Neck", "R Shoulder", "R Elbow", "R Wrist",
+        "L Shoulder", "L Elbow", "L Wrist", "R Hip", "R Knee",
+        "R Ankle", "L Hip", "L Knee", "L Ankle", "Chest"
+    };
+    for (size_t i = 0; i < keypointNames.size(); ++i)
+    {
+        db["pose_estimator"].audioOuts.emplace_back(keypointNames[i] + " X", i * 2, PinDataType::CV);
+        db["pose_estimator"].audioOuts.emplace_back(keypointNames[i] + " Y", i * 2 + 1, PinDataType::CV);
+    }
 
     // Add aliases for nodes with underscore naming convention
     db["clock_divider"] = db["ClockDivider"];
