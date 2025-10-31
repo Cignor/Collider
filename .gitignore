@@ -95,3 +95,8 @@ juce/assets/openpose_models/**/*.caffemodel
 # Exclude large YOLO weights (too big for GitHub)
 juce/assets/yolov3.weights
 juce/assets/**/*.weights
+# Exclude large CV model weights
+juce/assets/**/*.onnx
+juce/assets/**/*.data
+assets/**/*.onnx
+assets/**/*.data
