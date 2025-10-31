@@ -72,6 +72,7 @@ void ObjectDetectorModule::prepareToPlay(double sampleRate, int samplesPerBlock)
 void ObjectDetectorModule::releaseResources()
 {
     signalThreadShouldExit();
+    stopThread(5000);
 }
 
 void ObjectDetectorModule::loadModel()

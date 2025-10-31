@@ -167,6 +167,7 @@ void PoseEstimatorModule::prepareToPlay(double sampleRate, int samplesPerBlock)
 void PoseEstimatorModule::releaseResources()
 {
     signalThreadShouldExit();
+    stopThread(5000);
 }
 
 void PoseEstimatorModule::run()

@@ -2,14 +2,6 @@
 
 <ModularSynthPreset version="1" bpm="120.0">
   <modules>
-    <module logicalId="2" type="webcam_loader">
-      <params>
-        <WebcamLoaderParams>
-          <PARAM id="cameraIndex" value="2.0"/>
-          <PARAM id="zoomLevel" value="0.0"/>
-        </WebcamLoaderParams>
-      </params>
-    </module>
     <module logicalId="5" type="color_tracker">
       <params>
         <ColorTrackerParams>
@@ -281,9 +273,20 @@
         </TrackMixerParams>
       </params>
     </module>
+    <module logicalId="12" type="video_file_loader">
+      <params>
+        <VideoFileLoaderParams>
+          <PARAM id="loop" value="1.0"/>
+          <PARAM id="sync" value="1.0"/>
+          <PARAM id="zoomLevel" value="1.0"/>
+        </VideoFileLoaderParams>
+      </params>
+      <extra>
+        <VideoFileLoaderState videoFilePath="C:\Users\PIMP-TOWERPRIMUS\Downloads\Traffic - Traffic jam - city Traffic _ Free full hd videos - no copyright.mp4"/>
+      </extra>
+    </module>
   </modules>
   <connections>
-    <connection srcId="2" srcChan="0" dstId="5" dstChan="0"/>
     <connection srcId="5" srcChan="0" dstId="6" dstChan="1"/>
     <connection srcId="5" srcChan="3" dstId="6" dstChan="2"/>
     <connection srcId="5" srcChan="6" dstId="6" dstChan="3"/>
@@ -299,12 +302,13 @@
     <connection srcId="6" srcChan="7" dstId="7" dstChan="7"/>
     <connection srcId="7" srcChan="0" dstId="output" dstChan="0"/>
     <connection srcId="7" srcChan="1" dstId="output" dstChan="1"/>
+    <connection srcId="12" srcChan="0" dstId="5" dstChan="0"/>
   </connections>
   <NodeEditorUI>
-    <node id="2" x="339.0" y="377.0"/>
     <node id="5" x="766.0" y="501.0"/>
     <node id="6" x="1657.0" y="352.0"/>
     <node id="7" x="2198.2939453125" y="454.3846435546875"/>
+    <node id="12" x="-192.0" y="687.0"/>
     <node id="0" x="2848.54541015625" y="452.2258911132812"/>
   </NodeEditorUI>
 </ModularSynthPreset>

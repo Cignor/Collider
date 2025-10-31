@@ -46,6 +46,7 @@ void HandTrackerModule::prepareToPlay(double, int)
 void HandTrackerModule::releaseResources()
 {
     signalThreadShouldExit();
+    stopThread(5000);
 }
 
 void HandTrackerModule::loadModel()

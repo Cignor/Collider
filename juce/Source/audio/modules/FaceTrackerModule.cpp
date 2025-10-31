@@ -37,6 +37,7 @@ void FaceTrackerModule::prepareToPlay(double, int)
 void FaceTrackerModule::releaseResources()
 {
     signalThreadShouldExit();
+    stopThread(5000);
 }
 
 void FaceTrackerModule::loadModel()

@@ -45,6 +45,7 @@ void ContourDetectorModule::prepareToPlay(double sampleRate, int samplesPerBlock
 void ContourDetectorModule::releaseResources()
 {
     signalThreadShouldExit();
+    stopThread(5000);
 }
 
 void ContourDetectorModule::run()

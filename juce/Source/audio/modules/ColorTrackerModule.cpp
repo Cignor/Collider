@@ -1,4 +1,5 @@
 #include "ColorTrackerModule.h"
+#include "../graph/ModularSynthProcessor.h"
 #include "../../video/VideoFrameManager.h"
 #include <opencv2/imgproc.hpp>
 
@@ -42,6 +43,7 @@ void ColorTrackerModule::prepareToPlay(double sampleRate, int samplesPerBlock)
 void ColorTrackerModule::releaseResources()
 {
     signalThreadShouldExit();
+    stopThread(5000);
 }
 
 void ColorTrackerModule::run()
@@ -52,7 +54,24 @@ void ColorTrackerModule::run()
         cv::Mat frame = VideoFrameManager::getInstance().getFrame(sourceId);
         if (!frame.empty())
         {
-            cv::Mat hsv;
+        cv::Mat hsv;
+        if (!frame.empty())
+        {
+            // Cache last good frame for paused/no-signal scenarios
+            {
+                const juce::ScopedLock lk(frameLock);
+                frame.copyTo(lastFrameBgr);
+            }
+        }
+        else
+        {
+            // Use cached frame when no fresh frames are available (e.g., transport paused)
+            const juce::ScopedLock lk(frameLock);
+            if (!lastFrameBgr.empty())
+                frame = lastFrameBgr.clone();
+        }
+
+        if (!frame.empty())
             cv::cvtColor(frame, hsv, cv::COLOR_BGR2HSV);
 
             // Color picker integration (coordinates provided by UI)
@@ -60,16 +79,76 @@ void ColorTrackerModule::run()
             {
                 int mx = pickerMouseX.exchange(-1);
                 int my = pickerMouseY.exchange(-1);
-                if (mx >= 0 && my >= 0 && mx < hsv.cols && my < hsv.rows)
+                int targetIdx = pickerTargetIndex.load();
+                if (!frame.empty() && mx >= 0 && my >= 0 && mx < frame.cols && my < frame.rows)
                 {
-                    cv::Vec3b pixel = hsv.at<cv::Vec3b>(my, mx);
-                    int hue = pixel[0];
-                    TrackedColor tc;
-                    tc.name = juce::String("Color ") + juce::String((int)trackedColors.size() + 1);
-                    tc.hsvLower = cv::Scalar(std::max(0, hue - 10), 100, 100);
-                    tc.hsvUpper = cv::Scalar(std::min(179, hue + 10), 255, 255);
-                    const juce::ScopedLock lock(colorListLock);
-                    trackedColors.push_back(tc);
+                    // 5x5 ROI in ORIGINAL BGR frame
+                    cv::Rect roi(std::max(0, mx - 2), std::max(0, my - 2), 5, 5);
+                    roi &= cv::Rect(0, 0, frame.cols, frame.rows);
+                    if (roi.area() > 0)
+                    {
+                        // Average BGR, then convert that average to HSV
+                        cv::Scalar avgBgr = cv::mean(frame(roi));
+                        cv::Vec3b bgr8((uchar)avgBgr[0], (uchar)avgBgr[1], (uchar)avgBgr[2]);
+                        cv::Mat onePix(1,1,CV_8UC3);
+                        onePix.at<cv::Vec3b>(0,0) = bgr8;
+                        cv::Mat onePixHsv;
+                        cv::cvtColor(onePix, onePixHsv, cv::COLOR_BGR2HSV);
+                        cv::Vec3b avgHsv = onePixHsv.at<cv::Vec3b>(0,0);
+                        int avgHue = (int)avgHsv[0];
+                        int avgSat = (int)avgHsv[1];
+                        int avgVal = (int)avgHsv[2];
+
+                        // === DEBUG LOGGING ===
+                        juce::String logMsg;
+                        logMsg << "[ColorTracker][PICK] xy=" << mx << "," << my
+                               << " roi=" << roi.x << "," << roi.y << " " << roi.width << "x" << roi.height
+                               << " BGR=" << (int)bgr8[2] << "," << (int)bgr8[1] << "," << (int)bgr8[0]
+                               << " HSV=" << avgHue << "," << avgSat << "," << avgVal;
+                        juce::Logger::writeToLog(logMsg);
+
+                        const juce::ScopedLock lock(colorListLock);
+                        if (targetIdx < 0 || targetIdx >= (int)trackedColors.size())
+                        {
+                            TrackedColor tc;
+                            tc.name = juce::String("Color ") + juce::String((int)trackedColors.size() + 1);
+                            tc.hsvLower = cv::Scalar(
+                                juce::jlimit(0, 179, avgHue - 10),
+                                juce::jlimit(0, 255, avgSat - 40),
+                                juce::jlimit(0, 255, avgVal - 40));
+                            tc.hsvUpper = cv::Scalar(
+                                juce::jlimit(0, 179, avgHue + 10),
+                                juce::jlimit(0, 255, avgSat + 40),
+                                juce::jlimit(0, 255, avgVal + 40));
+                            tc.displayColour = juce::Colour((juce::uint8)bgr8[2], (juce::uint8)bgr8[1], (juce::uint8)bgr8[0]);
+                            trackedColors.push_back(tc);
+                            juce::Logger::writeToLog(
+                                juce::String("[ColorTracker][ADD] name=") + tc.name +
+                                " swatchRGB=" + juce::String((int)bgr8[2]) + "," + juce::String((int)bgr8[1]) + "," + juce::String((int)bgr8[0]) +
+                                " hsvLower=" + juce::String((int)tc.hsvLower[0]) + "," + juce::String((int)tc.hsvLower[1]) + "," + juce::String((int)tc.hsvLower[2]) +
+                                " hsvUpper=" + juce::String((int)tc.hsvUpper[0]) + "," + juce::String((int)tc.hsvUpper[1]) + "," + juce::String((int)tc.hsvUpper[2])
+                            );
+                        }
+                        else
+                        {
+                            auto& tc = trackedColors[(size_t)targetIdx];
+                            tc.hsvLower = cv::Scalar(
+                                juce::jlimit(0, 179, avgHue - 10),
+                                juce::jlimit(0, 255, avgSat - 40),
+                                juce::jlimit(0, 255, avgVal - 40));
+                            tc.hsvUpper = cv::Scalar(
+                                juce::jlimit(0, 179, avgHue + 10),
+                                juce::jlimit(0, 255, avgSat + 40),
+                                juce::jlimit(0, 255, avgVal + 40));
+                            tc.displayColour = juce::Colour((juce::uint8)bgr8[2], (juce::uint8)bgr8[1], (juce::uint8)bgr8[0]);
+                            juce::Logger::writeToLog(
+                                juce::String("[ColorTracker][UPDATE] index=") + juce::String(targetIdx) +
+                                " swatchRGB=" + juce::String((int)bgr8[2]) + "," + juce::String((int)bgr8[1]) + "," + juce::String((int)bgr8[0]) +
+                                " hsvLower=" + juce::String((int)tc.hsvLower[0]) + "," + juce::String((int)tc.hsvLower[1]) + "," + juce::String((int)tc.hsvLower[2]) +
+                                " hsvUpper=" + juce::String((int)tc.hsvUpper[0]) + "," + juce::String((int)tc.hsvUpper[1]) + "," + juce::String((int)tc.hsvUpper[2])
+                            );
+                        }
+                    }
                 }
                 isColorPickerActive.store(false);
             }
@@ -79,8 +158,31 @@ void ColorTrackerModule::run()
                 const juce::ScopedLock lock(colorListLock);
                 for (auto& tc : trackedColors)
                 {
+                    if (frame.empty() || hsv.empty())
+                    {
+                        result.emplace_back(0.5f, 0.5f, 0.0f);
+                        continue;
+                    }
+                    // Compute tolerance-adjusted bounds
+                    double centerH = 0.5 * ((double)tc.hsvLower[0] + (double)tc.hsvUpper[0]);
+                    double centerS = 0.5 * ((double)tc.hsvLower[1] + (double)tc.hsvUpper[1]);
+                    double centerV = 0.5 * ((double)tc.hsvLower[2] + (double)tc.hsvUpper[2]);
+                    double deltaH  = 0.5 * ((double)tc.hsvUpper[0] - (double)tc.hsvLower[0]);
+                    double deltaS  = 0.5 * ((double)tc.hsvUpper[1] - (double)tc.hsvLower[1]);
+                    double deltaV  = 0.5 * ((double)tc.hsvUpper[2] - (double)tc.hsvLower[2]);
+                    double scale   = juce::jlimit(0.1, 5.0, (double)tc.tolerance);
+                    double lowH  = juce::jlimit(0.0, 179.0, centerH - deltaH * scale);
+                    double highH = juce::jlimit(0.0, 179.0, centerH + deltaH * scale);
+                    double lowS  = juce::jlimit(0.0, 255.0, centerS - deltaS * scale);
+                    double highS = juce::jlimit(0.0, 255.0, centerS + deltaS * scale);
+                    double lowV  = juce::jlimit(0.0, 255.0, centerV - deltaV * scale);
+                    double highV = juce::jlimit(0.0, 255.0, centerV + deltaV * scale);
+
+                    cv::Scalar lower(lowH, lowS, lowV);
+                    cv::Scalar upper(highH, highS, highV);
+
                     cv::Mat mask;
-                    cv::inRange(hsv, tc.hsvLower, tc.hsvUpper, mask);
+                    cv::inRange(hsv, lower, upper, mask);
                     
                     // Morphological cleanup
                     cv::erode(mask, mask, cv::Mat(), cv::Point(-1,-1), 1);
@@ -124,7 +226,8 @@ void ColorTrackerModule::run()
                     fifoBuffer[writeScope.startIndex1] = result;
             }
             
-            updateGuiFrame(frame);
+            if (!frame.empty())
+                updateGuiFrame(frame);
         }
         
         wait(33);
@@ -150,9 +253,133 @@ juce::Image ColorTrackerModule::getLatestFrame()
 
 void ColorTrackerModule::addColorAt(int x, int y)
 {
+    // Try synchronous immediate update for paused/idle UI first
+    bool appliedSync = false;
+
+    cv::Mat frameCopy;
+    {
+        const juce::ScopedLock lk(frameLock);
+        if (!lastFrameBgr.empty())
+            frameCopy = lastFrameBgr.clone();
+    }
+    if (!frameCopy.empty())
+    {
+        const int mx = juce::jlimit(0, frameCopy.cols - 1, x);
+        const int my = juce::jlimit(0, frameCopy.rows - 1, y);
+        cv::Rect roi(std::max(0, mx - 2), std::max(0, my - 2), 5, 5);
+        roi &= cv::Rect(0, 0, frameCopy.cols, frameCopy.rows);
+        if (roi.area() > 0)
+        {
+            cv::Scalar avgBgr = cv::mean(frameCopy(roi));
+            cv::Vec3b bgr8((uchar)avgBgr[0], (uchar)avgBgr[1], (uchar)avgBgr[2]);
+            cv::Mat onePix(1,1,CV_8UC3);
+            onePix.at<cv::Vec3b>(0,0) = bgr8;
+            cv::Mat onePixHsv;
+            cv::cvtColor(onePix, onePixHsv, cv::COLOR_BGR2HSV);
+            cv::Vec3b avgHsv = onePixHsv.at<cv::Vec3b>(0,0);
+            int avgHue = (int)avgHsv[0];
+            int avgSat = (int)avgHsv[1];
+            int avgVal = (int)avgHsv[2];
+
+            const juce::ScopedLock lock(colorListLock);
+            int targetIdx = pickerTargetIndex.load();
+            if (targetIdx < 0 || targetIdx >= (int)trackedColors.size())
+            {
+                TrackedColor tc;
+                tc.name = juce::String("Color ") + juce::String((int)trackedColors.size() + 1);
+                tc.hsvLower = cv::Scalar(
+                    juce::jlimit(0, 179, avgHue - 10),
+                    juce::jlimit(0, 255, avgSat - 40),
+                    juce::jlimit(0, 255, avgVal - 40));
+                tc.hsvUpper = cv::Scalar(
+                    juce::jlimit(0, 179, avgHue + 10),
+                    juce::jlimit(0, 255, avgSat + 40),
+                    juce::jlimit(0, 255, avgVal + 40));
+                tc.displayColour = juce::Colour((juce::uint8)bgr8[2], (juce::uint8)bgr8[1], (juce::uint8)bgr8[0]);
+                trackedColors.push_back(tc);
+            }
+            else
+            {
+                auto& tc = trackedColors[(size_t)targetIdx];
+                tc.hsvLower = cv::Scalar(
+                    juce::jlimit(0, 179, avgHue - 10),
+                    juce::jlimit(0, 255, avgSat - 40),
+                    juce::jlimit(0, 255, avgVal - 40));
+                tc.hsvUpper = cv::Scalar(
+                    juce::jlimit(0, 179, avgHue + 10),
+                    juce::jlimit(0, 255, avgSat + 40),
+                    juce::jlimit(0, 255, avgVal + 40));
+                tc.displayColour = juce::Colour((juce::uint8)bgr8[2], (juce::uint8)bgr8[1], (juce::uint8)bgr8[0]);
+                appliedSync = true;
+            }
+
+            // Push the same frame to GUI immediately for instant visual feedback
+            updateGuiFrame(frameCopy);
+        }
+    }
+
+    if (appliedSync)
+    {
+        // We handled this click synchronously; do NOT queue a second async apply.
+        addColorRequested.store(false);
+        pickerMouseX.store(-1);
+        pickerMouseY.store(-1);
+        isColorPickerActive.store(false);
+        return;
+    }
+
+    // Fallback: queue for background thread (no cached frame available)
     pickerMouseX.store(x);
     pickerMouseY.store(y);
     addColorRequested.store(true);
+}
+
+juce::ValueTree ColorTrackerModule::getExtraStateTree() const
+{
+    juce::ValueTree state("ColorTrackerState");
+    const juce::ScopedLock lock(colorListLock);
+    for (const auto& tc : trackedColors)
+    {
+        juce::ValueTree node("TrackedColor");
+        node.setProperty("name", tc.name, nullptr);
+        node.setProperty("displayColour", tc.displayColour.toString(), nullptr);
+        // Persist HSV windows (indexed fields for stability)
+        node.setProperty("hsvLower0", (int)tc.hsvLower[0], nullptr);
+        node.setProperty("hsvLower1", (int)tc.hsvLower[1], nullptr);
+        node.setProperty("hsvLower2", (int)tc.hsvLower[2], nullptr);
+        node.setProperty("hsvUpper0", (int)tc.hsvUpper[0], nullptr);
+        node.setProperty("hsvUpper1", (int)tc.hsvUpper[1], nullptr);
+        node.setProperty("hsvUpper2", (int)tc.hsvUpper[2], nullptr);
+        node.setProperty("tolerance", tc.tolerance, nullptr);
+        state.addChild(node, -1, nullptr);
+    }
+    return state;
+}
+
+void ColorTrackerModule::setExtraStateTree(const juce::ValueTree& state)
+{
+    if (!state.hasType("ColorTrackerState")) return;
+    const juce::ScopedLock lock(colorListLock);
+    trackedColors.clear();
+    for (int i = 0; i < state.getNumChildren(); ++i)
+    {
+        auto node = state.getChild(i);
+        if (!node.hasType("TrackedColor")) continue;
+        TrackedColor tc;
+        tc.name = node.getProperty("name", juce::String("Color ") + juce::String(i)).toString();
+        tc.displayColour = juce::Colour::fromString(node.getProperty("displayColour", "ff000000").toString());
+        int hL = (int)node.getProperty("hsvLower0", 0);
+        int sL = (int)node.getProperty("hsvLower1", 100);
+        int vL = (int)node.getProperty("hsvLower2", 100);
+        int hU = (int)node.getProperty("hsvUpper0", 10);
+        int sU = (int)node.getProperty("hsvUpper1", 255);
+        int vU = (int)node.getProperty("hsvUpper2", 255);
+        tc.hsvLower = cv::Scalar(hL, sL, vL);
+        tc.hsvUpper = cv::Scalar(hU, sU, vU);
+        tc.tolerance = (float)(double)node.getProperty("tolerance", 1.0);
+        trackedColors.push_back(tc);
+    }
+    // UI will re-query pins on next frame; no explicit rebuild signal required
 }
 
 void ColorTrackerModule::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midi)
@@ -222,26 +449,69 @@ void ColorTrackerModule::drawParametersInNode(float itemWidth,
     ImGui::PushItemWidth(itemWidth);
 
     if (ImGui::Button("Add Color...", ImVec2(itemWidth, 0)))
+    {
+        pickerTargetIndex.store(-1);
         isColorPickerActive.store(true);
+    }
 
     if (isColorPickerActive.load())
     {
         ImGui::TextColored(ImVec4(1.f,1.f,0.f,1.f), "Click on the video preview to pick a color");
     }
 
-    // Render tracked color list with remove buttons
+    // Zoom controls (-/+) like PoseEstimator
+    {
+        int level = zoomLevelParam ? (int) zoomLevelParam->load() : 1;
+        level = juce::jlimit(0, 2, level);
+        float buttonWidth = (itemWidth / 2.0f) - 4.0f;
+        const bool atMin = (level <= 0);
+        const bool atMax = (level >= 2);
+        if (atMin) ImGui::BeginDisabled();
+        if (ImGui::Button("-", ImVec2(buttonWidth, 0)))
+        {
+            int newLevel = juce::jmax(0, level - 1);
+            if (auto* p = apvts.getParameter("zoomLevel"))
+                p->setValueNotifyingHost((float)newLevel / 2.0f);
+        }
+        if (atMin) ImGui::EndDisabled();
+        ImGui::SameLine();
+        if (atMax) ImGui::BeginDisabled();
+        if (ImGui::Button("+", ImVec2(buttonWidth, 0)))
+        {
+            int newLevel = juce::jmin(2, level + 1);
+            if (auto* p = apvts.getParameter("zoomLevel"))
+                p->setValueNotifyingHost((float)newLevel / 2.0f);
+        }
+        if (atMax) ImGui::EndDisabled();
+    }
+
+    // Render tracked color list with swatch, tolerance, and remove
     {
         const juce::ScopedLock lock(colorListLock);
         for (size_t i = 0; i < trackedColors.size(); )
         {
             ImGui::Separator();
-            juce::String label = trackedColors[i].name + "##" + juce::String((int)i);
-            ImGui::TextUnformatted(label.toRawUTF8());
+            const auto& tc = trackedColors[i];
+            ImVec4 imc(tc.displayColour.getFloatRed(), tc.displayColour.getFloatGreen(), tc.displayColour.getFloatBlue(), 1.0f);
+            if (ImGui::ColorButton((tc.name + "##swatch" + juce::String((int)i)).toRawUTF8(), imc, ImGuiColorEditFlags_NoTooltip, ImVec2(20,20)))
+            {
+                pickerTargetIndex.store((int)i);
+                isColorPickerActive.store(true);
+            }
+            ImGui::SameLine();
+            ImGui::TextUnformatted((tc.name + "##label" + juce::String((int)i)).toRawUTF8());
+            ImGui::SameLine();
+            ImGui::SetNextItemWidth(120.0f);
+            float tol = (float)tc.tolerance;
+            if (ImGui::SliderFloat((juce::String("Tol##") + juce::String((int)i)).toRawUTF8(), &tol, 0.1f, 5.0f, "%.2fx"))
+            {
+                const_cast<TrackedColor&>(tc).tolerance = tol;
+            }
             ImGui::SameLine();
             if (ImGui::SmallButton((juce::String("Remove##") + juce::String((int)i)).toRawUTF8()))
             {
                 trackedColors.erase(trackedColors.begin() + (long long)i);
-                continue; // don't increment i
+                continue; // don't increment i when erased
             }
             ++i;
         }

@@ -47,6 +47,7 @@ void SemanticSegmentationModule::prepareToPlay(double sampleRate, int samplesPer
 void SemanticSegmentationModule::releaseResources()
 {
     signalThreadShouldExit();
+    stopThread(5000);
 }
 
 void SemanticSegmentationModule::loadModel()
@@ -109,88 +110,83 @@ void SemanticSegmentationModule::run()
 {
     while (!threadShouldExit())
     {
-        if (!modelLoaded)
-        {
-            wait(200);
-            continue;
-        }
-        
         cv::Mat frame = VideoFrameManager::getInstance().getFrame(currentSourceId.load());
         if (!frame.empty())
         {
-            cv::Mat blob = cv::dnn::blobFromImage(frame, 1.0, cv::Size(ENET_W, ENET_H), cv::Scalar(), true, false);
-            net.setInput(blob);
-            cv::Mat out = net.forward(); // shape: 1 x C x H x W
-            
-            int dims = out.dims;
-            if (dims == 4)
+            if (modelLoaded)
             {
-                int N = out.size[0];
-                int C = out.size[1];
-                int H = out.size[2];
-                int W = out.size[3];
-                juce::ignoreUnused(N);
-                
-                // Argmax across channels per pixel
-                cv::Mat classId(H, W, CV_8S);
-                for (int y = 0; y < H; ++y)
+                cv::Mat blob = cv::dnn::blobFromImage(frame, 1.0, cv::Size(ENET_W, ENET_H), cv::Scalar(), true, false);
+                net.setInput(blob);
+                cv::Mat out = net.forward(); // shape: 1 x C x H x W
+
+                if (out.dims == 4)
                 {
-                    for (int x = 0; x < W; ++x)
+                    int C = out.size[1];
+                    int H = out.size[2];
+                    int W = out.size[3];
+
+                    // Argmax across channels per pixel
+                    cv::Mat classId(H, W, CV_8S);
+                    for (int y = 0; y < H; ++y)
                     {
-                        int bestClass = 0;
-                        float bestScore = -1e9f;
-                        for (int c = 0; c < C; ++c)
+                        for (int x = 0; x < W; ++x)
                         {
-                            float score = out.ptr<float>(0, c, y)[x];
-                            if (score > bestScore) { bestScore = score; bestClass = c; }
+                            int bestClass = 0;
+                            float bestScore = -1e9f;
+                            for (int c = 0; c < C; ++c)
+                            {
+                                float score = out.ptr<float>(0, c, y)[x];
+                                if (score > bestScore) { bestScore = score; bestClass = c; }
+                            }
+                            classId.at<signed char>(y, x) = (signed char)bestClass;
                         }
-                        classId.at<signed char>(y, x) = (signed char)bestClass;
                     }
-                }
 
-                // Target mask
-                int target = targetClassParam ? targetClassParam->getIndex() : 0;
-                cv::Mat mask(H, W, CV_8U);
-                for (int y = 0; y < H; ++y)
-                    for (int x = 0; x < W; ++x)
-                        mask.at<unsigned char>(y, x) = (unsigned char)(classId.at<signed char>(y, x) == target ? 255 : 0);
+                    // Target mask
+                    int target = targetClassParam ? targetClassParam->getIndex() : 0;
+                    cv::Mat mask(H, W, CV_8U);
+                    for (int y = 0; y < H; ++y)
+                        for (int x = 0; x < W; ++x)
+                            mask.at<unsigned char>(y, x) = (unsigned char)(classId.at<signed char>(y, x) == target ? 255 : 0);
 
-                SegmentationResult result;
-                int pix = cv::countNonZero(mask);
-                if (pix > 0)
-                {
-                    result.detected = true;
-                    result.area = (float)pix / (float)(H * W);
-                    cv::Moments m = cv::moments(mask, true);
-                    result.centerX = (float)(m.m10 / m.m00) / (float)W;
-                    result.centerY = (float)(m.m01 / m.m00) / (float)H;
-                }
-
-                if (fifo.getFreeSpace() >= 1)
-                {
-                    auto writeScope = fifo.write(1);
-                    if (writeScope.blockSize1 > 0)
-                        fifoBuffer[writeScope.startIndex1] = result;
-                }
-
-                // Colorize for preview
-                cv::Mat color(H, W, CV_8UC3);
-                for (int y = 0; y < H; ++y)
-                {
-                    for (int x = 0; x < W; ++x)
+                    SegmentationResult result;
+                    int pix = cv::countNonZero(mask);
+                    if (pix > 0)
                     {
-                        int cid = (int)classId.at<signed char>(y, x);
-                        cv::Vec3b col = (cid >= 0 && cid < (int)classColors.size()) ? classColors[(size_t)cid] : cv::Vec3b(0,0,0);
-                        color.at<cv::Vec3b>(y, x) = col;
+                        result.detected = true;
+                        result.area = (float)pix / (float)(H * W);
+                        cv::Moments m = cv::moments(mask, true);
+                        result.centerX = (float)(m.m10 / m.m00) / (float)W;
+                        result.centerY = (float)(m.m01 / m.m00) / (float)H;
                     }
+
+                    if (fifo.getFreeSpace() >= 1)
+                    {
+                        auto writeScope = fifo.write(1);
+                        if (writeScope.blockSize1 > 0)
+                            fifoBuffer[writeScope.startIndex1] = result;
+                    }
+
+                    // Colorize for preview
+                    cv::Mat color(H, W, CV_8UC3);
+                    for (int y = 0; y < H; ++y)
+                    {
+                        for (int x = 0; x < W; ++x)
+                        {
+                            int cid = (int)classId.at<signed char>(y, x);
+                            cv::Vec3b col = (cid >= 0 && cid < (int)classColors.size()) ? classColors[(size_t)cid] : cv::Vec3b(0,0,0);
+                            color.at<cv::Vec3b>(y, x) = col;
+                        }
+                    }
+                    cv::resize(color, color, frame.size(), 0, 0, cv::INTER_NEAREST);
+                    cv::addWeighted(frame, 1.0, color, 0.4, 0.0, frame);
                 }
-                cv::resize(color, color, frame.size(), 0, 0, cv::INTER_NEAREST);
-                cv::addWeighted(frame, 1.0, color, 0.4, 0.0, frame);
             }
-            
+
+            // Always update preview with the latest frame (with or without overlay)
             updateGuiFrame(frame);
         }
-        
+
         wait(100);
     }
 }
@@ -248,25 +244,71 @@ void SemanticSegmentationModule::drawParametersInNode(float itemWidth,
 {
     juce::ignoreUnused(isParamModulated);
     ImGui::PushItemWidth(itemWidth);
+
+    // Target class dropdown (populated from classNames if available)
     if (targetClassParam)
     {
-        int idx = targetClassParam->getIndex();
-        juce::String items;
-        if (!classNames.empty())
+        int currentIndex = targetClassParam->getIndex();
+        const char* preview = (!classNames.empty() && juce::isPositiveAndBelow(currentIndex, (int)classNames.size()))
+                                ? classNames[(size_t)currentIndex].c_str()
+                                : "person";
+
+        if (ImGui::BeginCombo("Target Class", preview))
         {
-            for (const auto& n : classNames) { items += juce::String(n); items += "\0"; }
-            items += "\0";
-        }
-        else
-        {
-            items = juce::String("person\0\0");
-        }
-        if (ImGui::Combo("Target Class", &idx, items.toRawUTF8()))
-        {
-            *targetClassParam = idx;
-            onModificationEnded();
+            if (classNames.empty())
+            {
+                const bool isSelected = (currentIndex == 0);
+                if (ImGui::Selectable("person", isSelected))
+                {
+                    *targetClassParam = 0;
+                    onModificationEnded();
+                }
+                if (isSelected) ImGui::SetItemDefaultFocus();
+            }
+            else
+            {
+                for (int i = 0; i < (int)classNames.size(); ++i)
+                {
+                    const bool isSelected = (currentIndex == i);
+                    if (ImGui::Selectable(classNames[(size_t)i].c_str(), isSelected))
+                    {
+                        *targetClassParam = i;
+                        onModificationEnded();
+                    }
+                    if (isSelected) ImGui::SetItemDefaultFocus();
+                }
+            }
+            ImGui::EndCombo();
         }
     }
+
+    // Zoom (-/+) controls, consistent with PoseEstimatorModule
+    ImGui::Separator();
+    int level = zoomLevelParam ? (int) zoomLevelParam->load() : 1;
+    level = juce::jlimit(0, 2, level);
+    float buttonWidth = (itemWidth / 2.0f) - 4.0f;
+    const bool atMin = (level <= 0);
+    const bool atMax = (level >= 2);
+    if (atMin) ImGui::BeginDisabled();
+    if (ImGui::Button("-", ImVec2(buttonWidth, 0)))
+    {
+        int newLevel = juce::jmax(0, level - 1);
+        if (auto* p = apvts.getParameter("zoomLevel"))
+            p->setValueNotifyingHost((float)newLevel / 2.0f);
+        onModificationEnded();
+    }
+    if (atMin) ImGui::EndDisabled();
+    ImGui::SameLine();
+    if (atMax) ImGui::BeginDisabled();
+    if (ImGui::Button("+", ImVec2(buttonWidth, 0)))
+    {
+        int newLevel = juce::jmin(2, level + 1);
+        if (auto* p = apvts.getParameter("zoomLevel"))
+            p->setValueNotifyingHost((float)newLevel / 2.0f);
+        onModificationEnded();
+    }
+    if (atMax) ImGui::EndDisabled();
+
     ImGui::PopItemWidth();
 }
 

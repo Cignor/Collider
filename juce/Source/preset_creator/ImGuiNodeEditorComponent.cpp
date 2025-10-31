@@ -2353,6 +2353,7 @@ if (auto* mp = synth->getModuleForLogical (lid))
         juce::Image frame = colorModule->getLatestFrame();
         if (!frame.isNull())
         {
+            static std::map<int, int> hoverRadiusByNode; // logicalId -> radius (half-size), default 2 => 5x5
             if (visionModuleTextures.find((int)lid) == visionModuleTextures.end())
                 visionModuleTextures[(int)lid] = std::make_unique<juce::OpenGLTexture>();
             auto* texture = visionModuleTextures[(int)lid].get();
@@ -2374,11 +2375,73 @@ if (auto* mp = synth->getModuleForLogical (lid))
                         ImVec2 itemSize = ImGui::GetItemRectSize();
                         float nx = (mousePos.x - itemMin.x) / itemSize.x;
                         float ny = (mousePos.y - itemMin.y) / itemSize.y;
-                        int px = (int)juce::jlimit(0.0f, 1.0f, nx) * frame.getWidth();
-                        int py = (int)juce::jlimit(0.0f, 1.0f, ny) * frame.getHeight();
+                        nx = juce::jlimit(0.0f, 1.0f, nx);
+                        ny = juce::jlimit(0.0f, 1.0f, ny);
+                        // Use ny directly (no flip) to align clicks with displayed image
+                        int px = (int)juce::jlimit(0.0f, (float)frame.getWidth()  - 1.0f, nx * (float)frame.getWidth());
+                        int py = (int)juce::jlimit(0.0f, (float)frame.getHeight() - 1.0f, ny * (float)frame.getHeight());
+                        juce::Logger::writeToLog(juce::String("[ColorTracker][UI] nx=") + juce::String(nx, 3) + ", ny=" + juce::String(ny, 3) +
+                                                  ", px=" + juce::String(px) + ", py=" + juce::String(py));
                         colorModule->addColorAt(px, py);
                         colorModule->exitPickerMode();
                     }
+                }
+
+                // Hover preview: median/average color swatch and scroll-wheel radius control
+                if (ImGui::IsItemHovered())
+                {
+                    // Update radius by mouse wheel
+                    int& rad = hoverRadiusByNode[(int)lid]; if (rad <= 0) rad = 2;
+                    float wheel = ImGui::GetIO().MouseWheel;
+                    if (wheel != 0.0f)
+                    {
+                        rad += (wheel > 0) ? 1 : -1;
+                        rad = juce::jlimit(1, 30, rad); // (2*rad+1)^2 window, max 61x61
+                    }
+
+                    // Map mouse to pixel
+                    ImVec2 mousePos = ImGui::GetMousePos();
+                    ImVec2 itemMin = ImGui::GetItemRectMin();
+                    ImVec2 itemSize = ImGui::GetItemRectSize();
+                    float nx = (mousePos.x - itemMin.x) / itemSize.x;
+                    float ny = (mousePos.y - itemMin.y) / itemSize.y;
+                    nx = juce::jlimit(0.0f, 1.0f, nx);
+                    ny = juce::jlimit(0.0f, 1.0f, ny);
+                    int cx = (int)juce::jlimit(0.0f, (float)frame.getWidth()  - 1.0f, nx * (float)frame.getWidth());
+                    int cy = (int)juce::jlimit(0.0f, (float)frame.getHeight() - 1.0f, ny * (float)frame.getHeight());
+
+                    // Sample ROI from juce::Image
+                    std::vector<int> vr, vg, vb; vr.reserve((2*rad+1)*(2*rad+1)); vg.reserve(vr.capacity()); vb.reserve(vr.capacity());
+                    juce::Image::BitmapData bd(frame, juce::Image::BitmapData::readOnly);
+                    auto clampi = [](int v, int lo, int hi){ return (v < lo) ? lo : (v > hi ? hi : v); };
+                    for (int y = cy - rad; y <= cy + rad; ++y)
+                    {
+                        int yy = clampi(y, 0, frame.getHeight()-1);
+                        const juce::PixelARGB* row = (const juce::PixelARGB*)(bd.getLinePointer(yy));
+                        for (int x = cx - rad; x <= cx + rad; ++x)
+                        {
+                            int xx = clampi(x, 0, frame.getWidth()-1);
+                            const juce::PixelARGB& p = row[xx];
+                            vr.push_back(p.getRed());
+                            vg.push_back(p.getGreen());
+                            vb.push_back(p.getBlue());
+                        }
+                    }
+                    auto median = [](std::vector<int>& v){ std::nth_element(v.begin(), v.begin()+v.size()/2, v.end()); return v[v.size()/2]; };
+                    int mr = median(vr), mg = median(vg), mb = median(vb);
+                    juce::Colour mc((juce::uint8)mr, (juce::uint8)mg, (juce::uint8)mb);
+                    float h = mc.getHue(), s = mc.getSaturation(), b = mc.getBrightness();
+
+                    // Tooltip near cursor with swatch and numbers
+                    ImGui::BeginTooltip();
+                    ImGui::Text("(%d,%d) rad=%d", cx, cy, rad);
+                    ImGui::ColorButton("##hoverSwatch", ImVec4(mc.getFloatRed(), mc.getFloatGreen(), mc.getFloatBlue(), 1.0f), 0, ImVec2(22,22));
+                    ImGui::SameLine();
+                    ImGui::Text("RGB %d,%d,%d\nHSV %d,%d,%d", mr, mg, mb, (int)(h*180.0f), (int)(s*255.0f), (int)(b*255.0f));
+                    ImGui::EndTooltip();
+
+                    // Textual summary under the image (lightweight)
+                    ImGui::TextDisabled("Hover RGB %d,%d,%d  HSV %d,%d,%d  rad=%d", mr, mg, mb, (int)(h*180.0f), (int)(s*255.0f), (int)(b*255.0f), rad);
                 }
             }
         }
@@ -7358,34 +7421,39 @@ std::vector<AudioPin> ImGuiNodeEditorComponent::getPinsOfType(juce::uint32 logic
             }
         }
     }
-    else if (auto* module = synth->getModuleForLogical(logicalId))
+
+    // If no static pins matched (or none defined), fall back to dynamic pins from the module
+    if (matchingPins.empty())
     {
-        // --- DYNAMIC PATH FOR MODULES WITH getDynamicInputPins/getDynamicOutputPins ---
-        auto dynamicPins = isInput ? module->getDynamicInputPins() : module->getDynamicOutputPins();
-        
-        if (!dynamicPins.empty())
+        if (auto* module = synth->getModuleForLogical(logicalId))
         {
-            // Module provides dynamic pins - filter by type
-            for (const auto& pin : dynamicPins)
+            // --- DYNAMIC PATH FOR MODULES WITH getDynamicInputPins/getDynamicOutputPins ---
+            auto dynamicPins = isInput ? module->getDynamicInputPins() : module->getDynamicOutputPins();
+            
+            if (!dynamicPins.empty())
             {
-                if (pin.type == targetType)
+                // Module provides dynamic pins - filter by type
+                for (const auto& pin : dynamicPins)
                 {
-                    matchingPins.emplace_back(pin.name, pin.channel, pin.type);
+                    if (pin.type == targetType)
+                    {
+                        matchingPins.emplace_back(pin.name, pin.channel, pin.type);
+                    }
                 }
             }
-        }
-        else if (dynamic_cast<VstHostModuleProcessor*>(module))
-        {
-            // For VSTs without dynamic pins, assume all pins are 'Audio' type for chaining.
-            if (targetType == PinDataType::Audio)
+            else if (auto* vst = dynamic_cast<VstHostModuleProcessor*>(module))
             {
-                const int numChannels = isInput ? module->getTotalNumInputChannels() : module->getTotalNumOutputChannels();
-                for (int i = 0; i < numChannels; ++i)
+                // For VSTs without dynamic pins, assume all pins are 'Audio' type for chaining.
+                if (targetType == PinDataType::Audio)
                 {
-                    juce::String pinName = isInput ? module->getAudioInputLabel(i) : module->getAudioOutputLabel(i);
-                    if (pinName.isNotEmpty())
+                    const int numChannels = isInput ? vst->getTotalNumInputChannels() : vst->getTotalNumOutputChannels();
+                    for (int i = 0; i < numChannels; ++i)
                     {
-                        matchingPins.emplace_back(pinName, i, PinDataType::Audio);
+                        juce::String pinName = isInput ? vst->getAudioInputLabel(i) : vst->getAudioOutputLabel(i);
+                        if (pinName.isNotEmpty())
+                        {
+                            matchingPins.emplace_back(pinName, i, PinDataType::Audio);
+                        }
                     }
                 }
             }

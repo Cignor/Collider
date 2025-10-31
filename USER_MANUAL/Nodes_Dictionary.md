@@ -1718,17 +1718,28 @@ Computer vision nodes process video for audio/CV generation.
 ### Webcam Loader
 **Webcam Video Source**
 
-Captures video from webcam and publishes as a source for vision processing.
+Captures video from webcam and publishes a `Source ID` for vision processing modules.
 
-**Output:**
+**Outputs:**
 - `Source ID` (Raw) - Video source identifier
+
+**Auto-Connect Shortcuts:**
+- **R (Raw)**: Connect `Source ID` to any `Source In` (Raw) input on CV modules (e.g., Movement/Human/Object/Color/Pose/Hand/Face/Contour/Segmentation).
+- Other chaining keys (**C/G/B/Y**) generally not applicable for this node.
 
 ---
 
 ### Video File Loader
 **Video File Source**
 
-Loads and plays video files for vision processing.
+Loads and plays video files; publishes a `Source ID` for vision processing modules.
+
+**Outputs:**
+- `Source ID` (Raw) - Video source identifier
+
+**Auto-Connect Shortcuts:**
+- **R (Raw)**: Connect `Source ID` to any `Source In` (Raw) input on CV modules.
+- Other chaining keys (**C/G/B/Y**) generally not applicable for this node.
 
 ---
 
@@ -1741,9 +1752,14 @@ Analyzes video for motion via optical flow or background subtraction.
 - `Source In` (Raw) - Video source ID
 
 **Outputs:**
-- `Motion X/Y` (CV) - Motion vector
+- `Motion X` (CV), `Motion Y` (CV) - Motion vector components
 - `Amount` (CV) - Total motion amount
 - `Trigger` (Gate) - Trigger on significant motion
+
+**Auto-Connect Shortcuts:**
+- **R (Raw)**: Connect loader `Source ID` → `Source In`.
+- **B (CV)**: Chain `Motion X/Y/Amount` to CV destinations.
+- **Y (Gate)**: Chain `Trigger` to gate inputs.
 
 **How to Use:**
 1. Connect webcam or video file loader
@@ -1758,9 +1774,18 @@ Analyzes video for motion via optical flow or background subtraction.
 
 Detects faces or bodies in video via Haar Cascades or HOG.
 
+**Inputs:**
+- `Source In` (Raw) - Video source ID
+
 **Outputs:**
-- `X, Y, Width, Height` (CV) - Detection bounding box
+- `X` (CV), `Y` (CV) - Center position
+- `Width` (CV), `Height` (CV) - Bounding box size
 - `Gate` (Gate) - High when person detected
+
+**Auto-Connect Shortcuts:**
+- **R (Raw)**: Connect loader `Source ID` → `Source In`.
+- **B (CV)**: Chain X/Y/Width/Height to CV inputs.
+- **Y (Gate)**: Chain `Gate` to gate inputs.
 
 **How to Use:**
 1. Connect video source
@@ -1773,27 +1798,17 @@ Detects faces or bodies in video via Haar Cascades or HOG.
 ### Pose Estimator
 **Body Keypoint Detection**
 
-Uses OpenPose MPI model to detect 15 human body keypoints in real-time video, providing precise tracking of head, limbs, and torso positions.
+Uses OpenPose MPI model to detect 15 body keypoints. Outputs 30 CV pins programmatically (X/Y for each keypoint).
 
 **Inputs:**
 - `Source In` (Raw) - Video source ID from webcam or video file loader
 
-**Outputs:**
-- `Head X/Y` (CV) - Head position
-- `Neck X/Y` (CV) - Neck position
-- `R Shoulder X/Y` (CV) - Right shoulder position
-- `R Elbow X/Y` (CV) - Right elbow position
-- `R Wrist X/Y` (CV) - Right wrist position
-- `L Shoulder X/Y` (CV) - Left shoulder position
-- `L Elbow X/Y` (CV) - Left elbow position
-- `L Wrist X/Y` (CV) - Left wrist position
-- `R Hip X/Y` (CV) - Right hip position
-- `R Knee X/Y` (CV) - Right knee position
-- `R Ankle X/Y` (CV) - Right ankle position
-- `L Hip X/Y` (CV) - Left hip position
-- `L Knee X/Y` (CV) - Left knee position
-- `L Ankle X/Y` (CV) - Left ankle position
-- `Chest X/Y` (CV) - Chest/torso center position
+**Outputs (dynamic/programmatic):**
+- `Head X/Y`, `Neck X/Y`, `R Shoulder X/Y`, `R Elbow X/Y`, `R Wrist X/Y`, `L Shoulder X/Y`, `L Elbow X/Y`, `L Wrist X/Y`, `R Hip X/Y`, `R Knee X/Y`, `R Ankle X/Y`, `L Hip X/Y`, `L Knee X/Y`, `L Ankle X/Y`, `Chest X/Y` (all CV)
+
+**Auto-Connect Shortcuts:**
+- **R (Raw)**: Connect loader `Source ID` → `Source In`.
+- **B (CV)**: Chain any keypoint X/Y outputs to CV targets.
 
 **Parameters:**
 - `Confidence` (0.0-1.0) - Detection confidence threshold (default: 0.1). Lower values detect more keypoints but may include false positives
@@ -1840,18 +1855,17 @@ Uses OpenPose MPI model to detect 15 human body keypoints in real-time video, pr
 ### Hand Tracker
 **Hand Keypoint Detection**
 
-Uses OpenPose hand model to detect 21 hand keypoints in real-time video, providing precise finger and wrist tracking.
+Uses OpenPose hand model to detect 21 hand keypoints. Outputs 42 CV pins (X/Y per keypoint).
 
 **Inputs:**
-- `Source In` (Raw) - Video source ID from webcam or video file loader
+- `Source In` (Raw) - Video source ID
 
-**Outputs:**
-- `Wrist X/Y` (CV) - Wrist position
-- `Thumb 1-4 X/Y` (CV) - Thumb joint positions (4 points)
-- `Index 1-4 X/Y` (CV) - Index finger joint positions (4 points)
-- `Middle 1-4 X/Y` (CV) - Middle finger joint positions (4 points)
-- `Ring 1-4 X/Y` (CV) - Ring finger joint positions (4 points)
-- `Pinky 1-4 X/Y` (CV) - Pinky finger joint positions (4 points)
+**Outputs (dynamic/programmatic):**
+- `Wrist X/Y`, `Thumb 1-4 X/Y`, `Index 1-4 X/Y`, `Middle 1-4 X/Y`, `Ring 1-4 X/Y`, `Pinky 1-4 X/Y` (all CV)
+
+**Auto-Connect Shortcuts:**
+- **R (Raw)**: Connect loader `Source ID` → `Source In`.
+- **B (CV)**: Chain any keypoint X/Y outputs to CV targets.
 
 **Parameters:**
 - `Confidence` (0.0-1.0) - Detection confidence threshold (default: 0.1)
@@ -1882,13 +1896,17 @@ Uses OpenPose hand model to detect 21 hand keypoints in real-time video, providi
 ### Face Tracker
 **Facial Landmark Detection**
 
-Uses OpenPose face model to detect 70 facial landmarks, providing detailed face and expression tracking.
+Uses OpenPose face model to detect 70 facial landmarks. Outputs 140 CV pins (X/Y per point).
 
 **Inputs:**
-- `Source In` (Raw) - Video source ID from webcam or video file loader
+- `Source In` (Raw) - Video source ID
 
-**Outputs:**
-- `Pt 1-70 X/Y` (CV) - 70 facial landmark positions (eyes, nose, mouth, face outline)
+**Outputs (dynamic/programmatic):**
+- `Pt 1-70 X/Y` (CV) - Landmark positions
+
+**Auto-Connect Shortcuts:**
+- **R (Raw)**: Connect loader `Source ID` → `Source In`.
+- **B (CV)**: Chain landmark X/Y outputs to CV targets.
 
 **Parameters:**
 - `Confidence` (0.0-1.0) - Detection confidence threshold (default: 0.1)
@@ -1922,14 +1940,19 @@ Uses OpenPose face model to detect 70 facial landmarks, providing detailed face 
 Uses YOLOv3 deep learning model to detect objects from 80 COCO classes (person, car, bottle, etc.) in real-time video.
 
 **Inputs:**
-- `Source In` (Raw) - Video source ID from webcam or video file loader
+- `Source In` (Raw) - Video source ID
 
 **Outputs:**
-- `X` (CV) - Center X position of detected object (normalized 0-1)
-- `Y` (CV) - Center Y position of detected object (normalized 0-1)
-- `Width` (CV) - Object width (normalized 0-1)
-- `Height` (CV) - Object height (normalized 0-1)
-- `Gate` (Gate) - High when object detected
+- `X` (CV) - Center X position (0-1)
+- `Y` (CV) - Center Y position (0-1)
+- `Width` (CV) - Width (0-1)
+- `Height` (CV) - Height (0-1)
+- `Gate` (Gate) - High when target detected
+
+**Auto-Connect Shortcuts:**
+- **R (Raw)**: Connect loader `Source ID` → `Source In`.
+- **B (CV)**: Chain X/Y/Width/Height to CV inputs.
+- **Y (Gate)**: Chain `Gate` to gate inputs.
 
 **Parameters:**
 - `Target Class` (Choice) - Object class to detect (person, car, bicycle, etc.)
@@ -1963,16 +1986,20 @@ Uses YOLOv3 deep learning model to detect objects from 80 COCO classes (person, 
 ### Color Tracker
 **Multi-Color HSV Tracking**
 
-Tracks multiple custom colors in video using HSV color space, outputting position and area for each tracked color.
+Tracks multiple custom colors in video using HSV color space. Outputs are dynamic: each added color creates three CV outputs.
 
 **Inputs:**
-- `Source In` (Raw) - Video source ID from webcam or video file loader
+- `Source In` (Raw) - Video source ID
 
-**Outputs:**
-- Dynamic outputs per tracked color:
-  - `[Color Name] X` (CV) - Center X position (normalized 0-1)
-  - `[Color Name] Y` (CV) - Center Y position (normalized 0-1)
-  - `[Color Name] Area` (CV) - Area covered (normalized 0-1)
+**Outputs (dynamic):**
+- For each tracked color:
+  - `[Color] X` (CV) - Center X (0-1)
+  - `[Color] Y` (CV) - Center Y (0-1)
+  - `[Color] Area` (CV) - Covered area (0-1)
+
+**Auto-Connect Shortcuts:**
+- **R (Raw)**: Connect loader `Source ID` → `Source In`.
+- **B (CV)**: Chain per-color X/Y/Area to CV inputs.
 
 **Parameters:**
 - `Add Color...` (Button) - Click to pick a color from the video preview
@@ -2008,12 +2035,16 @@ Tracks multiple custom colors in video using HSV color space, outputting positio
 Detects shapes and their properties using background subtraction and contour analysis.
 
 **Inputs:**
-- `Source In` (Raw) - Video source ID from webcam or video file loader
+- `Source In` (Raw) - Video source ID
 
 **Outputs:**
-- `Area` (CV) - Detected shape area (normalized 0-1)
-- `Complexity` (CV) - Shape complexity based on polygon approximation (0-1)
-- `Aspect Ratio` (CV) - Width/height ratio of bounding box
+- `Area` (CV) - Detected shape area (0-1)
+- `Complexity` (CV) - Polygon complexity (0-1)
+- `Aspect Ratio` (CV) - Width/height ratio
+
+**Auto-Connect Shortcuts:**
+- **R (Raw)**: Connect loader `Source ID` → `Source In`.
+- **B (CV)**: Chain outputs to CV inputs.
 
 **Parameters:**
 - `Threshold` (0-255) - Threshold for foreground/background separation (default: 128)
@@ -2045,16 +2076,21 @@ Detects shapes and their properties using background subtraction and contour ana
 ### Semantic Segmentation
 **Scene Segmentation via Deep Learning**
 
-Uses semantic segmentation networks (ENet or DeepLabV3) to identify and track objects by semantic class in video.
+Uses semantic segmentation (ENet or DeepLabV3) to identify a target class and output region properties.
 
 **Inputs:**
-- `Source In` (Raw) - Video source ID from webcam or video file loader
+- `Source In` (Raw) - Video source ID
 
 **Outputs:**
-- `Area` (CV) - Percentage of frame covered by target class (normalized 0-1)
-- `Center X` (CV) - Center X position of detected region (normalized 0-1)
-- `Center Y` (CV) - Center Y position of detected region (normalized 0-1)
-- `Gate` (Gate) - High when target class detected
+- `Area` (CV) - Frame coverage of target class (0-1)
+- `Center X` (CV) - Center X of detected region (0-1)
+- `Center Y` (CV) - Center Y of detected region (0-1)
+- `Gate` (Gate) - High when target detected
+
+**Auto-Connect Shortcuts:**
+- **R (Raw)**: Connect loader `Source ID` → `Source In`.
+- **B (CV)**: Chain Area and Center outputs to CV targets.
+- **Y (Gate)**: Chain `Gate` to gate inputs.
 
 **Parameters:**
 - `Target Class` (Choice) - Semantic class to detect (person, road, car, etc.)

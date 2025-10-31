@@ -22,6 +22,7 @@ public:
     void prepareToPlay(double sampleRate, int samplesPerBlock) override;
     void releaseResources() override;
     void processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midi) override;
+    void setTimingInfo(const TransportState& state) override { lastTransportPlaying.store(state.isPlaying); if (syncToTransport.load()) playing.store(state.isPlaying); }
     
     juce::AudioProcessorValueTreeState& getAPVTS() override { return apvts; }
     
@@ -54,13 +55,32 @@ private:
     std::atomic<float>* loopParam = nullptr;
     // 0 = Small (240), 1 = Normal (480), 2 = Large (960)
     std::atomic<float>* zoomLevelParam = nullptr;
+    // Playback controls
+    std::atomic<float>* speedParam = nullptr;   // 0.25 .. 4.0 (1.0 default)
+    std::atomic<float>* inNormParam = nullptr;  // 0..1
+    std::atomic<float>* outNormParam = nullptr; // 0..1
+    std::atomic<float>* syncParam = nullptr; // bool as float
+    std::atomic<bool> playing { true };
+    std::atomic<bool> syncToTransport { true };
+    std::atomic<bool> lastTransportPlaying { false };
+    std::atomic<bool> needPreviewFrame { false };
+    std::atomic<bool> lastPlaying { false }; // for play-edge detection
+    std::atomic<int> pendingSeekFrame { -1 };
+    std::atomic<int> lastPosFrame { 0 };
+    // Normalized pending requests (used when totalFrames not ready yet)
+    std::atomic<float> pendingSeekNorm { -1.0f };
+    std::atomic<float> pendingStartNorm { -1.0f };
     
     cv::VideoCapture videoCapture;
+    juce::CriticalSection captureLock;
     juce::Image latestFrameForGui;
     juce::CriticalSection imageLock;
     
     juce::File videoFileToLoad;
     juce::File currentVideoFile;
     std::unique_ptr<juce::FileChooser> fileChooser;
+
+    // Cached metadata (atomic for cross-thread visibility)
+    std::atomic<int> totalFrames { 0 };
 };
 
