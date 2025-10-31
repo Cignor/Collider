@@ -65,6 +65,7 @@ private:
     std::atomic<bool> lastTransportPlaying { false };
     std::atomic<bool> needPreviewFrame { false };
     std::atomic<bool> lastPlaying { false }; // for play-edge detection
+    std::atomic<int> lastFourcc { 0 }; // cached FOURCC
     std::atomic<int> pendingSeekFrame { -1 };
     std::atomic<int> lastPosFrame { 0 };
     // Normalized pending requests (used when totalFrames not ready yet)
@@ -73,6 +74,33 @@ private:
     
     cv::VideoCapture videoCapture;
     juce::CriticalSection captureLock;
+
+    static juce::String fourccToString(int fourcc)
+    {
+        if (fourcc == 0) return "unknown";
+        char c[5];
+        c[0] = (char)(fourcc & 0xFF);
+        c[1] = (char)((fourcc >> 8) & 0xFF);
+        c[2] = (char)((fourcc >> 16) & 0xFF);
+        c[3] = (char)((fourcc >> 24) & 0xFF);
+        c[4] = '\0';
+        return juce::String(c);
+    }
+
+    static juce::String fourccFriendlyName(const juce::String& code)
+    {
+        const juce::String c = code.toLowerCase();
+        if (c == "avc1" || c == "h264") return "H.264";
+        if (c == "hvc1" || c == "hevc" || c == "hev1") return "H.265/HEVC";
+        if (c == "mp4v" || c == "m4v") return "MPEG-4 Part 2";
+        if (c == "mjpg" || c == "mjpa" || c == "jpeg") return "Motion JPEG";
+        if (c == "xvid" ) return "MPEG-4 ASP (Xvid)";
+        if (c == "vp09") return "VP9";
+        if (c == "av01") return "AV1";
+        if (c == "wmv3" || c == "wvc1") return "VC-1";
+        if (c == "h263") return "H.263";
+        return "unknown";
+    }
     juce::Image latestFrameForGui;
     juce::CriticalSection imageLock;
     

@@ -74,84 +74,7 @@ void ColorTrackerModule::run()
         if (!frame.empty())
             cv::cvtColor(frame, hsv, cv::COLOR_BGR2HSV);
 
-            // Color picker integration (coordinates provided by UI)
-            if (addColorRequested.exchange(false))
-            {
-                int mx = pickerMouseX.exchange(-1);
-                int my = pickerMouseY.exchange(-1);
-                int targetIdx = pickerTargetIndex.load();
-                if (!frame.empty() && mx >= 0 && my >= 0 && mx < frame.cols && my < frame.rows)
-                {
-                    // 5x5 ROI in ORIGINAL BGR frame
-                    cv::Rect roi(std::max(0, mx - 2), std::max(0, my - 2), 5, 5);
-                    roi &= cv::Rect(0, 0, frame.cols, frame.rows);
-                    if (roi.area() > 0)
-                    {
-                        // Average BGR, then convert that average to HSV
-                        cv::Scalar avgBgr = cv::mean(frame(roi));
-                        cv::Vec3b bgr8((uchar)avgBgr[0], (uchar)avgBgr[1], (uchar)avgBgr[2]);
-                        cv::Mat onePix(1,1,CV_8UC3);
-                        onePix.at<cv::Vec3b>(0,0) = bgr8;
-                        cv::Mat onePixHsv;
-                        cv::cvtColor(onePix, onePixHsv, cv::COLOR_BGR2HSV);
-                        cv::Vec3b avgHsv = onePixHsv.at<cv::Vec3b>(0,0);
-                        int avgHue = (int)avgHsv[0];
-                        int avgSat = (int)avgHsv[1];
-                        int avgVal = (int)avgHsv[2];
-
-                        // === DEBUG LOGGING ===
-                        juce::String logMsg;
-                        logMsg << "[ColorTracker][PICK] xy=" << mx << "," << my
-                               << " roi=" << roi.x << "," << roi.y << " " << roi.width << "x" << roi.height
-                               << " BGR=" << (int)bgr8[2] << "," << (int)bgr8[1] << "," << (int)bgr8[0]
-                               << " HSV=" << avgHue << "," << avgSat << "," << avgVal;
-                        juce::Logger::writeToLog(logMsg);
-
-                        const juce::ScopedLock lock(colorListLock);
-                        if (targetIdx < 0 || targetIdx >= (int)trackedColors.size())
-                        {
-                            TrackedColor tc;
-                            tc.name = juce::String("Color ") + juce::String((int)trackedColors.size() + 1);
-                            tc.hsvLower = cv::Scalar(
-                                juce::jlimit(0, 179, avgHue - 10),
-                                juce::jlimit(0, 255, avgSat - 40),
-                                juce::jlimit(0, 255, avgVal - 40));
-                            tc.hsvUpper = cv::Scalar(
-                                juce::jlimit(0, 179, avgHue + 10),
-                                juce::jlimit(0, 255, avgSat + 40),
-                                juce::jlimit(0, 255, avgVal + 40));
-                            tc.displayColour = juce::Colour((juce::uint8)bgr8[2], (juce::uint8)bgr8[1], (juce::uint8)bgr8[0]);
-                            trackedColors.push_back(tc);
-                            juce::Logger::writeToLog(
-                                juce::String("[ColorTracker][ADD] name=") + tc.name +
-                                " swatchRGB=" + juce::String((int)bgr8[2]) + "," + juce::String((int)bgr8[1]) + "," + juce::String((int)bgr8[0]) +
-                                " hsvLower=" + juce::String((int)tc.hsvLower[0]) + "," + juce::String((int)tc.hsvLower[1]) + "," + juce::String((int)tc.hsvLower[2]) +
-                                " hsvUpper=" + juce::String((int)tc.hsvUpper[0]) + "," + juce::String((int)tc.hsvUpper[1]) + "," + juce::String((int)tc.hsvUpper[2])
-                            );
-                        }
-                        else
-                        {
-                            auto& tc = trackedColors[(size_t)targetIdx];
-                            tc.hsvLower = cv::Scalar(
-                                juce::jlimit(0, 179, avgHue - 10),
-                                juce::jlimit(0, 255, avgSat - 40),
-                                juce::jlimit(0, 255, avgVal - 40));
-                            tc.hsvUpper = cv::Scalar(
-                                juce::jlimit(0, 179, avgHue + 10),
-                                juce::jlimit(0, 255, avgSat + 40),
-                                juce::jlimit(0, 255, avgVal + 40));
-                            tc.displayColour = juce::Colour((juce::uint8)bgr8[2], (juce::uint8)bgr8[1], (juce::uint8)bgr8[0]);
-                            juce::Logger::writeToLog(
-                                juce::String("[ColorTracker][UPDATE] index=") + juce::String(targetIdx) +
-                                " swatchRGB=" + juce::String((int)bgr8[2]) + "," + juce::String((int)bgr8[1]) + "," + juce::String((int)bgr8[0]) +
-                                " hsvLower=" + juce::String((int)tc.hsvLower[0]) + "," + juce::String((int)tc.hsvLower[1]) + "," + juce::String((int)tc.hsvLower[2]) +
-                                " hsvUpper=" + juce::String((int)tc.hsvUpper[0]) + "," + juce::String((int)tc.hsvUpper[1]) + "," + juce::String((int)tc.hsvUpper[2])
-                            );
-                        }
-                    }
-                }
-                isColorPickerActive.store(false);
-            }
+            // NOTE: No queued color-pick path here anymore; add/update is handled synchronously by addColorAt()
 
             ColorResult result;
             {
@@ -253,7 +176,7 @@ juce::Image ColorTrackerModule::getLatestFrame()
 
 void ColorTrackerModule::addColorAt(int x, int y)
 {
-    // Try synchronous immediate update for paused/idle UI first
+    // Synchronous immediate update only (no background queuing)
     bool appliedSync = false;
 
     cv::Mat frameCopy;
@@ -318,20 +241,11 @@ void ColorTrackerModule::addColorAt(int x, int y)
         }
     }
 
-    if (appliedSync)
-    {
-        // We handled this click synchronously; do NOT queue a second async apply.
-        addColorRequested.store(false);
-        pickerMouseX.store(-1);
-        pickerMouseY.store(-1);
-        isColorPickerActive.store(false);
-        return;
-    }
-
-    // Fallback: queue for background thread (no cached frame available)
-    pickerMouseX.store(x);
-    pickerMouseY.store(y);
-    addColorRequested.store(true);
+    // Finalize picker state; never queue async to avoid duplicates
+    addColorRequested.store(false);
+    pickerMouseX.store(-1);
+    pickerMouseY.store(-1);
+    isColorPickerActive.store(false);
 }
 
 juce::ValueTree ColorTrackerModule::getExtraStateTree() const

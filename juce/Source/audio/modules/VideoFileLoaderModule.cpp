@@ -99,20 +99,20 @@ void VideoFileLoaderModule::run()
                 videoFileToLoad = juce::File{}; // Clear request immediately after processing
                 sourceIsOpen = true;
                 needPreviewFrame.store(true);
-                // Reset state for new media
+                // Reset state for new media, but keep user-defined in/out ranges
                 totalFrames.store(0); // force re-evaluation
                 lastPosFrame.store(0);
                 pendingSeekFrame.store(0);
-                if (auto* pIn = dynamic_cast<juce::AudioParameterFloat*>(apvts.getParameter("in"))) *pIn = 0.0f;
-                if (auto* pOut = dynamic_cast<juce::AudioParameterFloat*>(apvts.getParameter("out"))) *pOut = 1.0f;
                 
-                // Get the video's native FPS
+                // Get the video's native FPS and codec
                 videoFps = videoCapture.get(cv::CAP_PROP_FPS);
+                lastFourcc.store((int) videoCapture.get(cv::CAP_PROP_FOURCC));
                 {
                     int tf = (int) videoCapture.get(cv::CAP_PROP_FRAME_COUNT);
                     if (tf <= 1) tf = 0; // treat unknown/invalid as 0 so UI uses normalized seeks
                     totalFrames.store(tf);
-                    juce::Logger::writeToLog("[VideoFileLoader] Opened '" + currentVideoFile.getFileName() + "' frames=" + juce::String(tf));
+                    juce::Logger::writeToLog("[VideoFileLoader] Opened '" + currentVideoFile.getFileName() + "' frames=" + juce::String(tf) +
+                                             ", fps=" + juce::String(videoFps,2) + ", fourcc='" + fourccToString(lastFourcc.load()) + "'");
                 }
                 if (videoFps > 0.0 && videoFps < 1000.0) // Sanity check
                 {
@@ -230,6 +230,8 @@ void VideoFileLoaderModule::run()
                         updateGuiFrame(preview);
                         juce::Logger::writeToLog("[VideoFileLoader][Preview] Published paused preview frame");
                         lastPosFrame.store((int) videoCapture.get(cv::CAP_PROP_POS_FRAMES));
+                        if (lastFourcc.load() == 0)
+                            lastFourcc.store((int) videoCapture.get(cv::CAP_PROP_FOURCC));
                         // Also try to refresh total frames after the first paused read
                         if (totalFrames.load() <= 1)
                         {
@@ -261,6 +263,8 @@ void VideoFileLoaderModule::run()
             // Update local preview
             updateGuiFrame(frame);
             lastPosFrame.store((int) videoCapture.get(cv::CAP_PROP_POS_FRAMES));
+            if (lastFourcc.load() == 0)
+                lastFourcc.store((int) videoCapture.get(cv::CAP_PROP_FOURCC));
             // If frame count was unknown at open time, refresh it after first (or any) read
             if (totalFrames.load() <= 1)
             {
@@ -523,6 +527,17 @@ void VideoFileLoaderModule::drawParametersInNode(float itemWidth,
     if (atMax) ImGui::EndDisabled();
     
     ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1.0f), "Source ID: %d", (int)getLogicalId());
+    {
+        int fcc = lastFourcc.load();
+        juce::String codec = fourccToString(fcc);
+        juce::String friendly = fourccFriendlyName(codec);
+        juce::String ext = currentVideoFile.getFileExtension();
+        if (ext.startsWithChar('.')) ext = ext.substring(1);
+        ImGui::TextColored(ImVec4(0.5f, 0.8f, 0.5f, 1.0f), "Codec: %s (%s)   Container: %s",
+                           codec.toRawUTF8(), friendly.toRawUTF8(), (ext.isEmpty() ? "unknown" : ext.toRawUTF8()));
+        if (totalFrames.load() <= 1)
+            ImGui::TextColored(ImVec4(0.9f, 0.7f, 0.2f, 1.0f), "Length unknown yet (ratio seeks)");
+    }
 
     // --- Playback speed (slider only) ---
     float spd = speedParam ? speedParam->load() : 1.0f;
