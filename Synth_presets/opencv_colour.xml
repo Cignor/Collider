@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<ModularSynthPreset version="1" bpm="120.0">
+  <modules>
+    <module logicalId="1" type="webcam_loader">
+      <params>
+        <WebcamLoaderParams>
+          <PARAM id="cameraIndex" value="2.0"/>
+          <PARAM id="zoomLevel" value="1.0"/>
+        </WebcamLoaderParams>
+      </params>
+    </module>
+    <module logicalId="2" type="color_tracker">
+      <params>
+        <ColorTrackerParams>
+          <PARAM id="sourceId" value="0.0"/>
+          <PARAM id="zoomLevel" value="1.0"/>
+        </ColorTrackerParams>
+      </params>
+    </module>
+  </modules>
+  <connections>
+    <connection srcId="1" srcChan="0" dstId="2" dstChan="0"/>
+  </connections>
+  <NodeEditorUI>
+    <node id="1" x="686.0" y="318.0"/>
+    <node id="2" x="1334.0" y="208.0"/>
+    <node id="0" x="0.0" y="0.0"/>
+  </NodeEditorUI>
+</ModularSynthPreset>

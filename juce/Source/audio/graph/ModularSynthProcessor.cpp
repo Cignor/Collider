@@ -72,6 +72,12 @@
 #include "../modules/MovementDetectorModule.h"
 #include "../modules/HumanDetectorModule.h"
 #include "../modules/PoseEstimatorModule.h"
+#include "../modules/HandTrackerModule.h"
+#include "../modules/FaceTrackerModule.h"
+#include "../modules/ObjectDetectorModule.h"
+#include "../modules/ColorTrackerModule.h"
+#include "../modules/ContourDetectorModule.h"
+#include "../modules/SemanticSegmentationModule.h"
 #include "../modules/InletModuleProcessor.h"
 #include "../modules/OutletModuleProcessor.h"
 #include "../modules/MetaModuleProcessor.h"
@@ -733,6 +739,12 @@ namespace {
             reg("movement_detector", []{ return std::make_unique<MovementDetectorModule>(); });
             reg("human_detector", []{ return std::make_unique<HumanDetectorModule>(); });
             reg("pose_estimator", []{ return std::make_unique<PoseEstimatorModule>(); });
+            reg("hand_tracker", []{ return std::make_unique<HandTrackerModule>(); });
+            reg("face_tracker", []{ return std::make_unique<FaceTrackerModule>(); });
+            reg("object_detector", []{ return std::make_unique<ObjectDetectorModule>(); });
+            reg("color_tracker", []{ return std::make_unique<ColorTrackerModule>(); });
+            reg("contour_detector", []{ return std::make_unique<ContourDetectorModule>(); });
+            reg("semantic_segmentation", []{ return std::make_unique<SemanticSegmentationModule>(); });
             reg("stroke_sequencer", []{ return std::make_unique<StrokeSequencerModuleProcessor>(); });
             
             reg("meta module", []{ return std::make_unique<MetaModuleProcessor>(); });

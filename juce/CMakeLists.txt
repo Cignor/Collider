@@ -475,6 +475,18 @@ target_sources(ColliderApp PRIVATE
     Source/audio/modules/HumanDetectorModule.cpp
     Source/audio/modules/PoseEstimatorModule.h
     Source/audio/modules/PoseEstimatorModule.cpp
+    Source/audio/modules/HandTrackerModule.h
+    Source/audio/modules/HandTrackerModule.cpp
+    Source/audio/modules/FaceTrackerModule.h
+    Source/audio/modules/FaceTrackerModule.cpp
+    Source/audio/modules/ObjectDetectorModule.h
+    Source/audio/modules/ObjectDetectorModule.cpp
+    Source/audio/modules/ColorTrackerModule.h
+    Source/audio/modules/ColorTrackerModule.cpp
+    Source/audio/modules/ContourDetectorModule.h
+    Source/audio/modules/ContourDetectorModule.cpp
+    Source/audio/modules/SemanticSegmentationModule.h
+    Source/audio/modules/SemanticSegmentationModule.cpp
     Source/animation/AnimationData.h
     Source/animation/RawAnimationData.h
     Source/animation/RawAnimationData.cpp
@@ -758,6 +770,18 @@ target_sources(PresetCreatorApp PRIVATE
     Source/audio/modules/HumanDetectorModule.cpp
     Source/audio/modules/PoseEstimatorModule.h
     Source/audio/modules/PoseEstimatorModule.cpp
+    Source/audio/modules/HandTrackerModule.h
+    Source/audio/modules/HandTrackerModule.cpp
+    Source/audio/modules/FaceTrackerModule.h
+    Source/audio/modules/FaceTrackerModule.cpp
+    Source/audio/modules/ObjectDetectorModule.h
+    Source/audio/modules/ObjectDetectorModule.cpp
+    Source/audio/modules/ColorTrackerModule.h
+    Source/audio/modules/ColorTrackerModule.cpp
+    Source/audio/modules/ContourDetectorModule.h
+    Source/audio/modules/ContourDetectorModule.cpp
+    Source/audio/modules/SemanticSegmentationModule.h
+    Source/audio/modules/SemanticSegmentationModule.cpp
     Source/animation/AnimationData.h
     Source/animation/RawAnimationData.h
     Source/animation/RawAnimationData.cpp

@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<ModularSynthPreset version="1" bpm="120.0">
+  <modules>
+    <module logicalId="1" type="webcam_loader">
+      <params>
+        <WebcamLoaderParams>
+          <PARAM id="cameraIndex" value="2.0"/>
+          <PARAM id="zoomLevel" value="0.0"/>
+        </WebcamLoaderParams>
+      </params>
+    </module>
+    <module logicalId="4" type="contour_detector">
+      <params>
+        <ContourDetectorParams>
+          <PARAM id="noiseReduction" value="1.0"/>
+          <PARAM id="sourceId" value="0.0"/>
+          <PARAM id="threshold" value="128.0"/>
+          <PARAM id="zoomLevel" value="1.0"/>
+        </ContourDetectorParams>
+      </params>
+    </module>
+    <module logicalId="5" type="color_tracker">
+      <params>
+        <ColorTrackerParams>
+          <PARAM id="sourceId" value="0.0"/>
+          <PARAM id="zoomLevel" value="1.0"/>
+        </ColorTrackerParams>
+      </params>
+    </module>
+    <module logicalId="7" type="semantic_segmentation">
+      <params>
+        <SemanticSegmentationParams>
+          <PARAM id="sourceId" value="0.0"/>
+          <PARAM id="targetClass" value="0.0"/>
+          <PARAM id="zoomLevel" value="1.0"/>
+        </SemanticSegmentationParams>
+      </params>
+    </module>
+    <module logicalId="8" type="object_detector">
+      <params>
+        <ObjectDetectorParams>
+          <PARAM id="confidence" value="0.5"/>
+          <PARAM id="sourceId" value="0.0"/>
+          <PARAM id="targetClass" value="0.0"/>
+          <PARAM id="zoomLevel" value="1.0"/>
+        </ObjectDetectorParams>
+      </params>
+    </module>
+  </modules>
+  <connections/>
+  <NodeEditorUI>
+    <node id="1" x="591.0" y="306.0"/>
+    <node id="4" x="1584.0" y="416.0"/>
+    <node id="5" x="1585.0" y="597.0"/>
+    <node id="7" x="1600.0" y="701.0"/>
+    <node id="8" x="1602.0" y="871.0"/>
+    <node id="0" x="0.0" y="0.0"/>
+  </NodeEditorUI>
+</ModularSynthPreset>

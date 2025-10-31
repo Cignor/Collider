@@ -1,0 +1,86 @@
+#pragma once
+
+#include "ModuleProcessor.h"
+#include <opencv2/core.hpp>
+#include <juce_core/juce_core.h>
+#include <juce_audio_processors/juce_audio_processors.h>
+#include <juce_graphics/juce_graphics.h>
+#if defined(PRESET_CREATOR_UI)
+#include <juce_gui_basics/juce_gui_basics.h>
+#endif
+
+// A struct to hold the state and results for a single tracked color.
+struct TrackedColor
+{
+    juce::String name;
+    cv::Scalar hsvLower { 0, 100, 100 };
+    cv::Scalar hsvUpper { 10, 255, 255 };
+};
+
+// x, y, area for each color
+using ColorResult = std::vector<std::tuple<float, float, float>>;
+
+class ColorTrackerModule : public ModuleProcessor, private juce::Thread
+{
+public:
+    ColorTrackerModule();
+    ~ColorTrackerModule() override;
+
+    const juce::String getName() const override { return "color_tracker"; }
+    
+    void prepareToPlay(double sampleRate, int samplesPerBlock) override;
+    void releaseResources() override;
+    void processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midi) override;
+    
+    juce::AudioProcessorValueTreeState& getAPVTS() override { return apvts; }
+    juce::Image getLatestFrame();
+
+    // UI integration helpers
+    void addColorAt(int x, int y);
+    bool isPickerActive() const { return isColorPickerActive.load(); }
+    void exitPickerMode() { isColorPickerActive.store(false); }
+
+    // Dynamic outputs: 3 per color
+    std::vector<DynamicPinInfo> getDynamicOutputPins() const override;
+
+#if defined(PRESET_CREATOR_UI)
+    void drawParametersInNode(float itemWidth,
+                              const std::function<bool(const juce::String& paramId)>& isParamModulated,
+                              const std::function<void()>& onModificationEnded) override;
+    void drawIoPins(const NodePinHelpers& helpers) override;
+    ImVec2 getCustomNodeSize() const override;
+#endif
+
+private:
+    void run() override;
+    void updateGuiFrame(const cv::Mat& frame);
+    
+    static juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout();
+    juce::AudioProcessorValueTreeState apvts;
+    
+    std::atomic<float>* sourceIdParam = nullptr;
+    std::atomic<float>* zoomLevelParam = nullptr; // 0=Small,1=Normal,2=Large
+    
+    // Thread-safe color list
+    std::vector<TrackedColor> trackedColors;
+    mutable juce::CriticalSection colorListLock;
+    
+    // Source ID (set by audio thread)
+    std::atomic<juce::uint32> currentSourceId { 0 };
+    
+    // FIFO for communication
+    ColorResult lastResultForAudio;
+    juce::AbstractFifo fifo { 16 };
+    std::vector<ColorResult> fifoBuffer;
+    
+    // UI interaction
+    std::atomic<bool> isColorPickerActive { false };
+    std::atomic<int> pickerMouseX { -1 }, pickerMouseY { -1 };
+    std::atomic<bool> addColorRequested { false };
+
+    // UI preview
+    juce::Image latestFrameForGui;
+    juce::CriticalSection imageLock;
+};
+
+

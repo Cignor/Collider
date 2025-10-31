@@ -30,6 +30,12 @@
 #include "../audio/modules/MovementDetectorModule.h"
 #include "../audio/modules/HumanDetectorModule.h"
 #include "../audio/modules/PoseEstimatorModule.h"
+#include "../audio/modules/ColorTrackerModule.h"
+#include "../audio/modules/ContourDetectorModule.h"
+#include "../audio/modules/SemanticSegmentationModule.h"
+#include "../audio/modules/ObjectDetectorModule.h"
+#include "../audio/modules/HandTrackerModule.h"
+#include "../audio/modules/FaceTrackerModule.h"
 #include "../audio/modules/MapRangeModuleProcessor.h"
 #include "../audio/modules/LagProcessorModuleProcessor.h"
 #include "../audio/modules/DeCrackleModuleProcessor.h"
@@ -1592,7 +1598,13 @@ void ImGuiNodeEditorComponent::renderImGui()
         ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1.0f), "Processors:");
         addModuleButton("Movement Detector", "movement_detector");
         addModuleButton("Human Detector", "human_detector");
+        addModuleButton("Object Detector", "object_detector");
         addModuleButton("Pose Estimator", "pose_estimator");
+        addModuleButton("Hand Tracker", "hand_tracker");
+        addModuleButton("Face Tracker", "face_tracker");
+        addModuleButton("Color Tracker", "color_tracker");
+        addModuleButton("Contour Detector", "contour_detector");
+        addModuleButton("Semantic Segmentation", "semantic_segmentation");
     }
     
     // ═══════════════════════════════════════════════════════════════════════════════
@@ -2335,6 +2347,140 @@ if (auto* mp = synth->getModuleForLogical (lid))
             }
         }
         poseModule->drawParametersInNode(nodeContentWidth, isParamModulated, onModificationEnded);
+    }
+    else if (auto* colorModule = dynamic_cast<ColorTrackerModule*>(mp))
+    {
+        juce::Image frame = colorModule->getLatestFrame();
+        if (!frame.isNull())
+        {
+            if (visionModuleTextures.find((int)lid) == visionModuleTextures.end())
+                visionModuleTextures[(int)lid] = std::make_unique<juce::OpenGLTexture>();
+            auto* texture = visionModuleTextures[(int)lid].get();
+            texture->loadImage(frame);
+            if (texture->getTextureID() != 0)
+            {
+                float ar = (float)frame.getHeight() / juce::jmax(1.0f, (float)frame.getWidth());
+                ImVec2 size(nodeContentWidth, nodeContentWidth * ar);
+                ImGui::Image((void*)(intptr_t)texture->getTextureID(), size, ImVec2(0,1), ImVec2(1,0));
+
+                // Handle color picker clicks when active
+                if (colorModule->isPickerActive() && ImGui::IsItemHovered())
+                {
+                    ImGui::SetTooltip("Click to pick a color from the video");
+                    if (ImGui::IsMouseClicked(ImGuiMouseButton_Left))
+                    {
+                        ImVec2 mousePos = ImGui::GetMousePos();
+                        ImVec2 itemMin = ImGui::GetItemRectMin();
+                        ImVec2 itemSize = ImGui::GetItemRectSize();
+                        float nx = (mousePos.x - itemMin.x) / itemSize.x;
+                        float ny = (mousePos.y - itemMin.y) / itemSize.y;
+                        int px = (int)juce::jlimit(0.0f, 1.0f, nx) * frame.getWidth();
+                        int py = (int)juce::jlimit(0.0f, 1.0f, ny) * frame.getHeight();
+                        colorModule->addColorAt(px, py);
+                        colorModule->exitPickerMode();
+                    }
+                }
+            }
+        }
+        colorModule->drawParametersInNode(nodeContentWidth, isParamModulated, onModificationEnded);
+    }
+    else if (auto* contourModule = dynamic_cast<ContourDetectorModule*>(mp))
+    {
+        juce::Image frame = contourModule->getLatestFrame();
+        if (!frame.isNull())
+        {
+            if (visionModuleTextures.find((int)lid) == visionModuleTextures.end())
+                visionModuleTextures[(int)lid] = std::make_unique<juce::OpenGLTexture>();
+            auto* texture = visionModuleTextures[(int)lid].get();
+            texture->loadImage(frame);
+            if (texture->getTextureID() != 0)
+            {
+                float ar = (float)frame.getHeight() / juce::jmax(1.0f, (float)frame.getWidth());
+                ImVec2 size(nodeContentWidth, nodeContentWidth * ar);
+                ImGui::Image((void*)(intptr_t)texture->getTextureID(), size, ImVec2(0,1), ImVec2(1,0));
+            }
+        }
+        contourModule->drawParametersInNode(nodeContentWidth, isParamModulated, onModificationEnded);
+    }
+    else if (auto* segModule = dynamic_cast<SemanticSegmentationModule*>(mp))
+    {
+        juce::Image frame = segModule->getLatestFrame();
+        if (!frame.isNull())
+        {
+            if (visionModuleTextures.find((int)lid) == visionModuleTextures.end())
+                visionModuleTextures[(int)lid] = std::make_unique<juce::OpenGLTexture>();
+            auto* texture = visionModuleTextures[(int)lid].get();
+            texture->loadImage(frame);
+            if (texture->getTextureID() != 0)
+            {
+                float ar = (float)frame.getHeight() / juce::jmax(1.0f, (float)frame.getWidth());
+                ImVec2 size(nodeContentWidth, nodeContentWidth * ar);
+                ImGui::Image((void*)(intptr_t)texture->getTextureID(), size, ImVec2(0,1), ImVec2(1,0));
+            }
+        }
+        segModule->drawParametersInNode(nodeContentWidth, isParamModulated, onModificationEnded);
+    }
+    else if (auto* objModule = dynamic_cast<ObjectDetectorModule*>(mp))
+    {
+        juce::Image frame = objModule->getLatestFrame();
+        if (!frame.isNull())
+        {
+            if (visionModuleTextures.find((int)lid) == visionModuleTextures.end())
+                visionModuleTextures[(int)lid] = std::make_unique<juce::OpenGLTexture>();
+            auto* texture = visionModuleTextures[(int)lid].get();
+            texture->loadImage(frame);
+            if (texture->getTextureID() != 0)
+            {
+                float ar = (float)frame.getHeight() / juce::jmax(1.0f, (float)frame.getWidth());
+                ImVec2 size(nodeContentWidth, nodeContentWidth * ar);
+                ImGui::Image((void*)(intptr_t)texture->getTextureID(), size, ImVec2(0,1), ImVec2(1,0));
+            }
+        }
+        objModule->drawParametersInNode(nodeContentWidth, isParamModulated, onModificationEnded);
+    }
+    else if (auto* handModule = dynamic_cast<HandTrackerModule*>(mp))
+    {
+        juce::Image frame = handModule->getLatestFrame();
+        if (!frame.isNull())
+        {
+            if (visionModuleTextures.find((int)lid) == visionModuleTextures.end())
+            {
+                visionModuleTextures[(int)lid] = std::make_unique<juce::OpenGLTexture>();
+            }
+            juce::OpenGLTexture* texture = visionModuleTextures[(int)lid].get();
+            texture->loadImage(frame);
+            if (texture->getTextureID() != 0)
+            {
+                float nativeWidth = (float)frame.getWidth();
+                float nativeHeight = (float)frame.getHeight();
+                float aspectRatio = (nativeWidth > 0.0f) ? nativeHeight / nativeWidth : 0.75f;
+                ImVec2 renderSize = ImVec2(nodeContentWidth, nodeContentWidth * aspectRatio);
+                ImGui::Image((void*)(intptr_t)texture->getTextureID(), renderSize, ImVec2(0, 1), ImVec2(1, 0));
+            }
+        }
+        handModule->drawParametersInNode(nodeContentWidth, isParamModulated, onModificationEnded);
+    }
+    else if (auto* faceModule = dynamic_cast<FaceTrackerModule*>(mp))
+    {
+        juce::Image frame = faceModule->getLatestFrame();
+        if (!frame.isNull())
+        {
+            if (visionModuleTextures.find((int)lid) == visionModuleTextures.end())
+            {
+                visionModuleTextures[(int)lid] = std::make_unique<juce::OpenGLTexture>();
+            }
+            juce::OpenGLTexture* texture = visionModuleTextures[(int)lid].get();
+            texture->loadImage(frame);
+            if (texture->getTextureID() != 0)
+            {
+                float nativeWidth = (float)frame.getWidth();
+                float nativeHeight = (float)frame.getHeight();
+                float aspectRatio = (nativeWidth > 0.0f) ? nativeHeight / nativeWidth : 0.75f;
+                ImVec2 renderSize = ImVec2(nodeContentWidth, nodeContentWidth * aspectRatio);
+                ImGui::Image((void*)(intptr_t)texture->getTextureID(), renderSize, ImVec2(0, 1), ImVec2(1, 0));
+            }
+        }
+        faceModule->drawParametersInNode(nodeContentWidth, isParamModulated, onModificationEnded);
     }
     else
     {
@@ -3808,7 +3954,13 @@ if (auto* mp = synth->getModuleForLogical (lid))
                     ImGui::Separator();
                     if (ImGui::MenuItem("Movement Detector")) addAtMouse("movement_detector");
                     if (ImGui::MenuItem("Human Detector")) addAtMouse("human_detector");
+                    if (ImGui::MenuItem("Object Detector")) addAtMouse("object_detector");
                     if (ImGui::MenuItem("Pose Estimator")) addAtMouse("pose_estimator");
+                    if (ImGui::MenuItem("Hand Tracker")) addAtMouse("hand_tracker");
+                    if (ImGui::MenuItem("Face Tracker")) addAtMouse("face_tracker");
+                    if (ImGui::MenuItem("Color Tracker")) addAtMouse("color_tracker");
+                    if (ImGui::MenuItem("Contour Detector")) addAtMouse("contour_detector");
+                    if (ImGui::MenuItem("Semantic Segmentation")) addAtMouse("semantic_segmentation");
                     ImGui::EndMenu();
                 }
                 
@@ -7473,7 +7625,9 @@ ImGuiNodeEditorComponent::ModuleCategory ImGuiNodeEditorComponent::getModuleCate
     // --- 10. COMPUTER VISION (Bright Orange) ---
     if (lower.contains("webcam") || lower.contains("video_file") ||
         lower.contains("movement") || lower.contains("detector") || 
-        lower.contains("opencv") || lower.contains("vision"))
+        lower.contains("opencv") || lower.contains("vision") ||
+        lower.contains("tracker") || lower.contains("segmentation") ||
+        lower.contains("pose_estimator"))
         return ModuleCategory::OpenCV;
     
     // --- 11. SYSTEM (Lavender) ---
@@ -7559,7 +7713,13 @@ std::map<juce::String, std::pair<const char*, const char*>> ImGuiNodeEditorCompo
         {"Video File Loader", {"video_file_loader", "Loads and plays a video file, publishes it as a source for vision processing modules"}},
         {"Movement Detector", {"movement_detector", "Analyzes video source for motion via optical flow or background subtraction, outputs motion data as CV"}},
         {"Human Detector", {"human_detector", "Detects faces or bodies in video source via Haar Cascades or HOG, outputs position and size as CV"}},
+        {"Object Detector", {"object_detector", "Uses YOLOv3 to detect objects (person, car, etc.) and outputs bounding box position/size as CV"}},
         {"Pose Estimator", {"pose_estimator", "Uses OpenPose to detect 15 body keypoints (head, shoulders, elbows, wrists, hips, knees, ankles) and outputs their positions as CV signals"}},
+        {"Hand Tracker", {"hand_tracker", "Detects 21 hand keypoints and outputs their X/Y positions as CV (42 channels)"}},
+        {"Face Tracker", {"face_tracker", "Detects 70 facial landmarks and outputs X/Y positions as CV (140 channels)"}},
+        {"Color Tracker", {"color_tracker", "Tracks multiple colors in video and outputs their positions and sizes as CV"}},
+        {"Contour Detector", {"contour_detector", "Detects shapes via background subtraction and outputs area, complexity, and aspect ratio as CV"}},
+        {"Semantic Segmentation", {"semantic_segmentation", "Uses deep learning to segment video into semantic regions and outputs detected areas as CV"}},
         
         // Effects
         {"VCF", {"vcf", "Voltage Controlled Filter"}},

@@ -1,7 +1,7 @@
 # Collider Modular Synthesizer - Node Dictionary
 
-**Last Updated:** October 30, 2025  
-**Version:** 1.0
+**Last Updated:** December 17, 2024  
+**Version:** 1.1
 
 ---
 
@@ -94,7 +94,13 @@
 - [Video File Loader](#video-file-loader) - Video File Source
 - [Movement Detector](#movement-detector) - Motion Detection
 - [Human Detector](#human-detector) - Face/Body Detection
+- [Object Detector](#object-detector) - Object Detection (YOLOv3)
 - [Pose Estimator](#pose-estimator) - Body Keypoint Detection
+- [Hand Tracker](#hand-tracker) - Hand Keypoint Tracking
+- [Face Tracker](#face-tracker) - Facial Landmark Tracking
+- [Color Tracker](#color-tracker) - Multi-Color Tracking
+- [Contour Detector](#contour-detector) - Shape Detection
+- [Semantic Segmentation](#semantic-segmentation) - Scene Segmentation
 
 #### 11. SYSTEM NODES
 - [Meta](#meta) - Meta Module Container
@@ -1828,6 +1834,251 @@ Uses OpenPose MPI model to detect 15 human body keypoints in real-time video, pr
 - OpenPose MPI model files (~200 MB download)
 - Webcam or video file source
 - OpenCV with DNN module (included in build)
+
+---
+
+### Hand Tracker
+**Hand Keypoint Detection**
+
+Uses OpenPose hand model to detect 21 hand keypoints in real-time video, providing precise finger and wrist tracking.
+
+**Inputs:**
+- `Source In` (Raw) - Video source ID from webcam or video file loader
+
+**Outputs:**
+- `Wrist X/Y` (CV) - Wrist position
+- `Thumb 1-4 X/Y` (CV) - Thumb joint positions (4 points)
+- `Index 1-4 X/Y` (CV) - Index finger joint positions (4 points)
+- `Middle 1-4 X/Y` (CV) - Middle finger joint positions (4 points)
+- `Ring 1-4 X/Y` (CV) - Ring finger joint positions (4 points)
+- `Pinky 1-4 X/Y` (CV) - Pinky finger joint positions (4 points)
+
+**Parameters:**
+- `Confidence` (0.0-1.0) - Detection confidence threshold (default: 0.1)
+- `Zoom` (+/-) - Adjust preview size: Small (240px), Normal (480px), Large (960px)
+
+**How to Use:**
+1. **Setup:** Requires OpenPose hand model files in `assets/openpose_models/hand/`
+2. **Connect Video Source:** Connect Webcam or Video File Loader's `Source ID` to `Source In`
+3. **Adjust Confidence:** Lower values for sensitive detection, higher for reliable detection
+4. **Map Gestures:** Connect finger joint positions to synthesis parameters
+5. **Example Patches:**
+   - **Gesture Control:** Map thumb position to filter cutoff, index position to VCO frequency
+   - **Finger Tracking:** Use individual finger tips for multi-parameter control
+   - **Hand Size:** Use wrist to fingertip distances for amplitude or volume control
+6. **Performance Tips:**
+   - Works best with hands clearly visible against contrasting background
+   - Keep hands ~30-80cm from camera
+   - Good lighting improves detection accuracy
+
+**Technical Details:**
+- Uses OpenPose hand detection model
+- Detects 21 keypoints per hand
+- Runs at ~15 FPS on CPU
+- Outputs normalized coordinates (0-1 range)
+
+---
+
+### Face Tracker
+**Facial Landmark Detection**
+
+Uses OpenPose face model to detect 70 facial landmarks, providing detailed face and expression tracking.
+
+**Inputs:**
+- `Source In` (Raw) - Video source ID from webcam or video file loader
+
+**Outputs:**
+- `Pt 1-70 X/Y` (CV) - 70 facial landmark positions (eyes, nose, mouth, face outline)
+
+**Parameters:**
+- `Confidence` (0.0-1.0) - Detection confidence threshold (default: 0.1)
+- `Zoom` (+/-) - Adjust preview size: Small (240px), Normal (480px), Large (960px)
+
+**How to Use:**
+1. **Setup:** Requires OpenPose face model files in `assets/openpose_models/face/`
+2. **Connect Video Source:** Connect Webcam or Video File Loader's `Source ID` to `Source In`
+3. **Adjust Confidence:** Lower values for sensitive detection, higher for reliable detection
+4. **Map Landmarks:** Connect facial landmark positions to synthesis parameters
+5. **Example Patches:**
+   - **Expression Control:** Map mouth width to effect parameters, eyebrow position to filter resonance
+   - **Head Tracking:** Use face center for spatial panning
+   - **Lip Sync:** Use mouth landmarks for vocoder or formant filtering
+6. **Performance Tips:**
+   - Face-front camera position works best
+   - Keep face well-lit
+   - Maintain 50-150cm distance from camera
+
+**Technical Details:**
+- Uses Haar Cascade for face detection, OpenPose DNN for landmark estimation
+- Detects 70 landmarks per face
+- Runs at ~15 FPS on CPU
+- Outputs normalized coordinates (0-1 range)
+
+---
+
+### Object Detector
+**YOLOv3 Object Detection**
+
+Uses YOLOv3 deep learning model to detect objects from 80 COCO classes (person, car, bottle, etc.) in real-time video.
+
+**Inputs:**
+- `Source In` (Raw) - Video source ID from webcam or video file loader
+
+**Outputs:**
+- `X` (CV) - Center X position of detected object (normalized 0-1)
+- `Y` (CV) - Center Y position of detected object (normalized 0-1)
+- `Width` (CV) - Object width (normalized 0-1)
+- `Height` (CV) - Object height (normalized 0-1)
+- `Gate` (Gate) - High when object detected
+
+**Parameters:**
+- `Target Class` (Choice) - Object class to detect (person, car, bicycle, etc.)
+- `Confidence` (0.0-1.0) - Detection confidence threshold (default: 0.5)
+- `Zoom` (+/-) - Adjust preview size: Small (240px), Normal (480px), Large (960px)
+
+**How to Use:**
+1. **Setup:** Requires YOLOv3 model files (`yolov3.cfg`, `yolov3.weights`, `coco.names`) in `assets/`
+2. **Connect Video Source:** Connect Webcam or Video File Loader's `Source ID` to `Source In`
+3. **Select Target Class:** Choose which object type to detect
+4. **Adjust Confidence:** Lower for more detections (may include false positives), higher for reliable detection
+5. **Map Coordinates:** Connect X/Y/Width/Height outputs to synthesis parameters
+6. **Example Patches:**
+   - **Person Tracking:** Use person bounding box to trigger events when person enters/exits frame
+   - **Object Size Control:** Use Width × Height to control effect amount
+   - **Position-Based Effects:** Map center X to panning, center Y to filter cutoff
+7. **Performance Tips:**
+   - YOLO is computationally intensive (~10 FPS on CPU)
+   - Good lighting and contrast improve detection
+   - Larger objects are detected more reliably
+
+**Technical Details:**
+- Uses YOLOv3 (You Only Look Once v3) detection model
+- 80 COCO object classes supported
+- Runs at ~10 FPS on CPU
+- Outputs normalized bounding box coordinates
+- Falls back to YOLOv3-tiny if standard model not available
+
+---
+
+### Color Tracker
+**Multi-Color HSV Tracking**
+
+Tracks multiple custom colors in video using HSV color space, outputting position and area for each tracked color.
+
+**Inputs:**
+- `Source In` (Raw) - Video source ID from webcam or video file loader
+
+**Outputs:**
+- Dynamic outputs per tracked color:
+  - `[Color Name] X` (CV) - Center X position (normalized 0-1)
+  - `[Color Name] Y` (CV) - Center Y position (normalized 0-1)
+  - `[Color Name] Area` (CV) - Area covered (normalized 0-1)
+
+**Parameters:**
+- `Add Color...` (Button) - Click to pick a color from the video preview
+- `Zoom` (+/-) - Adjust preview size: Small (240px), Normal (480px), Large (960px)
+
+**How to Use:**
+1. **Connect Video Source:** Connect Webcam or Video File Loader's `Source ID` to `Source In`
+2. **Pick Colors:** Click "Add Color..." and click on the video preview to sample a color
+3. **Track Multiple:** Add up to 8 different colors to track simultaneously
+4. **Remove Colors:** Click "Remove" button next to each tracked color
+5. **Map Coordinates:** Connect individual color outputs to synthesis parameters
+6. **Example Patches:**
+   - **Two-Object Control:** Track two colored objects for stereo panning or dual oscillator control
+   - **Area-Based Effects:** Use Area output to control effect wet/dry mix
+   - **Position Automation:** Map color X/Y to sequencer position or filter sweeps
+7. **Performance Tips:**
+   - Works best with saturated, distinct colors
+   - Avoid overlapping colors in similar hues
+   - Good lighting maintains consistent HSV values
+
+**Technical Details:**
+- Uses HSV color space for robust color detection
+- Tracks up to 8 colors simultaneously
+- Automatic morphological cleanup for noise reduction
+- Runs at ~30 FPS on CPU
+- Outputs normalized coordinates and area
+
+---
+
+### Contour Detector
+**Shape Detection via Background Subtraction**
+
+Detects shapes and their properties using background subtraction and contour analysis.
+
+**Inputs:**
+- `Source In` (Raw) - Video source ID from webcam or video file loader
+
+**Outputs:**
+- `Area` (CV) - Detected shape area (normalized 0-1)
+- `Complexity` (CV) - Shape complexity based on polygon approximation (0-1)
+- `Aspect Ratio` (CV) - Width/height ratio of bounding box
+
+**Parameters:**
+- `Threshold` (0-255) - Threshold for foreground/background separation (default: 128)
+- `Noise Reduction` (Bool) - Enable morphological filtering to reduce noise (default: On)
+- `Zoom` (+/-) - Adjust preview size: Small (240px), Normal (480px), Large (960px)
+
+**How to Use:**
+1. **Connect Video Source:** Connect Webcam or Video File Loader's `Source ID` to `Source In`
+2. **Adjust Threshold:** Set threshold to separate foreground from background
+3. **Enable Noise Reduction:** Reduce detection of small, noisy artifacts
+4. **Map Shape Properties:** Connect Area, Complexity, and Aspect Ratio to synthesis parameters
+5. **Example Patches:**
+   - **Size-Based Filtering:** Use Area to control low-pass filter cutoff
+   - **Shape Recognition:** Use Complexity to detect simple vs complex shapes
+   - **Orientation Control:** Use Aspect Ratio to determine if object is horizontal or vertical
+6. **Performance Tips:**
+   - Requires relatively static background for best results
+   - Good contrast between foreground and background
+   - Use noise reduction for clean signal
+
+**Technical Details:**
+- Uses MOG2 background subtraction
+- Polygon approximation for complexity calculation
+- Runs at ~25 FPS on CPU
+- Outputs normalized shape properties
+
+---
+
+### Semantic Segmentation
+**Scene Segmentation via Deep Learning**
+
+Uses semantic segmentation networks (ENet or DeepLabV3) to identify and track objects by semantic class in video.
+
+**Inputs:**
+- `Source In` (Raw) - Video source ID from webcam or video file loader
+
+**Outputs:**
+- `Area` (CV) - Percentage of frame covered by target class (normalized 0-1)
+- `Center X` (CV) - Center X position of detected region (normalized 0-1)
+- `Center Y` (CV) - Center Y position of detected region (normalized 0-1)
+- `Gate` (Gate) - High when target class detected
+
+**Parameters:**
+- `Target Class` (Choice) - Semantic class to detect (person, road, car, etc.)
+- `Zoom` (+/-) - Adjust preview size: Small (240px), Normal (480px), Large (960px)
+
+**How to Use:**
+1. **Setup:** Requires ENet or DeepLabV3 model files in `assets/`
+2. **Connect Video Source:** Connect Webcam or Video File Loader's `Source ID` to `Source In`
+3. **Select Target Class:** Choose which semantic class to track
+4. **Map Region Properties:** Connect Area and Center outputs to synthesis parameters
+5. **Example Patches:**
+   - **Presence Detection:** Use Gate output to trigger events when person enters frame
+   - **Coverage-Based Effects:** Use Area to control reverb size or delay feedback
+   - **Center Tracking:** Use Center X/Y for spatial effects
+6. **Performance Tips:**
+   - Computationally intensive (~10 FPS on CPU)
+   - Best results with scenes that match training data (Cityscapes, etc.)
+   - Works well for large, distinct regions
+
+**Technical Details:**
+- Uses ENet (Efficient Neural Network) or DeepLabV3 segmentation models
+- Supports Cityscapes dataset classes by default
+- Runs at ~10 FPS on CPU
+- Outputs normalized region properties with colored preview overlay
 
 ---
 

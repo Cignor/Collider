@@ -86,6 +86,12 @@ void populateModuleDescriptions()
     descriptions["movement_detector"] = "Analyzes video source for motion via optical flow or background subtraction, outputs motion data as CV.";
     descriptions["human_detector"] = "Detects faces or bodies in video source via Haar Cascades or HOG, outputs position and size as CV.";
     descriptions["pose_estimator"] = "Uses OpenPose to detect 15 body keypoints (head, shoulders, elbows, wrists, hips, knees, ankles) and outputs their positions as CV signals.";
+    descriptions["hand_tracker"] = "Detects 21 hand keypoints and outputs their X/Y positions as CV (42 channels).";
+    descriptions["face_tracker"] = "Detects 70 facial landmarks and outputs X/Y positions as CV (140 channels).";
+    descriptions["object_detector"] = "Uses YOLOv3 to detect objects (person, car, etc.) and outputs bounding box position/size as CV.";
+    descriptions["color_tracker"] = "Tracks multiple colors in video and outputs their positions and sizes as CV.";
+    descriptions["contour_detector"] = "Detects shapes via background subtraction and outputs area, complexity, and aspect ratio as CV.";
+    descriptions["semantic_segmentation"] = "Uses deep learning to segment video into semantic regions and outputs detected areas as CV.";
     
     // Add aliases for underscore naming conventions
     descriptions["clock_divider"] = descriptions["ClockDivider"];
@@ -1008,6 +1014,32 @@ db["random"] = ModulePinInfo(
         {}
     );
 
+    // Object Detector (YOLOv3) - 1 input (Source ID) and 5 outputs (X,Y,Width,Height,Gate)
+    db["object_detector"] = ModulePinInfo(
+        NodeWidth::Medium,
+        {
+            AudioPin("Source In", 0, PinDataType::Raw)
+        },
+        {
+            AudioPin("X", 0, PinDataType::CV),
+            AudioPin("Y", 1, PinDataType::CV),
+            AudioPin("Width", 2, PinDataType::CV),
+            AudioPin("Height", 3, PinDataType::CV),
+            AudioPin("Gate", 4, PinDataType::Gate)
+        },
+        {}
+    );
+
+    // Color Tracker: dynamic outputs (3 per color). Only declare input here.
+    db["color_tracker"] = ModulePinInfo(
+        NodeWidth::Exception, // custom node width with zoom
+        {
+            AudioPin("Source In", 0, PinDataType::Raw)
+        },
+        {},
+        {}
+    );
+
     // Pose Estimator: 15 keypoints x 2 coordinates = 30 output pins
     db["pose_estimator"] = ModulePinInfo();
     db["pose_estimator"].defaultWidth = NodeWidth::Exception; // Custom size with zoom support
@@ -1024,10 +1056,55 @@ db["random"] = ModulePinInfo(
         db["pose_estimator"].audioOuts.emplace_back(keypointNames[i] + " Y", i * 2 + 1, PinDataType::CV);
     }
 
+    // Hand Tracker: 21 keypoints x 2 = 42 outs
+    db["hand_tracker"] = ModulePinInfo();
+    db["hand_tracker"].defaultWidth = NodeWidth::Exception;
+    db["hand_tracker"].audioIns.emplace_back("Source In", 0, PinDataType::Raw);
+    const char* handNames[21] = {
+        "Wrist",
+        "Thumb 1","Thumb 2","Thumb 3","Thumb 4",
+        "Index 1","Index 2","Index 3","Index 4",
+        "Middle 1","Middle 2","Middle 3","Middle 4",
+        "Ring 1","Ring 2","Ring 3","Ring 4",
+        "Pinky 1","Pinky 2","Pinky 3","Pinky 4"
+    };
+    for (int i=0;i<21;++i)
+    {
+        db["hand_tracker"].audioOuts.emplace_back(std::string(handNames[i]) + " X", i*2, PinDataType::CV);
+        db["hand_tracker"].audioOuts.emplace_back(std::string(handNames[i]) + " Y", i*2+1, PinDataType::CV);
+    }
+
+    // Face Tracker: 70 * 2 = 140 outs
+    db["face_tracker"] = ModulePinInfo();
+    db["face_tracker"].defaultWidth = NodeWidth::Exception;
+    db["face_tracker"].audioIns.emplace_back("Source In", 0, PinDataType::Raw);
+    for (int i=0;i<70;++i)
+    {
+        std::string base = std::string("Pt ") + std::to_string(i+1);
+        db["face_tracker"].audioOuts.emplace_back(base + " X", i*2, PinDataType::CV);
+        db["face_tracker"].audioOuts.emplace_back(base + " Y", i*2+1, PinDataType::CV);
+    }
+
     // Add aliases for nodes with underscore naming convention
     db["clock_divider"] = db["ClockDivider"];
     db["sequential_switch"] = db["SequentialSwitch"];
     db["s_and_h"] = db["s&h"];
+
+    // Contour Detector: 1 input, 3 outputs
+    db["contour_detector"] = ModulePinInfo(
+        NodeWidth::Medium,
+        { AudioPin("Source In", 0, PinDataType::Raw) },
+        { AudioPin("Area", 0, PinDataType::CV), AudioPin("Complexity", 1, PinDataType::CV), AudioPin("Aspect Ratio", 2, PinDataType::CV) },
+        {}
+    );
+
+    // Semantic Segmentation: 1 input, 4 outputs (Area, Center X, Center Y, Gate)
+    db["semantic_segmentation"] = ModulePinInfo(
+        NodeWidth::Medium,
+        { AudioPin("Source In", 0, PinDataType::Raw) },
+        { AudioPin("Area", 0, PinDataType::CV), AudioPin("Center X", 1, PinDataType::CV), AudioPin("Center Y", 2, PinDataType::CV), AudioPin("Gate", 3, PinDataType::Gate) },
+        {}
+    );
 
 }
 
