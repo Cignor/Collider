@@ -79,6 +79,32 @@ void VideoFileLoaderModule::chooseVideoFile()
 
 void VideoFileLoaderModule::run()
 {
+    // One-time OpenCV build summary: detect if FFMPEG is integrated
+    {
+        static std::atomic<bool> buildInfoLogged { false };
+        if (!buildInfoLogged.exchange(true))
+        {
+            juce::String info(cv::getBuildInformation().c_str());
+            bool ffmpegYes = false;
+            juce::String ffmpegLine;
+            {
+                juce::StringArray lines;
+                lines.addLines(info);
+                for (const auto& ln : lines)
+                {
+                    if (ln.containsIgnoreCase("FFMPEG:"))
+                    {
+                        ffmpegLine = ln.trim();
+                        if (ln.containsIgnoreCase("YES")) ffmpegYes = true;
+                        break;
+                    }
+                }
+            }
+            juce::Logger::writeToLog("[OpenCV Build] FFMPEG integrated: " + juce::String(ffmpegYes ? "YES" : "NO") +
+                                     (ffmpegLine.isNotEmpty() ? juce::String(" | ") + ffmpegLine : juce::String()));
+        }
+    }
+
     bool sourceIsOpen = false;
     double videoFps = 30.0; // Default FPS
     double frameDurationMs = 33.0; // Default to ~30fps
@@ -93,12 +119,23 @@ void VideoFileLoaderModule::run()
                 videoCapture.release();
             }
             
-            if (videoCapture.open(videoFileToLoad.getFullPathName().toStdString()))
+            bool opened = videoCapture.open(videoFileToLoad.getFullPathName().toStdString(), cv::CAP_FFMPEG);
+            if (!opened)
+            {
+                juce::Logger::writeToLog("[VideoFileLoader] FFmpeg backend open failed, retrying default backend: " + videoFileToLoad.getFullPathName());
+                opened = videoCapture.open(videoFileToLoad.getFullPathName().toStdString());
+            }
+            if (opened)
             {
                 currentVideoFile = videoFileToLoad;
                 videoFileToLoad = juce::File{}; // Clear request immediately after processing
                 sourceIsOpen = true;
                 needPreviewFrame.store(true);
+                // Log backend name (helps diagnose FFmpeg vs MSMF at runtime)
+               #if (CV_VERSION_MAJOR >= 4)
+                juce::String backendName = videoCapture.getBackendName().c_str();
+                juce::Logger::writeToLog("[VideoFileLoader] Backend: " + backendName);
+               #endif
                 // Reset state for new media, but keep user-defined in/out ranges
                 totalFrames.store(0); // force re-evaluation
                 lastPosFrame.store(0);
@@ -108,11 +145,26 @@ void VideoFileLoaderModule::run()
                 videoFps = videoCapture.get(cv::CAP_PROP_FPS);
                 lastFourcc.store((int) videoCapture.get(cv::CAP_PROP_FOURCC));
                 {
+                    // Backend and raw FOURCC diagnostics
+                    #if CV_VERSION_MAJOR >= 4
+                    const std::string backendName = videoCapture.getBackendName();
+                    juce::Logger::writeToLog("[VideoFileLoader] Backend: " + juce::String(backendName.c_str()));
+                    #endif
+                    const int fourccRaw = lastFourcc.load();
+                    juce::Logger::writeToLog("[VideoFileLoader] Metadata: FPS=" + juce::String(videoFps,2) +
+                                             ", Raw FOURCC=" + juce::String(fourccRaw) +
+                                             " ('" + fourccToString(fourccRaw) + "')");
+                }
+                {
                     int tf = (int) videoCapture.get(cv::CAP_PROP_FRAME_COUNT);
                     if (tf <= 1) tf = 0; // treat unknown/invalid as 0 so UI uses normalized seeks
                     totalFrames.store(tf);
                     juce::Logger::writeToLog("[VideoFileLoader] Opened '" + currentVideoFile.getFileName() + "' frames=" + juce::String(tf) +
                                              ", fps=" + juce::String(videoFps,2) + ", fourcc='" + fourccToString(lastFourcc.load()) + "'");
+                    if (tf > 1 && videoFps > 0.0)
+                        totalDurationMs.store((double)tf * (1000.0 / videoFps));
+                    else
+                        totalDurationMs.store(0.0);
                 }
                 if (videoFps > 0.0 && videoFps < 1000.0) // Sanity check
                 {
@@ -143,11 +195,21 @@ void VideoFileLoaderModule::run()
         // Apply any pending seeks (UI-driven) before processing
         int tfLocal = totalFrames.load();
         {
-            // 1) If we have a normalized pending seek and frames are now known, convert
+            // 1) If we have a normalized pending seek, prefer time-based seek when duration is known
             float pendingNorm = pendingSeekNorm.exchange(-1.0f);
             if (pendingNorm >= 0.0f)
             {
-                if (tfLocal > 1)
+                const double durMs = totalDurationMs.load();
+                if (durMs > 0.0)
+                {
+                    double seekToMs = juce::jlimit(0.0, durMs, (double)pendingNorm * durMs);
+                    const juce::ScopedLock capLock(captureLock);
+                    if (videoCapture.isOpened())
+                        videoCapture.set(cv::CAP_PROP_POS_MSEC, seekToMs);
+                    needPreviewFrame.store(true);
+                    juce::Logger::writeToLog("[VideoFileLoader][Seek] Applied normalized seek via MSEC=" + juce::String(seekToMs));
+                }
+                else if (tfLocal > 1)
                 {
                     int toFrame = (int) std::round(juce::jlimit(0.0f, 1.0f, pendingNorm) * (tfLocal - 1));
                     pendingSeekFrame.store(toFrame);
@@ -158,7 +220,7 @@ void VideoFileLoaderModule::run()
                     if (videoCapture.isOpened())
                         videoCapture.set(cv::CAP_PROP_POS_AVI_RATIO, juce::jlimit(0.0, 1.0, (double) pendingNorm));
                     needPreviewFrame.store(true);
-                    juce::Logger::writeToLog("[VideoFileLoader][Seek] Applied normalized seek ratio=" + juce::String(pendingNorm, 3));
+                    juce::Logger::writeToLog("[VideoFileLoader][Seek] WARNING ratio seek");
                 }
             }
 
@@ -166,7 +228,17 @@ void VideoFileLoaderModule::run()
             float pendingStart = pendingStartNorm.exchange(-1.0f);
             if (pendingStart >= 0.0f)
             {
-                if (tfLocal > 1)
+                const double durMs = totalDurationMs.load();
+                if (durMs > 0.0)
+                {
+                    double seekToMs = juce::jlimit(0.0, durMs, (double)pendingStart * durMs);
+                    const juce::ScopedLock capLock(captureLock);
+                    if (videoCapture.isOpened())
+                        videoCapture.set(cv::CAP_PROP_POS_MSEC, seekToMs);
+                    needPreviewFrame.store(true);
+                    juce::Logger::writeToLog("[VideoFileLoader][Seek] Applied normalized start via MSEC=" + juce::String(seekToMs));
+                }
+                else if (tfLocal > 1)
                 {
                     int inF = (int) std::round(juce::jlimit(0.0f, 1.0f, pendingStart) * (tfLocal - 1));
                     pendingSeekFrame.store(inF);
@@ -188,7 +260,16 @@ void VideoFileLoaderModule::run()
         if (nowPlaying && !wasPlaying)
         {
             float inN = inNormParam ? inNormParam->load() : 0.0f;
-            if (tfLocal > 1)
+            const double durMs = totalDurationMs.load();
+            if (durMs > 0.0)
+            {
+                double seekToMs = juce::jlimit(0.0, durMs, (double)inN * durMs);
+                const juce::ScopedLock capLock(captureLock);
+                if (videoCapture.isOpened())
+                    videoCapture.set(cv::CAP_PROP_POS_MSEC, seekToMs);
+                juce::Logger::writeToLog("[VideoFileLoader][PlayEdge] Seeking to in(ms)=" + juce::String(seekToMs));
+            }
+            else if (tfLocal > 1)
             {
                 int inF = juce::jlimit(0, juce::jmax(1, tfLocal) - 1, (int) std::round(inN * (tfLocal - 1)));
                 pendingSeekFrame.store(inF);
@@ -272,6 +353,8 @@ void VideoFileLoaderModule::run()
                 if (tf > 1)
                 {
                     totalFrames.store(tf);
+                    if (videoFps > 0.0)
+                        totalDurationMs.store((double)tf * (1000.0 / videoFps));
                     juce::Logger::writeToLog("[VideoFileLoader] Frame count acquired after playing read: " + juce::String(tf));
                 }
             }

@@ -71,6 +71,7 @@ private:
     // Normalized pending requests (used when totalFrames not ready yet)
     std::atomic<float> pendingSeekNorm { -1.0f };
     std::atomic<float> pendingStartNorm { -1.0f };
+    std::atomic<double> totalDurationMs { 0.0 };
     
     cv::VideoCapture videoCapture;
     juce::CriticalSection captureLock;

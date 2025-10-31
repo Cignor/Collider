@@ -882,6 +882,10 @@ if(WIN32)
         COMMAND ${CMAKE_COMMAND} -E copy_if_different
                 "${ONNXRUNTIME_DIR}/lib/onnxruntime_providers_shared.dll"
                 "$<TARGET_FILE_DIR:ColliderApp>"
+        # Copy OpenCV FFmpeg video backend DLL (relative to build tree)
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                "${CMAKE_BINARY_DIR}/bin/$<CONFIG>/opencv_videoio_ffmpeg490_64.dll"
+                "$<TARGET_FILE_DIR:ColliderApp>"
         COMMAND ${CMAKE_COMMAND} -E copy_directory
                 "${PIPER_DIR}/espeak-ng-data"
                 "$<TARGET_FILE_DIR:ColliderApp>/espeak-ng-data"
@@ -906,6 +910,10 @@ if(WIN32)
                 "$<TARGET_FILE_DIR:PresetCreatorApp>"
         COMMAND ${CMAKE_COMMAND} -E copy_if_different
                 "${ONNXRUNTIME_DIR}/lib/onnxruntime_providers_shared.dll"
+                "$<TARGET_FILE_DIR:PresetCreatorApp>"
+        # Copy OpenCV FFmpeg video backend DLL (relative to build tree)
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                "${CMAKE_BINARY_DIR}/bin/$<CONFIG>/opencv_videoio_ffmpeg490_64.dll"
                 "$<TARGET_FILE_DIR:PresetCreatorApp>"
         COMMAND ${CMAKE_COMMAND} -E copy_directory
                 "${PIPER_DIR}/espeak-ng-data"
