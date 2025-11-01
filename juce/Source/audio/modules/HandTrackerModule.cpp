@@ -17,6 +17,7 @@ juce::AudioProcessorValueTreeState::ParameterLayout HandTrackerModule::createPar
     params.push_back(std::make_unique<juce::AudioParameterFloat>("sourceId", "Source ID", 0.0f, 1000.0f, 0.0f));
     params.push_back(std::make_unique<juce::AudioParameterFloat>("confidence", "Confidence", 0.0f, 1.0f, 0.1f));
     params.push_back(std::make_unique<juce::AudioParameterChoice>("zoomLevel", "Zoom Level", juce::StringArray{"Small","Normal","Large"}, 1));
+    params.push_back(std::make_unique<juce::AudioParameterBool>("useGpu", "Use GPU (CUDA)", false)); // Default OFF for compatibility
     return { params.begin(), params.end() };
 }
 
@@ -30,6 +31,7 @@ HandTrackerModule::HandTrackerModule()
     sourceIdParam = apvts.getRawParameterValue("sourceId");
     zoomLevelParam = apvts.getRawParameterValue("zoomLevel");
     confidenceThresholdParam = apvts.getRawParameterValue("confidence");
+    useGpuParam = dynamic_cast<juce::AudioParameterBool*>(apvts.getParameter("useGpu"));
     fifoBuffer.resize(16);
 }
 
@@ -66,14 +68,57 @@ void HandTrackerModule::loadModel()
 void HandTrackerModule::run()
 {
     if (!modelLoaded) loadModel();
+    
+    #if WITH_CUDA_SUPPORT
+        bool lastGpuState = false; // Track GPU state to minimize backend switches
+        bool loggedGpuWarning = false; // Only warn once if no GPU available
+    #endif
+    
     while (!threadShouldExit())
     {
         auto srcId = currentSourceId.load();
         cv::Mat frame = VideoFrameManager::getInstance().getFrame(srcId);
         if (frame.empty()) { wait(50); continue; }
 
+        bool useGpu = false;
+        
+        #if WITH_CUDA_SUPPORT
+            // Check if user wants GPU and if CUDA device is available
+            useGpu = useGpuParam->get();
+            if (useGpu && cv::cuda::getCudaEnabledDeviceCount() == 0)
+            {
+                useGpu = false; // Fallback to CPU
+                if (!loggedGpuWarning)
+                {
+                    juce::Logger::writeToLog("[HandTracker] WARNING: GPU requested but no CUDA device found. Using CPU.");
+                    loggedGpuWarning = true;
+                }
+            }
+            
+            // Set DNN backend only when state changes (expensive operation)
+            if (useGpu != lastGpuState)
+            {
+                if (useGpu)
+                {
+                    net.setPreferableBackend(cv::dnn::DNN_BACKEND_CUDA);
+                    net.setPreferableTarget(cv::dnn::DNN_TARGET_CUDA);
+                    juce::Logger::writeToLog("[HandTracker] ✓ Switched to CUDA backend (GPU)");
+                }
+                else
+                {
+                    net.setPreferableBackend(cv::dnn::DNN_BACKEND_OPENCV);
+                    net.setPreferableTarget(cv::dnn::DNN_TARGET_CPU);
+                    juce::Logger::writeToLog("[HandTracker] Switched to CPU backend");
+                }
+                lastGpuState = useGpu;
+            }
+        #endif
+
+        // NOTE: For DNN models, blobFromImage works on CPU
+        // The GPU acceleration happens in net.forward() when backend is set to CUDA
         cv::Mat blob = cv::dnn::blobFromImage(frame, 1.0/255.0, cv::Size(368,368), cv::Scalar(), false, false);
         net.setInput(blob);
+        // Forward pass (GPU-accelerated if backend is CUDA)
         cv::Mat out = net.forward();
         HandResult result{};
         parseHandOutput(out, frame.cols, frame.rows, result);
@@ -149,6 +194,46 @@ void HandTrackerModule::drawParametersInNode(float itemWidth,
                                              const std::function<void()>& onModificationEnded)
 {
     ImGui::PushItemWidth(itemWidth);
+    
+    // GPU ACCELERATION TOGGLE
+    #if WITH_CUDA_SUPPORT
+        bool cudaAvailable = (cv::cuda::getCudaEnabledDeviceCount() > 0);
+        
+        if (!cudaAvailable)
+        {
+            ImGui::BeginDisabled();
+        }
+        
+        bool useGpu = useGpuParam->get();
+        if (ImGui::Checkbox("⚡ Use GPU (CUDA)", &useGpu))
+        {
+            *useGpuParam = useGpu;
+            onModificationEnded();
+        }
+        
+        if (!cudaAvailable)
+        {
+            ImGui::EndDisabled();
+            if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
+            {
+                ImGui::SetTooltip("No CUDA-enabled GPU detected.\nCheck that your GPU supports CUDA and drivers are installed.");
+            }
+        }
+        else if (ImGui::IsItemHovered())
+        {
+            ImGui::SetTooltip("Enable GPU acceleration for hand tracking.\nRequires CUDA-capable NVIDIA GPU.");
+        }
+        
+        ImGui::Separator();
+    #else
+        ImGui::TextDisabled("🚫 GPU support not compiled");
+        if (ImGui::IsItemHovered())
+        {
+            ImGui::SetTooltip("OpenCV was built without CUDA support.\nRebuild with WITH_CUDA=ON to enable GPU acceleration.");
+        }
+        ImGui::Separator();
+    #endif
+    
     // Confidence
     float conf = confidenceThresholdParam ? confidenceThresholdParam->load() : 0.1f;
     if (ImGui::SliderFloat("Confidence", &conf, 0.0f, 1.0f, "%.2f")) {

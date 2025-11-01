@@ -703,6 +703,14 @@ target_include_directories(ColliderApp PRIVATE
     ${opencv_SOURCE_DIR}/modules/dnn/include              # For DNN headers (dnn.hpp)
     ${OPENCV_BUILD_DIR}
     ${OPENCV_BUILD_DIR}/modules/world
+    # OpenCV CUDA modules (from opencv_contrib source)
+    $<$<BOOL:${CUDA_SUPPORT_ENABLED}>:${opencv_contrib_SOURCE_DIR}/modules/cudaimgproc/include>
+    $<$<BOOL:${CUDA_SUPPORT_ENABLED}>:${opencv_contrib_SOURCE_DIR}/modules/cudawarping/include>
+    $<$<BOOL:${CUDA_SUPPORT_ENABLED}>:${opencv_contrib_SOURCE_DIR}/modules/cudaarithm/include>
+    $<$<BOOL:${CUDA_SUPPORT_ENABLED}>:${opencv_contrib_SOURCE_DIR}/modules/cudafilters/include>
+    $<$<BOOL:${CUDA_SUPPORT_ENABLED}>:${opencv_contrib_SOURCE_DIR}/modules/cudafeatures2d/include>
+    $<$<BOOL:${CUDA_SUPPORT_ENABLED}>:${opencv_contrib_SOURCE_DIR}/modules/cudaobjdetect/include>
+    $<$<BOOL:${CUDA_SUPPORT_ENABLED}>:${opencv_contrib_SOURCE_DIR}/modules/cudaoptflow/include>
     $<$<BOOL:${USE_RUBBERBAND}>:${RUBBERBAND_INCLUDE_DIR}>
 )
 
@@ -967,6 +975,14 @@ target_include_directories(PresetCreatorApp PRIVATE
     ${opencv_SOURCE_DIR}/modules/dnn/include              # For DNN headers (dnn.hpp)
     ${OPENCV_BUILD_DIR}
     ${OPENCV_BUILD_DIR}/modules/world
+    # OpenCV CUDA modules (from opencv_contrib source)
+    $<$<BOOL:${CUDA_SUPPORT_ENABLED}>:${opencv_contrib_SOURCE_DIR}/modules/cudaimgproc/include>
+    $<$<BOOL:${CUDA_SUPPORT_ENABLED}>:${opencv_contrib_SOURCE_DIR}/modules/cudawarping/include>
+    $<$<BOOL:${CUDA_SUPPORT_ENABLED}>:${opencv_contrib_SOURCE_DIR}/modules/cudaarithm/include>
+    $<$<BOOL:${CUDA_SUPPORT_ENABLED}>:${opencv_contrib_SOURCE_DIR}/modules/cudafilters/include>
+    $<$<BOOL:${CUDA_SUPPORT_ENABLED}>:${opencv_contrib_SOURCE_DIR}/modules/cudafeatures2d/include>
+    $<$<BOOL:${CUDA_SUPPORT_ENABLED}>:${opencv_contrib_SOURCE_DIR}/modules/cudaobjdetect/include>
+    $<$<BOOL:${CUDA_SUPPORT_ENABLED}>:${opencv_contrib_SOURCE_DIR}/modules/cudaoptflow/include>
     $<$<BOOL:${USE_RUBBERBAND}>:${RUBBERBAND_INCLUDE_DIR}>
 )
 

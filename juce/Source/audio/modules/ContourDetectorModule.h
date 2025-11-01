@@ -3,6 +3,10 @@
 #include "ModuleProcessor.h"
 #include <opencv2/core.hpp>
 #include <opencv2/video.hpp>
+#if WITH_CUDA_SUPPORT
+    #include <opencv2/core/cuda.hpp>
+    #include <opencv2/cudaimgproc.hpp>
+#endif
 #include <juce_core/juce_core.h>
 #include <juce_audio_processors/juce_audio_processors.h>
 #include <juce_graphics/juce_graphics.h>
@@ -51,6 +55,7 @@ private:
     std::atomic<float>* thresholdParam = nullptr;
     juce::AudioParameterBool* noiseReductionParam = nullptr;
     std::atomic<float>* zoomLevelParam = nullptr;
+    juce::AudioParameterBool* useGpuParam = nullptr;
     
     cv::Ptr<cv::BackgroundSubtractor> backSub;
     

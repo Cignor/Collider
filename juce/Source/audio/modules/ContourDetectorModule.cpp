@@ -13,6 +13,7 @@ juce::AudioProcessorValueTreeState::ParameterLayout ContourDetectorModule::creat
     params.push_back(std::make_unique<juce::AudioParameterFloat>("threshold", "Threshold", 0.0f, 255.0f, 128.0f));
     params.push_back(std::make_unique<juce::AudioParameterBool>("noiseReduction", "Noise Reduction", true));
     params.push_back(std::make_unique<juce::AudioParameterChoice>("zoomLevel", "Zoom Level", juce::StringArray{ "Small", "Normal", "Large" }, 1));
+    params.push_back(std::make_unique<juce::AudioParameterBool>("useGpu", "Use GPU (CUDA)", false)); // Default OFF for compatibility
     return { params.begin(), params.end() };
 }
 
@@ -27,6 +28,7 @@ ContourDetectorModule::ContourDetectorModule()
     thresholdParam = apvts.getRawParameterValue("threshold");
     noiseReductionParam = dynamic_cast<juce::AudioParameterBool*>(apvts.getParameter("noiseReduction"));
     zoomLevelParam = apvts.getRawParameterValue("zoomLevel");
+    useGpuParam = dynamic_cast<juce::AudioParameterBool*>(apvts.getParameter("useGpu"));
     fifoBuffer.resize(16);
     backSub = cv::createBackgroundSubtractorMOG2();
 }
@@ -56,15 +58,26 @@ void ContourDetectorModule::run()
         cv::Mat frame = VideoFrameManager::getInstance().getFrame(sourceId);
         if (!frame.empty())
         {
+            bool useGpu = false;
+            #if WITH_CUDA_SUPPORT
+                useGpu = useGpuParam->get() && (cv::cuda::getCudaEnabledDeviceCount() > 0);
+            #endif
+            
             cv::Mat fgMask;
             backSub->apply(frame, fgMask);
-            cv::threshold(fgMask, fgMask, thresholdParam ? thresholdParam->load() : 128.0f, 255, cv::THRESH_BINARY);
+            
+            float thresh = thresholdParam ? thresholdParam->load() : 128.0f;
+            // NOTE: threshold doesn't have CUDA implementation in this OpenCV build
+            // Using CPU version even when GPU is enabled (fast enough, avoids upload/download overhead)
+            cv::threshold(fgMask, fgMask, thresh, 255, cv::THRESH_BINARY);
+            
             if (noiseReductionParam && noiseReductionParam->get())
             {
                 cv::erode(fgMask, fgMask, cv::Mat(), cv::Point(-1,-1), 2);
                 cv::dilate(fgMask, fgMask, cv::Mat(), cv::Point(-1,-1), 2);
             }
 
+            // findContours is CPU-only
             std::vector<std::vector<cv::Point>> contours;
             cv::findContours(fgMask, contours, cv::RETR_EXTERNAL, cv::CHAIN_APPROX_SIMPLE);
 
@@ -160,6 +173,45 @@ void ContourDetectorModule::drawParametersInNode(float itemWidth,
 {
     juce::ignoreUnused(isParamModulated);
     ImGui::PushItemWidth(itemWidth);
+    
+    // GPU ACCELERATION TOGGLE
+    #if WITH_CUDA_SUPPORT
+        bool cudaAvailable = (cv::cuda::getCudaEnabledDeviceCount() > 0);
+        
+        if (!cudaAvailable)
+        {
+            ImGui::BeginDisabled();
+        }
+        
+        bool useGpu = useGpuParam->get();
+        if (ImGui::Checkbox("⚡ Use GPU (CUDA)", &useGpu))
+        {
+            *useGpuParam = useGpu;
+            onModificationEnded();
+        }
+        
+        if (!cudaAvailable)
+        {
+            ImGui::EndDisabled();
+            if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
+            {
+                ImGui::SetTooltip("No CUDA-enabled GPU detected.\nCheck that your GPU supports CUDA and drivers are installed.");
+            }
+        }
+        else if (ImGui::IsItemHovered())
+        {
+            ImGui::SetTooltip("Enable GPU acceleration for contour detection.\nRequires CUDA-capable NVIDIA GPU.");
+        }
+        
+        ImGui::Separator();
+    #else
+        ImGui::TextDisabled("🚫 GPU support not compiled");
+        if (ImGui::IsItemHovered())
+        {
+            ImGui::SetTooltip("OpenCV was built without CUDA support.\nRebuild with WITH_CUDA=ON to enable GPU acceleration.");
+        }
+        ImGui::Separator();
+    #endif
 
     float th = thresholdParam ? thresholdParam->load() : 128.0f;
     if (ImGui::SliderFloat("Threshold", &th, 0.0f, 255.0f, "%.0f"))

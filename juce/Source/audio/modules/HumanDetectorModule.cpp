@@ -15,6 +15,7 @@ juce::AudioProcessorValueTreeState::ParameterLayout HumanDetectorModule::createP
     params.push_back(std::make_unique<juce::AudioParameterInt>("minNeighbors", "Min Neighbors", 1, 10, 3));
     params.push_back(std::make_unique<juce::AudioParameterChoice>(
         "zoomLevel", "Zoom Level", juce::StringArray{ "Small", "Normal", "Large" }, 1));
+    params.push_back(std::make_unique<juce::AudioParameterBool>("useGpu", "Use GPU (CUDA)", false)); // Default OFF for compatibility
     return { params.begin(), params.end() };
 }
 
@@ -29,21 +30,33 @@ HumanDetectorModule::HumanDetectorModule()
     scaleFactorParam = apvts.getRawParameterValue("scaleFactor");
     minNeighborsParam = apvts.getRawParameterValue("minNeighbors");
     zoomLevelParam = apvts.getRawParameterValue("zoomLevel");
+    useGpuParam = dynamic_cast<juce::AudioParameterBool*>(apvts.getParameter("useGpu"));
 
-    // Load Haar Cascade
+    // Load Haar Cascade (CPU)
     juce::File cascadeFile = juce::File::getSpecialLocation(juce::File::currentApplicationFile)
                                 .getSiblingFile("haarcascade_frontalface_default.xml");
     if (cascadeFile.existsAsFile())
     {
         faceCascade.load(cascadeFile.getFullPathName().toStdString());
+        
+        #if WITH_CUDA_SUPPORT
+            // Load GPU cascade
+            faceCascadeGpu = cv::cuda::CascadeClassifier::create(cascadeFile.getFullPathName().toStdString());
+        #endif
     }
     else
     {
         juce::Logger::writeToLog("ERROR: haarcascade_frontalface_default.xml not found!");
     }
     
-    // Set up HOG detector
+    // Set up HOG detector (CPU)
     hog.setSVMDetector(cv::HOGDescriptor::getDefaultPeopleDetector());
+    
+    #if WITH_CUDA_SUPPORT
+        // Set up HOG detector (GPU)
+        hogGpu = cv::cuda::HOG::create();
+        hogGpu->setSVMDetector(cv::HOGDescriptor::getDefaultPeopleDetector());
+    #endif
     
     fifoBuffer.resize(16);
     fifo.setTotalSize(16);
@@ -113,14 +126,50 @@ DetectionResult HumanDetectorModule::analyzeFrame(const cv::Mat& inputFrame)
 
     std::vector<cv::Rect> detections;
     int mode = (int)modeParam->load();
+    bool useGpu = false;
+    
+    #if WITH_CUDA_SUPPORT
+        useGpu = useGpuParam->get() && (cv::cuda::getCudaEnabledDeviceCount() > 0);
+    #endif
 
     if (mode == 0) // Face Detection
     {
-        faceCascade.detectMultiScale(gray, detections, scaleFactorParam->load(), (int)minNeighborsParam->load());
+        #if WITH_CUDA_SUPPORT
+            if (useGpu && faceCascadeGpu)
+            {
+                cv::cuda::GpuMat grayGpu;
+                grayGpu.upload(gray);
+                
+                cv::cuda::GpuMat detectionsGpu;
+                faceCascadeGpu->detectMultiScale(grayGpu, detectionsGpu);
+                
+                // Convert detections to std::vector<cv::Rect>
+                faceCascadeGpu->convert(detectionsGpu, detections);
+            }
+            else
+        #endif
+        {
+            faceCascade.detectMultiScale(gray, detections, scaleFactorParam->load(), (int)minNeighborsParam->load());
+        }
     }
     else // Body Detection
     {
-        hog.detectMultiScale(gray, detections);
+        #if WITH_CUDA_SUPPORT
+            if (useGpu && hogGpu)
+            {
+                cv::cuda::GpuMat grayGpu;
+                grayGpu.upload(gray);
+                
+                std::vector<cv::Rect> foundLocations;
+                std::vector<double> confidences;
+                hogGpu->detectMultiScale(grayGpu, foundLocations, &confidences);
+                detections = foundLocations;
+            }
+            else
+        #endif
+        {
+            hog.detectMultiScale(gray, detections);
+        }
     }
 
     // Draw all detections (smaller ones in gray)
@@ -235,6 +284,45 @@ void HumanDetectorModule::drawParametersInNode(float itemWidth,
                                                const std::function<void()>& onModificationEnded)
 {
     ImGui::PushItemWidth(itemWidth);
+    
+    // GPU ACCELERATION TOGGLE
+    #if WITH_CUDA_SUPPORT
+        bool cudaAvailable = (cv::cuda::getCudaEnabledDeviceCount() > 0);
+        
+        if (!cudaAvailable)
+        {
+            ImGui::BeginDisabled();
+        }
+        
+        bool useGpu = useGpuParam->get();
+        if (ImGui::Checkbox("⚡ Use GPU (CUDA)", &useGpu))
+        {
+            *useGpuParam = useGpu;
+            onModificationEnded();
+        }
+        
+        if (!cudaAvailable)
+        {
+            ImGui::EndDisabled();
+            if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
+            {
+                ImGui::SetTooltip("No CUDA-enabled GPU detected.\nCheck that your GPU supports CUDA and drivers are installed.");
+            }
+        }
+        else if (ImGui::IsItemHovered())
+        {
+            ImGui::SetTooltip("Enable GPU acceleration for human detection.\nRequires CUDA-capable NVIDIA GPU.");
+        }
+        
+        ImGui::Separator();
+    #else
+        ImGui::TextDisabled("🚫 GPU support not compiled");
+        if (ImGui::IsItemHovered())
+        {
+            ImGui::SetTooltip("OpenCV was built without CUDA support.\nRebuild with WITH_CUDA=ON to enable GPU acceleration.");
+        }
+        ImGui::Separator();
+    #endif
     
     // Mode selection
     int mode = (int)modeParam->load();

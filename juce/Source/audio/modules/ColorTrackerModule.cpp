@@ -14,6 +14,8 @@ juce::AudioProcessorValueTreeState::ParameterLayout ColorTrackerModule::createPa
         "sourceId", "Source ID", 0.0f, 1000.0f, 0.0f));
     params.push_back(std::make_unique<juce::AudioParameterChoice>(
         "zoomLevel", "Zoom Level", juce::StringArray{ "Small", "Normal", "Large" }, 1));
+    params.push_back(std::make_unique<juce::AudioParameterBool>(
+        "useGpu", "Use GPU (CUDA)", false)); // Default OFF for compatibility
     return { params.begin(), params.end() };
 }
 
@@ -26,6 +28,7 @@ ColorTrackerModule::ColorTrackerModule()
 {
     sourceIdParam = apvts.getRawParameterValue("sourceId");
     zoomLevelParam = apvts.getRawParameterValue("zoomLevel");
+    useGpuParam = dynamic_cast<juce::AudioParameterBool*>(apvts.getParameter("useGpu"));
     fifoBuffer.resize(16);
 }
 
@@ -54,9 +57,6 @@ void ColorTrackerModule::run()
         cv::Mat frame = VideoFrameManager::getInstance().getFrame(sourceId);
         if (!frame.empty())
         {
-        cv::Mat hsv;
-        if (!frame.empty())
-        {
             // Cache last good frame for paused/no-signal scenarios
             {
                 const juce::ScopedLock lk(frameLock);
@@ -72,7 +72,30 @@ void ColorTrackerModule::run()
         }
 
         if (!frame.empty())
-            cv::cvtColor(frame, hsv, cv::COLOR_BGR2HSV);
+        {
+            bool useGpu = false;
+            #if WITH_CUDA_SUPPORT
+                useGpu = useGpuParam->get() && (cv::cuda::getCudaEnabledDeviceCount() > 0);
+            #endif
+            
+            cv::Mat hsv;
+            #if WITH_CUDA_SUPPORT
+                cv::cuda::GpuMat hsvGpu; // Keep in scope for use in inRange loop
+                if (useGpu)
+                {
+                    cv::cuda::GpuMat frameGpu;
+                    frameGpu.upload(frame);
+                    cv::cuda::cvtColor(frameGpu, hsvGpu, cv::COLOR_BGR2HSV);
+                    // Download for CPU fallback checks (hsv.empty() check below)
+                    hsvGpu.download(hsv);
+                }
+                else
+                {
+                    cv::cvtColor(frame, hsv, cv::COLOR_BGR2HSV);
+                }
+            #else
+                cv::cvtColor(frame, hsv, cv::COLOR_BGR2HSV);
+            #endif
 
             // NOTE: No queued color-pick path here anymore; add/update is handled synchronously by addColorAt()
 
@@ -105,6 +128,8 @@ void ColorTrackerModule::run()
                     cv::Scalar upper(highH, highS, highV);
 
                     cv::Mat mask;
+                    // NOTE: inRange doesn't have CUDA implementation in this OpenCV build
+                    // Using CPU version even when GPU is enabled (fast enough, avoids upload/download overhead)
                     cv::inRange(hsv, lower, upper, mask);
                     
                     // Morphological cleanup
@@ -359,8 +384,47 @@ void ColorTrackerModule::drawParametersInNode(float itemWidth,
                                               const std::function<bool(const juce::String& paramId)>& isParamModulated,
                                               const std::function<void()>& onModificationEnded)
 {
-    juce::ignoreUnused(isParamModulated, onModificationEnded);
+    juce::ignoreUnused(isParamModulated);
     ImGui::PushItemWidth(itemWidth);
+    
+    // GPU ACCELERATION TOGGLE
+    #if WITH_CUDA_SUPPORT
+        bool cudaAvailable = (cv::cuda::getCudaEnabledDeviceCount() > 0);
+        
+        if (!cudaAvailable)
+        {
+            ImGui::BeginDisabled();
+        }
+        
+        bool useGpu = useGpuParam->get();
+        if (ImGui::Checkbox("⚡ Use GPU (CUDA)", &useGpu))
+        {
+            *useGpuParam = useGpu;
+            onModificationEnded();
+        }
+        
+        if (!cudaAvailable)
+        {
+            ImGui::EndDisabled();
+            if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
+            {
+                ImGui::SetTooltip("No CUDA-enabled GPU detected.\nCheck that your GPU supports CUDA and drivers are installed.");
+            }
+        }
+        else if (ImGui::IsItemHovered())
+        {
+            ImGui::SetTooltip("Enable GPU acceleration for color tracking.\nRequires CUDA-capable NVIDIA GPU.");
+        }
+        
+        ImGui::Separator();
+    #else
+        ImGui::TextDisabled("🚫 GPU support not compiled");
+        if (ImGui::IsItemHovered())
+        {
+            ImGui::SetTooltip("OpenCV was built without CUDA support.\nRebuild with WITH_CUDA=ON to enable GPU acceleration.");
+        }
+        ImGui::Separator();
+    #endif
 
     if (ImGui::Button("Add Color...", ImVec2(itemWidth, 0)))
     {

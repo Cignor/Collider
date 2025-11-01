@@ -128,6 +128,10 @@ juce::AudioProcessorValueTreeState::ParameterLayout PoseEstimatorModule::createP
     params.push_back(std::make_unique<juce::AudioParameterBool>(
         "drawSkeleton", "Draw Skeleton", true));
     
+    // GPU acceleration toggle
+    params.push_back(std::make_unique<juce::AudioParameterBool>(
+        "useGpu", "Use GPU (CUDA)", false)); // Default OFF for compatibility
+    
     return { params.begin(), params.end() };
 }
 
@@ -145,6 +149,7 @@ PoseEstimatorModule::PoseEstimatorModule()
     modelChoiceParam = dynamic_cast<juce::AudioParameterChoice*>(apvts.getParameter("model"));
     confidenceThresholdParam = apvts.getRawParameterValue("confidence");
     drawSkeletonParam = dynamic_cast<juce::AudioParameterBool*>(apvts.getParameter("drawSkeleton"));
+    useGpuParam = dynamic_cast<juce::AudioParameterBool*>(apvts.getParameter("useGpu"));
     
     // Initialize FIFO buffer
     fifoBuffer.resize(16);
@@ -174,6 +179,11 @@ void PoseEstimatorModule::run()
 {
     juce::Logger::writeToLog("[PoseEstimator] Processing thread started");
     
+    #if WITH_CUDA_SUPPORT
+        bool lastGpuState = false; // Track GPU state to minimize backend switches
+        bool loggedGpuWarning = false; // Only warn once if no GPU available
+    #endif
+    
     while (!threadShouldExit())
     {
         // Handle deferred model reload requests from UI
@@ -197,8 +207,44 @@ void PoseEstimatorModule::run()
         
         if (!frame.empty())
         {
+            bool useGpu = false;
+            
+            #if WITH_CUDA_SUPPORT
+                // Check if user wants GPU and if CUDA device is available
+                useGpu = useGpuParam->get();
+                if (useGpu && cv::cuda::getCudaEnabledDeviceCount() == 0)
+                {
+                    useGpu = false; // Fallback to CPU
+                    if (!loggedGpuWarning)
+                    {
+                        juce::Logger::writeToLog("[PoseEstimator] WARNING: GPU requested but no CUDA device found. Using CPU.");
+                        loggedGpuWarning = true;
+                    }
+                }
+                
+                // Set DNN backend only when state changes (expensive operation)
+                if (useGpu != lastGpuState)
+                {
+                    if (useGpu)
+                    {
+                        net.setPreferableBackend(cv::dnn::DNN_BACKEND_CUDA);
+                        net.setPreferableTarget(cv::dnn::DNN_TARGET_CUDA);
+                        juce::Logger::writeToLog("[PoseEstimator] ✓ Switched to CUDA backend (GPU)");
+                    }
+                    else
+                    {
+                        net.setPreferableBackend(cv::dnn::DNN_BACKEND_OPENCV);
+                        net.setPreferableTarget(cv::dnn::DNN_TARGET_CPU);
+                        juce::Logger::writeToLog("[PoseEstimator] Switched to CPU backend");
+                    }
+                    lastGpuState = useGpu;
+                }
+            #endif
+            
             // 1. Prepare image for the network (resize and normalize)
             // Blob size based on Quality setting (Low=224, Medium=368)
+            // NOTE: For DNN models, blobFromImage works on CPU
+            // The GPU acceleration happens in net.forward() when backend is set to CUDA
             int q = qualityParam ? qualityParam->getIndex() : 1;
             cv::Size blobSize = (q == 0) ? cv::Size(224, 224) : cv::Size(368, 368);
             cv::Mat inputBlob = cv::dnn::blobFromImage(
@@ -210,6 +256,7 @@ void PoseEstimatorModule::run()
                 false);
 
             // 2. Run the forward pass through the neural network
+            // Forward pass (GPU-accelerated if backend is CUDA)
             net.setInput(inputBlob);
             cv::Mat netOutput = net.forward();
             
@@ -400,6 +447,45 @@ void PoseEstimatorModule::drawParametersInNode(float itemWidth,
                                               const std::function<void()>& onModificationEnded)
 {
     ImGui::PushItemWidth(itemWidth);
+    
+    // GPU ACCELERATION TOGGLE
+    #if WITH_CUDA_SUPPORT
+        bool cudaAvailable = (cv::cuda::getCudaEnabledDeviceCount() > 0);
+        
+        if (!cudaAvailable)
+        {
+            ImGui::BeginDisabled();
+        }
+        
+        bool useGpu = useGpuParam->get();
+        if (ImGui::Checkbox("⚡ Use GPU (CUDA)", &useGpu))
+        {
+            *useGpuParam = useGpu;
+            onModificationEnded();
+        }
+        
+        if (!cudaAvailable)
+        {
+            ImGui::EndDisabled();
+            if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
+            {
+                ImGui::SetTooltip("No CUDA-enabled GPU detected.\nCheck that your GPU supports CUDA and drivers are installed.");
+            }
+        }
+        else if (ImGui::IsItemHovered())
+        {
+            ImGui::SetTooltip("Enable GPU acceleration for pose detection.\nRequires CUDA-capable NVIDIA GPU.");
+        }
+        
+        ImGui::Separator();
+    #else
+        ImGui::TextDisabled("🚫 GPU support not compiled");
+        if (ImGui::IsItemHovered())
+        {
+            ImGui::SetTooltip("OpenCV was built without CUDA support.\nRebuild with WITH_CUDA=ON to enable GPU acceleration.");
+        }
+        ImGui::Separator();
+    #endif
     
     // Only show Model selection (as requested)
     if (modelChoiceParam)

@@ -5,6 +5,11 @@
 #include "ModuleProcessor.h"
 #include <opencv2/core.hpp>
 #include <opencv2/video.hpp>
+#if WITH_CUDA_SUPPORT
+    #include <opencv2/core/cuda.hpp>
+    #include <opencv2/cudaimgproc.hpp>
+    #include <opencv2/cudaoptflow.hpp>
+#endif
 #include <juce_core/juce_core.h>
 #include <juce_audio_processors/juce_audio_processors.h>
 #include <juce_graphics/juce_graphics.h>
@@ -64,6 +69,7 @@ private:
     std::atomic<float>* sensitivityParam = nullptr;
     // 0=Small,1=Normal,2=Large
     std::atomic<float>* zoomLevelParam = nullptr;
+    juce::AudioParameterBool* useGpuParam = nullptr;
 
     // NEW: Algorithm-specific tuning parameters
     juce::AudioParameterInt* maxFeaturesParam = nullptr;

@@ -4,6 +4,11 @@
 #include <opencv2/core.hpp>
 #include <opencv2/dnn.hpp>
 #include <opencv2/objdetect.hpp>
+#if WITH_CUDA_SUPPORT
+    #include <opencv2/core/cuda.hpp>
+    #include <opencv2/cudaimgproc.hpp>
+    #include <opencv2/cudawarping.hpp>
+#endif
 #include <juce_core/juce_core.h>
 #include <juce_audio_processors/juce_audio_processors.h>
 
@@ -50,6 +55,7 @@ private:
     std::atomic<float>* sourceIdParam = nullptr;
     std::atomic<float>* confidenceThresholdParam = nullptr;
     std::atomic<float>* zoomLevelParam = nullptr;
+    juce::AudioParameterBool* useGpuParam = nullptr;
 
     cv::CascadeClassifier faceCascade;
     cv::dnn::Net net;

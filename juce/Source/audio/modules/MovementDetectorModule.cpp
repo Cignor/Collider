@@ -18,6 +18,7 @@ juce::AudioProcessorValueTreeState::ParameterLayout MovementDetectorModule::crea
     params.push_back(std::make_unique<juce::AudioParameterInt>("maxFeatures", "Max Features", 20, 500, 100));
     params.push_back(std::make_unique<juce::AudioParameterInt>("pyramidLevels", "Pyramid Levels", 1, 5, 3));
     params.push_back(std::make_unique<juce::AudioParameterBool>("noiseReduction", "Noise Reduction", false));
+    params.push_back(std::make_unique<juce::AudioParameterBool>("useGpu", "Use GPU (CUDA)", false)); // Default OFF for compatibility
     return { params.begin(), params.end() };
 }
 
@@ -31,6 +32,7 @@ MovementDetectorModule::MovementDetectorModule()
     modeParam = apvts.getRawParameterValue("mode");
     sensitivityParam = apvts.getRawParameterValue("sensitivity");
     zoomLevelParam = apvts.getRawParameterValue("zoomLevel");
+    useGpuParam = dynamic_cast<juce::AudioParameterBool*>(apvts.getParameter("useGpu"));
     // NEW: init parameter pointers
     maxFeaturesParam = dynamic_cast<juce::AudioParameterInt*>(apvts.getParameter("maxFeatures"));
     pyramidLevelsParam = dynamic_cast<juce::AudioParameterInt*>(apvts.getParameter("pyramidLevels"));
@@ -115,11 +117,57 @@ MovementResult MovementDetectorModule::analyzeFrame(const cv::Mat& inputFrame)
 
         if (!prevGrayFrame.empty() && !prevPoints.empty())
         {
+            bool useGpu = false;
+            #if WITH_CUDA_SUPPORT
+                useGpu = useGpuParam->get() && (cv::cuda::getCudaEnabledDeviceCount() > 0);
+            #endif
+            
             std::vector<cv::Point2f> nextPoints;
             std::vector<uchar> status;
             int levels = pyramidLevelsParam ? pyramidLevelsParam->get() : 3;
-            cv::calcOpticalFlowPyrLK(prevGrayFrame, gray, prevPoints, nextPoints, status, cv::noArray(),
-                                     cv::Size(15, 15), levels);
+            
+            #if WITH_CUDA_SUPPORT
+                if (useGpu)
+                {
+                    // GPU optical flow
+                    cv::cuda::GpuMat prevGrayGpu, currGrayGpu;
+                    prevGrayGpu.upload(prevGrayFrame);
+                    currGrayGpu.upload(gray);
+                    
+                    cv::cuda::GpuMat prevPointsGpu, nextPointsGpu, statusGpu, errGpu;
+                    // Convert vector to Mat for upload
+                    cv::Mat prevPointsMat(1, (int)prevPoints.size(), CV_32FC2);
+                    for (size_t i = 0; i < prevPoints.size(); ++i)
+                    {
+                        prevPointsMat.at<cv::Vec2f>(0, (int)i) = cv::Vec2f(prevPoints[i].x, prevPoints[i].y);
+                    }
+                    prevPointsGpu.upload(prevPointsMat);
+                    
+                    cv::Ptr<cv::cuda::SparsePyrLKOpticalFlow> optFlow = cv::cuda::SparsePyrLKOpticalFlow::create();
+                    optFlow->setMaxLevel(levels);
+                    optFlow->calc(prevGrayGpu, currGrayGpu, prevPointsGpu, nextPointsGpu, statusGpu, errGpu);
+                    
+                    // Download results
+                    cv::Mat nextPointsMat, statusMat;
+                    nextPointsGpu.download(nextPointsMat);
+                    statusGpu.download(statusMat);
+                    
+                    nextPoints.resize(prevPoints.size());
+                    status.resize(prevPoints.size());
+                    for (size_t i = 0; i < prevPoints.size(); ++i)
+                    {
+                        cv::Vec2f pt = nextPointsMat.at<cv::Vec2f>(0, (int)i);
+                        nextPoints[i] = cv::Point2f(pt[0], pt[1]);
+                        status[i] = statusMat.at<uchar>(0, (int)i);
+                    }
+                }
+                else
+            #endif
+            {
+                // CPU optical flow
+                cv::calcOpticalFlowPyrLK(prevGrayFrame, gray, prevPoints, nextPoints, status, cv::noArray(),
+                                         cv::Size(15, 15), levels);
+            }
 
             float sumX = 0.0f, sumY = 0.0f;
             int trackedCount = 0;
@@ -270,6 +318,45 @@ void MovementDetectorModule::drawParametersInNode(float itemWidth,
                                                   const std::function<void()>& onModificationEnded)
 {
     ImGui::PushItemWidth(itemWidth);
+    
+    // GPU ACCELERATION TOGGLE
+    #if WITH_CUDA_SUPPORT
+        bool cudaAvailable = (cv::cuda::getCudaEnabledDeviceCount() > 0);
+        
+        if (!cudaAvailable)
+        {
+            ImGui::BeginDisabled();
+        }
+        
+        bool useGpu = useGpuParam->get();
+        if (ImGui::Checkbox("⚡ Use GPU (CUDA)", &useGpu))
+        {
+            *useGpuParam = useGpu;
+            onModificationEnded();
+        }
+        
+        if (!cudaAvailable)
+        {
+            ImGui::EndDisabled();
+            if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
+            {
+                ImGui::SetTooltip("No CUDA-enabled GPU detected.\nCheck that your GPU supports CUDA and drivers are installed.");
+            }
+        }
+        else if (ImGui::IsItemHovered())
+        {
+            ImGui::SetTooltip("Enable GPU acceleration for movement detection.\nRequires CUDA-capable NVIDIA GPU.\nOnly affects Optical Flow mode.");
+        }
+        
+        ImGui::Separator();
+    #else
+        ImGui::TextDisabled("🚫 GPU support not compiled");
+        if (ImGui::IsItemHovered())
+        {
+            ImGui::SetTooltip("OpenCV was built without CUDA support.\nRebuild with WITH_CUDA=ON to enable GPU acceleration.");
+        }
+        ImGui::Separator();
+    #endif
     
     // Mode selection
     int mode = (int)modeParam->load();

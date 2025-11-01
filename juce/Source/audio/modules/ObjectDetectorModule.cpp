@@ -38,6 +38,9 @@ juce::AudioProcessorValueTreeState::ParameterLayout ObjectDetectorModule::create
     params.push_back(std::make_unique<juce::AudioParameterChoice>(
         "zoomLevel", "Zoom Level", juce::StringArray{ "Small", "Normal", "Large" }, 1));
     
+    params.push_back(std::make_unique<juce::AudioParameterBool>(
+        "useGpu", "Use GPU (CUDA)", false)); // Default OFF for compatibility
+    
     return { params.begin(), params.end() };
 }
 
@@ -52,6 +55,7 @@ ObjectDetectorModule::ObjectDetectorModule()
     zoomLevelParam = apvts.getRawParameterValue("zoomLevel");
     targetClassParam = dynamic_cast<juce::AudioParameterChoice*>(apvts.getParameter("targetClass"));
     confidenceThresholdParam = apvts.getRawParameterValue("confidence");
+    useGpuParam = dynamic_cast<juce::AudioParameterBool*>(apvts.getParameter("useGpu"));
     
     fifoBuffer.resize(16);
     
@@ -104,6 +108,8 @@ void ObjectDetectorModule::loadModel()
         try
         {
             net = cv::dnn::readNetFromDarknet(cfg.getFullPathName().toStdString(), weights.getFullPathName().toStdString());
+            // Backend/target will be set dynamically in run() based on useGpuParam
+            // Default to CPU for now; will switch in run() if GPU is requested
             net.setPreferableBackend(cv::dnn::DNN_BACKEND_OPENCV);
             net.setPreferableTarget(cv::dnn::DNN_TARGET_CPU);
             
@@ -142,6 +148,11 @@ void ObjectDetectorModule::loadModel()
 
 void ObjectDetectorModule::run()
 {
+    #if WITH_CUDA_SUPPORT
+        bool lastGpuState = false; // Track GPU state to minimize backend switches
+        bool loggedGpuWarning = false; // Only warn once if no GPU available
+    #endif
+    
     while (!threadShouldExit())
     {
         if (!modelLoaded)
@@ -155,7 +166,43 @@ void ObjectDetectorModule::run()
         
         if (!frame.empty())
         {
+            bool useGpu = false;
+            
+            #if WITH_CUDA_SUPPORT
+                // Check if user wants GPU and if CUDA device is available
+                useGpu = useGpuParam->get();
+                if (useGpu && cv::cuda::getCudaEnabledDeviceCount() == 0)
+                {
+                    useGpu = false; // Fallback to CPU
+                    if (!loggedGpuWarning)
+                    {
+                        juce::Logger::writeToLog("[ObjectDetector] WARNING: GPU requested but no CUDA device found. Using CPU.");
+                        loggedGpuWarning = true;
+                    }
+                }
+                
+                // Set DNN backend only when state changes (expensive operation)
+                if (useGpu != lastGpuState)
+                {
+                    if (useGpu)
+                    {
+                        net.setPreferableBackend(cv::dnn::DNN_BACKEND_CUDA);
+                        net.setPreferableTarget(cv::dnn::DNN_TARGET_CUDA);
+                        juce::Logger::writeToLog("[ObjectDetector] ✓ Switched to CUDA backend (GPU)");
+                    }
+                    else
+                    {
+                        net.setPreferableBackend(cv::dnn::DNN_BACKEND_OPENCV);
+                        net.setPreferableTarget(cv::dnn::DNN_TARGET_CPU);
+                        juce::Logger::writeToLog("[ObjectDetector] Switched to CPU backend");
+                    }
+                    lastGpuState = useGpu;
+                }
+            #endif
+            
             // Prepare input blob
+            // NOTE: For DNN models, blobFromImage works on CPU
+            // The GPU acceleration happens in net.forward() when backend is set to CUDA
             cv::Mat blob = cv::dnn::blobFromImage(
                 frame,
                 1.0 / 255.0,
@@ -165,7 +212,7 @@ void ObjectDetectorModule::run()
                 false);
             net.setInput(blob);
             
-            // Forward through YOLO
+            // Forward through YOLO (GPU-accelerated if backend is CUDA)
             std::vector<cv::Mat> outs;
             net.forward(outs, net.getUnconnectedOutLayersNames());
             
@@ -320,6 +367,45 @@ void ObjectDetectorModule::drawParametersInNode(float itemWidth,
 {
     juce::ignoreUnused(isParamModulated);
     ImGui::PushItemWidth(itemWidth);
+    
+    // GPU ACCELERATION TOGGLE
+    #if WITH_CUDA_SUPPORT
+        bool cudaAvailable = (cv::cuda::getCudaEnabledDeviceCount() > 0);
+        
+        if (!cudaAvailable)
+        {
+            ImGui::BeginDisabled();
+        }
+        
+        bool useGpu = useGpuParam->get();
+        if (ImGui::Checkbox("⚡ Use GPU (CUDA)", &useGpu))
+        {
+            *useGpuParam = useGpu;
+            onModificationEnded();
+        }
+        
+        if (!cudaAvailable)
+        {
+            ImGui::EndDisabled();
+            if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
+            {
+                ImGui::SetTooltip("No CUDA-enabled GPU detected.\nCheck that your GPU supports CUDA and drivers are installed.");
+            }
+        }
+        else if (ImGui::IsItemHovered())
+        {
+            ImGui::SetTooltip("Enable GPU acceleration for object detection.\nRequires CUDA-capable NVIDIA GPU.");
+        }
+        
+        ImGui::Separator();
+    #else
+        ImGui::TextDisabled("🚫 GPU support not compiled");
+        if (ImGui::IsItemHovered())
+        {
+            ImGui::SetTooltip("OpenCV was built without CUDA support.\nRebuild with WITH_CUDA=ON to enable GPU acceleration.");
+        }
+        ImGui::Separator();
+    #endif
     
     if (targetClassParam)
     {

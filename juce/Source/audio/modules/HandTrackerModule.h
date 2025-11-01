@@ -3,6 +3,11 @@
 #include "ModuleProcessor.h"
 #include <opencv2/core.hpp>
 #include <opencv2/dnn.hpp>
+#if WITH_CUDA_SUPPORT
+    #include <opencv2/core/cuda.hpp>
+    #include <opencv2/cudaimgproc.hpp>
+    #include <opencv2/cudawarping.hpp>
+#endif
 #include <juce_core/juce_core.h>
 #include <juce_audio_processors/juce_audio_processors.h>
 
@@ -49,6 +54,7 @@ private:
     std::atomic<float>* sourceIdParam = nullptr;
     std::atomic<float>* confidenceThresholdParam = nullptr;
     std::atomic<float>* zoomLevelParam = nullptr; // 0/1/2 small/normal/large
+    juce::AudioParameterBool* useGpuParam = nullptr;
 
     cv::dnn::Net net;
     bool modelLoaded = false;

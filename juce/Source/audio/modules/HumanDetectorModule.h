@@ -5,6 +5,11 @@
 #include "ModuleProcessor.h"
 #include <opencv2/core.hpp>
 #include <opencv2/objdetect.hpp>
+#if WITH_CUDA_SUPPORT
+    #include <opencv2/core/cuda.hpp>
+    #include <opencv2/cudaimgproc.hpp>
+    #include <opencv2/cudaobjdetect.hpp>
+#endif
 #include <juce_core/juce_core.h>
 #include <juce_audio_processors/juce_audio_processors.h>
 #include <juce_graphics/juce_graphics.h>
@@ -67,10 +72,17 @@ private:
     std::atomic<float>* minNeighborsParam = nullptr;
     // 0=Small,1=Normal,2=Large
     std::atomic<float>* zoomLevelParam = nullptr;
+    juce::AudioParameterBool* useGpuParam = nullptr;
 
-    // OpenCV objects for detection
+    // OpenCV objects for detection (CPU)
     cv::CascadeClassifier faceCascade;
     cv::HOGDescriptor hog;
+    
+    // OpenCV objects for detection (GPU)
+    #if WITH_CUDA_SUPPORT
+        cv::Ptr<cv::cuda::CascadeClassifier> faceCascadeGpu;
+        cv::Ptr<cv::cuda::HOG> hogGpu;
+    #endif
     
     // State for trigger generation
     int gateSamplesRemaining = 0;
