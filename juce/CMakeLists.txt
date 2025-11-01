@@ -353,6 +353,27 @@ if(MSVC)
     set(CMAKE_C_FLAGS "${SAVED_CMAKE_C_FLAGS} /FS")
 endif()
 
+# ==============================================================================
+# Define CUDA Support Preprocessor Macro for Application Code
+# ==============================================================================
+# This allows C++ code to check #if WITH_CUDA_SUPPORT at compile time
+# Only define if both CUDA and cuDNN are available (required for full DNN CUDA support)
+if(WITH_CUDA AND CUDNN_FOUND)
+    message(STATUS "✓ Enabling WITH_CUDA_SUPPORT preprocessor definition")
+    message(STATUS "  - CUDA Version: ${CUDAToolkit_VERSION}")
+    message(STATUS "  - cuDNN Found: ${CUDNN_INCLUDE_DIR}")
+    # Will be added to targets later via target_compile_definitions
+    set(CUDA_SUPPORT_ENABLED TRUE)
+else()
+    message(STATUS "CUDA support disabled - WITH_CUDA_SUPPORT not defined")
+    if(NOT WITH_CUDA)
+        message(STATUS "  Reason: WITH_CUDA is OFF")
+    elseif(NOT CUDNN_FOUND)
+        message(STATUS "  Reason: cuDNN not found")
+    endif()
+    set(CUDA_SUPPORT_ENABLED FALSE)
+endif()
+
 # --------------------------------------------------------------
 # Rubber Band (optional, real-time timestretcher/pitch-shifter)
 # --------------------------------------------------------------
@@ -630,6 +651,7 @@ target_compile_definitions(ColliderApp PRIVATE
     JUCE_PLUGINHOST_VST3=1
     $<$<BOOL:${USE_RUBBERBAND}>:USE_RUBBERBAND=1>
     $<$<NOT:$<BOOL:${USE_RUBBERBAND}>>:USE_RUBBERBAND=0>
+    $<$<BOOL:${CUDA_SUPPORT_ENABLED}>:WITH_CUDA_SUPPORT=1>
 )
 
 target_link_libraries(ColliderApp PRIVATE
@@ -961,6 +983,7 @@ target_compile_definitions(PresetCreatorApp PRIVATE
     PRESET_CREATOR_UI=1
     $<$<BOOL:${USE_RUBBERBAND}>:USE_RUBBERBAND=1>
     $<$<NOT:$<BOOL:${USE_RUBBERBAND}>>:USE_RUBBERBAND=0>
+    $<$<BOOL:${CUDA_SUPPORT_ENABLED}>:WITH_CUDA_SUPPORT=1>
 )
 
 target_link_libraries(PresetCreatorApp PRIVATE
