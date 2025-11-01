@@ -1,0 +1,2 @@
+*.zip filter=lfs diff=lfs merge=lfs -text
+opencv_cuda_cache_archive_20251101_1733/ filter=lfs diff=lfs merge=lfs -text
