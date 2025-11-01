@@ -74,8 +74,43 @@ void CropVideoModule::run()
         cv::Mat frame = VideoFrameManager::getInstance().getFrame(sourceId);
         if (frame.empty()) { wait(33); continue; }
 
-        // NEW: Cache the full, uncropped input frame for the UI to draw on.
+        // Cache the full, uncropped input frame for the UI and tracker initialization
+        {
+            const juce::ScopedLock lock(trackerLock);
+            frame.copyTo(lastFrameForTracker);
+        }
         updateInputGuiFrame(frame);
+
+        // Tracking Logic
+        if (trackingActive.load())
+        {
+            const juce::ScopedLock lock(trackerLock);
+            if (tracker)
+            {
+                cv::Rect newBox;
+                bool ok = tracker->update(frame, newBox);
+
+                if (ok)
+                {
+                    // Update parameters from tracker results
+                    float newW = (float)newBox.width / (float)frame.cols;
+                    float newH = (float)newBox.height / (float)frame.rows;
+                    float newX = ((float)newBox.x + (float)newBox.width / 2.0f) / (float)frame.cols;
+                    float newY = ((float)newBox.y + (float)newBox.height / 2.0f) / (float)frame.rows;
+
+                    *cropXParam = newX;
+                    *cropYParam = newY;
+                    *cropWParam = newW;
+                    *cropHParam = newH;
+                }
+                else
+                {
+                    // Tracking failed, disengage
+                    trackingActive.store(false);
+                    tracker.release();
+                }
+            }
+        }
 
         // Get final crop values (these are already modulated by the audio thread if connected)
         float cx = cropXParam ? cropXParam->load() : 0.5f;
@@ -362,6 +397,53 @@ void CropVideoModule::drawParametersInNode(float itemWidth, const std::function<
         }
     }
     
+    // --- Tracking Buttons ---
+    ImGui::Separator();
+    if (trackingActive.load())
+    {
+        ImGui::PushStyleColor(ImGuiCol_Button, (ImVec4)ImColor::HSV(0.0f, 0.6f, 0.6f));
+        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, (ImVec4)ImColor::HSV(0.0f, 0.7f, 0.7f));
+        ImGui::PushStyleColor(ImGuiCol_ButtonActive, (ImVec4)ImColor::HSV(0.0f, 0.8f, 0.8f));
+        if (ImGui::Button("Stop Tracking", ImVec2(itemWidth, 0)))
+        {
+            const juce::ScopedLock lock(trackerLock);
+            trackingActive.store(false);
+            tracker.release();
+        }
+        ImGui::PopStyleColor(3);
+    }
+    else
+    {
+        if (ImGui::Button("Start Tracking", ImVec2(itemWidth, 0)))
+        {
+            const juce::ScopedLock lock(trackerLock);
+            if (!lastFrameForTracker.empty())
+            {
+                // Get current rect from params to initialize tracker
+                float cx = cropXParam ? cropXParam->load() : 0.5f;
+                float cy = cropYParam ? cropYParam->load() : 0.5f;
+                float w = cropWParam ? cropWParam->load() : 0.5f;
+                float h = cropHParam ? cropHParam->load() : 0.5f;
+                int frameW = lastFrameForTracker.cols;
+                int frameH = lastFrameForTracker.rows;
+                cv::Rect initBox(
+                    (int)((cx - w / 2.0f) * frameW),
+                    (int)((cy - h / 2.0f) * frameH),
+                    (int)(w * frameW),
+                    (int)(h * frameH)
+                );
+
+                if (initBox.area() > 0)
+                {
+                    tracker = cv::TrackerMIL::create();
+                    tracker->init(lastFrameForTracker, initBox);
+                    trackingActive.store(true);
+                }
+            }
+        }
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip("Lock onto the current crop box and follow it automatically.");
+    }
+    
     // --- Parameter Sliders ---
     ImGui::PushItemWidth(itemWidth);
     ImGui::Text("Manual Crop Controls:");
@@ -369,7 +451,8 @@ void CropVideoModule::drawParametersInNode(float itemWidth, const std::function<
     auto drawModSlider = [&](const char* label, const char* paramId, std::atomic<float>* paramPtr)
     {
         bool modulated = isParamModulated(juce::String(paramId) + "_mod");
-        if (modulated) ImGui::BeginDisabled();
+        bool isControlled = modulated || trackingActive.load();
+        if (isControlled) ImGui::BeginDisabled();
         
         float value = paramPtr ? paramPtr->load() : 0.5f;
         if (ImGui::SliderFloat(label, &value, 0.0f, 1.0f, "%.3f"))
@@ -381,11 +464,16 @@ void CropVideoModule::drawParametersInNode(float itemWidth, const std::function<
             }
         }
         
-        if (modulated)
+        if (isControlled)
         {
             ImGui::EndDisabled();
             if (ImGui::IsItemHovered())
-                ImGui::SetTooltip("CV input connected");
+            {
+                if (trackingActive.load())
+                    ImGui::SetTooltip("Tracking active");
+                else if (modulated)
+                    ImGui::SetTooltip("CV input connected");
+            }
         }
     };
     

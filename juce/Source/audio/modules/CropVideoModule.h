@@ -2,6 +2,7 @@
 
 #include "ModuleProcessor.h"
 #include <opencv2/core.hpp>
+#include <opencv2/video/tracking.hpp>
 #if WITH_CUDA_SUPPORT
     #include <opencv2/core/cuda.hpp>
 #endif
@@ -57,6 +58,12 @@ private:
     
     // CV Input Value
     std::atomic<juce::uint32> currentSourceId { 0 };
+    
+    // Tracking State
+    std::atomic<bool> trackingActive { false };
+    cv::Ptr<cv::Tracker> tracker;
+    juce::CriticalSection trackerLock;
+    cv::Mat lastFrameForTracker;
     
     // UI Previews
     juce::Image latestInputFrameForGui;  // NEW: Holds the uncropped input for drawing
