@@ -53,7 +53,5 @@ private:
     cv::VideoCapture videoCapture;
     juce::Image latestFrameForGui;
     juce::CriticalSection imageLock;
-    
-    juce::StringArray availableCameraNames;
 };
 

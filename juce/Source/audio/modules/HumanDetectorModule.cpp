@@ -5,6 +5,7 @@
 
 #if defined(PRESET_CREATOR_UI)
 #include <imgui.h>
+#include "../../preset_creator/ImGuiNodeEditorComponent.h"
 #endif
 
 juce::AudioProcessorValueTreeState::ParameterLayout HumanDetectorModule::createParameterLayout()
@@ -15,7 +16,14 @@ juce::AudioProcessorValueTreeState::ParameterLayout HumanDetectorModule::createP
     params.push_back(std::make_unique<juce::AudioParameterInt>("minNeighbors", "Min Neighbors", 1, 10, 3));
     params.push_back(std::make_unique<juce::AudioParameterChoice>(
         "zoomLevel", "Zoom Level", juce::StringArray{ "Small", "Normal", "Large" }, 1));
-    params.push_back(std::make_unique<juce::AudioParameterBool>("useGpu", "Use GPU (CUDA)", false)); // Default OFF for compatibility
+    
+    // GPU acceleration toggle - default from global setting
+    #if defined(PRESET_CREATOR_UI)
+        bool defaultGpu = ImGuiNodeEditorComponent::getGlobalGpuEnabled();
+    #else
+        bool defaultGpu = true;
+    #endif
+    params.push_back(std::make_unique<juce::AudioParameterBool>("useGpu", "Use GPU (CUDA)", defaultGpu));
     return { params.begin(), params.end() };
 }
 
@@ -33,20 +41,55 @@ HumanDetectorModule::HumanDetectorModule()
     useGpuParam = dynamic_cast<juce::AudioParameterBool*>(apvts.getParameter("useGpu"));
 
     // Load Haar Cascade (CPU)
-    juce::File cascadeFile = juce::File::getSpecialLocation(juce::File::currentApplicationFile)
-                                .getSiblingFile("haarcascade_frontalface_default.xml");
+    // Try multiple possible locations for the cascade file
+    juce::File exeFile = juce::File::getSpecialLocation(juce::File::currentApplicationFile);
+    juce::File appDir = exeFile.getParentDirectory();
+    
+    juce::File cascadeFile = appDir.getChildFile("haarcascade_frontalface_default.xml");
+    if (!cascadeFile.existsAsFile())
+    {
+        // Try in assets directory
+        cascadeFile = appDir.getChildFile("assets").getChildFile("haarcascade_frontalface_default.xml");
+    }
+    if (!cascadeFile.existsAsFile())
+    {
+        // Try next to executable (getSiblingFile)
+        cascadeFile = exeFile.getSiblingFile("haarcascade_frontalface_default.xml");
+    }
+    
     if (cascadeFile.existsAsFile())
     {
-        faceCascade.load(cascadeFile.getFullPathName().toStdString());
-        
-        #if WITH_CUDA_SUPPORT
-            // Load GPU cascade
-            faceCascadeGpu = cv::cuda::CascadeClassifier::create(cascadeFile.getFullPathName().toStdString());
-        #endif
+        faceCascadeLoaded = faceCascade.load(cascadeFile.getFullPathName().toStdString());
+        if (faceCascadeLoaded)
+        {
+            juce::Logger::writeToLog("[HumanDetector] Loaded cascade: " + cascadeFile.getFileName());
+            
+            #if WITH_CUDA_SUPPORT
+                try
+                {
+                    // Load GPU cascade
+                    faceCascadeGpu = cv::cuda::CascadeClassifier::create(cascadeFile.getFullPathName().toStdString());
+                    if (faceCascadeGpu)
+                    {
+                        juce::Logger::writeToLog("[HumanDetector] GPU cascade loaded successfully");
+                    }
+                }
+                catch (const cv::Exception& e)
+                {
+                    juce::Logger::writeToLog("[HumanDetector] WARNING: Failed to load GPU cascade: " + juce::String(e.what()));
+                    faceCascadeGpu.release();
+                }
+            #endif
+        }
+        else
+        {
+            juce::Logger::writeToLog("[HumanDetector] ERROR: Failed to load cascade file: " + cascadeFile.getFullPathName());
+        }
     }
     else
     {
-        juce::Logger::writeToLog("ERROR: haarcascade_frontalface_default.xml not found!");
+        juce::Logger::writeToLog("[HumanDetector] WARNING: haarcascade_frontalface_default.xml not found in: " + appDir.getFullPathName());
+        juce::Logger::writeToLog("[HumanDetector] Face detection will be disabled. Body detection (HOG) will still work.");
     }
     
     // Set up HOG detector (CPU)
@@ -121,55 +164,136 @@ DetectionResult HumanDetectorModule::analyzeFrame(const cv::Mat& inputFrame)
     
     inputFrame.copyTo(displayFrame);
     cv::cvtColor(inputFrame, gray, cv::COLOR_BGR2GRAY);
-    cv::resize(gray, gray, cv::Size(320, 240));
-    cv::resize(displayFrame, displayFrame, cv::Size(320, 240));
 
     std::vector<cv::Rect> detections;
+    
+    // Safety checks for null parameters
+    if (!modeParam || !scaleFactorParam || !minNeighborsParam)
+    {
+        cv::resize(displayFrame, displayFrame, cv::Size(320, 240));
+        updateGuiFrame(displayFrame);
+        return result; // Return empty result if parameters not initialized
+    }
+    
     int mode = (int)modeParam->load();
     bool useGpu = false;
     
     #if WITH_CUDA_SUPPORT
-        useGpu = useGpuParam->get() && (cv::cuda::getCudaEnabledDeviceCount() > 0);
+        useGpu = useGpuParam ? (useGpuParam->get() && (cv::cuda::getCudaEnabledDeviceCount() > 0)) : false;
     #endif
 
     if (mode == 0) // Face Detection
     {
-        #if WITH_CUDA_SUPPORT
-            if (useGpu && faceCascadeGpu)
-            {
-                cv::cuda::GpuMat grayGpu;
-                grayGpu.upload(gray);
-                
-                cv::cuda::GpuMat detectionsGpu;
-                faceCascadeGpu->detectMultiScale(grayGpu, detectionsGpu);
-                
-                // Convert detections to std::vector<cv::Rect>
-                faceCascadeGpu->convert(detectionsGpu, detections);
-            }
-            else
-        #endif
+        // Face detection works better on smaller images - resize for speed
+        cv::Mat graySmall, displaySmall;
+        cv::resize(gray, graySmall, cv::Size(320, 240));
+        cv::resize(displayFrame, displaySmall, cv::Size(320, 240));
+        
+        // Check if face cascade is loaded before using it
+        if (faceCascadeLoaded || faceCascadeGpu)
         {
-            faceCascade.detectMultiScale(gray, detections, scaleFactorParam->load(), (int)minNeighborsParam->load());
+            #if WITH_CUDA_SUPPORT
+                if (useGpu && faceCascadeGpu)
+                {
+                    cv::cuda::GpuMat grayGpu;
+                    grayGpu.upload(graySmall);
+                    
+                    cv::cuda::GpuMat detectionsGpu;
+                    faceCascadeGpu->detectMultiScale(grayGpu, detectionsGpu);
+                    
+                    // Convert detections to std::vector<cv::Rect>
+                    faceCascadeGpu->convert(detectionsGpu, detections);
+                }
+                else
+            #endif
+            {
+                // Only use CPU cascade if it's actually loaded
+                if (faceCascadeLoaded)
+                {
+                    faceCascade.detectMultiScale(graySmall, detections, scaleFactorParam->load(), (int)minNeighborsParam->load());
+                }
+            }
         }
+        
+        displayFrame = displaySmall;
     }
-    else // Body Detection
+    else // Body Detection (HOG)
     {
+        // HOG needs larger images to work properly - use at least 640x480
+        // Resize input to a reasonable size for HOG (larger = more accurate but slower)
+        cv::Size hogSize = cv::Size(640, 480);
+        cv::Mat grayHog;
+        cv::resize(gray, grayHog, hogSize);
+        
+        // Scale factor to map detections back to display size
+        float scaleX = (float)displayFrame.cols / 640.0f;
+        float scaleY = (float)displayFrame.rows / 480.0f;
+        
         #if WITH_CUDA_SUPPORT
             if (useGpu && hogGpu)
             {
-                cv::cuda::GpuMat grayGpu;
-                grayGpu.upload(gray);
-                
-                std::vector<cv::Rect> foundLocations;
-                std::vector<double> confidences;
-                hogGpu->detectMultiScale(grayGpu, foundLocations, &confidences);
-                detections = foundLocations;
+                try
+                {
+                    cv::cuda::GpuMat grayGpu;
+                    grayGpu.upload(grayHog);
+                    
+                    std::vector<cv::Rect> foundLocations;
+                    std::vector<double> confidences;
+                    
+                    // CUDA HOG detectMultiScale has different signature - use minimal parameters
+                    // Basic signature: detectMultiScale(img, foundLocations, confidences)
+                    hogGpu->detectMultiScale(grayGpu, foundLocations, &confidences);
+                    
+                    detections = foundLocations;
+                    
+                    // Scale detections back to display frame size
+                    for (auto& det : detections)
+                    {
+                        det.x = (int)(det.x * scaleX);
+                        det.y = (int)(det.y * scaleY);
+                        det.width = (int)(det.width * scaleX);
+                        det.height = (int)(det.height * scaleY);
+                    }
+                }
+                catch (const cv::Exception& e)
+                {
+                    juce::Logger::writeToLog("[HumanDetector] HOG GPU detection error: " + juce::String(e.what()));
+                    detections.clear();
+                }
             }
             else
         #endif
         {
-            hog.detectMultiScale(gray, detections);
+            try
+            {
+                // CPU HOG with optimized parameters to prevent freezing
+                std::vector<double> weights;
+                hog.detectMultiScale(grayHog, detections, weights,
+                                    0.0,                    // hitThreshold (0 = default)
+                                    cv::Size(8, 8),         // winStride (larger stride = faster, less accurate)
+                                    cv::Size(32, 32),       // padding
+                                    1.05,                   // scale (smaller = faster, checks fewer scales)
+                                    2.0,                    // finalThreshold (group similar detections)
+                                    false);                 // useMeanshiftGrouping (false = faster)
+                
+                // Scale detections back to display frame size
+                for (auto& det : detections)
+                {
+                    det.x = (int)(det.x * scaleX);
+                    det.y = (int)(det.y * scaleY);
+                    det.width = (int)(det.width * scaleX);
+                    det.height = (int)(det.height * scaleY);
+                }
+            }
+            catch (const cv::Exception& e)
+            {
+                juce::Logger::writeToLog("[HumanDetector] HOG CPU detection error: " + juce::String(e.what()));
+                detections.clear();
+            }
         }
+        
+        // Resize display frame for UI (smaller for preview)
+        cv::resize(displayFrame, displayFrame, cv::Size(320, 240));
     }
 
     // Draw all detections (smaller ones in gray)
@@ -194,10 +318,11 @@ DetectionResult HumanDetectorModule::analyzeFrame(const cv::Mat& inputFrame)
                     cv::FONT_HERSHEY_SIMPLEX, 0.4, cv::Scalar(0, 255, 0), 1);
 
         result.numDetections = 1;
-        result.x[0] = juce::jmap((float)largest->x, 0.0f, 320.0f, 0.0f, 1.0f);
-        result.y[0] = juce::jmap((float)largest->y, 0.0f, 240.0f, 0.0f, 1.0f);
-        result.width[0] = juce::jmap((float)largest->width, 0.0f, 320.0f, 0.0f, 1.0f);
-        result.height[0] = juce::jmap((float)largest->height, 0.0f, 240.0f, 0.0f, 1.0f);
+        // Normalize coordinates to [0,1] range based on actual display frame size
+        result.x[0] = juce::jmap((float)largest->x, 0.0f, (float)displayFrame.cols, 0.0f, 1.0f);
+        result.y[0] = juce::jmap((float)largest->y, 0.0f, (float)displayFrame.rows, 0.0f, 1.0f);
+        result.width[0] = juce::jmap((float)largest->width, 0.0f, (float)displayFrame.cols, 0.0f, 1.0f);
+        result.height[0] = juce::jmap((float)largest->height, 0.0f, (float)displayFrame.rows, 0.0f, 1.0f);
     }
 
     updateGuiFrame(displayFrame);
@@ -294,7 +419,7 @@ void HumanDetectorModule::drawParametersInNode(float itemWidth,
             ImGui::BeginDisabled();
         }
         
-        bool useGpu = useGpuParam->get();
+        bool useGpu = useGpuParam ? useGpuParam->get() : false;
         if (ImGui::Checkbox("⚡ Use GPU (CUDA)", &useGpu))
         {
             *useGpuParam = useGpu;
@@ -325,7 +450,7 @@ void HumanDetectorModule::drawParametersInNode(float itemWidth,
     #endif
     
     // Mode selection
-    int mode = (int)modeParam->load();
+    int mode = modeParam ? (int)modeParam->load() : 0;
     const char* modes[] = { "Faces (Haar)", "Bodies (HOG)" };
     if (ImGui::Combo("Mode", &mode, modes, 2))
     {
@@ -336,24 +461,30 @@ void HumanDetectorModule::drawParametersInNode(float itemWidth,
     // Conditional parameters for Haar mode
     if (mode == 0)
     {
-        float scaleFactor = scaleFactorParam->load();
-        if (ImGui::SliderFloat("Scale Factor", &scaleFactor, 1.05f, 2.0f, "%.2f"))
+        if (scaleFactorParam)
         {
-            *dynamic_cast<juce::AudioParameterFloat*>(apvts.getParameter("scaleFactor")) = scaleFactor;
-        }
-        if (ImGui::IsItemDeactivatedAfterEdit())
-        {
-            onModificationEnded();
+            float scaleFactor = scaleFactorParam->load();
+            if (ImGui::SliderFloat("Scale Factor", &scaleFactor, 1.05f, 2.0f, "%.2f"))
+            {
+                *dynamic_cast<juce::AudioParameterFloat*>(apvts.getParameter("scaleFactor")) = scaleFactor;
+            }
+            if (ImGui::IsItemDeactivatedAfterEdit())
+            {
+                onModificationEnded();
+            }
         }
         
-        int minNeighbors = (int)minNeighborsParam->load();
-        if (ImGui::SliderInt("Min Neighbors", &minNeighbors, 1, 10))
+        if (minNeighborsParam)
         {
-            *dynamic_cast<juce::AudioParameterInt*>(apvts.getParameter("minNeighbors")) = minNeighbors;
-        }
-        if (ImGui::IsItemDeactivatedAfterEdit())
-        {
-            onModificationEnded();
+            int minNeighbors = (int)minNeighborsParam->load();
+            if (ImGui::SliderInt("Min Neighbors", &minNeighbors, 1, 10))
+            {
+                *dynamic_cast<juce::AudioParameterInt*>(apvts.getParameter("minNeighbors")) = minNeighbors;
+            }
+            if (ImGui::IsItemDeactivatedAfterEdit())
+            {
+                onModificationEnded();
+            }
         }
     }
     

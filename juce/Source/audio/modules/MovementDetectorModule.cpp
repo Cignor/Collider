@@ -5,6 +5,7 @@
 
 #if defined(PRESET_CREATOR_UI)
 #include <imgui.h>
+#include "../../preset_creator/ImGuiNodeEditorComponent.h"
 #endif
 
 juce::AudioProcessorValueTreeState::ParameterLayout MovementDetectorModule::createParameterLayout()
@@ -18,7 +19,14 @@ juce::AudioProcessorValueTreeState::ParameterLayout MovementDetectorModule::crea
     params.push_back(std::make_unique<juce::AudioParameterInt>("maxFeatures", "Max Features", 20, 500, 100));
     params.push_back(std::make_unique<juce::AudioParameterInt>("pyramidLevels", "Pyramid Levels", 1, 5, 3));
     params.push_back(std::make_unique<juce::AudioParameterBool>("noiseReduction", "Noise Reduction", false));
-    params.push_back(std::make_unique<juce::AudioParameterBool>("useGpu", "Use GPU (CUDA)", false)); // Default OFF for compatibility
+    
+    // GPU acceleration toggle - default from global setting
+    #if defined(PRESET_CREATOR_UI)
+        bool defaultGpu = ImGuiNodeEditorComponent::getGlobalGpuEnabled();
+    #else
+        bool defaultGpu = true;
+    #endif
+    params.push_back(std::make_unique<juce::AudioParameterBool>("useGpu", "Use GPU (CUDA)", defaultGpu));
     return { params.begin(), params.end() };
 }
 

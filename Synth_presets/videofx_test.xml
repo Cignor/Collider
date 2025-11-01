@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<ModularSynthPreset version="1" bpm="120.0">
+  <modules>
+    <module logicalId="1" type="video_fx">
+      <params>
+        <VideoFXParams>
+          <PARAM id="blur" value="11.76999950408936"/>
+          <PARAM id="brightness" value="-1.290000915527344"/>
+          <PARAM id="contrast" value="1.959999918937683"/>
+          <PARAM id="flipH" value="0.0"/>
+          <PARAM id="flipV" value="0.0"/>
+          <PARAM id="gainBlue" value="0.4799999892711639"/>
+          <PARAM id="gainGreen" value="1.350000023841858"/>
+          <PARAM id="gainRed" value="1.039999961853027"/>
+          <PARAM id="grayscale" value="0.0"/>
+          <PARAM id="hueShift" value="-93.09999847412109"/>
+          <PARAM id="invert" value="0.0"/>
+          <PARAM id="saturation" value="3.0"/>
+          <PARAM id="sharpen" value="0.0"/>
+          <PARAM id="useGpu" value="1.0"/>
+          <PARAM id="zoomLevel" value="1.0"/>
+        </VideoFXParams>
+      </params>
+      <extra>
+        <VideoFXState/>
+      </extra>
+    </module>
+    <module logicalId="2" type="video_file_loader">
+      <params>
+        <VideoFileLoaderParams>
+          <PARAM id="in" value="0.0"/>
+          <PARAM id="loop" value="1.0"/>
+          <PARAM id="out" value="1.0"/>
+          <PARAM id="speed" value="1.0"/>
+          <PARAM id="sync" value="1.0"/>
+          <PARAM id="zoomLevel" value="1.0"/>
+        </VideoFileLoaderParams>
+      </params>
+      <extra>
+        <VideoFileLoaderState videoFilePath="C:\Users\PIMP-TOWERPRIMUS\Downloads\Rover. Shuffle_cuttingshapes.mp4"/>
+      </extra>
+    </module>
+    <module logicalId="3" type="face_tracker">
+      <params>
+        <FaceTrackerParams>
+          <PARAM id="confidence" value="0.09999999403953552"/>
+          <PARAM id="sourceId" value="0.0"/>
+          <PARAM id="useGpu" value="1.0"/>
+          <PARAM id="zoomLevel" value="1.0"/>
+        </FaceTrackerParams>
+      </params>
+    </module>
+  </modules>
+  <connections>
+    <connection srcId="1" srcChan="0" dstId="3" dstChan="0"/>
+    <connection srcId="2" srcChan="0" dstId="1" dstChan="0"/>
+  </connections>
+  <NodeEditorUI>
+    <node id="1" x="622.0" y="231.0"/>
+    <node id="2" x="47.0" y="214.0"/>
+    <node id="3" x="1288.0" y="252.0"/>
+    <node id="0" x="0.0" y="0.0"/>
+  </NodeEditorUI>
+</ModularSynthPreset>

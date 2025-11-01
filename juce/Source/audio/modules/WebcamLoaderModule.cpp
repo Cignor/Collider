@@ -1,5 +1,6 @@
 #include "WebcamLoaderModule.h"
 #include "../../video/VideoFrameManager.h"
+#include "../../video/CameraEnumerator.h"
 #include <opencv2/imgproc.hpp>
 
 #if defined(PRESET_CREATOR_UI)
@@ -26,32 +27,8 @@ WebcamLoaderModule::WebcamLoaderModule()
     cameraIndexParam = apvts.getRawParameterValue("cameraIndex");
     zoomLevelParam = apvts.getRawParameterValue("zoomLevel");
     
-    // Enumerate available cameras with resolution info
-    for (int i = 0; i < 10; ++i) // Check first 10 camera indices
-    {
-        cv::VideoCapture tempCap(i);
-        if (tempCap.isOpened())
-        {
-            int width = (int)tempCap.get(cv::CAP_PROP_FRAME_WIDTH);
-            int height = (int)tempCap.get(cv::CAP_PROP_FRAME_HEIGHT);
-            
-            juce::String cameraName = "Camera " + juce::String(i);
-            if (width > 0 && height > 0)
-            {
-                cameraName += " (" + juce::String(width) + "x" + juce::String(height) + ")";
-            }
-            
-            availableCameraNames.add(cameraName);
-            tempCap.release();
-        }
-    }
-    
-    if (availableCameraNames.isEmpty())
-    {
-        availableCameraNames.add("No cameras found");
-    }
-    
-    juce::Logger::writeToLog("[WebcamLoader] Found " + juce::String(availableCameraNames.size()) + " camera(s)");
+    // Camera enumeration is now done by CameraEnumerator singleton on a background thread
+    // This constructor is now instant!
 }
 
 WebcamLoaderModule::~WebcamLoaderModule()
@@ -176,25 +153,65 @@ void WebcamLoaderModule::drawParametersInNode(float itemWidth,
 {
     ImGui::PushItemWidth(itemWidth);
     
-    // Camera selection with real device names
+    // Get the latest list from the fast, cached singleton
+    auto availableCameraNames = CameraEnumerator::getInstance().getAvailableCameraNames();
+    
+    // Add a refresh button to re-scan for cameras if needed
+    if (ImGui::Button("Refresh List"))
+    {
+        CameraEnumerator::getInstance().rescan();
+    }
+    ImGui::SameLine();
+    
     int currentIndex = (int)cameraIndexParam->load();
     currentIndex = juce::jlimit(0, juce::jmax(0, availableCameraNames.size() - 1), currentIndex);
     
     const char* currentCameraName = availableCameraNames[currentIndex].toRawUTF8();
+    
+    // Check if we're in a scanning state or no cameras found
+    bool isScanning = (availableCameraNames.size() == 1 && availableCameraNames[0].startsWith("Scanning"));
+    bool noCameras = (availableCameraNames.size() == 1 && availableCameraNames[0].startsWith("No cameras"));
+    
+    if (isScanning || noCameras)
+    {
+        ImGui::BeginDisabled();
+    }
+    
     if (ImGui::BeginCombo("Camera", currentCameraName))
     {
         for (int i = 0; i < availableCameraNames.size(); ++i)
         {
             const bool isSelected = (currentIndex == i);
-            if (ImGui::Selectable(availableCameraNames[i].toRawUTF8(), isSelected))
+            const juce::String& cameraName = availableCameraNames[i];
+            
+            // Don't allow selecting "Scanning..." or "No cameras found"
+            bool isSelectable = !cameraName.startsWith("Scanning") && !cameraName.startsWith("No cameras");
+            
+            if (!isSelectable)
+            {
+                ImGui::BeginDisabled();
+            }
+            
+            if (ImGui::Selectable(cameraName.toRawUTF8(), isSelected))
             {
                 *dynamic_cast<juce::AudioParameterInt*>(apvts.getParameter("cameraIndex")) = i;
                 onModificationEnded();
             }
+            
+            if (!isSelectable)
+            {
+                ImGui::EndDisabled();
+            }
+            
             if (isSelected)
                 ImGui::SetItemDefaultFocus();
         }
         ImGui::EndCombo();
+    }
+    
+    if (isScanning || noCameras)
+    {
+        ImGui::EndDisabled();
     }
     
     ImGui::Separator();

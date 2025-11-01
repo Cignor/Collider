@@ -5,6 +5,7 @@
 
 #if defined(PRESET_CREATOR_UI)
 #include <imgui.h>
+#include "../../preset_creator/ImGuiNodeEditorComponent.h"
 #endif
 
 juce::AudioProcessorValueTreeState::ParameterLayout ColorTrackerModule::createParameterLayout()
@@ -14,8 +15,15 @@ juce::AudioProcessorValueTreeState::ParameterLayout ColorTrackerModule::createPa
         "sourceId", "Source ID", 0.0f, 1000.0f, 0.0f));
     params.push_back(std::make_unique<juce::AudioParameterChoice>(
         "zoomLevel", "Zoom Level", juce::StringArray{ "Small", "Normal", "Large" }, 1));
+    
+    // GPU acceleration toggle - default from global setting
+    #if defined(PRESET_CREATOR_UI)
+        bool defaultGpu = ImGuiNodeEditorComponent::getGlobalGpuEnabled();
+    #else
+        bool defaultGpu = true;
+    #endif
     params.push_back(std::make_unique<juce::AudioParameterBool>(
-        "useGpu", "Use GPU (CUDA)", false)); // Default OFF for compatibility
+        "useGpu", "Use GPU (CUDA)", defaultGpu));
     return { params.begin(), params.end() };
 }
 

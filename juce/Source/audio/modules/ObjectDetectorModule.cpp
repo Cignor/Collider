@@ -6,6 +6,7 @@
 
 #if defined(PRESET_CREATOR_UI)
 #include <imgui.h>
+#include "../../preset_creator/ImGuiNodeEditorComponent.h"
 #endif
 
 // YOLOv3 default input size
@@ -38,8 +39,14 @@ juce::AudioProcessorValueTreeState::ParameterLayout ObjectDetectorModule::create
     params.push_back(std::make_unique<juce::AudioParameterChoice>(
         "zoomLevel", "Zoom Level", juce::StringArray{ "Small", "Normal", "Large" }, 1));
     
+    // GPU acceleration toggle - default from global setting
+    #if defined(PRESET_CREATOR_UI)
+        bool defaultGpu = ImGuiNodeEditorComponent::getGlobalGpuEnabled();
+    #else
+        bool defaultGpu = true;
+    #endif
     params.push_back(std::make_unique<juce::AudioParameterBool>(
-        "useGpu", "Use GPU (CUDA)", false)); // Default OFF for compatibility
+        "useGpu", "Use GPU (CUDA)", defaultGpu));
     
     return { params.begin(), params.end() };
 }
@@ -108,10 +115,27 @@ void ObjectDetectorModule::loadModel()
         try
         {
             net = cv::dnn::readNetFromDarknet(cfg.getFullPathName().toStdString(), weights.getFullPathName().toStdString());
-            // Backend/target will be set dynamically in run() based on useGpuParam
-            // Default to CPU for now; will switch in run() if GPU is requested
-            net.setPreferableBackend(cv::dnn::DNN_BACKEND_OPENCV);
-            net.setPreferableTarget(cv::dnn::DNN_TARGET_CPU);
+            
+            // CRITICAL: Set backend immediately after loading model
+            #if WITH_CUDA_SUPPORT
+                bool useGpu = useGpuParam ? useGpuParam->get() : false;
+                if (useGpu && cv::cuda::getCudaEnabledDeviceCount() > 0)
+                {
+                    net.setPreferableBackend(cv::dnn::DNN_BACKEND_CUDA);
+                    net.setPreferableTarget(cv::dnn::DNN_TARGET_CUDA);
+                    juce::Logger::writeToLog("[ObjectDetector] ✓ Model loaded with CUDA backend (GPU)");
+                }
+                else
+                {
+                    net.setPreferableBackend(cv::dnn::DNN_BACKEND_OPENCV);
+                    net.setPreferableTarget(cv::dnn::DNN_TARGET_CPU);
+                    juce::Logger::writeToLog("[ObjectDetector] Model loaded with CPU backend");
+                }
+            #else
+                net.setPreferableBackend(cv::dnn::DNN_BACKEND_OPENCV);
+                net.setPreferableTarget(cv::dnn::DNN_TARGET_CPU);
+                juce::Logger::writeToLog("[ObjectDetector] Model loaded with CPU backend (CUDA not compiled)");
+            #endif
             
             // Load class names if available
             classNames.clear();
@@ -170,7 +194,7 @@ void ObjectDetectorModule::run()
             
             #if WITH_CUDA_SUPPORT
                 // Check if user wants GPU and if CUDA device is available
-                useGpu = useGpuParam->get();
+                useGpu = useGpuParam ? useGpuParam->get() : false;
                 if (useGpu && cv::cuda::getCudaEnabledDeviceCount() == 0)
                 {
                     useGpu = false; // Fallback to CPU

@@ -8,6 +8,11 @@
 #include <unordered_set>
 #include <cstdint>
 #include <algorithm>
+
+// ============================================================================
+// Global GPU/CPU Settings (default: GPU enabled for best performance)
+// ============================================================================
+bool ImGuiNodeEditorComponent::s_globalGpuEnabled = true;
 #include "../audio/graph/ModularSynthProcessor.h"
 #include "../audio/modules/ModuleProcessor.h"
 #include "../audio/modules/AudioInputModuleProcessor.h"
@@ -36,6 +41,7 @@
 #include "../audio/modules/ObjectDetectorModule.h"
 #include "../audio/modules/HandTrackerModule.h"
 #include "../audio/modules/FaceTrackerModule.h"
+#include "../audio/modules/VideoFXModule.h"
 #include "../audio/modules/MapRangeModuleProcessor.h"
 #include "../audio/modules/LagProcessorModuleProcessor.h"
 #include "../audio/modules/DeCrackleModuleProcessor.h"
@@ -510,19 +516,6 @@ void ImGuiNodeEditorComponent::renderImGui()
             if (ImGui::MenuItem("Save Preset", "Ctrl+S")) { startSaveDialog(); }
             if (ImGui::MenuItem("Load Preset", "Ctrl+O")) { startLoadDialog(); }
             
-            // ADD: Audio Settings menu item
-            if (ImGui::MenuItem("Audio Settings..."))
-            {
-                if (onShowAudioSettings)
-                    onShowAudioSettings();
-            }
-            
-            // MIDI Device Manager menu item
-            if (ImGui::MenuItem("MIDI Device Manager..."))
-            {
-                showMidiDeviceManager = !showMidiDeviceManager;
-            }
-            
             ImGui::Separator();
             
             // Plugin scanning menu item
@@ -636,6 +629,68 @@ void ImGuiNodeEditorComponent::renderImGui()
             }
             // <<< END OF BLOCK >>>
 
+            ImGui::EndMenu();
+        }
+        
+        // ========================================================================
+        // SETTINGS MENU - Global GPU/CPU Configuration, Audio, and MIDI
+        // ========================================================================
+        if (ImGui::BeginMenu("Settings"))
+        {
+            // Audio Settings
+            if (ImGui::MenuItem("Audio Settings..."))
+            {
+                if (onShowAudioSettings)
+                    onShowAudioSettings();
+            }
+            
+            // MIDI Device Manager
+            if (ImGui::MenuItem("MIDI Device Manager..."))
+            {
+                showMidiDeviceManager = !showMidiDeviceManager;
+            }
+            
+            ImGui::Separator();
+            
+            #if WITH_CUDA_SUPPORT
+                bool gpuEnabled = getGlobalGpuEnabled();
+                if (ImGui::Checkbox("Enable GPU Acceleration (CUDA)", &gpuEnabled))
+                {
+                    setGlobalGpuEnabled(gpuEnabled);
+                    juce::Logger::writeToLog("[Settings] Global GPU: " + juce::String(gpuEnabled ? "ENABLED" : "DISABLED"));
+                }
+                
+                ImGui::TextDisabled("This setting controls all vision nodes:");
+                ImGui::TextDisabled("  - Pose Estimator");
+                ImGui::TextDisabled("  - Hand Tracker");
+                ImGui::TextDisabled("  - Face Tracker");
+                ImGui::TextDisabled("  - Object Detector");
+                ImGui::TextDisabled("  - Human Detector");
+                ImGui::TextDisabled("  - Color Tracker");
+                ImGui::TextDisabled("  - Contour Detector");
+                ImGui::TextDisabled("  - Movement Detector");
+                ImGui::TextDisabled("  - Semantic Segmentation");
+                
+                ImGui::Separator();
+                
+                // Show CUDA device info
+                #if WITH_CUDA_SUPPORT
+                    int deviceCount = cv::cuda::getCudaEnabledDeviceCount();
+                    if (deviceCount > 0)
+                    {
+                        ImGui::TextColored(ImVec4(0.0f, 1.0f, 0.0f, 1.0f), "CUDA Available");
+                        ImGui::Text("GPU Devices: %d", deviceCount);
+                    }
+                    else
+                    {
+                        ImGui::TextColored(ImVec4(1.0f, 0.5f, 0.0f, 1.0f), "CUDA compiled but no devices found");
+                    }
+                #endif
+            #else
+                ImGui::TextDisabled("GPU Acceleration: Not Compiled");
+                ImGui::TextDisabled("Rebuild with CUDA support to enable");
+            #endif
+            
             ImGui::EndMenu();
         }
 
@@ -1598,6 +1653,7 @@ void ImGuiNodeEditorComponent::renderImGui()
         addModuleButton("Video File Loader", "video_file_loader");
         ImGui::Spacing();
         ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1.0f), "Processors:");
+        addModuleButton("Video FX", "video_fx");
         addModuleButton("Movement Detector", "movement_detector");
         addModuleButton("Human Detector", "human_detector");
         addModuleButton("Object Detector", "object_detector");
@@ -2546,6 +2602,30 @@ if (auto* mp = synth->getModuleForLogical (lid))
             }
         }
         faceModule->drawParametersInNode(nodeContentWidth, isParamModulated, onModificationEnded);
+    }
+    else if (auto* fxModule = dynamic_cast<VideoFXModule*>(mp))
+    {
+        juce::Image frame = fxModule->getLatestFrame();
+        if (!frame.isNull())
+        {
+            if (visionModuleTextures.find((int)lid) == visionModuleTextures.end())
+            {
+                visionModuleTextures[(int)lid] = std::make_unique<juce::OpenGLTexture>();
+            }
+            juce::OpenGLTexture* texture = visionModuleTextures[(int)lid].get();
+            texture->loadImage(frame);
+            if (texture->getTextureID() != 0)
+            {
+                float nativeWidth = (float)frame.getWidth();
+                float nativeHeight = (float)frame.getHeight();
+                float aspectRatio = (nativeWidth > 0.0f) ? nativeHeight / nativeWidth : 0.75f; // Default to 4:3
+                ImVec2 renderSize = ImVec2(nodeContentWidth, nodeContentWidth * aspectRatio);
+                // Flip Y-coords for correct orientation
+                ImGui::Image((void*)(intptr_t)texture->getTextureID(), renderSize, ImVec2(0, 1), ImVec2(1, 0));
+            }
+        }
+        // Now draw the regular parameters below the video
+        fxModule->drawParametersInNode(nodeContentWidth, isParamModulated, onModificationEnded);
     }
     else
     {
@@ -4026,6 +4106,7 @@ if (auto* mp = synth->getModuleForLogical (lid))
                     if (ImGui::MenuItem("Webcam Loader")) addAtMouse("webcam_loader");
                     if (ImGui::MenuItem("Video File Loader")) addAtMouse("video_file_loader");
                     ImGui::Separator();
+                    if (ImGui::MenuItem("Video FX")) addAtMouse("video_fx");
                     if (ImGui::MenuItem("Movement Detector")) addAtMouse("movement_detector");
                     if (ImGui::MenuItem("Human Detector")) addAtMouse("human_detector");
                     if (ImGui::MenuItem("Object Detector")) addAtMouse("object_detector");
@@ -7794,6 +7875,7 @@ std::map<juce::String, std::pair<const char*, const char*>> ImGuiNodeEditorCompo
         // OpenCV (Computer Vision)
         {"Webcam Loader", {"webcam_loader", "Captures video from a webcam and publishes it as a source for vision processing modules"}},
         {"Video File Loader", {"video_file_loader", "Loads and plays a video file, publishes it as a source for vision processing modules"}},
+        {"Video FX", {"video_fx", "Applies real-time video effects (brightness, contrast, saturation, blur, sharpen, etc.) to video sources, chainable"}},
         {"Movement Detector", {"movement_detector", "Analyzes video source for motion via optical flow or background subtraction, outputs motion data as CV"}},
         {"Human Detector", {"human_detector", "Detects faces or bodies in video source via Haar Cascades or HOG, outputs position and size as CV"}},
         {"Object Detector", {"object_detector", "Uses YOLOv3 to detect objects (person, car, etc.) and outputs bounding box position/size as CV"}},

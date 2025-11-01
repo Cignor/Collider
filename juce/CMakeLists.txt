@@ -596,10 +596,13 @@ target_sources(ColliderApp PRIVATE
     Source/audio/modules/AnimationModuleProcessor.h
     Source/audio/modules/AnimationModuleProcessor.cpp
     Source/video/VideoFrameManager.h
+    Source/video/CameraEnumerator.h
     Source/audio/modules/WebcamLoaderModule.h
     Source/audio/modules/WebcamLoaderModule.cpp
     Source/audio/modules/VideoFileLoaderModule.h
     Source/audio/modules/VideoFileLoaderModule.cpp
+    Source/audio/modules/VideoFXModule.h
+    Source/audio/modules/VideoFXModule.cpp
     Source/audio/modules/MovementDetectorModule.h
     Source/audio/modules/MovementDetectorModule.cpp
     Source/audio/modules/HumanDetectorModule.h
@@ -679,6 +682,11 @@ if(TARGET CUDAToolkit::cudart)
     target_link_libraries(ColliderApp PRIVATE CUDAToolkit::cudart)
 elseif(CUDA_CUDART_LIBRARY)
     target_link_libraries(ColliderApp PRIVATE ${CUDA_CUDART_LIBRARY})
+endif()
+
+# Link Windows libraries for native camera enumeration (DirectShow)
+if(WIN32)
+    target_link_libraries(ColliderApp PRIVATE ole32 strmiids)
 endif()
 
 # Add include directories for ColliderApp
@@ -910,10 +918,13 @@ target_sources(PresetCreatorApp PRIVATE
     Source/audio/modules/AnimationModuleProcessor.h
     Source/audio/modules/AnimationModuleProcessor.cpp
     Source/video/VideoFrameManager.h
+    Source/video/CameraEnumerator.h
     Source/audio/modules/WebcamLoaderModule.h
     Source/audio/modules/WebcamLoaderModule.cpp
     Source/audio/modules/VideoFileLoaderModule.h
     Source/audio/modules/VideoFileLoaderModule.cpp
+    Source/audio/modules/VideoFXModule.h
+    Source/audio/modules/VideoFXModule.cpp
     Source/audio/modules/MovementDetectorModule.h
     Source/audio/modules/MovementDetectorModule.cpp
     Source/audio/modules/HumanDetectorModule.h
@@ -1028,6 +1039,11 @@ if(TARGET CUDAToolkit::cudart)
     target_link_libraries(PresetCreatorApp PRIVATE CUDAToolkit::cudart)
 elseif(CUDA_CUDART_LIBRARY)
     target_link_libraries(PresetCreatorApp PRIVATE ${CUDA_CUDART_LIBRARY})
+endif()
+
+# Link Windows libraries for native camera enumeration (DirectShow)
+if(WIN32)
+    target_link_libraries(PresetCreatorApp PRIVATE ole32 strmiids)
 endif()
 
 if(WIN32)

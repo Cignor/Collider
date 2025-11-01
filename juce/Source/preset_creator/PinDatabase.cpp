@@ -1061,8 +1061,8 @@ db["random"] = ModulePinInfo(
     };
     for (size_t i = 0; i < keypointNames.size(); ++i)
     {
-        db["pose_estimator"].audioOuts.emplace_back(keypointNames[i] + " X", i * 2, PinDataType::CV);
-        db["pose_estimator"].audioOuts.emplace_back(keypointNames[i] + " Y", i * 2 + 1, PinDataType::CV);
+        db["pose_estimator"].audioOuts.emplace_back(keypointNames[i] + " X", static_cast<int>(i * 2), PinDataType::CV);
+        db["pose_estimator"].audioOuts.emplace_back(keypointNames[i] + " Y", static_cast<int>(i * 2 + 1), PinDataType::CV);
     }
 
     // Hand Tracker: 21 keypoints x 2 = 42 outs

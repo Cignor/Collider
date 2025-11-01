@@ -6,6 +6,7 @@
 
 #if defined(PRESET_CREATOR_UI)
 #include <imgui.h>
+#include "../../preset_creator/ImGuiNodeEditorComponent.h"
 #endif
 
 void PoseEstimatorModule::loadModel(int modelIndex)
@@ -61,6 +62,28 @@ void PoseEstimatorModule::loadModel(int modelIndex)
     if (protoFile.existsAsFile() && modelFile.existsAsFile()) {
         try {
             net = cv::dnn::readNetFromCaffe(protoPath.toStdString(), modelPath.toStdString());
+            
+            // CRITICAL: Set backend immediately after loading model
+            #if WITH_CUDA_SUPPORT
+                bool useGpu = useGpuParam ? useGpuParam->get() : false;
+                if (useGpu && cv::cuda::getCudaEnabledDeviceCount() > 0)
+                {
+                    net.setPreferableBackend(cv::dnn::DNN_BACKEND_CUDA);
+                    net.setPreferableTarget(cv::dnn::DNN_TARGET_CUDA);
+                    juce::Logger::writeToLog("[PoseEstimator] ✓ Model loaded with CUDA backend (GPU)");
+                }
+                else
+                {
+                    net.setPreferableBackend(cv::dnn::DNN_BACKEND_OPENCV);
+                    net.setPreferableTarget(cv::dnn::DNN_TARGET_CPU);
+                    juce::Logger::writeToLog("[PoseEstimator] Model loaded with CPU backend");
+                }
+            #else
+                net.setPreferableBackend(cv::dnn::DNN_BACKEND_OPENCV);
+                net.setPreferableTarget(cv::dnn::DNN_TARGET_CPU);
+                juce::Logger::writeToLog("[PoseEstimator] Model loaded with CPU backend (CUDA not compiled)");
+            #endif
+            
             modelLoaded = true;
             juce::Logger::writeToLog("[PoseEstimator] SUCCESS: Loaded model: " + modelName);
         } catch (const cv::Exception& e) {
@@ -128,9 +151,14 @@ juce::AudioProcessorValueTreeState::ParameterLayout PoseEstimatorModule::createP
     params.push_back(std::make_unique<juce::AudioParameterBool>(
         "drawSkeleton", "Draw Skeleton", true));
     
-    // GPU acceleration toggle
+    // GPU acceleration toggle - default from global setting
+    #if defined(PRESET_CREATOR_UI)
+        bool defaultGpu = ImGuiNodeEditorComponent::getGlobalGpuEnabled();
+    #else
+        bool defaultGpu = true; // Default to GPU for non-UI builds
+    #endif
     params.push_back(std::make_unique<juce::AudioParameterBool>(
-        "useGpu", "Use GPU (CUDA)", false)); // Default OFF for compatibility
+        "useGpu", "Use GPU (CUDA)", defaultGpu));
     
     return { params.begin(), params.end() };
 }
@@ -207,11 +235,9 @@ void PoseEstimatorModule::run()
         
         if (!frame.empty())
         {
-            bool useGpu = false;
-            
             #if WITH_CUDA_SUPPORT
-                // Check if user wants GPU and if CUDA device is available
-                useGpu = useGpuParam->get();
+                // Check if user wants GPU and if a CUDA device is available
+                bool useGpu = useGpuParam ? useGpuParam->get() : false;
                 if (useGpu && cv::cuda::getCudaEnabledDeviceCount() == 0)
                 {
                     useGpu = false; // Fallback to CPU
@@ -222,7 +248,7 @@ void PoseEstimatorModule::run()
                     }
                 }
                 
-                // Set DNN backend only when state changes (expensive operation)
+                // Set DNN backend only when state changes (this is an expensive operation)
                 if (useGpu != lastGpuState)
                 {
                     if (useGpu)
@@ -241,10 +267,8 @@ void PoseEstimatorModule::run()
                 }
             #endif
             
-            // 1. Prepare image for the network (resize and normalize)
-            // Blob size based on Quality setting (Low=224, Medium=368)
-            // NOTE: For DNN models, blobFromImage works on CPU
-            // The GPU acceleration happens in net.forward() when backend is set to CUDA
+            // --- SIMPLIFIED AND CORRECTED LOGIC ---
+            // 1. Prepare image for the network. This happens on the CPU regardless of the backend.
             int q = qualityParam ? qualityParam->getIndex() : 1;
             cv::Size blobSize = (q == 0) ? cv::Size(224, 224) : cv::Size(368, 368);
             cv::Mat inputBlob = cv::dnn::blobFromImage(
@@ -255,10 +279,12 @@ void PoseEstimatorModule::run()
                 false,
                 false);
 
-            // 2. Run the forward pass through the neural network
-            // Forward pass (GPU-accelerated if backend is CUDA)
+            // 2. Set the input and run the forward pass.
+            // This `forward()` call is where the GPU acceleration happens if the backend was set to CUDA.
             net.setInput(inputBlob);
             cv::Mat netOutput = net.forward();
+            
+            // --- END OF CORRECTION ---
             
             // 3. Parse the output to extract keypoint coordinates
             PoseResult result;

@@ -2,13 +2,24 @@
 #include "../../video/VideoFrameManager.h"
 #include <opencv2/imgproc.hpp>
 
+#if defined(PRESET_CREATOR_UI)
+#include "../../preset_creator/ImGuiNodeEditorComponent.h"
+#endif
+
 juce::AudioProcessorValueTreeState::ParameterLayout FaceTrackerModule::createParameterLayout()
 {
     std::vector<std::unique_ptr<juce::RangedAudioParameter>> params;
     params.push_back(std::make_unique<juce::AudioParameterFloat>("sourceId", "Source ID", 0.0f, 1000.0f, 0.0f));
     params.push_back(std::make_unique<juce::AudioParameterFloat>("confidence", "Confidence", 0.0f, 1.0f, 0.1f));
     params.push_back(std::make_unique<juce::AudioParameterChoice>("zoomLevel", "Zoom Level", juce::StringArray{"Small","Normal","Large"}, 1));
-    params.push_back(std::make_unique<juce::AudioParameterBool>("useGpu", "Use GPU (CUDA)", false)); // Default OFF for compatibility
+    
+    // GPU acceleration toggle - default from global setting
+    #if defined(PRESET_CREATOR_UI)
+        bool defaultGpu = ImGuiNodeEditorComponent::getGlobalGpuEnabled();
+    #else
+        bool defaultGpu = true;
+    #endif
+    params.push_back(std::make_unique<juce::AudioParameterBool>("useGpu", "Use GPU (CUDA)", defaultGpu));
     return { params.begin(), params.end() };
 }
 
@@ -53,7 +64,33 @@ void FaceTrackerModule::loadModel()
     bool ok = faceCascade.load(haarPath.toStdString());
     if (ok && juce::File(protoPath).existsAsFile() && juce::File(modelPath).existsAsFile())
     {
-        try { net = cv::dnn::readNetFromCaffe(protoPath.toStdString(), modelPath.toStdString()); modelLoaded = true; }
+        try 
+        { 
+            net = cv::dnn::readNetFromCaffe(protoPath.toStdString(), modelPath.toStdString());
+            
+            // CRITICAL: Set backend immediately after loading model
+            #if WITH_CUDA_SUPPORT
+                bool useGpu = useGpuParam ? useGpuParam->get() : false;
+                if (useGpu && cv::cuda::getCudaEnabledDeviceCount() > 0)
+                {
+                    net.setPreferableBackend(cv::dnn::DNN_BACKEND_CUDA);
+                    net.setPreferableTarget(cv::dnn::DNN_TARGET_CUDA);
+                    juce::Logger::writeToLog("[FaceTracker] ✓ Model loaded with CUDA backend (GPU)");
+                }
+                else
+                {
+                    net.setPreferableBackend(cv::dnn::DNN_BACKEND_OPENCV);
+                    net.setPreferableTarget(cv::dnn::DNN_TARGET_CPU);
+                    juce::Logger::writeToLog("[FaceTracker] Model loaded with CPU backend");
+                }
+            #else
+                net.setPreferableBackend(cv::dnn::DNN_BACKEND_OPENCV);
+                net.setPreferableTarget(cv::dnn::DNN_TARGET_CPU);
+                juce::Logger::writeToLog("[FaceTracker] Model loaded with CPU backend (CUDA not compiled)");
+            #endif
+            
+            modelLoaded = true; 
+        }
         catch (...) { modelLoaded = false; }
     }
 }
@@ -77,7 +114,7 @@ void FaceTrackerModule::run()
         
         #if WITH_CUDA_SUPPORT
             // Check if user wants GPU and if CUDA device is available
-            useGpu = useGpuParam->get();
+            useGpu = useGpuParam ? useGpuParam->get() : false;
             if (useGpu && cv::cuda::getCudaEnabledDeviceCount() == 0)
             {
                 useGpu = false; // Fallback to CPU

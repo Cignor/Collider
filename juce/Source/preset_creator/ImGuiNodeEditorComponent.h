@@ -396,4 +396,11 @@ public:
     
     // --- VST Plugin Support ---
     void addPluginModules();
+    
+    // --- Global GPU/CPU Settings ---
+    static bool getGlobalGpuEnabled() { return s_globalGpuEnabled; }
+    static void setGlobalGpuEnabled(bool enabled) { s_globalGpuEnabled = enabled; }
+    
+private:
+    static bool s_globalGpuEnabled; // Global preference for GPU acceleration
 };

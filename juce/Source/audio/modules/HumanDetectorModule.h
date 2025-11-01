@@ -76,6 +76,7 @@ private:
 
     // OpenCV objects for detection (CPU)
     cv::CascadeClassifier faceCascade;
+    bool faceCascadeLoaded = false; // Track if cascade was successfully loaded
     cv::HOGDescriptor hog;
     
     // OpenCV objects for detection (GPU)
