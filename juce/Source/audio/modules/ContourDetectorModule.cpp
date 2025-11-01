@@ -28,7 +28,8 @@ juce::AudioProcessorValueTreeState::ParameterLayout ContourDetectorModule::creat
 ContourDetectorModule::ContourDetectorModule()
     : ModuleProcessor(BusesProperties()
                       .withInput("Input", juce::AudioChannelSet::mono(), true)
-                      .withOutput("Output", juce::AudioChannelSet::discreteChannels(3), true)),
+                      .withOutput("CV Out", juce::AudioChannelSet::discreteChannels(3), true)
+                      .withOutput("Video Out", juce::AudioChannelSet::mono(), true)), // PASSTHROUGH
       juce::Thread("Contour Detector Thread"),
       apvts(*this, nullptr, "ContourDetectorParams", createParameterLayout())
 {
@@ -121,6 +122,8 @@ void ContourDetectorModule::run()
                     fifoBuffer[writeScope.startIndex1] = result;
             }
 
+            // --- PASSTHROUGH LOGIC ---
+            VideoFrameManager::getInstance().setFrame(getLogicalId(), frame);
             updateGuiFrame(frame);
         }
         
@@ -160,10 +163,21 @@ void ContourDetectorModule::processBlock(juce::AudioBuffer<float>& buffer, juce:
             lastResultForAudio = fifoBuffer[readScope.startIndex1];
     }
 
+    // Output CV on bus 0
+    auto cvOutBus = getBusBuffer(buffer, false, 0);
     const float values[3] { lastResultForAudio.area, lastResultForAudio.complexity, lastResultForAudio.aspectRatio };
-    for (int ch = 0; ch < juce::jmin(3, buffer.getNumChannels()); ++ch)
-        for (int s = 0; s < buffer.getNumSamples(); ++s)
-            buffer.setSample(ch, s, values[ch]);
+    for (int ch = 0; ch < juce::jmin(3, cvOutBus.getNumChannels()); ++ch)
+        for (int s = 0; s < cvOutBus.getNumSamples(); ++s)
+            cvOutBus.setSample(ch, s, values[ch]);
+    
+    // Passthrough Video ID on bus 1
+    auto videoOutBus = getBusBuffer(buffer, false, 1);
+    if (videoOutBus.getNumChannels() > 0)
+    {
+        float primaryId = static_cast<float>(getLogicalId());
+        for (int s = 0; s < videoOutBus.getNumSamples(); ++s)
+            videoOutBus.setSample(0, s, primaryId);
+    }
 }
 
 #if defined(PRESET_CREATOR_UI)
@@ -270,6 +284,7 @@ void ContourDetectorModule::drawIoPins(const NodePinHelpers& helpers)
     helpers.drawAudioOutputPin("Area", 0);
     helpers.drawAudioOutputPin("Complexity", 1);
     helpers.drawAudioOutputPin("Aspect Ratio", 2);
+    helpers.drawAudioOutputPin("Video Out", 0); // Bus 1
 }
 #endif
 

@@ -26,7 +26,9 @@ juce::AudioProcessorValueTreeState::ParameterLayout FaceTrackerModule::createPar
 FaceTrackerModule::FaceTrackerModule()
     : ModuleProcessor(BusesProperties()
                         .withInput("Input", juce::AudioChannelSet::mono(), true)
-                        .withOutput("Output", juce::AudioChannelSet::discreteChannels(FACE_NUM_KEYPOINTS * 2), true)),
+                        .withOutput("CV Out", juce::AudioChannelSet::discreteChannels(FACE_NUM_KEYPOINTS * 2), true)
+                        .withOutput("Video Out", juce::AudioChannelSet::mono(), true)    // PASSTHROUGH
+                        .withOutput("Cropped Out", juce::AudioChannelSet::mono(), true)), // CROPPED
       juce::Thread("Face Tracker Thread"),
       apvts(*this, nullptr, "FaceTrackerParams", createParameterLayout())
 {
@@ -144,12 +146,25 @@ void FaceTrackerModule::run()
             }
         #endif
 
+        // Save a clean copy for cropping (before drawing annotations)
+        cv::Mat originalFrame;
+        frame.copyTo(originalFrame);
+        
         cv::Mat gray; cv::cvtColor(frame, gray, cv::COLOR_BGR2GRAY);
         std::vector<cv::Rect> faces; faceCascade.detectMultiScale(gray, faces);
         FaceResult result{};
         if (!faces.empty())
         {
             cv::Rect box = faces[0];
+            
+            // --- CROPPED OUTPUT LOGIC ---
+            cv::Rect validBox = box & cv::Rect(0, 0, originalFrame.cols, originalFrame.rows);
+            if (validBox.area() > 0)
+            {
+                cv::Mat cropped = originalFrame(validBox);
+                VideoFrameManager::getInstance().setFrame(getSecondaryLogicalId(), cropped);
+            }
+            
             cv::Mat roi = frame(box);
             // NOTE: For DNN models, blobFromImage works on CPU
             // The GPU acceleration happens in net.forward() when backend is set to CUDA
@@ -164,7 +179,17 @@ void FaceTrackerModule::run()
                 if (result.keypoints[i][0] >= 0)
                     cv::circle(frame, { (int)result.keypoints[i][0], (int)result.keypoints[i][1] }, 2, {0,0,255}, -1);
         }
+        else
+        {
+            // Clear cropped output when no face detected
+            cv::Mat emptyFrame;
+            VideoFrameManager::getInstance().setFrame(getSecondaryLogicalId(), emptyFrame);
+        }
+        
         if (fifo.getFreeSpace()>=1){ auto w=fifo.write(1); if (w.blockSize1>0) fifoBuffer[w.startIndex1]=result; }
+        
+        // --- PASSTHROUGH LOGIC ---
+        VideoFrameManager::getInstance().setFrame(getLogicalId(), frame);
         updateGuiFrame(frame);
         wait(66);
     }
@@ -188,8 +213,41 @@ void FaceTrackerModule::processBlock(juce::AudioBuffer<float>& buffer, juce::Mid
 {
     juce::ignoreUnused(midi);
     auto in=getBusBuffer(buffer,true,0); if(in.getNumChannels()>0 && in.getNumSamples()>0) currentSourceId.store((juce::uint32)in.getSample(0,0));
-    buffer.clear(); if(fifo.getNumReady()>0){auto r=fifo.read(1); if(r.blockSize1>0) lastResultForAudio=fifoBuffer[r.startIndex1];}
-    for(int i=0;i<FACE_NUM_KEYPOINTS;++i){int chX=i*2, chY=i*2+1; if(chY>=buffer.getNumChannels()) break; float xn=(lastResultForAudio.keypoints[i][0]>=0)?juce::jlimit(0.0f,1.0f,lastResultForAudio.keypoints[i][0]/640.0f):0.0f; float yn=(lastResultForAudio.keypoints[i][1]>=0)?juce::jlimit(0.0f,1.0f,lastResultForAudio.keypoints[i][1]/480.0f):0.0f; for(int s=0;s<buffer.getNumSamples();++s){buffer.setSample(chX,s,xn); buffer.setSample(chY,s,yn);} }
+    
+    if(fifo.getNumReady()>0){auto r=fifo.read(1); if(r.blockSize1>0) lastResultForAudio=fifoBuffer[r.startIndex1];}
+    
+    // Output CV on bus 0
+    auto cvOutBus = getBusBuffer(buffer, false, 0);
+    for(int i=0;i<FACE_NUM_KEYPOINTS;++i)
+    {
+        int chX=i*2, chY=i*2+1; 
+        if(chY>=cvOutBus.getNumChannels()) break; 
+        float xn=(lastResultForAudio.keypoints[i][0]>=0)?juce::jlimit(0.0f,1.0f,lastResultForAudio.keypoints[i][0]/640.0f):0.0f; 
+        float yn=(lastResultForAudio.keypoints[i][1]>=0)?juce::jlimit(0.0f,1.0f,lastResultForAudio.keypoints[i][1]/480.0f):0.0f; 
+        for(int s=0;s<cvOutBus.getNumSamples();++s)
+        {
+            cvOutBus.setSample(chX,s,xn); 
+            cvOutBus.setSample(chY,s,yn);
+        }
+    }
+    
+    // Passthrough Video ID on bus 1
+    auto videoOutBus = getBusBuffer(buffer, false, 1);
+    if (videoOutBus.getNumChannels() > 0)
+    {
+        float primaryId = static_cast<float>(getLogicalId());
+        for (int s = 0; s < videoOutBus.getNumSamples(); ++s)
+            videoOutBus.setSample(0, s, primaryId);
+    }
+    
+    // Cropped Video ID on bus 2
+    auto croppedOutBus = getBusBuffer(buffer, false, 2);
+    if (croppedOutBus.getNumChannels() > 0)
+    {
+        float secondaryId = static_cast<float>(getSecondaryLogicalId());
+        for (int s = 0; s < croppedOutBus.getNumSamples(); ++s)
+            croppedOutBus.setSample(0, s, secondaryId);
+    }
 }
 
 #if defined(PRESET_CREATOR_UI)
@@ -254,7 +312,9 @@ void FaceTrackerModule::drawIoPins(const NodePinHelpers& helpers)
 {
     helpers.drawAudioInputPin("Source In", 0);
     for(int i=0;i<FACE_NUM_KEYPOINTS;++i)
-    { juce::String base = juce::String("Pt ") + juce::String(i+1); helpers.drawAudioOutputPin((base+" X").toRawUTF8(), i*2); helpers.drawAudioOutputPin((base+" Y").toRawUTF8(), i*2+1);}    
+    { juce::String base = juce::String("Pt ") + juce::String(i+1); helpers.drawAudioOutputPin((base+" X").toRawUTF8(), i*2); helpers.drawAudioOutputPin((base+" Y").toRawUTF8(), i*2+1);}
+    helpers.drawAudioOutputPin("Video Out", 0);     // Bus 1
+    helpers.drawAudioOutputPin("Cropped Out", 1); // Bus 2
 }
 
 #endif

@@ -33,7 +33,8 @@ juce::AudioProcessorValueTreeState::ParameterLayout MovementDetectorModule::crea
 MovementDetectorModule::MovementDetectorModule()
     : ModuleProcessor(BusesProperties()
                      .withInput("Input", juce::AudioChannelSet::mono(), true)
-                     .withOutput("Output", juce::AudioChannelSet::discreteChannels(4), true)),
+                     .withOutput("CV Out", juce::AudioChannelSet::discreteChannels(4), true)
+                     .withOutput("Video Out", juce::AudioChannelSet::mono(), true)), // PASSTHROUGH
       juce::Thread("Movement Detector Analysis Thread"),
       apvts(*this, nullptr, "MovementParams", createParameterLayout())
 {
@@ -240,6 +241,8 @@ MovementResult MovementDetectorModule::analyzeFrame(const cv::Mat& inputFrame)
         }
     }
 
+    // --- PASSTHROUGH LOGIC ---
+    VideoFrameManager::getInstance().setFrame(getLogicalId(), displayFrame);
     updateGuiFrame(displayFrame);
     return result;
 }
@@ -288,13 +291,13 @@ void MovementDetectorModule::processBlock(juce::AudioBuffer<float>& buffer, juce
         }
     }
     
-    // Write results to output channels
-    auto outputBuffer = getBusBuffer(buffer, false, 0);
-    if (outputBuffer.getNumChannels() < 4) return;
+    // Write results to output channels (bus 0 - CV Out)
+    auto cvOutBus = getBusBuffer(buffer, false, 0);
+    if (cvOutBus.getNumChannels() < 4) return;
     
-    outputBuffer.setSample(0, 0, lastResultForAudio.avgMotionX);
-    outputBuffer.setSample(1, 0, lastResultForAudio.avgMotionY);
-    outputBuffer.setSample(2, 0, lastResultForAudio.motionAmount);
+    cvOutBus.setSample(0, 0, lastResultForAudio.avgMotionX);
+    cvOutBus.setSample(1, 0, lastResultForAudio.avgMotionY);
+    cvOutBus.setSample(2, 0, lastResultForAudio.motionAmount);
 
     // Handle trigger
     if (lastResultForAudio.motionTrigger)
@@ -305,18 +308,27 @@ void MovementDetectorModule::processBlock(juce::AudioBuffer<float>& buffer, juce
 
     if (triggerSamplesRemaining > 0)
     {
-        outputBuffer.setSample(3, 0, 1.0f);
+        cvOutBus.setSample(3, 0, 1.0f);
         triggerSamplesRemaining--;
     }
     else
     {
-        outputBuffer.setSample(3, 0, 0.0f);
+        cvOutBus.setSample(3, 0, 0.0f);
     }
     
     // Fill rest of buffer
     for (int channel = 0; channel < 4; ++channel)
     {
-        outputBuffer.copyFrom(channel, 1, outputBuffer, channel, 0, outputBuffer.getNumSamples() - 1);
+        cvOutBus.copyFrom(channel, 1, cvOutBus, channel, 0, cvOutBus.getNumSamples() - 1);
+    }
+    
+    // Passthrough Video ID on bus 1
+    auto videoOutBus = getBusBuffer(buffer, false, 1);
+    if (videoOutBus.getNumChannels() > 0)
+    {
+        float primaryId = static_cast<float>(getLogicalId());
+        for (int s = 0; s < videoOutBus.getNumSamples(); ++s)
+            videoOutBus.setSample(0, s, primaryId);
     }
 }
 
@@ -462,5 +474,6 @@ void MovementDetectorModule::drawIoPins(const NodePinHelpers& helpers)
     helpers.drawAudioOutputPin("Motion Y", 1);
     helpers.drawAudioOutputPin("Amount", 2);
     helpers.drawAudioOutputPin("Trigger", 3);
+    helpers.drawAudioOutputPin("Video Out", 0); // Bus 1
 }
 #endif

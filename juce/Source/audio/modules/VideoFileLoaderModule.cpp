@@ -27,7 +27,8 @@ juce::AudioProcessorValueTreeState::ParameterLayout VideoFileLoaderModule::creat
 
 VideoFileLoaderModule::VideoFileLoaderModule()
     : ModuleProcessor(BusesProperties()
-                     .withOutput("Output", juce::AudioChannelSet::mono(), true)),
+                     .withOutput("CV Out", juce::AudioChannelSet::mono(), true)
+                     .withOutput("Audio Out", juce::AudioChannelSet::stereo(), true)),
       juce::Thread("Video File Loader Thread"),
       apvts(*this, nullptr, "VideoFileLoaderParams", createParameterLayout())
 {
@@ -38,6 +39,9 @@ VideoFileLoaderModule::VideoFileLoaderModule()
     outNormParam = apvts.getRawParameterValue("out");
     syncParam = apvts.getRawParameterValue("sync");
     syncToTransport.store(syncParam && (*syncParam > 0.5f));
+    
+    // Initialize audio format manager
+    audioFormatManager.registerBasicFormats();
 }
 
 VideoFileLoaderModule::~VideoFileLoaderModule()
@@ -48,6 +52,9 @@ VideoFileLoaderModule::~VideoFileLoaderModule()
 
 void VideoFileLoaderModule::prepareToPlay(double sampleRate, int samplesPerBlock)
 {
+    audioSampleRate = sampleRate;
+    audioTransport.prepareToPlay(samplesPerBlock, sampleRate);
+    
     startThread(juce::Thread::Priority::normal);
     // If we already had a file open previously, request re-open on thread start
     if (currentVideoFile.existsAsFile())
@@ -56,6 +63,7 @@ void VideoFileLoaderModule::prepareToPlay(double sampleRate, int samplesPerBlock
 
 void VideoFileLoaderModule::releaseResources()
 {
+    audioTransport.releaseResources();
     signalThreadShouldExit();
     stopThread(5000);
 }
@@ -178,6 +186,9 @@ void VideoFileLoaderModule::run()
                     juce::Logger::writeToLog("[VideoFileLoader] Opened: " + currentVideoFile.getFileName() + 
                                             " (FPS unknown, using 30fps)");
                 }
+                
+                // Load audio from the video file
+                loadAudioFromVideo();
             }
             else
             {
@@ -465,17 +476,161 @@ juce::Image VideoFileLoaderModule::getLatestFrame()
     return latestFrameForGui.createCopy();
 }
 
+void VideoFileLoaderModule::loadAudioFromVideo()
+{
+    const juce::ScopedLock lock(audioLock);
+    
+    // Stop and clear existing audio
+    audioTransport.stop();
+    audioTransport.setSource(nullptr);
+    audioSource.reset();
+    audioLoaded.store(false);
+    
+    if (!currentVideoFile.existsAsFile())
+        return;
+    
+    // Try to load audio from the video file
+    // Note: JUCE's AudioFormatManager may not support all video containers directly
+    // This is a best-effort attempt. For full compatibility, you might need FFmpeg extraction
+    std::unique_ptr<juce::AudioFormatReader> reader(audioFormatManager.createReaderFor(currentVideoFile));
+    
+    if (reader != nullptr)
+    {
+        audioSource = std::make_unique<juce::AudioFormatReaderSource>(reader.release(), true);
+        double sourceSampleRate = audioSource->getAudioFormatReader()->sampleRate;
+        
+        // Use the current processing sample rate, not the source file's sample rate
+        // The AudioTransportSource will handle resampling if needed
+        audioTransport.setSource(audioSource.get(), 0, nullptr, audioSampleRate);
+        
+        // Set looping
+        if (loopParam && *loopParam > 0.5f)
+            audioTransport.setLooping(true);
+        
+        audioLoaded.store(true);
+        juce::Logger::writeToLog("[VideoFileLoader] Audio loaded from video file. "
+                                  "Source SR: " + juce::String(sourceSampleRate) + " Hz, "
+                                  "Processing SR: " + juce::String(audioSampleRate) + " Hz");
+    }
+    else
+    {
+        juce::Logger::writeToLog("[VideoFileLoader] Could not extract audio from video file. "
+                                  "Video file may not contain audio, or format is not supported by JUCE.");
+    }
+}
+
+void VideoFileLoaderModule::updateAudioPlayback()
+{
+    if (!audioLoaded.load())
+        return;
+    
+    // Sync play/pause state
+    bool shouldPlay = playing.load();
+    
+    if (shouldPlay && !audioTransport.isPlaying())
+    {
+        audioTransport.start();
+        
+        // Seek to start position if needed
+        float inN = inNormParam ? inNormParam->load() : 0.0f;
+        if (inN > 0.0f && audioSource != nullptr)
+        {
+            int64 totalSamples = audioSource->getTotalLength();
+            int64 startSample = (int64)(inN * totalSamples);
+            audioTransport.setPosition(startSample / audioSampleRate);
+        }
+    }
+    else if (!shouldPlay && audioTransport.isPlaying())
+    {
+        audioTransport.stop();
+    }
+    
+    // Handle looping
+    bool shouldLoop = loopParam && *loopParam > 0.5f;
+    audioTransport.setLooping(shouldLoop);
+    
+    // Check if we've reached the end (and not looping)
+    if (!shouldLoop && audioTransport.hasStreamFinished())
+    {
+        playing.store(false);
+        audioTransport.stop();
+    }
+    
+    // Handle in/out points
+    float inN = inNormParam ? inNormParam->load() : 0.0f;
+    float outN = outNormParam ? outNormParam->load() : 1.0f;
+    
+    if (audioSource != nullptr && audioSampleRate > 0.0)
+    {
+        int64 totalSamples = audioSource->getTotalLength();
+        double currentPos = audioTransport.getCurrentPosition();
+        double totalDuration = totalSamples / audioSampleRate;
+        double outTime = outN * totalDuration;
+        
+        if (currentPos >= outTime && shouldPlay)
+        {
+            if (shouldLoop)
+            {
+                // Loop back to in point
+                double inTime = inN * totalDuration;
+                audioTransport.setPosition(inTime);
+            }
+            else
+            {
+                playing.store(false);
+                audioTransport.stop();
+            }
+        }
+    }
+}
+
 void VideoFileLoaderModule::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midi)
 {
-    buffer.clear();
+    juce::ignoreUnused(midi);
     
-    // Output this module's logical ID
-    if (buffer.getNumChannels() > 0)
+    // Update audio playback state first
+    updateAudioPlayback();
+    
+    // Get output buses
+    auto cvOutBus = getBusBuffer(buffer, false, 0);  // CV output (mono)
+    auto audioOutBus = getBusBuffer(buffer, false, 1); // Audio output (stereo)
+    
+    cvOutBus.clear();
+    audioOutBus.clear();
+    
+    // Output this module's logical ID on CV bus
+    if (cvOutBus.getNumChannels() > 0)
     {
         float sourceId = (float)getLogicalId();
-        for (int sample = 0; sample < buffer.getNumSamples(); ++sample)
+        for (int sample = 0; sample < cvOutBus.getNumSamples(); ++sample)
         {
-            buffer.setSample(0, sample, sourceId);
+            cvOutBus.setSample(0, sample, sourceId);
+        }
+    }
+    
+    // Output audio from the video file
+    if (audioLoaded.load() && audioOutBus.getNumChannels() >= 2 && audioOutBus.getNumSamples() > 0)
+    {
+        // Ensure audioTransport is playing if we're in play mode
+        bool shouldPlay = playing.load();
+        if (shouldPlay && !audioTransport.isPlaying())
+        {
+            audioTransport.start();
+        }
+        
+        // AudioSourceChannelInfo constructor takes the buffer and uses all its channels
+        // Since audioOutBus is already stereo (2 channels), this should work correctly
+        juce::AudioSourceChannelInfo info(audioOutBus);
+        audioTransport.getNextAudioBlock(info);
+        
+        // Note: Speed control for audio would require a time-stretching library like RubberBand
+        // For now, audio plays at normal speed while video can be sped up/slowed down
+        // To add speed control, integrate a time-stretcher similar to SampleLoaderModule
+        
+        // Update audio position for synchronization
+        if (playing.load())
+        {
+            audioPosition.store(audioTransport.getCurrentPosition() * audioSampleRate);
         }
     }
 }
@@ -688,7 +843,26 @@ void VideoFileLoaderModule::drawParametersInNode(float itemWidth,
 
 void VideoFileLoaderModule::drawIoPins(const NodePinHelpers& helpers)
 {
+    // Pins are handled via getDynamicOutputPins for proper type coloring
+    // This method is kept for backward compatibility but dynamic pins take precedence
     helpers.drawAudioOutputPin("Source ID", 0);
 }
 #endif
+
+std::vector<DynamicPinInfo> VideoFileLoaderModule::getDynamicOutputPins() const
+{
+    std::vector<DynamicPinInfo> pins;
+    
+    // CV Output: Bus 0, Channel 0 (mono - contains logical ID for video routing)
+    pins.push_back({ "Source ID", 0, PinDataType::Video });
+    
+    // Audio Outputs: Bus 1, Channels 0-1 (stereo)
+    // Note: Channel indices are absolute, so bus 1 channel 0 = absolute channel 1
+    // (bus 0 has 1 channel, so bus 1 starts at absolute index 1)
+    int bus1StartChannel = 1; // After bus 0's 1 channel
+    pins.push_back({ "Audio L", bus1StartChannel + 0, PinDataType::Audio });
+    pins.push_back({ "Audio R", bus1StartChannel + 1, PinDataType::Audio });
+    
+    return pins;
+}
 

@@ -1,60 +1,62 @@
 #=============================================================
-#       MOOFY VIDEO NODE: Architecture & Integration Guide
-#       This script archives the files related to the
-#       Video File Loader node and its integration points.
-#       Send the generated text file to another expert to
-#       communicate how the node works end-to-end.
+#       MOOFY COMPUTER VISION: Complete Architecture Guide
+#       This script archives ALL files related to computer vision,
+#       OpenCV integration, and video processing in the project.
+#       Send the generated text file to an external expert to
+#       understand the complete CV system architecture.
 #=============================================================
 
 #--- Configuration ---
 $projectRoot = $PSScriptRoot
 $outputFile = Join-Path $projectRoot "moofy_VideoNode.txt"
 
-#--- Related Files (Video File Loader & Integration) ---
+#--- Related Files (Complete Computer Vision System) ---
 $sourceFiles = @(
     #=============================================================
-    # SECTION 1: CORE VIDEO NODE IMPLEMENTATION
+    # SECTION 1: CORE VIDEO SOURCE MODULES
+    # Video input sources (file and webcam)
     #=============================================================
     "juce/Source/audio/modules/VideoFileLoaderModule.h",
     "juce/Source/audio/modules/VideoFileLoaderModule.cpp",
-
-    #=============================================================
-    # SECTION 2: SHARED VIDEO FRAME MANAGER
-    # Thread-safe singleton for publishing/consuming frames
-    #=============================================================
-    "juce/Source/video/VideoFrameManager.h",
-
-    #=============================================================
-    # SECTION 3: MODULE FACTORY REGISTRATION
-    # Where the module type key is registered to the factory
-    #=============================================================
-    "juce/Source/audio/graph/ModularSynthProcessor.cpp",
-
-    #=============================================================
-    # SECTION 4: PIN DATABASE & NODE EDITOR INTEGRATION
-    # Pin definitions, UI buttons/menus, descriptions, and search
-    #=============================================================
-    "juce/Source/preset_creator/PinDatabase.cpp",
-    "juce/Source/preset_creator/ImGuiNodeEditorComponent.cpp",
-
-    #=============================================================
-    # SECTION 4b: COMPUTER VISION MODULES (Nodes)
-    # Core CV source/processing nodes that use VideoFrameManager
-    #=============================================================
     "juce/Source/audio/modules/WebcamLoaderModule.h",
     "juce/Source/audio/modules/WebcamLoaderModule.cpp",
-    "juce/Source/audio/modules/MovementDetectorModule.h",
-    "juce/Source/audio/modules/MovementDetectorModule.cpp",
-    "juce/Source/audio/modules/HumanDetectorModule.h",
-    "juce/Source/audio/modules/HumanDetectorModule.cpp",
-    "juce/Source/audio/modules/PoseEstimatorModule.h",
-    "juce/Source/audio/modules/PoseEstimatorModule.cpp",
-    "juce/Source/audio/modules/HandTrackerModule.h",
-    "juce/Source/audio/modules/HandTrackerModule.cpp",
-    "juce/Source/audio/modules/FaceTrackerModule.h",
-    "juce/Source/audio/modules/FaceTrackerModule.cpp",
+
+    #=============================================================
+    # SECTION 2: BASE CLASSES & INFRASTRUCTURE
+    # Foundation classes for CV modules and video frame management
+    #=============================================================
+    "juce/Source/audio/modules/OpenCVModuleProcessor.h",
+    "juce/Source/video/VideoFrameManager.h",
+    "juce/Source/video/CameraEnumerator.h",
+    "juce/Source/audio/modules/ModuleProcessor.h",
+
+    #=============================================================
+    # SECTION 3: DETECTION & TRACKING MODULES
+    # Object, face, hand, pose, and human detection/tracking
+    #=============================================================
     "juce/Source/audio/modules/ObjectDetectorModule.h",
     "juce/Source/audio/modules/ObjectDetectorModule.cpp",
+    "juce/Source/audio/modules/FaceTrackerModule.h",
+    "juce/Source/audio/modules/FaceTrackerModule.cpp",
+    "juce/Source/audio/modules/HandTrackerModule.h",
+    "juce/Source/audio/modules/HandTrackerModule.cpp",
+    "juce/Source/audio/modules/PoseEstimatorModule.h",
+    "juce/Source/audio/modules/PoseEstimatorModule.cpp",
+    "juce/Source/audio/modules/HumanDetectorModule.h",
+    "juce/Source/audio/modules/HumanDetectorModule.cpp",
+
+    #=============================================================
+    # SECTION 4: MOVEMENT & OPTICAL FLOW MODULES
+    # Motion detection and tracking
+    #=============================================================
+    "juce/Source/audio/modules/MovementDetectorModule.h",
+    "juce/Source/audio/modules/MovementDetectorModule.cpp",
+    "juce/Source/audio/modules/MovementDetectorModuleProcessor.h",
+
+    #=============================================================
+    # SECTION 5: IMAGE PROCESSING MODULES
+    # Color tracking, contour detection, segmentation
+    #=============================================================
     "juce/Source/audio/modules/ColorTrackerModule.h",
     "juce/Source/audio/modules/ColorTrackerModule.cpp",
     "juce/Source/audio/modules/ContourDetectorModule.h",
@@ -63,10 +65,42 @@ $sourceFiles = @(
     "juce/Source/audio/modules/SemanticSegmentationModule.cpp",
 
     #=============================================================
-    # SECTION 5: BUILD SYSTEM (OpenCV/JUCE linkage reference)
-    # Useful to understand dependencies for the video pipeline
+    # SECTION 6: VIDEO EFFECTS & PROCESSING
+    # Video FX and post-processing modules
     #=============================================================
-    "juce/CMakeLists.txt"
+    "juce/Source/audio/modules/VideoFXModule.h",
+    "juce/Source/audio/modules/VideoFXModule.cpp",
+
+    #=============================================================
+    # SECTION 7: MODULE FACTORY REGISTRATION
+    # Where module types are registered to the factory system
+    #=============================================================
+    "juce/Source/audio/graph/ModularSynthProcessor.cpp",
+
+    #=============================================================
+    # SECTION 8: PIN DATABASE & NODE EDITOR INTEGRATION
+    # Pin definitions, UI buttons/menus, descriptions, and search
+    # This is where CV modules are made available in the node editor
+    #=============================================================
+    "juce/Source/preset_creator/PinDatabase.cpp",
+    "juce/Source/preset_creator/ImGuiNodeEditorComponent.cpp",
+
+    #=============================================================
+    # SECTION 9: BUILD SYSTEM & DEPENDENCIES
+    # OpenCV/JUCE linkage, CUDA support, CMake configuration
+    #=============================================================
+    "juce/CMakeLists.txt",
+    "juce/opencv_cuda13_npp.patch",
+
+    #=============================================================
+    # SECTION 10: DOCUMENTATION & GUIDES
+    # Architecture documentation and implementation guides
+    #=============================================================
+    "guides/CUDA_GPU_ACCELERATION_IMPLEMENTATION_GUIDE.md",
+    "guides/CUDA_GPU_IMPLEMENTATION_SUMMARY.md",
+    "guides/OPENCV_CUDA_BUILD_CACHE_GUIDE.md",
+    "guides/OPENCV_CACHE_QUICK_REFERENCE.md",
+    "CUDA_OPENCV_INTEGRATION_SUMMARY.md"
 )
 
 #--- Script Execution ---
@@ -75,8 +109,13 @@ if (Test-Path $outputFile) {
     Remove-Item $outputFile
 }
 
-Write-Host "Starting Moofy Video Node script..." -ForegroundColor Cyan
-Write-Host "Archiving Video Node related files to: $outputFile"
+Write-Host "Starting Moofy Computer Vision Archive script..." -ForegroundColor Cyan
+Write-Host "Archiving ALL Computer Vision related files to: $outputFile"
+Write-Host "This includes:" -ForegroundColor Yellow
+Write-Host "  - All CV modules (detection, tracking, processing)" -ForegroundColor Yellow
+Write-Host "  - Infrastructure (VideoFrameManager, OpenCV base classes)" -ForegroundColor Yellow
+Write-Host "  - Build system configuration (OpenCV/CUDA)" -ForegroundColor Yellow
+Write-Host "  - Documentation and implementation guides" -ForegroundColor Yellow
 
 foreach ($file in $sourceFiles) {
     $normalizedFile = $file.Replace('/', '\\')

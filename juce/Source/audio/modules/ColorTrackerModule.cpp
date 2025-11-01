@@ -30,7 +30,8 @@ juce::AudioProcessorValueTreeState::ParameterLayout ColorTrackerModule::createPa
 ColorTrackerModule::ColorTrackerModule()
     : ModuleProcessor(BusesProperties()
                       .withInput("Input", juce::AudioChannelSet::mono(), true)
-                      .withOutput("Output", juce::AudioChannelSet::discreteChannels(24), true)), // up to 8 colors x 3
+                      .withOutput("CV Out", juce::AudioChannelSet::discreteChannels(24), true) // up to 8 colors x 3
+                      .withOutput("Video Out", juce::AudioChannelSet::mono(), true)), // PASSTHROUGH
       juce::Thread("Color Tracker Thread"),
       apvts(*this, nullptr, "ColorTrackerParams", createParameterLayout())
 {
@@ -183,7 +184,11 @@ void ColorTrackerModule::run()
             }
             
             if (!frame.empty())
+            {
+                // --- PASSTHROUGH LOGIC ---
+                VideoFrameManager::getInstance().setFrame(getLogicalId(), frame);
                 updateGuiFrame(frame);
+            }
         }
         
         wait(33);
@@ -344,25 +349,35 @@ void ColorTrackerModule::processBlock(juce::AudioBuffer<float>& buffer, juce::Mi
             lastResultForAudio = fifoBuffer[readScope.startIndex1];
     }
 
-    // Map each tracked color to 3 outputs: X, Y, Area
+    // Map each tracked color to 3 outputs: X, Y, Area (bus 0 - CV Out)
+    auto cvOutBus = getBusBuffer(buffer, false, 0);
     for (size_t i = 0; i < lastResultForAudio.size(); ++i)
     {
         int chX = (int)i * 3 + 0;
         int chY = (int)i * 3 + 1;
         int chA = (int)i * 3 + 2;
-        if (chA < buffer.getNumChannels())
+        if (chA < cvOutBus.getNumChannels())
         {
             const auto& tpl = lastResultForAudio[i];
             float vx = std::get<0>(tpl);
             float vy = std::get<1>(tpl);
             float va = std::get<2>(tpl);
-            for (int s = 0; s < buffer.getNumSamples(); ++s)
+            for (int s = 0; s < cvOutBus.getNumSamples(); ++s)
             {
-                buffer.setSample(chX, s, vx);
-                buffer.setSample(chY, s, vy);
-                buffer.setSample(chA, s, va);
+                cvOutBus.setSample(chX, s, vx);
+                cvOutBus.setSample(chY, s, vy);
+                cvOutBus.setSample(chA, s, va);
             }
         }
+    }
+    
+    // Passthrough Video ID on bus 1
+    auto videoOutBus = getBusBuffer(buffer, false, 1);
+    if (videoOutBus.getNumChannels() > 0)
+    {
+        float primaryId = static_cast<float>(getLogicalId());
+        for (int s = 0; s < videoOutBus.getNumSamples(); ++s)
+            videoOutBus.setSample(0, s, primaryId);
     }
 }
 
@@ -510,6 +525,7 @@ void ColorTrackerModule::drawIoPins(const NodePinHelpers& helpers)
 {
     helpers.drawAudioInputPin("Source In", 0);
     // Outputs are dynamic; editor queries via getDynamicOutputPins
+    helpers.drawAudioOutputPin("Video Out", 0); // Bus 1
 }
 #endif
 

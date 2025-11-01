@@ -35,7 +35,9 @@ juce::AudioProcessorValueTreeState::ParameterLayout HandTrackerModule::createPar
 HandTrackerModule::HandTrackerModule()
     : ModuleProcessor(BusesProperties()
                         .withInput("Input", juce::AudioChannelSet::mono(), true)
-                        .withOutput("Output", juce::AudioChannelSet::discreteChannels(HAND_NUM_KEYPOINTS * 2), true)),
+                        .withOutput("CV Out", juce::AudioChannelSet::discreteChannels(HAND_NUM_KEYPOINTS * 2), true)
+                        .withOutput("Video Out", juce::AudioChannelSet::mono(), true)    // PASSTHROUGH
+                        .withOutput("Cropped Out", juce::AudioChannelSet::mono(), true)), // CROPPED
       juce::Thread("Hand Tracker Thread"),
       apvts(*this, nullptr, "HandTrackerParams", createParameterLayout())
 {
@@ -151,6 +153,10 @@ void HandTrackerModule::run()
             }
         #endif
 
+        // Save a clean copy for cropping (before drawing annotations)
+        cv::Mat originalFrame;
+        frame.copyTo(originalFrame);
+        
         // NOTE: For DNN models, blobFromImage works on CPU
         // The GPU acceleration happens in net.forward() when backend is set to CUDA
         cv::Mat blob = cv::dnn::blobFromImage(frame, 1.0/255.0, cv::Size(368,368), cv::Scalar(), false, false);
@@ -162,6 +168,48 @@ void HandTrackerModule::run()
 
         if (fifo.getFreeSpace() >= 1) { auto w = fifo.write(1); if (w.blockSize1 > 0) fifoBuffer[w.startIndex1] = result; }
 
+        // --- CROPPED OUTPUT LOGIC ---
+        // Calculate bounding box from detected keypoints
+        int minX = INT_MAX, minY = INT_MAX, maxX = 0, maxY = 0;
+        int validPoints = 0;
+        for (int i=0;i<HAND_NUM_KEYPOINTS;++i)
+        {
+            if (result.keypoints[i][0] >= 0 && result.keypoints[i][1] >= 0)
+            {
+                int x = (int)result.keypoints[i][0];
+                int y = (int)result.keypoints[i][1];
+                minX = juce::jmin(minX, x);
+                minY = juce::jmin(minY, y);
+                maxX = juce::jmax(maxX, x);
+                maxY = juce::jmax(maxY, y);
+                validPoints++;
+            }
+        }
+        
+        if (validPoints > 0)
+        {
+            // Add padding around the bounding box
+            int padding = 20;
+            int boxX = juce::jmax(0, minX - padding);
+            int boxY = juce::jmax(0, minY - padding);
+            int boxW = juce::jmin(originalFrame.cols - boxX, maxX - minX + padding * 2);
+            int boxH = juce::jmin(originalFrame.rows - boxY, maxY - minY + padding * 2);
+            cv::Rect box(boxX, boxY, boxW, boxH);
+            box &= cv::Rect(0, 0, originalFrame.cols, originalFrame.rows);
+            
+            if (box.area() > 0)
+            {
+                cv::Mat cropped = originalFrame(box);
+                VideoFrameManager::getInstance().setFrame(getSecondaryLogicalId(), cropped);
+            }
+        }
+        else
+        {
+            // Clear cropped output when no hand detected
+            cv::Mat emptyFrame;
+            VideoFrameManager::getInstance().setFrame(getSecondaryLogicalId(), emptyFrame);
+        }
+
         // Draw minimal skeleton
         for (const auto& p : HAND_SKELETON_PAIRS)
         {
@@ -172,6 +220,9 @@ void HandTrackerModule::run()
         for (int i=0;i<HAND_NUM_KEYPOINTS;++i)
             if (result.keypoints[i][0] >= 0)
                 cv::circle(frame, { (int)result.keypoints[i][0], (int)result.keypoints[i][1] }, 3, {0,0,255}, -1);
+        
+        // --- PASSTHROUGH LOGIC ---
+        VideoFrameManager::getInstance().setFrame(getLogicalId(), frame);
         updateGuiFrame(frame);
         wait(66);
     }
@@ -199,14 +250,39 @@ void HandTrackerModule::processBlock(juce::AudioBuffer<float>& buffer, juce::Mid
     // Read Source ID from input pin
     auto in = getBusBuffer(buffer, true, 0);
     if (in.getNumChannels()>0 && in.getNumSamples()>0) currentSourceId.store((juce::uint32)in.getSample(0,0));
-    buffer.clear();
+    
     if (fifo.getNumReady()>0) { auto r=fifo.read(1); if (r.blockSize1>0) lastResultForAudio=fifoBuffer[r.startIndex1]; }
+    
+    // Output CV on bus 0
+    auto cvOutBus = getBusBuffer(buffer, false, 0);
     for (int i=0;i<HAND_NUM_KEYPOINTS;++i)
     {
-        int chX=i*2, chY=i*2+1; if (chY>=buffer.getNumChannels()) break;
+        int chX=i*2, chY=i*2+1; if (chY>=cvOutBus.getNumChannels()) break;
         float xn = (lastResultForAudio.keypoints[i][0] >= 0) ? juce::jlimit(0.0f,1.0f,lastResultForAudio.keypoints[i][0]/640.0f) : 0.0f;
         float yn = (lastResultForAudio.keypoints[i][1] >= 0) ? juce::jlimit(0.0f,1.0f,lastResultForAudio.keypoints[i][1]/480.0f) : 0.0f;
-        for (int s=0;s<buffer.getNumSamples();++s){ buffer.setSample(chX,s,xn); buffer.setSample(chY,s,yn);}    
+        for (int s=0;s<cvOutBus.getNumSamples();++s)
+        {
+            cvOutBus.setSample(chX,s,xn); 
+            cvOutBus.setSample(chY,s,yn);
+        }
+    }
+    
+    // Passthrough Video ID on bus 1
+    auto videoOutBus = getBusBuffer(buffer, false, 1);
+    if (videoOutBus.getNumChannels() > 0)
+    {
+        float primaryId = static_cast<float>(getLogicalId());
+        for (int s = 0; s < videoOutBus.getNumSamples(); ++s)
+            videoOutBus.setSample(0, s, primaryId);
+    }
+    
+    // Cropped Video ID on bus 2
+    auto croppedOutBus = getBusBuffer(buffer, false, 2);
+    if (croppedOutBus.getNumChannels() > 0)
+    {
+        float secondaryId = static_cast<float>(getSecondaryLogicalId());
+        for (int s = 0; s < croppedOutBus.getNumSamples(); ++s)
+            croppedOutBus.setSample(0, s, secondaryId);
     }
 }
 
@@ -295,6 +371,8 @@ void HandTrackerModule::drawIoPins(const NodePinHelpers& helpers)
         helpers.drawAudioOutputPin(x.toRawUTF8(), i*2);
         helpers.drawAudioOutputPin(y.toRawUTF8(), i*2+1);
     }
+    helpers.drawAudioOutputPin("Video Out", 0);     // Bus 1
+    helpers.drawAudioOutputPin("Cropped Out", 1); // Bus 2
 }
 
 #endif

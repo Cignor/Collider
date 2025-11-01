@@ -245,6 +245,10 @@ public:
     void setLogicalId(juce::uint32 id) { storedLogicalId = id; }
     juce::uint32 getLogicalId() const { return storedLogicalId; }
 
+    // Secondary logical ID for extra outputs (like cropped video from detector nodes)
+    void setSecondaryLogicalId(juce::uint32 id) { storedSecondaryLogicalId = id; }
+    juce::uint32 getSecondaryLogicalId() const { return storedSecondaryLogicalId; }
+
     // === COMPREHENSIVE DIAGNOSTICS SYSTEM ===
     
     // Get detailed connection information for debugging
@@ -547,4 +551,5 @@ private:
 protected:
     ModularSynthProcessor* parentSynth { nullptr };
     juce::uint32 storedLogicalId { 0 };
+    juce::uint32 storedSecondaryLogicalId { 0 };
 };

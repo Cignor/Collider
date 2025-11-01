@@ -80,6 +80,7 @@
 #include "../modules/ColorTrackerModule.h"
 #include "../modules/ContourDetectorModule.h"
 #include "../modules/SemanticSegmentationModule.h"
+#include "../modules/CropVideoModule.h"
 #include "../modules/InletModuleProcessor.h"
 #include "../modules/OutletModuleProcessor.h"
 #include "../modules/MetaModuleProcessor.h"
@@ -758,6 +759,7 @@ namespace {
             reg("color_tracker", []{ return std::make_unique<ColorTrackerModule>(); });
             reg("contour_detector", []{ return std::make_unique<ContourDetectorModule>(); });
             reg("semantic_segmentation", []{ return std::make_unique<SemanticSegmentationModule>(); });
+            reg("crop_video", []{ return std::make_unique<CropVideoModule>(); });
             reg("stroke_sequencer", []{ return std::make_unique<StrokeSequencerModuleProcessor>(); });
             
             reg("meta module", []{ return std::make_unique<MetaModuleProcessor>(); });
@@ -796,7 +798,10 @@ ModularSynthProcessor::NodeID ModularSynthProcessor::addModule(const juce::Strin
         const juce::uint32 logicalId = nextLogicalId++;
         logicalIdToModule[logicalId] = LogicalModule{ node->nodeID, moduleType };
         if (auto* mp = dynamic_cast<ModuleProcessor*>(node->getProcessor()))
+        {
             mp->setLogicalId(logicalId);
+            mp->setSecondaryLogicalId(nextLogicalId++); // Assign secondary ID for extra outputs (e.g., cropped video)
+        }
         
         if (moduleType.equalsIgnoreCase("audio_input"))
         {

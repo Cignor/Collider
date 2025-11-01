@@ -5,6 +5,9 @@
 #include <opencv2/videoio.hpp>
 #include <juce_core/juce_core.h>
 #include <juce_audio_processors/juce_audio_processors.h>
+#include <juce_audio_formats/juce_audio_formats.h>
+#include <juce_audio_basics/juce_audio_basics.h>
+#include <juce_audio_devices/juce_audio_devices.h>
 #include <juce_graphics/juce_graphics.h>
 
 /**
@@ -25,6 +28,9 @@ public:
     void setTimingInfo(const TransportState& state) override { lastTransportPlaying.store(state.isPlaying); if (syncToTransport.load()) playing.store(state.isPlaying); }
     
     juce::AudioProcessorValueTreeState& getAPVTS() override { return apvts; }
+    
+    // Dynamic pin definitions
+    std::vector<DynamicPinInfo> getDynamicOutputPins() const override;
     
     // State management for saving/loading video file path
     juce::ValueTree getExtraStateTree() const override;
@@ -111,5 +117,18 @@ private:
 
     // Cached metadata (atomic for cross-thread visibility)
     std::atomic<int> totalFrames { 0 };
+    
+    // Audio playback
+    juce::AudioFormatManager audioFormatManager;
+    std::unique_ptr<juce::AudioFormatReaderSource> audioSource;
+    juce::AudioTransportSource audioTransport;
+    juce::AudioBuffer<float> audioBuffer;
+    double audioSampleRate = 44100.0;
+    std::atomic<double> audioPosition { 0.0 }; // Position in samples
+    std::atomic<bool> audioLoaded { false };
+    juce::CriticalSection audioLock;
+    
+    void loadAudioFromVideo();
+    void updateAudioPlayback();
 };
 

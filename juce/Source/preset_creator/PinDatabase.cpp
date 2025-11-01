@@ -84,6 +84,7 @@ void populateModuleDescriptions()
     // OpenCV (Computer Vision)
     descriptions["webcam_loader"] = "Captures video from a webcam and publishes it as a source for vision processing modules.";
     descriptions["video_file_loader"] = "Loads and plays a video file, publishes it as a source for vision processing modules.";
+    descriptions["video_fx"] = "Applies real-time video effects (brightness, contrast, saturation, blur, sharpen, etc.) to video sources, chainable.";
     descriptions["movement_detector"] = "Analyzes video source for motion via optical flow or background subtraction, outputs motion data as CV.";
     descriptions["human_detector"] = "Detects faces or bodies in video source via Haar Cascades or HOG, outputs position and size as CV.";
     descriptions["pose_estimator"] = "Uses OpenPose to detect 15 body keypoints (head, shoulders, elbows, wrists, hips, knees, ankles) and outputs their positions as CV signals.";
@@ -93,6 +94,7 @@ void populateModuleDescriptions()
     descriptions["color_tracker"] = "Tracks multiple colors in video and outputs their positions and sizes as CV.";
     descriptions["contour_detector"] = "Detects shapes via background subtraction and outputs area, complexity, and aspect ratio as CV.";
     descriptions["semantic_segmentation"] = "Uses deep learning to segment video into semantic regions and outputs detected areas as CV.";
+    descriptions["crop_video"] = "Crops a video stream based on CV signals (X, Y, Width, Height). Perfect for following detected objects or regions.";
     
     // Add aliases for underscore naming conventions
     descriptions["clock_divider"] = descriptions["ClockDivider"];
@@ -995,46 +997,39 @@ db["random"] = ModulePinInfo(
     );
 
     db["movement_detector"] = ModulePinInfo(
-        NodeWidth::Medium,
+        NodeWidth::Exception,
+        { AudioPin("Source In", 0, PinDataType::Video) },
         { 
-            AudioPin("Source In", 0, PinDataType::Video)
-        },
-        { 
-            AudioPin("Motion X", 0, PinDataType::CV),
-            AudioPin("Motion Y", 1, PinDataType::CV),
-            AudioPin("Amount", 2, PinDataType::CV),
-            AudioPin("Trigger", 3, PinDataType::Gate)
+            AudioPin("Motion X", 0, PinDataType::CV), AudioPin("Motion Y", 1, PinDataType::CV),
+            AudioPin("Amount", 2, PinDataType::CV), AudioPin("Trigger", 3, PinDataType::Gate),
+            AudioPin("Video Out", 0, PinDataType::Video) // Bus 1
         },
         {}
     );
 
     db["human_detector"] = ModulePinInfo(
-        NodeWidth::Medium,
-        { 
-            AudioPin("Source In", 0, PinDataType::Video)
-        },
-        { 
-            AudioPin("X", 0, PinDataType::CV),
-            AudioPin("Y", 1, PinDataType::CV),
-            AudioPin("Width", 2, PinDataType::CV),
-            AudioPin("Height", 3, PinDataType::CV),
-            AudioPin("Gate", 4, PinDataType::Gate)
+        NodeWidth::Exception,
+        { AudioPin("Source In", 0, PinDataType::Video) },
+        {
+            AudioPin("X", 0, PinDataType::CV), AudioPin("Y", 1, PinDataType::CV),
+            AudioPin("Width", 2, PinDataType::CV), AudioPin("Height", 3, PinDataType::CV),
+            AudioPin("Gate", 4, PinDataType::Gate),
+            AudioPin("Video Out", 0, PinDataType::Video),   // Bus 1
+            AudioPin("Cropped Out", 1, PinDataType::Video) // Bus 2
         },
         {}
     );
 
-    // Object Detector (YOLOv3) - 1 input (Source ID) and 5 outputs (X,Y,Width,Height,Gate)
+    // Object Detector (YOLOv3) - 1 input (Source ID) and 7 outputs (X,Y,Width,Height,Gate,Video Out,Cropped Out)
     db["object_detector"] = ModulePinInfo(
-        NodeWidth::Medium,
+        NodeWidth::Exception,
+        { AudioPin("Source In", 0, PinDataType::Video) },
         {
-            AudioPin("Source In", 0, PinDataType::Video)
-        },
-        {
-            AudioPin("X", 0, PinDataType::CV),
-            AudioPin("Y", 1, PinDataType::CV),
-            AudioPin("Width", 2, PinDataType::CV),
-            AudioPin("Height", 3, PinDataType::CV),
-            AudioPin("Gate", 4, PinDataType::Gate)
+            AudioPin("X", 0, PinDataType::CV), AudioPin("Y", 1, PinDataType::CV),
+            AudioPin("Width", 2, PinDataType::CV), AudioPin("Height", 3, PinDataType::CV),
+            AudioPin("Gate", 4, PinDataType::Gate),
+            AudioPin("Video Out", 0, PinDataType::Video),   // Bus 1
+            AudioPin("Cropped Out", 1, PinDataType::Video) // Bus 2
         },
         {}
     );
@@ -1045,11 +1040,13 @@ db["random"] = ModulePinInfo(
         {
             AudioPin("Source In", 0, PinDataType::Video)
         },
-        {},
+        {
+            AudioPin("Video Out", 0, PinDataType::Video) // Bus 1 - dynamic color pins are added programmatically
+        },
         {}
     );
 
-    // Pose Estimator: 15 keypoints x 2 coordinates = 30 output pins
+    // Pose Estimator: 15 keypoints x 2 coordinates = 30 output pins + Video Out
     db["pose_estimator"] = ModulePinInfo();
     db["pose_estimator"].defaultWidth = NodeWidth::Exception; // Custom size with zoom support
     db["pose_estimator"].audioIns.emplace_back("Source In", 0, PinDataType::Video);
@@ -1064,6 +1061,9 @@ db["random"] = ModulePinInfo(
         db["pose_estimator"].audioOuts.emplace_back(keypointNames[i] + " X", static_cast<int>(i * 2), PinDataType::CV);
         db["pose_estimator"].audioOuts.emplace_back(keypointNames[i] + " Y", static_cast<int>(i * 2 + 1), PinDataType::CV);
     }
+    // Add Video Out and Cropped Out pins (bus 1 and 2)
+    db["pose_estimator"].audioOuts.emplace_back("Video Out", 0, PinDataType::Video);
+    db["pose_estimator"].audioOuts.emplace_back("Cropped Out", 1, PinDataType::Video);
 
     // Hand Tracker: 21 keypoints x 2 = 42 outs
     db["hand_tracker"] = ModulePinInfo();
@@ -1082,8 +1082,11 @@ db["random"] = ModulePinInfo(
         db["hand_tracker"].audioOuts.emplace_back(std::string(handNames[i]) + " X", i*2, PinDataType::CV);
         db["hand_tracker"].audioOuts.emplace_back(std::string(handNames[i]) + " Y", i*2+1, PinDataType::CV);
     }
+    // Add Video Out and Cropped Out pins (bus 1 and 2)
+    db["hand_tracker"].audioOuts.emplace_back("Video Out", 0, PinDataType::Video);
+    db["hand_tracker"].audioOuts.emplace_back("Cropped Out", 1, PinDataType::Video);
 
-    // Face Tracker: 70 * 2 = 140 outs
+    // Face Tracker: 70 * 2 = 140 outs + Video Out + Cropped Out
     db["face_tracker"] = ModulePinInfo();
     db["face_tracker"].defaultWidth = NodeWidth::Exception;
     db["face_tracker"].audioIns.emplace_back("Source In", 0, PinDataType::Video);
@@ -1093,25 +1096,59 @@ db["random"] = ModulePinInfo(
         db["face_tracker"].audioOuts.emplace_back(base + " X", i*2, PinDataType::CV);
         db["face_tracker"].audioOuts.emplace_back(base + " Y", i*2+1, PinDataType::CV);
     }
+    // Add Video Out and Cropped Out pins (bus 1 and 2)
+    db["face_tracker"].audioOuts.emplace_back("Video Out", 0, PinDataType::Video);
+    db["face_tracker"].audioOuts.emplace_back("Cropped Out", 1, PinDataType::Video);
 
     // Add aliases for nodes with underscore naming convention
     db["clock_divider"] = db["ClockDivider"];
     db["sequential_switch"] = db["SequentialSwitch"];
     db["s_and_h"] = db["s&h"];
 
-    // Contour Detector: 1 input, 3 outputs
+    // Contour Detector: 1 input, 3 CV outputs + Video Out
     db["contour_detector"] = ModulePinInfo(
-        NodeWidth::Medium,
+        NodeWidth::Exception,
         { AudioPin("Source In", 0, PinDataType::Video) },
-        { AudioPin("Area", 0, PinDataType::CV), AudioPin("Complexity", 1, PinDataType::CV), AudioPin("Aspect Ratio", 2, PinDataType::CV) },
+        { 
+            AudioPin("Area", 0, PinDataType::CV), AudioPin("Complexity", 1, PinDataType::CV), 
+            AudioPin("Aspect Ratio", 2, PinDataType::CV), AudioPin("Video Out", 0, PinDataType::Video) // Bus 1
+        },
         {}
     );
 
-    // Semantic Segmentation: 1 input, 4 outputs (Area, Center X, Center Y, Gate)
+    // Semantic Segmentation: 1 input, 4 CV outputs + Video Out
     db["semantic_segmentation"] = ModulePinInfo(
-        NodeWidth::Medium,
+        NodeWidth::Exception,
         { AudioPin("Source In", 0, PinDataType::Video) },
-        { AudioPin("Area", 0, PinDataType::CV), AudioPin("Center X", 1, PinDataType::CV), AudioPin("Center Y", 2, PinDataType::CV), AudioPin("Gate", 3, PinDataType::Gate) },
+        { 
+            AudioPin("Area", 0, PinDataType::CV), AudioPin("Center X", 1, PinDataType::CV), 
+            AudioPin("Center Y", 2, PinDataType::CV), AudioPin("Gate", 3, PinDataType::Gate),
+            AudioPin("Video Out", 0, PinDataType::Video) // Bus 1
+        },
+        {}
+    );
+
+    // Video FX Module - Uses dynamic pins based on video source
+    db["video_fx"] = ModulePinInfo(
+        NodeWidth::Exception, // Custom size for video preview
+        {}, // Dynamic inputs defined by module (video source + optional CV parameters)
+        {}, // Dynamic outputs defined by module (processed video output)
+        {}
+    );
+
+    // Crop Video Module - takes source ID and CV signals (X, Y, W, H) to crop a video stream
+    db["crop_video"] = ModulePinInfo(
+        NodeWidth::Exception, // Uses custom size for video preview
+        {
+            AudioPin("Source In", 0, PinDataType::Video),
+            AudioPin("Center X", 1, PinDataType::CV),
+            AudioPin("Center Y", 2, PinDataType::CV),
+            AudioPin("Width", 3, PinDataType::CV),
+            AudioPin("Height", 4, PinDataType::CV)
+        },
+        {
+            AudioPin("Output ID", 0, PinDataType::Video)
+        },
         {}
     );
 

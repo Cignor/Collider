@@ -621,6 +621,8 @@ target_sources(ColliderApp PRIVATE
     Source/audio/modules/ContourDetectorModule.cpp
     Source/audio/modules/SemanticSegmentationModule.h
     Source/audio/modules/SemanticSegmentationModule.cpp
+    Source/audio/modules/CropVideoModule.h
+    Source/audio/modules/CropVideoModule.cpp
     Source/animation/AnimationData.h
     Source/animation/RawAnimationData.h
     Source/animation/RawAnimationData.cpp
@@ -943,6 +945,8 @@ target_sources(PresetCreatorApp PRIVATE
     Source/audio/modules/ContourDetectorModule.cpp
     Source/audio/modules/SemanticSegmentationModule.h
     Source/audio/modules/SemanticSegmentationModule.cpp
+    Source/audio/modules/CropVideoModule.h
+    Source/audio/modules/CropVideoModule.cpp
     Source/animation/AnimationData.h
     Source/animation/RawAnimationData.h
     Source/animation/RawAnimationData.cpp

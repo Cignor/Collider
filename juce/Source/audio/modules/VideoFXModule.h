@@ -62,6 +62,8 @@ private:
     std::atomic<float>* gainRedParam = nullptr;
     std::atomic<float>* gainGreenParam = nullptr;
     std::atomic<float>* gainBlueParam = nullptr;
+    juce::AudioParameterBool* sepiaParam = nullptr;
+    std::atomic<float>* temperatureParam = nullptr; // -1.0 to 1.0
 
     // Filters & Effects
     std::atomic<float>* sharpenParam = nullptr;    // 0.0 to 2.0
@@ -74,6 +76,16 @@ private:
     // Threshold Effect
     juce::AudioParameterBool* thresholdEnableParam = nullptr;
     std::atomic<float>* thresholdLevelParam = nullptr; // 0 to 255
+    
+    // New Effects
+    juce::AudioParameterInt* posterizeLevelsParam = nullptr; // 2 to 16
+    std::atomic<float>* vignetteAmountParam = nullptr; // 0.0 to 1.0
+    std::atomic<float>* vignetteSizeParam = nullptr; // 0.1 to 2.0
+    juce::AudioParameterInt* pixelateBlockSizeParam = nullptr; // 2 to 64
+    juce::AudioParameterBool* cannyEnableParam = nullptr;
+    std::atomic<float>* cannyThresh1Param = nullptr; // 0 to 255
+    std::atomic<float>* cannyThresh2Param = nullptr; // 0 to 255
+    juce::AudioParameterChoice* kaleidoscopeModeParam = nullptr; // None, 4-Way, 8-Way
 
     // Source ID (read from input pin)
     std::atomic<juce::uint32> currentSourceId { 0 };

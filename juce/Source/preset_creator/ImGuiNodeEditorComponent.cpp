@@ -42,6 +42,7 @@ bool ImGuiNodeEditorComponent::s_globalGpuEnabled = true;
 #include "../audio/modules/HandTrackerModule.h"
 #include "../audio/modules/FaceTrackerModule.h"
 #include "../audio/modules/VideoFXModule.h"
+#include "../audio/modules/CropVideoModule.h"
 #include "../audio/modules/MapRangeModuleProcessor.h"
 #include "../audio/modules/LagProcessorModuleProcessor.h"
 #include "../audio/modules/DeCrackleModuleProcessor.h"
@@ -802,6 +803,13 @@ void ImGuiNodeEditorComponent::renderImGui()
                 if (ImGui::MenuItem("Comparator")) { insertNodeBetween("comparator"); }
                 if (ImGui::MenuItem("Logic")) { insertNodeBetween("logic"); }
                 if (ImGui::MenuItem("Sequential Switch")) { insertNodeBetween("sequential_switch"); }
+                ImGui::EndMenu();
+            }
+            
+            if (ImGui::BeginMenu("Computer Vision", isNodeSelected))
+            {
+                if (ImGui::MenuItem("Video FX")) { insertNodeBetween("video_fx"); }
+                if (ImGui::MenuItem("Crop Video")) { insertNodeBetween("crop_video"); }
                 ImGui::EndMenu();
             }
             
@@ -2627,6 +2635,30 @@ if (auto* mp = synth->getModuleForLogical (lid))
         // Now draw the regular parameters below the video
         fxModule->drawParametersInNode(nodeContentWidth, isParamModulated, onModificationEnded);
     }
+    else if (auto* cropVideoModule = dynamic_cast<CropVideoModule*>(mp))
+    {
+        juce::Image frame = cropVideoModule->getLatestFrame();
+        if (!frame.isNull())
+        {
+            if (visionModuleTextures.find((int)lid) == visionModuleTextures.end())
+            {
+                visionModuleTextures[(int)lid] = std::make_unique<juce::OpenGLTexture>();
+            }
+            juce::OpenGLTexture* texture = visionModuleTextures[(int)lid].get();
+            texture->loadImage(frame);
+            if (texture->getTextureID() != 0)
+            {
+                float nativeWidth = (float)frame.getWidth();
+                float nativeHeight = (float)frame.getHeight();
+                float aspectRatio = (nativeWidth > 0.0f) ? nativeHeight / nativeWidth : 0.75f; // Default to 4:3
+                ImVec2 renderSize = ImVec2(nodeContentWidth, nodeContentWidth * aspectRatio);
+                // Flip Y-coords for correct orientation
+                ImGui::Image((void*)(intptr_t)texture->getTextureID(), renderSize, ImVec2(0, 1), ImVec2(1, 0));
+            }
+        }
+        // Now draw the regular parameters below the video
+        cropVideoModule->drawParametersInNode(nodeContentWidth, isParamModulated, onModificationEnded);
+    }
     else
     {
         mp->drawParametersInNode (nodeContentWidth, isParamModulated, onModificationEnded);
@@ -4107,6 +4139,8 @@ if (auto* mp = synth->getModuleForLogical (lid))
                     if (ImGui::MenuItem("Video File Loader")) addAtMouse("video_file_loader");
                     ImGui::Separator();
                     if (ImGui::MenuItem("Video FX")) addAtMouse("video_fx");
+                    if (ImGui::MenuItem("Crop Video")) addAtMouse("crop_video");
+                    ImGui::Separator();
                     if (ImGui::MenuItem("Movement Detector")) addAtMouse("movement_detector");
                     if (ImGui::MenuItem("Human Detector")) addAtMouse("human_detector");
                     if (ImGui::MenuItem("Object Detector")) addAtMouse("object_detector");
@@ -6906,7 +6940,9 @@ void ImGuiNodeEditorComponent::drawInsertNodeOnLinkPopup()
             // Modulators
             {"S&H", "s_and_h"}, {"Function Generator", "function_generator"},
             // Sequencers
-            {"Timeline", "timeline"}
+            {"Timeline", "timeline"},
+            // Computer Vision (Video processing - Video cables are treated as mod)
+            {"Video FX", "video_fx"}, {"Crop Video", "crop_video"}
         };
         const auto& listToShow = linkToInsertOn.isMod ? modInsertable : audioInsertable;
 
@@ -7788,6 +7824,7 @@ ImGuiNodeEditorComponent::ModuleCategory ImGuiNodeEditorComponent::getModuleCate
     
     // --- 10. COMPUTER VISION (Bright Orange) ---
     if (lower.contains("webcam") || lower.contains("video_file") ||
+        lower == "video_fx" || lower == "crop_video" ||
         lower.contains("movement") || lower.contains("detector") || 
         lower.contains("opencv") || lower.contains("vision") ||
         lower.contains("tracker") || lower.contains("segmentation") ||
@@ -7876,6 +7913,7 @@ std::map<juce::String, std::pair<const char*, const char*>> ImGuiNodeEditorCompo
         {"Webcam Loader", {"webcam_loader", "Captures video from a webcam and publishes it as a source for vision processing modules"}},
         {"Video File Loader", {"video_file_loader", "Loads and plays a video file, publishes it as a source for vision processing modules"}},
         {"Video FX", {"video_fx", "Applies real-time video effects (brightness, contrast, saturation, blur, sharpen, etc.) to video sources, chainable"}},
+        {"Crop Video", {"crop_video", "Crops and resizes video frames to a specified region, chainable video processor"}},
         {"Movement Detector", {"movement_detector", "Analyzes video source for motion via optical flow or background subtraction, outputs motion data as CV"}},
         {"Human Detector", {"human_detector", "Detects faces or bodies in video source via Haar Cascades or HOG, outputs position and size as CV"}},
         {"Object Detector", {"object_detector", "Uses YOLOv3 to detect objects (person, car, etc.) and outputs bounding box position/size as CV"}},

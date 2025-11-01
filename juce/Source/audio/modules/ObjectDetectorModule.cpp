@@ -54,7 +54,9 @@ juce::AudioProcessorValueTreeState::ParameterLayout ObjectDetectorModule::create
 ObjectDetectorModule::ObjectDetectorModule()
     : ModuleProcessor(BusesProperties()
                       .withInput("Input", juce::AudioChannelSet::mono(), true)
-                      .withOutput("Output", juce::AudioChannelSet::discreteChannels(5), true)),
+                      .withOutput("CV Out", juce::AudioChannelSet::discreteChannels(5), true)
+                      .withOutput("Video Out", juce::AudioChannelSet::mono(), true)    // PASSTHROUGH
+                      .withOutput("Cropped Out", juce::AudioChannelSet::mono(), true)), // CROPPED
       juce::Thread("Object Detector Thread"),
       apvts(*this, nullptr, "ObjectDetectorParams", createParameterLayout())
 {
@@ -190,6 +192,10 @@ void ObjectDetectorModule::run()
         
         if (!frame.empty())
         {
+            // Save a clean copy for cropping (before drawing annotations)
+            cv::Mat originalFrame;
+            frame.copyTo(originalFrame);
+            
             bool useGpu = false;
             
             #if WITH_CUDA_SUPPORT
@@ -281,7 +287,13 @@ void ObjectDetectorModule::run()
             cv::dnn::NMSBoxes(boxes, confidences, confThreshold, 0.4f, indices);
             
             ObjectDetectionResult result;
-            if (!indices.empty())
+            if (indices.empty())
+            {
+                // Clear cropped output when no object detected
+                cv::Mat emptyFrame;
+                VideoFrameManager::getInstance().setFrame(getSecondaryLogicalId(), emptyFrame);
+            }
+            else
             {
                 int bestIdx = indices[0];
                 const cv::Rect& box = boxes[bestIdx];
@@ -291,7 +303,22 @@ void ObjectDetectorModule::run()
                 result.width  = juce::jlimit(0.0f, 1.0f, (float)box.width / (float)frame.cols);
                 result.height = juce::jlimit(0.0f, 1.0f, (float)box.height / (float)frame.rows);
                 
-                // Draw bbox and label
+                // --- CROPPED OUTPUT LOGIC ---
+                if (box.area() > 0)
+                {
+                    // Ensure the box is within the frame to prevent crash
+                    cv::Rect validBox = box & cv::Rect(0, 0, originalFrame.cols, originalFrame.rows);
+                    if (validBox.area() > 0)
+                    {
+                        // Create the cropped frame from original (before annotations)
+                        cv::Mat cropped = originalFrame(validBox);
+                        
+                        // Publish it using the secondary ID
+                        VideoFrameManager::getInstance().setFrame(getSecondaryLogicalId(), cropped);
+                    }
+                }
+                
+                // Draw bbox and label on the main frame
                 cv::rectangle(frame, box, cv::Scalar(0, 255, 0), 2);
                 std::string label;
                 if (!classNames.empty() && targetClassId >= 0 && targetClassId < (int)classNames.size())
@@ -308,6 +335,9 @@ void ObjectDetectorModule::run()
                     fifoBuffer[writeScope.startIndex1] = result;
             }
             
+            // --- PASSTHROUGH LOGIC ---
+            // Publish the annotated frame under our primary ID and update local GUI
+            VideoFrameManager::getInstance().setFrame(getLogicalId(), frame);
             updateGuiFrame(frame);
         }
         
@@ -360,6 +390,7 @@ void ObjectDetectorModule::processBlock(juce::AudioBuffer<float>& buffer, juce::
     }
     
     // Output channels: 0:X, 1:Y, 2:W, 3:H, 4:Gate
+    auto cvOutBus = getBusBuffer(buffer, false, 0);
     const float values[5]
     {
         lastResultForAudio.x,
@@ -369,10 +400,28 @@ void ObjectDetectorModule::processBlock(juce::AudioBuffer<float>& buffer, juce::
         lastResultForAudio.detected ? 1.0f : 0.0f
     };
     
-    for (int ch = 0; ch < juce::jmin(5, buffer.getNumChannels()); ++ch)
+    for (int ch = 0; ch < juce::jmin(5, cvOutBus.getNumChannels()); ++ch)
     {
-        for (int s = 0; s < buffer.getNumSamples(); ++s)
-            buffer.setSample(ch, s, values[ch]);
+        for (int s = 0; s < cvOutBus.getNumSamples(); ++s)
+            cvOutBus.setSample(ch, s, values[ch]);
+    }
+    
+    // Output primary ID for passthrough video on bus 1
+    auto videoOutBus = getBusBuffer(buffer, false, 1);
+    if (videoOutBus.getNumChannels() > 0)
+    {
+        float primaryId = static_cast<float>(getLogicalId());
+        for (int s = 0; s < videoOutBus.getNumSamples(); ++s)
+            videoOutBus.setSample(0, s, primaryId);
+    }
+    
+    // Output secondary ID for cropped video on bus 2
+    auto croppedOutBus = getBusBuffer(buffer, false, 2);
+    if (croppedOutBus.getNumChannels() > 0)
+    {
+        float secondaryId = static_cast<float>(getSecondaryLogicalId());
+        for (int s = 0; s < croppedOutBus.getNumSamples(); ++s)
+            croppedOutBus.setSample(0, s, secondaryId);
     }
 }
 
@@ -521,6 +570,8 @@ void ObjectDetectorModule::drawIoPins(const NodePinHelpers& helpers)
     helpers.drawAudioOutputPin("Width", 2);
     helpers.drawAudioOutputPin("Height", 3);
     helpers.drawAudioOutputPin("Gate", 4);
+    helpers.drawAudioOutputPin("Video Out", 0);     // Bus 1, Channel 0
+    helpers.drawAudioOutputPin("Cropped Out", 1); // Bus 2, Channel 0
 }
 #endif
 

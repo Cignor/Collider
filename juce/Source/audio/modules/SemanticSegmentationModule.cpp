@@ -31,7 +31,8 @@ juce::AudioProcessorValueTreeState::ParameterLayout SemanticSegmentationModule::
 SemanticSegmentationModule::SemanticSegmentationModule()
     : ModuleProcessor(BusesProperties()
                       .withInput("Input", juce::AudioChannelSet::mono(), true)
-                      .withOutput("Output", juce::AudioChannelSet::discreteChannels(4), true)),
+                      .withOutput("CV Out", juce::AudioChannelSet::discreteChannels(4), true)
+                      .withOutput("Video Out", juce::AudioChannelSet::mono(), true)), // PASSTHROUGH
       juce::Thread("Semantic Segmentation Thread"),
       apvts(*this, nullptr, "SemanticSegmentationParams", createParameterLayout())
 {
@@ -254,6 +255,8 @@ void SemanticSegmentationModule::run()
                 }
             }
 
+            // --- PASSTHROUGH LOGIC ---
+            VideoFrameManager::getInstance().setFrame(getLogicalId(), frame);
             // Always update preview with the latest frame (with or without overlay)
             updateGuiFrame(frame);
         }
@@ -294,10 +297,21 @@ void SemanticSegmentationModule::processBlock(juce::AudioBuffer<float>& buffer, 
             lastResultForAudio = fifoBuffer[readScope.startIndex1];
     }
 
+    // Output CV on bus 0
+    auto cvOutBus = getBusBuffer(buffer, false, 0);
     const float values[4] { lastResultForAudio.area, lastResultForAudio.centerX, lastResultForAudio.centerY, lastResultForAudio.detected ? 1.0f : 0.0f };
-    for (int ch = 0; ch < juce::jmin(4, buffer.getNumChannels()); ++ch)
-        for (int s = 0; s < buffer.getNumSamples(); ++s)
-            buffer.setSample(ch, s, values[ch]);
+    for (int ch = 0; ch < juce::jmin(4, cvOutBus.getNumChannels()); ++ch)
+        for (int s = 0; s < cvOutBus.getNumSamples(); ++s)
+            cvOutBus.setSample(ch, s, values[ch]);
+    
+    // Passthrough Video ID on bus 1
+    auto videoOutBus = getBusBuffer(buffer, false, 1);
+    if (videoOutBus.getNumChannels() > 0)
+    {
+        float primaryId = static_cast<float>(getLogicalId());
+        for (int s = 0; s < videoOutBus.getNumSamples(); ++s)
+            videoOutBus.setSample(0, s, primaryId);
+    }
 }
 
 #if defined(PRESET_CREATOR_UI)
@@ -429,6 +443,7 @@ void SemanticSegmentationModule::drawIoPins(const NodePinHelpers& helpers)
     helpers.drawAudioOutputPin("Center X", 1);
     helpers.drawAudioOutputPin("Center Y", 2);
     helpers.drawAudioOutputPin("Gate", 3);
+    helpers.drawAudioOutputPin("Video Out", 0); // Bus 1
 }
 #endif
 

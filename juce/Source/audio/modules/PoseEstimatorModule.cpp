@@ -166,7 +166,8 @@ juce::AudioProcessorValueTreeState::ParameterLayout PoseEstimatorModule::createP
 PoseEstimatorModule::PoseEstimatorModule()
     : ModuleProcessor(BusesProperties()
                      .withInput("Input", juce::AudioChannelSet::mono(), true)
-                     .withOutput("Output", juce::AudioChannelSet::discreteChannels(30), true)), // 15 keypoints x 2 (x,y)
+                     .withOutput("CV Out", juce::AudioChannelSet::discreteChannels(30), true) // 15 keypoints x 2 (x,y)
+                     .withOutput("Video Out", juce::AudioChannelSet::mono(), true)), // PASSTHROUGH
       juce::Thread("Pose Estimator Thread"),
       apvts(*this, nullptr, "PoseEstimatorParams", createParameterLayout())
 {
@@ -331,6 +332,8 @@ void PoseEstimatorModule::run()
                 }
             }
             
+            // --- PASSTHROUGH LOGIC ---
+            VideoFrameManager::getInstance().setFrame(getLogicalId(), frame);
             // 6. Update the GUI preview frame
             updateGuiFrame(frame);
         }
@@ -430,14 +433,15 @@ void PoseEstimatorModule::processBlock(juce::AudioBuffer<float>& buffer, juce::M
         }
     }
     
-    // Map keypoint coordinates to output channels
+    // Map keypoint coordinates to output channels (bus 0 - CV Out)
+    auto cvOutBus = getBusBuffer(buffer, false, 0);
     // Channel layout: [Head X, Head Y, Neck X, Neck Y, R Shoulder X, R Shoulder Y, ...]
     for (int i = 0; i < MPI_NUM_KEYPOINTS; ++i)
     {
         int chX = i * 2;
         int chY = i * 2 + 1;
         
-        if (chY < buffer.getNumChannels())
+        if (chY < cvOutBus.getNumChannels())
         {
             // Normalize coordinates to 0-1 range based on typical video resolution (640x480 or similar)
             // If keypoint not detected (negative value), output 0
@@ -450,12 +454,21 @@ void PoseEstimatorModule::processBlock(juce::AudioBuffer<float>& buffer, juce::M
                 : 0.0f;
             
             // Fill the entire buffer with the current value (DC signal)
-            for (int sample = 0; sample < buffer.getNumSamples(); ++sample)
+            for (int sample = 0; sample < cvOutBus.getNumSamples(); ++sample)
             {
-                buffer.setSample(chX, sample, x_normalized);
-                buffer.setSample(chY, sample, y_normalized);
+                cvOutBus.setSample(chX, sample, x_normalized);
+                cvOutBus.setSample(chY, sample, y_normalized);
             }
         }
+    }
+    
+    // Passthrough Video ID on bus 1
+    auto videoOutBus = getBusBuffer(buffer, false, 1);
+    if (videoOutBus.getNumChannels() > 0)
+    {
+        float primaryId = static_cast<float>(getLogicalId());
+        for (int s = 0; s < videoOutBus.getNumSamples(); ++s)
+            videoOutBus.setSample(0, s, primaryId);
     }
 }
 
@@ -603,5 +616,6 @@ void PoseEstimatorModule::drawIoPins(const NodePinHelpers& helpers)
         helpers.drawAudioOutputPin(xLabel.toRawUTF8(), i * 2);
         helpers.drawAudioOutputPin(yLabel.toRawUTF8(), i * 2 + 1);
     }
+    helpers.drawAudioOutputPin("Video Out", 0); // Bus 1
 }
 #endif

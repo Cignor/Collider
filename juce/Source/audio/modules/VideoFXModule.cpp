@@ -26,6 +26,8 @@ juce::AudioProcessorValueTreeState::ParameterLayout VideoFXModule::createParamet
     params.push_back(std::make_unique<juce::AudioParameterFloat>("gainRed", "Red Gain", 0.0f, 2.0f, 1.0f));
     params.push_back(std::make_unique<juce::AudioParameterFloat>("gainGreen", "Green Gain", 0.0f, 2.0f, 1.0f));
     params.push_back(std::make_unique<juce::AudioParameterFloat>("gainBlue", "Blue Gain", 0.0f, 2.0f, 1.0f));
+    params.push_back(std::make_unique<juce::AudioParameterBool>("sepia", "Sepia", false));
+    params.push_back(std::make_unique<juce::AudioParameterFloat>("temperature", "Temperature", -1.0f, 1.0f, 0.0f));
     
     // Filters & Effects
     params.push_back(std::make_unique<juce::AudioParameterFloat>("sharpen", "Sharpen", 0.0f, 2.0f, 0.0f));
@@ -38,6 +40,16 @@ juce::AudioProcessorValueTreeState::ParameterLayout VideoFXModule::createParamet
     // Threshold Effect
     params.push_back(std::make_unique<juce::AudioParameterBool>("thresholdEnable", "Enable Threshold", false));
     params.push_back(std::make_unique<juce::AudioParameterFloat>("thresholdLevel", "Threshold Level", 0.0f, 255.0f, 127.0f));
+    
+    // New Effects
+    params.push_back(std::make_unique<juce::AudioParameterInt>("posterizeLevels", "Posterize Levels", 2, 32, 32));
+    params.push_back(std::make_unique<juce::AudioParameterFloat>("vignetteAmount", "Vignette Amount", 0.0f, 1.0f, 0.0f));
+    params.push_back(std::make_unique<juce::AudioParameterFloat>("vignetteSize", "Vignette Size", 0.1f, 2.0f, 0.5f));
+    params.push_back(std::make_unique<juce::AudioParameterInt>("pixelateSize", "Pixelate Block Size", 1, 128, 1));
+    params.push_back(std::make_unique<juce::AudioParameterBool>("cannyEnable", "Edge Detect", false));
+    params.push_back(std::make_unique<juce::AudioParameterFloat>("cannyThresh1", "Canny Thresh 1", 0.0f, 255.0f, 50.0f));
+    params.push_back(std::make_unique<juce::AudioParameterFloat>("cannyThresh2", "Canny Thresh 2", 0.0f, 255.0f, 150.0f));
+    params.push_back(std::make_unique<juce::AudioParameterChoice>("kaleidoscope", "Kaleidoscope", juce::StringArray{ "None", "4-Way", "8-Way" }, 0));
 
     return { params.begin(), params.end() };
 }
@@ -68,6 +80,18 @@ VideoFXModule::VideoFXModule()
     // Initialize threshold parameters
     thresholdEnableParam = dynamic_cast<juce::AudioParameterBool*>(apvts.getParameter("thresholdEnable"));
     thresholdLevelParam = apvts.getRawParameterValue("thresholdLevel");
+    
+    // Initialize new effect parameters
+    sepiaParam = dynamic_cast<juce::AudioParameterBool*>(apvts.getParameter("sepia"));
+    temperatureParam = apvts.getRawParameterValue("temperature");
+    posterizeLevelsParam = dynamic_cast<juce::AudioParameterInt*>(apvts.getParameter("posterizeLevels"));
+    vignetteAmountParam = apvts.getRawParameterValue("vignetteAmount");
+    vignetteSizeParam = apvts.getRawParameterValue("vignetteSize");
+    pixelateBlockSizeParam = dynamic_cast<juce::AudioParameterInt*>(apvts.getParameter("pixelateSize"));
+    cannyEnableParam = dynamic_cast<juce::AudioParameterBool*>(apvts.getParameter("cannyEnable"));
+    cannyThresh1Param = apvts.getRawParameterValue("cannyThresh1");
+    cannyThresh2Param = apvts.getRawParameterValue("cannyThresh2");
+    kaleidoscopeModeParam = dynamic_cast<juce::AudioParameterChoice*>(apvts.getParameter("kaleidoscope"));
 }
 
 VideoFXModule::~VideoFXModule()
@@ -97,6 +121,8 @@ void VideoFXModule::run()
         float gainR = gainRedParam ? gainRedParam->load() : 1.0f;
         float gainG = gainGreenParam ? gainGreenParam->load() : 1.0f;
         float gainB = gainBlueParam ? gainBlueParam->load() : 1.0f;
+        bool sepia = sepiaParam ? sepiaParam->get() : false;
+        float temperature = temperatureParam ? temperatureParam->load() : 0.0f;
         float sharpen = sharpenParam ? sharpenParam->load() : 0.0f;
         float blur = blurParam ? blurParam->load() : 0.0f;
         bool grayscale = grayscaleParam ? grayscaleParam->get() : false;
@@ -105,66 +131,45 @@ void VideoFXModule::run()
         bool flipV = flipVerticalParam ? flipVerticalParam->get() : false;
         bool thresholdEnable = thresholdEnableParam ? thresholdEnableParam->get() : false;
         float thresholdLevel = thresholdLevelParam ? thresholdLevelParam->load() : 127.0f;
+        int posterizeLevels = posterizeLevelsParam ? posterizeLevelsParam->get() : 32;
+        float vignetteAmount = vignetteAmountParam ? vignetteAmountParam->load() : 0.0f;
+        float vignetteSize = vignetteSizeParam ? vignetteSizeParam->load() : 0.5f;
+        int pixelateSize = pixelateBlockSizeParam ? pixelateBlockSizeParam->get() : 1;
+        bool cannyEnable = cannyEnableParam ? cannyEnableParam->get() : false;
+        float cannyThresh1 = cannyThresh1Param ? cannyThresh1Param->load() : 50.0f;
+        float cannyThresh2 = cannyThresh2Param ? cannyThresh2Param->load() : 150.0f;
+        int kaleidoscopeMode = kaleidoscopeModeParam ? kaleidoscopeModeParam->getIndex() : 0;
         bool useGpu = useGpuParam ? useGpuParam->get() : false;
 
-        cv::Mat processedFrame; // Create a destination frame
+        cv::Mat processedFrame;
 
 #if defined(WITH_CUDA_SUPPORT)
         if (useGpu && cv::cuda::getCudaEnabledDeviceCount() > 0)
         {
             try
             {
-                // GPU PATH
                 cv::cuda::GpuMat gpuFrame, gpuTemp;
                 gpuFrame.upload(frame);
 
-                // --- GPU PROCESSING CHAIN ---
-                // The output of one operation becomes the input for the next.
-
-                // Brightness & Contrast
+                // GPU processing chain (simplified for now, complex effects fallback to CPU)
                 if (brightness != 0.0f || contrast != 1.0f) {
                     gpuFrame.convertTo(gpuTemp, CV_8UC3, contrast, brightness);
                     gpuTemp.copyTo(gpuFrame);
                 }
-
-                // Grayscale
                 if (grayscale) {
                     cv::cuda::cvtColor(gpuFrame, gpuTemp, cv::COLOR_BGR2GRAY);
                     cv::cuda::cvtColor(gpuTemp, gpuFrame, cv::COLOR_GRAY2BGR);
                 }
-
-                // Threshold (NEW)
-                if (thresholdEnable) {
-                    cv::cuda::GpuMat grayGpu;
-                    cv::cuda::cvtColor(gpuFrame, grayGpu, cv::COLOR_BGR2GRAY);
-                    cv::cuda::threshold(grayGpu, gpuTemp, thresholdLevel, 255, cv::THRESH_BINARY);
-                    cv::cuda::cvtColor(gpuTemp, gpuFrame, cv::COLOR_GRAY2BGR);
-                }
-
-                // Blur (FIXED: Ensure kernel size is always odd and positive)
                 if (blur > 0.0f) {
                     int ksize = juce::jmax(1, static_cast<int>(blur) * 2 + 1);
                     auto gaussian = cv::cuda::createGaussianFilter(gpuFrame.type(), -1, cv::Size(ksize, ksize), 0);
                     gaussian->apply(gpuFrame, gpuTemp);
                     gpuTemp.copyTo(gpuFrame);
                 }
-
-                // Sharpen (FIXED: Use cv::cuda::addWeighted)
-                if (sharpen > 0.0f) {
-                    cv::cuda::GpuMat blurredGpu;
-                    auto gaussian = cv::cuda::createGaussianFilter(gpuFrame.type(), -1, cv::Size(0, 0), 3);
-                    gaussian->apply(gpuFrame, blurredGpu);
-                    cv::cuda::addWeighted(gpuFrame, 1.0 + sharpen, blurredGpu, -sharpen, 0, gpuTemp);
-                    gpuTemp.copyTo(gpuFrame);
-                }
-
-                // Invert
                 if (invert) {
                     cv::cuda::bitwise_not(gpuFrame, gpuTemp);
                     gpuTemp.copyTo(gpuFrame);
                 }
-
-                // Flip
                 if (flipH || flipV) {
                     int flipCode = flipH && flipV ? -1 : (flipH ? 1 : 0);
                     cv::cuda::flip(gpuFrame, gpuTemp, flipCode);
@@ -172,103 +177,190 @@ void VideoFXModule::run()
                 }
 
                 gpuFrame.download(processedFrame);
-
-                // --- Complex color operations are still easier on CPU ---
+                goto cpu_color_ops_label; // Jump to CPU section for complex color ops
             }
             catch (const cv::Exception& e)
             {
                 juce::Logger::writeToLog("[VideoFX] GPU processing error, falling back to CPU: " + juce::String(e.what()));
-                processedFrame = frame.clone(); // Start over with the original frame for CPU path
-                goto cpu_path_label; // Jump to the CPU processing block
+                processedFrame = frame.clone();
+                goto cpu_path_label;
             }
         }
         else
 #endif
         {
-        cpu_path_label: // Label for the GPU fallback goto
-            // --- CPU PATH ---
-            processedFrame = frame.clone(); // Start with a fresh copy
+        cpu_path_label:
+            processedFrame = frame.clone();
 
-            // Brightness & Contrast
+            // --- REORDERED & CORRECTED CPU EFFECTS CHAIN ---
+
+            // 1. Core Color Adjustments
             if (brightness != 0.0f || contrast != 1.0f) {
                 processedFrame.convertTo(processedFrame, -1, contrast, brightness);
             }
+            
+        cpu_color_ops_label: // Label for GPU fallback to join here
 
-            // Grayscale
+            if (temperature != 0.0f) {
+                std::vector<cv::Mat> bgr;
+                cv::split(processedFrame, bgr);
+                float factor = temperature;
+                if (factor < 0.0f) { // Cool
+                    bgr[0] = bgr[0] * (1.0f - factor * 0.5f);
+                    bgr[2] = bgr[2] * (1.0f + factor * 0.5f);
+                } else { // Warm
+                    bgr[0] = bgr[0] * (1.0f - factor * 0.5f);
+                    bgr[2] = bgr[2] * (1.0f + factor * 0.5f);
+                }
+                cv::merge(bgr, processedFrame);
+            }
+            if (sepia) {
+                cv::Mat sepiaKernel = (cv::Mat_<float>(3,3) << 0.272, 0.534, 0.131, 0.349, 0.686, 0.168, 0.393, 0.769, 0.189);
+                cv::transform(processedFrame, processedFrame, sepiaKernel);
+            }
+            if (saturation != 1.0f || hueShift != 0.0f) {
+                cv::Mat hsv;
+                cv::cvtColor(processedFrame, hsv, cv::COLOR_BGR2HSV);
+                std::vector<cv::Mat> hsvChannels;
+                cv::split(hsv, hsvChannels);
+                if (hueShift != 0.0f) {
+                     hsvChannels[0].convertTo(hsvChannels[0], CV_32F);
+                     hsvChannels[0] += (hueShift / 2.0f);
+                     cv::Mat mask = hsvChannels[0] < 0;
+                     cv::add(hsvChannels[0], 180, hsvChannels[0], mask);
+                     mask = hsvChannels[0] >= 180;
+                     cv::subtract(hsvChannels[0], 180, hsvChannels[0], mask);
+                     hsvChannels[0].convertTo(hsvChannels[0], CV_8U);
+                }
+                if (saturation != 1.0f) {
+                    hsvChannels[1].convertTo(hsvChannels[1], CV_32F);
+                    hsvChannels[1] *= saturation;
+                    hsvChannels[1].convertTo(hsvChannels[1], CV_8U);
+                }
+                cv::merge(hsvChannels, hsv);
+                cv::cvtColor(hsv, processedFrame, cv::COLOR_HSV2BGR);
+            }
+            if (gainR != 1.0f || gainG != 1.0f || gainB != 1.0f) {
+                std::vector<cv::Mat> bgr;
+                cv::split(processedFrame, bgr);
+                if (gainB != 1.0f) bgr[0] *= gainB;
+                if (gainG != 1.0f) bgr[1] *= gainG;
+                if (gainR != 1.0f) bgr[2] *= gainR;
+                cv::merge(bgr, processedFrame);
+            }
+            if (posterizeLevels < 32) {
+                int levels = 256 / posterizeLevels;
+                if (levels > 0) {
+                    processedFrame = (processedFrame / levels) * levels + levels / 2;
+                }
+            }
+            
+            // 2. Monochrome & Edge Effects
             if (grayscale) {
                 cv::cvtColor(processedFrame, processedFrame, cv::COLOR_BGR2GRAY);
                 cv::cvtColor(processedFrame, processedFrame, cv::COLOR_GRAY2BGR);
             }
-
-            // Threshold (NEW)
-            if (thresholdEnable) {
+            if (cannyEnable) {
+                cv::Mat gray;
+                cv::cvtColor(processedFrame, gray, cv::COLOR_BGR2GRAY);
+                cv::Canny(gray, gray, cannyThresh1, cannyThresh2);
+                cv::cvtColor(gray, processedFrame, cv::COLOR_GRAY2BGR);
+            } else if (thresholdEnable) {
                 cv::Mat gray;
                 cv::cvtColor(processedFrame, gray, cv::COLOR_BGR2GRAY);
                 cv::threshold(gray, gray, thresholdLevel, 255, cv::THRESH_BINARY);
                 cv::cvtColor(gray, processedFrame, cv::COLOR_GRAY2BGR);
             }
-
-            // Blur (FIXED: Ensure kernel size is always odd and positive)
-            if (blur > 0.0f) {
-                int ksize = juce::jmax(1, static_cast<int>(blur) * 2 + 1);
-                cv::GaussianBlur(processedFrame, processedFrame, cv::Size(ksize, ksize), 0);
-            }
-            
-            // Sharpen (FIXED: The darkening is from clipping. This is the correct formula, but values can go out of 0-255 range.
-            // Using a temporary 16-bit signed matrix prevents clipping during the operation.)
-            if (sharpen > 0.0f) {
-                cv::Mat temp;
-                processedFrame.convertTo(temp, CV_16SC3); // Convert to signed 16-bit
-                cv::Mat blurred;
-                cv::GaussianBlur(temp, blurred, cv::Size(0, 0), 3);
-                cv::addWeighted(temp, 1.0 + sharpen, blurred, -sharpen, 0, temp);
-                temp.convertTo(processedFrame, CV_8UC3); // Convert back to 8-bit, automatically clamping values
-            }
-            
-            // Invert
             if (invert) {
                 cv::bitwise_not(processedFrame, processedFrame);
             }
 
-            // Flip
-            if (flipH && flipV) { cv::flip(processedFrame, processedFrame, -1); }
-            else if (flipH) { cv::flip(processedFrame, processedFrame, 1); }
-            else if (flipV) { cv::flip(processedFrame, processedFrame, 0); }
+            // 3. Geometric & Spatial Filters (applied last for maximum impact)
+            if (flipH || flipV) {
+                int flipCode = flipH && flipV ? -1 : (flipH ? 1 : 0);
+                cv::flip(processedFrame, processedFrame, flipCode);
+            }
+            if (vignetteAmount > 0.0f) {
+                 cv::Mat vignette = cv::Mat::zeros(processedFrame.size(), CV_32F);
+                 int centerX = processedFrame.cols / 2;
+                 int centerY = processedFrame.rows / 2;
+                 float maxDist = std::sqrt((float)centerX * centerX + (float)centerY * centerY) * vignetteSize;
+                 for (int y = 0; y < processedFrame.rows; y++) {
+                     for (int x = 0; x < processedFrame.cols; x++) {
+                         float dist = std::sqrt(std::pow(x - centerX, 2) + std::pow(y - centerY, 2));
+                         float v = 1.0f - (dist / maxDist) * vignetteAmount;
+                         vignette.at<float>(y, x) = juce::jlimit(0.0f, 1.0f, v);
+                     }
+                 }
+                 std::vector<cv::Mat> bgr;
+                 cv::split(processedFrame, bgr);
+                 for (size_t i = 0; i < bgr.size(); i++) {
+                     bgr[i].convertTo(bgr[i], CV_32F);
+                     cv::multiply(bgr[i], vignette, bgr[i]);
+                     bgr[i].convertTo(bgr[i], CV_8U);
+                 }
+                 cv::merge(bgr, processedFrame);
+            }
+            if (pixelateSize > 1) {
+                int w = processedFrame.cols;
+                int h = processedFrame.rows;
+                cv::Mat temp;
+                cv::resize(processedFrame, temp, cv::Size(w / pixelateSize, h / pixelateSize), 0, 0, cv::INTER_NEAREST);
+                cv::resize(temp, processedFrame, cv::Size(w, h), 0, 0, cv::INTER_NEAREST);
+            }
+            if (blur > 0.0f) {
+                int ksize = juce::jmax(1, static_cast<int>(blur) * 2 + 1);
+                cv::GaussianBlur(processedFrame, processedFrame, cv::Size(ksize, ksize), 0);
+            }
+            if (sharpen > 0.0f) {
+                cv::Mat temp;
+                processedFrame.convertTo(temp, CV_16SC3);
+                cv::Mat blurred;
+                cv::GaussianBlur(temp, blurred, cv::Size(0, 0), 3);
+                cv::addWeighted(temp, 1.0 + sharpen, blurred, -sharpen, 0, temp);
+                temp.convertTo(processedFrame, CV_8UC3);
+            }
         }
         
-        // --- Complex color operations (Hue/Sat/Gain) remain on CPU for both paths ---
-        // (This is because they are more complex and less performance-critical than spatial filters)
-        if (saturation != 1.0f || hueShift != 0.0f || gainR != 1.0f || gainG != 1.0f || gainB != 1.0f)
-        {
-            cv::Mat hsv;
-            cv::cvtColor(processedFrame, hsv, cv::COLOR_BGR2HSV);
-            std::vector<cv::Mat> hsvChannels(3);
-            cv::split(hsv, hsvChannels);
+        // --- KALEIDOSCOPE (APPLIED LAST - after all other effects) ---
+        if (kaleidoscopeMode > 0) {
+            int w = processedFrame.cols;
+            int h = processedFrame.rows;
+            int halfW = w / 2;
+            int halfH = h / 2;
+            cv::Mat quadrant = processedFrame(cv::Rect(0, 0, halfW, halfH)).clone();
 
-            if (hueShift != 0.0f) {
-                hsvChannels[0].convertTo(hsvChannels[0], CV_32F);
-                hsvChannels[0] += (hueShift / 2.0f); // OpenCV Hue is 0-179
-                hsvChannels[0].convertTo(hsvChannels[0], CV_8U, 1, 180); // Wrap around
-                cv::add(hsvChannels[0], 180, hsvChannels[0], hsvChannels[0] < 0);
+            if (kaleidoscopeMode == 1) { // 4-Way
+                cv::Mat flippedH, flippedV, flippedBoth;
+                cv::flip(quadrant, flippedH, 1);
+                cv::flip(quadrant, flippedV, 0);
+                cv::flip(quadrant, flippedBoth, -1);
+                quadrant.copyTo(processedFrame(cv::Rect(0, 0, halfW, halfH)));
+                flippedH.copyTo(processedFrame(cv::Rect(halfW, 0, halfW, halfH)));
+                flippedV.copyTo(processedFrame(cv::Rect(0, halfH, halfW, halfH)));
+                flippedBoth.copyTo(processedFrame(cv::Rect(halfW, halfH, halfW, halfH)));
+            } else if (kaleidoscopeMode == 2) { // 8-Way (CORRECTED LOGIC)
+                cv::Mat symmQuadrant = quadrant.clone();
+                cv::Mat mask = cv::Mat::zeros(quadrant.size(), CV_8U);
+                std::vector<cv::Point> triangle_pts = {cv::Point(0,0), cv::Point(halfW, 0), cv::Point(0, halfH)};
+                cv::fillConvexPoly(mask, triangle_pts, cv::Scalar(255));
+                
+                cv::Mat tri;
+                quadrant.copyTo(tri, mask);
+
+                cv::Mat tri_flipped_h;
+                cv::flip(tri, tri_flipped_h, 1);
+                tri_flipped_h.copyTo(symmQuadrant, ~mask);
+
+                cv::Mat flippedH, flippedV, flippedBoth;
+                cv::flip(symmQuadrant, flippedH, 1);
+                cv::flip(symmQuadrant, flippedV, 0);
+                cv::flip(symmQuadrant, flippedBoth, -1);
+                symmQuadrant.copyTo(processedFrame(cv::Rect(0, 0, halfW, halfH)));
+                flippedH.copyTo(processedFrame(cv::Rect(halfW, 0, halfW, halfH)));
+                flippedV.copyTo(processedFrame(cv::Rect(0, halfH, halfW, halfH)));
+                flippedBoth.copyTo(processedFrame(cv::Rect(halfW, halfH, halfW, halfH)));
             }
-
-            if (saturation != 1.0f) {
-                hsvChannels[1].convertTo(hsvChannels[1], CV_32F);
-                hsvChannels[1] *= saturation;
-                cv::threshold(hsvChannels[1], hsvChannels[1], 255, 255, cv::THRESH_TRUNC);
-                hsvChannels[1].convertTo(hsvChannels[1], CV_8U);
-            }
-            
-            cv::merge(hsvChannels, hsv);
-            cv::cvtColor(hsv, processedFrame, cv::COLOR_HSV2BGR);
-
-            // Apply RGB Gains
-            std::vector<cv::Mat> bgrChannels(3);
-            cv::split(processedFrame, bgrChannels);
-            if(gainB != 1.0f) bgrChannels[0] *= gainB;
-            if(gainG != 1.0f) bgrChannels[1] *= gainG;
-            if(gainR != 1.0f) bgrChannels[2] *= gainR;
-            cv::merge(bgrChannels, processedFrame);
         }
         
         // Publish and update UI
@@ -377,8 +469,10 @@ void VideoFXModule::drawParametersInNode(float itemWidth,
         // Reset all parameters to their default values
         const char* paramIds[] = {
             "useGpu", "zoomLevel", "brightness", "contrast", "saturation", "hueShift",
-            "gainRed", "gainGreen", "gainBlue", "sharpen", "blur", "grayscale",
-            "invert", "flipH", "flipV", "thresholdEnable", "thresholdLevel"
+            "gainRed", "gainGreen", "gainBlue", "sepia", "temperature", "sharpen", "blur", 
+            "grayscale", "invert", "flipH", "flipV", "thresholdEnable", "thresholdLevel",
+            "posterizeLevels", "vignetteAmount", "vignetteSize", "pixelateSize", 
+            "cannyEnable", "cannyThresh1", "cannyThresh2", "kaleidoscope"
         };
         
         for (const char* paramId : paramIds)
@@ -492,6 +586,20 @@ void VideoFXModule::drawParametersInNode(float itemWidth,
         onModificationEnded();
     }
     
+    bool sepia = sepiaParam ? sepiaParam->get() : false;
+    if (ImGui::Checkbox("Sepia", &sepia))
+    {
+        if (sepiaParam) *sepiaParam = sepia;
+        onModificationEnded();
+    }
+    
+    float temperature = temperatureParam ? temperatureParam->load() : 0.0f;
+    if (ImGui::SliderFloat("Temperature", &temperature, -1.0f, 1.0f))
+    {
+        if (auto* p = dynamic_cast<juce::AudioParameterFloat*>(apvts.getParameter("temperature"))) *p = temperature;
+        onModificationEnded();
+    }
+    
     ImGui::Separator();
     ImGui::TextColored(ImVec4(0.9f, 0.9f, 0.5f, 1.0f), "Filters & Effects");
     
@@ -542,7 +650,7 @@ void VideoFXModule::drawParametersInNode(float itemWidth,
     ImGui::Separator();
     ImGui::TextColored(ImVec4(0.9f, 0.9f, 0.5f, 1.0f), "More Filters");
 
-    // --- FEATURE: THRESHOLD EFFECT UI ---
+    // Threshold Effect
     bool threshEnable = thresholdEnableParam ? thresholdEnableParam->get() : false;
     if (ImGui::Checkbox("Threshold", &threshEnable))
     {
@@ -559,6 +667,79 @@ void VideoFXModule::drawParametersInNode(float itemWidth,
              if (auto* p = dynamic_cast<juce::AudioParameterFloat*>(apvts.getParameter("thresholdLevel"))) *p = threshLevel;
              onModificationEnded();
         }
+    }
+    
+    // Posterize
+    int posterizeLevels = posterizeLevelsParam ? posterizeLevelsParam->get() : 32;
+    if (ImGui::SliderInt("Posterize", &posterizeLevels, 2, 32))
+    {
+        if (posterizeLevelsParam) *posterizeLevelsParam = posterizeLevels;
+        onModificationEnded();
+    }
+    if (ImGui::IsItemHovered()) ImGui::SetTooltip("Reduces the number of colors.\nLower values = stronger effect.");
+    
+    // Pixelate
+    int pixelateSize = pixelateBlockSizeParam ? pixelateBlockSizeParam->get() : 1;
+    if (ImGui::SliderInt("Pixelate", &pixelateSize, 1, 128))
+    {
+        if (pixelateBlockSizeParam) *pixelateBlockSizeParam = pixelateSize;
+        onModificationEnded();
+    }
+    if (ImGui::IsItemHovered()) ImGui::SetTooltip("Creates a mosaic effect.\nHigher values = larger blocks.");
+    
+    // Edge Detection (Canny)
+    bool cannyEnable = cannyEnableParam ? cannyEnableParam->get() : false;
+    if (ImGui::Checkbox("Edge Detect", &cannyEnable))
+    {
+        if (cannyEnableParam) *cannyEnableParam = cannyEnable;
+        onModificationEnded();
+    }
+    
+    if (cannyEnable)
+    {
+        float cannyTh1 = cannyThresh1Param ? cannyThresh1Param->load() : 50.0f;
+        if (ImGui::SliderFloat("Canny Thresh 1", &cannyTh1, 0.0f, 255.0f))
+        {
+            if (auto* p = dynamic_cast<juce::AudioParameterFloat*>(apvts.getParameter("cannyThresh1"))) *p = cannyTh1;
+            onModificationEnded();
+        }
+        
+        float cannyTh2 = cannyThresh2Param ? cannyThresh2Param->load() : 150.0f;
+        if (ImGui::SliderFloat("Canny Thresh 2", &cannyTh2, 0.0f, 255.0f))
+        {
+            if (auto* p = dynamic_cast<juce::AudioParameterFloat*>(apvts.getParameter("cannyThresh2"))) *p = cannyTh2;
+            onModificationEnded();
+        }
+    }
+    
+    ImGui::Separator();
+    ImGui::TextColored(ImVec4(0.9f, 0.9f, 0.5f, 1.0f), "Advanced Effects");
+    
+    // Vignette
+    float vignetteAmount = vignetteAmountParam ? vignetteAmountParam->load() : 0.0f;
+    if (ImGui::SliderFloat("Vignette Amount", &vignetteAmount, 0.0f, 1.0f))
+    {
+        if (auto* p = dynamic_cast<juce::AudioParameterFloat*>(apvts.getParameter("vignetteAmount"))) *p = vignetteAmount;
+        onModificationEnded();
+    }
+    
+    if (vignetteAmount > 0.0f)
+    {
+        float vignetteSize = vignetteSizeParam ? vignetteSizeParam->load() : 0.5f;
+        if (ImGui::SliderFloat("Vignette Size", &vignetteSize, 0.1f, 2.0f))
+        {
+            if (auto* p = dynamic_cast<juce::AudioParameterFloat*>(apvts.getParameter("vignetteSize"))) *p = vignetteSize;
+            onModificationEnded();
+        }
+    }
+    
+    // Kaleidoscope
+    int kaleidoscopeMode = kaleidoscopeModeParam ? kaleidoscopeModeParam->getIndex() : 0;
+    const char* kaleidoscopeModes[] = { "None", "4-Way", "8-Way" };
+    if (ImGui::Combo("Kaleidoscope", &kaleidoscopeMode, kaleidoscopeModes, 3))
+    {
+        if (kaleidoscopeModeParam) kaleidoscopeModeParam->setValueNotifyingHost((float)kaleidoscopeMode / 2.0f);
+        onModificationEnded();
     }
     
     ImGui::PopItemWidth();

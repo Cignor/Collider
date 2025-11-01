@@ -30,7 +30,9 @@ juce::AudioProcessorValueTreeState::ParameterLayout HumanDetectorModule::createP
 HumanDetectorModule::HumanDetectorModule()
     : ModuleProcessor(BusesProperties()
                      .withInput("Input", juce::AudioChannelSet::mono(), true)
-                     .withOutput("Output", juce::AudioChannelSet::discreteChannels(5), true)),
+                     .withOutput("CV Out", juce::AudioChannelSet::discreteChannels(5), true)
+                     .withOutput("Video Out", juce::AudioChannelSet::mono(), true)    // PASSTHROUGH
+                     .withOutput("Cropped Out", juce::AudioChannelSet::mono(), true)), // CROPPED
       juce::Thread("Human Detector Analysis Thread"),
       apvts(*this, nullptr, "HumanParams", createParameterLayout())
 {
@@ -161,6 +163,10 @@ DetectionResult HumanDetectorModule::analyzeFrame(const cv::Mat& inputFrame)
 {
     DetectionResult result;
     cv::Mat gray, displayFrame;
+    
+    // Make a copy for cropping before any resizing
+    cv::Mat originalFrameForCrop;
+    inputFrame.copyTo(originalFrameForCrop);
     
     inputFrame.copyTo(displayFrame);
     cv::cvtColor(inputFrame, gray, cv::COLOR_BGR2GRAY);
@@ -323,8 +329,36 @@ DetectionResult HumanDetectorModule::analyzeFrame(const cv::Mat& inputFrame)
         result.y[0] = juce::jmap((float)largest->y, 0.0f, (float)displayFrame.rows, 0.0f, 1.0f);
         result.width[0] = juce::jmap((float)largest->width, 0.0f, (float)displayFrame.cols, 0.0f, 1.0f);
         result.height[0] = juce::jmap((float)largest->height, 0.0f, (float)displayFrame.rows, 0.0f, 1.0f);
+        
+        // --- CROPPED OUTPUT LOGIC ---
+        // Use original frame and scale the ROI if necessary
+        cv::Rect originalRoi = *largest;
+        if (displayFrame.cols != originalFrameForCrop.cols || displayFrame.rows != originalFrameForCrop.rows)
+        {
+            float scaleX = (float)originalFrameForCrop.cols / (float)displayFrame.cols;
+            float scaleY = (float)originalFrameForCrop.rows / (float)displayFrame.rows;
+            originalRoi.x = (int)(originalRoi.x * scaleX);
+            originalRoi.y = (int)(originalRoi.y * scaleY);
+            originalRoi.width = (int)(originalRoi.width * scaleX);
+            originalRoi.height = (int)(originalRoi.height * scaleY);
+        }
+        
+        originalRoi &= cv::Rect(0, 0, originalFrameForCrop.cols, originalFrameForCrop.rows);
+        if (originalRoi.area() > 0)
+        {
+            cv::Mat cropped = originalFrameForCrop(originalRoi);
+            VideoFrameManager::getInstance().setFrame(getSecondaryLogicalId(), cropped);
+        }
+    }
+    else
+    {
+        // Clear cropped output when no detection
+        cv::Mat emptyFrame;
+        VideoFrameManager::getInstance().setFrame(getSecondaryLogicalId(), emptyFrame);
     }
 
+    // --- PASSTHROUGH LOGIC ---
+    VideoFrameManager::getInstance().setFrame(getLogicalId(), displayFrame);
     updateGuiFrame(displayFrame);
     return result;
 }
@@ -373,33 +407,51 @@ void HumanDetectorModule::processBlock(juce::AudioBuffer<float>& buffer, juce::M
         }
     }
     
-    // Write results to output channels
-    auto outputBuffer = getBusBuffer(buffer, false, 0);
-    if (outputBuffer.getNumChannels() < 5) return;
+    // Write results to output channels (bus 0 - CV Out)
+    auto cvOutBus = getBusBuffer(buffer, false, 0);
+    if (cvOutBus.getNumChannels() < 5) return;
     
     if (lastResultForAudio.numDetections > 0)
     {
-        outputBuffer.setSample(0, 0, lastResultForAudio.x[0]);
-        outputBuffer.setSample(1, 0, lastResultForAudio.y[0]);
-        outputBuffer.setSample(2, 0, lastResultForAudio.width[0]);
-        outputBuffer.setSample(3, 0, lastResultForAudio.height[0]);
+        cvOutBus.setSample(0, 0, lastResultForAudio.x[0]);
+        cvOutBus.setSample(1, 0, lastResultForAudio.y[0]);
+        cvOutBus.setSample(2, 0, lastResultForAudio.width[0]);
+        cvOutBus.setSample(3, 0, lastResultForAudio.height[0]);
         gateSamplesRemaining = 2; // Keep gate high
     }
 
     if (gateSamplesRemaining > 0)
     {
-        outputBuffer.setSample(4, 0, 1.0f);
+        cvOutBus.setSample(4, 0, 1.0f);
         gateSamplesRemaining--;
     }
     else
     {
-        outputBuffer.setSample(4, 0, 0.0f);
+        cvOutBus.setSample(4, 0, 0.0f);
     }
     
     // Fill rest of buffer
     for (int channel = 0; channel < 5; ++channel)
     {
-        outputBuffer.copyFrom(channel, 1, outputBuffer, channel, 0, outputBuffer.getNumSamples() - 1);
+        cvOutBus.copyFrom(channel, 1, cvOutBus, channel, 0, cvOutBus.getNumSamples() - 1);
+    }
+    
+    // Passthrough Video ID on bus 1
+    auto videoOutBus = getBusBuffer(buffer, false, 1);
+    if (videoOutBus.getNumChannels() > 0)
+    {
+        float primaryId = static_cast<float>(getLogicalId());
+        for (int s = 0; s < videoOutBus.getNumSamples(); ++s)
+            videoOutBus.setSample(0, s, primaryId);
+    }
+    
+    // Cropped Video ID on bus 2
+    auto croppedOutBus = getBusBuffer(buffer, false, 2);
+    if (croppedOutBus.getNumChannels() > 0)
+    {
+        float secondaryId = static_cast<float>(getSecondaryLogicalId());
+        for (int s = 0; s < croppedOutBus.getNumSamples(); ++s)
+            croppedOutBus.setSample(0, s, secondaryId);
     }
 }
 
@@ -537,5 +589,7 @@ void HumanDetectorModule::drawIoPins(const NodePinHelpers& helpers)
     helpers.drawAudioOutputPin("Width", 2);
     helpers.drawAudioOutputPin("Height", 3);
     helpers.drawAudioOutputPin("Gate", 4);
+    helpers.drawAudioOutputPin("Video Out", 0);     // Bus 1
+    helpers.drawAudioOutputPin("Cropped Out", 1); // Bus 2
 }
 #endif
