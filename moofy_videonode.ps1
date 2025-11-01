@@ -38,6 +38,31 @@ $sourceFiles = @(
     "juce/Source/preset_creator/ImGuiNodeEditorComponent.cpp",
 
     #=============================================================
+    # SECTION 4b: COMPUTER VISION MODULES (Nodes)
+    # Core CV source/processing nodes that use VideoFrameManager
+    #=============================================================
+    "juce/Source/audio/modules/WebcamLoaderModule.h",
+    "juce/Source/audio/modules/WebcamLoaderModule.cpp",
+    "juce/Source/audio/modules/MovementDetectorModule.h",
+    "juce/Source/audio/modules/MovementDetectorModule.cpp",
+    "juce/Source/audio/modules/HumanDetectorModule.h",
+    "juce/Source/audio/modules/HumanDetectorModule.cpp",
+    "juce/Source/audio/modules/PoseEstimatorModule.h",
+    "juce/Source/audio/modules/PoseEstimatorModule.cpp",
+    "juce/Source/audio/modules/HandTrackerModule.h",
+    "juce/Source/audio/modules/HandTrackerModule.cpp",
+    "juce/Source/audio/modules/FaceTrackerModule.h",
+    "juce/Source/audio/modules/FaceTrackerModule.cpp",
+    "juce/Source/audio/modules/ObjectDetectorModule.h",
+    "juce/Source/audio/modules/ObjectDetectorModule.cpp",
+    "juce/Source/audio/modules/ColorTrackerModule.h",
+    "juce/Source/audio/modules/ColorTrackerModule.cpp",
+    "juce/Source/audio/modules/ContourDetectorModule.h",
+    "juce/Source/audio/modules/ContourDetectorModule.cpp",
+    "juce/Source/audio/modules/SemanticSegmentationModule.h",
+    "juce/Source/audio/modules/SemanticSegmentationModule.cpp",
+
+    #=============================================================
     # SECTION 5: BUILD SYSTEM (OpenCV/JUCE linkage reference)
     # Useful to understand dependencies for the video pipeline
     #=============================================================

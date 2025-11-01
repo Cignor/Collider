@@ -1245,8 +1245,12 @@ std::optional<RhythmInfo> AnimationModuleProcessor::getRhythmInfo() const
         const double durationSeconds = currentClip->durationInTicks / currentClip->ticksPerSecond;
         
         // One loop = one "beat" in BPM terms
-        // Note: This is the base BPM without considering animation speed modifier
+        // Calculate base BPM
         info.bpm = static_cast<float>(60.0 / durationSeconds);
+        
+        // Apply animation speed multiplier
+        const float speedMultiplier = currentAnimator->GetAnimationSpeed();
+        info.bpm *= speedMultiplier;
     }
     else
     {

@@ -87,6 +87,7 @@ private:
     };
     
     std::vector<IntrospectedSource> m_introspectedSources;
+    mutable juce::CriticalSection m_sourcesLock;  // Thread safety for dynamic pin queries
     
     /**
      * Scan the parent graph for modules with getRhythmInfo()
@@ -111,5 +112,9 @@ private:
      * Normalize BPM to 0-1 range for CV output
      */
     float normalizeBPM(float bpm, float minBPM, float maxBPM) const;
+    
+    // === PERFORMANCE OPTIMIZATION ===
+    
+    int m_scanCounter { 0 };  // Counter to reduce graph scan frequency
 };
 

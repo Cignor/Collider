@@ -98,7 +98,7 @@ struct MidiMessageWithDevice {
 // <<< ALL PIN-RELATED DEFINITIONS ARE NOW CENTRALIZED HERE >>>
 
 // Defines the data type of a modulation or audio signal
-enum class PinDataType { CV, Audio, Gate, Raw };
+enum class PinDataType { CV, Audio, Gate, Raw, Video };
 
 // Forward declare NodeWidth enum (defined in ImGuiNodeEditorComponent.h)
 // This avoids circular dependency while allowing ModulePinInfo to store it

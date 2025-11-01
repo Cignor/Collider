@@ -40,6 +40,7 @@
 #include "../modules/MIDIPlayerModuleProcessor.h"
 #include "../modules/PolyVCOModuleProcessor.h"
 #include "../modules/BestPracticeNodeProcessor.h"
+#include "../modules/TimelineModuleProcessor.h"
 #include "../modules/BPMMonitorModuleProcessor.h"
 #include "../modules/ShapingOscillatorModuleProcessor.h"
 #include "../modules/MultiSequencerModuleProcessor.h"
@@ -108,6 +109,8 @@ ModularSynthProcessor::ModularSynthProcessor()
     bpmMonitorNode = internalGraph->addNode(std::move(bpmMonitor));
     if (auto* processor = dynamic_cast<ModuleProcessor*>(bpmMonitorNode->getProcessor()))
         processor->setParent(this);
+    // Add to logicalIdToModule so it appears in the UI
+    logicalIdToModule[999] = LogicalModule{ bpmMonitorNode->nodeID, "bpm_monitor" };
     juce::Logger::writeToLog("[ModularSynth] Initialized BPM Monitor with logicalID: 999");
     
     activeAudioProcessors.store(std::make_shared<const std::vector<std::shared_ptr<ModuleProcessor>>>());
@@ -486,6 +489,13 @@ void ModularSynthProcessor::setStateInformation(const void* data, int sizeInByte
 
         juce::Logger::writeToLog("[STATE] Processing module " + juce::String(i) + ": logicalId=" + juce::String(logicalId) + " type='" + type + "'");
 
+        // Skip BPM Monitor (logical ID 999) - it's always present and should not be loaded from preset
+        if (logicalId == 999)
+        {
+            juce::Logger::writeToLog("[STATE] Skipping BPM Monitor (logical ID 999) - always present");
+            continue;
+        }
+
         if (logicalId > 0 && type.isNotEmpty())
         {
             NodeID nodeId;
@@ -709,6 +719,7 @@ namespace {
             reg("midi_player", []{ return std::make_unique<MIDIPlayerModuleProcessor>(); });
             reg("polyvco", []{ return std::make_unique<PolyVCOModuleProcessor>(); });
             reg("best_practice", []{ return std::make_unique<BestPracticeNodeProcessor>(); });
+            reg("timeline", []{ return std::make_unique<TimelineModuleProcessor>(); });
             reg("shaping_oscillator", []{ return std::make_unique<ShapingOscillatorModuleProcessor>(); });
             reg("multi_sequencer", []{ return std::make_unique<MultiSequencerModuleProcessor>(); });
             reg("lag_processor", []{ return std::make_unique<LagProcessorModuleProcessor>(); });

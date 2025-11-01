@@ -49,10 +49,14 @@ void BPMMonitorModuleProcessor::prepareToPlay(double sampleRate, int samplesPerB
     // Reset all tap tempo analyzers
     for (auto& analyzer : m_tapAnalyzers)
         analyzer.reset();
+    
+    // Reset scan counter
+    m_scanCounter = 0;
 }
 
 void BPMMonitorModuleProcessor::scanGraphForRhythmSources()
 {
+    const juce::ScopedLock lock(m_sourcesLock);
     m_introspectedSources.clear();
     
     // Get parent synth
@@ -90,6 +94,7 @@ void BPMMonitorModuleProcessor::scanGraphForRhythmSources()
 
 void BPMMonitorModuleProcessor::processDetection(const juce::AudioBuffer<float>& buffer)
 {
+    const juce::ScopedLock lock(m_sourcesLock);
     m_detectedSources.clear();
     
     const int numInputs = apvts.getRawParameterValue("numInputs")->load();
@@ -144,16 +149,26 @@ void BPMMonitorModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
     const float maxBPM = apvts.getRawParameterValue("maxBPM")->load();
     
     // === INTROSPECTION ENGINE ===
-    if (mode == (int)OperationMode::Auto || mode == (int)OperationMode::IntrospectionOnly)
-        scanGraphForRhythmSources();
-    else
-        m_introspectedSources.clear();
+    // Scan graph periodically to reduce overhead (every 128 blocks ≈ 2.9ms at 44.1kHz)
+    if (++m_scanCounter % 128 == 0)
+    {
+        if (mode == (int)OperationMode::Auto || mode == (int)OperationMode::IntrospectionOnly)
+            scanGraphForRhythmSources();
+        else
+        {
+            const juce::ScopedLock lock(m_sourcesLock);
+            m_introspectedSources.clear();
+        }
+    }
     
     // === BEAT DETECTION ENGINE ===
     if (mode == (int)OperationMode::Auto || mode == (int)OperationMode::DetectionOnly)
         processDetection(buffer);
     else
+    {
+        const juce::ScopedLock lock(m_sourcesLock);
         m_detectedSources.clear();
+    }
     
     // === OUTPUT GENERATION ===
     buffer.clear();
@@ -161,8 +176,17 @@ void BPMMonitorModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
     int channelIndex = 0;
     const int numSamples = buffer.getNumSamples();
     
+    // Copy sources for safe iteration
+    std::vector<IntrospectedSource> introspected;
+    std::vector<DetectedRhythmSource> detected;
+    {
+        const juce::ScopedLock lock(m_sourcesLock);
+        introspected = m_introspectedSources;
+        detected = m_detectedSources;
+    }
+    
     // Introspected sources first (fast, accurate)
-    for (const auto& source : m_introspectedSources)
+    for (const auto& source : introspected)
     {
         if (channelIndex + 2 >= buffer.getNumChannels())
             break;
@@ -181,7 +205,7 @@ void BPMMonitorModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
     }
     
     // Detected sources next (universal fallback)
-    for (const auto& source : m_detectedSources)
+    for (const auto& source : detected)
     {
         if (channelIndex + 2 >= buffer.getNumChannels())
             break;
@@ -206,6 +230,7 @@ void BPMMonitorModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
 std::vector<DynamicPinInfo> BPMMonitorModuleProcessor::getDynamicOutputPins() const
 {
     std::vector<DynamicPinInfo> pins;
+    const juce::ScopedLock lock(m_sourcesLock);
     
     // Introspected sources
     for (const auto& source : m_introspectedSources)
@@ -338,35 +363,38 @@ void BPMMonitorModuleProcessor::drawParametersInNode(float itemWidth,
     ImGui::Separator();
     ImGui::Text("Detected Rhythm Sources:");
     
-    if (m_introspectedSources.empty() && m_detectedSources.empty())
     {
-        ImGui::TextDisabled("  None");
-    }
-    else
-    {
-        // Introspected sources
-        if (!m_introspectedSources.empty())
+        const juce::ScopedLock lock(m_sourcesLock);
+        if (m_introspectedSources.empty() && m_detectedSources.empty())
         {
-            ImGui::TextColored(ImVec4(0.5f, 1.0f, 0.5f, 1.0f), "Introspected:");
-            for (const auto& source : m_introspectedSources)
-            {
-                ImGui::BulletText("%s: %.1f BPM %s", 
-                                 source.name.toRawUTF8(), 
-                                 source.bpm,
-                                 source.isActive ? "[ACTIVE]" : "[STOPPED]");
-            }
+            ImGui::TextDisabled("  None");
         }
-        
-        // Detected sources
-        if (!m_detectedSources.empty())
+        else
         {
-            ImGui::TextColored(ImVec4(1.0f, 0.8f, 0.3f, 1.0f), "Detected:");
-            for (const auto& source : m_detectedSources)
+            // Introspected sources
+            if (!m_introspectedSources.empty())
             {
-                ImGui::BulletText("%s: %.1f BPM (%.0f%% conf)", 
-                                 source.name.toRawUTF8(), 
-                                 source.detectedBPM,
-                                 source.confidence * 100.0f);
+                ImGui::TextColored(ImVec4(0.5f, 1.0f, 0.5f, 1.0f), "Introspected:");
+                for (const auto& source : m_introspectedSources)
+                {
+                    ImGui::BulletText("%s: %.1f BPM %s", 
+                                     source.name.toRawUTF8(), 
+                                     source.bpm,
+                                     source.isActive ? "[ACTIVE]" : "[STOPPED]");
+                }
+            }
+            
+            // Detected sources
+            if (!m_detectedSources.empty())
+            {
+                ImGui::TextColored(ImVec4(1.0f, 0.8f, 0.3f, 1.0f), "Detected:");
+                for (const auto& source : m_detectedSources)
+                {
+                    ImGui::BulletText("%s: %.1f BPM (%.0f%% conf)", 
+                                     source.name.toRawUTF8(), 
+                                     source.detectedBPM,
+                                     source.confidence * 100.0f);
+                }
             }
         }
     }

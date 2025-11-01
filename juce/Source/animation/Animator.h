@@ -14,7 +14,8 @@ public:
     void Update(float deltaTime);
     void PlayAnimation(const std::string& animationName);
     void SetAnimationSpeed(float speed) { m_AnimationSpeed = speed; }
-
+    float GetAnimationSpeed() const { return m_AnimationSpeed; }
+    
     const std::vector<glm::mat4>& GetFinalBoneMatrices() const { return m_FinalBoneMatrices; }
     const std::vector<glm::mat4>& GetBoneWorldTransforms() const { return m_BoneWorldTransforms; }
     const AnimationData* GetAnimationData() const { return m_AnimationData; }

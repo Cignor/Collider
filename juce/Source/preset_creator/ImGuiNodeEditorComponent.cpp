@@ -74,6 +74,7 @@ static const char* toString(PinDataType t)
         case PinDataType::CV: return "CV";
         case PinDataType::Gate: return "Gate";
         case PinDataType::Raw: return "Raw";
+        case PinDataType::Video: return "Video";
         default: return "Unknown";
     }
 }
@@ -1528,6 +1529,7 @@ void ImGuiNodeEditorComponent::renderImGui()
         addModuleButton("Tempo Clock", "tempo_clock");
         addModuleButton("Snapshot Sequencer", "snapshot_sequencer");
         addModuleButton("Stroke Sequencer", "stroke_sequencer");
+        addModuleButton("Timeline", "timeline");
     }
     
     // ═══════════════════════════════════════════════════════════════════════════════
@@ -3509,12 +3511,13 @@ if (auto* mp = synth->getModuleForLogical (lid))
                                       " dstAttr=" + juce::String(attrs.second));
             linkToInsertOn.srcPin = decodePinId(attrs.first);
             linkToInsertOn.dstPin = decodePinId(attrs.second);
-            // Decide list based on pin data types (treat CV/Gate/Raw as modulation list)
+            // Decide list based on pin data types (treat CV/Gate/Raw/Video as modulation list)
             const PinDataType srcType = getPinDataTypeForPin(linkToInsertOn.srcPin);
             const PinDataType dstType = getPinDataTypeForPin(linkToInsertOn.dstPin);
             if (srcType == PinDataType::CV || dstType == PinDataType::CV ||
                 srcType == PinDataType::Gate || dstType == PinDataType::Gate ||
-                srcType == PinDataType::Raw || dstType == PinDataType::Raw)
+                srcType == PinDataType::Raw || dstType == PinDataType::Raw ||
+                srcType == PinDataType::Video || dstType == PinDataType::Video)
             {
                 linkToInsertOn.isMod = true;
             }
@@ -3571,6 +3574,11 @@ if (auto* mp = synth->getModuleForLogical (lid))
         else if (ImGui::IsKeyPressed(ImGuiKey_Y))
         {
             handleColorCodedChaining(PinDataType::Gate);
+        }
+        // V: Video type chaining
+        else if (ImGui::IsKeyPressed(ImGuiKey_V))
+        {
+            handleColorCodedChaining(PinDataType::Video);
         }
     }
     // --- END OF KEYBOARD SHORTCUTS ---
@@ -3694,7 +3702,8 @@ if (auto* mp = synth->getModuleForLogical (lid))
             const PinDataType dstType = getPinDataTypeForPin(linkToInsertOn.dstPin);
             if (srcType == PinDataType::CV || dstType == PinDataType::CV ||
                 srcType == PinDataType::Gate || dstType == PinDataType::Gate ||
-                srcType == PinDataType::Raw || dstType == PinDataType::Raw)
+                srcType == PinDataType::Raw || dstType == PinDataType::Raw ||
+                srcType == PinDataType::Video || dstType == PinDataType::Video)
             {
                 linkToInsertOn.isMod = true;
             }
@@ -3799,7 +3808,8 @@ if (auto* mp = synth->getModuleForLogical (lid))
             const PinDataType dstType = getPinDataTypeForPin(linkToInsertOn.dstPin);
             if (srcType == PinDataType::CV || dstType == PinDataType::CV ||
                 srcType == PinDataType::Gate || dstType == PinDataType::Gate ||
-                srcType == PinDataType::Raw || dstType == PinDataType::Raw)
+                srcType == PinDataType::Raw || dstType == PinDataType::Raw ||
+                srcType == PinDataType::Video || dstType == PinDataType::Video)
             {
                 linkToInsertOn.isMod = true;
             }
@@ -3977,6 +3987,7 @@ if (auto* mp = synth->getModuleForLogical (lid))
                     if (ImGui::MenuItem("Tempo Clock")) addAtMouse("tempo_clock");
                     if (ImGui::MenuItem("Snapshot Sequencer")) addAtMouse("snapshot_sequencer");
                     if (ImGui::MenuItem("Stroke Sequencer")) addAtMouse("stroke_sequencer");
+                    if (ImGui::MenuItem("Timeline")) addAtMouse("timeline");
                     ImGui::EndMenu();
                 }
                 
@@ -6812,7 +6823,9 @@ void ImGuiNodeEditorComponent::drawInsertNodeOnLinkPopup()
             {"Rate", "rate"}, {"Comparator", "comparator"}, {"Logic", "logic"},
             {"CV Mixer", "cv_mixer"}, {"Sequential Switch", "sequential_switch"},
             // Modulators
-            {"S&H", "s_and_h"}, {"Function Generator", "function_generator"}
+            {"S&H", "s_and_h"}, {"Function Generator", "function_generator"},
+            // Sequencers
+            {"Timeline", "timeline"}
         };
         const auto& listToShow = linkToInsertOn.isMod ? modInsertable : audioInsertable;
 
@@ -7299,6 +7312,7 @@ unsigned int ImGuiNodeEditorComponent::getImU32ForType(PinDataType type)
         case PinDataType::Audio: return IM_COL32(100, 255, 150, 255); // Green
         case PinDataType::Gate:  return IM_COL32(255, 220, 100, 255); // Yellow
         case PinDataType::Raw:   return IM_COL32(255, 100, 100, 255); // Red
+        case PinDataType::Video: return IM_COL32(0, 200, 255, 255);   // Cyan
         default:                 return IM_COL32(150, 150, 150, 255); // Grey
     }
 }
@@ -7311,6 +7325,7 @@ const char* ImGuiNodeEditorComponent::pinDataTypeToString(PinDataType type)
         case PinDataType::Audio: return "Audio (-1 to 1)";
         case PinDataType::Gate:  return "Gate/Trigger";
         case PinDataType::Raw:   return "Raw";
+        case PinDataType::Video: return "Video Source";
         default:                 return "Unknown";
     }
 }
@@ -7670,7 +7685,7 @@ ImGuiNodeEditorComponent::ModuleCategory ImGuiNodeEditorComponent::getModuleCate
         return ModuleCategory::Utility;
     
     // --- 5. SEQUENCERS (Light Green) ---
-    if (lower.contains("sequencer") || lower.contains("tempo_clock"))
+    if (lower.contains("sequencer") || lower.contains("tempo_clock") || lower == "timeline")
         return ModuleCategory::Seq;
     
     // --- 6. MIDI (Vibrant Purple) ---
@@ -7702,7 +7717,7 @@ ImGuiNodeEditorComponent::ModuleCategory ImGuiNodeEditorComponent::getModuleCate
     if (lower.contains("meta") || lower.contains("inlet") || 
         lower.contains("outlet") || lower.contains("comment") ||
         lower.contains("recorder") || lower.contains("vst_host") ||
-        lower.contains("best_practice"))
+        lower.contains("best_practice") || lower == "bpm_monitor" || lower.contains("bpm monitor"))
         return ModuleCategory::Sys;
     
     // --- 12. PLUGINS (Teal) ---
@@ -7835,6 +7850,8 @@ std::map<juce::String, std::pair<const char*, const char*>> ImGuiNodeEditorCompo
         {"Comment", {"comment", "Text comment box"}},
         {"Best Practice", {"best_practice", "Best practice node template"}},
         {"Snapshot Sequencer", {"snapshot_sequencer", "Snapshot sequencer for parameter automation"}},
+        {"Timeline", {"timeline", "Transport-synchronized automation recorder for CV, Gate, Trigger, and Raw signals"}},
+        {"BPM Monitor", {"bpm_monitor", "Hybrid rhythm detection and BPM reporting from sequencers and audio inputs"}},
         
         // Analysis
         {"Scope", {"scope", "Oscilloscope display"}},

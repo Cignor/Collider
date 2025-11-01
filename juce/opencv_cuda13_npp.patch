@@ -1,0 +1,49 @@
+﻿--- a/modules/core/include/opencv2/core/private.cuda.hpp
++++ b/modules/core/include/opencv2/core/private.cuda.hpp
+@@ -139,20 +139,42 @@
+ 
+ #if defined(HAVE_CUDA) && defined(HAVE_NPP)
+ 
++#if defined(__CUDACC_VER_MAJOR__) && __CUDACC_VER_MAJOR__ >= 13
++// CUDA 13.0+ uses new NPP API - context-based stream management
++inline NppStream nppGetStream()
++{
++    NppStreamContext nppStreamCtx = {0};
++    nppGetStreamContext(&nppStreamCtx);
++    return nppStreamCtx.hStream;
++}
++
++inline void nppSetStream(cudaStream_t stream)
++{
++    NppStreamContext nppStreamCtx;
++    nppStreamCtx.hStream = stream;
++    nppSetStreamContext(&nppStreamCtx);
++}
++
++inline NppStreamContext nppGetStreamContext()
++{
++    NppStreamContext nppStreamCtx;
++    nppGetStreamContext(&nppStreamCtx);
++    return nppStreamCtx;
++}
++#else
++// CUDA < 13.0 uses legacy NPP API
+ // Stream
+ inline NppStream nppGetStream()
+ {
+     return nppGetStream();
+ }
+ 
+ inline void nppSetStream(cudaStream_t stream)
+ {
+     nppSetStream(stream);
+ }
+ 
+ // Context
+ inline NppStreamContext nppGetStreamContext()
+ {
+     return nppGetStreamContext();
+ }
++#endif
+ 
+ #endif // HAVE_CUDA && HAVE_NPP

@@ -66,6 +66,7 @@
 - [Snapshot Sequencer](#snapshot-sequencer) - Patch State Sequencer
 - [Stroke Sequencer](#stroke-sequencer) - Gesture-Based Sequencer
 - [Tempo Clock](#tempo-clock) - Global Clock Generator
+- [Timeline](#timeline) - Automation Recorder and Playback
 
 #### 6. MIDI NODES
 - [MIDI CV](#midi-cv) - MIDI to CV Converter
@@ -109,6 +110,7 @@
 - [Comment](#comment) - Documentation Node
 - [Recorder](#recorder) - Audio Recording to File
 - [VST Host](#vst-host) - VST Plugin Host
+- [BPM Monitor](#bpm-monitor) - Rhythm Detection and BPM Reporting
 
 ---
 
@@ -1473,6 +1475,73 @@ Records and plays back drawn gestures as CV sequences.
 
 ---
 
+### Timeline
+**Automation Recorder and Playback**
+
+A transport-synchronized automation recorder that captures and plays back CV, Gate, Trigger, and Raw signals with sample-accurate precision. The Timeline Node serves as the single source of truth for temporal automation in the modular synthesizer.
+
+**Inputs (Dynamic):**
+- `[Channel Name] In` (CV) - One input per automation channel (up to 32 channels)
+
+**Outputs (Dynamic):**
+- `[Channel Name] Out` (CV) - One output per automation channel (up to 32 channels)
+
+**Parameters:**
+- `Record` (Bool) - Enable recording mode (mutually exclusive with Play)
+- `Play` (Bool) - Enable playback mode (mutually exclusive with Record)
+- `Add Channel` (Button) - Create a new automation channel
+- `Remove Channel` (Button) - Remove the last automation channel
+
+**Auto-Connect Shortcuts:**
+- **B (CV)**: Chain automation outputs to CV modulation inputs
+- **Y (Gate)**: Chain gate/trigger outputs to gate inputs
+- **R (Raw)**: Chain raw value outputs
+
+**How to Use:**
+1. **Setup Channels:**
+   - Click "Add Channel" to create automation channels
+   - Each channel can record a separate signal (CV, Gate, Trigger, or Raw)
+   - Channels are automatically named (e.g., "Channel 1", "Channel 2")
+   
+2. **Recording:**
+   - Connect signals you want to record to the Timeline's input pins
+   - Click the "● REC" button to enable recording
+   - Start the global transport (Tempo Clock)
+   - The Timeline records keyframes with sample-accurate timing
+   - Recording automatically detects value changes (only stores new keyframes when values change)
+   - Click "● REC" again to stop recording
+   
+3. **Playback:**
+   - Click the "▶ PLAY" button to enable playback
+   - Start the global transport
+   - The Timeline plays back recorded automation, interpolating between keyframes
+   - Playback is sample-accurate and synchronized to the global tempo
+   
+4. **Visualization:**
+   - Select a channel from the list to view its keyframes
+   - A waveform plot shows the recorded automation curve
+   - The UI displays the current playback position in Bar:Beat:Tick format
+   
+5. **Persistence:**
+   - Automation data is automatically saved with presets
+   - All channels and keyframes are preserved when saving/loading patches
+   
+6. **Tips:**
+   - Use multiple channels to record different parameters simultaneously
+   - Record is mutually exclusive with Play - switch modes as needed
+   - The Timeline passes through signals when neither Record nor Play is active (zero-latency monitoring)
+   - Great for creating complex automation that syncs perfectly to tempo
+
+**Technical Details:**
+- Synchronized with global `TransportState` (from Tempo Clock)
+- Sample-accurate keyframe recording and playback
+- Linear interpolation between keyframes during playback
+- Thread-safe data access (audio thread + UI thread)
+- XML persistence via `getExtraStateTree()` / `setExtraStateTree()`
+- Dynamic I/O pins based on number of automation channels
+
+---
+
 ## 6. MIDI NODES
 
 MIDI nodes handle MIDI input/output and conversion to CV.
@@ -1721,11 +1790,11 @@ Computer vision nodes process video for audio/CV generation.
 Captures video from webcam and publishes a `Source ID` for vision processing modules.
 
 **Outputs:**
-- `Source ID` (Raw) - Video source identifier
+- `Source ID` (Video) - Video source identifier
 
 **Auto-Connect Shortcuts:**
-- **R (Raw)**: Connect `Source ID` to any `Source In` (Raw) input on CV modules (e.g., Movement/Human/Object/Color/Pose/Hand/Face/Contour/Segmentation).
-- Other chaining keys (**C/G/B/Y**) generally not applicable for this node.
+- **V (Video)**: Connect `Source ID` to any `Source In` (Video) input on vision processing modules (e.g., Movement/Human/Object/Color/Pose/Hand/Face/Contour/Segmentation).
+- Other chaining keys (**C/G/B/Y/R**) not applicable for this node.
 
 ---
 
@@ -1735,11 +1804,11 @@ Captures video from webcam and publishes a `Source ID` for vision processing mod
 Loads and plays video files; publishes a `Source ID` for vision processing modules.
 
 **Outputs:**
-- `Source ID` (Raw) - Video source identifier
+- `Source ID` (Video) - Video source identifier
 
 **Auto-Connect Shortcuts:**
-- **R (Raw)**: Connect `Source ID` to any `Source In` (Raw) input on CV modules.
-- Other chaining keys (**C/G/B/Y**) generally not applicable for this node.
+- **V (Video)**: Connect `Source ID` to any `Source In` (Video) input on vision processing modules.
+- Other chaining keys (**C/G/B/Y/R**) not applicable for this node.
 
 ---
 
@@ -1749,7 +1818,7 @@ Loads and plays video files; publishes a `Source ID` for vision processing modul
 Analyzes video for motion via optical flow or background subtraction.
 
 **Inputs:**
-- `Source In` (Raw) - Video source ID
+- `Source In` (Video) - Video source ID
 
 **Outputs:**
 - `Motion X` (CV), `Motion Y` (CV) - Motion vector components
@@ -1757,7 +1826,7 @@ Analyzes video for motion via optical flow or background subtraction.
 - `Trigger` (Gate) - Trigger on significant motion
 
 **Auto-Connect Shortcuts:**
-- **R (Raw)**: Connect loader `Source ID` → `Source In`.
+- **V (Video)**: Connect loader `Source ID` → `Source In`.
 - **B (CV)**: Chain `Motion X/Y/Amount` to CV destinations.
 - **Y (Gate)**: Chain `Trigger` to gate inputs.
 
@@ -1775,7 +1844,7 @@ Analyzes video for motion via optical flow or background subtraction.
 Detects faces or bodies in video via Haar Cascades or HOG.
 
 **Inputs:**
-- `Source In` (Raw) - Video source ID
+- `Source In` (Video) - Video source ID
 
 **Outputs:**
 - `X` (CV), `Y` (CV) - Center position
@@ -1783,7 +1852,7 @@ Detects faces or bodies in video via Haar Cascades or HOG.
 - `Gate` (Gate) - High when person detected
 
 **Auto-Connect Shortcuts:**
-- **R (Raw)**: Connect loader `Source ID` → `Source In`.
+- **V (Video)**: Connect loader `Source ID` → `Source In`.
 - **B (CV)**: Chain X/Y/Width/Height to CV inputs.
 - **Y (Gate)**: Chain `Gate` to gate inputs.
 
@@ -1801,13 +1870,13 @@ Detects faces or bodies in video via Haar Cascades or HOG.
 Uses OpenPose MPI model to detect 15 body keypoints. Outputs 30 CV pins programmatically (X/Y for each keypoint).
 
 **Inputs:**
-- `Source In` (Raw) - Video source ID from webcam or video file loader
+- `Source In` (Video) - Video source ID from webcam or video file loader
 
 **Outputs (dynamic/programmatic):**
 - `Head X/Y`, `Neck X/Y`, `R Shoulder X/Y`, `R Elbow X/Y`, `R Wrist X/Y`, `L Shoulder X/Y`, `L Elbow X/Y`, `L Wrist X/Y`, `R Hip X/Y`, `R Knee X/Y`, `R Ankle X/Y`, `L Hip X/Y`, `L Knee X/Y`, `L Ankle X/Y`, `Chest X/Y` (all CV)
 
 **Auto-Connect Shortcuts:**
-- **R (Raw)**: Connect loader `Source ID` → `Source In`.
+- **V (Video)**: Connect loader `Source ID` → `Source In`.
 - **B (CV)**: Chain any keypoint X/Y outputs to CV targets.
 
 **Parameters:**
@@ -1858,13 +1927,13 @@ Uses OpenPose MPI model to detect 15 body keypoints. Outputs 30 CV pins programm
 Uses OpenPose hand model to detect 21 hand keypoints. Outputs 42 CV pins (X/Y per keypoint).
 
 **Inputs:**
-- `Source In` (Raw) - Video source ID
+- `Source In` (Video) - Video source ID
 
 **Outputs (dynamic/programmatic):**
 - `Wrist X/Y`, `Thumb 1-4 X/Y`, `Index 1-4 X/Y`, `Middle 1-4 X/Y`, `Ring 1-4 X/Y`, `Pinky 1-4 X/Y` (all CV)
 
 **Auto-Connect Shortcuts:**
-- **R (Raw)**: Connect loader `Source ID` → `Source In`.
+- **V (Video)**: Connect loader `Source ID` → `Source In`.
 - **B (CV)**: Chain any keypoint X/Y outputs to CV targets.
 
 **Parameters:**
@@ -1899,13 +1968,13 @@ Uses OpenPose hand model to detect 21 hand keypoints. Outputs 42 CV pins (X/Y pe
 Uses OpenPose face model to detect 70 facial landmarks. Outputs 140 CV pins (X/Y per point).
 
 **Inputs:**
-- `Source In` (Raw) - Video source ID
+- `Source In` (Video) - Video source ID
 
 **Outputs (dynamic/programmatic):**
 - `Pt 1-70 X/Y` (CV) - Landmark positions
 
 **Auto-Connect Shortcuts:**
-- **R (Raw)**: Connect loader `Source ID` → `Source In`.
+- **V (Video)**: Connect loader `Source ID` → `Source In`.
 - **B (CV)**: Chain landmark X/Y outputs to CV targets.
 
 **Parameters:**
@@ -1940,7 +2009,7 @@ Uses OpenPose face model to detect 70 facial landmarks. Outputs 140 CV pins (X/Y
 Uses YOLOv3 deep learning model to detect objects from 80 COCO classes (person, car, bottle, etc.) in real-time video.
 
 **Inputs:**
-- `Source In` (Raw) - Video source ID
+- `Source In` (Video) - Video source ID
 
 **Outputs:**
 - `X` (CV) - Center X position (0-1)
@@ -1950,7 +2019,7 @@ Uses YOLOv3 deep learning model to detect objects from 80 COCO classes (person, 
 - `Gate` (Gate) - High when target detected
 
 **Auto-Connect Shortcuts:**
-- **R (Raw)**: Connect loader `Source ID` → `Source In`.
+- **V (Video)**: Connect loader `Source ID` → `Source In`.
 - **B (CV)**: Chain X/Y/Width/Height to CV inputs.
 - **Y (Gate)**: Chain `Gate` to gate inputs.
 
@@ -1989,7 +2058,7 @@ Uses YOLOv3 deep learning model to detect objects from 80 COCO classes (person, 
 Tracks multiple custom colors in video using HSV color space. Outputs are dynamic: each added color creates three CV outputs.
 
 **Inputs:**
-- `Source In` (Raw) - Video source ID
+- `Source In` (Video) - Video source ID
 
 **Outputs (dynamic):**
 - For each tracked color:
@@ -1998,7 +2067,7 @@ Tracks multiple custom colors in video using HSV color space. Outputs are dynami
   - `[Color] Area` (CV) - Covered area (0-1)
 
 **Auto-Connect Shortcuts:**
-- **R (Raw)**: Connect loader `Source ID` → `Source In`.
+- **V (Video)**: Connect loader `Source ID` → `Source In`.
 - **B (CV)**: Chain per-color X/Y/Area to CV inputs.
 
 **Parameters:**
@@ -2035,7 +2104,7 @@ Tracks multiple custom colors in video using HSV color space. Outputs are dynami
 Detects shapes and their properties using background subtraction and contour analysis.
 
 **Inputs:**
-- `Source In` (Raw) - Video source ID
+- `Source In` (Video) - Video source ID
 
 **Outputs:**
 - `Area` (CV) - Detected shape area (0-1)
@@ -2043,7 +2112,7 @@ Detects shapes and their properties using background subtraction and contour ana
 - `Aspect Ratio` (CV) - Width/height ratio
 
 **Auto-Connect Shortcuts:**
-- **R (Raw)**: Connect loader `Source ID` → `Source In`.
+- **V (Video)**: Connect loader `Source ID` → `Source In`.
 - **B (CV)**: Chain outputs to CV inputs.
 
 **Parameters:**
@@ -2079,7 +2148,7 @@ Detects shapes and their properties using background subtraction and contour ana
 Uses semantic segmentation (ENet or DeepLabV3) to identify a target class and output region properties.
 
 **Inputs:**
-- `Source In` (Raw) - Video source ID
+- `Source In` (Video) - Video source ID
 
 **Outputs:**
 - `Area` (CV) - Frame coverage of target class (0-1)
@@ -2088,7 +2157,7 @@ Uses semantic segmentation (ENet or DeepLabV3) to identify a target class and ou
 - `Gate` (Gate) - High when target detected
 
 **Auto-Connect Shortcuts:**
-- **R (Raw)**: Connect loader `Source ID` → `Source In`.
+- **V (Video)**: Connect loader `Source ID` → `Source In`.
 - **B (CV)**: Chain Area and Center outputs to CV targets.
 - **Y (Gate)**: Chain `Gate` to gate inputs.
 
@@ -2197,6 +2266,86 @@ Hosts VST2/VST3 plugins within the modular environment.
 
 ---
 
+### BPM Monitor
+**Rhythm Detection and BPM Reporting**
+
+A hybrid smart system that automatically detects and reports BPM from rhythm-producing modules and audio inputs. This node is always present in patches (like the output node) and cannot be deleted. It dynamically generates output pins for each detected rhythm source.
+
+**Inputs (Dynamic):**
+- `In 1-16` (Audio) - Audio inputs for beat detection (up to 16 channels)
+
+**Outputs (Dynamic):**
+- For each detected rhythm source:
+  - `[Source Name] BPM` (Raw) - Absolute BPM value
+  - `[Source Name] CV` (CV) - Normalized BPM (0-1 range for modulation)
+  - `[Source Name] Active` (Gate) - High when source is active (for introspected sources)
+  - `[Source Name] Confidence` (CV) - Detection confidence (0-1, for detected sources)
+
+**Parameters:**
+- `Operation Mode` (Choice) - Auto (both methods), Introspection Only, or Detection Only
+- `Min BPM` (20-120) - Minimum BPM for normalization (default: 60)
+- `Max BPM` (120-300) - Maximum BPM for normalization (default: 240)
+
+**Auto-Connect Shortcuts:**
+- **B (CV)**: Chain `[Source] CV` outputs to CV modulation inputs
+- **Y (Gate)**: Chain `[Source] Active` outputs to gate inputs
+- **R (Raw)**: Chain `[Source] BPM` outputs to raw value inputs
+- **G (Audio)**: Connect audio sources to beat detection inputs
+
+**How to Use:**
+1. **Operation Modes:**
+   - **Auto**: Uses both introspection (fast) and beat detection (universal)
+   - **Introspection Only**: Only scans modules that report rhythm info (sequencers, animations)
+   - **Detection Only**: Only analyzes audio inputs using tap tempo algorithm
+   
+2. **Introspection (Recommended):**
+   - Automatically detects modules that implement `getRhythmInfo()`
+   - Works with: Sequencer, Step Sequencer, Animation, Physics, and other rhythm-producing modules
+   - Provides instant, accurate BPM reporting
+   - Scans the graph periodically (every 128 audio blocks for efficiency)
+   
+3. **Beat Detection (Fallback):**
+   - Connect any rhythmic audio signal to the inputs
+   - Uses tap tempo algorithm with rolling average
+   - Works with external audio, VST plugins, or any rhythmic source
+   - Outputs confidence level indicating detection stability
+   
+4. **Using Outputs:**
+   - Each detected source generates three outputs:
+     - **BPM (Raw)**: Absolute BPM value (e.g., 120.0)
+     - **CV**: Normalized 0-1 range for modulation (scaled by Min/Max BPM parameters)
+     - **Active/Confidence**: Gate for introspected sources, confidence CV for detected sources
+   
+5. **Example Patches:**
+   - **Sync Effects to Sequencer**: Connect Sequencer → BPM Monitor, use `CV` output to modulate delay time
+   - **Beat-Synchronized LFO**: Use `CV` output to sync LFO rate to detected BPM
+   - **Multi-Source Tempo**: Monitor multiple sequencers and select the most appropriate one
+   - **External Tempo Sync**: Connect audio input from external source, use detected BPM to sync your patch
+   
+6. **Tips:**
+   - Introspection mode is fastest and most accurate for compatible modules
+   - Beat detection works with any rhythmic source but may have latency
+   - Use Min/Max BPM parameters to set the CV output range for your modulation needs
+   - The node automatically updates when new rhythm sources appear or disappear
+
+**Technical Details:**
+- Hybrid detection: introspection (via `getRhythmInfo()`) + audio analysis (TapTempo algorithm)
+- Graph scanning runs every 128 audio blocks (~2.9ms at 44.1kHz) for efficiency
+- Thread-safe access to detected sources (protects dynamic pin queries)
+- Dynamic output pins generated based on detected sources
+- Always present (logical ID 999, undeletable)
+- Supports up to 16 audio detection inputs
+
+**Supported Introspection Sources:**
+- Sequencer (reports BPM when active)
+- Step Sequencer (reports BPM when running)
+- Animation (reports BPM based on animation speed and duration)
+- Physics (can report rhythm from collision events)
+- Other modules implementing `getRhythmInfo()`
+
+---
+
+
 ## Glossary
 
 **CV (Control Voltage):** A signal (typically 0-1 or -1 to +1) used to modulate parameters.
@@ -2209,6 +2358,8 @@ Hosts VST2/VST3 plugins within the modular environment.
 
 **Raw:** Unscaled numerical values for custom ranges.
 
+**Video:** Video source identifier for computer vision processing.
+
 **V/Oct:** Volt-per-octave pitch CV standard (1 semitone = 1/12 V).
 
 **Relative Modulation:** CV modulates around a slider position (musical/proportional).
@@ -2218,6 +2369,23 @@ Hosts VST2/VST3 plugins within the modular environment.
 **Bipolar:** Signal range from -1 to +1 (centered at 0).
 
 **Unipolar:** Signal range from 0 to 1.
+
+---
+
+## Keyboard Shortcuts for Auto-Connection
+
+When multiple nodes are selected, use these keys to chain them by data type:
+
+| Key | Data Type | Color | Use Case |
+|-----|-----------|-------|----------|
+| **C** | Standard Chaining | White | Stereo audio chain (channels 0→0, 1→1) |
+| **G** | Audio | Green | Audio effects chain |
+| **B** | CV (Control Voltage) | Blue | CV signal chain |
+| **Y** | Gate | Yellow | Gate/trigger chain |
+| **R** | Raw | Red | Raw value chain |
+| **V** | Video | Cyan | Video source chain (webcam/video → CV modules) |
+
+**Note:** Auto-connection shortcuts only work when 2+ nodes are selected.
 
 ---
 

@@ -48,6 +48,7 @@ void populateModuleDescriptions()
     descriptions["recorder"] = "Records incoming audio to a WAV, AIFF, or FLAC file.";
     descriptions["tempo_clock"] = "Global clock generator with BPM control, transport, and clock outputs.";
     descriptions["bpm_monitor"] = "Monitors and reports BPM from rhythm-producing modules (sequencers, animations). Always present and undeletable.";
+    descriptions["timeline"] = "Transport-synchronized automation recorder with sample-accurate timing for CV, Gate, Trigger, and Raw signals.";
     // Modulators
     descriptions["LFO"] = "A Low-Frequency Oscillator for modulation.";
     descriptions["ADSR"] = "An Attack-Decay-Sustain-Release envelope generator.";
@@ -951,6 +952,14 @@ db["random"] = ModulePinInfo(
         }
     );
 
+    // Timeline - Uses dynamic pins based on automation channels
+    db["timeline"] = ModulePinInfo(
+        NodeWidth::Big,
+        {}, // Dynamic inputs defined by module (one per automation channel)
+        {}, // Dynamic outputs defined by module (one per automation channel)
+        {}
+    );
+
     // BPM Monitor - Uses dynamic pins based on detected rhythm sources
     db["bpm_monitor"] = ModulePinInfo(
         NodeWidth::Big,
@@ -971,7 +980,7 @@ db["random"] = ModulePinInfo(
         NodeWidth::Exception, // Custom size for video display
         {}, // No inputs
         { 
-            AudioPin("Source ID", 0, PinDataType::Raw)
+            AudioPin("Source ID", 0, PinDataType::Video)
         },
         {}
     );
@@ -980,7 +989,7 @@ db["random"] = ModulePinInfo(
         NodeWidth::Exception, // Custom size for video display
         {}, // No inputs
         { 
-            AudioPin("Source ID", 0, PinDataType::Raw)
+            AudioPin("Source ID", 0, PinDataType::Video)
         },
         {}
     );
@@ -988,7 +997,7 @@ db["random"] = ModulePinInfo(
     db["movement_detector"] = ModulePinInfo(
         NodeWidth::Medium,
         { 
-            AudioPin("Source In", 0, PinDataType::Raw)
+            AudioPin("Source In", 0, PinDataType::Video)
         },
         { 
             AudioPin("Motion X", 0, PinDataType::CV),
@@ -1002,7 +1011,7 @@ db["random"] = ModulePinInfo(
     db["human_detector"] = ModulePinInfo(
         NodeWidth::Medium,
         { 
-            AudioPin("Source In", 0, PinDataType::Raw)
+            AudioPin("Source In", 0, PinDataType::Video)
         },
         { 
             AudioPin("X", 0, PinDataType::CV),
@@ -1018,7 +1027,7 @@ db["random"] = ModulePinInfo(
     db["object_detector"] = ModulePinInfo(
         NodeWidth::Medium,
         {
-            AudioPin("Source In", 0, PinDataType::Raw)
+            AudioPin("Source In", 0, PinDataType::Video)
         },
         {
             AudioPin("X", 0, PinDataType::CV),
@@ -1034,7 +1043,7 @@ db["random"] = ModulePinInfo(
     db["color_tracker"] = ModulePinInfo(
         NodeWidth::Exception, // custom node width with zoom
         {
-            AudioPin("Source In", 0, PinDataType::Raw)
+            AudioPin("Source In", 0, PinDataType::Video)
         },
         {},
         {}
@@ -1043,7 +1052,7 @@ db["random"] = ModulePinInfo(
     // Pose Estimator: 15 keypoints x 2 coordinates = 30 output pins
     db["pose_estimator"] = ModulePinInfo();
     db["pose_estimator"].defaultWidth = NodeWidth::Exception; // Custom size with zoom support
-    db["pose_estimator"].audioIns.emplace_back("Source In", 0, PinDataType::Raw);
+    db["pose_estimator"].audioIns.emplace_back("Source In", 0, PinDataType::Video);
     // Programmatically add all 30 output pins (15 keypoints x 2 coordinates)
     const std::vector<std::string> keypointNames = {
         "Head", "Neck", "R Shoulder", "R Elbow", "R Wrist",
@@ -1059,7 +1068,7 @@ db["random"] = ModulePinInfo(
     // Hand Tracker: 21 keypoints x 2 = 42 outs
     db["hand_tracker"] = ModulePinInfo();
     db["hand_tracker"].defaultWidth = NodeWidth::Exception;
-    db["hand_tracker"].audioIns.emplace_back("Source In", 0, PinDataType::Raw);
+    db["hand_tracker"].audioIns.emplace_back("Source In", 0, PinDataType::Video);
     const char* handNames[21] = {
         "Wrist",
         "Thumb 1","Thumb 2","Thumb 3","Thumb 4",
@@ -1077,7 +1086,7 @@ db["random"] = ModulePinInfo(
     // Face Tracker: 70 * 2 = 140 outs
     db["face_tracker"] = ModulePinInfo();
     db["face_tracker"].defaultWidth = NodeWidth::Exception;
-    db["face_tracker"].audioIns.emplace_back("Source In", 0, PinDataType::Raw);
+    db["face_tracker"].audioIns.emplace_back("Source In", 0, PinDataType::Video);
     for (int i=0;i<70;++i)
     {
         std::string base = std::string("Pt ") + std::to_string(i+1);
@@ -1093,7 +1102,7 @@ db["random"] = ModulePinInfo(
     // Contour Detector: 1 input, 3 outputs
     db["contour_detector"] = ModulePinInfo(
         NodeWidth::Medium,
-        { AudioPin("Source In", 0, PinDataType::Raw) },
+        { AudioPin("Source In", 0, PinDataType::Video) },
         { AudioPin("Area", 0, PinDataType::CV), AudioPin("Complexity", 1, PinDataType::CV), AudioPin("Aspect Ratio", 2, PinDataType::CV) },
         {}
     );
@@ -1101,7 +1110,7 @@ db["random"] = ModulePinInfo(
     // Semantic Segmentation: 1 input, 4 outputs (Area, Center X, Center Y, Gate)
     db["semantic_segmentation"] = ModulePinInfo(
         NodeWidth::Medium,
-        { AudioPin("Source In", 0, PinDataType::Raw) },
+        { AudioPin("Source In", 0, PinDataType::Video) },
         { AudioPin("Area", 0, PinDataType::CV), AudioPin("Center X", 1, PinDataType::CV), AudioPin("Center Y", 2, PinDataType::CV), AudioPin("Gate", 3, PinDataType::Gate) },
         {}
     );

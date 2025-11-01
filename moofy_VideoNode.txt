@@ -77,6 +77,7 @@ private:
     // Normalized pending requests (used when totalFrames not ready yet)
     std::atomic<float> pendingSeekNorm { -1.0f };
     std::atomic<float> pendingStartNorm { -1.0f };
+    std::atomic<double> totalDurationMs { 0.0 };
     
     cv::VideoCapture videoCapture;
     juce::CriticalSection captureLock;
@@ -206,6 +207,32 @@ void VideoFileLoaderModule::chooseVideoFile()
 
 void VideoFileLoaderModule::run()
 {
+    // One-time OpenCV build summary: detect if FFMPEG is integrated
+    {
+        static std::atomic<bool> buildInfoLogged { false };
+        if (!buildInfoLogged.exchange(true))
+        {
+            juce::String info(cv::getBuildInformation().c_str());
+            bool ffmpegYes = false;
+            juce::String ffmpegLine;
+            {
+                juce::StringArray lines;
+                lines.addLines(info);
+                for (const auto& ln : lines)
+                {
+                    if (ln.containsIgnoreCase("FFMPEG:"))
+                    {
+                        ffmpegLine = ln.trim();
+                        if (ln.containsIgnoreCase("YES")) ffmpegYes = true;
+                        break;
+                    }
+                }
+            }
+            juce::Logger::writeToLog("[OpenCV Build] FFMPEG integrated: " + juce::String(ffmpegYes ? "YES" : "NO") +
+                                     (ffmpegLine.isNotEmpty() ? juce::String(" | ") + ffmpegLine : juce::String()));
+        }
+    }
+
     bool sourceIsOpen = false;
     double videoFps = 30.0; // Default FPS
     double frameDurationMs = 33.0; // Default to ~30fps
@@ -220,12 +247,23 @@ void VideoFileLoaderModule::run()
                 videoCapture.release();
             }
             
-            if (videoCapture.open(videoFileToLoad.getFullPathName().toStdString()))
+            bool opened = videoCapture.open(videoFileToLoad.getFullPathName().toStdString(), cv::CAP_FFMPEG);
+            if (!opened)
+            {
+                juce::Logger::writeToLog("[VideoFileLoader] FFmpeg backend open failed, retrying default backend: " + videoFileToLoad.getFullPathName());
+                opened = videoCapture.open(videoFileToLoad.getFullPathName().toStdString());
+            }
+            if (opened)
             {
                 currentVideoFile = videoFileToLoad;
                 videoFileToLoad = juce::File{}; // Clear request immediately after processing
                 sourceIsOpen = true;
                 needPreviewFrame.store(true);
+                // Log backend name (helps diagnose FFmpeg vs MSMF at runtime)
+               #if (CV_VERSION_MAJOR >= 4)
+                juce::String backendName = videoCapture.getBackendName().c_str();
+                juce::Logger::writeToLog("[VideoFileLoader] Backend: " + backendName);
+               #endif
                 // Reset state for new media, but keep user-defined in/out ranges
                 totalFrames.store(0); // force re-evaluation
                 lastPosFrame.store(0);
@@ -235,11 +273,26 @@ void VideoFileLoaderModule::run()
                 videoFps = videoCapture.get(cv::CAP_PROP_FPS);
                 lastFourcc.store((int) videoCapture.get(cv::CAP_PROP_FOURCC));
                 {
+                    // Backend and raw FOURCC diagnostics
+                    #if CV_VERSION_MAJOR >= 4
+                    const std::string backendName = videoCapture.getBackendName();
+                    juce::Logger::writeToLog("[VideoFileLoader] Backend: " + juce::String(backendName.c_str()));
+                    #endif
+                    const int fourccRaw = lastFourcc.load();
+                    juce::Logger::writeToLog("[VideoFileLoader] Metadata: FPS=" + juce::String(videoFps,2) +
+                                             ", Raw FOURCC=" + juce::String(fourccRaw) +
+                                             " ('" + fourccToString(fourccRaw) + "')");
+                }
+                {
                     int tf = (int) videoCapture.get(cv::CAP_PROP_FRAME_COUNT);
                     if (tf <= 1) tf = 0; // treat unknown/invalid as 0 so UI uses normalized seeks
                     totalFrames.store(tf);
                     juce::Logger::writeToLog("[VideoFileLoader] Opened '" + currentVideoFile.getFileName() + "' frames=" + juce::String(tf) +
                                              ", fps=" + juce::String(videoFps,2) + ", fourcc='" + fourccToString(lastFourcc.load()) + "'");
+                    if (tf > 1 && videoFps > 0.0)
+                        totalDurationMs.store((double)tf * (1000.0 / videoFps));
+                    else
+                        totalDurationMs.store(0.0);
                 }
                 if (videoFps > 0.0 && videoFps < 1000.0) // Sanity check
                 {
@@ -270,11 +323,21 @@ void VideoFileLoaderModule::run()
         // Apply any pending seeks (UI-driven) before processing
         int tfLocal = totalFrames.load();
         {
-            // 1) If we have a normalized pending seek and frames are now known, convert
+            // 1) If we have a normalized pending seek, prefer time-based seek when duration is known
             float pendingNorm = pendingSeekNorm.exchange(-1.0f);
             if (pendingNorm >= 0.0f)
             {
-                if (tfLocal > 1)
+                const double durMs = totalDurationMs.load();
+                if (durMs > 0.0)
+                {
+                    double seekToMs = juce::jlimit(0.0, durMs, (double)pendingNorm * durMs);
+                    const juce::ScopedLock capLock(captureLock);
+                    if (videoCapture.isOpened())
+                        videoCapture.set(cv::CAP_PROP_POS_MSEC, seekToMs);
+                    needPreviewFrame.store(true);
+                    juce::Logger::writeToLog("[VideoFileLoader][Seek] Applied normalized seek via MSEC=" + juce::String(seekToMs));
+                }
+                else if (tfLocal > 1)
                 {
                     int toFrame = (int) std::round(juce::jlimit(0.0f, 1.0f, pendingNorm) * (tfLocal - 1));
                     pendingSeekFrame.store(toFrame);
@@ -285,7 +348,7 @@ void VideoFileLoaderModule::run()
                     if (videoCapture.isOpened())
                         videoCapture.set(cv::CAP_PROP_POS_AVI_RATIO, juce::jlimit(0.0, 1.0, (double) pendingNorm));
                     needPreviewFrame.store(true);
-                    juce::Logger::writeToLog("[VideoFileLoader][Seek] Applied normalized seek ratio=" + juce::String(pendingNorm, 3));
+                    juce::Logger::writeToLog("[VideoFileLoader][Seek] WARNING ratio seek");
                 }
             }
 
@@ -293,7 +356,17 @@ void VideoFileLoaderModule::run()
             float pendingStart = pendingStartNorm.exchange(-1.0f);
             if (pendingStart >= 0.0f)
             {
-                if (tfLocal > 1)
+                const double durMs = totalDurationMs.load();
+                if (durMs > 0.0)
+                {
+                    double seekToMs = juce::jlimit(0.0, durMs, (double)pendingStart * durMs);
+                    const juce::ScopedLock capLock(captureLock);
+                    if (videoCapture.isOpened())
+                        videoCapture.set(cv::CAP_PROP_POS_MSEC, seekToMs);
+                    needPreviewFrame.store(true);
+                    juce::Logger::writeToLog("[VideoFileLoader][Seek] Applied normalized start via MSEC=" + juce::String(seekToMs));
+                }
+                else if (tfLocal > 1)
                 {
                     int inF = (int) std::round(juce::jlimit(0.0f, 1.0f, pendingStart) * (tfLocal - 1));
                     pendingSeekFrame.store(inF);
@@ -315,7 +388,16 @@ void VideoFileLoaderModule::run()
         if (nowPlaying && !wasPlaying)
         {
             float inN = inNormParam ? inNormParam->load() : 0.0f;
-            if (tfLocal > 1)
+            const double durMs = totalDurationMs.load();
+            if (durMs > 0.0)
+            {
+                double seekToMs = juce::jlimit(0.0, durMs, (double)inN * durMs);
+                const juce::ScopedLock capLock(captureLock);
+                if (videoCapture.isOpened())
+                    videoCapture.set(cv::CAP_PROP_POS_MSEC, seekToMs);
+                juce::Logger::writeToLog("[VideoFileLoader][PlayEdge] Seeking to in(ms)=" + juce::String(seekToMs));
+            }
+            else if (tfLocal > 1)
             {
                 int inF = juce::jlimit(0, juce::jmax(1, tfLocal) - 1, (int) std::round(inN * (tfLocal - 1)));
                 pendingSeekFrame.store(inF);
@@ -399,6 +481,8 @@ void VideoFileLoaderModule::run()
                 if (tf > 1)
                 {
                     totalFrames.store(tf);
+                    if (videoFps > 0.0)
+                        totalDurationMs.store((double)tf * (1000.0 / videoFps));
                     juce::Logger::writeToLog("[VideoFileLoader] Frame count acquired after playing read: " + juce::String(tf));
                 }
             }
@@ -11830,6 +11914,4151 @@ void ImGuiNodeEditorComponent::mergePresetFromFile(const juce::File& file, ImVec
 
 
 ================================================================================
+FILE: juce\\Source\\audio\\modules\\WebcamLoaderModule.h
+================================================================================
+
+
+#pragma once
+
+#include "ModuleProcessor.h"
+#include <opencv2/core.hpp>
+#include <opencv2/videoio.hpp>
+#include <juce_core/juce_core.h>
+#include <juce_audio_processors/juce_audio_processors.h>
+#include <juce_graphics/juce_graphics.h>
+
+/**
+ * Source node that captures from a webcam and publishes frames to VideoFrameManager.
+ * Outputs its own logical ID as a CV signal for routing to processing nodes.
+ */
+class WebcamLoaderModule : public ModuleProcessor, private juce::Thread
+{
+public:
+    WebcamLoaderModule();
+    ~WebcamLoaderModule() override;
+
+    const juce::String getName() const override { return "webcam_loader"; }
+    
+    void prepareToPlay(double sampleRate, int samplesPerBlock) override;
+    void releaseResources() override;
+    void processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midi) override;
+    
+    juce::AudioProcessorValueTreeState& getAPVTS() override { return apvts; }
+
+    // For UI: get latest frame for preview
+    juce::Image getLatestFrame();
+
+#if defined(PRESET_CREATOR_UI)
+    void drawParametersInNode(float itemWidth,
+                              const std::function<bool(const juce::String& paramId)>& isParamModulated,
+                              const std::function<void()>& onModificationEnded) override;
+    void drawIoPins(const NodePinHelpers& helpers) override;
+    
+    // Override to specify custom node width. Height is calculated dynamically based on video aspect ratio.
+    // Width changes based on zoom level (Small=240px, Normal=480px, Large=960px).
+    ImVec2 getCustomNodeSize() const override;
+#endif
+
+private:
+    void run() override;
+    void updateGuiFrame(const cv::Mat& frame);
+    
+    static juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout();
+    juce::AudioProcessorValueTreeState apvts;
+    
+    std::atomic<float>* cameraIndexParam = nullptr;
+    // 0 = Small (240), 1 = Normal (480), 2 = Large (960)
+    std::atomic<float>* zoomLevelParam = nullptr;
+    
+    cv::VideoCapture videoCapture;
+    juce::Image latestFrameForGui;
+    juce::CriticalSection imageLock;
+    
+    juce::StringArray availableCameraNames;
+};
+
+
+
+================================================================================
+FILE: juce\\Source\\audio\\modules\\WebcamLoaderModule.cpp
+================================================================================
+
+
+#include "WebcamLoaderModule.h"
+#include "../../video/VideoFrameManager.h"
+#include <opencv2/imgproc.hpp>
+
+#if defined(PRESET_CREATOR_UI)
+#include <imgui.h>
+#endif
+
+juce::AudioProcessorValueTreeState::ParameterLayout WebcamLoaderModule::createParameterLayout()
+{
+    std::vector<std::unique_ptr<juce::RangedAudioParameter>> params;
+    
+    params.push_back(std::make_unique<juce::AudioParameterInt>("cameraIndex", "Camera Index", 0, 3, 0));
+    params.push_back(std::make_unique<juce::AudioParameterChoice>(
+        "zoomLevel", "Zoom Level", juce::StringArray{ "Small", "Normal", "Large" }, 1));
+    
+    return { params.begin(), params.end() };
+}
+
+WebcamLoaderModule::WebcamLoaderModule()
+    : ModuleProcessor(BusesProperties()
+                     .withOutput("Output", juce::AudioChannelSet::mono(), true)),
+      juce::Thread("Webcam Loader Thread"),
+      apvts(*this, nullptr, "WebcamLoaderParams", createParameterLayout())
+{
+    cameraIndexParam = apvts.getRawParameterValue("cameraIndex");
+    zoomLevelParam = apvts.getRawParameterValue("zoomLevel");
+    
+    // Enumerate available cameras with resolution info
+    for (int i = 0; i < 10; ++i) // Check first 10 camera indices
+    {
+        cv::VideoCapture tempCap(i);
+        if (tempCap.isOpened())
+        {
+            int width = (int)tempCap.get(cv::CAP_PROP_FRAME_WIDTH);
+            int height = (int)tempCap.get(cv::CAP_PROP_FRAME_HEIGHT);
+            
+            juce::String cameraName = "Camera " + juce::String(i);
+            if (width > 0 && height > 0)
+            {
+                cameraName += " (" + juce::String(width) + "x" + juce::String(height) + ")";
+            }
+            
+            availableCameraNames.add(cameraName);
+            tempCap.release();
+        }
+    }
+    
+    if (availableCameraNames.isEmpty())
+    {
+        availableCameraNames.add("No cameras found");
+    }
+    
+    juce::Logger::writeToLog("[WebcamLoader] Found " + juce::String(availableCameraNames.size()) + " camera(s)");
+}
+
+WebcamLoaderModule::~WebcamLoaderModule()
+{
+    stopThread(5000);
+    VideoFrameManager::getInstance().removeSource(getLogicalId());
+}
+
+void WebcamLoaderModule::prepareToPlay(double sampleRate, int samplesPerBlock)
+{
+    startThread(juce::Thread::Priority::normal);
+}
+
+void WebcamLoaderModule::releaseResources()
+{
+    signalThreadShouldExit();
+}
+
+void WebcamLoaderModule::run()
+{
+    int currentCameraIndex = -1;
+    
+    while (!threadShouldExit())
+    {
+        int requestedIndex = (int)cameraIndexParam->load();
+        
+        // If camera changed or is not open, try to open it
+        if (requestedIndex != currentCameraIndex || !videoCapture.isOpened())
+        {
+            if (videoCapture.isOpened())
+            {
+                videoCapture.release();
+            }
+            
+            if (videoCapture.open(requestedIndex))
+            {
+                currentCameraIndex = requestedIndex;
+                juce::Logger::writeToLog("[WebcamLoader] Opened camera " + juce::String(requestedIndex));
+            }
+            else
+            {
+                wait(500);
+                continue;
+            }
+        }
+        
+        cv::Mat frame;
+        if (videoCapture.read(frame))
+        {
+            // Publish frame to central manager using this module's logical ID
+            VideoFrameManager::getInstance().setFrame(getLogicalId(), frame);
+            
+            // Update local preview for UI
+            updateGuiFrame(frame);
+        }
+        else
+        {
+            // Lost camera connection
+            videoCapture.release();
+            currentCameraIndex = -1;
+        }
+        
+        wait(33); // ~30 FPS
+    }
+    
+    videoCapture.release();
+    VideoFrameManager::getInstance().removeSource(getLogicalId());
+}
+
+void WebcamLoaderModule::updateGuiFrame(const cv::Mat& frame)
+{
+    cv::Mat bgraFrame;
+    cv::cvtColor(frame, bgraFrame, cv::COLOR_BGR2BGRA);
+    
+    const juce::ScopedLock lock(imageLock);
+    
+    if (latestFrameForGui.isNull() || 
+        latestFrameForGui.getWidth() != bgraFrame.cols || 
+        latestFrameForGui.getHeight() != bgraFrame.rows)
+    {
+        latestFrameForGui = juce::Image(juce::Image::ARGB, bgraFrame.cols, bgraFrame.rows, true);
+    }
+    
+    juce::Image::BitmapData destData(latestFrameForGui, juce::Image::BitmapData::writeOnly);
+    memcpy(destData.data, bgraFrame.data, bgraFrame.total() * bgraFrame.elemSize());
+}
+
+juce::Image WebcamLoaderModule::getLatestFrame()
+{
+    const juce::ScopedLock lock(imageLock);
+    return latestFrameForGui.createCopy();
+}
+
+void WebcamLoaderModule::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midi)
+{
+    buffer.clear();
+    
+    // Output this module's logical ID on the "Source ID" pin
+    if (buffer.getNumChannels() > 0)
+    {
+        float sourceId = (float)getLogicalId();
+        for (int sample = 0; sample < buffer.getNumSamples(); ++sample)
+        {
+            buffer.setSample(0, sample, sourceId);
+        }
+    }
+}
+
+#if defined(PRESET_CREATOR_UI)
+ImVec2 WebcamLoaderModule::getCustomNodeSize() const
+{
+    // Return different width based on zoom level (0=240,1=480,2=960)
+    int level = zoomLevelParam ? (int) zoomLevelParam->load() : 1;
+    level = juce::jlimit(0, 2, level);
+    const float widths[3] { 240.0f, 480.0f, 960.0f };
+    return ImVec2(widths[level], 0.0f);
+}
+
+void WebcamLoaderModule::drawParametersInNode(float itemWidth,
+                                              const std::function<bool(const juce::String& paramId)>& isParamModulated,
+                                              const std::function<void()>& onModificationEnded)
+{
+    ImGui::PushItemWidth(itemWidth);
+    
+    // Camera selection with real device names
+    int currentIndex = (int)cameraIndexParam->load();
+    currentIndex = juce::jlimit(0, juce::jmax(0, availableCameraNames.size() - 1), currentIndex);
+    
+    const char* currentCameraName = availableCameraNames[currentIndex].toRawUTF8();
+    if (ImGui::BeginCombo("Camera", currentCameraName))
+    {
+        for (int i = 0; i < availableCameraNames.size(); ++i)
+        {
+            const bool isSelected = (currentIndex == i);
+            if (ImGui::Selectable(availableCameraNames[i].toRawUTF8(), isSelected))
+            {
+                *dynamic_cast<juce::AudioParameterInt*>(apvts.getParameter("cameraIndex")) = i;
+                onModificationEnded();
+            }
+            if (isSelected)
+                ImGui::SetItemDefaultFocus();
+        }
+        ImGui::EndCombo();
+    }
+    
+    ImGui::Separator();
+    
+    // Zoom buttons (+ to increase, - to decrease) across 3 levels
+    int level = zoomLevelParam ? (int) zoomLevelParam->load() : 1;
+    level = juce::jlimit(0, 2, level);
+    float buttonWidth = (itemWidth / 2.0f) - 4.0f;
+    const bool atMin = (level <= 0);
+    const bool atMax = (level >= 2);
+
+    if (atMin) ImGui::BeginDisabled();
+    if (ImGui::Button("-", ImVec2(buttonWidth, 0)))
+    {
+        int newLevel = juce::jmax(0, level - 1);
+        if (auto* p = apvts.getParameter("zoomLevel"))
+            p->setValueNotifyingHost((float)newLevel / 2.0f);
+        onModificationEnded();
+    }
+    if (atMin) ImGui::EndDisabled();
+
+    ImGui::SameLine();
+
+    if (atMax) ImGui::BeginDisabled();
+    if (ImGui::Button("+", ImVec2(buttonWidth, 0)))
+    {
+        int newLevel = juce::jmin(2, level + 1);
+        if (auto* p = apvts.getParameter("zoomLevel"))
+            p->setValueNotifyingHost((float)newLevel / 2.0f);
+        onModificationEnded();
+    }
+    if (atMax) ImGui::EndDisabled();
+    
+    ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1.0f), "Source ID: %d", (int)getLogicalId());
+    
+    ImGui::PopItemWidth();
+}
+
+void WebcamLoaderModule::drawIoPins(const NodePinHelpers& helpers)
+{
+    helpers.drawAudioOutputPin("Source ID", 0);
+}
+#endif
+
+
+
+================================================================================
+FILE: juce\\Source\\audio\\modules\\MovementDetectorModule.h
+================================================================================
+
+
+// juce/Source/audio/modules/MovementDetectorModule.h
+
+#pragma once
+
+#include "ModuleProcessor.h"
+#include <opencv2/core.hpp>
+#include <opencv2/video.hpp>
+#include <juce_core/juce_core.h>
+#include <juce_audio_processors/juce_audio_processors.h>
+#include <juce_graphics/juce_graphics.h>
+
+// 1. Define the real-time safe struct for this module's results.
+struct MovementResult
+{
+    float avgMotionX = 0.0f;     // Average horizontal motion (-1 to 1)
+    float avgMotionY = 0.0f;     // Average vertical motion (-1 to 1)
+    float motionAmount = 0.0f;   // Magnitude of motion or area of detected movement (0 to 1)
+    bool motionTrigger = false;  // A one-shot trigger on significant motion
+};
+
+/**
+ * Processing node that analyzes video from a source node via the VideoFrameManager.
+ * Requires a "Source ID" input connection from a Webcam or Video File Loader.
+ */
+class MovementDetectorModule : public ModuleProcessor, private juce::Thread
+{
+public:
+    MovementDetectorModule();
+    ~MovementDetectorModule() override;
+
+    const juce::String getName() const override { return "movement_detector"; }
+    juce::AudioProcessorValueTreeState& getAPVTS() override { return apvts; }
+    
+    void prepareToPlay(double sampleRate, int samplesPerBlock) override;
+    void releaseResources() override;
+    void processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midi) override;
+    
+    // For UI: get latest annotated frame
+    juce::Image getLatestFrame();
+
+#if defined(PRESET_CREATOR_UI)
+    void drawParametersInNode(float itemWidth,
+                              const std::function<bool(const juce::String& paramId)>& isParamModulated,
+                              const std::function<void()>& onModificationEnded) override;
+    void drawIoPins(const NodePinHelpers& helpers) override;
+    // Allow custom width (Small=240, Normal=480, Large=960)
+    ImVec2 getCustomNodeSize() const override { 
+        int level = zoomLevelParam ? (int) zoomLevelParam->load() : 1; 
+        level = juce::jlimit(0, 2, level); 
+        const float widths[3] { 240.0f, 480.0f, 960.0f }; 
+        return ImVec2(widths[level], 0.0f); 
+    }
+#endif
+
+private:
+    void run() override;
+    void updateGuiFrame(const cv::Mat& frame);
+    MovementResult analyzeFrame(const cv::Mat& inputFrame);
+    
+    static juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout();
+
+    juce::AudioProcessorValueTreeState apvts;
+    std::atomic<float>* modeParam = nullptr;
+    std::atomic<float>* sensitivityParam = nullptr;
+    // 0=Small,1=Normal,2=Large
+    std::atomic<float>* zoomLevelParam = nullptr;
+
+    // NEW: Algorithm-specific tuning parameters
+    juce::AudioParameterInt* maxFeaturesParam = nullptr;
+    juce::AudioParameterInt* pyramidLevelsParam = nullptr;
+    juce::AudioParameterBool* noiseReductionParam = nullptr;
+
+    // State for Optical Flow mode
+    cv::Mat prevGrayFrame;
+    std::vector<cv::Point2f> prevPoints;
+
+    // State for Background Subtraction mode
+    cv::Ptr<cv::BackgroundSubtractorMOG2> pBackSub;
+    
+    // State for trigger generation
+    int triggerSamplesRemaining = 0;
+    
+    // Thread-safe data transfer from video thread to audio thread
+    juce::AbstractFifo fifo { 16 };
+    std::vector<MovementResult> fifoBuffer;
+    MovementResult lastResultForAudio;
+    
+    // Current source ID (read from input pin)
+    std::atomic<juce::uint32> currentSourceId { 0 };
+    
+    // GUI preview
+    juce::Image latestFrameForGui;
+    juce::CriticalSection imageLock;
+};
+
+
+
+================================================================================
+FILE: juce\\Source\\audio\\modules\\MovementDetectorModule.cpp
+================================================================================
+
+
+#include "MovementDetectorModule.h"
+#include "../../video/VideoFrameManager.h"
+#include <opencv2/imgproc.hpp>
+#include <opencv2/video.hpp>
+
+#if defined(PRESET_CREATOR_UI)
+#include <imgui.h>
+#endif
+
+juce::AudioProcessorValueTreeState::ParameterLayout MovementDetectorModule::createParameterLayout()
+{
+    std::vector<std::unique_ptr<juce::RangedAudioParameter>> params;
+    params.push_back(std::make_unique<juce::AudioParameterChoice>("mode", "Mode", juce::StringArray{"Optical Flow", "Background Subtraction"}, 0));
+    params.push_back(std::make_unique<juce::AudioParameterFloat>("sensitivity", "Sensitivity", 0.01f, 1.0f, 0.1f));
+    params.push_back(std::make_unique<juce::AudioParameterChoice>(
+        "zoomLevel", "Zoom Level", juce::StringArray{ "Small", "Normal", "Large" }, 1));
+    // NEW: tuning parameters
+    params.push_back(std::make_unique<juce::AudioParameterInt>("maxFeatures", "Max Features", 20, 500, 100));
+    params.push_back(std::make_unique<juce::AudioParameterInt>("pyramidLevels", "Pyramid Levels", 1, 5, 3));
+    params.push_back(std::make_unique<juce::AudioParameterBool>("noiseReduction", "Noise Reduction", false));
+    return { params.begin(), params.end() };
+}
+
+MovementDetectorModule::MovementDetectorModule()
+    : ModuleProcessor(BusesProperties()
+                     .withInput("Input", juce::AudioChannelSet::mono(), true)
+                     .withOutput("Output", juce::AudioChannelSet::discreteChannels(4), true)),
+      juce::Thread("Movement Detector Analysis Thread"),
+      apvts(*this, nullptr, "MovementParams", createParameterLayout())
+{
+    modeParam = apvts.getRawParameterValue("mode");
+    sensitivityParam = apvts.getRawParameterValue("sensitivity");
+    zoomLevelParam = apvts.getRawParameterValue("zoomLevel");
+    // NEW: init parameter pointers
+    maxFeaturesParam = dynamic_cast<juce::AudioParameterInt*>(apvts.getParameter("maxFeatures"));
+    pyramidLevelsParam = dynamic_cast<juce::AudioParameterInt*>(apvts.getParameter("pyramidLevels"));
+    noiseReductionParam = dynamic_cast<juce::AudioParameterBool*>(apvts.getParameter("noiseReduction"));
+    pBackSub = cv::createBackgroundSubtractorMOG2();
+    
+    fifoBuffer.resize(16);
+    fifo.setTotalSize(16);
+}
+
+MovementDetectorModule::~MovementDetectorModule()
+{
+    stopThread(5000);
+}
+
+void MovementDetectorModule::prepareToPlay(double sampleRate, int samplesPerBlock)
+{
+    startThread(juce::Thread::Priority::normal);
+}
+
+void MovementDetectorModule::releaseResources()
+{
+    signalThreadShouldExit();
+}
+
+void MovementDetectorModule::run()
+{
+    // Analysis loop runs on background thread
+    while (!threadShouldExit())
+    {
+        juce::uint32 sourceId = currentSourceId.load();
+        
+        if (sourceId == 0)
+        {
+            // No source connected
+            wait(100);
+            continue;
+        }
+        
+        // Get frame from VideoFrameManager
+        cv::Mat frame = VideoFrameManager::getInstance().getFrame(sourceId);
+        
+        if (!frame.empty())
+        {
+            // Perform analysis
+            MovementResult result = analyzeFrame(frame);
+            
+            // Push result to FIFO for audio thread
+            if (fifo.getFreeSpace() >= 1)
+            {
+                auto writeScope = fifo.write(1);
+                if (writeScope.blockSize1 > 0)
+                {
+                    fifoBuffer[writeScope.startIndex1] = result;
+                }
+            }
+        }
+        
+        wait(33); // ~30 FPS analysis rate
+    }
+}
+
+MovementResult MovementDetectorModule::analyzeFrame(const cv::Mat& inputFrame)
+{
+    MovementResult result;
+    cv::Mat gray, displayFrame;
+    
+    inputFrame.copyTo(displayFrame);
+    cv::cvtColor(inputFrame, gray, cv::COLOR_BGR2GRAY);
+    cv::resize(gray, gray, cv::Size(320, 240));
+    cv::resize(displayFrame, displayFrame, cv::Size(320, 240));
+
+    int mode = (int)modeParam->load();
+
+    if (mode == 0) // Optical Flow
+    {
+        if (prevPoints.size() < 50)
+        {
+            int maxFeatures = maxFeaturesParam ? maxFeaturesParam->get() : 100;
+            cv::goodFeaturesToTrack(gray, prevPoints, maxFeatures, 0.3, 7);
+        }
+
+        if (!prevGrayFrame.empty() && !prevPoints.empty())
+        {
+            std::vector<cv::Point2f> nextPoints;
+            std::vector<uchar> status;
+            int levels = pyramidLevelsParam ? pyramidLevelsParam->get() : 3;
+            cv::calcOpticalFlowPyrLK(prevGrayFrame, gray, prevPoints, nextPoints, status, cv::noArray(),
+                                     cv::Size(15, 15), levels);
+
+            float sumX = 0.0f, sumY = 0.0f;
+            int trackedCount = 0;
+            for (size_t i = 0; i < prevPoints.size(); ++i)
+            {
+                if (status[i])
+                {
+                    cv::line(displayFrame, prevPoints[i], nextPoints[i], cv::Scalar(0, 255, 0), 1);
+                    cv::circle(displayFrame, nextPoints[i], 2, cv::Scalar(255, 0, 0), -1);
+                    
+                    sumX += nextPoints[i].x - prevPoints[i].x;
+                    sumY += nextPoints[i].y - prevPoints[i].y;
+                    trackedCount++;
+                }
+            }
+
+            if (trackedCount > 0)
+            {
+                result.avgMotionX = juce::jlimit(-1.0f, 1.0f, sumX / (trackedCount * 10.0f));
+                result.avgMotionY = juce::jlimit(-1.0f, 1.0f, sumY / (trackedCount * 10.0f));
+                result.motionAmount = juce::jlimit(0.0f, 1.0f, std::sqrt(result.avgMotionX * result.avgMotionX + result.avgMotionY * result.avgMotionY));
+                
+                if (result.motionAmount > sensitivityParam->load())
+                {
+                    result.motionTrigger = true;
+                }
+            }
+            prevPoints = nextPoints;
+        }
+        gray.copyTo(prevGrayFrame);
+    }
+    else // Background Subtraction
+    {
+        cv::Mat fgMask;
+        pBackSub->apply(gray, fgMask);
+        if (noiseReductionParam && noiseReductionParam->get())
+        {
+            cv::erode(fgMask, fgMask, cv::Mat(), cv::Point(-1, -1), 1);
+            cv::dilate(fgMask, fgMask, cv::Mat(), cv::Point(-1, -1), 2);
+        }
+        
+        cv::Moments m = cv::moments(fgMask, true);
+        result.motionAmount = juce::jlimit(0.0f, 1.0f, (float)(m.m00 / (320 * 240)));
+        
+        if (result.motionAmount > 0.001)
+        {
+             result.avgMotionX = juce::jmap((float)(m.m10 / m.m00), 0.0f, 320.0f, -1.0f, 1.0f);
+             result.avgMotionY = juce::jmap((float)(m.m01 / m.m00), 0.0f, 240.0f, -1.0f, 1.0f);
+             
+             cv::Point2f centroid(m.m10 / m.m00, m.m01 / m.m00);
+             cv::circle(displayFrame, centroid, 5, cv::Scalar(0, 255, 0), -1);
+             cv::circle(displayFrame, centroid, 8, cv::Scalar(255, 255, 255), 2);
+        }
+        
+        cv::Mat fgMaskColor;
+        cv::cvtColor(fgMask, fgMaskColor, cv::COLOR_GRAY2BGR);
+        cv::addWeighted(displayFrame, 0.7, fgMaskColor, 0.3, 0, displayFrame);
+        
+        if (result.motionAmount > sensitivityParam->load())
+        {
+            result.motionTrigger = true;
+        }
+    }
+
+    updateGuiFrame(displayFrame);
+    return result;
+}
+
+void MovementDetectorModule::updateGuiFrame(const cv::Mat& frame)
+{
+    cv::Mat bgraFrame;
+    cv::cvtColor(frame, bgraFrame, cv::COLOR_BGR2BGRA);
+    
+    const juce::ScopedLock lock(imageLock);
+    
+    if (latestFrameForGui.isNull() || 
+        latestFrameForGui.getWidth() != bgraFrame.cols || 
+        latestFrameForGui.getHeight() != bgraFrame.rows)
+    {
+        latestFrameForGui = juce::Image(juce::Image::ARGB, bgraFrame.cols, bgraFrame.rows, true);
+    }
+    
+    juce::Image::BitmapData destData(latestFrameForGui, juce::Image::BitmapData::writeOnly);
+    memcpy(destData.data, bgraFrame.data, bgraFrame.total() * bgraFrame.elemSize());
+}
+
+juce::Image MovementDetectorModule::getLatestFrame()
+{
+    const juce::ScopedLock lock(imageLock);
+    return latestFrameForGui.createCopy();
+}
+
+void MovementDetectorModule::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midi)
+{
+    // Read Source ID from input pin
+    auto inputBuffer = getBusBuffer(buffer, true, 0);
+    if (inputBuffer.getNumChannels() > 0 && inputBuffer.getNumSamples() > 0)
+    {
+        float sourceIdFloat = inputBuffer.getSample(0, 0);
+        currentSourceId.store((juce::uint32)sourceIdFloat);
+    }
+    
+    // Get latest result from analysis thread via FIFO
+    if (fifo.getNumReady() > 0)
+    {
+        auto readScope = fifo.read(1);
+        if (readScope.blockSize1 > 0)
+        {
+            lastResultForAudio = fifoBuffer[readScope.startIndex1];
+        }
+    }
+    
+    // Write results to output channels
+    auto outputBuffer = getBusBuffer(buffer, false, 0);
+    if (outputBuffer.getNumChannels() < 4) return;
+    
+    outputBuffer.setSample(0, 0, lastResultForAudio.avgMotionX);
+    outputBuffer.setSample(1, 0, lastResultForAudio.avgMotionY);
+    outputBuffer.setSample(2, 0, lastResultForAudio.motionAmount);
+
+    // Handle trigger
+    if (lastResultForAudio.motionTrigger)
+    {
+        triggerSamplesRemaining = (int)(getSampleRate() * 0.01);
+        lastResultForAudio.motionTrigger = false; // Clear to avoid repeating
+    }
+
+    if (triggerSamplesRemaining > 0)
+    {
+        outputBuffer.setSample(3, 0, 1.0f);
+        triggerSamplesRemaining--;
+    }
+    else
+    {
+        outputBuffer.setSample(3, 0, 0.0f);
+    }
+    
+    // Fill rest of buffer
+    for (int channel = 0; channel < 4; ++channel)
+    {
+        outputBuffer.copyFrom(channel, 1, outputBuffer, channel, 0, outputBuffer.getNumSamples() - 1);
+    }
+}
+
+#if defined(PRESET_CREATOR_UI)
+void MovementDetectorModule::drawParametersInNode(float itemWidth,
+                                                  const std::function<bool(const juce::String& paramId)>& isParamModulated,
+                                                  const std::function<void()>& onModificationEnded)
+{
+    ImGui::PushItemWidth(itemWidth);
+    
+    // Mode selection
+    int mode = (int)modeParam->load();
+    const char* modes[] = { "Optical Flow", "Background Subtraction" };
+    if (ImGui::Combo("Mode", &mode, modes, 2))
+    {
+        *dynamic_cast<juce::AudioParameterChoice*>(apvts.getParameter("mode")) = mode;
+        onModificationEnded();
+    }
+    
+    // Sensitivity slider
+    float sensitivity = sensitivityParam->load();
+    if (ImGui::SliderFloat("Sensitivity", &sensitivity, 0.01f, 1.0f, "%.2f"))
+    {
+        *dynamic_cast<juce::AudioParameterFloat*>(apvts.getParameter("sensitivity")) = sensitivity;
+    }
+    if (ImGui::IsItemDeactivatedAfterEdit())
+    {
+        onModificationEnded();
+    }
+    
+    ImGui::Separator();
+    // Zoom controls (-/+) Small/Normal/Large
+    int level = zoomLevelParam ? (int) zoomLevelParam->load() : 1;
+    level = juce::jlimit(0, 2, level);
+    float buttonWidth = (itemWidth / 2.0f) - 4.0f;
+    const bool atMin = (level <= 0);
+    const bool atMax = (level >= 2);
+    if (atMin) ImGui::BeginDisabled();
+    if (ImGui::Button("-", ImVec2(buttonWidth, 0)))
+    {
+        int newLevel = juce::jmax(0, level - 1);
+        if (auto* p = apvts.getParameter("zoomLevel"))
+            p->setValueNotifyingHost((float)newLevel / 2.0f);
+        onModificationEnded();
+    }
+    if (atMin) ImGui::EndDisabled();
+    ImGui::SameLine();
+    if (atMax) ImGui::BeginDisabled();
+    if (ImGui::Button("+", ImVec2(buttonWidth, 0)))
+    {
+        int newLevel = juce::jmin(2, level + 1);
+        if (auto* p = apvts.getParameter("zoomLevel"))
+            p->setValueNotifyingHost((float)newLevel / 2.0f);
+        onModificationEnded();
+    }
+    if (atMax) ImGui::EndDisabled();
+
+    // NEW: Algorithm tuning controls
+    ImGui::Separator();
+    if (mode == 0) // Optical Flow
+    {
+        ImGui::Text("Optical Flow Settings");
+        if (maxFeaturesParam)
+        {
+            int maxF = maxFeaturesParam->get();
+            if (ImGui::SliderInt("Max Features", &maxF, 20, 500)) { *maxFeaturesParam = maxF; }
+            if (ImGui::IsItemDeactivatedAfterEdit()) onModificationEnded();
+        }
+        if (pyramidLevelsParam)
+        {
+            int lv = pyramidLevelsParam->get();
+            if (ImGui::SliderInt("Pyramid Levels", &lv, 1, 5)) { *pyramidLevelsParam = lv; }
+            if (ImGui::IsItemDeactivatedAfterEdit()) onModificationEnded();
+        }
+    }
+    else
+    {
+        ImGui::Text("Background Subtraction Settings");
+        if (noiseReductionParam)
+        {
+            bool nr = noiseReductionParam->get();
+            if (ImGui::Checkbox("Noise Reduction", &nr)) { *noiseReductionParam = nr; onModificationEnded(); }
+        }
+    }
+
+    // Show current source ID
+    juce::uint32 sourceId = currentSourceId.load();
+    if (sourceId > 0)
+    {
+        ImGui::TextColored(ImVec4(0.5f, 1.0f, 0.5f, 1.0f), "Connected to Source: %d", (int)sourceId);
+    }
+    else
+    {
+        ImGui::TextColored(ImVec4(1.0f, 0.5f, 0.5f, 1.0f), "No source connected");
+    }
+    
+    ImGui::PopItemWidth();
+}
+
+void MovementDetectorModule::drawIoPins(const NodePinHelpers& helpers)
+{
+    helpers.drawAudioInputPin("Source In", 0);
+    helpers.drawAudioOutputPin("Motion X", 0);
+    helpers.drawAudioOutputPin("Motion Y", 1);
+    helpers.drawAudioOutputPin("Amount", 2);
+    helpers.drawAudioOutputPin("Trigger", 3);
+}
+#endif
+
+
+================================================================================
+FILE: juce\\Source\\audio\\modules\\HumanDetectorModule.h
+================================================================================
+
+
+// juce/Source/audio/modules/HumanDetectorModule.h
+
+#pragma once
+
+#include "ModuleProcessor.h"
+#include <opencv2/core.hpp>
+#include <opencv2/objdetect.hpp>
+#include <juce_core/juce_core.h>
+#include <juce_audio_processors/juce_audio_processors.h>
+#include <juce_graphics/juce_graphics.h>
+
+// We can reuse the same POD struct as it fits our needs perfectly.
+struct DetectionResult
+{
+    static constexpr int maxDetections = 1; // This module only outputs the largest detection
+    int numDetections = 0;
+    float x[maxDetections] = {0};
+    float y[maxDetections] = {0};
+    float width[maxDetections] = {0};
+    float height[maxDetections] = {0};
+};
+
+/**
+ * Processing node that detects humans from a video source via the VideoFrameManager.
+ * Requires a "Source ID" input connection from a Webcam or Video File Loader.
+ */
+class HumanDetectorModule : public ModuleProcessor, private juce::Thread
+{
+public:
+    HumanDetectorModule();
+    ~HumanDetectorModule() override;
+
+    const juce::String getName() const override { return "human_detector"; }
+    juce::AudioProcessorValueTreeState& getAPVTS() override { return apvts; }
+    
+    void prepareToPlay(double sampleRate, int samplesPerBlock) override;
+    void releaseResources() override;
+    void processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midi) override;
+    
+    // For UI: get latest annotated frame
+    juce::Image getLatestFrame();
+
+#if defined(PRESET_CREATOR_UI)
+    void drawParametersInNode(float itemWidth,
+                              const std::function<bool(const juce::String& paramId)>& isParamModulated,
+                              const std::function<void()>& onModificationEnded) override;
+    void drawIoPins(const NodePinHelpers& helpers) override;
+    // Allow custom width (Small=240, Normal=480, Large=960)
+    ImVec2 getCustomNodeSize() const override {
+        int level = zoomLevelParam ? (int) zoomLevelParam->load() : 1;
+        level = juce::jlimit(0, 2, level);
+        const float widths[3] { 240.0f, 480.0f, 960.0f };
+        return ImVec2(widths[level], 0.0f);
+    }
+#endif
+
+private:
+    void run() override;
+    void updateGuiFrame(const cv::Mat& frame);
+    DetectionResult analyzeFrame(const cv::Mat& inputFrame);
+    
+    static juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout();
+
+    juce::AudioProcessorValueTreeState apvts;
+    std::atomic<float>* modeParam = nullptr;
+    std::atomic<float>* scaleFactorParam = nullptr;
+    std::atomic<float>* minNeighborsParam = nullptr;
+    // 0=Small,1=Normal,2=Large
+    std::atomic<float>* zoomLevelParam = nullptr;
+
+    // OpenCV objects for detection
+    cv::CascadeClassifier faceCascade;
+    cv::HOGDescriptor hog;
+    
+    // State for trigger generation
+    int gateSamplesRemaining = 0;
+    
+    // Thread-safe data transfer from video thread to audio thread
+    juce::AbstractFifo fifo { 16 };
+    std::vector<DetectionResult> fifoBuffer;
+    DetectionResult lastResultForAudio;
+    
+    // Current source ID (read from input pin)
+    std::atomic<juce::uint32> currentSourceId { 0 };
+    
+    // GUI preview
+    juce::Image latestFrameForGui;
+    juce::CriticalSection imageLock;
+};
+
+
+
+================================================================================
+FILE: juce\\Source\\audio\\modules\\HumanDetectorModule.cpp
+================================================================================
+
+
+#include "HumanDetectorModule.h"
+#include "../../video/VideoFrameManager.h"
+#include <opencv2/imgproc.hpp>
+#include <opencv2/objdetect.hpp>
+
+#if defined(PRESET_CREATOR_UI)
+#include <imgui.h>
+#endif
+
+juce::AudioProcessorValueTreeState::ParameterLayout HumanDetectorModule::createParameterLayout()
+{
+    std::vector<std::unique_ptr<juce::RangedAudioParameter>> params;
+    params.push_back(std::make_unique<juce::AudioParameterChoice>("mode", "Detection Mode", juce::StringArray{"Faces (Haar)", "Bodies (HOG)"}, 0));
+    params.push_back(std::make_unique<juce::AudioParameterFloat>("scaleFactor", "Scale Factor", 1.05f, 2.0f, 1.1f));
+    params.push_back(std::make_unique<juce::AudioParameterInt>("minNeighbors", "Min Neighbors", 1, 10, 3));
+    params.push_back(std::make_unique<juce::AudioParameterChoice>(
+        "zoomLevel", "Zoom Level", juce::StringArray{ "Small", "Normal", "Large" }, 1));
+    return { params.begin(), params.end() };
+}
+
+HumanDetectorModule::HumanDetectorModule()
+    : ModuleProcessor(BusesProperties()
+                     .withInput("Input", juce::AudioChannelSet::mono(), true)
+                     .withOutput("Output", juce::AudioChannelSet::discreteChannels(5), true)),
+      juce::Thread("Human Detector Analysis Thread"),
+      apvts(*this, nullptr, "HumanParams", createParameterLayout())
+{
+    modeParam = apvts.getRawParameterValue("mode");
+    scaleFactorParam = apvts.getRawParameterValue("scaleFactor");
+    minNeighborsParam = apvts.getRawParameterValue("minNeighbors");
+    zoomLevelParam = apvts.getRawParameterValue("zoomLevel");
+
+    // Load Haar Cascade
+    juce::File cascadeFile = juce::File::getSpecialLocation(juce::File::currentApplicationFile)
+                                .getSiblingFile("haarcascade_frontalface_default.xml");
+    if (cascadeFile.existsAsFile())
+    {
+        faceCascade.load(cascadeFile.getFullPathName().toStdString());
+    }
+    else
+    {
+        juce::Logger::writeToLog("ERROR: haarcascade_frontalface_default.xml not found!");
+    }
+    
+    // Set up HOG detector
+    hog.setSVMDetector(cv::HOGDescriptor::getDefaultPeopleDetector());
+    
+    fifoBuffer.resize(16);
+    fifo.setTotalSize(16);
+}
+
+HumanDetectorModule::~HumanDetectorModule()
+{
+    stopThread(5000);
+}
+
+void HumanDetectorModule::prepareToPlay(double sampleRate, int samplesPerBlock)
+{
+    startThread(juce::Thread::Priority::normal);
+}
+
+void HumanDetectorModule::releaseResources()
+{
+    signalThreadShouldExit();
+}
+
+void HumanDetectorModule::run()
+{
+    // Analysis loop runs on background thread
+    while (!threadShouldExit())
+    {
+        juce::uint32 sourceId = currentSourceId.load();
+        
+        if (sourceId == 0)
+        {
+            // No source connected
+            wait(100);
+            continue;
+        }
+        
+        // Get frame from VideoFrameManager
+        cv::Mat frame = VideoFrameManager::getInstance().getFrame(sourceId);
+        
+        if (!frame.empty())
+        {
+            // Perform analysis
+            DetectionResult result = analyzeFrame(frame);
+            
+            // Push result to FIFO for audio thread
+            if (fifo.getFreeSpace() >= 1)
+            {
+                auto writeScope = fifo.write(1);
+                if (writeScope.blockSize1 > 0)
+                {
+                    fifoBuffer[writeScope.startIndex1] = result;
+                }
+            }
+        }
+        
+        wait(33); // ~30 FPS analysis rate
+    }
+}
+
+DetectionResult HumanDetectorModule::analyzeFrame(const cv::Mat& inputFrame)
+{
+    DetectionResult result;
+    cv::Mat gray, displayFrame;
+    
+    inputFrame.copyTo(displayFrame);
+    cv::cvtColor(inputFrame, gray, cv::COLOR_BGR2GRAY);
+    cv::resize(gray, gray, cv::Size(320, 240));
+    cv::resize(displayFrame, displayFrame, cv::Size(320, 240));
+
+    std::vector<cv::Rect> detections;
+    int mode = (int)modeParam->load();
+
+    if (mode == 0) // Face Detection
+    {
+        faceCascade.detectMultiScale(gray, detections, scaleFactorParam->load(), (int)minNeighborsParam->load());
+    }
+    else // Body Detection
+    {
+        hog.detectMultiScale(gray, detections);
+    }
+
+    // Draw all detections (smaller ones in gray)
+    for (const auto& detection : detections)
+    {
+        cv::rectangle(displayFrame, detection, cv::Scalar(128, 128, 128), 1);
+    }
+
+    if (!detections.empty())
+    {
+        // Find the largest detection
+        auto largest = std::max_element(detections.begin(), detections.end(), 
+            [](const cv::Rect& a, const cv::Rect& b) {
+                return a.area() < b.area();
+            });
+
+        // Draw the largest detection
+        cv::rectangle(displayFrame, *largest, cv::Scalar(0, 255, 0), 2);
+        
+        std::string label = (mode == 0) ? "Face" : "Person";
+        cv::putText(displayFrame, label, cv::Point(largest->x, largest->y - 5),
+                    cv::FONT_HERSHEY_SIMPLEX, 0.4, cv::Scalar(0, 255, 0), 1);
+
+        result.numDetections = 1;
+        result.x[0] = juce::jmap((float)largest->x, 0.0f, 320.0f, 0.0f, 1.0f);
+        result.y[0] = juce::jmap((float)largest->y, 0.0f, 240.0f, 0.0f, 1.0f);
+        result.width[0] = juce::jmap((float)largest->width, 0.0f, 320.0f, 0.0f, 1.0f);
+        result.height[0] = juce::jmap((float)largest->height, 0.0f, 240.0f, 0.0f, 1.0f);
+    }
+
+    updateGuiFrame(displayFrame);
+    return result;
+}
+
+void HumanDetectorModule::updateGuiFrame(const cv::Mat& frame)
+{
+    cv::Mat bgraFrame;
+    cv::cvtColor(frame, bgraFrame, cv::COLOR_BGR2BGRA);
+    
+    const juce::ScopedLock lock(imageLock);
+    
+    if (latestFrameForGui.isNull() || 
+        latestFrameForGui.getWidth() != bgraFrame.cols || 
+        latestFrameForGui.getHeight() != bgraFrame.rows)
+    {
+        latestFrameForGui = juce::Image(juce::Image::ARGB, bgraFrame.cols, bgraFrame.rows, true);
+    }
+    
+    juce::Image::BitmapData destData(latestFrameForGui, juce::Image::BitmapData::writeOnly);
+    memcpy(destData.data, bgraFrame.data, bgraFrame.total() * bgraFrame.elemSize());
+}
+
+juce::Image HumanDetectorModule::getLatestFrame()
+{
+    const juce::ScopedLock lock(imageLock);
+    return latestFrameForGui.createCopy();
+}
+
+void HumanDetectorModule::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midi)
+{
+    // Read Source ID from input pin
+    auto inputBuffer = getBusBuffer(buffer, true, 0);
+    if (inputBuffer.getNumChannels() > 0 && inputBuffer.getNumSamples() > 0)
+    {
+        float sourceIdFloat = inputBuffer.getSample(0, 0);
+        currentSourceId.store((juce::uint32)sourceIdFloat);
+    }
+    
+    // Get latest result from analysis thread via FIFO
+    if (fifo.getNumReady() > 0)
+    {
+        auto readScope = fifo.read(1);
+        if (readScope.blockSize1 > 0)
+        {
+            lastResultForAudio = fifoBuffer[readScope.startIndex1];
+        }
+    }
+    
+    // Write results to output channels
+    auto outputBuffer = getBusBuffer(buffer, false, 0);
+    if (outputBuffer.getNumChannels() < 5) return;
+    
+    if (lastResultForAudio.numDetections > 0)
+    {
+        outputBuffer.setSample(0, 0, lastResultForAudio.x[0]);
+        outputBuffer.setSample(1, 0, lastResultForAudio.y[0]);
+        outputBuffer.setSample(2, 0, lastResultForAudio.width[0]);
+        outputBuffer.setSample(3, 0, lastResultForAudio.height[0]);
+        gateSamplesRemaining = 2; // Keep gate high
+    }
+
+    if (gateSamplesRemaining > 0)
+    {
+        outputBuffer.setSample(4, 0, 1.0f);
+        gateSamplesRemaining--;
+    }
+    else
+    {
+        outputBuffer.setSample(4, 0, 0.0f);
+    }
+    
+    // Fill rest of buffer
+    for (int channel = 0; channel < 5; ++channel)
+    {
+        outputBuffer.copyFrom(channel, 1, outputBuffer, channel, 0, outputBuffer.getNumSamples() - 1);
+    }
+}
+
+#if defined(PRESET_CREATOR_UI)
+void HumanDetectorModule::drawParametersInNode(float itemWidth,
+                                               const std::function<bool(const juce::String& paramId)>& isParamModulated,
+                                               const std::function<void()>& onModificationEnded)
+{
+    ImGui::PushItemWidth(itemWidth);
+    
+    // Mode selection
+    int mode = (int)modeParam->load();
+    const char* modes[] = { "Faces (Haar)", "Bodies (HOG)" };
+    if (ImGui::Combo("Mode", &mode, modes, 2))
+    {
+        *dynamic_cast<juce::AudioParameterChoice*>(apvts.getParameter("mode")) = mode;
+        onModificationEnded();
+    }
+    
+    // Conditional parameters for Haar mode
+    if (mode == 0)
+    {
+        float scaleFactor = scaleFactorParam->load();
+        if (ImGui::SliderFloat("Scale Factor", &scaleFactor, 1.05f, 2.0f, "%.2f"))
+        {
+            *dynamic_cast<juce::AudioParameterFloat*>(apvts.getParameter("scaleFactor")) = scaleFactor;
+        }
+        if (ImGui::IsItemDeactivatedAfterEdit())
+        {
+            onModificationEnded();
+        }
+        
+        int minNeighbors = (int)minNeighborsParam->load();
+        if (ImGui::SliderInt("Min Neighbors", &minNeighbors, 1, 10))
+        {
+            *dynamic_cast<juce::AudioParameterInt*>(apvts.getParameter("minNeighbors")) = minNeighbors;
+        }
+        if (ImGui::IsItemDeactivatedAfterEdit())
+        {
+            onModificationEnded();
+        }
+    }
+    
+    ImGui::Separator();
+    // Zoom controls (-/+) Small/Normal/Large
+    int level = zoomLevelParam ? (int) zoomLevelParam->load() : 1;
+    level = juce::jlimit(0, 2, level);
+    float buttonWidth = (itemWidth / 2.0f) - 4.0f;
+    const bool atMin = (level <= 0);
+    const bool atMax = (level >= 2);
+    if (atMin) ImGui::BeginDisabled();
+    if (ImGui::Button("-", ImVec2(buttonWidth, 0)))
+    {
+        int newLevel = juce::jmax(0, level - 1);
+        if (auto* p = apvts.getParameter("zoomLevel"))
+            p->setValueNotifyingHost((float)newLevel / 2.0f);
+        onModificationEnded();
+    }
+    if (atMin) ImGui::EndDisabled();
+    ImGui::SameLine();
+    if (atMax) ImGui::BeginDisabled();
+    if (ImGui::Button("+", ImVec2(buttonWidth, 0)))
+    {
+        int newLevel = juce::jmin(2, level + 1);
+        if (auto* p = apvts.getParameter("zoomLevel"))
+            p->setValueNotifyingHost((float)newLevel / 2.0f);
+        onModificationEnded();
+    }
+    if (atMax) ImGui::EndDisabled();
+    
+    // Show current source ID
+    juce::uint32 sourceId = currentSourceId.load();
+    if (sourceId > 0)
+    {
+        ImGui::TextColored(ImVec4(0.5f, 1.0f, 0.5f, 1.0f), "Connected to Source: %d", (int)sourceId);
+    }
+    else
+    {
+        ImGui::TextColored(ImVec4(1.0f, 0.5f, 0.5f, 1.0f), "No source connected");
+    }
+    
+    ImGui::PopItemWidth();
+}
+
+void HumanDetectorModule::drawIoPins(const NodePinHelpers& helpers)
+{
+    helpers.drawAudioInputPin("Source In", 0);
+    helpers.drawAudioOutputPin("X", 0);
+    helpers.drawAudioOutputPin("Y", 1);
+    helpers.drawAudioOutputPin("Width", 2);
+    helpers.drawAudioOutputPin("Height", 3);
+    helpers.drawAudioOutputPin("Gate", 4);
+}
+#endif
+
+
+================================================================================
+FILE: juce\\Source\\audio\\modules\\PoseEstimatorModule.h
+================================================================================
+
+
+#pragma once
+
+#include "ModuleProcessor.h"
+#include <opencv2/core.hpp>
+#include <opencv2/dnn.hpp>
+#include <juce_core/juce_core.h>
+#include <juce_audio_processors/juce_audio_processors.h>
+#include <juce_graphics/juce_graphics.h>
+#if defined(PRESET_CREATOR_UI)
+#include <juce_gui_basics/juce_gui_basics.h>
+#endif
+
+// The MPI model detects 15 keypoints per person
+constexpr int MPI_NUM_KEYPOINTS = 15;
+
+/**
+ * A real-time safe struct to hold the (x, y) coordinates of each keypoint.
+ * Used to pass pose data from the processing thread to the audio thread via a lock-free FIFO.
+ */
+struct PoseResult
+{
+    float keypoints[MPI_NUM_KEYPOINTS][2] = {{0}}; // [point_index][x or y]
+    int detectedPoints = 0;
+    bool isValid = false;
+};
+
+/**
+ * Pose Estimator Module
+ * Uses OpenPose MPI model to detect human body keypoints in real-time video.
+ * Connects to a video source (webcam or video file) and outputs 30 CV signals
+ * (x,y coordinates for 15 body keypoints: head, shoulders, elbows, wrists, hips, knees, ankles, etc.)
+ */
+class PoseEstimatorModule : public ModuleProcessor, private juce::Thread
+{
+public:
+    PoseEstimatorModule();
+    ~PoseEstimatorModule() override;
+
+    const juce::String getName() const override { return "pose_estimator"; }
+    
+    void prepareToPlay(double sampleRate, int samplesPerBlock) override;
+    void releaseResources() override;
+    void processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midi) override;
+    
+    juce::AudioProcessorValueTreeState& getAPVTS() override { return apvts; }
+
+    // Persist extra state (e.g., assets path)
+    juce::ValueTree getExtraStateTree() const override;
+    void setExtraStateTree(const juce::ValueTree& state) override;
+
+    // For UI: get latest frame with skeleton overlay for preview
+    juce::Image getLatestFrame();
+
+#if defined(PRESET_CREATOR_UI)
+    void drawParametersInNode(float itemWidth,
+                              const std::function<bool(const juce::String& paramId)>& isParamModulated,
+                              const std::function<void()>& onModificationEnded) override;
+    void drawIoPins(const NodePinHelpers& helpers) override;
+    
+    // Override to specify custom node width based on zoom level (Small/Normal/Large)
+    ImVec2 getCustomNodeSize() const override;
+#endif
+
+private:
+    void run() override; // Thread entry point - processes video frames
+    void updateGuiFrame(const cv::Mat& frame);
+    void parsePoseOutput(const cv::Mat& netOutput, int frameWidth, int frameHeight, PoseResult& result);
+        void loadModel(int modelIndex);
+    
+    static juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout();
+    juce::AudioProcessorValueTreeState apvts;
+    
+        // Parameters
+    std::atomic<float>* sourceIdParam = nullptr;
+        // 0 = Small (240), 1 = Normal (480), 2 = Large (960)
+    std::atomic<float>* zoomLevelParam = nullptr;
+    std::atomic<float>* confidenceThresholdParam = nullptr;
+    juce::AudioParameterBool* drawSkeletonParam = nullptr;
+    // Store custom assets directory as plain string (saved via extra state)
+    juce::String assetsPath;
+#if defined(PRESET_CREATOR_UI)
+    std::unique_ptr<juce::FileChooser> pathChooser;
+#endif
+        juce::AudioParameterChoice* modelChoiceParam = nullptr;
+    
+    // Deep Neural Network for pose estimation
+    cv::dnn::Net net;
+    bool modelLoaded = false;
+    juce::AudioParameterChoice* qualityParam = nullptr;
+        
+        // Signal for the background thread to reload the model
+        std::atomic<int> requestedModelIndex { -1 };
+    
+    // Source ID (read from input cable in audio thread, used by processing thread)
+    std::atomic<juce::uint32> currentSourceId { 0 };
+    
+    // Lock-free FIFO for passing results from processing thread to audio thread
+    PoseResult lastResultForAudio;
+    juce::AbstractFifo fifo { 16 };
+    std::vector<PoseResult> fifoBuffer;
+    
+    // UI preview
+    juce::Image latestFrameForGui;
+    juce::CriticalSection imageLock;
+};
+
+// Keypoint names for the MPI model (for UI labels and debugging)
+const std::vector<std::string> MPI_KEYPOINT_NAMES = {
+    "Head", "Neck", "R Shoulder", "R Elbow", "R Wrist",
+    "L Shoulder", "L Elbow", "L Wrist", "R Hip", "R Knee",
+    "R Ankle", "L Hip", "L Knee", "L Ankle", "Chest"
+};
+
+// Skeleton connections (pairs of keypoint indices to draw as lines)
+const std::vector<std::pair<int, int>> MPI_SKELETON_PAIRS = {
+    {0, 1},   // Head -> Neck
+    {1, 14},  // Neck -> Chest
+    {1, 2},   // Neck -> R Shoulder
+    {2, 3},   // R Shoulder -> R Elbow
+    {3, 4},   // R Elbow -> R Wrist
+    {1, 5},   // Neck -> L Shoulder
+    {5, 6},   // L Shoulder -> L Elbow
+    {6, 7},   // L Elbow -> L Wrist
+    {14, 8},  // Chest -> R Hip
+    {8, 9},   // R Hip -> R Knee
+    {9, 10},  // R Knee -> R Ankle
+    {14, 11}, // Chest -> L Hip
+    {11, 12}, // L Hip -> L Knee
+    {12, 13}  // L Knee -> L Ankle
+};
+
+
+
+================================================================================
+FILE: juce\\Source\\audio\\modules\\PoseEstimatorModule.cpp
+================================================================================
+
+
+#include "PoseEstimatorModule.h"
+#include "../../video/VideoFrameManager.h"
+#include "../graph/ModularSynthProcessor.h"
+#include <opencv2/imgproc.hpp>
+#include <opencv2/dnn.hpp>
+
+#if defined(PRESET_CREATOR_UI)
+#include <imgui.h>
+#endif
+
+void PoseEstimatorModule::loadModel(int modelIndex)
+{
+    // --- THIS IS THE CORRECTED PATH LOGIC ---
+    // 1. Get the directory containing the running executable.
+    auto exeFile = juce::File::getSpecialLocation(juce::File::currentApplicationFile);
+    auto appDir = exeFile.getParentDirectory();
+    juce::Logger::writeToLog("[PoseEstimator] Executable directory: " + appDir.getFullPathName());
+
+    // 2. Look for the 'assets' folder next to the executable (fixed path as requested).
+    juce::File assetsDir = appDir.getChildFile("assets");
+    juce::Logger::writeToLog("[PoseEstimator] Searching for assets in: " + assetsDir.getFullPathName());
+    
+    // 3. Navigate to the specific model subdirectory.
+    auto poseModelsDir = assetsDir.getChildFile("openpose_models").getChildFile("pose");
+
+    juce::String protoPath, modelPath;
+    juce::String modelName;
+
+    switch (modelIndex)
+    {
+        case 0: // BODY_25
+            modelName = "BODY_25";
+            protoPath = poseModelsDir.getChildFile("body_25/pose_deploy.prototxt").getFullPathName();
+            modelPath = poseModelsDir.getChildFile("body_25/pose_iter_584000.caffemodel").getFullPathName();
+            break;
+        case 1: // COCO
+            modelName = "COCO";
+            protoPath = poseModelsDir.getChildFile("coco/pose_deploy_linevec.prototxt").getFullPathName();
+            modelPath = poseModelsDir.getChildFile("coco/pose_iter_440000.caffemodel").getFullPathName();
+            break;
+        case 2: // MPI
+            modelName = "MPI";
+            protoPath = poseModelsDir.getChildFile("mpi/pose_deploy_linevec.prototxt").getFullPathName();
+            modelPath = poseModelsDir.getChildFile("mpi/pose_iter_160000.caffemodel").getFullPathName();
+            break;
+        case 3: // MPI (Fast)
+        default:
+            modelName = "MPI (Fast)";
+            protoPath = poseModelsDir.getChildFile("mpi/pose_deploy_linevec_faster_4_stages.prototxt").getFullPathName();
+            modelPath = poseModelsDir.getChildFile("mpi/pose_iter_160000.caffemodel").getFullPathName();
+            break;
+    }
+
+    juce::Logger::writeToLog("[PoseEstimator] Attempting to load " + modelName + " model...");
+    juce::Logger::writeToLog("  - Prototxt: " + protoPath);
+    juce::Logger::writeToLog("  - Caffemodel: " + modelPath);
+    
+    juce::File protoFile(protoPath);
+    juce::File modelFile(modelPath);
+
+    if (protoFile.existsAsFile() && modelFile.existsAsFile()) {
+        try {
+            net = cv::dnn::readNetFromCaffe(protoPath.toStdString(), modelPath.toStdString());
+            modelLoaded = true;
+            juce::Logger::writeToLog("[PoseEstimator] SUCCESS: Loaded model: " + modelName);
+        } catch (const cv::Exception& e) {
+            juce::Logger::writeToLog("[PoseEstimator] FAILED: OpenCV exception while loading model: " + juce::String(e.what()));
+            modelLoaded = false;
+        }
+    } else {
+        juce::Logger::writeToLog("[PoseEstimator] FAILED: Could not find model files at the specified paths.");
+        if (!protoFile.existsAsFile()) juce::Logger::writeToLog("  - Missing file: " + protoPath);
+        if (!modelFile.existsAsFile()) juce::Logger::writeToLog("  - Missing file: " + modelPath);
+        modelLoaded = false;
+    }
+}
+
+juce::ValueTree PoseEstimatorModule::getExtraStateTree() const
+{
+    juce::ValueTree state("PoseEstimatorState");
+    state.setProperty("assetsPath", assetsPath, nullptr);
+    return state;
+}
+
+void PoseEstimatorModule::setExtraStateTree(const juce::ValueTree& state)
+{
+    if (state.hasType("PoseEstimatorState"))
+    {
+        assetsPath = state.getProperty("assetsPath", "").toString();
+        if (assetsPath.isNotEmpty())
+        {
+            requestedModelIndex = modelChoiceParam ? modelChoiceParam->getIndex() : 3;
+        }
+    }
+}
+
+// Network input size for MPI model
+constexpr int POSE_NET_WIDTH = 368;
+constexpr int POSE_NET_HEIGHT = 368;
+
+juce::AudioProcessorValueTreeState::ParameterLayout PoseEstimatorModule::createParameterLayout()
+{
+    std::vector<std::unique_ptr<juce::RangedAudioParameter>> params;
+    
+    // Source ID input (which video source to connect to)
+    params.push_back(std::make_unique<juce::AudioParameterFloat>(
+        "sourceId", "Source ID", 0.0f, 1000.0f, 0.0f));
+    
+    // Model choice (BODY_25, COCO, MPI, MPI Fast)
+    params.push_back(std::make_unique<juce::AudioParameterChoice>(
+        "model", "Model", juce::StringArray{ "BODY_25", "COCO", "MPI", "MPI (Fast)" }, 3));
+
+    // Model quality (affects blob size)
+    params.push_back(std::make_unique<juce::AudioParameterChoice>(
+        "quality", "Quality", juce::StringArray{ "Low (Fast)", "Medium (Default)" }, 1));
+    
+    // Note: assets path is stored via extra state, not as a parameter
+    
+    // Zoom level for UI: 0=Small(240),1=Normal(480),2=Large(960)
+    params.push_back(std::make_unique<juce::AudioParameterChoice>(
+        "zoomLevel", "Zoom Level", juce::StringArray{ "Small", "Normal", "Large" }, 1));
+    
+    // Confidence threshold (0.0 - 1.0) - keypoints below this confidence will be ignored
+    params.push_back(std::make_unique<juce::AudioParameterFloat>(
+        "confidence", "Confidence", 0.0f, 1.0f, 0.1f));
+    
+    // Toggle skeleton drawing on preview
+    params.push_back(std::make_unique<juce::AudioParameterBool>(
+        "drawSkeleton", "Draw Skeleton", true));
+    
+    return { params.begin(), params.end() };
+}
+
+PoseEstimatorModule::PoseEstimatorModule()
+    : ModuleProcessor(BusesProperties()
+                     .withInput("Input", juce::AudioChannelSet::mono(), true)
+                     .withOutput("Output", juce::AudioChannelSet::discreteChannels(30), true)), // 15 keypoints x 2 (x,y)
+      juce::Thread("Pose Estimator Thread"),
+      apvts(*this, nullptr, "PoseEstimatorParams", createParameterLayout())
+{
+    // Get parameter pointers
+    sourceIdParam = apvts.getRawParameterValue("sourceId");
+    zoomLevelParam = apvts.getRawParameterValue("zoomLevel");
+    qualityParam = dynamic_cast<juce::AudioParameterChoice*>(apvts.getParameter("quality"));
+    modelChoiceParam = dynamic_cast<juce::AudioParameterChoice*>(apvts.getParameter("model"));
+    confidenceThresholdParam = apvts.getRawParameterValue("confidence");
+    drawSkeletonParam = dynamic_cast<juce::AudioParameterBool*>(apvts.getParameter("drawSkeleton"));
+    
+    // Initialize FIFO buffer
+    fifoBuffer.resize(16);
+    
+    // Defer initial model load to the thread (default to current selection or MPI Fast)
+    requestedModelIndex = modelChoiceParam ? modelChoiceParam->getIndex() : 3;
+}
+
+PoseEstimatorModule::~PoseEstimatorModule()
+{
+    stopThread(5000);
+}
+
+void PoseEstimatorModule::prepareToPlay(double sampleRate, int samplesPerBlock)
+{
+    // Always start the processing thread; it handles model loading on demand.
+    startThread(juce::Thread::Priority::normal);
+}
+
+void PoseEstimatorModule::releaseResources()
+{
+    signalThreadShouldExit();
+    stopThread(5000);
+}
+
+void PoseEstimatorModule::run()
+{
+    juce::Logger::writeToLog("[PoseEstimator] Processing thread started");
+    
+    while (!threadShouldExit())
+    {
+        // Handle deferred model reload requests from UI
+        int toLoad = requestedModelIndex.exchange(-1);
+        if (toLoad != -1)
+        {
+            loadModel(toLoad);
+        }
+        
+        if (!modelLoaded)
+        {
+            wait(200);
+            continue;
+        }
+
+        // Get the source ID from the input cable (set by processBlock from the audio thread)
+        juce::uint32 sourceId = currentSourceId.load();
+        
+        // Fetch frame from the VideoFrameManager
+        cv::Mat frame = VideoFrameManager::getInstance().getFrame(sourceId);
+        
+        if (!frame.empty())
+        {
+            // 1. Prepare image for the network (resize and normalize)
+            // Blob size based on Quality setting (Low=224, Medium=368)
+            int q = qualityParam ? qualityParam->getIndex() : 1;
+            cv::Size blobSize = (q == 0) ? cv::Size(224, 224) : cv::Size(368, 368);
+            cv::Mat inputBlob = cv::dnn::blobFromImage(
+                frame,
+                1.0 / 255.0,
+                blobSize,
+                cv::Scalar(0, 0, 0),
+                false,
+                false);
+
+            // 2. Run the forward pass through the neural network
+            net.setInput(inputBlob);
+            cv::Mat netOutput = net.forward();
+            
+            // 3. Parse the output to extract keypoint coordinates
+            PoseResult result;
+            parsePoseOutput(netOutput, frame.cols, frame.rows, result);
+            
+            // Apply confidence threshold
+            result.isValid = (result.detectedPoints > 5); // Need at least 5 keypoints for valid pose
+            
+            // 4. Push result to the audio thread via lock-free FIFO (UPDATED API)
+            if (fifo.getFreeSpace() >= 1)
+            {
+                auto writeScope = fifo.write(1);
+                if (writeScope.blockSize1 > 0)
+                {
+                    fifoBuffer[writeScope.startIndex1] = result;
+                }
+            }
+            
+            // 5. Draw the skeleton on the frame for UI preview (if enabled)
+            if (drawSkeletonParam->get())
+            {
+                // Draw skeleton lines
+                for (const auto& pair : MPI_SKELETON_PAIRS)
+                {
+                    int idxA = pair.first;
+                    int idxB = pair.second;
+                    
+                    if (result.keypoints[idxA][0] >= 0 && result.keypoints[idxB][0] >= 0)
+                    {
+                        cv::Point ptA((int)result.keypoints[idxA][0], (int)result.keypoints[idxA][1]);
+                        cv::Point ptB((int)result.keypoints[idxB][0], (int)result.keypoints[idxB][1]);
+                        cv::line(frame, ptA, ptB, cv::Scalar(0, 255, 0), 3);
+                    }
+                }
+                
+                // Draw keypoint circles
+                for (int i = 0; i < MPI_NUM_KEYPOINTS; ++i)
+                {
+                    if (result.keypoints[i][0] >= 0)
+                    {
+                        cv::Point pt((int)result.keypoints[i][0], (int)result.keypoints[i][1]);
+                        cv::circle(frame, pt, 5, cv::Scalar(0, 0, 255), -1);
+                    }
+                }
+            }
+            
+            // 6. Update the GUI preview frame
+            updateGuiFrame(frame);
+        }
+        
+        // Run at ~15 FPS (pose estimation is computationally expensive)
+        wait(66);
+    }
+    
+    juce::Logger::writeToLog("[PoseEstimator] Processing thread stopped");
+}
+
+void PoseEstimatorModule::parsePoseOutput(const cv::Mat& netOutput, int frameWidth, int frameHeight, PoseResult& result)
+{
+    // OpenPose output format: [1, num_keypoints, height, width]
+    // Each heatmap represents the probability of a keypoint at each location
+    
+    int H = netOutput.size[2]; // Heatmap height
+    int W = netOutput.size[3]; // Heatmap width
+    
+    result.detectedPoints = 0;
+    float confidenceThreshold = confidenceThresholdParam->load();
+    
+    int numHeatmaps = netOutput.size[1];
+    int count = juce::jmin(MPI_NUM_KEYPOINTS, numHeatmaps);
+    for (int i = 0; i < count; ++i)
+    {
+        // CORRECTED: Create a Mat view from the 4D blob for OpenCV 4.x
+        cv::Mat heatMap(H, W, CV_32F, (void*)netOutput.ptr<float>(0, i));
+        
+        // Find the location of maximum confidence
+        double maxConfidence;
+        cv::Point maxLoc;
+        cv::minMaxLoc(heatMap, nullptr, &maxConfidence, nullptr, &maxLoc);
+        
+        if (maxConfidence > confidenceThreshold)
+        {
+            // Scale the heatmap coordinates back to the original frame size
+            result.keypoints[i][0] = (float)maxLoc.x * frameWidth / W;
+            result.keypoints[i][1] = (float)maxLoc.y * frameHeight / H;
+            result.detectedPoints++;
+        }
+        else
+        {
+            // Mark as not detected
+            result.keypoints[i][0] = -1.0f;
+            result.keypoints[i][1] = -1.0f;
+        }
+    }
+}
+
+void PoseEstimatorModule::updateGuiFrame(const cv::Mat& frame)
+{
+    cv::Mat bgraFrame;
+    cv::cvtColor(frame, bgraFrame, cv::COLOR_BGR2BGRA);
+    
+    const juce::ScopedLock lock(imageLock);
+    
+    if (latestFrameForGui.isNull() || 
+        latestFrameForGui.getWidth() != bgraFrame.cols || 
+        latestFrameForGui.getHeight() != bgraFrame.rows)
+    {
+        latestFrameForGui = juce::Image(juce::Image::ARGB, bgraFrame.cols, bgraFrame.rows, true);
+    }
+    
+    juce::Image::BitmapData destData(latestFrameForGui, juce::Image::BitmapData::writeOnly);
+    memcpy(destData.data, bgraFrame.data, bgraFrame.total() * bgraFrame.elemSize());
+}
+
+juce::Image PoseEstimatorModule::getLatestFrame()
+{
+    const juce::ScopedLock lock(imageLock);
+    return latestFrameForGui.createCopy();
+}
+
+void PoseEstimatorModule::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midi)
+{
+    juce::ignoreUnused(midi);
+    
+    // Read Source ID from input pin (BEFORE clearing the buffer!)
+    auto inputBuffer = getBusBuffer(buffer, true, 0);
+    if (inputBuffer.getNumChannels() > 0 && inputBuffer.getNumSamples() > 0)
+    {
+        float sourceIdFloat = inputBuffer.getSample(0, 0);
+        currentSourceId.store((juce::uint32)sourceIdFloat);
+    }
+    
+    // Clear the buffer for output
+    buffer.clear();
+    
+    // Check if there's new pose data from the processing thread (UPDATED FIFO API)
+    if (fifo.getNumReady() > 0)
+    {
+        auto readScope = fifo.read(1);
+        if (readScope.blockSize1 > 0)
+        {
+            lastResultForAudio = fifoBuffer[readScope.startIndex1];
+        }
+    }
+    
+    // Map keypoint coordinates to output channels
+    // Channel layout: [Head X, Head Y, Neck X, Neck Y, R Shoulder X, R Shoulder Y, ...]
+    for (int i = 0; i < MPI_NUM_KEYPOINTS; ++i)
+    {
+        int chX = i * 2;
+        int chY = i * 2 + 1;
+        
+        if (chY < buffer.getNumChannels())
+        {
+            // Normalize coordinates to 0-1 range based on typical video resolution (640x480 or similar)
+            // If keypoint not detected (negative value), output 0
+            float x_normalized = (lastResultForAudio.keypoints[i][0] >= 0) 
+                ? juce::jlimit(0.0f, 1.0f, lastResultForAudio.keypoints[i][0] / 640.0f)
+                : 0.0f;
+            
+            float y_normalized = (lastResultForAudio.keypoints[i][1] >= 0) 
+                ? juce::jlimit(0.0f, 1.0f, lastResultForAudio.keypoints[i][1] / 480.0f)
+                : 0.0f;
+            
+            // Fill the entire buffer with the current value (DC signal)
+            for (int sample = 0; sample < buffer.getNumSamples(); ++sample)
+            {
+                buffer.setSample(chX, sample, x_normalized);
+                buffer.setSample(chY, sample, y_normalized);
+            }
+        }
+    }
+}
+
+#if defined(PRESET_CREATOR_UI)
+ImVec2 PoseEstimatorModule::getCustomNodeSize() const
+{
+    int level = zoomLevelParam ? (int) zoomLevelParam->load() : 1;
+    level = juce::jlimit(0, 2, level);
+    const float widths[3] { 240.0f, 480.0f, 960.0f };
+    return ImVec2(widths[level], 0.0f);
+}
+
+void PoseEstimatorModule::drawParametersInNode(float itemWidth,
+                                              const std::function<bool(const juce::String& paramId)>& isParamModulated,
+                                              const std::function<void()>& onModificationEnded)
+{
+    ImGui::PushItemWidth(itemWidth);
+    
+    // Only show Model selection (as requested)
+    if (modelChoiceParam)
+    {
+        int m = modelChoiceParam->getIndex();
+        if (ImGui::Combo("Model", &m, "BODY_25 (25 pts)\0COCO (18 pts)\0MPI (15 pts)\0MPI Fast (15 pts)\0\0"))
+        {
+            *modelChoiceParam = m;
+            requestedModelIndex = m; // signal thread to reload
+            onModificationEnded();
+        }
+    }
+
+    // Blob size (maps to quality tiers)
+    if (qualityParam)
+    {
+        int blobSize = (qualityParam->getIndex() == 0) ? 224 : 368;
+        if (ImGui::SliderInt("Blob Size", &blobSize, 224, 368))
+        {
+            int q = (blobSize <= 296) ? 0 : 1; // snap to Low/Medium
+            *qualityParam = q;
+            onModificationEnded();
+        }
+    }
+
+    // Confidence threshold
+    float confidence = confidenceThresholdParam->load();
+    if (ImGui::SliderFloat("Confidence", &confidence, 0.0f, 1.0f, "%.2f"))
+    {
+        *dynamic_cast<juce::AudioParameterFloat*>(apvts.getParameter("confidence")) = confidence;
+        onModificationEnded();
+    }
+
+    // Restore Zoom (-/+) controls
+    int level = zoomLevelParam ? (int) zoomLevelParam->load() : 1;
+    level = juce::jlimit(0, 2, level);
+    float buttonWidth = (itemWidth / 2.0f) - 4.0f;
+    const bool atMin = (level <= 0);
+    const bool atMax = (level >= 2);
+    if (atMin) ImGui::BeginDisabled();
+    if (ImGui::Button("-", ImVec2(buttonWidth, 0)))
+    {
+        int newLevel = juce::jmax(0, level - 1);
+        if (auto* p = apvts.getParameter("zoomLevel"))
+            p->setValueNotifyingHost((float)newLevel / 2.0f);
+        onModificationEnded();
+    }
+    if (atMin) ImGui::EndDisabled();
+    ImGui::SameLine();
+    if (atMax) ImGui::BeginDisabled();
+    if (ImGui::Button("+", ImVec2(buttonWidth, 0)))
+    {
+        int newLevel = juce::jmin(2, level + 1);
+        if (auto* p = apvts.getParameter("zoomLevel"))
+            p->setValueNotifyingHost((float)newLevel / 2.0f);
+        onModificationEnded();
+    }
+    if (atMax) ImGui::EndDisabled();
+    
+    // Status display
+    ImGui::Separator();
+    if (modelLoaded)
+    {
+        ImGui::TextColored(ImVec4(0.0f, 1.0f, 0.0f, 1.0f), "Model: Loaded");
+        ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1.0f), "Keypoints: %d/%d", 
+                          lastResultForAudio.detectedPoints, MPI_NUM_KEYPOINTS);
+    }
+    else
+    {
+        ImGui::TextColored(ImVec4(1.0f, 0.0f, 0.0f, 1.0f), "Model: NOT LOADED");
+        ImGui::TextWrapped("Place model files in: assets/openpose_models/pose/mpi/");
+    }
+    
+    ImGui::PopItemWidth();
+}
+
+void PoseEstimatorModule::drawIoPins(const NodePinHelpers& helpers)
+{
+    // Input: Source ID from video loader
+    helpers.drawAudioInputPin("Source In", 0);
+    
+    // Outputs: 30 pins (15 keypoints x 2 coordinates)
+    for (int i = 0; i < MPI_NUM_KEYPOINTS; ++i)
+    {
+        const std::string& name = MPI_KEYPOINT_NAMES[i];
+        // CORRECTED: Proper string conversion for ImGui
+        juce::String xLabel = juce::String(name) + " X";
+        juce::String yLabel = juce::String(name) + " Y";
+        helpers.drawAudioOutputPin(xLabel.toRawUTF8(), i * 2);
+        helpers.drawAudioOutputPin(yLabel.toRawUTF8(), i * 2 + 1);
+    }
+}
+#endif
+
+
+================================================================================
+FILE: juce\\Source\\audio\\modules\\HandTrackerModule.h
+================================================================================
+
+
+#pragma once
+
+#include "ModuleProcessor.h"
+#include <opencv2/core.hpp>
+#include <opencv2/dnn.hpp>
+#include <juce_core/juce_core.h>
+#include <juce_audio_processors/juce_audio_processors.h>
+
+constexpr int HAND_NUM_KEYPOINTS = 21;
+
+struct HandResult
+{
+    float keypoints[HAND_NUM_KEYPOINTS][2] = {{0}}; // [index][x/y]
+    int detectedPoints = 0;
+};
+
+class HandTrackerModule : public ModuleProcessor, private juce::Thread
+{
+public:
+    HandTrackerModule();
+    ~HandTrackerModule() override;
+
+    const juce::String getName() const override { return "hand_tracker"; }
+    juce::Image getLatestFrame();
+
+    void prepareToPlay(double sampleRate, int samplesPerBlock) override;
+    void releaseResources() override;
+    void processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midi) override;
+
+    juce::AudioProcessorValueTreeState& getAPVTS() override { return apvts; }
+
+#if defined(PRESET_CREATOR_UI)
+    void drawParametersInNode(float itemWidth,
+                              const std::function<bool(const juce::String& paramId)>& isParamModulated,
+                              const std::function<void()>& onModificationEnded) override;
+    void drawIoPins(const NodePinHelpers& helpers) override;
+    ImVec2 getCustomNodeSize() const override;
+#endif
+
+private:
+    void run() override;
+    void updateGuiFrame(const cv::Mat& frame);
+    void parseHandOutput(const cv::Mat& netOutput, int frameWidth, int frameHeight, HandResult& result);
+    void loadModel();
+
+    static juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout();
+    juce::AudioProcessorValueTreeState apvts;
+
+    std::atomic<float>* sourceIdParam = nullptr;
+    std::atomic<float>* confidenceThresholdParam = nullptr;
+    std::atomic<float>* zoomLevelParam = nullptr; // 0/1/2 small/normal/large
+
+    cv::dnn::Net net;
+    bool modelLoaded = false;
+
+    std::atomic<juce::uint32> currentSourceId { 0 };
+
+    HandResult lastResultForAudio;
+    juce::AbstractFifo fifo { 16 };
+    std::vector<HandResult> fifoBuffer;
+
+    juce::Image latestFrameForGui;
+    juce::CriticalSection imageLock;
+};
+
+
+
+
+================================================================================
+FILE: juce\\Source\\audio\\modules\\HandTrackerModule.cpp
+================================================================================
+
+
+#include "HandTrackerModule.h"
+#include "../../video/VideoFrameManager.h"
+#include <opencv2/imgproc.hpp>
+
+// Thumb/Index/Middle/Ring/Pinky chains plus wrist
+static const std::vector<std::pair<int, int>> HAND_SKELETON_PAIRS = {
+    {0,1},{1,2},{2,3},{3,4},      // Thumb
+    {0,5},{5,6},{6,7},{7,8},      // Index
+    {0,9},{9,10},{10,11},{11,12}, // Middle
+    {0,13},{13,14},{14,15},{15,16}, // Ring
+    {0,17},{17,18},{18,19},{19,20}  // Pinky
+};
+
+juce::AudioProcessorValueTreeState::ParameterLayout HandTrackerModule::createParameterLayout()
+{
+    std::vector<std::unique_ptr<juce::RangedAudioParameter>> params;
+    params.push_back(std::make_unique<juce::AudioParameterFloat>("sourceId", "Source ID", 0.0f, 1000.0f, 0.0f));
+    params.push_back(std::make_unique<juce::AudioParameterFloat>("confidence", "Confidence", 0.0f, 1.0f, 0.1f));
+    params.push_back(std::make_unique<juce::AudioParameterChoice>("zoomLevel", "Zoom Level", juce::StringArray{"Small","Normal","Large"}, 1));
+    return { params.begin(), params.end() };
+}
+
+HandTrackerModule::HandTrackerModule()
+    : ModuleProcessor(BusesProperties()
+                        .withInput("Input", juce::AudioChannelSet::mono(), true)
+                        .withOutput("Output", juce::AudioChannelSet::discreteChannels(HAND_NUM_KEYPOINTS * 2), true)),
+      juce::Thread("Hand Tracker Thread"),
+      apvts(*this, nullptr, "HandTrackerParams", createParameterLayout())
+{
+    sourceIdParam = apvts.getRawParameterValue("sourceId");
+    zoomLevelParam = apvts.getRawParameterValue("zoomLevel");
+    confidenceThresholdParam = apvts.getRawParameterValue("confidence");
+    fifoBuffer.resize(16);
+}
+
+HandTrackerModule::~HandTrackerModule()
+{
+    stopThread(5000);
+}
+
+void HandTrackerModule::prepareToPlay(double, int)
+{
+    startThread(juce::Thread::Priority::normal);
+}
+
+void HandTrackerModule::releaseResources()
+{
+    signalThreadShouldExit();
+    stopThread(5000);
+}
+
+void HandTrackerModule::loadModel()
+{
+    auto appDir = juce::File::getSpecialLocation(juce::File::currentApplicationFile).getParentDirectory();
+    auto assetsDir = appDir.getChildFile("assets");
+    auto handDir = assetsDir.getChildFile("openpose_models").getChildFile("hand");
+    auto protoPath = handDir.getChildFile("pose_deploy.prototxt").getFullPathName();
+    auto modelPath = handDir.getChildFile("pose_iter_102000.caffemodel").getFullPathName();
+    if (juce::File(protoPath).existsAsFile() && juce::File(modelPath).existsAsFile())
+    {
+        try { net = cv::dnn::readNetFromCaffe(protoPath.toStdString(), modelPath.toStdString()); modelLoaded = true; }
+        catch (...) { modelLoaded = false; }
+    }
+}
+
+void HandTrackerModule::run()
+{
+    if (!modelLoaded) loadModel();
+    while (!threadShouldExit())
+    {
+        auto srcId = currentSourceId.load();
+        cv::Mat frame = VideoFrameManager::getInstance().getFrame(srcId);
+        if (frame.empty()) { wait(50); continue; }
+
+        cv::Mat blob = cv::dnn::blobFromImage(frame, 1.0/255.0, cv::Size(368,368), cv::Scalar(), false, false);
+        net.setInput(blob);
+        cv::Mat out = net.forward();
+        HandResult result{};
+        parseHandOutput(out, frame.cols, frame.rows, result);
+
+        if (fifo.getFreeSpace() >= 1) { auto w = fifo.write(1); if (w.blockSize1 > 0) fifoBuffer[w.startIndex1] = result; }
+
+        // Draw minimal skeleton
+        for (const auto& p : HAND_SKELETON_PAIRS)
+        {
+            int a=p.first,b=p.second; if (result.keypoints[a][0] >= 0 && result.keypoints[b][0] >= 0)
+                cv::line(frame, { (int)result.keypoints[a][0], (int)result.keypoints[a][1] },
+                              { (int)result.keypoints[b][0], (int)result.keypoints[b][1] }, {0,255,0}, 2);
+        }
+        for (int i=0;i<HAND_NUM_KEYPOINTS;++i)
+            if (result.keypoints[i][0] >= 0)
+                cv::circle(frame, { (int)result.keypoints[i][0], (int)result.keypoints[i][1] }, 3, {0,0,255}, -1);
+        updateGuiFrame(frame);
+        wait(66);
+    }
+}
+
+void HandTrackerModule::parseHandOutput(const cv::Mat& netOutput, int frameWidth, int frameHeight, HandResult& result)
+{
+    int H = netOutput.size[2];
+    int W = netOutput.size[3];
+    float thresh = confidenceThresholdParam ? confidenceThresholdParam->load() : 0.1f;
+    result.detectedPoints = 0;
+    int count = juce::jmin(HAND_NUM_KEYPOINTS, netOutput.size[1]);
+    for (int i=0;i<count;++i)
+    {
+        cv::Mat heat(H, W, CV_32F, (void*)netOutput.ptr<float>(0,i));
+        double maxVal; cv::Point maxLoc; cv::minMaxLoc(heat, nullptr, &maxVal, nullptr, &maxLoc);
+        if (maxVal > thresh) { result.keypoints[i][0] = (float)maxLoc.x * frameWidth / W; result.keypoints[i][1] = (float)maxLoc.y * frameHeight / H; result.detectedPoints++; }
+        else { result.keypoints[i][0] = -1.0f; result.keypoints[i][1] = -1.0f; }
+    }
+}
+
+void HandTrackerModule::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midi)
+{
+    juce::ignoreUnused(midi);
+    // Read Source ID from input pin
+    auto in = getBusBuffer(buffer, true, 0);
+    if (in.getNumChannels()>0 && in.getNumSamples()>0) currentSourceId.store((juce::uint32)in.getSample(0,0));
+    buffer.clear();
+    if (fifo.getNumReady()>0) { auto r=fifo.read(1); if (r.blockSize1>0) lastResultForAudio=fifoBuffer[r.startIndex1]; }
+    for (int i=0;i<HAND_NUM_KEYPOINTS;++i)
+    {
+        int chX=i*2, chY=i*2+1; if (chY>=buffer.getNumChannels()) break;
+        float xn = (lastResultForAudio.keypoints[i][0] >= 0) ? juce::jlimit(0.0f,1.0f,lastResultForAudio.keypoints[i][0]/640.0f) : 0.0f;
+        float yn = (lastResultForAudio.keypoints[i][1] >= 0) ? juce::jlimit(0.0f,1.0f,lastResultForAudio.keypoints[i][1]/480.0f) : 0.0f;
+        for (int s=0;s<buffer.getNumSamples();++s){ buffer.setSample(chX,s,xn); buffer.setSample(chY,s,yn);}    
+    }
+}
+
+#if defined(PRESET_CREATOR_UI)
+ImVec2 HandTrackerModule::getCustomNodeSize() const
+{
+    int level = zoomLevelParam ? (int) zoomLevelParam->load() : 1; level = juce::jlimit(0,2,level);
+    const float widths[3]{240.0f,480.0f,960.0f}; return ImVec2(widths[level],0.0f);
+}
+
+static const char* HAND_NAMES[HAND_NUM_KEYPOINTS] = {
+    "Wrist",
+    "Thumb1","Thumb2","Thumb3","Thumb4",
+    "Index1","Index2","Index3","Index4",
+    "Middle1","Middle2","Middle3","Middle4",
+    "Ring1","Ring2","Ring3","Ring4",
+    "Pinky1","Pinky2","Pinky3","Pinky4"
+};
+
+void HandTrackerModule::drawParametersInNode(float itemWidth,
+                                             const std::function<bool(const juce::String& paramId)>& isParamModulated,
+                                             const std::function<void()>& onModificationEnded)
+{
+    ImGui::PushItemWidth(itemWidth);
+    // Confidence
+    float conf = confidenceThresholdParam ? confidenceThresholdParam->load() : 0.1f;
+    if (ImGui::SliderFloat("Confidence", &conf, 0.0f, 1.0f, "%.2f")) {
+        *dynamic_cast<juce::AudioParameterFloat*>(apvts.getParameter("confidence")) = conf; onModificationEnded();
+    }
+    // Zoom -/+
+    int level = zoomLevelParam ? (int)zoomLevelParam->load() : 1; level = juce::jlimit(0,2,level);
+    float bw = (itemWidth/2.0f)-4.0f; bool atMin=(level<=0), atMax=(level>=2);
+    if(atMin) ImGui::BeginDisabled(); if(ImGui::Button("-", ImVec2(bw,0))){ int nl=juce::jmax(0,level-1); if(auto* p=apvts.getParameter("zoomLevel")) p->setValueNotifyingHost((float)nl/2.0f); onModificationEnded(); }
+    if(atMin) ImGui::EndDisabled(); ImGui::SameLine(); if(atMax) ImGui::BeginDisabled(); if(ImGui::Button("+", ImVec2(bw,0))){ int nl=juce::jmin(2,level+1); if(auto* p=apvts.getParameter("zoomLevel")) p->setValueNotifyingHost((float)nl/2.0f); onModificationEnded(); }
+    if(atMax) ImGui::EndDisabled();
+    ImGui::PopItemWidth();
+}
+
+void HandTrackerModule::drawIoPins(const NodePinHelpers& helpers)
+{
+    helpers.drawAudioInputPin("Source In", 0);
+    for (int i=0;i<HAND_NUM_KEYPOINTS;++i)
+    {
+        juce::String x = juce::String(HAND_NAMES[i]) + " X";
+        juce::String y = juce::String(HAND_NAMES[i]) + " Y";
+        helpers.drawAudioOutputPin(x.toRawUTF8(), i*2);
+        helpers.drawAudioOutputPin(y.toRawUTF8(), i*2+1);
+    }
+}
+
+#endif
+
+void HandTrackerModule::updateGuiFrame(const cv::Mat& frame)
+{
+    cv::Mat bgra; cv::cvtColor(frame, bgra, cv::COLOR_BGR2BGRA);
+    const juce::ScopedLock lock(imageLock);
+    if (latestFrameForGui.isNull() || latestFrameForGui.getWidth()!=bgra.cols || latestFrameForGui.getHeight()!=bgra.rows)
+        latestFrameForGui = juce::Image(juce::Image::ARGB, bgra.cols, bgra.rows, true);
+    juce::Image::BitmapData dest(latestFrameForGui, juce::Image::BitmapData::writeOnly);
+    memcpy(dest.data, bgra.data, bgra.total()*bgra.elemSize());
+}
+
+juce::Image HandTrackerModule::getLatestFrame()
+{
+    const juce::ScopedLock lock(imageLock);
+    return latestFrameForGui.createCopy();
+}
+
+
+
+
+================================================================================
+FILE: juce\\Source\\audio\\modules\\FaceTrackerModule.h
+================================================================================
+
+
+#pragma once
+
+#include "ModuleProcessor.h"
+#include <opencv2/core.hpp>
+#include <opencv2/dnn.hpp>
+#include <opencv2/objdetect.hpp>
+#include <juce_core/juce_core.h>
+#include <juce_audio_processors/juce_audio_processors.h>
+
+constexpr int FACE_NUM_KEYPOINTS = 70;
+
+struct FaceResult
+{
+    float keypoints[FACE_NUM_KEYPOINTS][2] = {{0}};
+    int detectedPoints = 0;
+};
+
+class FaceTrackerModule : public ModuleProcessor, private juce::Thread
+{
+public:
+    FaceTrackerModule();
+    ~FaceTrackerModule() override;
+
+    const juce::String getName() const override { return "face_tracker"; }
+    juce::Image getLatestFrame();
+
+    void prepareToPlay(double sampleRate, int samplesPerBlock) override;
+    void releaseResources() override;
+    void processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midi) override;
+
+    juce::AudioProcessorValueTreeState& getAPVTS() override { return apvts; }
+
+#if defined(PRESET_CREATOR_UI)
+    void drawParametersInNode(float itemWidth,
+                              const std::function<bool(const juce::String& paramId)>& isParamModulated,
+                              const std::function<void()>& onModificationEnded) override;
+    void drawIoPins(const NodePinHelpers& helpers) override;
+    ImVec2 getCustomNodeSize() const override;
+#endif
+
+private:
+    void run() override;
+    void updateGuiFrame(const cv::Mat& frame);
+    void parseFaceOutput(const cv::Mat& netOutput, const cv::Rect& faceBox, FaceResult& result);
+    void loadModel();
+
+    static juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout();
+    juce::AudioProcessorValueTreeState apvts;
+
+    std::atomic<float>* sourceIdParam = nullptr;
+    std::atomic<float>* confidenceThresholdParam = nullptr;
+    std::atomic<float>* zoomLevelParam = nullptr;
+
+    cv::CascadeClassifier faceCascade;
+    cv::dnn::Net net;
+    bool modelLoaded = false;
+
+    std::atomic<juce::uint32> currentSourceId { 0 };
+
+    FaceResult lastResultForAudio;
+    juce::AbstractFifo fifo { 16 };
+    std::vector<FaceResult> fifoBuffer;
+
+    juce::Image latestFrameForGui;
+    juce::CriticalSection imageLock;
+};
+
+
+
+
+================================================================================
+FILE: juce\\Source\\audio\\modules\\FaceTrackerModule.cpp
+================================================================================
+
+
+#include "FaceTrackerModule.h"
+#include "../../video/VideoFrameManager.h"
+#include <opencv2/imgproc.hpp>
+
+juce::AudioProcessorValueTreeState::ParameterLayout FaceTrackerModule::createParameterLayout()
+{
+    std::vector<std::unique_ptr<juce::RangedAudioParameter>> params;
+    params.push_back(std::make_unique<juce::AudioParameterFloat>("sourceId", "Source ID", 0.0f, 1000.0f, 0.0f));
+    params.push_back(std::make_unique<juce::AudioParameterFloat>("confidence", "Confidence", 0.0f, 1.0f, 0.1f));
+    params.push_back(std::make_unique<juce::AudioParameterChoice>("zoomLevel", "Zoom Level", juce::StringArray{"Small","Normal","Large"}, 1));
+    return { params.begin(), params.end() };
+}
+
+FaceTrackerModule::FaceTrackerModule()
+    : ModuleProcessor(BusesProperties()
+                        .withInput("Input", juce::AudioChannelSet::mono(), true)
+                        .withOutput("Output", juce::AudioChannelSet::discreteChannels(FACE_NUM_KEYPOINTS * 2), true)),
+      juce::Thread("Face Tracker Thread"),
+      apvts(*this, nullptr, "FaceTrackerParams", createParameterLayout())
+{
+    sourceIdParam = apvts.getRawParameterValue("sourceId");
+    zoomLevelParam = apvts.getRawParameterValue("zoomLevel");
+    confidenceThresholdParam = apvts.getRawParameterValue("confidence");
+    fifoBuffer.resize(16);
+}
+
+FaceTrackerModule::~FaceTrackerModule()
+{
+    stopThread(5000);
+}
+
+void FaceTrackerModule::prepareToPlay(double, int)
+{
+    startThread(juce::Thread::Priority::normal);
+}
+
+void FaceTrackerModule::releaseResources()
+{
+    signalThreadShouldExit();
+    stopThread(5000);
+}
+
+void FaceTrackerModule::loadModel()
+{
+    auto appDir = juce::File::getSpecialLocation(juce::File::currentApplicationFile).getParentDirectory();
+    auto assetsDir = appDir.getChildFile("assets");
+    auto faceDir = assetsDir.getChildFile("openpose_models").getChildFile("face");
+    auto haarPath = faceDir.getChildFile("haarcascade_frontalface_alt.xml").getFullPathName();
+    auto protoPath = faceDir.getChildFile("pose_deploy.prototxt").getFullPathName();
+    auto modelPath = faceDir.getChildFile("pose_iter_116000.caffemodel").getFullPathName();
+    bool ok = faceCascade.load(haarPath.toStdString());
+    if (ok && juce::File(protoPath).existsAsFile() && juce::File(modelPath).existsAsFile())
+    {
+        try { net = cv::dnn::readNetFromCaffe(protoPath.toStdString(), modelPath.toStdString()); modelLoaded = true; }
+        catch (...) { modelLoaded = false; }
+    }
+}
+
+void FaceTrackerModule::run()
+{
+    if (!modelLoaded) loadModel();
+    while (!threadShouldExit())
+    {
+        auto srcId = currentSourceId.load();
+        cv::Mat frame = VideoFrameManager::getInstance().getFrame(srcId);
+        if (frame.empty()) { wait(50); continue; }
+
+        cv::Mat gray; cv::cvtColor(frame, gray, cv::COLOR_BGR2GRAY);
+        std::vector<cv::Rect> faces; faceCascade.detectMultiScale(gray, faces);
+        FaceResult result{};
+        if (!faces.empty())
+        {
+            cv::Rect box = faces[0];
+            cv::Mat roi = frame(box);
+            cv::Mat blob = cv::dnn::blobFromImage(roi, 1.0/255.0, cv::Size(368,368), cv::Scalar(), false, false);
+            net.setInput(blob);
+            cv::Mat out = net.forward();
+            parseFaceOutput(out, box, result);
+            // Draw box
+            cv::rectangle(frame, box, {0,255,0}, 2);
+            for (int i=0;i<FACE_NUM_KEYPOINTS;++i)
+                if (result.keypoints[i][0] >= 0)
+                    cv::circle(frame, { (int)result.keypoints[i][0], (int)result.keypoints[i][1] }, 2, {0,0,255}, -1);
+        }
+        if (fifo.getFreeSpace()>=1){ auto w=fifo.write(1); if (w.blockSize1>0) fifoBuffer[w.startIndex1]=result; }
+        updateGuiFrame(frame);
+        wait(66);
+    }
+}
+
+void FaceTrackerModule::parseFaceOutput(const cv::Mat& netOutput, const cv::Rect& faceBox, FaceResult& result)
+{
+    int H=netOutput.size[2], W=netOutput.size[3];
+    float thresh = confidenceThresholdParam ? confidenceThresholdParam->load() : 0.1f;
+    result.detectedPoints=0; int count=juce::jmin(FACE_NUM_KEYPOINTS, netOutput.size[1]);
+    for (int i=0;i<count;++i)
+    {
+        cv::Mat heat(H,W,CV_32F,(void*)netOutput.ptr<float>(0,i));
+        double mv; cv::Point ml; cv::minMaxLoc(heat,nullptr,&mv,nullptr,&ml);
+        if (mv>thresh){ result.keypoints[i][0]=(float)faceBox.x + (float)ml.x*faceBox.width/W; result.keypoints[i][1]=(float)faceBox.y + (float)ml.y*faceBox.height/H; result.detectedPoints++; }
+        else { result.keypoints[i][0]=-1.0f; result.keypoints[i][1]=-1.0f; }
+    }
+}
+
+void FaceTrackerModule::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midi)
+{
+    juce::ignoreUnused(midi);
+    auto in=getBusBuffer(buffer,true,0); if(in.getNumChannels()>0 && in.getNumSamples()>0) currentSourceId.store((juce::uint32)in.getSample(0,0));
+    buffer.clear(); if(fifo.getNumReady()>0){auto r=fifo.read(1); if(r.blockSize1>0) lastResultForAudio=fifoBuffer[r.startIndex1];}
+    for(int i=0;i<FACE_NUM_KEYPOINTS;++i){int chX=i*2, chY=i*2+1; if(chY>=buffer.getNumChannels()) break; float xn=(lastResultForAudio.keypoints[i][0]>=0)?juce::jlimit(0.0f,1.0f,lastResultForAudio.keypoints[i][0]/640.0f):0.0f; float yn=(lastResultForAudio.keypoints[i][1]>=0)?juce::jlimit(0.0f,1.0f,lastResultForAudio.keypoints[i][1]/480.0f):0.0f; for(int s=0;s<buffer.getNumSamples();++s){buffer.setSample(chX,s,xn); buffer.setSample(chY,s,yn);} }
+}
+
+#if defined(PRESET_CREATOR_UI)
+ImVec2 FaceTrackerModule::getCustomNodeSize() const
+{ int level=zoomLevelParam?(int)zoomLevelParam->load():1; level=juce::jlimit(0,2,level); const float widths[3]{240.0f,480.0f,960.0f}; return ImVec2(widths[level],0.0f);} 
+
+void FaceTrackerModule::drawParametersInNode(float itemWidth,
+                                             const std::function<bool(const juce::String& paramId)>& isParamModulated,
+                                             const std::function<void()>& onModificationEnded)
+{
+    ImGui::PushItemWidth(itemWidth);
+    float conf=confidenceThresholdParam?confidenceThresholdParam->load():0.1f;
+    if (ImGui::SliderFloat("Confidence", &conf, 0.0f, 1.0f, "%.2f")) { *dynamic_cast<juce::AudioParameterFloat*>(apvts.getParameter("confidence"))=conf; onModificationEnded(); }
+    int level=zoomLevelParam?(int)zoomLevelParam->load():1; level=juce::jlimit(0,2,level); float bw=(itemWidth/2.0f)-4.0f; bool atMin=(level<=0), atMax=(level>=2);
+    if(atMin) ImGui::BeginDisabled(); if(ImGui::Button("-", ImVec2(bw,0))){ int nl=juce::jmax(0,level-1); if(auto* p=apvts.getParameter("zoomLevel")) p->setValueNotifyingHost((float)nl/2.0f); onModificationEnded(); }
+    if(atMin) ImGui::EndDisabled(); ImGui::SameLine(); if(atMax) ImGui::BeginDisabled(); if(ImGui::Button("+", ImVec2(bw,0))){ int nl=juce::jmin(2,level+1); if(auto* p=apvts.getParameter("zoomLevel")) p->setValueNotifyingHost((float)nl/2.0f); onModificationEnded(); }
+    if(atMax) ImGui::EndDisabled();
+    ImGui::PopItemWidth();
+}
+
+void FaceTrackerModule::drawIoPins(const NodePinHelpers& helpers)
+{
+    helpers.drawAudioInputPin("Source In", 0);
+    for(int i=0;i<FACE_NUM_KEYPOINTS;++i)
+    { juce::String base = juce::String("Pt ") + juce::String(i+1); helpers.drawAudioOutputPin((base+" X").toRawUTF8(), i*2); helpers.drawAudioOutputPin((base+" Y").toRawUTF8(), i*2+1);}    
+}
+
+#endif
+
+void FaceTrackerModule::updateGuiFrame(const cv::Mat& frame)
+{
+    cv::Mat bgra; cv::cvtColor(frame, bgra, cv::COLOR_BGR2BGRA); const juce::ScopedLock lock(imageLock);
+    if (latestFrameForGui.isNull() || latestFrameForGui.getWidth()!=bgra.cols || latestFrameForGui.getHeight()!=bgra.rows)
+        latestFrameForGui = juce::Image(juce::Image::ARGB, bgra.cols, bgra.rows, true);
+    juce::Image::BitmapData dest(latestFrameForGui, juce::Image::BitmapData::writeOnly); memcpy(dest.data, bgra.data, bgra.total()*bgra.elemSize());
+}
+
+juce::Image FaceTrackerModule::getLatestFrame()
+{
+    const juce::ScopedLock lock(imageLock);
+    return latestFrameForGui.createCopy();
+}
+
+
+
+
+================================================================================
+FILE: juce\\Source\\audio\\modules\\ObjectDetectorModule.h
+================================================================================
+
+
+#pragma once
+
+#include "ModuleProcessor.h"
+#include <opencv2/core.hpp>
+#include <opencv2/dnn.hpp>
+#include <juce_core/juce_core.h>
+#include <juce_audio_processors/juce_audio_processors.h>
+#include <juce_graphics/juce_graphics.h>
+#if defined(PRESET_CREATOR_UI)
+#include <juce_gui_basics/juce_gui_basics.h>
+#endif
+
+// A real-time safe struct to hold the bounding box of the detected object.
+struct ObjectDetectionResult
+{
+    float x = 0.0f;     // normalized center X (0..1)
+    float y = 0.0f;     // normalized center Y (0..1)
+    float width = 0.0f; // normalized width (0..1)
+    float height = 0.0f;// normalized height (0..1)
+    bool detected = false;
+};
+
+class ObjectDetectorModule : public ModuleProcessor, private juce::Thread
+{
+public:
+    ObjectDetectorModule();
+    ~ObjectDetectorModule() override;
+
+    const juce::String getName() const override { return "object_detector"; }
+    
+    void prepareToPlay(double sampleRate, int samplesPerBlock) override;
+    void releaseResources() override;
+    void processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midi) override;
+    
+    juce::AudioProcessorValueTreeState& getAPVTS() override { return apvts; }
+    juce::Image getLatestFrame();
+
+#if defined(PRESET_CREATOR_UI)
+    void drawParametersInNode(float itemWidth,
+                              const std::function<bool(const juce::String& paramId)>& isParamModulated,
+                              const std::function<void()>& onModificationEnded) override;
+    void drawIoPins(const NodePinHelpers& helpers) override;
+    ImVec2 getCustomNodeSize() const override;
+#endif
+
+private:
+    void run() override;
+    void updateGuiFrame(const cv::Mat& frame);
+    void loadModel();
+    
+    static juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout();
+    juce::AudioProcessorValueTreeState apvts;
+    
+    // Parameters
+    std::atomic<float>* sourceIdParam = nullptr;
+    std::atomic<float>* zoomLevelParam = nullptr; // 0=Small,1=Normal,2=Large
+    juce::AudioParameterChoice* targetClassParam = nullptr;
+    std::atomic<float>* confidenceThresholdParam = nullptr;
+    
+    // DNN
+    cv::dnn::Net net;
+    bool modelLoaded = false;
+    std::vector<std::string> classNames;
+    
+    // UI-selected target class (independent of AudioParameterChoice list)
+    std::atomic<int> selectedClassId { 0 };
+
+    // Source ID (set by audio thread)
+    std::atomic<juce::uint32> currentSourceId { 0 };
+    
+    // FIFO for communication
+    ObjectDetectionResult lastResultForAudio;
+    juce::AbstractFifo fifo { 16 };
+    std::vector<ObjectDetectionResult> fifoBuffer;
+    
+    // UI preview
+    juce::Image latestFrameForGui;
+    juce::CriticalSection imageLock;
+};
+
+
+
+
+================================================================================
+FILE: juce\\Source\\audio\\modules\\ObjectDetectorModule.cpp
+================================================================================
+
+
+#include "ObjectDetectorModule.h"
+#include "../../video/VideoFrameManager.h"
+#include <opencv2/imgproc.hpp>
+#include <opencv2/dnn.hpp>
+#include <fstream>
+
+#if defined(PRESET_CREATOR_UI)
+#include <imgui.h>
+#endif
+
+// YOLOv3 default input size
+static constexpr int YOLO_INPUT_SIZE = 416;
+// Embedded COCO-80 labels used if coco.names is missing
+static const char* kCoco80[] = {
+    "person","bicycle","car","motorbike","aeroplane","bus","train","truck","boat","traffic light",
+    "fire hydrant","stop sign","parking meter","bench","bird","cat","dog","horse","sheep","cow",
+    "elephant","bear","zebra","giraffe","backpack","umbrella","handbag","tie","suitcase","frisbee",
+    "skis","snowboard","sports ball","kite","baseball bat","baseball glove","skateboard","surfboard","tennis racket","bottle",
+    "wine glass","cup","fork","knife","spoon","bowl","banana","apple","sandwich","orange",
+    "broccoli","carrot","hot dog","pizza","donut","cake","chair","sofa","pottedplant","bed",
+    "diningtable","toilet","tvmonitor","laptop","mouse","remote","keyboard","cell phone","microwave","oven",
+    "toaster","sink","refrigerator","book","clock","vase","scissors","teddy bear","hair drier","toothbrush"
+};
+
+juce::AudioProcessorValueTreeState::ParameterLayout ObjectDetectorModule::createParameterLayout()
+{
+    std::vector<std::unique_ptr<juce::RangedAudioParameter>> params;
+    
+    params.push_back(std::make_unique<juce::AudioParameterFloat>(
+        "sourceId", "Source ID", 0.0f, 1000.0f, 0.0f));
+    
+    params.push_back(std::make_unique<juce::AudioParameterChoice>(
+        "targetClass", "Target Class", juce::StringArray{ "person" }, 0));
+    
+    params.push_back(std::make_unique<juce::AudioParameterFloat>(
+        "confidence", "Confidence", 0.0f, 1.0f, 0.5f));
+    
+    params.push_back(std::make_unique<juce::AudioParameterChoice>(
+        "zoomLevel", "Zoom Level", juce::StringArray{ "Small", "Normal", "Large" }, 1));
+    
+    return { params.begin(), params.end() };
+}
+
+ObjectDetectorModule::ObjectDetectorModule()
+    : ModuleProcessor(BusesProperties()
+                      .withInput("Input", juce::AudioChannelSet::mono(), true)
+                      .withOutput("Output", juce::AudioChannelSet::discreteChannels(5), true)),
+      juce::Thread("Object Detector Thread"),
+      apvts(*this, nullptr, "ObjectDetectorParams", createParameterLayout())
+{
+    sourceIdParam = apvts.getRawParameterValue("sourceId");
+    zoomLevelParam = apvts.getRawParameterValue("zoomLevel");
+    targetClassParam = dynamic_cast<juce::AudioParameterChoice*>(apvts.getParameter("targetClass"));
+    confidenceThresholdParam = apvts.getRawParameterValue("confidence");
+    
+    fifoBuffer.resize(16);
+    
+    loadModel();
+}
+
+ObjectDetectorModule::~ObjectDetectorModule()
+{
+    stopThread(5000);
+}
+
+void ObjectDetectorModule::prepareToPlay(double sampleRate, int samplesPerBlock)
+{
+    juce::ignoreUnused(sampleRate, samplesPerBlock);
+    startThread(juce::Thread::Priority::normal);
+}
+
+void ObjectDetectorModule::releaseResources()
+{
+    signalThreadShouldExit();
+    stopThread(5000);
+}
+
+void ObjectDetectorModule::loadModel()
+{
+    // Find assets next to executable
+    auto exeFile = juce::File::getSpecialLocation(juce::File::currentApplicationFile);
+    auto appDir = exeFile.getParentDirectory();
+    juce::File assetsDir = appDir.getChildFile("assets");
+    
+    juce::File weights = assetsDir.getChildFile("yolov3.weights");
+    juce::File cfg     = assetsDir.getChildFile("yolov3.cfg");
+    // Fallback to tiny if standard is missing
+    if (!weights.existsAsFile() || !cfg.existsAsFile())
+    {
+        juce::File wTiny = assetsDir.getChildFile("yolov3-tiny.weights");
+        juce::File cTiny = assetsDir.getChildFile("yolov3-tiny.cfg");
+        if (wTiny.existsAsFile() && cTiny.existsAsFile())
+        {
+            weights = wTiny; cfg = cTiny;
+            juce::Logger::writeToLog("[ObjectDetector] Using YOLOv3-tiny assets.");
+        }
+    }
+    juce::File names = assetsDir.getChildFile("coco.names");
+ 
+    juce::Logger::writeToLog("[ObjectDetector] Assets directory: " + assetsDir.getFullPathName());
+    
+    if (weights.existsAsFile() && cfg.existsAsFile())
+    {
+        try
+        {
+            net = cv::dnn::readNetFromDarknet(cfg.getFullPathName().toStdString(), weights.getFullPathName().toStdString());
+            net.setPreferableBackend(cv::dnn::DNN_BACKEND_OPENCV);
+            net.setPreferableTarget(cv::dnn::DNN_TARGET_CPU);
+            
+            // Load class names if available
+            classNames.clear();
+            if (names.existsAsFile())
+            {
+                std::ifstream ifs(names.getFullPathName().toStdString().c_str());
+                std::string line;
+                while (std::getline(ifs, line))
+                    if (!line.empty()) classNames.push_back(line);
+            }
+            if (classNames.empty())
+            {
+                classNames.assign(std::begin(kCoco80), std::end(kCoco80));
+                juce::Logger::writeToLog("[ObjectDetector] coco.names missing; using embedded COCO-80 labels.");
+            }
+            
+            // Note: UI combo is populated from classNames directly
+            
+            modelLoaded = true;
+            juce::Logger::writeToLog("[ObjectDetector] YOLOv3 model loaded successfully");
+        }
+        catch (const cv::Exception& e)
+        {
+            juce::Logger::writeToLog("[ObjectDetector] OpenCV exception: " + juce::String(e.what()));
+            modelLoaded = false;
+        }
+    }
+    else
+    {
+        juce::Logger::writeToLog("[ObjectDetector] FAILED: Could not find YOLO model files in " + assetsDir.getFullPathName());
+        modelLoaded = false;
+    }
+}
+
+void ObjectDetectorModule::run()
+{
+    while (!threadShouldExit())
+    {
+        if (!modelLoaded)
+        {
+            wait(200);
+            continue;
+        }
+        
+        juce::uint32 sourceId = currentSourceId.load();
+        cv::Mat frame = VideoFrameManager::getInstance().getFrame(sourceId);
+        
+        if (!frame.empty())
+        {
+            // Prepare input blob
+            cv::Mat blob = cv::dnn::blobFromImage(
+                frame,
+                1.0 / 255.0,
+                cv::Size(YOLO_INPUT_SIZE, YOLO_INPUT_SIZE),
+                cv::Scalar(),
+                true,
+                false);
+            net.setInput(blob);
+            
+            // Forward through YOLO
+            std::vector<cv::Mat> outs;
+            net.forward(outs, net.getUnconnectedOutLayersNames());
+            
+            std::vector<int> classIds;
+            std::vector<float> confidences;
+            std::vector<cv::Rect> boxes;
+            
+            int targetClassId = juce::jlimit(0, (int)juce::jmax<size_t>(1, classNames.size()) - 1, selectedClassId.load());
+            float confThreshold = confidenceThresholdParam ? confidenceThresholdParam->load() : 0.5f;
+            
+            for (const auto& out : outs)
+            {
+                const float* data = reinterpret_cast<const float*>(out.data);
+                for (int i = 0; i < out.rows; ++i, data += out.cols)
+                {
+                    float score;
+                    int classId = -1;
+                    // Scores start at index 5
+                    cv::Mat scores(1, out.cols - 5, CV_32F, (void*)(data + 5));
+                    cv::Point classIdPoint;
+                    double maxClassScore;
+                    cv::minMaxLoc(scores, nullptr, &maxClassScore, nullptr, &classIdPoint);
+                    score = static_cast<float>(maxClassScore);
+                    classId = classIdPoint.x;
+                    
+                    if (score > confThreshold && classId == targetClassId)
+                    {
+                        int centerX = static_cast<int>(data[0] * frame.cols);
+                        int centerY = static_cast<int>(data[1] * frame.rows);
+                        int width   = static_cast<int>(data[2] * frame.cols);
+                        int height  = static_cast<int>(data[3] * frame.rows);
+                        int left    = centerX - width / 2;
+                        int top     = centerY - height / 2;
+                        classIds.push_back(classId);
+                        confidences.push_back(score);
+                        boxes.emplace_back(left, top, width, height);
+                    }
+                }
+            }
+            
+            std::vector<int> indices;
+            cv::dnn::NMSBoxes(boxes, confidences, confThreshold, 0.4f, indices);
+            
+            ObjectDetectionResult result;
+            if (!indices.empty())
+            {
+                int bestIdx = indices[0];
+                const cv::Rect& box = boxes[bestIdx];
+                result.detected = true;
+                result.x = juce::jlimit(0.0f, 1.0f, (float)(box.x + box.width * 0.5f) / (float)frame.cols);
+                result.y = juce::jlimit(0.0f, 1.0f, (float)(box.y + box.height * 0.5f) / (float)frame.rows);
+                result.width  = juce::jlimit(0.0f, 1.0f, (float)box.width / (float)frame.cols);
+                result.height = juce::jlimit(0.0f, 1.0f, (float)box.height / (float)frame.rows);
+                
+                // Draw bbox and label
+                cv::rectangle(frame, box, cv::Scalar(0, 255, 0), 2);
+                std::string label;
+                if (!classNames.empty() && targetClassId >= 0 && targetClassId < (int)classNames.size())
+                    label = classNames[(size_t)targetClassId];
+                else
+                    label = "target";
+                cv::putText(frame, label, box.tl() + cv::Point(0, -5), cv::FONT_HERSHEY_SIMPLEX, 0.8, cv::Scalar(0, 255, 0), 2);
+            }
+            
+            if (fifo.getFreeSpace() >= 1)
+            {
+                auto writeScope = fifo.write(1);
+                if (writeScope.blockSize1 > 0)
+                    fifoBuffer[writeScope.startIndex1] = result;
+            }
+            
+            updateGuiFrame(frame);
+        }
+        
+        // YOLO is heavy; ~10 FPS
+        wait(100);
+    }
+}
+
+void ObjectDetectorModule::updateGuiFrame(const cv::Mat& frame)
+{
+    cv::Mat bgraFrame;
+    cv::cvtColor(frame, bgraFrame, cv::COLOR_BGR2BGRA);
+    
+    const juce::ScopedLock lock(imageLock);
+    if (latestFrameForGui.isNull() ||
+        latestFrameForGui.getWidth() != bgraFrame.cols ||
+        latestFrameForGui.getHeight() != bgraFrame.rows)
+    {
+        latestFrameForGui = juce::Image(juce::Image::ARGB, bgraFrame.cols, bgraFrame.rows, true);
+    }
+    juce::Image::BitmapData destData(latestFrameForGui, juce::Image::BitmapData::writeOnly);
+    memcpy(destData.data, bgraFrame.data, bgraFrame.total() * bgraFrame.elemSize());
+}
+
+juce::Image ObjectDetectorModule::getLatestFrame()
+{
+    const juce::ScopedLock lock(imageLock);
+    return latestFrameForGui.createCopy();
+}
+
+void ObjectDetectorModule::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midi)
+{
+    juce::ignoreUnused(midi);
+    
+    // Read Source ID from input pin
+    auto inputBuffer = getBusBuffer(buffer, true, 0);
+    if (inputBuffer.getNumChannels() > 0 && inputBuffer.getNumSamples() > 0)
+    {
+        float sourceIdFloat = inputBuffer.getSample(0, 0);
+        currentSourceId.store((juce::uint32)sourceIdFloat);
+    }
+    
+    buffer.clear();
+    
+    if (fifo.getNumReady() > 0)
+    {
+        auto readScope = fifo.read(1);
+        if (readScope.blockSize1 > 0)
+            lastResultForAudio = fifoBuffer[readScope.startIndex1];
+    }
+    
+    // Output channels: 0:X, 1:Y, 2:W, 3:H, 4:Gate
+    const float values[5]
+    {
+        lastResultForAudio.x,
+        lastResultForAudio.y,
+        lastResultForAudio.width,
+        lastResultForAudio.height,
+        lastResultForAudio.detected ? 1.0f : 0.0f
+    };
+    
+    for (int ch = 0; ch < juce::jmin(5, buffer.getNumChannels()); ++ch)
+    {
+        for (int s = 0; s < buffer.getNumSamples(); ++s)
+            buffer.setSample(ch, s, values[ch]);
+    }
+}
+
+#if defined(PRESET_CREATOR_UI)
+ImVec2 ObjectDetectorModule::getCustomNodeSize() const
+{
+    int level = zoomLevelParam ? (int) zoomLevelParam->load() : 1;
+    level = juce::jlimit(0, 2, level);
+    const float widths[3] { 240.0f, 480.0f, 960.0f };
+    return ImVec2(widths[level], 0.0f);
+}
+
+void ObjectDetectorModule::drawParametersInNode(float itemWidth,
+                                                const std::function<bool(const juce::String& paramId)>& isParamModulated,
+                                                const std::function<void()>& onModificationEnded)
+{
+    juce::ignoreUnused(isParamModulated);
+    ImGui::PushItemWidth(itemWidth);
+    
+    if (targetClassParam)
+    {
+        int idx = juce::jlimit(0, (int)juce::jmax<size_t>(1, classNames.size()) - 1, selectedClassId.load());
+        const char* currentLabel = (!classNames.empty() && juce::isPositiveAndBelow(idx, (int)classNames.size()))
+            ? classNames[(size_t)idx].c_str() : "person";
+
+        // Optional quick filter
+        static char filterBuf[64] = {0};
+        ImGui::InputText("##class_filter", filterBuf, sizeof(filterBuf));
+        ImGui::SameLine();
+        if (ImGui::Button("Clear")) { filterBuf[0] = '\0'; }
+
+        if (ImGui::BeginCombo("Target Class", currentLabel))
+        {
+            const juce::String filter = juce::String(filterBuf).toLowerCase();
+            for (int i = 0; i < (int)classNames.size(); ++i)
+            {
+                const juce::String name = juce::String(classNames[(size_t)i]);
+                if (filter.isNotEmpty() && !name.toLowerCase().contains(filter))
+                    continue;
+                bool selected = (idx == i);
+                if (ImGui::Selectable(name.toRawUTF8(), selected))
+                {
+                    idx = i;
+                    selectedClassId.store(idx);
+                    onModificationEnded();
+                }
+                if (selected) ImGui::SetItemDefaultFocus();
+            }
+            ImGui::EndCombo();
+        }
+    }
+    
+    float confidence = confidenceThresholdParam ? confidenceThresholdParam->load() : 0.5f;
+    if (ImGui::SliderFloat("Confidence", &confidence, 0.0f, 1.0f, "%.2f"))
+    {
+        if (auto* p = dynamic_cast<juce::AudioParameterFloat*>(apvts.getParameter("confidence")))
+            *p = confidence;
+        onModificationEnded();
+    }
+    
+    // Zoom controls
+    int level = zoomLevelParam ? (int) zoomLevelParam->load() : 1;
+    level = juce::jlimit(0, 2, level);
+    float buttonWidth = (itemWidth / 2.0f) - 4.0f;
+    const bool atMin = (level <= 0);
+    const bool atMax = (level >= 2);
+    if (atMin) ImGui::BeginDisabled();
+    if (ImGui::Button("-", ImVec2(buttonWidth, 0)))
+    {
+        int newLevel = juce::jmax(0, level - 1);
+        if (auto* p = apvts.getParameter("zoomLevel"))
+            p->setValueNotifyingHost((float)newLevel / 2.0f);
+        onModificationEnded();
+    }
+    if (atMin) ImGui::EndDisabled();
+    ImGui::SameLine();
+    if (atMax) ImGui::BeginDisabled();
+    if (ImGui::Button("+", ImVec2(buttonWidth, 0)))
+    {
+        int newLevel = juce::jmin(2, level + 1);
+        if (auto* p = apvts.getParameter("zoomLevel"))
+            p->setValueNotifyingHost((float)newLevel / 2.0f);
+        onModificationEnded();
+    }
+    if (atMax) ImGui::EndDisabled();
+    
+    ImGui::Separator();
+    if (modelLoaded)
+    {
+        ImGui::TextColored(ImVec4(0.0f, 1.0f, 0.0f, 1.0f), "Model: Loaded");
+        ImGui::Text("Classes: %d", (int)classNames.size());
+    }
+    else
+    {
+        ImGui::TextColored(ImVec4(1.0f, 0.0f, 0.0f, 1.0f), "Model: NOT LOADED");
+        ImGui::TextWrapped("Place files in assets/: yolov3.cfg, yolov3.weights, coco.names");
+    }
+    
+    ImGui::PopItemWidth();
+}
+
+void ObjectDetectorModule::drawIoPins(const NodePinHelpers& helpers)
+{
+    helpers.drawAudioInputPin("Source In", 0);
+    helpers.drawAudioOutputPin("X", 0);
+    helpers.drawAudioOutputPin("Y", 1);
+    helpers.drawAudioOutputPin("Width", 2);
+    helpers.drawAudioOutputPin("Height", 3);
+    helpers.drawAudioOutputPin("Gate", 4);
+}
+#endif
+
+
+
+
+================================================================================
+FILE: juce\\Source\\audio\\modules\\ColorTrackerModule.h
+================================================================================
+
+
+#pragma once
+
+#include "ModuleProcessor.h"
+#include <opencv2/core.hpp>
+#include <juce_core/juce_core.h>
+#include <juce_audio_processors/juce_audio_processors.h>
+#include <juce_graphics/juce_graphics.h>
+#if defined(PRESET_CREATOR_UI)
+#include <juce_gui_basics/juce_gui_basics.h>
+#endif
+
+// A struct to hold the state and results for a single tracked color.
+struct TrackedColor
+{
+    juce::String name;
+    juce::Colour displayColour; // representative color for UI swatch
+    cv::Scalar hsvLower { 0, 100, 100 };
+    cv::Scalar hsvUpper { 10, 255, 255 };
+    float tolerance { 1.0f }; // 1.0 = default window; <1 shrink, >1 expand
+};
+
+// x, y, area for each color
+using ColorResult = std::vector<std::tuple<float, float, float>>;
+
+class ColorTrackerModule : public ModuleProcessor, private juce::Thread
+{
+public:
+    ColorTrackerModule();
+    ~ColorTrackerModule() override;
+
+    const juce::String getName() const override { return "color_tracker"; }
+    
+    void prepareToPlay(double sampleRate, int samplesPerBlock) override;
+    void releaseResources() override;
+    void processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midi) override;
+    
+    juce::AudioProcessorValueTreeState& getAPVTS() override { return apvts; }
+    juce::Image getLatestFrame();
+
+    // UI integration helpers
+    void addColorAt(int x, int y);
+    bool isPickerActive() const { return isColorPickerActive.load(); }
+    void exitPickerMode() { isColorPickerActive.store(false); }
+
+    // Dynamic outputs: 3 per color
+    std::vector<DynamicPinInfo> getDynamicOutputPins() const override;
+
+    // Persist tracked colors across sessions
+    juce::ValueTree getExtraStateTree() const override;
+    void setExtraStateTree(const juce::ValueTree& state) override;
+
+#if defined(PRESET_CREATOR_UI)
+    void drawParametersInNode(float itemWidth,
+                              const std::function<bool(const juce::String& paramId)>& isParamModulated,
+                              const std::function<void()>& onModificationEnded) override;
+    void drawIoPins(const NodePinHelpers& helpers) override;
+    ImVec2 getCustomNodeSize() const override;
+#endif
+
+private:
+    void run() override;
+    void updateGuiFrame(const cv::Mat& frame);
+    
+    static juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout();
+    juce::AudioProcessorValueTreeState apvts;
+    
+    std::atomic<float>* sourceIdParam = nullptr;
+    std::atomic<float>* zoomLevelParam = nullptr; // 0=Small,1=Normal,2=Large
+    
+    // Thread-safe color list
+    std::vector<TrackedColor> trackedColors;
+    mutable juce::CriticalSection colorListLock;
+    
+    // Source ID (set by audio thread)
+    std::atomic<juce::uint32> currentSourceId { 0 };
+    
+    // FIFO for communication
+    ColorResult lastResultForAudio;
+    juce::AbstractFifo fifo { 16 };
+    std::vector<ColorResult> fifoBuffer;
+    
+    // UI interaction
+    std::atomic<bool> isColorPickerActive { false };
+    // -1 means add a new color; 0+ means update that tracked color index
+    std::atomic<int> pickerTargetIndex { -1 };
+    std::atomic<int> pickerMouseX { -1 }, pickerMouseY { -1 };
+    std::atomic<bool> addColorRequested { false };
+
+    // UI preview
+    juce::Image latestFrameForGui;
+    juce::CriticalSection imageLock;
+
+    // Cached last BGR frame for operations while source is paused/no new frames
+    cv::Mat lastFrameBgr;
+    juce::CriticalSection frameLock;
+};
+
+
+
+
+================================================================================
+FILE: juce\\Source\\audio\\modules\\ColorTrackerModule.cpp
+================================================================================
+
+
+#include "ColorTrackerModule.h"
+#include "../graph/ModularSynthProcessor.h"
+#include "../../video/VideoFrameManager.h"
+#include <opencv2/imgproc.hpp>
+
+#if defined(PRESET_CREATOR_UI)
+#include <imgui.h>
+#endif
+
+juce::AudioProcessorValueTreeState::ParameterLayout ColorTrackerModule::createParameterLayout()
+{
+    std::vector<std::unique_ptr<juce::RangedAudioParameter>> params;
+    params.push_back(std::make_unique<juce::AudioParameterFloat>(
+        "sourceId", "Source ID", 0.0f, 1000.0f, 0.0f));
+    params.push_back(std::make_unique<juce::AudioParameterChoice>(
+        "zoomLevel", "Zoom Level", juce::StringArray{ "Small", "Normal", "Large" }, 1));
+    return { params.begin(), params.end() };
+}
+
+ColorTrackerModule::ColorTrackerModule()
+    : ModuleProcessor(BusesProperties()
+                      .withInput("Input", juce::AudioChannelSet::mono(), true)
+                      .withOutput("Output", juce::AudioChannelSet::discreteChannels(24), true)), // up to 8 colors x 3
+      juce::Thread("Color Tracker Thread"),
+      apvts(*this, nullptr, "ColorTrackerParams", createParameterLayout())
+{
+    sourceIdParam = apvts.getRawParameterValue("sourceId");
+    zoomLevelParam = apvts.getRawParameterValue("zoomLevel");
+    fifoBuffer.resize(16);
+}
+
+ColorTrackerModule::~ColorTrackerModule()
+{
+    stopThread(5000);
+}
+
+void ColorTrackerModule::prepareToPlay(double sampleRate, int samplesPerBlock)
+{
+    juce::ignoreUnused(sampleRate, samplesPerBlock);
+    startThread(juce::Thread::Priority::normal);
+}
+
+void ColorTrackerModule::releaseResources()
+{
+    signalThreadShouldExit();
+    stopThread(5000);
+}
+
+void ColorTrackerModule::run()
+{
+    while (!threadShouldExit())
+    {
+        juce::uint32 sourceId = currentSourceId.load();
+        cv::Mat frame = VideoFrameManager::getInstance().getFrame(sourceId);
+        if (!frame.empty())
+        {
+        cv::Mat hsv;
+        if (!frame.empty())
+        {
+            // Cache last good frame for paused/no-signal scenarios
+            {
+                const juce::ScopedLock lk(frameLock);
+                frame.copyTo(lastFrameBgr);
+            }
+        }
+        else
+        {
+            // Use cached frame when no fresh frames are available (e.g., transport paused)
+            const juce::ScopedLock lk(frameLock);
+            if (!lastFrameBgr.empty())
+                frame = lastFrameBgr.clone();
+        }
+
+        if (!frame.empty())
+            cv::cvtColor(frame, hsv, cv::COLOR_BGR2HSV);
+
+            // NOTE: No queued color-pick path here anymore; add/update is handled synchronously by addColorAt()
+
+            ColorResult result;
+            {
+                const juce::ScopedLock lock(colorListLock);
+                for (auto& tc : trackedColors)
+                {
+                    if (frame.empty() || hsv.empty())
+                    {
+                        result.emplace_back(0.5f, 0.5f, 0.0f);
+                        continue;
+                    }
+                    // Compute tolerance-adjusted bounds
+                    double centerH = 0.5 * ((double)tc.hsvLower[0] + (double)tc.hsvUpper[0]);
+                    double centerS = 0.5 * ((double)tc.hsvLower[1] + (double)tc.hsvUpper[1]);
+                    double centerV = 0.5 * ((double)tc.hsvLower[2] + (double)tc.hsvUpper[2]);
+                    double deltaH  = 0.5 * ((double)tc.hsvUpper[0] - (double)tc.hsvLower[0]);
+                    double deltaS  = 0.5 * ((double)tc.hsvUpper[1] - (double)tc.hsvLower[1]);
+                    double deltaV  = 0.5 * ((double)tc.hsvUpper[2] - (double)tc.hsvLower[2]);
+                    double scale   = juce::jlimit(0.1, 5.0, (double)tc.tolerance);
+                    double lowH  = juce::jlimit(0.0, 179.0, centerH - deltaH * scale);
+                    double highH = juce::jlimit(0.0, 179.0, centerH + deltaH * scale);
+                    double lowS  = juce::jlimit(0.0, 255.0, centerS - deltaS * scale);
+                    double highS = juce::jlimit(0.0, 255.0, centerS + deltaS * scale);
+                    double lowV  = juce::jlimit(0.0, 255.0, centerV - deltaV * scale);
+                    double highV = juce::jlimit(0.0, 255.0, centerV + deltaV * scale);
+
+                    cv::Scalar lower(lowH, lowS, lowV);
+                    cv::Scalar upper(highH, highS, highV);
+
+                    cv::Mat mask;
+                    cv::inRange(hsv, lower, upper, mask);
+                    
+                    // Morphological cleanup
+                    cv::erode(mask, mask, cv::Mat(), cv::Point(-1,-1), 1);
+                    cv::dilate(mask, mask, cv::Mat(), cv::Point(-1,-1), 1);
+                    
+                    std::vector<std::vector<cv::Point>> contours;
+                    cv::findContours(mask, contours, cv::RETR_EXTERNAL, cv::CHAIN_APPROX_SIMPLE);
+                    
+                    if (!contours.empty())
+                    {
+                        size_t best = 0;
+                        double maxArea = 0.0;
+                        for (size_t i = 0; i < contours.size(); ++i)
+                        {
+                            double a = cv::contourArea(contours[i]);
+                            if (a > maxArea) { maxArea = a; best = i; }
+                        }
+                        const auto& c = contours[best];
+                        cv::Moments m = cv::moments(c);
+                        float cx = (m.m00 > 0.0) ? (float)(m.m10 / m.m00) / (float)frame.cols : 0.5f;
+                        float cy = (m.m00 > 0.0) ? (float)(m.m01 / m.m00) / (float)frame.rows : 0.5f;
+                        float area = juce::jlimit(0.0f, 1.0f, (float)(maxArea / (frame.cols * frame.rows)));
+                        result.emplace_back(cx, cy, area);
+                        
+                        // Draw
+                        cv::Rect bbox = cv::boundingRect(c);
+                        cv::rectangle(frame, bbox, cv::Scalar(0, 255, 255), 2);
+                        cv::putText(frame, tc.name.toStdString(), bbox.tl() + cv::Point(0, -5), cv::FONT_HERSHEY_SIMPLEX, 0.5, cv::Scalar(255,255,255), 1);
+                    }
+                    else
+                    {
+                        result.emplace_back(0.5f, 0.5f, 0.0f);
+                    }
+                }
+            }
+
+            if (fifo.getFreeSpace() >= 1)
+            {
+                auto writeScope = fifo.write(1);
+                if (writeScope.blockSize1 > 0)
+                    fifoBuffer[writeScope.startIndex1] = result;
+            }
+            
+            if (!frame.empty())
+                updateGuiFrame(frame);
+        }
+        
+        wait(33);
+    }
+}
+
+void ColorTrackerModule::updateGuiFrame(const cv::Mat& frame)
+{
+    cv::Mat bgraFrame;
+    cv::cvtColor(frame, bgraFrame, cv::COLOR_BGR2BGRA);
+    const juce::ScopedLock lock(imageLock);
+    if (latestFrameForGui.isNull() || latestFrameForGui.getWidth() != bgraFrame.cols || latestFrameForGui.getHeight() != bgraFrame.rows)
+        latestFrameForGui = juce::Image(juce::Image::ARGB, bgraFrame.cols, bgraFrame.rows, true);
+    juce::Image::BitmapData dest(latestFrameForGui, juce::Image::BitmapData::writeOnly);
+    memcpy(dest.data, bgraFrame.data, bgraFrame.total() * bgraFrame.elemSize());
+}
+
+juce::Image ColorTrackerModule::getLatestFrame()
+{
+    const juce::ScopedLock lock(imageLock);
+    return latestFrameForGui.createCopy();
+}
+
+void ColorTrackerModule::addColorAt(int x, int y)
+{
+    // Synchronous immediate update only (no background queuing)
+    bool appliedSync = false;
+
+    cv::Mat frameCopy;
+    {
+        const juce::ScopedLock lk(frameLock);
+        if (!lastFrameBgr.empty())
+            frameCopy = lastFrameBgr.clone();
+    }
+    if (!frameCopy.empty())
+    {
+        const int mx = juce::jlimit(0, frameCopy.cols - 1, x);
+        const int my = juce::jlimit(0, frameCopy.rows - 1, y);
+        cv::Rect roi(std::max(0, mx - 2), std::max(0, my - 2), 5, 5);
+        roi &= cv::Rect(0, 0, frameCopy.cols, frameCopy.rows);
+        if (roi.area() > 0)
+        {
+            cv::Scalar avgBgr = cv::mean(frameCopy(roi));
+            cv::Vec3b bgr8((uchar)avgBgr[0], (uchar)avgBgr[1], (uchar)avgBgr[2]);
+            cv::Mat onePix(1,1,CV_8UC3);
+            onePix.at<cv::Vec3b>(0,0) = bgr8;
+            cv::Mat onePixHsv;
+            cv::cvtColor(onePix, onePixHsv, cv::COLOR_BGR2HSV);
+            cv::Vec3b avgHsv = onePixHsv.at<cv::Vec3b>(0,0);
+            int avgHue = (int)avgHsv[0];
+            int avgSat = (int)avgHsv[1];
+            int avgVal = (int)avgHsv[2];
+
+            const juce::ScopedLock lock(colorListLock);
+            int targetIdx = pickerTargetIndex.load();
+            if (targetIdx < 0 || targetIdx >= (int)trackedColors.size())
+            {
+                TrackedColor tc;
+                tc.name = juce::String("Color ") + juce::String((int)trackedColors.size() + 1);
+                tc.hsvLower = cv::Scalar(
+                    juce::jlimit(0, 179, avgHue - 10),
+                    juce::jlimit(0, 255, avgSat - 40),
+                    juce::jlimit(0, 255, avgVal - 40));
+                tc.hsvUpper = cv::Scalar(
+                    juce::jlimit(0, 179, avgHue + 10),
+                    juce::jlimit(0, 255, avgSat + 40),
+                    juce::jlimit(0, 255, avgVal + 40));
+                tc.displayColour = juce::Colour((juce::uint8)bgr8[2], (juce::uint8)bgr8[1], (juce::uint8)bgr8[0]);
+                trackedColors.push_back(tc);
+            }
+            else
+            {
+                auto& tc = trackedColors[(size_t)targetIdx];
+                tc.hsvLower = cv::Scalar(
+                    juce::jlimit(0, 179, avgHue - 10),
+                    juce::jlimit(0, 255, avgSat - 40),
+                    juce::jlimit(0, 255, avgVal - 40));
+                tc.hsvUpper = cv::Scalar(
+                    juce::jlimit(0, 179, avgHue + 10),
+                    juce::jlimit(0, 255, avgSat + 40),
+                    juce::jlimit(0, 255, avgVal + 40));
+                tc.displayColour = juce::Colour((juce::uint8)bgr8[2], (juce::uint8)bgr8[1], (juce::uint8)bgr8[0]);
+                appliedSync = true;
+            }
+
+            // Push the same frame to GUI immediately for instant visual feedback
+            updateGuiFrame(frameCopy);
+        }
+    }
+
+    // Finalize picker state; never queue async to avoid duplicates
+    addColorRequested.store(false);
+    pickerMouseX.store(-1);
+    pickerMouseY.store(-1);
+    isColorPickerActive.store(false);
+}
+
+juce::ValueTree ColorTrackerModule::getExtraStateTree() const
+{
+    juce::ValueTree state("ColorTrackerState");
+    const juce::ScopedLock lock(colorListLock);
+    for (const auto& tc : trackedColors)
+    {
+        juce::ValueTree node("TrackedColor");
+        node.setProperty("name", tc.name, nullptr);
+        node.setProperty("displayColour", tc.displayColour.toString(), nullptr);
+        // Persist HSV windows (indexed fields for stability)
+        node.setProperty("hsvLower0", (int)tc.hsvLower[0], nullptr);
+        node.setProperty("hsvLower1", (int)tc.hsvLower[1], nullptr);
+        node.setProperty("hsvLower2", (int)tc.hsvLower[2], nullptr);
+        node.setProperty("hsvUpper0", (int)tc.hsvUpper[0], nullptr);
+        node.setProperty("hsvUpper1", (int)tc.hsvUpper[1], nullptr);
+        node.setProperty("hsvUpper2", (int)tc.hsvUpper[2], nullptr);
+        node.setProperty("tolerance", tc.tolerance, nullptr);
+        state.addChild(node, -1, nullptr);
+    }
+    return state;
+}
+
+void ColorTrackerModule::setExtraStateTree(const juce::ValueTree& state)
+{
+    if (!state.hasType("ColorTrackerState")) return;
+    const juce::ScopedLock lock(colorListLock);
+    trackedColors.clear();
+    for (int i = 0; i < state.getNumChildren(); ++i)
+    {
+        auto node = state.getChild(i);
+        if (!node.hasType("TrackedColor")) continue;
+        TrackedColor tc;
+        tc.name = node.getProperty("name", juce::String("Color ") + juce::String(i)).toString();
+        tc.displayColour = juce::Colour::fromString(node.getProperty("displayColour", "ff000000").toString());
+        int hL = (int)node.getProperty("hsvLower0", 0);
+        int sL = (int)node.getProperty("hsvLower1", 100);
+        int vL = (int)node.getProperty("hsvLower2", 100);
+        int hU = (int)node.getProperty("hsvUpper0", 10);
+        int sU = (int)node.getProperty("hsvUpper1", 255);
+        int vU = (int)node.getProperty("hsvUpper2", 255);
+        tc.hsvLower = cv::Scalar(hL, sL, vL);
+        tc.hsvUpper = cv::Scalar(hU, sU, vU);
+        tc.tolerance = (float)(double)node.getProperty("tolerance", 1.0);
+        trackedColors.push_back(tc);
+    }
+    // UI will re-query pins on next frame; no explicit rebuild signal required
+}
+
+void ColorTrackerModule::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midi)
+{
+    juce::ignoreUnused(midi);
+    auto inputBuffer = getBusBuffer(buffer, true, 0);
+    if (inputBuffer.getNumChannels() > 0 && inputBuffer.getNumSamples() > 0)
+        currentSourceId.store((juce::uint32)inputBuffer.getSample(0, 0));
+
+    buffer.clear();
+    if (fifo.getNumReady() > 0)
+    {
+        auto readScope = fifo.read(1);
+        if (readScope.blockSize1 > 0)
+            lastResultForAudio = fifoBuffer[readScope.startIndex1];
+    }
+
+    // Map each tracked color to 3 outputs: X, Y, Area
+    for (size_t i = 0; i < lastResultForAudio.size(); ++i)
+    {
+        int chX = (int)i * 3 + 0;
+        int chY = (int)i * 3 + 1;
+        int chA = (int)i * 3 + 2;
+        if (chA < buffer.getNumChannels())
+        {
+            const auto& tpl = lastResultForAudio[i];
+            float vx = std::get<0>(tpl);
+            float vy = std::get<1>(tpl);
+            float va = std::get<2>(tpl);
+            for (int s = 0; s < buffer.getNumSamples(); ++s)
+            {
+                buffer.setSample(chX, s, vx);
+                buffer.setSample(chY, s, vy);
+                buffer.setSample(chA, s, va);
+            }
+        }
+    }
+}
+
+std::vector<DynamicPinInfo> ColorTrackerModule::getDynamicOutputPins() const
+{
+    std::vector<DynamicPinInfo> pins;
+    const juce::ScopedLock lock(colorListLock);
+    for (size_t i = 0; i < trackedColors.size(); ++i)
+    {
+        pins.emplace_back(trackedColors[i].name + " X", (int)(i * 3 + 0), PinDataType::CV);
+        pins.emplace_back(trackedColors[i].name + " Y", (int)(i * 3 + 1), PinDataType::CV);
+        pins.emplace_back(trackedColors[i].name + " Area", (int)(i * 3 + 2), PinDataType::CV);
+    }
+    return pins;
+}
+
+#if defined(PRESET_CREATOR_UI)
+ImVec2 ColorTrackerModule::getCustomNodeSize() const
+{
+    int level = zoomLevelParam ? (int) zoomLevelParam->load() : 1;
+    level = juce::jlimit(0, 2, level);
+    const float widths[3] { 240.0f, 480.0f, 960.0f };
+    return ImVec2(widths[level], 0.0f);
+}
+
+void ColorTrackerModule::drawParametersInNode(float itemWidth,
+                                              const std::function<bool(const juce::String& paramId)>& isParamModulated,
+                                              const std::function<void()>& onModificationEnded)
+{
+    juce::ignoreUnused(isParamModulated, onModificationEnded);
+    ImGui::PushItemWidth(itemWidth);
+
+    if (ImGui::Button("Add Color...", ImVec2(itemWidth, 0)))
+    {
+        pickerTargetIndex.store(-1);
+        isColorPickerActive.store(true);
+    }
+
+    if (isColorPickerActive.load())
+    {
+        ImGui::TextColored(ImVec4(1.f,1.f,0.f,1.f), "Click on the video preview to pick a color");
+    }
+
+    // Zoom controls (-/+) like PoseEstimator
+    {
+        int level = zoomLevelParam ? (int) zoomLevelParam->load() : 1;
+        level = juce::jlimit(0, 2, level);
+        float buttonWidth = (itemWidth / 2.0f) - 4.0f;
+        const bool atMin = (level <= 0);
+        const bool atMax = (level >= 2);
+        if (atMin) ImGui::BeginDisabled();
+        if (ImGui::Button("-", ImVec2(buttonWidth, 0)))
+        {
+            int newLevel = juce::jmax(0, level - 1);
+            if (auto* p = apvts.getParameter("zoomLevel"))
+                p->setValueNotifyingHost((float)newLevel / 2.0f);
+        }
+        if (atMin) ImGui::EndDisabled();
+        ImGui::SameLine();
+        if (atMax) ImGui::BeginDisabled();
+        if (ImGui::Button("+", ImVec2(buttonWidth, 0)))
+        {
+            int newLevel = juce::jmin(2, level + 1);
+            if (auto* p = apvts.getParameter("zoomLevel"))
+                p->setValueNotifyingHost((float)newLevel / 2.0f);
+        }
+        if (atMax) ImGui::EndDisabled();
+    }
+
+    // Render tracked color list with swatch, tolerance, and remove
+    {
+        const juce::ScopedLock lock(colorListLock);
+        for (size_t i = 0; i < trackedColors.size(); )
+        {
+            ImGui::Separator();
+            const auto& tc = trackedColors[i];
+            ImVec4 imc(tc.displayColour.getFloatRed(), tc.displayColour.getFloatGreen(), tc.displayColour.getFloatBlue(), 1.0f);
+            if (ImGui::ColorButton((tc.name + "##swatch" + juce::String((int)i)).toRawUTF8(), imc, ImGuiColorEditFlags_NoTooltip, ImVec2(20,20)))
+            {
+                pickerTargetIndex.store((int)i);
+                isColorPickerActive.store(true);
+            }
+            ImGui::SameLine();
+            ImGui::TextUnformatted((tc.name + "##label" + juce::String((int)i)).toRawUTF8());
+            ImGui::SameLine();
+            ImGui::SetNextItemWidth(120.0f);
+            float tol = (float)tc.tolerance;
+            if (ImGui::SliderFloat((juce::String("Tol##") + juce::String((int)i)).toRawUTF8(), &tol, 0.1f, 5.0f, "%.2fx"))
+            {
+                const_cast<TrackedColor&>(tc).tolerance = tol;
+            }
+            ImGui::SameLine();
+            if (ImGui::SmallButton((juce::String("Remove##") + juce::String((int)i)).toRawUTF8()))
+            {
+                trackedColors.erase(trackedColors.begin() + (long long)i);
+                continue; // don't increment i when erased
+            }
+            ++i;
+        }
+    }
+
+    ImGui::PopItemWidth();
+}
+
+void ColorTrackerModule::drawIoPins(const NodePinHelpers& helpers)
+{
+    helpers.drawAudioInputPin("Source In", 0);
+    // Outputs are dynamic; editor queries via getDynamicOutputPins
+}
+#endif
+
+
+
+
+================================================================================
+FILE: juce\\Source\\audio\\modules\\ContourDetectorModule.h
+================================================================================
+
+
+#pragma once
+
+#include "ModuleProcessor.h"
+#include <opencv2/core.hpp>
+#include <opencv2/video.hpp>
+#include <juce_core/juce_core.h>
+#include <juce_audio_processors/juce_audio_processors.h>
+#include <juce_graphics/juce_graphics.h>
+#if defined(PRESET_CREATOR_UI)
+#include <juce_gui_basics/juce_gui_basics.h>
+#endif
+
+struct ContourResult
+{
+    float area = 0.0f;
+    float complexity = 0.0f;
+    float aspectRatio = 0.0f;
+};
+
+class ContourDetectorModule : public ModuleProcessor, private juce::Thread
+{
+public:
+    ContourDetectorModule();
+    ~ContourDetectorModule() override;
+
+    const juce::String getName() const override { return "contour_detector"; }
+    
+    void prepareToPlay(double sampleRate, int samplesPerBlock) override;
+    void releaseResources() override;
+    void processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midi) override;
+    
+    juce::AudioProcessorValueTreeState& getAPVTS() override { return apvts; }
+    juce::Image getLatestFrame();
+
+#if defined(PRESET_CREATOR_UI)
+    void drawParametersInNode(float itemWidth,
+                              const std::function<bool(const juce::String& paramId)>& isParamModulated,
+                              const std::function<void()>& onModificationEnded) override;
+    void drawIoPins(const NodePinHelpers& helpers) override;
+    ImVec2 getCustomNodeSize() const override;
+#endif
+
+private:
+    void run() override;
+    void updateGuiFrame(const cv::Mat& frame);
+    
+    static juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout();
+    juce::AudioProcessorValueTreeState apvts;
+    
+    std::atomic<float>* sourceIdParam = nullptr;
+    std::atomic<float>* thresholdParam = nullptr;
+    juce::AudioParameterBool* noiseReductionParam = nullptr;
+    std::atomic<float>* zoomLevelParam = nullptr;
+    
+    cv::Ptr<cv::BackgroundSubtractor> backSub;
+    
+    std::atomic<juce::uint32> currentSourceId { 0 };
+    ContourResult lastResultForAudio;
+    juce::AbstractFifo fifo { 16 };
+    std::vector<ContourResult> fifoBuffer;
+    
+    juce::Image latestFrameForGui;
+    juce::CriticalSection imageLock;
+};
+
+
+
+
+================================================================================
+FILE: juce\\Source\\audio\\modules\\ContourDetectorModule.cpp
+================================================================================
+
+
+#include "ContourDetectorModule.h"
+#include "../../video/VideoFrameManager.h"
+#include <opencv2/imgproc.hpp>
+
+#if defined(PRESET_CREATOR_UI)
+#include <imgui.h>
+#endif
+
+juce::AudioProcessorValueTreeState::ParameterLayout ContourDetectorModule::createParameterLayout()
+{
+    std::vector<std::unique_ptr<juce::RangedAudioParameter>> params;
+    params.push_back(std::make_unique<juce::AudioParameterFloat>("sourceId", "Source ID", 0.0f, 1000.0f, 0.0f));
+    params.push_back(std::make_unique<juce::AudioParameterFloat>("threshold", "Threshold", 0.0f, 255.0f, 128.0f));
+    params.push_back(std::make_unique<juce::AudioParameterBool>("noiseReduction", "Noise Reduction", true));
+    params.push_back(std::make_unique<juce::AudioParameterChoice>("zoomLevel", "Zoom Level", juce::StringArray{ "Small", "Normal", "Large" }, 1));
+    return { params.begin(), params.end() };
+}
+
+ContourDetectorModule::ContourDetectorModule()
+    : ModuleProcessor(BusesProperties()
+                      .withInput("Input", juce::AudioChannelSet::mono(), true)
+                      .withOutput("Output", juce::AudioChannelSet::discreteChannels(3), true)),
+      juce::Thread("Contour Detector Thread"),
+      apvts(*this, nullptr, "ContourDetectorParams", createParameterLayout())
+{
+    sourceIdParam = apvts.getRawParameterValue("sourceId");
+    thresholdParam = apvts.getRawParameterValue("threshold");
+    noiseReductionParam = dynamic_cast<juce::AudioParameterBool*>(apvts.getParameter("noiseReduction"));
+    zoomLevelParam = apvts.getRawParameterValue("zoomLevel");
+    fifoBuffer.resize(16);
+    backSub = cv::createBackgroundSubtractorMOG2();
+}
+
+ContourDetectorModule::~ContourDetectorModule()
+{
+    stopThread(5000);
+}
+
+void ContourDetectorModule::prepareToPlay(double sampleRate, int samplesPerBlock)
+{
+    juce::ignoreUnused(sampleRate, samplesPerBlock);
+    startThread(juce::Thread::Priority::normal);
+}
+
+void ContourDetectorModule::releaseResources()
+{
+    signalThreadShouldExit();
+    stopThread(5000);
+}
+
+void ContourDetectorModule::run()
+{
+    while (!threadShouldExit())
+    {
+        juce::uint32 sourceId = currentSourceId.load();
+        cv::Mat frame = VideoFrameManager::getInstance().getFrame(sourceId);
+        if (!frame.empty())
+        {
+            cv::Mat fgMask;
+            backSub->apply(frame, fgMask);
+            cv::threshold(fgMask, fgMask, thresholdParam ? thresholdParam->load() : 128.0f, 255, cv::THRESH_BINARY);
+            if (noiseReductionParam && noiseReductionParam->get())
+            {
+                cv::erode(fgMask, fgMask, cv::Mat(), cv::Point(-1,-1), 2);
+                cv::dilate(fgMask, fgMask, cv::Mat(), cv::Point(-1,-1), 2);
+            }
+
+            std::vector<std::vector<cv::Point>> contours;
+            cv::findContours(fgMask, contours, cv::RETR_EXTERNAL, cv::CHAIN_APPROX_SIMPLE);
+
+            ContourResult result;
+            if (!contours.empty())
+            {
+                double maxArea = 0.0;
+                int maxIdx = -1;
+                for (int i = 0; i < (int)contours.size(); ++i)
+                {
+                    double a = cv::contourArea(contours[i]);
+                    if (a > maxArea) { maxArea = a; maxIdx = i; }
+                }
+                if (maxIdx >= 0)
+                {
+                    const auto& c = contours[(size_t)maxIdx];
+                    result.area = juce::jlimit(0.0f, 1.0f, (float)(maxArea / (frame.cols * frame.rows)));
+                    std::vector<cv::Point> approx;
+                    cv::approxPolyDP(c, approx, 0.02 * cv::arcLength(c, true), true);
+                    result.complexity = juce::jmap((float)approx.size(), 3.0f, 50.0f, 0.0f, 1.0f);
+                    cv::Rect bbox = cv::boundingRect(c);
+                    result.aspectRatio = bbox.height > 0 ? (float)bbox.width / (float)bbox.height : 0.0f;
+                    // Draw
+                    cv::drawContours(frame, contours, maxIdx, cv::Scalar(0,255,0), 2);
+                    cv::rectangle(frame, bbox, cv::Scalar(255,0,0), 2);
+                }
+            }
+
+            if (fifo.getFreeSpace() >= 1)
+            {
+                auto writeScope = fifo.write(1);
+                if (writeScope.blockSize1 > 0)
+                    fifoBuffer[writeScope.startIndex1] = result;
+            }
+
+            updateGuiFrame(frame);
+        }
+        
+        wait(40);
+    }
+}
+
+void ContourDetectorModule::updateGuiFrame(const cv::Mat& frame)
+{
+    cv::Mat bgra;
+    cv::cvtColor(frame, bgra, cv::COLOR_BGR2BGRA);
+    const juce::ScopedLock lock(imageLock);
+    if (latestFrameForGui.isNull() || latestFrameForGui.getWidth() != bgra.cols || latestFrameForGui.getHeight() != bgra.rows)
+        latestFrameForGui = juce::Image(juce::Image::ARGB, bgra.cols, bgra.rows, true);
+    juce::Image::BitmapData dest(latestFrameForGui, juce::Image::BitmapData::writeOnly);
+    memcpy(dest.data, bgra.data, bgra.total() * bgra.elemSize());
+}
+
+juce::Image ContourDetectorModule::getLatestFrame()
+{
+    const juce::ScopedLock lock(imageLock);
+    return latestFrameForGui.createCopy();
+}
+
+void ContourDetectorModule::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midi)
+{
+    juce::ignoreUnused(midi);
+    auto inputBuffer = getBusBuffer(buffer, true, 0);
+    if (inputBuffer.getNumChannels() > 0 && inputBuffer.getNumSamples() > 0)
+        currentSourceId.store((juce::uint32)inputBuffer.getSample(0, 0));
+
+    buffer.clear();
+    if (fifo.getNumReady() > 0)
+    {
+        auto readScope = fifo.read(1);
+        if (readScope.blockSize1 > 0)
+            lastResultForAudio = fifoBuffer[readScope.startIndex1];
+    }
+
+    const float values[3] { lastResultForAudio.area, lastResultForAudio.complexity, lastResultForAudio.aspectRatio };
+    for (int ch = 0; ch < juce::jmin(3, buffer.getNumChannels()); ++ch)
+        for (int s = 0; s < buffer.getNumSamples(); ++s)
+            buffer.setSample(ch, s, values[ch]);
+}
+
+#if defined(PRESET_CREATOR_UI)
+ImVec2 ContourDetectorModule::getCustomNodeSize() const
+{
+    int level = zoomLevelParam ? (int) zoomLevelParam->load() : 1;
+    level = juce::jlimit(0, 2, level);
+    const float widths[3] { 240.0f, 480.0f, 960.0f };
+    return ImVec2(widths[level], 0.0f);
+}
+
+void ContourDetectorModule::drawParametersInNode(float itemWidth,
+                                                 const std::function<bool(const juce::String& paramId)>& isParamModulated,
+                                                 const std::function<void()>& onModificationEnded)
+{
+    juce::ignoreUnused(isParamModulated);
+    ImGui::PushItemWidth(itemWidth);
+
+    float th = thresholdParam ? thresholdParam->load() : 128.0f;
+    if (ImGui::SliderFloat("Threshold", &th, 0.0f, 255.0f, "%.0f"))
+    {
+        if (auto* p = dynamic_cast<juce::AudioParameterFloat*>(apvts.getParameter("threshold")))
+            *p = th;
+        onModificationEnded();
+    }
+    bool nr = noiseReductionParam ? noiseReductionParam->get() : true;
+    if (ImGui::Checkbox("Noise Reduction", &nr))
+    {
+        if (noiseReductionParam) *noiseReductionParam = nr;
+        onModificationEnded();
+    }
+
+    // Zoom controls
+    int level = zoomLevelParam ? (int) zoomLevelParam->load() : 1;
+    level = juce::jlimit(0, 2, level);
+    float buttonWidth = (itemWidth / 2.0f) - 4.0f;
+    const bool atMin = (level <= 0);
+    const bool atMax = (level >= 2);
+    if (atMin) ImGui::BeginDisabled();
+    if (ImGui::Button("-", ImVec2(buttonWidth, 0)))
+    {
+        int newLevel = juce::jmax(0, level - 1);
+        if (auto* p = apvts.getParameter("zoomLevel"))
+            p->setValueNotifyingHost((float)newLevel / 2.0f);
+        onModificationEnded();
+    }
+    if (atMin) ImGui::EndDisabled();
+    ImGui::SameLine();
+    if (atMax) ImGui::BeginDisabled();
+    if (ImGui::Button("+", ImVec2(buttonWidth, 0)))
+    {
+        int newLevel = juce::jmin(2, level + 1);
+        if (auto* p = apvts.getParameter("zoomLevel"))
+            p->setValueNotifyingHost((float)newLevel / 2.0f);
+        onModificationEnded();
+    }
+    if (atMax) ImGui::EndDisabled();
+
+    ImGui::PopItemWidth();
+}
+
+void ContourDetectorModule::drawIoPins(const NodePinHelpers& helpers)
+{
+    helpers.drawAudioInputPin("Source In", 0);
+    helpers.drawAudioOutputPin("Area", 0);
+    helpers.drawAudioOutputPin("Complexity", 1);
+    helpers.drawAudioOutputPin("Aspect Ratio", 2);
+}
+#endif
+
+
+
+
+================================================================================
+FILE: juce\\Source\\audio\\modules\\SemanticSegmentationModule.h
+================================================================================
+
+
+#pragma once
+
+#include "ModuleProcessor.h"
+#include <opencv2/core.hpp>
+#include <opencv2/dnn.hpp>
+#include <juce_core/juce_core.h>
+#include <juce_audio_processors/juce_audio_processors.h>
+#include <juce_graphics/juce_graphics.h>
+#if defined(PRESET_CREATOR_UI)
+#include <juce_gui_basics/juce_gui_basics.h>
+#endif
+
+struct SegmentationResult
+{
+    float area = 0.0f;
+    float centerX = 0.5f;
+    float centerY = 0.5f;
+    bool detected = false;
+};
+
+class SemanticSegmentationModule : public ModuleProcessor, private juce::Thread
+{
+public:
+    SemanticSegmentationModule();
+    ~SemanticSegmentationModule() override;
+
+    const juce::String getName() const override { return "semantic_segmentation"; }
+    
+    void prepareToPlay(double sampleRate, int samplesPerBlock) override;
+    void releaseResources() override;
+    void processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midi) override;
+    
+    juce::AudioProcessorValueTreeState& getAPVTS() override { return apvts; }
+    juce::Image getLatestFrame();
+
+#if defined(PRESET_CREATOR_UI)
+    void drawParametersInNode(float itemWidth,
+                              const std::function<bool(const juce::String& paramId)>& isParamModulated,
+                              const std::function<void()>& onModificationEnded) override;
+    void drawIoPins(const NodePinHelpers& helpers) override;
+    ImVec2 getCustomNodeSize() const override;
+#endif
+
+private:
+    void run() override;
+    void updateGuiFrame(const cv::Mat& frame);
+    void loadModel();
+    
+    static juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout();
+    juce::AudioProcessorValueTreeState apvts;
+    
+    std::atomic<float>* sourceIdParam = nullptr;
+    std::atomic<float>* zoomLevelParam = nullptr;
+    juce::AudioParameterChoice* targetClassParam = nullptr;
+    
+    cv::dnn::Net net;
+    bool modelLoaded = false;
+    std::vector<std::string> classNames;
+    std::vector<cv::Vec3b> classColors;
+    
+    std::atomic<juce::uint32> currentSourceId { 0 };
+    SegmentationResult lastResultForAudio;
+    juce::AbstractFifo fifo { 16 };
+    std::vector<SegmentationResult> fifoBuffer;
+    
+    juce::Image latestFrameForGui;
+    juce::CriticalSection imageLock;
+};
+
+
+
+
+================================================================================
+FILE: juce\\Source\\audio\\modules\\SemanticSegmentationModule.cpp
+================================================================================
+
+
+#include "SemanticSegmentationModule.h"
+#include "../../video/VideoFrameManager.h"
+#include <opencv2/imgproc.hpp>
+#include <fstream>
+
+#if defined(PRESET_CREATOR_UI)
+#include <imgui.h>
+#endif
+
+static constexpr int ENET_W = 1024;
+static constexpr int ENET_H = 512;
+
+juce::AudioProcessorValueTreeState::ParameterLayout SemanticSegmentationModule::createParameterLayout()
+{
+    std::vector<std::unique_ptr<juce::RangedAudioParameter>> params;
+    params.push_back(std::make_unique<juce::AudioParameterFloat>("sourceId", "Source ID", 0.0f, 1000.0f, 0.0f));
+    params.push_back(std::make_unique<juce::AudioParameterChoice>("targetClass", "Target Class", juce::StringArray{ "person" }, 0));
+    params.push_back(std::make_unique<juce::AudioParameterChoice>("zoomLevel", "Zoom Level", juce::StringArray{ "Small", "Normal", "Large" }, 1));
+    return { params.begin(), params.end() };
+}
+
+SemanticSegmentationModule::SemanticSegmentationModule()
+    : ModuleProcessor(BusesProperties()
+                      .withInput("Input", juce::AudioChannelSet::mono(), true)
+                      .withOutput("Output", juce::AudioChannelSet::discreteChannels(4), true)),
+      juce::Thread("Semantic Segmentation Thread"),
+      apvts(*this, nullptr, "SemanticSegmentationParams", createParameterLayout())
+{
+    sourceIdParam = apvts.getRawParameterValue("sourceId");
+    zoomLevelParam = apvts.getRawParameterValue("zoomLevel");
+    targetClassParam = dynamic_cast<juce::AudioParameterChoice*>(apvts.getParameter("targetClass"));
+    fifoBuffer.resize(16);
+    loadModel();
+}
+
+SemanticSegmentationModule::~SemanticSegmentationModule()
+{
+    stopThread(5000);
+}
+
+void SemanticSegmentationModule::prepareToPlay(double sampleRate, int samplesPerBlock)
+{
+    juce::ignoreUnused(sampleRate, samplesPerBlock);
+    startThread(juce::Thread::Priority::normal);
+}
+
+void SemanticSegmentationModule::releaseResources()
+{
+    signalThreadShouldExit();
+    stopThread(5000);
+}
+
+void SemanticSegmentationModule::loadModel()
+{
+    auto exeFile = juce::File::getSpecialLocation(juce::File::currentApplicationFile);
+    auto appDir = exeFile.getParentDirectory();
+    juce::File assetsDir = appDir.getChildFile("assets");
+
+    // Try ENet Cityscapes first, then DeepLabV3 fallback
+    juce::File enetOnnx  = assetsDir.getChildFile("enet-cityscapes-pytorch.onnx");
+    juce::File enetNames = assetsDir.getChildFile("enet-classes.txt");
+    juce::File dlOnnx    = assetsDir.getChildFile("deeplabv3.onnx");
+    juce::File dlNames   = assetsDir.getChildFile("deeplabv3-classes.txt");
+
+    juce::File chosenOnnx;
+    juce::File chosenNames;
+
+    if (enetOnnx.existsAsFile()) { chosenOnnx = enetOnnx; chosenNames = enetNames; }
+    else if (dlOnnx.existsAsFile()) { chosenOnnx = dlOnnx; chosenNames = dlNames; }
+
+    if (! chosenOnnx.existsAsFile())
+    {
+        juce::Logger::writeToLog("[Segmentation] No ONNX model found in assets (expected enet-cityscapes-pytorch.onnx or deeplabv3.onnx)");
+        modelLoaded = false;
+        return;
+    }
+
+    try
+    {
+        net = cv::dnn::readNet(chosenOnnx.getFullPathName().toStdString());
+        net.setPreferableBackend(cv::dnn::DNN_BACKEND_OPENCV);
+        net.setPreferableTarget(cv::dnn::DNN_TARGET_CPU);
+
+        classNames.clear();
+        if (chosenNames.existsAsFile())
+        {
+            std::ifstream ifs(chosenNames.getFullPathName().toStdString().c_str());
+            std::string line;
+            while (std::getline(ifs, line)) if (!line.empty()) classNames.push_back(line);
+        }
+        else
+        {
+            for (int i = 0; i < 256; ++i) classNames.push_back("class_" + std::to_string(i));
+        }
+
+        classColors.resize(classNames.size());
+        for (size_t i = 0; i < classColors.size(); ++i)
+            classColors[i] = cv::Vec3b((uchar)(i*53%255), (uchar)(i*97%255), (uchar)(i*193%255));
+        modelLoaded = true;
+        juce::Logger::writeToLog("[Segmentation] Loaded ONNX: " + chosenOnnx.getFileName());
+    }
+    catch (const cv::Exception& e)
+    {
+        juce::Logger::writeToLog("[Segmentation] OpenCV exception: " + juce::String(e.what()));
+        modelLoaded = false;
+    }
+}
+
+void SemanticSegmentationModule::run()
+{
+    while (!threadShouldExit())
+    {
+        cv::Mat frame = VideoFrameManager::getInstance().getFrame(currentSourceId.load());
+        if (!frame.empty())
+        {
+            if (modelLoaded)
+            {
+                cv::Mat blob = cv::dnn::blobFromImage(frame, 1.0, cv::Size(ENET_W, ENET_H), cv::Scalar(), true, false);
+                net.setInput(blob);
+                cv::Mat out = net.forward(); // shape: 1 x C x H x W
+
+                if (out.dims == 4)
+                {
+                    int C = out.size[1];
+                    int H = out.size[2];
+                    int W = out.size[3];
+
+                    // Argmax across channels per pixel
+                    cv::Mat classId(H, W, CV_8S);
+                    for (int y = 0; y < H; ++y)
+                    {
+                        for (int x = 0; x < W; ++x)
+                        {
+                            int bestClass = 0;
+                            float bestScore = -1e9f;
+                            for (int c = 0; c < C; ++c)
+                            {
+                                float score = out.ptr<float>(0, c, y)[x];
+                                if (score > bestScore) { bestScore = score; bestClass = c; }
+                            }
+                            classId.at<signed char>(y, x) = (signed char)bestClass;
+                        }
+                    }
+
+                    // Target mask
+                    int target = targetClassParam ? targetClassParam->getIndex() : 0;
+                    cv::Mat mask(H, W, CV_8U);
+                    for (int y = 0; y < H; ++y)
+                        for (int x = 0; x < W; ++x)
+                            mask.at<unsigned char>(y, x) = (unsigned char)(classId.at<signed char>(y, x) == target ? 255 : 0);
+
+                    SegmentationResult result;
+                    int pix = cv::countNonZero(mask);
+                    if (pix > 0)
+                    {
+                        result.detected = true;
+                        result.area = (float)pix / (float)(H * W);
+                        cv::Moments m = cv::moments(mask, true);
+                        result.centerX = (float)(m.m10 / m.m00) / (float)W;
+                        result.centerY = (float)(m.m01 / m.m00) / (float)H;
+                    }
+
+                    if (fifo.getFreeSpace() >= 1)
+                    {
+                        auto writeScope = fifo.write(1);
+                        if (writeScope.blockSize1 > 0)
+                            fifoBuffer[writeScope.startIndex1] = result;
+                    }
+
+                    // Colorize for preview
+                    cv::Mat color(H, W, CV_8UC3);
+                    for (int y = 0; y < H; ++y)
+                    {
+                        for (int x = 0; x < W; ++x)
+                        {
+                            int cid = (int)classId.at<signed char>(y, x);
+                            cv::Vec3b col = (cid >= 0 && cid < (int)classColors.size()) ? classColors[(size_t)cid] : cv::Vec3b(0,0,0);
+                            color.at<cv::Vec3b>(y, x) = col;
+                        }
+                    }
+                    cv::resize(color, color, frame.size(), 0, 0, cv::INTER_NEAREST);
+                    cv::addWeighted(frame, 1.0, color, 0.4, 0.0, frame);
+                }
+            }
+
+            // Always update preview with the latest frame (with or without overlay)
+            updateGuiFrame(frame);
+        }
+
+        wait(100);
+    }
+}
+
+void SemanticSegmentationModule::updateGuiFrame(const cv::Mat& frame)
+{
+    cv::Mat bgra;
+    cv::cvtColor(frame, bgra, cv::COLOR_BGR2BGRA);
+    const juce::ScopedLock lock(imageLock);
+    if (latestFrameForGui.isNull() || latestFrameForGui.getWidth() != bgra.cols || latestFrameForGui.getHeight() != bgra.rows)
+        latestFrameForGui = juce::Image(juce::Image::ARGB, bgra.cols, bgra.rows, true);
+    juce::Image::BitmapData dest(latestFrameForGui, juce::Image::BitmapData::writeOnly);
+    memcpy(dest.data, bgra.data, bgra.total() * bgra.elemSize());
+}
+
+juce::Image SemanticSegmentationModule::getLatestFrame()
+{
+    const juce::ScopedLock lock(imageLock);
+    return latestFrameForGui.createCopy();
+}
+
+void SemanticSegmentationModule::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midi)
+{
+    juce::ignoreUnused(midi);
+    auto inputBuffer = getBusBuffer(buffer, true, 0);
+    if (inputBuffer.getNumChannels() > 0 && inputBuffer.getNumSamples() > 0)
+        currentSourceId.store((juce::uint32)inputBuffer.getSample(0, 0));
+
+    buffer.clear();
+    if (fifo.getNumReady() > 0)
+    {
+        auto readScope = fifo.read(1);
+        if (readScope.blockSize1 > 0)
+            lastResultForAudio = fifoBuffer[readScope.startIndex1];
+    }
+
+    const float values[4] { lastResultForAudio.area, lastResultForAudio.centerX, lastResultForAudio.centerY, lastResultForAudio.detected ? 1.0f : 0.0f };
+    for (int ch = 0; ch < juce::jmin(4, buffer.getNumChannels()); ++ch)
+        for (int s = 0; s < buffer.getNumSamples(); ++s)
+            buffer.setSample(ch, s, values[ch]);
+}
+
+#if defined(PRESET_CREATOR_UI)
+ImVec2 SemanticSegmentationModule::getCustomNodeSize() const
+{
+    int level = zoomLevelParam ? (int) zoomLevelParam->load() : 1;
+    level = juce::jlimit(0, 2, level);
+    const float widths[3] { 240.0f, 480.0f, 960.0f };
+    return ImVec2(widths[level], 0.0f);
+}
+
+void SemanticSegmentationModule::drawParametersInNode(float itemWidth,
+                                                      const std::function<bool(const juce::String& paramId)>& isParamModulated,
+                                                      const std::function<void()>& onModificationEnded)
+{
+    juce::ignoreUnused(isParamModulated);
+    ImGui::PushItemWidth(itemWidth);
+
+    // Target class dropdown (populated from classNames if available)
+    if (targetClassParam)
+    {
+        int currentIndex = targetClassParam->getIndex();
+        const char* preview = (!classNames.empty() && juce::isPositiveAndBelow(currentIndex, (int)classNames.size()))
+                                ? classNames[(size_t)currentIndex].c_str()
+                                : "person";
+
+        if (ImGui::BeginCombo("Target Class", preview))
+        {
+            if (classNames.empty())
+            {
+                const bool isSelected = (currentIndex == 0);
+                if (ImGui::Selectable("person", isSelected))
+                {
+                    *targetClassParam = 0;
+                    onModificationEnded();
+                }
+                if (isSelected) ImGui::SetItemDefaultFocus();
+            }
+            else
+            {
+                for (int i = 0; i < (int)classNames.size(); ++i)
+                {
+                    const bool isSelected = (currentIndex == i);
+                    if (ImGui::Selectable(classNames[(size_t)i].c_str(), isSelected))
+                    {
+                        *targetClassParam = i;
+                        onModificationEnded();
+                    }
+                    if (isSelected) ImGui::SetItemDefaultFocus();
+                }
+            }
+            ImGui::EndCombo();
+        }
+    }
+
+    // Zoom (-/+) controls, consistent with PoseEstimatorModule
+    ImGui::Separator();
+    int level = zoomLevelParam ? (int) zoomLevelParam->load() : 1;
+    level = juce::jlimit(0, 2, level);
+    float buttonWidth = (itemWidth / 2.0f) - 4.0f;
+    const bool atMin = (level <= 0);
+    const bool atMax = (level >= 2);
+    if (atMin) ImGui::BeginDisabled();
+    if (ImGui::Button("-", ImVec2(buttonWidth, 0)))
+    {
+        int newLevel = juce::jmax(0, level - 1);
+        if (auto* p = apvts.getParameter("zoomLevel"))
+            p->setValueNotifyingHost((float)newLevel / 2.0f);
+        onModificationEnded();
+    }
+    if (atMin) ImGui::EndDisabled();
+    ImGui::SameLine();
+    if (atMax) ImGui::BeginDisabled();
+    if (ImGui::Button("+", ImVec2(buttonWidth, 0)))
+    {
+        int newLevel = juce::jmin(2, level + 1);
+        if (auto* p = apvts.getParameter("zoomLevel"))
+            p->setValueNotifyingHost((float)newLevel / 2.0f);
+        onModificationEnded();
+    }
+    if (atMax) ImGui::EndDisabled();
+
+    ImGui::PopItemWidth();
+}
+
+void SemanticSegmentationModule::drawIoPins(const NodePinHelpers& helpers)
+{
+    helpers.drawAudioInputPin("Source In", 0);
+    helpers.drawAudioOutputPin("Area", 0);
+    helpers.drawAudioOutputPin("Center X", 1);
+    helpers.drawAudioOutputPin("Center Y", 2);
+    helpers.drawAudioOutputPin("Gate", 3);
+}
+#endif
+
+
+
+
+================================================================================
 FILE: juce\\CMakeLists.txt
 ================================================================================
 
@@ -12005,7 +16234,11 @@ set(BUILD_opencv_apps OFF CACHE BOOL "" FORCE)
 set(BUILD_TESTS OFF CACHE BOOL "" FORCE)
 set(BUILD_PERF_TESTS OFF CACHE BOOL "" FORCE)
 set(BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
-set(WITH_CUDA OFF CACHE BOOL "" FORCE)
+set(WITH_CUDA ON CACHE BOOL "" FORCE)
+set(OPENCV_DNN_CUDA ON CACHE BOOL "" FORCE)
+set(CUDA_TOOLKIT_ROOT_DIR "C:/CUDA128" CACHE PATH "" FORCE)
+set(CUDA_ARCH_BIN "10.0" CACHE STRING "" FORCE)
+set(CUDA_ARCH_PTX "10.0" CACHE STRING "" FORCE)
 set(BUILD_opencv_world ON CACHE BOOL "" FORCE) # Combine into a single library
 set(ENABLE_PRECOMPILED_HEADERS OFF CACHE BOOL "" FORCE) # Disable PCH to avoid PDB issues
 
@@ -12718,6 +16951,10 @@ if(WIN32)
         COMMAND ${CMAKE_COMMAND} -E copy_if_different
                 "${ONNXRUNTIME_DIR}/lib/onnxruntime_providers_shared.dll"
                 "$<TARGET_FILE_DIR:ColliderApp>"
+        # Copy OpenCV FFmpeg video backend DLL (relative to build tree)
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                "${CMAKE_BINARY_DIR}/bin/$<CONFIG>/opencv_videoio_ffmpeg490_64.dll"
+                "$<TARGET_FILE_DIR:ColliderApp>"
         COMMAND ${CMAKE_COMMAND} -E copy_directory
                 "${PIPER_DIR}/espeak-ng-data"
                 "$<TARGET_FILE_DIR:ColliderApp>/espeak-ng-data"
@@ -12742,6 +16979,10 @@ if(WIN32)
                 "$<TARGET_FILE_DIR:PresetCreatorApp>"
         COMMAND ${CMAKE_COMMAND} -E copy_if_different
                 "${ONNXRUNTIME_DIR}/lib/onnxruntime_providers_shared.dll"
+                "$<TARGET_FILE_DIR:PresetCreatorApp>"
+        # Copy OpenCV FFmpeg video backend DLL (relative to build tree)
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                "${CMAKE_BINARY_DIR}/bin/$<CONFIG>/opencv_videoio_ffmpeg490_64.dll"
                 "$<TARGET_FILE_DIR:PresetCreatorApp>"
         COMMAND ${CMAKE_COMMAND} -E copy_directory
                 "${PIPER_DIR}/espeak-ng-data"

@@ -137,6 +137,71 @@ FetchContent_GetProperties(ufbx SOURCE_DIR ufbx_SOURCE_DIR)
 add_library(ufbx_static STATIC ${ufbx_SOURCE_DIR}/ufbx.c)
 target_include_directories(ufbx_static PUBLIC ${ufbx_SOURCE_DIR})
 
+# ==============================================================================
+# CUDA & cuDNN Configuration (MUST be done before OpenCV)
+# ==============================================================================
+# Find the CUDA Toolkit. This will use the default installation path or environment
+# variables. This is essential for OpenCV's configuration to detect CUDA correctly.
+find_package(CUDAToolkit REQUIRED)
+
+# Find CUDA runtime library for direct linking if CUDAToolkit::cudart target is not available
+if(MSVC)
+    find_library(CUDA_CUDART_LIBRARY
+        NAMES cudart_static.lib cudart.lib
+        PATHS "${CUDAToolkit_LIBRARY_DIR}"
+        NO_DEFAULT_PATH
+    )
+else()
+    find_library(CUDA_CUDART_LIBRARY
+        NAMES cudart
+        PATHS "${CUDAToolkit_LIBRARY_DIR}"
+        NO_DEFAULT_PATH
+    )
+endif()
+
+# --- NPP (NVIDIA Performance Primitives) Configuration ---
+# Explicitly set CUDA and NPP paths for OpenCV to find them
+set(CUDA_TOOLKIT_ROOT_DIR "${CUDAToolkit_TARGET_DIR}" CACHE PATH "CUDA Toolkit root directory")
+set(CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES "${CUDAToolkit_INCLUDE_DIRS}" CACHE PATH "CUDA Toolkit include directories")
+
+# Set NPP include and library directories explicitly
+# NPP headers are in the CUDA Toolkit include directory
+set(CUDA_INCLUDE_DIRS "${CUDAToolkit_INCLUDE_DIRS}" CACHE PATH "CUDA include directories")
+set(CUDA_NPP_LIBRARY_ROOT_DIR "${CUDAToolkit_LIBRARY_DIR}" CACHE PATH "NPP library root directory")
+
+# Provide hints for cuDNN path.
+# First check if cuDNN is integrated into CUDA Toolkit (recommended approach)
+# Then fall back to standalone cuDNN installation
+set(CUDNN_FOUND FALSE)
+
+# CRITICAL FIX: CUDAToolkit_INCLUDE_DIRS is a LIST, extract the first element
+list(GET CUDAToolkit_INCLUDE_DIRS 0 CUDA_MAIN_INCLUDE_DIR)
+
+# Check in CUDA Toolkit directory first
+if(EXISTS "${CUDA_MAIN_INCLUDE_DIR}/cudnn.h")
+    set(CUDNN_INCLUDE_DIR "${CUDA_MAIN_INCLUDE_DIR}" CACHE PATH "Path to cuDNN include directory")
+    set(CUDNN_LIBRARY "${CUDAToolkit_LIBRARY_DIR}/cudnn.lib" CACHE FILEPATH "Path to cuDNN library")
+    set(CUDNN_FOUND TRUE)
+    message(STATUS "Found cuDNN integrated into CUDA Toolkit at ${CUDA_MAIN_INCLUDE_DIR}")
+# Fall back to standalone cuDNN installation
+elseif(EXISTS "C:/Program Files/NVIDIA/CUDNN/v9.14/include/cudnn.h")
+    set(CUDNN_INCLUDE_DIR "C:/Program Files/NVIDIA/CUDNN/v9.14/include" CACHE PATH "Path to cuDNN include directory")
+    set(CUDNN_LIBRARY "C:/Program Files/NVIDIA/CUDNN/v9.14/lib/x64/cudnn.lib" CACHE FILEPATH "Path to cuDNN library")
+    set(CUDNN_FOUND TRUE)
+    message(STATUS "Found standalone cuDNN at C:/Program Files/NVIDIA/CUDNN/v9.14/")
+endif()
+
+# Configure OpenCV based on cuDNN availability
+if(CUDNN_FOUND)
+    set(WITH_CUDNN ON CACHE BOOL "" FORCE)
+    set(OPENCV_DNN_CUDA ON CACHE BOOL "" FORCE)
+else()
+    message(WARNING "cuDNN not found. OpenCV will build without cuDNN support.")
+    message(WARNING "Disabling OPENCV_DNN_CUDA since cuDNN is required for CUDA DNN backend.")
+    set(WITH_CUDNN OFF CACHE BOOL "" FORCE)
+    set(OPENCV_DNN_CUDA OFF CACHE BOOL "" FORCE)
+endif()
+
 # --------------------------------------------------------------
 # OpenCV (Computer Vision Library - used for Preset Creator UI)
 # --------------------------------------------------------------
@@ -156,40 +221,83 @@ if(MSVC)
     set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} /FS")
 endif()
 
+# CRITICAL FIX: Add CUDA include directories using CMake's proper mechanism
+# This works for both C++ and CUDA compilation (unlike compiler flags which break on spaces)
+include_directories(SYSTEM ${CUDAToolkit_INCLUDE_DIRS})
+
+# UPGRADED: Using OpenCV 4.x development branch with CUDA 12.9+ fix
+# This includes PR #27288 which fixes nppGetStreamContext() issue for CUDA 12.9+
 FetchContent_Declare(
   opencv
   GIT_REPOSITORY https://github.com/opencv/opencv.git
-  GIT_TAG        4.9.0 # Pin to a specific, stable version
+  GIT_TAG        4.x # Latest development branch with CUDA 13.0 support
 )
 
-# Configure the OpenCV build
-# Disable features we don't need to speed up the build and reduce size
-set(BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE) # Build as a static library
-set(BUILD_opencv_apps OFF CACHE BOOL "" FORCE)
-set(BUILD_TESTS OFF CACHE BOOL "" FORCE)
-set(BUILD_PERF_TESTS OFF CACHE BOOL "" FORCE)
-set(BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
-set(WITH_CUDA OFF CACHE BOOL "" FORCE)
-set(BUILD_opencv_world ON CACHE BOOL "" FORCE) # Combine into a single library
-set(ENABLE_PRECOMPILED_HEADERS OFF CACHE BOOL "" FORCE) # Disable PCH to avoid PDB issues
+# ADDED: opencv_contrib is required for many CUDA modules and advanced features (especially cudev).
+FetchContent_Declare(
+  opencv_contrib
+  GIT_REPOSITORY https://github.com/opencv/opencv_contrib.git
+  GIT_TAG        4.x # Must match the main OpenCV branch
+)
 
-# === EXPLICITLY ENABLE MODULES FOR ADVANCED FEATURES ===
-# These modules are required for computer vision features:
-# - dnn: Deep Neural Networks (for Pose Estimation / YOLO / Object Detection)
-# - tracking: Object tracking algorithms
-# - features2d: Feature detection and matching
-# - video: Dense optical flow and motion analysis
-set(BUILD_opencv_dnn ON CACHE BOOL "" FORCE)
-set(BUILD_opencv_tracking ON CACHE BOOL "" FORCE)
-set(BUILD_opencv_features2d ON CACHE BOOL "" FORCE)
-set(BUILD_opencv_video ON CACHE BOOL "" FORCE)
-set(OPENCV_DNN_CAFFE ON CACHE BOOL "" FORCE)  # Enable Caffe model support for DNN
+# Fetch and populate opencv_contrib FIRST so we can get its source directory
+FetchContent_GetProperties(opencv_contrib)
+if(NOT opencv_contrib_POPULATED)
+    FetchContent_Populate(opencv_contrib)
+endif()
 
-# === CRITICAL FIX ===
-# Force OpenCV to use the dynamic runtime library (/MD), matching JUCE's default.
-# This prevents runtime library mismatch errors (LNK2005, LNK2038).
-set(BUILD_WITH_STATIC_CRT OFF CACHE BOOL "" FORCE)
+# Get the opencv_contrib source directory BEFORE configuring OpenCV
+FetchContent_GetProperties(opencv_contrib SOURCE_DIR opencv_contrib_SOURCE_DIR)
 
+# CRITICAL: Set OPENCV_EXTRA_MODULES_PATH BEFORE FetchContent_MakeAvailable(opencv)
+# This ensures OpenCV can find the cudev module during configuration
+set(OPENCV_EXTRA_MODULES_PATH "${opencv_contrib_SOURCE_DIR}/modules" CACHE PATH "" FORCE)
+
+# --- OpenCV Build Configuration ---
+set(BUILD_SHARED_LIBS OFF)
+set(BUILD_opencv_world ON)
+set(BUILD_TESTS OFF)
+set(BUILD_PERF_TESTS OFF)
+set(BUILD_EXAMPLES OFF)
+set(BUILD_opencv_apps OFF)
+set(ENABLE_PRECOMPILED_HEADERS OFF)
+set(BUILD_WITH_STATIC_CRT OFF) # Correctly matches JUCE's dynamic runtime
+set(WITH_IPP OFF) # Disable Intel IPP to avoid header path issues
+
+# --- CUDA and cuDNN Configuration ---
+set(WITH_CUDA ON CACHE BOOL "" FORCE)
+# OPENCV_DNN_CUDA and WITH_CUDNN are set above based on cuDNN availability
+set(WITH_NVIDIA_NPP ON CACHE BOOL "" FORCE)
+set(WITH_NVCUVID OFF) # Video decoding, disable if not needed.
+set(WITH_NVCUVENC OFF) # Video encoding, disable if not needed.
+
+# Explicitly provide CUDA paths to OpenCV (critical for finding NPP headers)
+set(CUDA_TOOLKIT_ROOT_DIR "${CUDAToolkit_TARGET_DIR}" CACHE PATH "" FORCE)
+set(CUDA_INCLUDE_DIRS "${CUDAToolkit_INCLUDE_DIRS}" CACHE PATH "" FORCE)
+# DO NOT set CUDA_LIBRARIES to a directory - causes "x64.lib" linker error
+# OpenCV will find CUDA libraries automatically via CUDA_TOOLKIT_ROOT_DIR
+
+# --- CUDA Architecture Targeting ---
+# Target NVIDIA Blackwell (RTX 5090), Ada Lovelace (40-series), and Ampere (30-series)
+set(CUDA_ARCH_BIN "8.6;8.9;12.0")
+# Provide forward compatibility for future architectures
+set(CUDA_ARCH_PTX "12.0")
+
+# Explicitly enable required modules.
+set(BUILD_opencv_core ON)
+set(BUILD_opencv_dnn ON)
+set(BUILD_opencv_features2d ON)
+set(BUILD_opencv_highgui ON)
+set(BUILD_opencv_imgcodecs ON)
+set(BUILD_opencv_imgproc ON)
+set(BUILD_opencv_objdetect ON)
+set(BUILD_opencv_tracking ON)
+set(BUILD_opencv_video ON)
+set(BUILD_opencv_videoio ON)
+set(BUILD_opencv_calib3d ON)
+set(OPENCV_DNN_CAFFE ON)
+
+# --- Finalize and Build OpenCV ---
 FetchContent_MakeAvailable(opencv)
 
 # Get the OpenCV build directory for generated headers
@@ -424,6 +532,8 @@ target_sources(ColliderApp PRIVATE
     Source/audio/modules/FunctionGeneratorModuleProcessor.cpp
     Source/audio/modules/BestPracticeNodeProcessor.h
     Source/audio/modules/BestPracticeNodeProcessor.cpp
+    Source/audio/modules/TimelineModuleProcessor.h
+    Source/audio/modules/TimelineModuleProcessor.cpp
     Source/audio/modules/VocalTractFilterModuleProcessor.h
     Source/audio/modules/VocalTractFilterModuleProcessor.cpp
     Source/audio/modules/VstHostModuleProcessor.h
@@ -540,6 +650,14 @@ target_link_libraries(ColliderApp PRIVATE
     # Piper TTS libraries (pre-built)
     ${ONNXRUNTIME_DIR}/lib/onnxruntime.lib
 )
+
+# Link CUDA runtime for OpenCV CUDA symbols
+# Use CUDAToolkit::cudart if available, otherwise link directly
+if(TARGET CUDAToolkit::cudart)
+    target_link_libraries(ColliderApp PRIVATE CUDAToolkit::cudart)
+elseif(CUDA_CUDART_LIBRARY)
+    target_link_libraries(ColliderApp PRIVATE ${CUDA_CUDART_LIBRARY})
+endif()
 
 # Add include directories for ColliderApp
 target_include_directories(ColliderApp PRIVATE
@@ -685,6 +803,8 @@ target_sources(PresetCreatorApp PRIVATE
     Source/audio/modules/FunctionGeneratorModuleProcessor.cpp
     Source/audio/modules/BestPracticeNodeProcessor.h
     Source/audio/modules/BestPracticeNodeProcessor.cpp
+    Source/audio/modules/TimelineModuleProcessor.h
+    Source/audio/modules/TimelineModuleProcessor.cpp
     Source/audio/modules/ShapingOscillatorModuleProcessor.h
     Source/audio/modules/ShapingOscillatorModuleProcessor.cpp
     Source/audio/voices/SampleVoiceProcessor.h
@@ -863,6 +983,14 @@ target_link_libraries(PresetCreatorApp PRIVATE
     ${ONNXRUNTIME_DIR}/lib/onnxruntime.lib
 )
 
+# Link CUDA runtime for OpenCV CUDA symbols
+# Use CUDAToolkit::cudart if available, otherwise link directly
+if(TARGET CUDAToolkit::cudart)
+    target_link_libraries(PresetCreatorApp PRIVATE CUDAToolkit::cudart)
+elseif(CUDA_CUDART_LIBRARY)
+    target_link_libraries(PresetCreatorApp PRIVATE ${CUDA_CUDART_LIBRARY})
+endif()
+
 if(WIN32)
     # Copy Piper executable and DLLs to output directories
     add_custom_command(
@@ -884,7 +1012,7 @@ if(WIN32)
                 "$<TARGET_FILE_DIR:ColliderApp>"
         # Copy OpenCV FFmpeg video backend DLL (relative to build tree)
         COMMAND ${CMAKE_COMMAND} -E copy_if_different
-                "${CMAKE_BINARY_DIR}/bin/$<CONFIG>/opencv_videoio_ffmpeg490_64.dll"
+                "${CMAKE_BINARY_DIR}/bin/$<CONFIG>/opencv_videoio_ffmpeg4130_64.dll"
                 "$<TARGET_FILE_DIR:ColliderApp>"
         COMMAND ${CMAKE_COMMAND} -E copy_directory
                 "${PIPER_DIR}/espeak-ng-data"
@@ -913,7 +1041,7 @@ if(WIN32)
                 "$<TARGET_FILE_DIR:PresetCreatorApp>"
         # Copy OpenCV FFmpeg video backend DLL (relative to build tree)
         COMMAND ${CMAKE_COMMAND} -E copy_if_different
-                "${CMAKE_BINARY_DIR}/bin/$<CONFIG>/opencv_videoio_ffmpeg490_64.dll"
+                "${CMAKE_BINARY_DIR}/bin/$<CONFIG>/opencv_videoio_ffmpeg4130_64.dll"
                 "$<TARGET_FILE_DIR:PresetCreatorApp>"
         COMMAND ${CMAKE_COMMAND} -E copy_directory
                 "${PIPER_DIR}/espeak-ng-data"
