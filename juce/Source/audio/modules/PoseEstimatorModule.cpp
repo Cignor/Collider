@@ -167,7 +167,8 @@ PoseEstimatorModule::PoseEstimatorModule()
     : ModuleProcessor(BusesProperties()
                      .withInput("Input", juce::AudioChannelSet::mono(), true)
                      .withOutput("CV Out", juce::AudioChannelSet::discreteChannels(30), true) // 15 keypoints x 2 (x,y)
-                     .withOutput("Video Out", juce::AudioChannelSet::mono(), true)), // PASSTHROUGH
+                     .withOutput("Video Out", juce::AudioChannelSet::mono(), true)    // PASSTHROUGH
+                     .withOutput("Cropped Out", juce::AudioChannelSet::mono(), true)), // CROPPED
       juce::Thread("Pose Estimator Thread"),
       apvts(*this, nullptr, "PoseEstimatorParams", createParameterLayout())
 {
@@ -332,6 +333,25 @@ void PoseEstimatorModule::run()
                 }
             }
             
+            // --- CROP LOGIC ---
+            std::vector<cv::Point> validPoints;
+            for (int i = 0; i < MPI_NUM_KEYPOINTS; ++i) {
+                if (result.keypoints[i][0] >= 0) {
+                    validPoints.emplace_back((int)result.keypoints[i][0], (int)result.keypoints[i][1]);
+                }
+            }
+            if (validPoints.size() > 2) {
+                cv::Rect box = cv::boundingRect(validPoints);
+                box &= cv::Rect(0, 0, frame.cols, frame.rows);
+                if (box.area() > 0) {
+                    cv::Mat cropped = frame(box);
+                    VideoFrameManager::getInstance().setFrame(getSecondaryLogicalId(), cropped);
+                }
+            } else {
+                cv::Mat emptyFrame;
+                VideoFrameManager::getInstance().setFrame(getSecondaryLogicalId(), emptyFrame);
+            }
+            
             // --- PASSTHROUGH LOGIC ---
             VideoFrameManager::getInstance().setFrame(getLogicalId(), frame);
             // 6. Update the GUI preview frame
@@ -408,6 +428,35 @@ juce::Image PoseEstimatorModule::getLatestFrame()
     return latestFrameForGui.createCopy();
 }
 
+std::vector<DynamicPinInfo> PoseEstimatorModule::getDynamicOutputPins() const
+{
+    // Bus 0: CV Out (30 channels - 15 keypoints * 2 coordinates)
+    // Bus 1: Video Out (1 channel)
+    // Bus 2: Cropped Out (1 channel)
+    std::vector<DynamicPinInfo> pins;
+    
+    // Add all 15 keypoint pins
+    const std::vector<std::string> keypointNames = {
+        "Head", "Neck", "R Shoulder", "R Elbow", "R Wrist",
+        "L Shoulder", "L Elbow", "L Wrist", "R Hip", "R Knee",
+        "R Ankle", "L Hip", "L Knee", "L Ankle", "Chest"
+    };
+    
+    for (size_t i = 0; i < keypointNames.size(); ++i)
+    {
+        pins.emplace_back(keypointNames[i] + " X", static_cast<int>(i * 2), PinDataType::CV);
+        pins.emplace_back(keypointNames[i] + " Y", static_cast<int>(i * 2 + 1), PinDataType::CV);
+    }
+    
+    // Add Video Out and Cropped Out pins
+    const int videoOutStartChannel = 30;
+    const int croppedOutStartChannel = videoOutStartChannel + 1;
+    pins.emplace_back("Video Out", videoOutStartChannel, PinDataType::Video);
+    pins.emplace_back("Cropped Out", croppedOutStartChannel, PinDataType::Video);
+    
+    return pins;
+}
+
 void PoseEstimatorModule::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midi)
 {
     juce::ignoreUnused(midi);
@@ -469,6 +518,15 @@ void PoseEstimatorModule::processBlock(juce::AudioBuffer<float>& buffer, juce::M
         float primaryId = static_cast<float>(getLogicalId());
         for (int s = 0; s < videoOutBus.getNumSamples(); ++s)
             videoOutBus.setSample(0, s, primaryId);
+    }
+    
+    // Output Cropped Out ID on bus 2
+    auto croppedOutBus = getBusBuffer(buffer, false, 2);
+    if (croppedOutBus.getNumChannels() > 0)
+    {
+        float secondaryId = static_cast<float>(getSecondaryLogicalId());
+        for (int s = 0; s < croppedOutBus.getNumSamples(); ++s)
+            croppedOutBus.setSample(0, s, secondaryId);
     }
 }
 

@@ -311,6 +311,9 @@ public:
     // SampleLoader texture management (use JUCE OpenGLTexture to avoid raw GL includes)
     std::unordered_map<int, std::unique_ptr<juce::OpenGLTexture>> sampleLoaderTextureIds;
     std::unordered_map<int, std::unique_ptr<juce::OpenGLTexture>> visionModuleTextures;
+    
+    // Accessor for modules that need to render their own preview with interaction
+    std::unordered_map<int, std::unique_ptr<juce::OpenGLTexture>>& getVisionModuleTextures() { return visionModuleTextures; }
 
     // Preset status tracking
     juce::String currentPresetFile;

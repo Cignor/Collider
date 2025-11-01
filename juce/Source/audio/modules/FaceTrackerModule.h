@@ -29,6 +29,8 @@ public:
     const juce::String getName() const override { return "face_tracker"; }
     juce::Image getLatestFrame();
 
+    std::vector<DynamicPinInfo> getDynamicOutputPins() const override;
+
     void prepareToPlay(double sampleRate, int samplesPerBlock) override;
     void releaseResources() override;
     void processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midi) override;

@@ -1136,20 +1136,21 @@ db["random"] = ModulePinInfo(
         {}
     );
 
-    // Crop Video Module - takes source ID and CV signals (X, Y, W, H) to crop a video stream
+    // Crop Video Module - takes source ID and CV modulation signals (X, Y, W, H) to crop a video stream
     db["crop_video"] = ModulePinInfo(
         NodeWidth::Exception, // Uses custom size for video preview
         {
-            AudioPin("Source In", 0, PinDataType::Video),
-            AudioPin("Center X", 1, PinDataType::CV),
-            AudioPin("Center Y", 2, PinDataType::CV),
-            AudioPin("Width", 3, PinDataType::CV),
-            AudioPin("Height", 4, PinDataType::CV)
+            AudioPin("Source In", 0, PinDataType::Video)
         },
         {
             AudioPin("Output ID", 0, PinDataType::Video)
         },
-        {}
+        {
+            ModPin("Center X", "cropX_mod", PinDataType::CV),
+            ModPin("Center Y", "cropY_mod", PinDataType::CV),
+            ModPin("Width", "cropW_mod", PinDataType::CV),
+            ModPin("Height", "cropH_mod", PinDataType::CV)
+        }
     );
 
 }

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "ModuleProcessor.h"
+#include "FFmpegAudioReader.h"
 #include <opencv2/core.hpp>
 #include <opencv2/videoio.hpp>
 #include <juce_core/juce_core.h>
@@ -119,7 +120,6 @@ private:
     std::atomic<int> totalFrames { 0 };
     
     // Audio playback
-    juce::AudioFormatManager audioFormatManager;
     std::unique_ptr<juce::AudioFormatReaderSource> audioSource;
     juce::AudioTransportSource audioTransport;
     juce::AudioBuffer<float> audioBuffer;

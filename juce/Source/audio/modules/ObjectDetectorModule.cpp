@@ -368,6 +368,26 @@ juce::Image ObjectDetectorModule::getLatestFrame()
     return latestFrameForGui.createCopy();
 }
 
+std::vector<DynamicPinInfo> ObjectDetectorModule::getDynamicOutputPins() const
+{
+    // Bus 0: CV Out (5 channels)
+    // Bus 1: Video Out (1 channel)
+    // Bus 2: Cropped Out (1 channel)
+    const int cvOutChannels = 5;
+    const int videoOutStartChannel = cvOutChannels;
+    const int croppedOutStartChannel = videoOutStartChannel + 1;
+
+    return {
+        { "X", 0, PinDataType::CV },
+        { "Y", 1, PinDataType::CV },
+        { "Width", 2, PinDataType::CV },
+        { "Height", 3, PinDataType::CV },
+        { "Gate", 4, PinDataType::Gate },
+        { "Video Out", videoOutStartChannel, PinDataType::Video },
+        { "Cropped Out", croppedOutStartChannel, PinDataType::Video }
+    };
+}
+
 void ObjectDetectorModule::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midi)
 {
     juce::ignoreUnused(midi);

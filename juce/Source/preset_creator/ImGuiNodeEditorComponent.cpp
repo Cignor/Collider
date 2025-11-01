@@ -2637,26 +2637,7 @@ if (auto* mp = synth->getModuleForLogical (lid))
     }
     else if (auto* cropVideoModule = dynamic_cast<CropVideoModule*>(mp))
     {
-        juce::Image frame = cropVideoModule->getLatestFrame();
-        if (!frame.isNull())
-        {
-            if (visionModuleTextures.find((int)lid) == visionModuleTextures.end())
-            {
-                visionModuleTextures[(int)lid] = std::make_unique<juce::OpenGLTexture>();
-            }
-            juce::OpenGLTexture* texture = visionModuleTextures[(int)lid].get();
-            texture->loadImage(frame);
-            if (texture->getTextureID() != 0)
-            {
-                float nativeWidth = (float)frame.getWidth();
-                float nativeHeight = (float)frame.getHeight();
-                float aspectRatio = (nativeWidth > 0.0f) ? nativeHeight / nativeWidth : 0.75f; // Default to 4:3
-                ImVec2 renderSize = ImVec2(nodeContentWidth, nodeContentWidth * aspectRatio);
-                // Flip Y-coords for correct orientation
-                ImGui::Image((void*)(intptr_t)texture->getTextureID(), renderSize, ImVec2(0, 1), ImVec2(1, 0));
-            }
-        }
-        // Now draw the regular parameters below the video
+        // CropVideoModule handles its own preview rendering with interaction in drawParametersInNode
         cropVideoModule->drawParametersInNode(nodeContentWidth, isParamModulated, onModificationEnded);
     }
     else

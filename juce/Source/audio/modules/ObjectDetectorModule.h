@@ -40,6 +40,8 @@ public:
     juce::AudioProcessorValueTreeState& getAPVTS() override { return apvts; }
     juce::Image getLatestFrame();
 
+    std::vector<DynamicPinInfo> getDynamicOutputPins() const override;
+
 #if defined(PRESET_CREATOR_UI)
     void drawParametersInNode(float itemWidth,
                               const std::function<bool(const juce::String& paramId)>& isParamModulated,

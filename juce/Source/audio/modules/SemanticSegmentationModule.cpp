@@ -282,6 +282,22 @@ juce::Image SemanticSegmentationModule::getLatestFrame()
     return latestFrameForGui.createCopy();
 }
 
+std::vector<DynamicPinInfo> SemanticSegmentationModule::getDynamicOutputPins() const
+{
+    // Bus 0: CV Out (4 channels)
+    // Bus 1: Video Out (1 channel)
+    const int cvOutChannels = 4;
+    const int videoOutStartChannel = cvOutChannels;
+
+    return {
+        { "Area", 0, PinDataType::CV },
+        { "Center X", 1, PinDataType::CV },
+        { "Center Y", 2, PinDataType::CV },
+        { "Gate", 3, PinDataType::Gate },
+        { "Video Out", videoOutStartChannel, PinDataType::Video }
+    };
+}
+
 void SemanticSegmentationModule::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midi)
 {
     juce::ignoreUnused(midi);

@@ -271,6 +271,22 @@ juce::Image MovementDetectorModule::getLatestFrame()
     return latestFrameForGui.createCopy();
 }
 
+std::vector<DynamicPinInfo> MovementDetectorModule::getDynamicOutputPins() const
+{
+    // Bus 0: CV Out (4 channels)
+    // Bus 1: Video Out (1 channel)
+    const int cvOutChannels = 4;
+    const int videoOutStartChannel = cvOutChannels;
+
+    return {
+        { "X", 0, PinDataType::CV },
+        { "Y", 1, PinDataType::CV },
+        { "Amount", 2, PinDataType::CV },
+        { "Gate", 3, PinDataType::Gate },
+        { "Video Out", videoOutStartChannel, PinDataType::Video }
+    };
+}
+
 void MovementDetectorModule::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midi)
 {
     // Read Source ID from input pin

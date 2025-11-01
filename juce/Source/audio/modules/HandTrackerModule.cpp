@@ -393,4 +393,37 @@ juce::Image HandTrackerModule::getLatestFrame()
     return latestFrameForGui.createCopy();
 }
 
+std::vector<DynamicPinInfo> HandTrackerModule::getDynamicOutputPins() const
+{
+    // Bus 0: CV Out (42 channels - 21 keypoints * 2 coordinates)
+    // Bus 1: Video Out (1 channel)
+    // Bus 2: Cropped Out (1 channel)
+    std::vector<DynamicPinInfo> pins;
+    
+    // Hand keypoint names matching PinDatabase
+    const char* handNames[21] = {
+        "Wrist",
+        "Thumb 1","Thumb 2","Thumb 3","Thumb 4",
+        "Index 1","Index 2","Index 3","Index 4",
+        "Middle 1","Middle 2","Middle 3","Middle 4",
+        "Ring 1","Ring 2","Ring 3","Ring 4",
+        "Pinky 1","Pinky 2","Pinky 3","Pinky 4"
+    };
+    
+    // Add all 21 keypoint pins
+    for (int i = 0; i < 21; ++i)
+    {
+        pins.emplace_back(std::string(handNames[i]) + " X", i * 2, PinDataType::CV);
+        pins.emplace_back(std::string(handNames[i]) + " Y", i * 2 + 1, PinDataType::CV);
+    }
+    
+    // Add Video Out and Cropped Out pins
+    const int videoOutStartChannel = 42;
+    const int croppedOutStartChannel = videoOutStartChannel + 1;
+    pins.emplace_back("Video Out", videoOutStartChannel, PinDataType::Video);
+    pins.emplace_back("Cropped Out", croppedOutStartChannel, PinDataType::Video);
+    
+    return pins;
+}
+
 

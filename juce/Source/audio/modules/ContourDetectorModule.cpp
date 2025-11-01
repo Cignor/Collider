@@ -148,6 +148,21 @@ juce::Image ContourDetectorModule::getLatestFrame()
     return latestFrameForGui.createCopy();
 }
 
+std::vector<DynamicPinInfo> ContourDetectorModule::getDynamicOutputPins() const
+{
+    // Bus 0: CV Out (3 channels)
+    // Bus 1: Video Out (1 channel)
+    const int cvOutChannels = 3;
+    const int videoOutStartChannel = cvOutChannels;
+
+    return {
+        { "Area", 0, PinDataType::CV },
+        { "Complexity", 1, PinDataType::CV },
+        { "Aspect Ratio", 2, PinDataType::CV },
+        { "Video Out", videoOutStartChannel, PinDataType::Video }
+    };
+}
+
 void ContourDetectorModule::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midi)
 {
     juce::ignoreUnused(midi);

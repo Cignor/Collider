@@ -12,6 +12,8 @@ FILE: juce\\Source\\audio\\modules\\VideoFileLoaderModule.h
 #include <juce_core/juce_core.h>
 #include <juce_audio_processors/juce_audio_processors.h>
 #include <juce_audio_formats/juce_audio_formats.h>
+#include <juce_audio_basics/juce_audio_basics.h>
+#include <juce_audio_devices/juce_audio_devices.h>
 #include <juce_graphics/juce_graphics.h>
 
 /**
@@ -32,6 +34,9 @@ public:
     void setTimingInfo(const TransportState& state) override { lastTransportPlaying.store(state.isPlaying); if (syncToTransport.load()) playing.store(state.isPlaying); }
     
     juce::AudioProcessorValueTreeState& getAPVTS() override { return apvts; }
+    
+    // Dynamic pin definitions
+    std::vector<DynamicPinInfo> getDynamicOutputPins() const override;
     
     // State management for saving/loading video file path
     juce::ValueTree getExtraStateTree() const override;
@@ -639,7 +644,10 @@ void VideoFileLoaderModule::loadAudioFromVideo()
     if (reader != nullptr)
     {
         audioSource = std::make_unique<juce::AudioFormatReaderSource>(reader.release(), true);
-        audioSampleRate = audioSource->getAudioFormatReader()->sampleRate;
+        double sourceSampleRate = audioSource->getAudioFormatReader()->sampleRate;
+        
+        // Use the current processing sample rate, not the source file's sample rate
+        // The AudioTransportSource will handle resampling if needed
         audioTransport.setSource(audioSource.get(), 0, nullptr, audioSampleRate);
         
         // Set looping
@@ -647,8 +655,9 @@ void VideoFileLoaderModule::loadAudioFromVideo()
             audioTransport.setLooping(true);
         
         audioLoaded.store(true);
-        juce::Logger::writeToLog("[VideoFileLoader] Audio loaded from video file. Sample rate: " + 
-                                  juce::String(audioSampleRate) + " Hz");
+        juce::Logger::writeToLog("[VideoFileLoader] Audio loaded from video file. "
+                                  "Source SR: " + juce::String(sourceSampleRate) + " Hz, "
+                                  "Processing SR: " + juce::String(audioSampleRate) + " Hz");
     }
     else
     {
@@ -749,6 +758,15 @@ void VideoFileLoaderModule::processBlock(juce::AudioBuffer<float>& buffer, juce:
     // Output audio from the video file
     if (audioLoaded.load() && audioOutBus.getNumChannels() >= 2 && audioOutBus.getNumSamples() > 0)
     {
+        // Ensure audioTransport is playing if we're in play mode
+        bool shouldPlay = playing.load();
+        if (shouldPlay && !audioTransport.isPlaying())
+        {
+            audioTransport.start();
+        }
+        
+        // AudioSourceChannelInfo constructor takes the buffer and uses all its channels
+        // Since audioOutBus is already stereo (2 channels), this should work correctly
         juce::AudioSourceChannelInfo info(audioOutBus);
         audioTransport.getNextAudioBlock(info);
         
@@ -972,9 +990,28 @@ void VideoFileLoaderModule::drawParametersInNode(float itemWidth,
 
 void VideoFileLoaderModule::drawIoPins(const NodePinHelpers& helpers)
 {
+    // Pins are handled via getDynamicOutputPins for proper type coloring
+    // This method is kept for backward compatibility but dynamic pins take precedence
     helpers.drawAudioOutputPin("Source ID", 0);
 }
 #endif
+
+std::vector<DynamicPinInfo> VideoFileLoaderModule::getDynamicOutputPins() const
+{
+    std::vector<DynamicPinInfo> pins;
+    
+    // CV Output: Bus 0, Channel 0 (mono - contains logical ID for video routing)
+    pins.push_back({ "Source ID", 0, PinDataType::Video });
+    
+    // Audio Outputs: Bus 1, Channels 0-1 (stereo)
+    // Note: Channel indices are absolute, so bus 1 channel 0 = absolute channel 1
+    // (bus 0 has 1 channel, so bus 1 starts at absolute index 1)
+    int bus1StartChannel = 1; // After bus 0's 1 channel
+    pins.push_back({ "Audio L", bus1StartChannel + 0, PinDataType::Audio });
+    pins.push_back({ "Audio R", bus1StartChannel + 1, PinDataType::Audio });
+    
+    return pins;
+}
 
 
 
@@ -2046,6 +2083,10 @@ public:
     void setLogicalId(juce::uint32 id) { storedLogicalId = id; }
     juce::uint32 getLogicalId() const { return storedLogicalId; }
 
+    // Secondary logical ID for extra outputs (like cropped video from detector nodes)
+    void setSecondaryLogicalId(juce::uint32 id) { storedSecondaryLogicalId = id; }
+    juce::uint32 getSecondaryLogicalId() const { return storedSecondaryLogicalId; }
+
     // === COMPREHENSIVE DIAGNOSTICS SYSTEM ===
     
     // Get detailed connection information for debugging
@@ -2348,6 +2389,7 @@ private:
 protected:
     ModularSynthProcessor* parentSynth { nullptr };
     juce::uint32 storedLogicalId { 0 };
+    juce::uint32 storedSecondaryLogicalId { 0 };
 };
 
 ================================================================================
@@ -2505,7 +2547,9 @@ juce::AudioProcessorValueTreeState::ParameterLayout ObjectDetectorModule::create
 ObjectDetectorModule::ObjectDetectorModule()
     : ModuleProcessor(BusesProperties()
                       .withInput("Input", juce::AudioChannelSet::mono(), true)
-                      .withOutput("Output", juce::AudioChannelSet::discreteChannels(5), true)),
+                      .withOutput("CV Out", juce::AudioChannelSet::discreteChannels(5), true)
+                      .withOutput("Video Out", juce::AudioChannelSet::mono(), true)    // PASSTHROUGH
+                      .withOutput("Cropped Out", juce::AudioChannelSet::mono(), true)), // CROPPED
       juce::Thread("Object Detector Thread"),
       apvts(*this, nullptr, "ObjectDetectorParams", createParameterLayout())
 {
@@ -2641,6 +2685,10 @@ void ObjectDetectorModule::run()
         
         if (!frame.empty())
         {
+            // Save a clean copy for cropping (before drawing annotations)
+            cv::Mat originalFrame;
+            frame.copyTo(originalFrame);
+            
             bool useGpu = false;
             
             #if WITH_CUDA_SUPPORT
@@ -2732,7 +2780,13 @@ void ObjectDetectorModule::run()
             cv::dnn::NMSBoxes(boxes, confidences, confThreshold, 0.4f, indices);
             
             ObjectDetectionResult result;
-            if (!indices.empty())
+            if (indices.empty())
+            {
+                // Clear cropped output when no object detected
+                cv::Mat emptyFrame;
+                VideoFrameManager::getInstance().setFrame(getSecondaryLogicalId(), emptyFrame);
+            }
+            else
             {
                 int bestIdx = indices[0];
                 const cv::Rect& box = boxes[bestIdx];
@@ -2742,7 +2796,22 @@ void ObjectDetectorModule::run()
                 result.width  = juce::jlimit(0.0f, 1.0f, (float)box.width / (float)frame.cols);
                 result.height = juce::jlimit(0.0f, 1.0f, (float)box.height / (float)frame.rows);
                 
-                // Draw bbox and label
+                // --- CROPPED OUTPUT LOGIC ---
+                if (box.area() > 0)
+                {
+                    // Ensure the box is within the frame to prevent crash
+                    cv::Rect validBox = box & cv::Rect(0, 0, originalFrame.cols, originalFrame.rows);
+                    if (validBox.area() > 0)
+                    {
+                        // Create the cropped frame from original (before annotations)
+                        cv::Mat cropped = originalFrame(validBox);
+                        
+                        // Publish it using the secondary ID
+                        VideoFrameManager::getInstance().setFrame(getSecondaryLogicalId(), cropped);
+                    }
+                }
+                
+                // Draw bbox and label on the main frame
                 cv::rectangle(frame, box, cv::Scalar(0, 255, 0), 2);
                 std::string label;
                 if (!classNames.empty() && targetClassId >= 0 && targetClassId < (int)classNames.size())
@@ -2759,6 +2828,9 @@ void ObjectDetectorModule::run()
                     fifoBuffer[writeScope.startIndex1] = result;
             }
             
+            // --- PASSTHROUGH LOGIC ---
+            // Publish the annotated frame under our primary ID and update local GUI
+            VideoFrameManager::getInstance().setFrame(getLogicalId(), frame);
             updateGuiFrame(frame);
         }
         
@@ -2811,6 +2883,7 @@ void ObjectDetectorModule::processBlock(juce::AudioBuffer<float>& buffer, juce::
     }
     
     // Output channels: 0:X, 1:Y, 2:W, 3:H, 4:Gate
+    auto cvOutBus = getBusBuffer(buffer, false, 0);
     const float values[5]
     {
         lastResultForAudio.x,
@@ -2820,10 +2893,28 @@ void ObjectDetectorModule::processBlock(juce::AudioBuffer<float>& buffer, juce::
         lastResultForAudio.detected ? 1.0f : 0.0f
     };
     
-    for (int ch = 0; ch < juce::jmin(5, buffer.getNumChannels()); ++ch)
+    for (int ch = 0; ch < juce::jmin(5, cvOutBus.getNumChannels()); ++ch)
     {
-        for (int s = 0; s < buffer.getNumSamples(); ++s)
-            buffer.setSample(ch, s, values[ch]);
+        for (int s = 0; s < cvOutBus.getNumSamples(); ++s)
+            cvOutBus.setSample(ch, s, values[ch]);
+    }
+    
+    // Output primary ID for passthrough video on bus 1
+    auto videoOutBus = getBusBuffer(buffer, false, 1);
+    if (videoOutBus.getNumChannels() > 0)
+    {
+        float primaryId = static_cast<float>(getLogicalId());
+        for (int s = 0; s < videoOutBus.getNumSamples(); ++s)
+            videoOutBus.setSample(0, s, primaryId);
+    }
+    
+    // Output secondary ID for cropped video on bus 2
+    auto croppedOutBus = getBusBuffer(buffer, false, 2);
+    if (croppedOutBus.getNumChannels() > 0)
+    {
+        float secondaryId = static_cast<float>(getSecondaryLogicalId());
+        for (int s = 0; s < croppedOutBus.getNumSamples(); ++s)
+            croppedOutBus.setSample(0, s, secondaryId);
     }
 }
 
@@ -2972,6 +3063,8 @@ void ObjectDetectorModule::drawIoPins(const NodePinHelpers& helpers)
     helpers.drawAudioOutputPin("Width", 2);
     helpers.drawAudioOutputPin("Height", 3);
     helpers.drawAudioOutputPin("Gate", 4);
+    helpers.drawAudioOutputPin("Video Out", 0);     // Bus 1, Channel 0
+    helpers.drawAudioOutputPin("Cropped Out", 1); // Bus 2, Channel 0
 }
 #endif
 
@@ -3092,7 +3185,9 @@ juce::AudioProcessorValueTreeState::ParameterLayout FaceTrackerModule::createPar
 FaceTrackerModule::FaceTrackerModule()
     : ModuleProcessor(BusesProperties()
                         .withInput("Input", juce::AudioChannelSet::mono(), true)
-                        .withOutput("Output", juce::AudioChannelSet::discreteChannels(FACE_NUM_KEYPOINTS * 2), true)),
+                        .withOutput("CV Out", juce::AudioChannelSet::discreteChannels(FACE_NUM_KEYPOINTS * 2), true)
+                        .withOutput("Video Out", juce::AudioChannelSet::mono(), true)    // PASSTHROUGH
+                        .withOutput("Cropped Out", juce::AudioChannelSet::mono(), true)), // CROPPED
       juce::Thread("Face Tracker Thread"),
       apvts(*this, nullptr, "FaceTrackerParams", createParameterLayout())
 {
@@ -3210,12 +3305,25 @@ void FaceTrackerModule::run()
             }
         #endif
 
+        // Save a clean copy for cropping (before drawing annotations)
+        cv::Mat originalFrame;
+        frame.copyTo(originalFrame);
+        
         cv::Mat gray; cv::cvtColor(frame, gray, cv::COLOR_BGR2GRAY);
         std::vector<cv::Rect> faces; faceCascade.detectMultiScale(gray, faces);
         FaceResult result{};
         if (!faces.empty())
         {
             cv::Rect box = faces[0];
+            
+            // --- CROPPED OUTPUT LOGIC ---
+            cv::Rect validBox = box & cv::Rect(0, 0, originalFrame.cols, originalFrame.rows);
+            if (validBox.area() > 0)
+            {
+                cv::Mat cropped = originalFrame(validBox);
+                VideoFrameManager::getInstance().setFrame(getSecondaryLogicalId(), cropped);
+            }
+            
             cv::Mat roi = frame(box);
             // NOTE: For DNN models, blobFromImage works on CPU
             // The GPU acceleration happens in net.forward() when backend is set to CUDA
@@ -3230,7 +3338,17 @@ void FaceTrackerModule::run()
                 if (result.keypoints[i][0] >= 0)
                     cv::circle(frame, { (int)result.keypoints[i][0], (int)result.keypoints[i][1] }, 2, {0,0,255}, -1);
         }
+        else
+        {
+            // Clear cropped output when no face detected
+            cv::Mat emptyFrame;
+            VideoFrameManager::getInstance().setFrame(getSecondaryLogicalId(), emptyFrame);
+        }
+        
         if (fifo.getFreeSpace()>=1){ auto w=fifo.write(1); if (w.blockSize1>0) fifoBuffer[w.startIndex1]=result; }
+        
+        // --- PASSTHROUGH LOGIC ---
+        VideoFrameManager::getInstance().setFrame(getLogicalId(), frame);
         updateGuiFrame(frame);
         wait(66);
     }
@@ -3254,8 +3372,41 @@ void FaceTrackerModule::processBlock(juce::AudioBuffer<float>& buffer, juce::Mid
 {
     juce::ignoreUnused(midi);
     auto in=getBusBuffer(buffer,true,0); if(in.getNumChannels()>0 && in.getNumSamples()>0) currentSourceId.store((juce::uint32)in.getSample(0,0));
-    buffer.clear(); if(fifo.getNumReady()>0){auto r=fifo.read(1); if(r.blockSize1>0) lastResultForAudio=fifoBuffer[r.startIndex1];}
-    for(int i=0;i<FACE_NUM_KEYPOINTS;++i){int chX=i*2, chY=i*2+1; if(chY>=buffer.getNumChannels()) break; float xn=(lastResultForAudio.keypoints[i][0]>=0)?juce::jlimit(0.0f,1.0f,lastResultForAudio.keypoints[i][0]/640.0f):0.0f; float yn=(lastResultForAudio.keypoints[i][1]>=0)?juce::jlimit(0.0f,1.0f,lastResultForAudio.keypoints[i][1]/480.0f):0.0f; for(int s=0;s<buffer.getNumSamples();++s){buffer.setSample(chX,s,xn); buffer.setSample(chY,s,yn);} }
+    
+    if(fifo.getNumReady()>0){auto r=fifo.read(1); if(r.blockSize1>0) lastResultForAudio=fifoBuffer[r.startIndex1];}
+    
+    // Output CV on bus 0
+    auto cvOutBus = getBusBuffer(buffer, false, 0);
+    for(int i=0;i<FACE_NUM_KEYPOINTS;++i)
+    {
+        int chX=i*2, chY=i*2+1; 
+        if(chY>=cvOutBus.getNumChannels()) break; 
+        float xn=(lastResultForAudio.keypoints[i][0]>=0)?juce::jlimit(0.0f,1.0f,lastResultForAudio.keypoints[i][0]/640.0f):0.0f; 
+        float yn=(lastResultForAudio.keypoints[i][1]>=0)?juce::jlimit(0.0f,1.0f,lastResultForAudio.keypoints[i][1]/480.0f):0.0f; 
+        for(int s=0;s<cvOutBus.getNumSamples();++s)
+        {
+            cvOutBus.setSample(chX,s,xn); 
+            cvOutBus.setSample(chY,s,yn);
+        }
+    }
+    
+    // Passthrough Video ID on bus 1
+    auto videoOutBus = getBusBuffer(buffer, false, 1);
+    if (videoOutBus.getNumChannels() > 0)
+    {
+        float primaryId = static_cast<float>(getLogicalId());
+        for (int s = 0; s < videoOutBus.getNumSamples(); ++s)
+            videoOutBus.setSample(0, s, primaryId);
+    }
+    
+    // Cropped Video ID on bus 2
+    auto croppedOutBus = getBusBuffer(buffer, false, 2);
+    if (croppedOutBus.getNumChannels() > 0)
+    {
+        float secondaryId = static_cast<float>(getSecondaryLogicalId());
+        for (int s = 0; s < croppedOutBus.getNumSamples(); ++s)
+            croppedOutBus.setSample(0, s, secondaryId);
+    }
 }
 
 #if defined(PRESET_CREATOR_UI)
@@ -3320,7 +3471,9 @@ void FaceTrackerModule::drawIoPins(const NodePinHelpers& helpers)
 {
     helpers.drawAudioInputPin("Source In", 0);
     for(int i=0;i<FACE_NUM_KEYPOINTS;++i)
-    { juce::String base = juce::String("Pt ") + juce::String(i+1); helpers.drawAudioOutputPin((base+" X").toRawUTF8(), i*2); helpers.drawAudioOutputPin((base+" Y").toRawUTF8(), i*2+1);}    
+    { juce::String base = juce::String("Pt ") + juce::String(i+1); helpers.drawAudioOutputPin((base+" X").toRawUTF8(), i*2); helpers.drawAudioOutputPin((base+" Y").toRawUTF8(), i*2+1);}
+    helpers.drawAudioOutputPin("Video Out", 0);     // Bus 1
+    helpers.drawAudioOutputPin("Cropped Out", 1); // Bus 2
 }
 
 #endif
@@ -3463,7 +3616,9 @@ juce::AudioProcessorValueTreeState::ParameterLayout HandTrackerModule::createPar
 HandTrackerModule::HandTrackerModule()
     : ModuleProcessor(BusesProperties()
                         .withInput("Input", juce::AudioChannelSet::mono(), true)
-                        .withOutput("Output", juce::AudioChannelSet::discreteChannels(HAND_NUM_KEYPOINTS * 2), true)),
+                        .withOutput("CV Out", juce::AudioChannelSet::discreteChannels(HAND_NUM_KEYPOINTS * 2), true)
+                        .withOutput("Video Out", juce::AudioChannelSet::mono(), true)    // PASSTHROUGH
+                        .withOutput("Cropped Out", juce::AudioChannelSet::mono(), true)), // CROPPED
       juce::Thread("Hand Tracker Thread"),
       apvts(*this, nullptr, "HandTrackerParams", createParameterLayout())
 {
@@ -3579,6 +3734,10 @@ void HandTrackerModule::run()
             }
         #endif
 
+        // Save a clean copy for cropping (before drawing annotations)
+        cv::Mat originalFrame;
+        frame.copyTo(originalFrame);
+        
         // NOTE: For DNN models, blobFromImage works on CPU
         // The GPU acceleration happens in net.forward() when backend is set to CUDA
         cv::Mat blob = cv::dnn::blobFromImage(frame, 1.0/255.0, cv::Size(368,368), cv::Scalar(), false, false);
@@ -3590,6 +3749,48 @@ void HandTrackerModule::run()
 
         if (fifo.getFreeSpace() >= 1) { auto w = fifo.write(1); if (w.blockSize1 > 0) fifoBuffer[w.startIndex1] = result; }
 
+        // --- CROPPED OUTPUT LOGIC ---
+        // Calculate bounding box from detected keypoints
+        int minX = INT_MAX, minY = INT_MAX, maxX = 0, maxY = 0;
+        int validPoints = 0;
+        for (int i=0;i<HAND_NUM_KEYPOINTS;++i)
+        {
+            if (result.keypoints[i][0] >= 0 && result.keypoints[i][1] >= 0)
+            {
+                int x = (int)result.keypoints[i][0];
+                int y = (int)result.keypoints[i][1];
+                minX = juce::jmin(minX, x);
+                minY = juce::jmin(minY, y);
+                maxX = juce::jmax(maxX, x);
+                maxY = juce::jmax(maxY, y);
+                validPoints++;
+            }
+        }
+        
+        if (validPoints > 0)
+        {
+            // Add padding around the bounding box
+            int padding = 20;
+            int boxX = juce::jmax(0, minX - padding);
+            int boxY = juce::jmax(0, minY - padding);
+            int boxW = juce::jmin(originalFrame.cols - boxX, maxX - minX + padding * 2);
+            int boxH = juce::jmin(originalFrame.rows - boxY, maxY - minY + padding * 2);
+            cv::Rect box(boxX, boxY, boxW, boxH);
+            box &= cv::Rect(0, 0, originalFrame.cols, originalFrame.rows);
+            
+            if (box.area() > 0)
+            {
+                cv::Mat cropped = originalFrame(box);
+                VideoFrameManager::getInstance().setFrame(getSecondaryLogicalId(), cropped);
+            }
+        }
+        else
+        {
+            // Clear cropped output when no hand detected
+            cv::Mat emptyFrame;
+            VideoFrameManager::getInstance().setFrame(getSecondaryLogicalId(), emptyFrame);
+        }
+
         // Draw minimal skeleton
         for (const auto& p : HAND_SKELETON_PAIRS)
         {
@@ -3600,6 +3801,9 @@ void HandTrackerModule::run()
         for (int i=0;i<HAND_NUM_KEYPOINTS;++i)
             if (result.keypoints[i][0] >= 0)
                 cv::circle(frame, { (int)result.keypoints[i][0], (int)result.keypoints[i][1] }, 3, {0,0,255}, -1);
+        
+        // --- PASSTHROUGH LOGIC ---
+        VideoFrameManager::getInstance().setFrame(getLogicalId(), frame);
         updateGuiFrame(frame);
         wait(66);
     }
@@ -3627,14 +3831,39 @@ void HandTrackerModule::processBlock(juce::AudioBuffer<float>& buffer, juce::Mid
     // Read Source ID from input pin
     auto in = getBusBuffer(buffer, true, 0);
     if (in.getNumChannels()>0 && in.getNumSamples()>0) currentSourceId.store((juce::uint32)in.getSample(0,0));
-    buffer.clear();
+    
     if (fifo.getNumReady()>0) { auto r=fifo.read(1); if (r.blockSize1>0) lastResultForAudio=fifoBuffer[r.startIndex1]; }
+    
+    // Output CV on bus 0
+    auto cvOutBus = getBusBuffer(buffer, false, 0);
     for (int i=0;i<HAND_NUM_KEYPOINTS;++i)
     {
-        int chX=i*2, chY=i*2+1; if (chY>=buffer.getNumChannels()) break;
+        int chX=i*2, chY=i*2+1; if (chY>=cvOutBus.getNumChannels()) break;
         float xn = (lastResultForAudio.keypoints[i][0] >= 0) ? juce::jlimit(0.0f,1.0f,lastResultForAudio.keypoints[i][0]/640.0f) : 0.0f;
         float yn = (lastResultForAudio.keypoints[i][1] >= 0) ? juce::jlimit(0.0f,1.0f,lastResultForAudio.keypoints[i][1]/480.0f) : 0.0f;
-        for (int s=0;s<buffer.getNumSamples();++s){ buffer.setSample(chX,s,xn); buffer.setSample(chY,s,yn);}    
+        for (int s=0;s<cvOutBus.getNumSamples();++s)
+        {
+            cvOutBus.setSample(chX,s,xn); 
+            cvOutBus.setSample(chY,s,yn);
+        }
+    }
+    
+    // Passthrough Video ID on bus 1
+    auto videoOutBus = getBusBuffer(buffer, false, 1);
+    if (videoOutBus.getNumChannels() > 0)
+    {
+        float primaryId = static_cast<float>(getLogicalId());
+        for (int s = 0; s < videoOutBus.getNumSamples(); ++s)
+            videoOutBus.setSample(0, s, primaryId);
+    }
+    
+    // Cropped Video ID on bus 2
+    auto croppedOutBus = getBusBuffer(buffer, false, 2);
+    if (croppedOutBus.getNumChannels() > 0)
+    {
+        float secondaryId = static_cast<float>(getSecondaryLogicalId());
+        for (int s = 0; s < croppedOutBus.getNumSamples(); ++s)
+            croppedOutBus.setSample(0, s, secondaryId);
     }
 }
 
@@ -3723,6 +3952,8 @@ void HandTrackerModule::drawIoPins(const NodePinHelpers& helpers)
         helpers.drawAudioOutputPin(x.toRawUTF8(), i*2);
         helpers.drawAudioOutputPin(y.toRawUTF8(), i*2+1);
     }
+    helpers.drawAudioOutputPin("Video Out", 0);     // Bus 1
+    helpers.drawAudioOutputPin("Cropped Out", 1); // Bus 2
 }
 
 #endif
@@ -4063,7 +4294,8 @@ juce::AudioProcessorValueTreeState::ParameterLayout PoseEstimatorModule::createP
 PoseEstimatorModule::PoseEstimatorModule()
     : ModuleProcessor(BusesProperties()
                      .withInput("Input", juce::AudioChannelSet::mono(), true)
-                     .withOutput("Output", juce::AudioChannelSet::discreteChannels(30), true)), // 15 keypoints x 2 (x,y)
+                     .withOutput("CV Out", juce::AudioChannelSet::discreteChannels(30), true) // 15 keypoints x 2 (x,y)
+                     .withOutput("Video Out", juce::AudioChannelSet::mono(), true)), // PASSTHROUGH
       juce::Thread("Pose Estimator Thread"),
       apvts(*this, nullptr, "PoseEstimatorParams", createParameterLayout())
 {
@@ -4228,6 +4460,8 @@ void PoseEstimatorModule::run()
                 }
             }
             
+            // --- PASSTHROUGH LOGIC ---
+            VideoFrameManager::getInstance().setFrame(getLogicalId(), frame);
             // 6. Update the GUI preview frame
             updateGuiFrame(frame);
         }
@@ -4327,14 +4561,15 @@ void PoseEstimatorModule::processBlock(juce::AudioBuffer<float>& buffer, juce::M
         }
     }
     
-    // Map keypoint coordinates to output channels
+    // Map keypoint coordinates to output channels (bus 0 - CV Out)
+    auto cvOutBus = getBusBuffer(buffer, false, 0);
     // Channel layout: [Head X, Head Y, Neck X, Neck Y, R Shoulder X, R Shoulder Y, ...]
     for (int i = 0; i < MPI_NUM_KEYPOINTS; ++i)
     {
         int chX = i * 2;
         int chY = i * 2 + 1;
         
-        if (chY < buffer.getNumChannels())
+        if (chY < cvOutBus.getNumChannels())
         {
             // Normalize coordinates to 0-1 range based on typical video resolution (640x480 or similar)
             // If keypoint not detected (negative value), output 0
@@ -4347,12 +4582,21 @@ void PoseEstimatorModule::processBlock(juce::AudioBuffer<float>& buffer, juce::M
                 : 0.0f;
             
             // Fill the entire buffer with the current value (DC signal)
-            for (int sample = 0; sample < buffer.getNumSamples(); ++sample)
+            for (int sample = 0; sample < cvOutBus.getNumSamples(); ++sample)
             {
-                buffer.setSample(chX, sample, x_normalized);
-                buffer.setSample(chY, sample, y_normalized);
+                cvOutBus.setSample(chX, sample, x_normalized);
+                cvOutBus.setSample(chY, sample, y_normalized);
             }
         }
+    }
+    
+    // Passthrough Video ID on bus 1
+    auto videoOutBus = getBusBuffer(buffer, false, 1);
+    if (videoOutBus.getNumChannels() > 0)
+    {
+        float primaryId = static_cast<float>(getLogicalId());
+        for (int s = 0; s < videoOutBus.getNumSamples(); ++s)
+            videoOutBus.setSample(0, s, primaryId);
     }
 }
 
@@ -4500,6 +4744,7 @@ void PoseEstimatorModule::drawIoPins(const NodePinHelpers& helpers)
         helpers.drawAudioOutputPin(xLabel.toRawUTF8(), i * 2);
         helpers.drawAudioOutputPin(yLabel.toRawUTF8(), i * 2 + 1);
     }
+    helpers.drawAudioOutputPin("Video Out", 0); // Bus 1
 }
 #endif
 
@@ -4651,7 +4896,9 @@ juce::AudioProcessorValueTreeState::ParameterLayout HumanDetectorModule::createP
 HumanDetectorModule::HumanDetectorModule()
     : ModuleProcessor(BusesProperties()
                      .withInput("Input", juce::AudioChannelSet::mono(), true)
-                     .withOutput("Output", juce::AudioChannelSet::discreteChannels(5), true)),
+                     .withOutput("CV Out", juce::AudioChannelSet::discreteChannels(5), true)
+                     .withOutput("Video Out", juce::AudioChannelSet::mono(), true)    // PASSTHROUGH
+                     .withOutput("Cropped Out", juce::AudioChannelSet::mono(), true)), // CROPPED
       juce::Thread("Human Detector Analysis Thread"),
       apvts(*this, nullptr, "HumanParams", createParameterLayout())
 {
@@ -4782,6 +5029,10 @@ DetectionResult HumanDetectorModule::analyzeFrame(const cv::Mat& inputFrame)
 {
     DetectionResult result;
     cv::Mat gray, displayFrame;
+    
+    // Make a copy for cropping before any resizing
+    cv::Mat originalFrameForCrop;
+    inputFrame.copyTo(originalFrameForCrop);
     
     inputFrame.copyTo(displayFrame);
     cv::cvtColor(inputFrame, gray, cv::COLOR_BGR2GRAY);
@@ -4944,8 +5195,36 @@ DetectionResult HumanDetectorModule::analyzeFrame(const cv::Mat& inputFrame)
         result.y[0] = juce::jmap((float)largest->y, 0.0f, (float)displayFrame.rows, 0.0f, 1.0f);
         result.width[0] = juce::jmap((float)largest->width, 0.0f, (float)displayFrame.cols, 0.0f, 1.0f);
         result.height[0] = juce::jmap((float)largest->height, 0.0f, (float)displayFrame.rows, 0.0f, 1.0f);
+        
+        // --- CROPPED OUTPUT LOGIC ---
+        // Use original frame and scale the ROI if necessary
+        cv::Rect originalRoi = *largest;
+        if (displayFrame.cols != originalFrameForCrop.cols || displayFrame.rows != originalFrameForCrop.rows)
+        {
+            float scaleX = (float)originalFrameForCrop.cols / (float)displayFrame.cols;
+            float scaleY = (float)originalFrameForCrop.rows / (float)displayFrame.rows;
+            originalRoi.x = (int)(originalRoi.x * scaleX);
+            originalRoi.y = (int)(originalRoi.y * scaleY);
+            originalRoi.width = (int)(originalRoi.width * scaleX);
+            originalRoi.height = (int)(originalRoi.height * scaleY);
+        }
+        
+        originalRoi &= cv::Rect(0, 0, originalFrameForCrop.cols, originalFrameForCrop.rows);
+        if (originalRoi.area() > 0)
+        {
+            cv::Mat cropped = originalFrameForCrop(originalRoi);
+            VideoFrameManager::getInstance().setFrame(getSecondaryLogicalId(), cropped);
+        }
+    }
+    else
+    {
+        // Clear cropped output when no detection
+        cv::Mat emptyFrame;
+        VideoFrameManager::getInstance().setFrame(getSecondaryLogicalId(), emptyFrame);
     }
 
+    // --- PASSTHROUGH LOGIC ---
+    VideoFrameManager::getInstance().setFrame(getLogicalId(), displayFrame);
     updateGuiFrame(displayFrame);
     return result;
 }
@@ -4994,33 +5273,51 @@ void HumanDetectorModule::processBlock(juce::AudioBuffer<float>& buffer, juce::M
         }
     }
     
-    // Write results to output channels
-    auto outputBuffer = getBusBuffer(buffer, false, 0);
-    if (outputBuffer.getNumChannels() < 5) return;
+    // Write results to output channels (bus 0 - CV Out)
+    auto cvOutBus = getBusBuffer(buffer, false, 0);
+    if (cvOutBus.getNumChannels() < 5) return;
     
     if (lastResultForAudio.numDetections > 0)
     {
-        outputBuffer.setSample(0, 0, lastResultForAudio.x[0]);
-        outputBuffer.setSample(1, 0, lastResultForAudio.y[0]);
-        outputBuffer.setSample(2, 0, lastResultForAudio.width[0]);
-        outputBuffer.setSample(3, 0, lastResultForAudio.height[0]);
+        cvOutBus.setSample(0, 0, lastResultForAudio.x[0]);
+        cvOutBus.setSample(1, 0, lastResultForAudio.y[0]);
+        cvOutBus.setSample(2, 0, lastResultForAudio.width[0]);
+        cvOutBus.setSample(3, 0, lastResultForAudio.height[0]);
         gateSamplesRemaining = 2; // Keep gate high
     }
 
     if (gateSamplesRemaining > 0)
     {
-        outputBuffer.setSample(4, 0, 1.0f);
+        cvOutBus.setSample(4, 0, 1.0f);
         gateSamplesRemaining--;
     }
     else
     {
-        outputBuffer.setSample(4, 0, 0.0f);
+        cvOutBus.setSample(4, 0, 0.0f);
     }
     
     // Fill rest of buffer
     for (int channel = 0; channel < 5; ++channel)
     {
-        outputBuffer.copyFrom(channel, 1, outputBuffer, channel, 0, outputBuffer.getNumSamples() - 1);
+        cvOutBus.copyFrom(channel, 1, cvOutBus, channel, 0, cvOutBus.getNumSamples() - 1);
+    }
+    
+    // Passthrough Video ID on bus 1
+    auto videoOutBus = getBusBuffer(buffer, false, 1);
+    if (videoOutBus.getNumChannels() > 0)
+    {
+        float primaryId = static_cast<float>(getLogicalId());
+        for (int s = 0; s < videoOutBus.getNumSamples(); ++s)
+            videoOutBus.setSample(0, s, primaryId);
+    }
+    
+    // Cropped Video ID on bus 2
+    auto croppedOutBus = getBusBuffer(buffer, false, 2);
+    if (croppedOutBus.getNumChannels() > 0)
+    {
+        float secondaryId = static_cast<float>(getSecondaryLogicalId());
+        for (int s = 0; s < croppedOutBus.getNumSamples(); ++s)
+            croppedOutBus.setSample(0, s, secondaryId);
     }
 }
 
@@ -5158,6 +5455,8 @@ void HumanDetectorModule::drawIoPins(const NodePinHelpers& helpers)
     helpers.drawAudioOutputPin("Width", 2);
     helpers.drawAudioOutputPin("Height", 3);
     helpers.drawAudioOutputPin("Gate", 4);
+    helpers.drawAudioOutputPin("Video Out", 0);     // Bus 1
+    helpers.drawAudioOutputPin("Cropped Out", 1); // Bus 2
 }
 #endif
 
@@ -5310,7 +5609,8 @@ juce::AudioProcessorValueTreeState::ParameterLayout MovementDetectorModule::crea
 MovementDetectorModule::MovementDetectorModule()
     : ModuleProcessor(BusesProperties()
                      .withInput("Input", juce::AudioChannelSet::mono(), true)
-                     .withOutput("Output", juce::AudioChannelSet::discreteChannels(4), true)),
+                     .withOutput("CV Out", juce::AudioChannelSet::discreteChannels(4), true)
+                     .withOutput("Video Out", juce::AudioChannelSet::mono(), true)), // PASSTHROUGH
       juce::Thread("Movement Detector Analysis Thread"),
       apvts(*this, nullptr, "MovementParams", createParameterLayout())
 {
@@ -5517,6 +5817,8 @@ MovementResult MovementDetectorModule::analyzeFrame(const cv::Mat& inputFrame)
         }
     }
 
+    // --- PASSTHROUGH LOGIC ---
+    VideoFrameManager::getInstance().setFrame(getLogicalId(), displayFrame);
     updateGuiFrame(displayFrame);
     return result;
 }
@@ -5565,13 +5867,13 @@ void MovementDetectorModule::processBlock(juce::AudioBuffer<float>& buffer, juce
         }
     }
     
-    // Write results to output channels
-    auto outputBuffer = getBusBuffer(buffer, false, 0);
-    if (outputBuffer.getNumChannels() < 4) return;
+    // Write results to output channels (bus 0 - CV Out)
+    auto cvOutBus = getBusBuffer(buffer, false, 0);
+    if (cvOutBus.getNumChannels() < 4) return;
     
-    outputBuffer.setSample(0, 0, lastResultForAudio.avgMotionX);
-    outputBuffer.setSample(1, 0, lastResultForAudio.avgMotionY);
-    outputBuffer.setSample(2, 0, lastResultForAudio.motionAmount);
+    cvOutBus.setSample(0, 0, lastResultForAudio.avgMotionX);
+    cvOutBus.setSample(1, 0, lastResultForAudio.avgMotionY);
+    cvOutBus.setSample(2, 0, lastResultForAudio.motionAmount);
 
     // Handle trigger
     if (lastResultForAudio.motionTrigger)
@@ -5582,18 +5884,27 @@ void MovementDetectorModule::processBlock(juce::AudioBuffer<float>& buffer, juce
 
     if (triggerSamplesRemaining > 0)
     {
-        outputBuffer.setSample(3, 0, 1.0f);
+        cvOutBus.setSample(3, 0, 1.0f);
         triggerSamplesRemaining--;
     }
     else
     {
-        outputBuffer.setSample(3, 0, 0.0f);
+        cvOutBus.setSample(3, 0, 0.0f);
     }
     
     // Fill rest of buffer
     for (int channel = 0; channel < 4; ++channel)
     {
-        outputBuffer.copyFrom(channel, 1, outputBuffer, channel, 0, outputBuffer.getNumSamples() - 1);
+        cvOutBus.copyFrom(channel, 1, cvOutBus, channel, 0, cvOutBus.getNumSamples() - 1);
+    }
+    
+    // Passthrough Video ID on bus 1
+    auto videoOutBus = getBusBuffer(buffer, false, 1);
+    if (videoOutBus.getNumChannels() > 0)
+    {
+        float primaryId = static_cast<float>(getLogicalId());
+        for (int s = 0; s < videoOutBus.getNumSamples(); ++s)
+            videoOutBus.setSample(0, s, primaryId);
     }
 }
 
@@ -5739,6 +6050,7 @@ void MovementDetectorModule::drawIoPins(const NodePinHelpers& helpers)
     helpers.drawAudioOutputPin("Motion Y", 1);
     helpers.drawAudioOutputPin("Amount", 2);
     helpers.drawAudioOutputPin("Trigger", 3);
+    helpers.drawAudioOutputPin("Video Out", 0); // Bus 1
 }
 #endif
 
@@ -6035,7 +6347,8 @@ juce::AudioProcessorValueTreeState::ParameterLayout ColorTrackerModule::createPa
 ColorTrackerModule::ColorTrackerModule()
     : ModuleProcessor(BusesProperties()
                       .withInput("Input", juce::AudioChannelSet::mono(), true)
-                      .withOutput("Output", juce::AudioChannelSet::discreteChannels(24), true)), // up to 8 colors x 3
+                      .withOutput("CV Out", juce::AudioChannelSet::discreteChannels(24), true) // up to 8 colors x 3
+                      .withOutput("Video Out", juce::AudioChannelSet::mono(), true)), // PASSTHROUGH
       juce::Thread("Color Tracker Thread"),
       apvts(*this, nullptr, "ColorTrackerParams", createParameterLayout())
 {
@@ -6188,7 +6501,11 @@ void ColorTrackerModule::run()
             }
             
             if (!frame.empty())
+            {
+                // --- PASSTHROUGH LOGIC ---
+                VideoFrameManager::getInstance().setFrame(getLogicalId(), frame);
                 updateGuiFrame(frame);
+            }
         }
         
         wait(33);
@@ -6349,25 +6666,35 @@ void ColorTrackerModule::processBlock(juce::AudioBuffer<float>& buffer, juce::Mi
             lastResultForAudio = fifoBuffer[readScope.startIndex1];
     }
 
-    // Map each tracked color to 3 outputs: X, Y, Area
+    // Map each tracked color to 3 outputs: X, Y, Area (bus 0 - CV Out)
+    auto cvOutBus = getBusBuffer(buffer, false, 0);
     for (size_t i = 0; i < lastResultForAudio.size(); ++i)
     {
         int chX = (int)i * 3 + 0;
         int chY = (int)i * 3 + 1;
         int chA = (int)i * 3 + 2;
-        if (chA < buffer.getNumChannels())
+        if (chA < cvOutBus.getNumChannels())
         {
             const auto& tpl = lastResultForAudio[i];
             float vx = std::get<0>(tpl);
             float vy = std::get<1>(tpl);
             float va = std::get<2>(tpl);
-            for (int s = 0; s < buffer.getNumSamples(); ++s)
+            for (int s = 0; s < cvOutBus.getNumSamples(); ++s)
             {
-                buffer.setSample(chX, s, vx);
-                buffer.setSample(chY, s, vy);
-                buffer.setSample(chA, s, va);
+                cvOutBus.setSample(chX, s, vx);
+                cvOutBus.setSample(chY, s, vy);
+                cvOutBus.setSample(chA, s, va);
             }
         }
+    }
+    
+    // Passthrough Video ID on bus 1
+    auto videoOutBus = getBusBuffer(buffer, false, 1);
+    if (videoOutBus.getNumChannels() > 0)
+    {
+        float primaryId = static_cast<float>(getLogicalId());
+        for (int s = 0; s < videoOutBus.getNumSamples(); ++s)
+            videoOutBus.setSample(0, s, primaryId);
     }
 }
 
@@ -6515,6 +6842,7 @@ void ColorTrackerModule::drawIoPins(const NodePinHelpers& helpers)
 {
     helpers.drawAudioInputPin("Source In", 0);
     // Outputs are dynamic; editor queries via getDynamicOutputPins
+    helpers.drawAudioOutputPin("Video Out", 0); // Bus 1
 }
 #endif
 
@@ -6634,7 +6962,8 @@ juce::AudioProcessorValueTreeState::ParameterLayout ContourDetectorModule::creat
 ContourDetectorModule::ContourDetectorModule()
     : ModuleProcessor(BusesProperties()
                       .withInput("Input", juce::AudioChannelSet::mono(), true)
-                      .withOutput("Output", juce::AudioChannelSet::discreteChannels(3), true)),
+                      .withOutput("CV Out", juce::AudioChannelSet::discreteChannels(3), true)
+                      .withOutput("Video Out", juce::AudioChannelSet::mono(), true)), // PASSTHROUGH
       juce::Thread("Contour Detector Thread"),
       apvts(*this, nullptr, "ContourDetectorParams", createParameterLayout())
 {
@@ -6727,6 +7056,8 @@ void ContourDetectorModule::run()
                     fifoBuffer[writeScope.startIndex1] = result;
             }
 
+            // --- PASSTHROUGH LOGIC ---
+            VideoFrameManager::getInstance().setFrame(getLogicalId(), frame);
             updateGuiFrame(frame);
         }
         
@@ -6766,10 +7097,21 @@ void ContourDetectorModule::processBlock(juce::AudioBuffer<float>& buffer, juce:
             lastResultForAudio = fifoBuffer[readScope.startIndex1];
     }
 
+    // Output CV on bus 0
+    auto cvOutBus = getBusBuffer(buffer, false, 0);
     const float values[3] { lastResultForAudio.area, lastResultForAudio.complexity, lastResultForAudio.aspectRatio };
-    for (int ch = 0; ch < juce::jmin(3, buffer.getNumChannels()); ++ch)
-        for (int s = 0; s < buffer.getNumSamples(); ++s)
-            buffer.setSample(ch, s, values[ch]);
+    for (int ch = 0; ch < juce::jmin(3, cvOutBus.getNumChannels()); ++ch)
+        for (int s = 0; s < cvOutBus.getNumSamples(); ++s)
+            cvOutBus.setSample(ch, s, values[ch]);
+    
+    // Passthrough Video ID on bus 1
+    auto videoOutBus = getBusBuffer(buffer, false, 1);
+    if (videoOutBus.getNumChannels() > 0)
+    {
+        float primaryId = static_cast<float>(getLogicalId());
+        for (int s = 0; s < videoOutBus.getNumSamples(); ++s)
+            videoOutBus.setSample(0, s, primaryId);
+    }
 }
 
 #if defined(PRESET_CREATOR_UI)
@@ -6876,6 +7218,7 @@ void ContourDetectorModule::drawIoPins(const NodePinHelpers& helpers)
     helpers.drawAudioOutputPin("Area", 0);
     helpers.drawAudioOutputPin("Complexity", 1);
     helpers.drawAudioOutputPin("Aspect Ratio", 2);
+    helpers.drawAudioOutputPin("Video Out", 0); // Bus 1
 }
 #endif
 
@@ -7003,7 +7346,8 @@ juce::AudioProcessorValueTreeState::ParameterLayout SemanticSegmentationModule::
 SemanticSegmentationModule::SemanticSegmentationModule()
     : ModuleProcessor(BusesProperties()
                       .withInput("Input", juce::AudioChannelSet::mono(), true)
-                      .withOutput("Output", juce::AudioChannelSet::discreteChannels(4), true)),
+                      .withOutput("CV Out", juce::AudioChannelSet::discreteChannels(4), true)
+                      .withOutput("Video Out", juce::AudioChannelSet::mono(), true)), // PASSTHROUGH
       juce::Thread("Semantic Segmentation Thread"),
       apvts(*this, nullptr, "SemanticSegmentationParams", createParameterLayout())
 {
@@ -7226,6 +7570,8 @@ void SemanticSegmentationModule::run()
                 }
             }
 
+            // --- PASSTHROUGH LOGIC ---
+            VideoFrameManager::getInstance().setFrame(getLogicalId(), frame);
             // Always update preview with the latest frame (with or without overlay)
             updateGuiFrame(frame);
         }
@@ -7266,10 +7612,21 @@ void SemanticSegmentationModule::processBlock(juce::AudioBuffer<float>& buffer, 
             lastResultForAudio = fifoBuffer[readScope.startIndex1];
     }
 
+    // Output CV on bus 0
+    auto cvOutBus = getBusBuffer(buffer, false, 0);
     const float values[4] { lastResultForAudio.area, lastResultForAudio.centerX, lastResultForAudio.centerY, lastResultForAudio.detected ? 1.0f : 0.0f };
-    for (int ch = 0; ch < juce::jmin(4, buffer.getNumChannels()); ++ch)
-        for (int s = 0; s < buffer.getNumSamples(); ++s)
-            buffer.setSample(ch, s, values[ch]);
+    for (int ch = 0; ch < juce::jmin(4, cvOutBus.getNumChannels()); ++ch)
+        for (int s = 0; s < cvOutBus.getNumSamples(); ++s)
+            cvOutBus.setSample(ch, s, values[ch]);
+    
+    // Passthrough Video ID on bus 1
+    auto videoOutBus = getBusBuffer(buffer, false, 1);
+    if (videoOutBus.getNumChannels() > 0)
+    {
+        float primaryId = static_cast<float>(getLogicalId());
+        for (int s = 0; s < videoOutBus.getNumSamples(); ++s)
+            videoOutBus.setSample(0, s, primaryId);
+    }
 }
 
 #if defined(PRESET_CREATOR_UI)
@@ -7401,6 +7758,7 @@ void SemanticSegmentationModule::drawIoPins(const NodePinHelpers& helpers)
     helpers.drawAudioOutputPin("Center X", 1);
     helpers.drawAudioOutputPin("Center Y", 2);
     helpers.drawAudioOutputPin("Gate", 3);
+    helpers.drawAudioOutputPin("Video Out", 0); // Bus 1
 }
 #endif
 
@@ -7560,10 +7918,10 @@ juce::AudioProcessorValueTreeState::ParameterLayout VideoFXModule::createParamet
     params.push_back(std::make_unique<juce::AudioParameterFloat>("thresholdLevel", "Threshold Level", 0.0f, 255.0f, 127.0f));
     
     // New Effects
-    params.push_back(std::make_unique<juce::AudioParameterInt>("posterizeLevels", "Posterize Levels", 2, 16, 16));
+    params.push_back(std::make_unique<juce::AudioParameterInt>("posterizeLevels", "Posterize Levels", 2, 32, 32));
     params.push_back(std::make_unique<juce::AudioParameterFloat>("vignetteAmount", "Vignette Amount", 0.0f, 1.0f, 0.0f));
     params.push_back(std::make_unique<juce::AudioParameterFloat>("vignetteSize", "Vignette Size", 0.1f, 2.0f, 0.5f));
-    params.push_back(std::make_unique<juce::AudioParameterInt>("pixelateSize", "Pixelate Block Size", 2, 64, 2));
+    params.push_back(std::make_unique<juce::AudioParameterInt>("pixelateSize", "Pixelate Block Size", 1, 128, 1));
     params.push_back(std::make_unique<juce::AudioParameterBool>("cannyEnable", "Edge Detect", false));
     params.push_back(std::make_unique<juce::AudioParameterFloat>("cannyThresh1", "Canny Thresh 1", 0.0f, 255.0f, 50.0f));
     params.push_back(std::make_unique<juce::AudioParameterFloat>("cannyThresh2", "Canny Thresh 2", 0.0f, 255.0f, 150.0f));
@@ -7649,74 +8007,45 @@ void VideoFXModule::run()
         bool flipV = flipVerticalParam ? flipVerticalParam->get() : false;
         bool thresholdEnable = thresholdEnableParam ? thresholdEnableParam->get() : false;
         float thresholdLevel = thresholdLevelParam ? thresholdLevelParam->load() : 127.0f;
-        int posterizeLevels = posterizeLevelsParam ? posterizeLevelsParam->get() : 16;
+        int posterizeLevels = posterizeLevelsParam ? posterizeLevelsParam->get() : 32;
         float vignetteAmount = vignetteAmountParam ? vignetteAmountParam->load() : 0.0f;
         float vignetteSize = vignetteSizeParam ? vignetteSizeParam->load() : 0.5f;
-        int pixelateSize = pixelateBlockSizeParam ? pixelateBlockSizeParam->get() : 2;
+        int pixelateSize = pixelateBlockSizeParam ? pixelateBlockSizeParam->get() : 1;
         bool cannyEnable = cannyEnableParam ? cannyEnableParam->get() : false;
         float cannyThresh1 = cannyThresh1Param ? cannyThresh1Param->load() : 50.0f;
         float cannyThresh2 = cannyThresh2Param ? cannyThresh2Param->load() : 150.0f;
         int kaleidoscopeMode = kaleidoscopeModeParam ? kaleidoscopeModeParam->getIndex() : 0;
         bool useGpu = useGpuParam ? useGpuParam->get() : false;
 
-        cv::Mat processedFrame; // Create a destination frame
+        cv::Mat processedFrame;
 
 #if defined(WITH_CUDA_SUPPORT)
         if (useGpu && cv::cuda::getCudaEnabledDeviceCount() > 0)
         {
             try
             {
-                // GPU PATH
                 cv::cuda::GpuMat gpuFrame, gpuTemp;
                 gpuFrame.upload(frame);
 
-                // --- GPU PROCESSING CHAIN ---
-                // The output of one operation becomes the input for the next.
-
-                // Brightness & Contrast
+                // GPU processing chain (simplified for now, complex effects fallback to CPU)
                 if (brightness != 0.0f || contrast != 1.0f) {
                     gpuFrame.convertTo(gpuTemp, CV_8UC3, contrast, brightness);
                     gpuTemp.copyTo(gpuFrame);
                 }
-
-                // Grayscale
                 if (grayscale) {
                     cv::cuda::cvtColor(gpuFrame, gpuTemp, cv::COLOR_BGR2GRAY);
                     cv::cuda::cvtColor(gpuTemp, gpuFrame, cv::COLOR_GRAY2BGR);
                 }
-
-                // Threshold (NEW)
-                if (thresholdEnable) {
-                    cv::cuda::GpuMat grayGpu;
-                    cv::cuda::cvtColor(gpuFrame, grayGpu, cv::COLOR_BGR2GRAY);
-                    cv::cuda::threshold(grayGpu, gpuTemp, thresholdLevel, 255, cv::THRESH_BINARY);
-                    cv::cuda::cvtColor(gpuTemp, gpuFrame, cv::COLOR_GRAY2BGR);
-                }
-
-                // Blur (FIXED: Ensure kernel size is always odd and positive)
                 if (blur > 0.0f) {
                     int ksize = juce::jmax(1, static_cast<int>(blur) * 2 + 1);
                     auto gaussian = cv::cuda::createGaussianFilter(gpuFrame.type(), -1, cv::Size(ksize, ksize), 0);
                     gaussian->apply(gpuFrame, gpuTemp);
                     gpuTemp.copyTo(gpuFrame);
                 }
-
-                // Sharpen (FIXED: Use cv::cuda::addWeighted)
-                if (sharpen > 0.0f) {
-                    cv::cuda::GpuMat blurredGpu;
-                    auto gaussian = cv::cuda::createGaussianFilter(gpuFrame.type(), -1, cv::Size(0, 0), 3);
-                    gaussian->apply(gpuFrame, blurredGpu);
-                    cv::cuda::addWeighted(gpuFrame, 1.0 + sharpen, blurredGpu, -sharpen, 0, gpuTemp);
-                    gpuTemp.copyTo(gpuFrame);
-                }
-
-                // Invert
                 if (invert) {
                     cv::cuda::bitwise_not(gpuFrame, gpuTemp);
                     gpuTemp.copyTo(gpuFrame);
                 }
-
-                // Flip
                 if (flipH || flipV) {
                     int flipCode = flipH && flipV ? -1 : (flipH ? 1 : 0);
                     cv::cuda::flip(gpuFrame, gpuTemp, flipCode);
@@ -7724,231 +8053,189 @@ void VideoFXModule::run()
                 }
 
                 gpuFrame.download(processedFrame);
-
-                // --- Complex color operations are still easier on CPU ---
+                goto cpu_color_ops_label; // Jump to CPU section for complex color ops
             }
             catch (const cv::Exception& e)
             {
                 juce::Logger::writeToLog("[VideoFX] GPU processing error, falling back to CPU: " + juce::String(e.what()));
-                processedFrame = frame.clone(); // Start over with the original frame for CPU path
-                goto cpu_path_label; // Jump to the CPU processing block
+                processedFrame = frame.clone();
+                goto cpu_path_label;
             }
         }
         else
 #endif
         {
-        cpu_path_label: // Label for the GPU fallback goto
-            // --- CPU PATH ---
-            processedFrame = frame.clone(); // Start with a fresh copy
+        cpu_path_label:
+            processedFrame = frame.clone();
 
-            // Brightness & Contrast
+            // --- REORDERED & CORRECTED CPU EFFECTS CHAIN ---
+
+            // 1. Core Color Adjustments
             if (brightness != 0.0f || contrast != 1.0f) {
                 processedFrame.convertTo(processedFrame, -1, contrast, brightness);
             }
+            
+        cpu_color_ops_label: // Label for GPU fallback to join here
 
-            // Grayscale
+            if (temperature != 0.0f) {
+                std::vector<cv::Mat> bgr;
+                cv::split(processedFrame, bgr);
+                float factor = temperature;
+                if (factor < 0.0f) { // Cool
+                    bgr[0] = bgr[0] * (1.0f - factor * 0.5f);
+                    bgr[2] = bgr[2] * (1.0f + factor * 0.5f);
+                } else { // Warm
+                    bgr[0] = bgr[0] * (1.0f - factor * 0.5f);
+                    bgr[2] = bgr[2] * (1.0f + factor * 0.5f);
+                }
+                cv::merge(bgr, processedFrame);
+            }
+            if (sepia) {
+                cv::Mat sepiaKernel = (cv::Mat_<float>(3,3) << 0.272, 0.534, 0.131, 0.349, 0.686, 0.168, 0.393, 0.769, 0.189);
+                cv::transform(processedFrame, processedFrame, sepiaKernel);
+            }
+            if (saturation != 1.0f || hueShift != 0.0f) {
+                cv::Mat hsv;
+                cv::cvtColor(processedFrame, hsv, cv::COLOR_BGR2HSV);
+                std::vector<cv::Mat> hsvChannels;
+                cv::split(hsv, hsvChannels);
+                if (hueShift != 0.0f) {
+                     hsvChannels[0].convertTo(hsvChannels[0], CV_32F);
+                     hsvChannels[0] += (hueShift / 2.0f);
+                     cv::Mat mask = hsvChannels[0] < 0;
+                     cv::add(hsvChannels[0], 180, hsvChannels[0], mask);
+                     mask = hsvChannels[0] >= 180;
+                     cv::subtract(hsvChannels[0], 180, hsvChannels[0], mask);
+                     hsvChannels[0].convertTo(hsvChannels[0], CV_8U);
+                }
+                if (saturation != 1.0f) {
+                    hsvChannels[1].convertTo(hsvChannels[1], CV_32F);
+                    hsvChannels[1] *= saturation;
+                    hsvChannels[1].convertTo(hsvChannels[1], CV_8U);
+                }
+                cv::merge(hsvChannels, hsv);
+                cv::cvtColor(hsv, processedFrame, cv::COLOR_HSV2BGR);
+            }
+            if (gainR != 1.0f || gainG != 1.0f || gainB != 1.0f) {
+                std::vector<cv::Mat> bgr;
+                cv::split(processedFrame, bgr);
+                if (gainB != 1.0f) bgr[0] *= gainB;
+                if (gainG != 1.0f) bgr[1] *= gainG;
+                if (gainR != 1.0f) bgr[2] *= gainR;
+                cv::merge(bgr, processedFrame);
+            }
+            if (posterizeLevels < 32) {
+                int levels = 256 / posterizeLevels;
+                if (levels > 0) {
+                    processedFrame = (processedFrame / levels) * levels + levels / 2;
+                }
+            }
+            
+            // 2. Monochrome & Edge Effects
             if (grayscale) {
                 cv::cvtColor(processedFrame, processedFrame, cv::COLOR_BGR2GRAY);
                 cv::cvtColor(processedFrame, processedFrame, cv::COLOR_GRAY2BGR);
             }
-
-            // Threshold (NEW)
-            if (thresholdEnable) {
-                cv::Mat gray;
-                cv::cvtColor(processedFrame, gray, cv::COLOR_BGR2GRAY);
-                cv::threshold(gray, gray, thresholdLevel, 255, cv::THRESH_BINARY);
-                cv::cvtColor(gray, processedFrame, cv::COLOR_GRAY2BGR);
-            }
-
-            // Blur (FIXED: Ensure kernel size is always odd and positive)
-            if (blur > 0.0f) {
-                int ksize = juce::jmax(1, static_cast<int>(blur) * 2 + 1);
-                cv::GaussianBlur(processedFrame, processedFrame, cv::Size(ksize, ksize), 0);
-            }
-            
-            // Sharpen (FIXED: The darkening is from clipping. This is the correct formula, but values can go out of 0-255 range.
-            // Using a temporary 16-bit signed matrix prevents clipping during the operation.)
-            if (sharpen > 0.0f) {
-                cv::Mat temp;
-                processedFrame.convertTo(temp, CV_16SC3); // Convert to signed 16-bit
-                cv::Mat blurred;
-                cv::GaussianBlur(temp, blurred, cv::Size(0, 0), 3);
-                cv::addWeighted(temp, 1.0 + sharpen, blurred, -sharpen, 0, temp);
-                temp.convertTo(processedFrame, CV_8UC3); // Convert back to 8-bit, automatically clamping values
-            }
-            
-            // Invert
-            if (invert) {
-                cv::bitwise_not(processedFrame, processedFrame);
-            }
-
-            // Flip
-            if (flipH && flipV) { cv::flip(processedFrame, processedFrame, -1); }
-            else if (flipH) { cv::flip(processedFrame, processedFrame, 1); }
-            else if (flipV) { cv::flip(processedFrame, processedFrame, 0); }
-            
-            // Pixelate (apply early, before other effects)
-            if (pixelateSize > 2) {
-                int w = processedFrame.cols;
-                int h = processedFrame.rows;
-                cv::resize(processedFrame, processedFrame, cv::Size(w / pixelateSize, h / pixelateSize), 0, 0, cv::INTER_NEAREST);
-                cv::resize(processedFrame, processedFrame, cv::Size(w, h), 0, 0, cv::INTER_NEAREST);
-            }
-            
-            // Posterize
-            if (posterizeLevels < 16) {
-                int levels = 256 / posterizeLevels;
-                processedFrame = (processedFrame / levels) * levels + levels / 2;
-            }
-            
-            // Edge Detection (Canny) - converts to grayscale
             if (cannyEnable) {
                 cv::Mat gray;
                 cv::cvtColor(processedFrame, gray, cv::COLOR_BGR2GRAY);
                 cv::Canny(gray, gray, cannyThresh1, cannyThresh2);
                 cv::cvtColor(gray, processedFrame, cv::COLOR_GRAY2BGR);
+            } else if (thresholdEnable) {
+                cv::Mat gray;
+                cv::cvtColor(processedFrame, gray, cv::COLOR_BGR2GRAY);
+                cv::threshold(gray, gray, thresholdLevel, 255, cv::THRESH_BINARY);
+                cv::cvtColor(gray, processedFrame, cv::COLOR_GRAY2BGR);
             }
-        }
-        
-        // --- Complex color operations (Hue/Sat/Gain/Temperature/Sepia) remain on CPU for both paths ---
-        // (This is because they are more complex and less performance-critical than spatial filters)
-        
-        // Temperature adjustment
-        if (temperature != 0.0f) {
-            float tempFactor = temperature; // -1.0 (cool/blue) to +1.0 (warm/orange)
-            std::vector<cv::Mat> bgrChannels;
-            cv::split(processedFrame, bgrChannels);
-            
-            // Adjust blue and red channels
-            if (tempFactor < 0.0f) {
-                // Cool (increase blue, decrease red)
-                bgrChannels[0] = bgrChannels[0] * (1.0f - tempFactor * 0.5f); // Blue (tempFactor is negative, so this increases)
-                bgrChannels[2] = bgrChannels[2] * (1.0f + tempFactor * 0.5f); // Red (tempFactor is negative, so this decreases)
-            } else {
-                // Warm (increase red, decrease blue)
-                bgrChannels[0] = bgrChannels[0] * (1.0f - tempFactor * 0.5f); // Blue (decrease)
-                bgrChannels[2] = bgrChannels[2] * (1.0f + tempFactor * 0.5f); // Red (increase)
-            }
-            cv::merge(bgrChannels, processedFrame);
-        }
-        
-        // Sepia tone
-        if (sepia) {
-            cv::Mat sepiaKernel = (cv::Mat_<float>(3,3) << 
-                0.272, 0.534, 0.131,
-                0.349, 0.686, 0.168,
-                0.393, 0.769, 0.189);
-            cv::transform(processedFrame, processedFrame, sepiaKernel);
-        }
-        
-        if (saturation != 1.0f || hueShift != 0.0f || gainR != 1.0f || gainG != 1.0f || gainB != 1.0f)
-        {
-            cv::Mat hsv;
-            cv::cvtColor(processedFrame, hsv, cv::COLOR_BGR2HSV);
-            std::vector<cv::Mat> hsvChannels(3);
-            cv::split(hsv, hsvChannels);
-
-            if (hueShift != 0.0f) {
-                hsvChannels[0].convertTo(hsvChannels[0], CV_32F);
-                hsvChannels[0] += (hueShift / 2.0f); // OpenCV Hue is 0-179
-                hsvChannels[0].convertTo(hsvChannels[0], CV_8U, 1, 180); // Wrap around
-                cv::add(hsvChannels[0], 180, hsvChannels[0], hsvChannels[0] < 0);
+            if (invert) {
+                cv::bitwise_not(processedFrame, processedFrame);
             }
 
-            if (saturation != 1.0f) {
-                hsvChannels[1].convertTo(hsvChannels[1], CV_32F);
-                hsvChannels[1] *= saturation;
-                cv::threshold(hsvChannels[1], hsvChannels[1], 255, 255, cv::THRESH_TRUNC);
-                hsvChannels[1].convertTo(hsvChannels[1], CV_8U);
+            // 3. Geometric & Spatial Filters (applied last for maximum impact)
+            if (flipH || flipV) {
+                int flipCode = flipH && flipV ? -1 : (flipH ? 1 : 0);
+                cv::flip(processedFrame, processedFrame, flipCode);
             }
-            
-            cv::merge(hsvChannels, hsv);
-            cv::cvtColor(hsv, processedFrame, cv::COLOR_HSV2BGR);
-
-            // Apply RGB Gains
-            std::vector<cv::Mat> bgrChannels(3);
-            cv::split(processedFrame, bgrChannels);
-            if(gainB != 1.0f) bgrChannels[0] *= gainB;
-            if(gainG != 1.0f) bgrChannels[1] *= gainG;
-            if(gainR != 1.0f) bgrChannels[2] *= gainR;
-            cv::merge(bgrChannels, processedFrame);
+            if (vignetteAmount > 0.0f) {
+                 cv::Mat vignette = cv::Mat::zeros(processedFrame.size(), CV_32F);
+                 int centerX = processedFrame.cols / 2;
+                 int centerY = processedFrame.rows / 2;
+                 float maxDist = std::sqrt((float)centerX * centerX + (float)centerY * centerY) * vignetteSize;
+                 for (int y = 0; y < processedFrame.rows; y++) {
+                     for (int x = 0; x < processedFrame.cols; x++) {
+                         float dist = std::sqrt(std::pow(x - centerX, 2) + std::pow(y - centerY, 2));
+                         float v = 1.0f - (dist / maxDist) * vignetteAmount;
+                         vignette.at<float>(y, x) = juce::jlimit(0.0f, 1.0f, v);
+                     }
+                 }
+                 std::vector<cv::Mat> bgr;
+                 cv::split(processedFrame, bgr);
+                 for (size_t i = 0; i < bgr.size(); i++) {
+                     bgr[i].convertTo(bgr[i], CV_32F);
+                     cv::multiply(bgr[i], vignette, bgr[i]);
+                     bgr[i].convertTo(bgr[i], CV_8U);
+                 }
+                 cv::merge(bgr, processedFrame);
+            }
+            if (pixelateSize > 1) {
+                int w = processedFrame.cols;
+                int h = processedFrame.rows;
+                cv::Mat temp;
+                cv::resize(processedFrame, temp, cv::Size(w / pixelateSize, h / pixelateSize), 0, 0, cv::INTER_NEAREST);
+                cv::resize(temp, processedFrame, cv::Size(w, h), 0, 0, cv::INTER_NEAREST);
+            }
+            if (blur > 0.0f) {
+                int ksize = juce::jmax(1, static_cast<int>(blur) * 2 + 1);
+                cv::GaussianBlur(processedFrame, processedFrame, cv::Size(ksize, ksize), 0);
+            }
+            if (sharpen > 0.0f) {
+                cv::Mat temp;
+                processedFrame.convertTo(temp, CV_16SC3);
+                cv::Mat blurred;
+                cv::GaussianBlur(temp, blurred, cv::Size(0, 0), 3);
+                cv::addWeighted(temp, 1.0 + sharpen, blurred, -sharpen, 0, temp);
+                temp.convertTo(processedFrame, CV_8UC3);
+            }
         }
         
-        // --- Vignette effect (applied after color operations) ---
-        if (vignetteAmount > 0.0f) {
-            int centerX = processedFrame.cols / 2;
-            int centerY = processedFrame.rows / 2;
-            float maxDist = std::sqrt(centerX * centerX + centerY * centerY) * vignetteSize;
-            
-            cv::Mat vignette = cv::Mat::zeros(processedFrame.size(), CV_32F);
-            for (int y = 0; y < processedFrame.rows; y++) {
-                for (int x = 0; x < processedFrame.cols; x++) {
-                    float dist = std::sqrt((x - centerX) * (x - centerX) + (y - centerY) * (y - centerY));
-                    float v = 1.0f - (dist / maxDist) * vignetteAmount;
-                    v = juce::jlimit(0.0f, 1.0f, v);
-                    vignette.at<float>(y, x) = v;
-                }
-            }
-            
-            // Apply vignette to each channel
-            std::vector<cv::Mat> bgrChannels;
-            cv::split(processedFrame, bgrChannels);
-            for (size_t i = 0; i < bgrChannels.size(); i++) {
-                bgrChannels[i].convertTo(bgrChannels[i], CV_32F);
-                cv::multiply(bgrChannels[i], vignette, bgrChannels[i]);
-                bgrChannels[i].convertTo(bgrChannels[i], CV_8U);
-            }
-            cv::merge(bgrChannels, processedFrame);
-        }
-        
-        // --- Kaleidoscope effect (applied last, as it rearranges the image) ---
+        // --- KALEIDOSCOPE (APPLIED LAST - after all other effects) ---
         if (kaleidoscopeMode > 0) {
             int w = processedFrame.cols;
             int h = processedFrame.rows;
             int halfW = w / 2;
             int halfH = h / 2;
-            
-            // Extract top-left quadrant
             cv::Mat quadrant = processedFrame(cv::Rect(0, 0, halfW, halfH)).clone();
-            
+
             if (kaleidoscopeMode == 1) { // 4-Way
-                // Top-left: original
-                quadrant.copyTo(processedFrame(cv::Rect(0, 0, halfW, halfH)));
-                
-                // Top-right: flipped horizontally
-                cv::Mat flippedH;
+                cv::Mat flippedH, flippedV, flippedBoth;
                 cv::flip(quadrant, flippedH, 1);
-                flippedH.copyTo(processedFrame(cv::Rect(halfW, 0, halfW, halfH)));
-                
-                // Bottom-left: flipped vertically
-                cv::Mat flippedV;
                 cv::flip(quadrant, flippedV, 0);
-                flippedV.copyTo(processedFrame(cv::Rect(0, halfH, halfW, halfH)));
-                
-                // Bottom-right: flipped both ways
-                cv::Mat flippedBoth;
                 cv::flip(quadrant, flippedBoth, -1);
+                quadrant.copyTo(processedFrame(cv::Rect(0, 0, halfW, halfH)));
+                flippedH.copyTo(processedFrame(cv::Rect(halfW, 0, halfW, halfH)));
+                flippedV.copyTo(processedFrame(cv::Rect(0, halfH, halfW, halfH)));
                 flippedBoth.copyTo(processedFrame(cv::Rect(halfW, halfH, halfW, halfH)));
-            } else if (kaleidoscopeMode == 2) { // 8-Way (simplified - creates 4 mirrored sections)
-                // Create 8 sections by rotating and mirroring
-                // Top row: original + horizontal flip
-                quadrant.copyTo(processedFrame(cv::Rect(0, 0, halfW, halfH/2)));
-                cv::Mat flippedH;
-                cv::flip(quadrant, flippedH, 1);
-                flippedH.copyTo(processedFrame(cv::Rect(halfW, 0, halfW, halfH/2)));
+            } else if (kaleidoscopeMode == 2) { // 8-Way (CORRECTED LOGIC)
+                cv::Mat symmQuadrant = quadrant.clone();
+                cv::Mat mask = cv::Mat::zeros(quadrant.size(), CV_8U);
+                std::vector<cv::Point> triangle_pts = {cv::Point(0,0), cv::Point(halfW, 0), cv::Point(0, halfH)};
+                cv::fillConvexPoly(mask, triangle_pts, cv::Scalar(255));
                 
-                // Middle: rotated 90 degrees
-                cv::Mat rotated90;
-                cv::rotate(quadrant, rotated90, cv::ROTATE_90_CLOCKWISE);
-                rotated90.copyTo(processedFrame(cv::Rect(0, halfH/2, halfW/2, halfH)));
-                cv::Mat rotated90Flipped;
-                cv::flip(rotated90, rotated90Flipped, 1);
-                rotated90Flipped.copyTo(processedFrame(cv::Rect(halfW, halfH/2, halfW, halfH/2)));
-                
-                // Bottom: rotated 180
-                cv::Mat rotated180;
-                cv::rotate(quadrant, rotated180, cv::ROTATE_180);
-                rotated180.copyTo(processedFrame(cv::Rect(0, halfH/2 + halfH/4, halfW, halfH/2)));
+                cv::Mat tri;
+                quadrant.copyTo(tri, mask);
+
+                cv::Mat tri_flipped_h;
+                cv::flip(tri, tri_flipped_h, 1);
+                tri_flipped_h.copyTo(symmQuadrant, ~mask);
+
+                cv::Mat flippedH, flippedV, flippedBoth;
+                cv::flip(symmQuadrant, flippedH, 1);
+                cv::flip(symmQuadrant, flippedV, 0);
+                cv::flip(symmQuadrant, flippedBoth, -1);
+                symmQuadrant.copyTo(processedFrame(cv::Rect(0, 0, halfW, halfH)));
+                flippedH.copyTo(processedFrame(cv::Rect(halfW, 0, halfW, halfH)));
+                flippedV.copyTo(processedFrame(cv::Rect(0, halfH, halfW, halfH)));
+                flippedBoth.copyTo(processedFrame(cv::Rect(halfW, halfH, halfW, halfH)));
             }
         }
         
@@ -8259,20 +8546,22 @@ void VideoFXModule::drawParametersInNode(float itemWidth,
     }
     
     // Posterize
-    int posterizeLevels = posterizeLevelsParam ? posterizeLevelsParam->get() : 16;
-    if (ImGui::SliderInt("Posterize", &posterizeLevels, 2, 16))
+    int posterizeLevels = posterizeLevelsParam ? posterizeLevelsParam->get() : 32;
+    if (ImGui::SliderInt("Posterize", &posterizeLevels, 2, 32))
     {
         if (posterizeLevelsParam) *posterizeLevelsParam = posterizeLevels;
         onModificationEnded();
     }
+    if (ImGui::IsItemHovered()) ImGui::SetTooltip("Reduces the number of colors.\nLower values = stronger effect.");
     
     // Pixelate
-    int pixelateSize = pixelateBlockSizeParam ? pixelateBlockSizeParam->get() : 2;
-    if (ImGui::SliderInt("Pixelate", &pixelateSize, 2, 64))
+    int pixelateSize = pixelateBlockSizeParam ? pixelateBlockSizeParam->get() : 1;
+    if (ImGui::SliderInt("Pixelate", &pixelateSize, 1, 128))
     {
         if (pixelateBlockSizeParam) *pixelateBlockSizeParam = pixelateSize;
         onModificationEnded();
     }
+    if (ImGui::IsItemHovered()) ImGui::SetTooltip("Creates a mosaic effect.\nHigher values = larger blocks.");
     
     // Edge Detection (Canny)
     bool cannyEnable = cannyEnableParam ? cannyEnableParam->get() : false;
@@ -8430,6 +8719,7 @@ FILE: juce\\Source\\audio\\graph\\ModularSynthProcessor.cpp
 #include "../modules/ColorTrackerModule.h"
 #include "../modules/ContourDetectorModule.h"
 #include "../modules/SemanticSegmentationModule.h"
+#include "../modules/CropVideoModule.h"
 #include "../modules/InletModuleProcessor.h"
 #include "../modules/OutletModuleProcessor.h"
 #include "../modules/MetaModuleProcessor.h"
@@ -9108,6 +9398,7 @@ namespace {
             reg("color_tracker", []{ return std::make_unique<ColorTrackerModule>(); });
             reg("contour_detector", []{ return std::make_unique<ContourDetectorModule>(); });
             reg("semantic_segmentation", []{ return std::make_unique<SemanticSegmentationModule>(); });
+            reg("crop_video", []{ return std::make_unique<CropVideoModule>(); });
             reg("stroke_sequencer", []{ return std::make_unique<StrokeSequencerModuleProcessor>(); });
             
             reg("meta module", []{ return std::make_unique<MetaModuleProcessor>(); });
@@ -9146,7 +9437,10 @@ ModularSynthProcessor::NodeID ModularSynthProcessor::addModule(const juce::Strin
         const juce::uint32 logicalId = nextLogicalId++;
         logicalIdToModule[logicalId] = LogicalModule{ node->nodeID, moduleType };
         if (auto* mp = dynamic_cast<ModuleProcessor*>(node->getProcessor()))
+        {
             mp->setLogicalId(logicalId);
+            mp->setSecondaryLogicalId(nextLogicalId++); // Assign secondary ID for extra outputs (e.g., cropped video)
+        }
         
         if (moduleType.equalsIgnoreCase("audio_input"))
         {
@@ -9900,6 +10194,7 @@ void populateModuleDescriptions()
     // OpenCV (Computer Vision)
     descriptions["webcam_loader"] = "Captures video from a webcam and publishes it as a source for vision processing modules.";
     descriptions["video_file_loader"] = "Loads and plays a video file, publishes it as a source for vision processing modules.";
+    descriptions["video_fx"] = "Applies real-time video effects (brightness, contrast, saturation, blur, sharpen, etc.) to video sources, chainable.";
     descriptions["movement_detector"] = "Analyzes video source for motion via optical flow or background subtraction, outputs motion data as CV.";
     descriptions["human_detector"] = "Detects faces or bodies in video source via Haar Cascades or HOG, outputs position and size as CV.";
     descriptions["pose_estimator"] = "Uses OpenPose to detect 15 body keypoints (head, shoulders, elbows, wrists, hips, knees, ankles) and outputs their positions as CV signals.";
@@ -9909,6 +10204,7 @@ void populateModuleDescriptions()
     descriptions["color_tracker"] = "Tracks multiple colors in video and outputs their positions and sizes as CV.";
     descriptions["contour_detector"] = "Detects shapes via background subtraction and outputs area, complexity, and aspect ratio as CV.";
     descriptions["semantic_segmentation"] = "Uses deep learning to segment video into semantic regions and outputs detected areas as CV.";
+    descriptions["crop_video"] = "Crops a video stream based on CV signals (X, Y, Width, Height). Perfect for following detected objects or regions.";
     
     // Add aliases for underscore naming conventions
     descriptions["clock_divider"] = descriptions["ClockDivider"];
@@ -10811,46 +11107,39 @@ db["random"] = ModulePinInfo(
     );
 
     db["movement_detector"] = ModulePinInfo(
-        NodeWidth::Medium,
+        NodeWidth::Exception,
+        { AudioPin("Source In", 0, PinDataType::Video) },
         { 
-            AudioPin("Source In", 0, PinDataType::Video)
-        },
-        { 
-            AudioPin("Motion X", 0, PinDataType::CV),
-            AudioPin("Motion Y", 1, PinDataType::CV),
-            AudioPin("Amount", 2, PinDataType::CV),
-            AudioPin("Trigger", 3, PinDataType::Gate)
+            AudioPin("Motion X", 0, PinDataType::CV), AudioPin("Motion Y", 1, PinDataType::CV),
+            AudioPin("Amount", 2, PinDataType::CV), AudioPin("Trigger", 3, PinDataType::Gate),
+            AudioPin("Video Out", 0, PinDataType::Video) // Bus 1
         },
         {}
     );
 
     db["human_detector"] = ModulePinInfo(
-        NodeWidth::Medium,
-        { 
-            AudioPin("Source In", 0, PinDataType::Video)
-        },
-        { 
-            AudioPin("X", 0, PinDataType::CV),
-            AudioPin("Y", 1, PinDataType::CV),
-            AudioPin("Width", 2, PinDataType::CV),
-            AudioPin("Height", 3, PinDataType::CV),
-            AudioPin("Gate", 4, PinDataType::Gate)
+        NodeWidth::Exception,
+        { AudioPin("Source In", 0, PinDataType::Video) },
+        {
+            AudioPin("X", 0, PinDataType::CV), AudioPin("Y", 1, PinDataType::CV),
+            AudioPin("Width", 2, PinDataType::CV), AudioPin("Height", 3, PinDataType::CV),
+            AudioPin("Gate", 4, PinDataType::Gate),
+            AudioPin("Video Out", 0, PinDataType::Video),   // Bus 1
+            AudioPin("Cropped Out", 1, PinDataType::Video) // Bus 2
         },
         {}
     );
 
-    // Object Detector (YOLOv3) - 1 input (Source ID) and 5 outputs (X,Y,Width,Height,Gate)
+    // Object Detector (YOLOv3) - 1 input (Source ID) and 7 outputs (X,Y,Width,Height,Gate,Video Out,Cropped Out)
     db["object_detector"] = ModulePinInfo(
-        NodeWidth::Medium,
+        NodeWidth::Exception,
+        { AudioPin("Source In", 0, PinDataType::Video) },
         {
-            AudioPin("Source In", 0, PinDataType::Video)
-        },
-        {
-            AudioPin("X", 0, PinDataType::CV),
-            AudioPin("Y", 1, PinDataType::CV),
-            AudioPin("Width", 2, PinDataType::CV),
-            AudioPin("Height", 3, PinDataType::CV),
-            AudioPin("Gate", 4, PinDataType::Gate)
+            AudioPin("X", 0, PinDataType::CV), AudioPin("Y", 1, PinDataType::CV),
+            AudioPin("Width", 2, PinDataType::CV), AudioPin("Height", 3, PinDataType::CV),
+            AudioPin("Gate", 4, PinDataType::Gate),
+            AudioPin("Video Out", 0, PinDataType::Video),   // Bus 1
+            AudioPin("Cropped Out", 1, PinDataType::Video) // Bus 2
         },
         {}
     );
@@ -10861,11 +11150,13 @@ db["random"] = ModulePinInfo(
         {
             AudioPin("Source In", 0, PinDataType::Video)
         },
-        {},
+        {
+            AudioPin("Video Out", 0, PinDataType::Video) // Bus 1 - dynamic color pins are added programmatically
+        },
         {}
     );
 
-    // Pose Estimator: 15 keypoints x 2 coordinates = 30 output pins
+    // Pose Estimator: 15 keypoints x 2 coordinates = 30 output pins + Video Out
     db["pose_estimator"] = ModulePinInfo();
     db["pose_estimator"].defaultWidth = NodeWidth::Exception; // Custom size with zoom support
     db["pose_estimator"].audioIns.emplace_back("Source In", 0, PinDataType::Video);
@@ -10880,6 +11171,9 @@ db["random"] = ModulePinInfo(
         db["pose_estimator"].audioOuts.emplace_back(keypointNames[i] + " X", static_cast<int>(i * 2), PinDataType::CV);
         db["pose_estimator"].audioOuts.emplace_back(keypointNames[i] + " Y", static_cast<int>(i * 2 + 1), PinDataType::CV);
     }
+    // Add Video Out and Cropped Out pins (bus 1 and 2)
+    db["pose_estimator"].audioOuts.emplace_back("Video Out", 0, PinDataType::Video);
+    db["pose_estimator"].audioOuts.emplace_back("Cropped Out", 1, PinDataType::Video);
 
     // Hand Tracker: 21 keypoints x 2 = 42 outs
     db["hand_tracker"] = ModulePinInfo();
@@ -10898,8 +11192,11 @@ db["random"] = ModulePinInfo(
         db["hand_tracker"].audioOuts.emplace_back(std::string(handNames[i]) + " X", i*2, PinDataType::CV);
         db["hand_tracker"].audioOuts.emplace_back(std::string(handNames[i]) + " Y", i*2+1, PinDataType::CV);
     }
+    // Add Video Out and Cropped Out pins (bus 1 and 2)
+    db["hand_tracker"].audioOuts.emplace_back("Video Out", 0, PinDataType::Video);
+    db["hand_tracker"].audioOuts.emplace_back("Cropped Out", 1, PinDataType::Video);
 
-    // Face Tracker: 70 * 2 = 140 outs
+    // Face Tracker: 70 * 2 = 140 outs + Video Out + Cropped Out
     db["face_tracker"] = ModulePinInfo();
     db["face_tracker"].defaultWidth = NodeWidth::Exception;
     db["face_tracker"].audioIns.emplace_back("Source In", 0, PinDataType::Video);
@@ -10909,26 +11206,61 @@ db["random"] = ModulePinInfo(
         db["face_tracker"].audioOuts.emplace_back(base + " X", i*2, PinDataType::CV);
         db["face_tracker"].audioOuts.emplace_back(base + " Y", i*2+1, PinDataType::CV);
     }
+    // Add Video Out and Cropped Out pins (bus 1 and 2)
+    db["face_tracker"].audioOuts.emplace_back("Video Out", 0, PinDataType::Video);
+    db["face_tracker"].audioOuts.emplace_back("Cropped Out", 1, PinDataType::Video);
 
     // Add aliases for nodes with underscore naming convention
     db["clock_divider"] = db["ClockDivider"];
     db["sequential_switch"] = db["SequentialSwitch"];
     db["s_and_h"] = db["s&h"];
 
-    // Contour Detector: 1 input, 3 outputs
+    // Contour Detector: 1 input, 3 CV outputs + Video Out
     db["contour_detector"] = ModulePinInfo(
-        NodeWidth::Medium,
+        NodeWidth::Exception,
         { AudioPin("Source In", 0, PinDataType::Video) },
-        { AudioPin("Area", 0, PinDataType::CV), AudioPin("Complexity", 1, PinDataType::CV), AudioPin("Aspect Ratio", 2, PinDataType::CV) },
+        { 
+            AudioPin("Area", 0, PinDataType::CV), AudioPin("Complexity", 1, PinDataType::CV), 
+            AudioPin("Aspect Ratio", 2, PinDataType::CV), AudioPin("Video Out", 0, PinDataType::Video) // Bus 1
+        },
         {}
     );
 
-    // Semantic Segmentation: 1 input, 4 outputs (Area, Center X, Center Y, Gate)
+    // Semantic Segmentation: 1 input, 4 CV outputs + Video Out
     db["semantic_segmentation"] = ModulePinInfo(
-        NodeWidth::Medium,
+        NodeWidth::Exception,
         { AudioPin("Source In", 0, PinDataType::Video) },
-        { AudioPin("Area", 0, PinDataType::CV), AudioPin("Center X", 1, PinDataType::CV), AudioPin("Center Y", 2, PinDataType::CV), AudioPin("Gate", 3, PinDataType::Gate) },
+        { 
+            AudioPin("Area", 0, PinDataType::CV), AudioPin("Center X", 1, PinDataType::CV), 
+            AudioPin("Center Y", 2, PinDataType::CV), AudioPin("Gate", 3, PinDataType::Gate),
+            AudioPin("Video Out", 0, PinDataType::Video) // Bus 1
+        },
         {}
+    );
+
+    // Video FX Module - Uses dynamic pins based on video source
+    db["video_fx"] = ModulePinInfo(
+        NodeWidth::Exception, // Custom size for video preview
+        {}, // Dynamic inputs defined by module (video source + optional CV parameters)
+        {}, // Dynamic outputs defined by module (processed video output)
+        {}
+    );
+
+    // Crop Video Module - takes source ID and CV modulation signals (X, Y, W, H) to crop a video stream
+    db["crop_video"] = ModulePinInfo(
+        NodeWidth::Exception, // Uses custom size for video preview
+        {
+            AudioPin("Source In", 0, PinDataType::Video)
+        },
+        {
+            AudioPin("Output ID", 0, PinDataType::Video)
+        },
+        {
+            ModPin("Center X", "cropX_mod", PinDataType::CV),
+            ModPin("Center Y", "cropY_mod", PinDataType::CV),
+            ModPin("Width", "cropW_mod", PinDataType::CV),
+            ModPin("Height", "cropH_mod", PinDataType::CV)
+        }
     );
 
 }
@@ -10986,6 +11318,7 @@ bool ImGuiNodeEditorComponent::s_globalGpuEnabled = true;
 #include "../audio/modules/HandTrackerModule.h"
 #include "../audio/modules/FaceTrackerModule.h"
 #include "../audio/modules/VideoFXModule.h"
+#include "../audio/modules/CropVideoModule.h"
 #include "../audio/modules/MapRangeModuleProcessor.h"
 #include "../audio/modules/LagProcessorModuleProcessor.h"
 #include "../audio/modules/DeCrackleModuleProcessor.h"
@@ -11746,6 +12079,13 @@ void ImGuiNodeEditorComponent::renderImGui()
                 if (ImGui::MenuItem("Comparator")) { insertNodeBetween("comparator"); }
                 if (ImGui::MenuItem("Logic")) { insertNodeBetween("logic"); }
                 if (ImGui::MenuItem("Sequential Switch")) { insertNodeBetween("sequential_switch"); }
+                ImGui::EndMenu();
+            }
+            
+            if (ImGui::BeginMenu("Computer Vision", isNodeSelected))
+            {
+                if (ImGui::MenuItem("Video FX")) { insertNodeBetween("video_fx"); }
+                if (ImGui::MenuItem("Crop Video")) { insertNodeBetween("crop_video"); }
                 ImGui::EndMenu();
             }
             
@@ -13571,6 +13911,11 @@ if (auto* mp = synth->getModuleForLogical (lid))
         // Now draw the regular parameters below the video
         fxModule->drawParametersInNode(nodeContentWidth, isParamModulated, onModificationEnded);
     }
+    else if (auto* cropVideoModule = dynamic_cast<CropVideoModule*>(mp))
+    {
+        // CropVideoModule handles its own preview rendering with interaction in drawParametersInNode
+        cropVideoModule->drawParametersInNode(nodeContentWidth, isParamModulated, onModificationEnded);
+    }
     else
     {
         mp->drawParametersInNode (nodeContentWidth, isParamModulated, onModificationEnded);
@@ -15051,6 +15396,8 @@ if (auto* mp = synth->getModuleForLogical (lid))
                     if (ImGui::MenuItem("Video File Loader")) addAtMouse("video_file_loader");
                     ImGui::Separator();
                     if (ImGui::MenuItem("Video FX")) addAtMouse("video_fx");
+                    if (ImGui::MenuItem("Crop Video")) addAtMouse("crop_video");
+                    ImGui::Separator();
                     if (ImGui::MenuItem("Movement Detector")) addAtMouse("movement_detector");
                     if (ImGui::MenuItem("Human Detector")) addAtMouse("human_detector");
                     if (ImGui::MenuItem("Object Detector")) addAtMouse("object_detector");
@@ -17850,7 +18197,9 @@ void ImGuiNodeEditorComponent::drawInsertNodeOnLinkPopup()
             // Modulators
             {"S&H", "s_and_h"}, {"Function Generator", "function_generator"},
             // Sequencers
-            {"Timeline", "timeline"}
+            {"Timeline", "timeline"},
+            // Computer Vision (Video processing - Video cables are treated as mod)
+            {"Video FX", "video_fx"}, {"Crop Video", "crop_video"}
         };
         const auto& listToShow = linkToInsertOn.isMod ? modInsertable : audioInsertable;
 
@@ -18732,6 +19081,7 @@ ImGuiNodeEditorComponent::ModuleCategory ImGuiNodeEditorComponent::getModuleCate
     
     // --- 10. COMPUTER VISION (Bright Orange) ---
     if (lower.contains("webcam") || lower.contains("video_file") ||
+        lower == "video_fx" || lower == "crop_video" ||
         lower.contains("movement") || lower.contains("detector") || 
         lower.contains("opencv") || lower.contains("vision") ||
         lower.contains("tracker") || lower.contains("segmentation") ||
@@ -18820,6 +19170,7 @@ std::map<juce::String, std::pair<const char*, const char*>> ImGuiNodeEditorCompo
         {"Webcam Loader", {"webcam_loader", "Captures video from a webcam and publishes it as a source for vision processing modules"}},
         {"Video File Loader", {"video_file_loader", "Loads and plays a video file, publishes it as a source for vision processing modules"}},
         {"Video FX", {"video_fx", "Applies real-time video effects (brightness, contrast, saturation, blur, sharpen, etc.) to video sources, chainable"}},
+        {"Crop Video", {"crop_video", "Crops and resizes video frames to a specified region, chainable video processor"}},
         {"Movement Detector", {"movement_detector", "Analyzes video source for motion via optical flow or background subtraction, outputs motion data as CV"}},
         {"Human Detector", {"human_detector", "Detects faces or bodies in video source via Haar Cascades or HOG, outputs position and size as CV"}},
         {"Object Detector", {"object_detector", "Uses YOLOv3 to detect objects (person, car, etc.) and outputs bounding box position/size as CV"}},
@@ -20106,6 +20457,8 @@ target_sources(ColliderApp PRIVATE
     Source/audio/modules/ContourDetectorModule.cpp
     Source/audio/modules/SemanticSegmentationModule.h
     Source/audio/modules/SemanticSegmentationModule.cpp
+    Source/audio/modules/CropVideoModule.h
+    Source/audio/modules/CropVideoModule.cpp
     Source/animation/AnimationData.h
     Source/animation/RawAnimationData.h
     Source/animation/RawAnimationData.cpp
@@ -20428,6 +20781,8 @@ target_sources(PresetCreatorApp PRIVATE
     Source/audio/modules/ContourDetectorModule.cpp
     Source/audio/modules/SemanticSegmentationModule.h
     Source/audio/modules/SemanticSegmentationModule.cpp
+    Source/audio/modules/CropVideoModule.h
+    Source/audio/modules/CropVideoModule.cpp
     Source/animation/AnimationData.h
     Source/animation/RawAnimationData.h
     Source/animation/RawAnimationData.cpp

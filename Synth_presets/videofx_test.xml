@@ -5,21 +5,33 @@
     <module logicalId="1" type="video_fx">
       <params>
         <VideoFXParams>
-          <PARAM id="blur" value="11.76999950408936"/>
-          <PARAM id="brightness" value="-1.290000915527344"/>
-          <PARAM id="contrast" value="1.959999918937683"/>
+          <PARAM id="blur" value="0.0"/>
+          <PARAM id="brightness" value="0.0"/>
+          <PARAM id="contrast" value="1.0"/>
           <PARAM id="flipH" value="0.0"/>
           <PARAM id="flipV" value="0.0"/>
-          <PARAM id="gainBlue" value="0.4799999892711639"/>
-          <PARAM id="gainGreen" value="1.350000023841858"/>
-          <PARAM id="gainRed" value="1.039999961853027"/>
+          <PARAM id="gainBlue" value="1.0"/>
+          <PARAM id="gainGreen" value="1.0"/>
+          <PARAM id="gainRed" value="1.0"/>
           <PARAM id="grayscale" value="0.0"/>
-          <PARAM id="hueShift" value="-93.09999847412109"/>
+          <PARAM id="hueShift" value="0.0"/>
           <PARAM id="invert" value="0.0"/>
-          <PARAM id="saturation" value="3.0"/>
+          <PARAM id="saturation" value="1.0"/>
           <PARAM id="sharpen" value="0.0"/>
           <PARAM id="useGpu" value="1.0"/>
           <PARAM id="zoomLevel" value="1.0"/>
+          <PARAM id="cannyEnable" value="0.0"/>
+          <PARAM id="cannyThresh1" value="50.0"/>
+          <PARAM id="cannyThresh2" value="150.0"/>
+          <PARAM id="kaleidoscope" value="0.0"/>
+          <PARAM id="pixelateSize" value="1.0"/>
+          <PARAM id="posterizeLevels" value="32.0"/>
+          <PARAM id="sepia" value="0.0"/>
+          <PARAM id="temperature" value="0.0"/>
+          <PARAM id="thresholdEnable" value="0.0"/>
+          <PARAM id="thresholdLevel" value="127.0"/>
+          <PARAM id="vignetteAmount" value="0.0"/>
+          <PARAM id="vignetteSize" value="0.4999999701976776"/>
         </VideoFXParams>
       </params>
       <extra>
@@ -44,22 +56,77 @@
     <module logicalId="3" type="face_tracker">
       <params>
         <FaceTrackerParams>
-          <PARAM id="confidence" value="0.09999999403953552"/>
+          <PARAM id="confidence" value="0.0"/>
           <PARAM id="sourceId" value="0.0"/>
           <PARAM id="useGpu" value="1.0"/>
           <PARAM id="zoomLevel" value="1.0"/>
         </FaceTrackerParams>
       </params>
     </module>
+    <module logicalId="10" type="crop_video">
+      <params>
+        <CropVideoParams>
+          <PARAM id="aspectRatio" value="1.0"/>
+          <PARAM id="cropH" value="0.5299999713897705"/>
+          <PARAM id="cropW" value="0.4899999797344208"/>
+          <PARAM id="cropX" value="0.5199999809265137"/>
+          <PARAM id="cropY" value="0.2699999809265137"/>
+          <PARAM id="padding" value="0.0"/>
+          <PARAM id="zoomLevel" value="1.0"/>
+        </CropVideoParams>
+      </params>
+    </module>
+    <module logicalId="19" type="video_fx">
+      <params>
+        <VideoFXParams>
+          <PARAM id="blur" value="0.0"/>
+          <PARAM id="brightness" value="0.0"/>
+          <PARAM id="cannyEnable" value="0.0"/>
+          <PARAM id="cannyThresh1" value="50.0"/>
+          <PARAM id="cannyThresh2" value="150.0"/>
+          <PARAM id="contrast" value="1.0"/>
+          <PARAM id="flipH" value="0.0"/>
+          <PARAM id="flipV" value="0.0"/>
+          <PARAM id="gainBlue" value="1.0"/>
+          <PARAM id="gainGreen" value="1.0"/>
+          <PARAM id="gainRed" value="1.0"/>
+          <PARAM id="grayscale" value="0.0"/>
+          <PARAM id="hueShift" value="0.0"/>
+          <PARAM id="invert" value="0.0"/>
+          <PARAM id="kaleidoscope" value="0.0"/>
+          <PARAM id="pixelateSize" value="1.0"/>
+          <PARAM id="posterizeLevels" value="32.0"/>
+          <PARAM id="saturation" value="1.0"/>
+          <PARAM id="sepia" value="0.0"/>
+          <PARAM id="sharpen" value="0.0"/>
+          <PARAM id="temperature" value="0.0"/>
+          <PARAM id="thresholdEnable" value="0.0"/>
+          <PARAM id="thresholdLevel" value="127.0"/>
+          <PARAM id="useGpu" value="1.0"/>
+          <PARAM id="vignetteAmount" value="0.0"/>
+          <PARAM id="vignetteSize" value="0.4999999701976776"/>
+          <PARAM id="zoomLevel" value="1.0"/>
+        </VideoFXParams>
+      </params>
+      <extra>
+        <VideoFXState/>
+      </extra>
+    </module>
   </modules>
   <connections>
     <connection srcId="1" srcChan="0" dstId="3" dstChan="0"/>
-    <connection srcId="2" srcChan="0" dstId="1" dstChan="0"/>
+    <connection srcId="2" srcChan="1" dstId="output" dstChan="1"/>
+    <connection srcId="2" srcChan="2" dstId="output" dstChan="0"/>
+    <connection srcId="2" srcChan="0" dstId="10" dstChan="0"/>
+    <connection srcId="3" srcChan="141" dstId="19" dstChan="0"/>
+    <connection srcId="10" srcChan="0" dstId="1" dstChan="0"/>
   </connections>
   <NodeEditorUI>
-    <node id="1" x="622.0" y="231.0"/>
-    <node id="2" x="47.0" y="214.0"/>
-    <node id="3" x="1288.0" y="252.0"/>
+    <node id="1" x="575.0" y="-54.0"/>
+    <node id="2" x="-1047.0" y="61.0"/>
+    <node id="3" x="1253.0" y="-154.9999084472656"/>
+    <node id="10" x="-412.2014770507812" y="92.56614685058594"/>
+    <node id="19" x="1867.0" y="353.0"/>
     <node id="0" x="0.0" y="0.0"/>
   </NodeEditorUI>
 </ModularSynthPreset>

@@ -374,6 +374,116 @@ else()
     set(CUDA_SUPPORT_ENABLED FALSE)
 endif()
 
+# ==============================================================================
+# FFmpeg (Pre-built vendor binaries - SIMPLIFIED!)
+# ==============================================================================
+# Windows: Download from https://github.com/BtbN/FFmpeg-Builds/releases
+# Extract to vendor/ffmpeg/ (see FFMPEG_SETUP_GUIDE.md)
+set(FFMPEG_DIR "${CMAKE_SOURCE_DIR}/../vendor/ffmpeg" CACHE PATH "Path to FFmpeg")
+set(FFMPEG_FOUND FALSE)
+
+if(WIN32)
+    # Windows: Use pre-built vendor binaries
+    if(EXISTS "${FFMPEG_DIR}/include/libavformat/avformat.h")
+        message(STATUS "✓ FFmpeg found at ${FFMPEG_DIR}")
+        
+        set(FFMPEG_INCLUDE_DIR "${FFMPEG_DIR}/include")
+        set(FFMPEG_LIB_DIR "${FFMPEG_DIR}/lib")
+        set(FFMPEG_BIN_DIR "${FFMPEG_DIR}/bin")
+        
+        # Find all required libraries
+        find_library(AVFORMAT_LIBRARY avformat PATHS "${FFMPEG_LIB_DIR}" NO_DEFAULT_PATH REQUIRED)
+        find_library(AVCODEC_LIBRARY avcodec PATHS "${FFMPEG_LIB_DIR}" NO_DEFAULT_PATH REQUIRED)
+        find_library(AVUTIL_LIBRARY avutil PATHS "${FFMPEG_LIB_DIR}" NO_DEFAULT_PATH REQUIRED)
+        find_library(SWRESAMPLE_LIBRARY swresample PATHS "${FFMPEG_LIB_DIR}" NO_DEFAULT_PATH REQUIRED)
+        find_library(SWSCALE_LIBRARY swscale PATHS "${FFMPEG_LIB_DIR}" NO_DEFAULT_PATH REQUIRED)
+        
+        set(FFMPEG_LIBRARIES 
+            ${AVFORMAT_LIBRARY}
+            ${AVCODEC_LIBRARY}
+            ${AVUTIL_LIBRARY}
+            ${SWRESAMPLE_LIBRARY}
+            ${SWSCALE_LIBRARY}
+        )
+        
+        message(STATUS "  - Include: ${FFMPEG_INCLUDE_DIR}")
+        message(STATUS "  - Libraries: ${FFMPEG_LIBRARIES}")
+        set(FFMPEG_FOUND TRUE)
+    else()
+        message(FATAL_ERROR 
+            "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            "❌ FFmpeg NOT FOUND!\n"
+            "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            "Expected location: ${FFMPEG_DIR}\n"
+            "\n"
+            "📦 Quick Setup (5 minutes):\n"
+            "  1. Download: https://github.com/BtbN/FFmpeg-Builds/releases\n"
+            "     Get: ffmpeg-master-latest-win64-gpl-shared.zip\n"
+            "  2. Extract to: ${FFMPEG_DIR}\n"
+            "  3. Folder structure should be:\n"
+            "     vendor/ffmpeg/\n"
+            "       ├── bin/     (DLL files)\n"
+            "       ├── include/ (header files)\n"
+            "       └── lib/     (.lib files)\n"
+            "\n"
+            "📖 See FFMPEG_SETUP_GUIDE.md for detailed instructions\n"
+            "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+        )
+    endif()
+else()
+    # Linux/Mac: Use system packages
+    find_package(PkgConfig QUIET)
+    if(PKG_CONFIG_FOUND)
+        pkg_check_modules(FFMPEG
+            libavformat>=57.0
+            libavcodec>=57.0
+            libavutil>=55.0
+            libswresample>=3.0
+            libswscale>=5.0
+        )
+        if(FFMPEG_FOUND)
+            set(FFMPEG_INCLUDE_DIR ${FFMPEG_INCLUDE_DIRS})
+            set(FFMPEG_LIBRARIES ${FFMPEG_LIBRARIES})
+            message(STATUS "✓ FFmpeg found via pkg-config")
+            message(STATUS "  - Include: ${FFMPEG_INCLUDE_DIR}")
+        endif()
+    endif()
+    
+    # Fallback: try finding libraries directly
+    if(NOT FFMPEG_FOUND)
+        find_path(FFMPEG_INCLUDE_DIR NAMES libavformat/avformat.h
+            PATHS /usr/include /usr/local/include /opt/homebrew/include
+        )
+        find_library(AVFORMAT_LIBRARY avformat)
+        find_library(AVCODEC_LIBRARY avcodec)
+        find_library(AVUTIL_LIBRARY avutil)
+        find_library(SWRESAMPLE_LIBRARY swresample)
+        find_library(SWSCALE_LIBRARY swscale)
+        
+        if(FFMPEG_INCLUDE_DIR AND AVFORMAT_LIBRARY)
+            set(FFMPEG_LIBRARIES 
+                ${AVFORMAT_LIBRARY}
+                ${AVCODEC_LIBRARY}
+                ${AVUTIL_LIBRARY}
+                ${SWRESAMPLE_LIBRARY}
+                ${SWSCALE_LIBRARY}
+            )
+            set(FFMPEG_FOUND TRUE)
+            message(STATUS "✓ FFmpeg found")
+        else()
+            message(FATAL_ERROR
+                "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+                "❌ FFmpeg NOT FOUND!\n"
+                "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+                "📦 Install FFmpeg:\n"
+                "  Linux:  sudo apt-get install libavformat-dev libavcodec-dev libavutil-dev libswresample-dev libswscale-dev\n"
+                "  macOS:  brew install ffmpeg\n"
+                "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+            )
+        endif()
+    endif()
+endif()
+
 # --------------------------------------------------------------
 # Rubber Band (optional, real-time timestretcher/pitch-shifter)
 # --------------------------------------------------------------
@@ -601,6 +711,8 @@ target_sources(ColliderApp PRIVATE
     Source/audio/modules/WebcamLoaderModule.cpp
     Source/audio/modules/VideoFileLoaderModule.h
     Source/audio/modules/VideoFileLoaderModule.cpp
+    Source/audio/modules/FFmpegAudioReader.h
+    Source/audio/modules/FFmpegAudioReader.cpp
     Source/audio/modules/VideoFXModule.h
     Source/audio/modules/VideoFXModule.cpp
     Source/audio/modules/MovementDetectorModule.h
@@ -674,6 +786,11 @@ target_link_libraries(ColliderApp PRIVATE
     ufbx_static
     opencv_world
     $<$<BOOL:${USE_RUBBERBAND}>:${RUBBERBAND_TARGET}>
+    $<$<BOOL:${FFMPEG_FOUND}>:${AVFORMAT_LIBRARY}>
+    $<$<BOOL:${FFMPEG_FOUND}>:${AVCODEC_LIBRARY}>
+    $<$<BOOL:${FFMPEG_FOUND}>:${AVUTIL_LIBRARY}>
+    $<$<BOOL:${FFMPEG_FOUND}>:${SWRESAMPLE_LIBRARY}>
+    $<$<BOOL:${FFMPEG_FOUND}>:${SWSCALE_LIBRARY}>
     # Piper TTS libraries (pre-built)
     ${ONNXRUNTIME_DIR}/lib/onnxruntime.lib
 )
@@ -699,6 +816,7 @@ target_include_directories(ColliderApp PRIVATE
     ${CMAKE_SOURCE_DIR}/../soundtouch/include
     ${CMAKE_SOURCE_DIR}/../soundtouch/source/SoundTouch
     ${ufbx_SOURCE_DIR}
+    $<$<BOOL:${FFMPEG_FOUND}>:${FFMPEG_INCLUDE_DIR}>
     # OpenCV include directories - source and generated headers
     ${opencv_SOURCE_DIR}/include
     ${opencv_SOURCE_DIR}/modules/core/include
@@ -925,6 +1043,8 @@ target_sources(PresetCreatorApp PRIVATE
     Source/audio/modules/WebcamLoaderModule.cpp
     Source/audio/modules/VideoFileLoaderModule.h
     Source/audio/modules/VideoFileLoaderModule.cpp
+    Source/audio/modules/FFmpegAudioReader.h
+    Source/audio/modules/FFmpegAudioReader.cpp
     Source/audio/modules/VideoFXModule.h
     Source/audio/modules/VideoFXModule.cpp
     Source/audio/modules/MovementDetectorModule.h
@@ -976,6 +1096,7 @@ target_include_directories(PresetCreatorApp PRIVATE
     ${CMAKE_SOURCE_DIR}/../soundtouch/include
     ${CMAKE_SOURCE_DIR}/../soundtouch/source/SoundTouch
     ${ufbx_SOURCE_DIR}
+    $<$<BOOL:${FFMPEG_FOUND}>:${FFMPEG_INCLUDE_DIR}>
     # OpenCV include directories - source and generated headers
     ${opencv_SOURCE_DIR}/include
     ${opencv_SOURCE_DIR}/modules/core/include
@@ -1033,6 +1154,10 @@ target_link_libraries(PresetCreatorApp PRIVATE
     ufbx_static
     opencv_world
     $<$<BOOL:${USE_RUBBERBAND}>:${RUBBERBAND_TARGET}>
+    $<$<BOOL:${FFMPEG_FOUND}>:${AVFORMAT_LIBRARY}>
+    $<$<BOOL:${FFMPEG_FOUND}>:${AVCODEC_LIBRARY}>
+    $<$<BOOL:${FFMPEG_FOUND}>:${AVUTIL_LIBRARY}>
+    $<$<BOOL:${FFMPEG_FOUND}>:${SWRESAMPLE_LIBRARY}>
     # Piper TTS libraries (pre-built)
     ${ONNXRUNTIME_DIR}/lib/onnxruntime.lib
 )
@@ -1073,13 +1198,47 @@ if(WIN32)
         COMMAND ${CMAKE_COMMAND} -E copy_if_different
                 "${CMAKE_BINARY_DIR}/bin/$<CONFIG>/opencv_videoio_ffmpeg4130_64.dll"
                 "$<TARGET_FILE_DIR:ColliderApp>"
+    )
+    
+    # Copy FFmpeg DLLs separately (if FFmpeg is found)
+    # We need to copy each DLL individually to avoid generator expression issues
+    if(FFMPEG_FOUND AND EXISTS "${FFMPEG_BIN_DIR}")
+        file(GLOB FFMPEG_DLLS "${FFMPEG_BIN_DIR}/*.dll")
+        if(FFMPEG_DLLS)
+            foreach(DLL ${FFMPEG_DLLS})
+                get_filename_component(DLL_NAME ${DLL} NAME)
+                add_custom_command(
+                    TARGET ColliderApp POST_BUILD
+                    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                            "${DLL}"
+                            "$<TARGET_FILE_DIR:ColliderApp>"
+                    COMMENT "Copying ${DLL_NAME} to ColliderApp"
+                )
+                add_custom_command(
+                    TARGET PresetCreatorApp POST_BUILD
+                    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                            "${DLL}"
+                            "$<TARGET_FILE_DIR:PresetCreatorApp>"
+                    COMMENT "Copying ${DLL_NAME} to PresetCreatorApp"
+                )
+            endforeach()
+        endif()
+    endif()
+    
+    # Continue with other files for ColliderApp
+    add_custom_command(
+        TARGET ColliderApp POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E copy_directory
                 "${PIPER_DIR}/espeak-ng-data"
                 "$<TARGET_FILE_DIR:ColliderApp>/espeak-ng-data"
+        COMMENT "Copying espeak-ng-data to ColliderApp output directory"
+    )
+    add_custom_command(
+        TARGET ColliderApp POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E copy_if_different
                 "${opencv_SOURCE_DIR}/data/haarcascades/haarcascade_frontalface_default.xml"
                 "$<TARGET_FILE_DIR:ColliderApp>"
-        COMMENT "Copying Piper TTS and OpenCV data files to ColliderApp output directory"
+        COMMENT "Copying OpenCV data to ColliderApp output directory"
     )
     add_custom_command(
         TARGET PresetCreatorApp POST_BUILD
@@ -1112,6 +1271,6 @@ if(WIN32)
         COMMAND ${CMAKE_COMMAND} -E copy_if_different
                 "${opencv_SOURCE_DIR}/data/haarcascades/haarcascade_frontalface_default.xml"
                 "$<TARGET_FILE_DIR:PresetCreatorApp>"
-        COMMENT "Copying Piper TTS, OpenPose, and other runtime assets to PresetCreatorApp output directory"
+        COMMENT "Copying Piper TTS, OpenPose, FFmpeg, and other runtime assets to PresetCreatorApp output directory"
     )
 endif()

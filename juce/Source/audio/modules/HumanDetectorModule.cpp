@@ -387,6 +387,26 @@ juce::Image HumanDetectorModule::getLatestFrame()
     return latestFrameForGui.createCopy();
 }
 
+std::vector<DynamicPinInfo> HumanDetectorModule::getDynamicOutputPins() const
+{
+    // Bus 0: CV Out (5 channels)
+    // Bus 1: Video Out (1 channel)
+    // Bus 2: Cropped Out (1 channel)
+    const int cvOutChannels = 5;
+    const int videoOutStartChannel = cvOutChannels;
+    const int croppedOutStartChannel = videoOutStartChannel + 1;
+
+    return {
+        { "X", 0, PinDataType::CV },
+        { "Y", 1, PinDataType::CV },
+        { "Width", 2, PinDataType::CV },
+        { "Height", 3, PinDataType::CV },
+        { "Gate", 4, PinDataType::Gate },
+        { "Video Out", videoOutStartChannel, PinDataType::Video },
+        { "Cropped Out", croppedOutStartChannel, PinDataType::Video }
+    };
+}
+
 void HumanDetectorModule::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midi)
 {
     // Read Source ID from input pin

@@ -333,4 +333,28 @@ juce::Image FaceTrackerModule::getLatestFrame()
     return latestFrameForGui.createCopy();
 }
 
+std::vector<DynamicPinInfo> FaceTrackerModule::getDynamicOutputPins() const
+{
+    // Bus 0: CV Out (140 channels - 70 keypoints * 2 coordinates)
+    // Bus 1: Video Out (1 channel)
+    // Bus 2: Cropped Out (1 channel)
+    std::vector<DynamicPinInfo> pins;
+    
+    // Add all 70 keypoint pins
+    for (int i = 0; i < 70; ++i)
+    {
+        std::string base = "Pt " + std::to_string(i + 1);
+        pins.emplace_back(base + " X", i * 2, PinDataType::CV);
+        pins.emplace_back(base + " Y", i * 2 + 1, PinDataType::CV);
+    }
+    
+    // Add Video Out and Cropped Out pins
+    const int videoOutStartChannel = 140;
+    const int croppedOutStartChannel = videoOutStartChannel + 1;
+    pins.emplace_back("Video Out", videoOutStartChannel, PinDataType::Video);
+    pins.emplace_back("Cropped Out", croppedOutStartChannel, PinDataType::Video);
+    
+    return pins;
+}
+
 

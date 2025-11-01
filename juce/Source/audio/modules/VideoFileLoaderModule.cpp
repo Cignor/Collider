@@ -39,9 +39,6 @@ VideoFileLoaderModule::VideoFileLoaderModule()
     outNormParam = apvts.getRawParameterValue("out");
     syncParam = apvts.getRawParameterValue("sync");
     syncToTransport.store(syncParam && (*syncParam > 0.5f));
-    
-    // Initialize audio format manager
-    audioFormatManager.registerBasicFormats();
 }
 
 VideoFileLoaderModule::~VideoFileLoaderModule()
@@ -489,33 +486,42 @@ void VideoFileLoaderModule::loadAudioFromVideo()
     if (!currentVideoFile.existsAsFile())
         return;
     
-    // Try to load audio from the video file
-    // Note: JUCE's AudioFormatManager may not support all video containers directly
-    // This is a best-effort attempt. For full compatibility, you might need FFmpeg extraction
-    std::unique_ptr<juce::AudioFormatReader> reader(audioFormatManager.createReaderFor(currentVideoFile));
-    
-    if (reader != nullptr)
+    // --- NEW LOGIC: Use FFmpeg-based audio reader ---
+    // FFmpegAudioReader provides robust audio decoding from any video file
+    // that FFmpeg supports (AAC, AC3, DTS, Opus, etc.)
+    try
     {
-        audioSource = std::make_unique<juce::AudioFormatReaderSource>(reader.release(), true);
-        double sourceSampleRate = audioSource->getAudioFormatReader()->sampleRate;
+        std::unique_ptr<juce::AudioFormatReader> reader(
+            new FFmpegAudioReader(currentVideoFile.getFullPathName()));
         
-        // Use the current processing sample rate, not the source file's sample rate
-        // The AudioTransportSource will handle resampling if needed
-        audioTransport.setSource(audioSource.get(), 0, nullptr, audioSampleRate);
-        
-        // Set looping
-        if (loopParam && *loopParam > 0.5f)
-            audioTransport.setLooping(true);
-        
-        audioLoaded.store(true);
-        juce::Logger::writeToLog("[VideoFileLoader] Audio loaded from video file. "
-                                  "Source SR: " + juce::String(sourceSampleRate) + " Hz, "
-                                  "Processing SR: " + juce::String(audioSampleRate) + " Hz");
+        if (reader != nullptr && reader->lengthInSamples > 0)
+        {
+            audioSource = std::make_unique<juce::AudioFormatReaderSource>(reader.release(), true);
+            double sourceSampleRate = audioSource->getAudioFormatReader()->sampleRate;
+            
+            // Use the current processing sample rate, not the source file's sample rate
+            // The AudioTransportSource will handle resampling if needed
+            audioTransport.setSource(audioSource.get(), 0, nullptr, audioSampleRate);
+            
+            // Set looping
+            if (loopParam && *loopParam > 0.5f)
+                audioTransport.setLooping(true);
+            
+            audioLoaded.store(true);
+            juce::Logger::writeToLog("[VideoFileLoader] Audio loaded via FFmpeg. "
+                                     "Source SR: " + juce::String(sourceSampleRate) + " Hz, "
+                                     "Processing SR: " + juce::String(audioSampleRate) + " Hz");
+        }
+        else
+        {
+            juce::Logger::writeToLog("[VideoFileLoader] Could not extract audio via FFmpeg. "
+                                     "File may not contain audio.");
+        }
     }
-    else
+    catch (const std::exception& e)
     {
-        juce::Logger::writeToLog("[VideoFileLoader] Could not extract audio from video file. "
-                                  "Video file may not contain audio, or format is not supported by JUCE.");
+        juce::Logger::writeToLog("[VideoFileLoader] Exception while loading audio: " + 
+                                  juce::String(e.what()));
     }
 }
 

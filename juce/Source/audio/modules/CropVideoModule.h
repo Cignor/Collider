@@ -25,7 +25,10 @@ public:
     void processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midi) override;
     
     juce::AudioProcessorValueTreeState& getAPVTS() override { return apvts; }
-    juce::Image getLatestFrame();
+    juce::Image getLatestFrame(); // This will return the CROPPED output frame for chaining previews
+
+    // Override to declare modulatable parameters
+    bool getParamRouting(const juce::String& paramId, int& outBusIndex, int& outChannelIndexInBus) const override;
 
 #if defined(PRESET_CREATOR_UI)
     void drawParametersInNode(float itemWidth,
@@ -38,6 +41,7 @@ public:
 private:
     void run() override;
     void updateGuiFrame(const cv::Mat& frame);
+    void updateInputGuiFrame(const cv::Mat& frame); // NEW: For the uncropped preview
     
     static juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout();
     juce::AudioProcessorValueTreeState apvts;
@@ -51,15 +55,12 @@ private:
     std::atomic<float>* cropWParam = nullptr;
     std::atomic<float>* cropHParam = nullptr;
     
-    // CV Input Values (read from processBlock, used in run())
+    // CV Input Value
     std::atomic<juce::uint32> currentSourceId { 0 };
-    std::atomic<float> cvCropX { -1.0f }; // -1 means not connected
-    std::atomic<float> cvCropY { -1.0f };
-    std::atomic<float> cvCropW { -1.0f };
-    std::atomic<float> cvCropH { -1.0f };
     
-    // UI Preview
-    juce::Image latestFrameForGui;
+    // UI Previews
+    juce::Image latestInputFrameForGui;  // NEW: Holds the uncropped input for drawing
+    juce::Image latestOutputFrameForGui; // RENAMED: Holds the cropped output
     juce::CriticalSection imageLock;
 };
 
