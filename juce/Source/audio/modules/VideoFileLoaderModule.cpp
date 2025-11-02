@@ -22,6 +22,9 @@ juce::AudioProcessorValueTreeState::ParameterLayout VideoFileLoaderModule::creat
     params.push_back(std::make_unique<juce::AudioParameterFloat>(
         "out", "End", 0.0f, 1.0f, 1.0f));
     
+    // Add the engine selection parameter, defaulting to Naive for performance
+    params.push_back(std::make_unique<juce::AudioParameterChoice>("engine", "Engine", juce::StringArray { "RubberBand", "Naive" }, 1));
+    
     return { params.begin(), params.end() };
 }
 
@@ -38,6 +41,7 @@ VideoFileLoaderModule::VideoFileLoaderModule()
     inNormParam = apvts.getRawParameterValue("in");
     outNormParam = apvts.getRawParameterValue("out");
     syncParam = apvts.getRawParameterValue("sync");
+    engineParam = dynamic_cast<juce::AudioParameterChoice*>(apvts.getParameter("engine"));
     syncToTransport.store(syncParam && (*syncParam > 0.5f));
 }
 
@@ -49,8 +53,14 @@ VideoFileLoaderModule::~VideoFileLoaderModule()
 
 void VideoFileLoaderModule::prepareToPlay(double sampleRate, int samplesPerBlock)
 {
+    const juce::ScopedLock lock(audioLock);
     audioSampleRate = sampleRate;
-    audioTransport.prepareToPlay(samplesPerBlock, sampleRate);
+    timePitch.prepare(sampleRate, 2, samplesPerBlock); // Prepare for stereo
+    
+    // Allocate interleaved buffers for processing
+    interleavedCapacityFrames = samplesPerBlock * 2; // Headroom
+    interleavedInput.allocate((size_t)(interleavedCapacityFrames * 2), true);
+    interleavedOutput.allocate((size_t)(interleavedCapacityFrames * 2), true);
     
     startThread(juce::Thread::Priority::normal);
     // If we already had a file open previously, request re-open on thread start
@@ -60,9 +70,11 @@ void VideoFileLoaderModule::prepareToPlay(double sampleRate, int samplesPerBlock
 
 void VideoFileLoaderModule::releaseResources()
 {
-    audioTransport.releaseResources();
     signalThreadShouldExit();
     stopThread(5000);
+    
+    const juce::ScopedLock lock(audioLock);
+    timePitch.reset();
 }
 
 void VideoFileLoaderModule::chooseVideoFile()
@@ -200,97 +212,46 @@ void VideoFileLoaderModule::run()
             continue;
         }
         
-        // Apply any pending seeks (UI-driven) before processing
-        int tfLocal = totalFrames.load();
+        // --- UNIFIED SEEK LOGIC ---
+        // This is now the single point of control for seeking, triggered by UI.
+        float normSeekPos = pendingSeekNormalized.exchange(-1.0f);
+        if (normSeekPos >= 0.0f)
         {
-            // 1) If we have a normalized pending seek, prefer time-based seek when duration is known
-            float pendingNorm = pendingSeekNorm.exchange(-1.0f);
-            if (pendingNorm >= 0.0f)
-            {
-                const double durMs = totalDurationMs.load();
-                if (durMs > 0.0)
-                {
-                    double seekToMs = juce::jlimit(0.0, durMs, (double)pendingNorm * durMs);
-                    const juce::ScopedLock capLock(captureLock);
-                    if (videoCapture.isOpened())
-                        videoCapture.set(cv::CAP_PROP_POS_MSEC, seekToMs);
-                    needPreviewFrame.store(true);
-                    juce::Logger::writeToLog("[VideoFileLoader][Seek] Applied normalized seek via MSEC=" + juce::String(seekToMs));
-                }
-                else if (tfLocal > 1)
-                {
-                    int toFrame = (int) std::round(juce::jlimit(0.0f, 1.0f, pendingNorm) * (tfLocal - 1));
-                    pendingSeekFrame.store(toFrame);
-                }
-                else
-                {
-                    const juce::ScopedLock capLock(captureLock);
-                    if (videoCapture.isOpened())
-                        videoCapture.set(cv::CAP_PROP_POS_AVI_RATIO, juce::jlimit(0.0, 1.0, (double) pendingNorm));
-                    needPreviewFrame.store(true);
-                    juce::Logger::writeToLog("[VideoFileLoader][Seek] WARNING ratio seek");
-                }
-            }
-
-            // 2) If we have a normalized pending start and frames are now known, convert and seek
-            float pendingStart = pendingStartNorm.exchange(-1.0f);
-            if (pendingStart >= 0.0f)
-            {
-                const double durMs = totalDurationMs.load();
-                if (durMs > 0.0)
-                {
-                    double seekToMs = juce::jlimit(0.0, durMs, (double)pendingStart * durMs);
-                    const juce::ScopedLock capLock(captureLock);
-                    if (videoCapture.isOpened())
-                        videoCapture.set(cv::CAP_PROP_POS_MSEC, seekToMs);
-                    needPreviewFrame.store(true);
-                    juce::Logger::writeToLog("[VideoFileLoader][Seek] Applied normalized start via MSEC=" + juce::String(seekToMs));
-                }
-                else if (tfLocal > 1)
-                {
-                    int inF = (int) std::round(juce::jlimit(0.0f, 1.0f, pendingStart) * (tfLocal - 1));
-                    pendingSeekFrame.store(inF);
-                }
-                else
-                {
-                    const juce::ScopedLock capLock(captureLock);
-                    if (videoCapture.isOpened())
-                        videoCapture.set(cv::CAP_PROP_POS_AVI_RATIO, juce::jlimit(0.0, 1.0, (double) pendingStart));
-                    needPreviewFrame.store(true);
-                    juce::Logger::writeToLog("[VideoFileLoader][Seek] Applied normalized start ratio=" + juce::String(pendingStart, 3));
-                }
-            }
-        }
-
-        // On play edge: seek to IN point
-        bool nowPlaying = playing.load();
-        bool wasPlaying = lastPlaying.exchange(nowPlaying);
-        if (nowPlaying && !wasPlaying)
-        {
-            float inN = inNormParam ? inNormParam->load() : 0.0f;
             const double durMs = totalDurationMs.load();
             if (durMs > 0.0)
             {
-                double seekToMs = juce::jlimit(0.0, durMs, (double)inN * durMs);
+                double seekToMs = juce::jlimit(0.0, durMs, (double)normSeekPos * durMs);
+                
+                // Seek video
                 const juce::ScopedLock capLock(captureLock);
                 if (videoCapture.isOpened())
                     videoCapture.set(cv::CAP_PROP_POS_MSEC, seekToMs);
-                juce::Logger::writeToLog("[VideoFileLoader][PlayEdge] Seeking to in(ms)=" + juce::String(seekToMs));
+                
+                // Seek audio by updating the read position
+                const juce::ScopedLock audioLk(audioLock);
+                if (audioReader) {
+                    audioReadPosition = normSeekPos * audioReader->lengthInSamples;
+                    timePitch.reset(); // Reset time stretcher state after seek
+                }
             }
-            else if (tfLocal > 1)
-            {
-                int inF = juce::jlimit(0, juce::jmax(1, tfLocal) - 1, (int) std::round(inN * (tfLocal - 1)));
-                pendingSeekFrame.store(inF);
-                juce::Logger::writeToLog("[VideoFileLoader][PlayEdge] Seeking to inF=" + juce::String(inF));
-            }
+            // Fallback to ratio seek if duration is not known
             else
             {
-                pendingSeekNorm.store(juce::jlimit(0.0f, 1.0f, inN));
-                juce::Logger::writeToLog("[VideoFileLoader][PlayEdge] Seeking to inNorm=" + juce::String(inN, 3));
+                const juce::ScopedLock capLock(captureLock);
+                if (videoCapture.isOpened())
+                    videoCapture.set(cv::CAP_PROP_POS_AVI_RATIO, (double)normSeekPos);
+                
+                // Seek audio by ratio
+                const juce::ScopedLock audioLk(audioLock);
+                if (audioReader) {
+                    audioReadPosition = normSeekPos * audioReader->lengthInSamples;
+                    timePitch.reset();
+                }
             }
             needPreviewFrame.store(true);
         }
 
+        // Legacy frame-based seek support (for compatibility)
         int seekTo = pendingSeekFrame.exchange(-1);
         if (seekTo >= 0)
         {
@@ -298,7 +259,34 @@ void VideoFileLoaderModule::run()
             if (videoCapture.isOpened())
                 videoCapture.set(cv::CAP_PROP_POS_FRAMES, (double) seekTo);
             needPreviewFrame.store(true);
-            juce::Logger::writeToLog("[VideoFileLoader][Seek] Applied pending seek to frame=" + juce::String(seekTo));
+            
+            // Also seek audio
+            const juce::ScopedLock audioLk(audioLock);
+            if (audioReader) {
+                int tfLocal = totalFrames.load();
+                if (tfLocal > 1) {
+                    float normPos = (float)seekTo / (float)(tfLocal - 1);
+                    audioReadPosition = normPos * audioReader->lengthInSamples;
+                    timePitch.reset();
+                }
+            }
+        }
+
+        // On play edge: seek to IN point using unified seek
+        bool nowPlaying = playing.load();
+        bool wasPlaying = lastPlaying.exchange(nowPlaying);
+        if (nowPlaying && !wasPlaying)
+        {
+            float inN = inNormParam ? inNormParam->load() : 0.0f;
+            pendingSeekNormalized.store(inN); // Use unified seek
+            needPreviewFrame.store(true);
+            
+            // Also seek audio
+            const juce::ScopedLock audioLk(audioLock);
+            if (audioReader) {
+                audioReadPosition = inN * audioReader->lengthInSamples;
+                timePitch.reset();
+            }
         }
 
         // Respect play/pause
@@ -477,116 +465,30 @@ void VideoFileLoaderModule::loadAudioFromVideo()
 {
     const juce::ScopedLock lock(audioLock);
     
-    // Stop and clear existing audio
-    audioTransport.stop();
-    audioTransport.setSource(nullptr);
-    audioSource.reset();
+    audioReader.reset();
+    timePitch.reset(); // Reset the processing engine
+    audioReadPosition = 0.0;
     audioLoaded.store(false);
     
-    if (!currentVideoFile.existsAsFile())
-        return;
+    if (!currentVideoFile.existsAsFile()) return;
     
-    // --- NEW LOGIC: Use FFmpeg-based audio reader ---
-    // FFmpegAudioReader provides robust audio decoding from any video file
-    // that FFmpeg supports (AAC, AC3, DTS, Opus, etc.)
     try
     {
-        std::unique_ptr<juce::AudioFormatReader> reader(
-            new FFmpegAudioReader(currentVideoFile.getFullPathName()));
+        audioReader = std::make_unique<FFmpegAudioReader>(currentVideoFile.getFullPathName());
         
-        if (reader != nullptr && reader->lengthInSamples > 0)
+        if (audioReader != nullptr && audioReader->lengthInSamples > 0)
         {
-            audioSource = std::make_unique<juce::AudioFormatReaderSource>(reader.release(), true);
-            double sourceSampleRate = audioSource->getAudioFormatReader()->sampleRate;
-            
-            // Use the current processing sample rate, not the source file's sample rate
-            // The AudioTransportSource will handle resampling if needed
-            audioTransport.setSource(audioSource.get(), 0, nullptr, audioSampleRate);
-            
-            // Set looping
-            if (loopParam && *loopParam > 0.5f)
-                audioTransport.setLooping(true);
-            
             audioLoaded.store(true);
-            juce::Logger::writeToLog("[VideoFileLoader] Audio loaded via FFmpeg. "
-                                     "Source SR: " + juce::String(sourceSampleRate) + " Hz, "
-                                     "Processing SR: " + juce::String(audioSampleRate) + " Hz");
+            juce::Logger::writeToLog("[VideoFileLoader] Audio loaded via FFmpeg.");
         }
         else
         {
-            juce::Logger::writeToLog("[VideoFileLoader] Could not extract audio via FFmpeg. "
-                                     "File may not contain audio.");
+            juce::Logger::writeToLog("[VideoFileLoader] Could not extract audio stream via FFmpeg.");
         }
     }
     catch (const std::exception& e)
     {
-        juce::Logger::writeToLog("[VideoFileLoader] Exception while loading audio: " + 
-                                  juce::String(e.what()));
-    }
-}
-
-void VideoFileLoaderModule::updateAudioPlayback()
-{
-    if (!audioLoaded.load())
-        return;
-    
-    // Sync play/pause state
-    bool shouldPlay = playing.load();
-    
-    if (shouldPlay && !audioTransport.isPlaying())
-    {
-        audioTransport.start();
-        
-        // Seek to start position if needed
-        float inN = inNormParam ? inNormParam->load() : 0.0f;
-        if (inN > 0.0f && audioSource != nullptr)
-        {
-            int64 totalSamples = audioSource->getTotalLength();
-            int64 startSample = (int64)(inN * totalSamples);
-            audioTransport.setPosition(startSample / audioSampleRate);
-        }
-    }
-    else if (!shouldPlay && audioTransport.isPlaying())
-    {
-        audioTransport.stop();
-    }
-    
-    // Handle looping
-    bool shouldLoop = loopParam && *loopParam > 0.5f;
-    audioTransport.setLooping(shouldLoop);
-    
-    // Check if we've reached the end (and not looping)
-    if (!shouldLoop && audioTransport.hasStreamFinished())
-    {
-        playing.store(false);
-        audioTransport.stop();
-    }
-    
-    // Handle in/out points
-    float inN = inNormParam ? inNormParam->load() : 0.0f;
-    float outN = outNormParam ? outNormParam->load() : 1.0f;
-    
-    if (audioSource != nullptr && audioSampleRate > 0.0)
-    {
-        int64 totalSamples = audioSource->getTotalLength();
-        double currentPos = audioTransport.getCurrentPosition();
-        double totalDuration = totalSamples / audioSampleRate;
-        double outTime = outN * totalDuration;
-        
-        if (currentPos >= outTime && shouldPlay)
-        {
-            if (shouldLoop)
-            {
-                // Loop back to in point
-                double inTime = inN * totalDuration;
-                audioTransport.setPosition(inTime);
-            }
-            else
-            {
-                playing.store(false);
-                audioTransport.stop();
-            }
-        }
+        juce::Logger::writeToLog("[VideoFileLoader] Exception loading audio: " + juce::String(e.what()));
     }
 }
 
@@ -594,17 +496,13 @@ void VideoFileLoaderModule::processBlock(juce::AudioBuffer<float>& buffer, juce:
 {
     juce::ignoreUnused(midi);
     
-    // Update audio playback state first
-    updateAudioPlayback();
-    
-    // Get output buses
-    auto cvOutBus = getBusBuffer(buffer, false, 0);  // CV output (mono)
-    auto audioOutBus = getBusBuffer(buffer, false, 1); // Audio output (stereo)
+    auto cvOutBus = getBusBuffer(buffer, false, 0);
+    auto audioOutBus = getBusBuffer(buffer, false, 1);
     
     cvOutBus.clear();
     audioOutBus.clear();
     
-    // Output this module's logical ID on CV bus
+    // Output Source ID on CV bus
     if (cvOutBus.getNumChannels() > 0)
     {
         float sourceId = (float)getLogicalId();
@@ -614,29 +512,125 @@ void VideoFileLoaderModule::processBlock(juce::AudioBuffer<float>& buffer, juce:
         }
     }
     
-    // Output audio from the video file
-    if (audioLoaded.load() && audioOutBus.getNumChannels() >= 2 && audioOutBus.getNumSamples() > 0)
+    // --- NEW AUDIO PROCESSING LOGIC ---
+    const juce::ScopedLock lock(audioLock);
+    if (!audioLoaded.load() || !audioReader || !playing.load())
     {
-        // Ensure audioTransport is playing if we're in play mode
-        bool shouldPlay = playing.load();
-        if (shouldPlay && !audioTransport.isPlaying())
-        {
-            audioTransport.start();
+        return; // Nothing to play
+    }
+
+    // 1. Get parameters and configure the time-stretching engine
+    const float speed = juce::jlimit(0.25f, 4.0f, speedParam ? speedParam->load() : 1.0f);
+    const int engineIdx = engineParam ? engineParam->getIndex() : 1; // Default to Naive
+    auto requestedMode = (engineIdx == 0) ? TimePitchProcessor::Mode::RubberBand : TimePitchProcessor::Mode::Fifo;
+    
+    timePitch.setMode(requestedMode); // Set engine mode
+    timePitch.setTimeStretchRatio(speed); // Set playback speed
+
+    // 2. Determine playback range in samples
+    const float startNorm = inNormParam ? inNormParam->load() : 0.0f;
+    const float endNorm = outNormParam ? outNormParam->load() : 1.0f;
+    const juce::int64 startSample = (juce::int64)(startNorm * audioReader->lengthInSamples);
+    juce::int64 endSample = (juce::int64)(endNorm * audioReader->lengthInSamples);
+    if (endSample <= startSample) endSample = audioReader->lengthInSamples; // Use full length if range is invalid
+    
+    const bool isLooping = loopParam && loopParam->load() > 0.5f;
+    const int numSamples = audioOutBus.getNumSamples();
+    const int numChannels = audioReader->numChannels;
+
+    // 3. THE FIX: Read a BLOCK of audio efficiently - don't read sample-by-sample
+    // Check if we need to loop before reading
+    if (audioReadPosition >= endSample)
+    {
+        if (isLooping) {
+            audioReadPosition = (double)startSample; // Loop back
+        } else {
+            playing.store(false); // Stop playback
+            return;
         }
-        
-        // AudioSourceChannelInfo constructor takes the buffer and uses all its channels
-        // Since audioOutBus is already stereo (2 channels), this should work correctly
-        juce::AudioSourceChannelInfo info(audioOutBus);
-        audioTransport.getNextAudioBlock(info);
-        
-        // Note: Speed control for audio would require a time-stretching library like RubberBand
-        // For now, audio plays at normal speed while video can be sped up/slowed down
-        // To add speed control, integrate a time-stretcher similar to SampleLoaderModule
-        
-        // Update audio position for synchronization
-        if (playing.load())
+    }
+    
+    // Calculate how many source samples we need to read to produce numSamples of output at current speed
+    const int framesToFeed = (int)std::ceil((double)numSamples / speed);
+    
+    // Clamp to available range
+    juce::int64 currentPos = (juce::int64)audioReadPosition;
+    currentPos = juce::jlimit((juce::int64)0, (juce::int64)(audioReader->lengthInSamples - 1), currentPos);
+    int samplesToRead = juce::jmin(framesToFeed, (int)(endSample - audioReadPosition));
+    if (samplesToRead <= 0) {
+        // No samples available in range
+        return;
+    }
+    
+    // Allocate source buffer for reading a block
+    juce::AudioBuffer<float> sourceBuffer(numChannels, samplesToRead);
+    
+    // Prepare channel pointers for readSamples - it expects int* const* but with
+    // usesFloatingPointData=true, we cast to float* const*
+    float* channelPointers[64]; // Support up to 64 channels
+    for (int ch = 0; ch < numChannels; ++ch) {
+        channelPointers[ch] = sourceBuffer.getWritePointer(ch);
+    }
+    
+    // Cast to int* const* for readSamples (the function signature uses int* but
+    // when usesFloatingPointData is true, it's actually float data)
+    int* const* channelPointersInt = reinterpret_cast<int* const*>(channelPointers);
+    
+    // Read a contiguous block of samples from the FFmpeg reader in one efficient operation
+    if (!audioReader->readSamples(channelPointersInt, numChannels, 0, currentPos, samplesToRead))
+    {
+        // Failed to read, stop playback
+        playing.store(false);
+        return;
+    }
+    
+    // Advance the read position by the block size
+    audioReadPosition += samplesToRead;
+
+    // 4. Convert planar to interleaved and feed to time stretcher
+    // Ensure our interleaved buffers are large enough
+    if (samplesToRead > interleavedCapacityFrames)
+    {
+        interleavedCapacityFrames = samplesToRead * 2;
+        interleavedInput.allocate((size_t)(interleavedCapacityFrames * numChannels), true);
+        interleavedOutput.allocate((size_t)(interleavedCapacityFrames * numChannels), true);
+    }
+    
+    float* inLR = interleavedInput.getData();
+    for (int i = 0; i < samplesToRead; ++i) {
+        for (int ch = 0; ch < numChannels; ++ch) {
+            inLR[i * numChannels + ch] = sourceBuffer.getSample(ch, i);
+        }
+    }
+    
+    timePitch.putInterleaved(inLR, samplesToRead);
+    
+    // 5. Retrieve the processed audio from time stretcher
+    if (numSamples > interleavedCapacityFrames)
+    {
+        interleavedCapacityFrames = numSamples * 2;
+        interleavedOutput.allocate((size_t)(interleavedCapacityFrames * numChannels), true);
+    }
+    
+    float* outLR = interleavedOutput.getData();
+    int produced = timePitch.receiveInterleaved(outLR, numSamples);
+
+    // 6. De-interleave the processed audio into the output buffer
+    if (produced > 0)
+    {
+        const int actualProduced = juce::jmin(produced, numSamples);
+        for (int ch = 0; ch < juce::jmin(numChannels, audioOutBus.getNumChannels()); ++ch)
         {
-            audioPosition.store(audioTransport.getCurrentPosition() * audioSampleRate);
+            float* dest = audioOutBus.getWritePointer(ch);
+            for (int i = 0; i < actualProduced; ++i)
+            {
+                dest[i] = outLR[i * numChannels + ch];
+            }
+            // Zero any remaining samples
+            if (actualProduced < numSamples)
+            {
+                juce::FloatVectorOperations::clear(dest + actualProduced, numSamples - actualProduced);
+            }
         }
     }
 }
@@ -783,9 +777,19 @@ void VideoFileLoaderModule::drawParametersInNode(float itemWidth,
             ImGui::TextColored(ImVec4(0.9f, 0.7f, 0.2f, 1.0f), "Length unknown yet (ratio seeks)");
     }
 
+    // ADD ENGINE SELECTION COMBO BOX
+    ImGui::Separator();
+    int engineIdx = engineParam ? engineParam->getIndex() : 1;
+    const char* items[] = { "RubberBand (High Quality)", "Naive (Low CPU)" };
+    if (ImGui::Combo("Engine", &engineIdx, items, 2))
+    {
+        if (engineParam) *engineParam = engineIdx;
+        onModificationEnded();
+    }
+    ImGui::Separator();
+
     // --- Playback speed (slider only) ---
     float spd = speedParam ? speedParam->load() : 1.0f;
-    ImGui::Separator();
     ImGui::SliderFloat("Speed", &spd, 0.25f, 4.0f, "%.2fx");
     if (auto* p = dynamic_cast<juce::AudioParameterFloat*>(apvts.getParameter("speed"))) *p = spd;
 
@@ -795,53 +799,33 @@ void VideoFileLoaderModule::drawParametersInNode(float itemWidth,
         float inN = inNormParam ? inNormParam->load() : 0.0f;
         float outN = outNormParam ? outNormParam->load() : 1.0f;
         ImGui::Separator();
-        if (ImGui::SliderFloat("Start", &inN, 0.0f, 1.0f))
+        
+        if (ImGui::SliderFloat("Start", &inN, 0.0f, 1.0f, "%.3f"))
         {
             inN = juce::jlimit(0.0f, outN - 0.01f, inN);
             if (auto* p = dynamic_cast<juce::AudioParameterFloat*>(apvts.getParameter("in"))) *p = inN;
-            if (tf > 1)
-            {
-                int inF = (int)std::round(inN * (tf - 1));
-                pendingSeekFrame.store(inF);
-                needPreviewFrame.store(true);
-                juce::Logger::writeToLog("[VideoFileLoader][UI] Start set: inN=" + juce::String(inN, 3) + " inF=" + juce::String(inF));
-            }
-            else
-            {
-                pendingStartNorm.store(inN);
-            }
+            pendingSeekNormalized.store(inN); // Use unified seek
         }
-        if (ImGui::SliderFloat("End", &outN, 0.0f, 1.0f))
+        if (ImGui::IsItemDeactivatedAfterEdit()) onModificationEnded();
+
+        if (ImGui::SliderFloat("End", &outN, 0.0f, 1.0f, "%.3f"))
         {
             outN = juce::jlimit(inN + 0.01f, 1.0f, outN);
             if (auto* p = dynamic_cast<juce::AudioParameterFloat*>(apvts.getParameter("out"))) *p = outN;
-            if (tf > 1)
-            {
-                int outF = (int)std::round(outN * (tf - 1));
-                juce::Logger::writeToLog("[VideoFileLoader][UI] End set: outN=" + juce::String(outN, 3) + " outF=" + juce::String(outF));
-            }
+            onModificationEnded();
         }
 
-        int currentFrame = lastPosFrame.load();
-        float pos = (tf > 1) ? ((float) currentFrame / (float) tf) : 0.0f;
+        float pos = (tf > 1) ? ((float)lastPosFrame.load() / (float)tf) : 0.0f;
         // Clamp position UI between in/out
         float minPos = juce::jlimit(0.0f, 1.0f, inN);
         float maxPos = juce::jlimit(minPos, 1.0f, outN);
         pos = juce::jlimit(minPos, maxPos, pos);
-        if (ImGui::SliderFloat("Position", &pos, 0.0f, 1.0f))
+
+        if (ImGui::SliderFloat("Position", &pos, 0.0f, 1.0f, "%.3f"))
         {
-            if (tf > 1)
-            {
-                int targetF = (int)std::round(pos * (float)(tf - 1));
-                pendingSeekFrame.store(targetF);
-                needPreviewFrame.store(true);
-                juce::Logger::writeToLog("[VideoFileLoader][UI] Position set: posN=" + juce::String(pos, 3) + " frame=" + juce::String(targetF));
-            }
-            else
-            {
-                pendingSeekNorm.store(pos);
-            }
+            pendingSeekNormalized.store(pos); // Use unified seek
         }
+        if (ImGui::IsItemDeactivatedAfterEdit()) onModificationEnded();
     }
     
     ImGui::PopItemWidth();
@@ -849,9 +833,10 @@ void VideoFileLoaderModule::drawParametersInNode(float itemWidth,
 
 void VideoFileLoaderModule::drawIoPins(const NodePinHelpers& helpers)
 {
-    // Pins are handled via getDynamicOutputPins for proper type coloring
-    // This method is kept for backward compatibility but dynamic pins take precedence
+    // Although getDynamicOutputPins takes precedence, this ensures correctness if it's ever used as a fallback.
     helpers.drawAudioOutputPin("Source ID", 0);
+    helpers.drawAudioOutputPin("Audio L", 1);
+    helpers.drawAudioOutputPin("Audio R", 2);
 }
 #endif
 

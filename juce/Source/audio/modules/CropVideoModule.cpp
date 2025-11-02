@@ -24,6 +24,12 @@ juce::AudioProcessorValueTreeState::ParameterLayout CropVideoModule::createParam
     params.push_back(std::make_unique<juce::AudioParameterFloat>("cropW", "Width", 0.0f, 1.0f, 0.5f));
     params.push_back(std::make_unique<juce::AudioParameterFloat>("cropH", "Height", 0.0f, 1.0f, 0.5f));
     
+    // Tracker box controls (relative to crop box, normalized 0-1)
+    params.push_back(std::make_unique<juce::AudioParameterFloat>("trackerX", "Tracker X", 0.0f, 1.0f, 0.25f));
+    params.push_back(std::make_unique<juce::AudioParameterFloat>("trackerY", "Tracker Y", 0.0f, 1.0f, 0.25f));
+    params.push_back(std::make_unique<juce::AudioParameterFloat>("trackerW", "Tracker Width", 0.0f, 1.0f, 0.5f));
+    params.push_back(std::make_unique<juce::AudioParameterFloat>("trackerH", "Tracker Height", 0.0f, 1.0f, 0.5f));
+    
     return { params.begin(), params.end() };
 }
 
@@ -66,6 +72,8 @@ bool CropVideoModule::getParamRouting(const juce::String& paramId, int& outBusIn
 
 void CropVideoModule::run()
 {
+    juce::Logger::writeToLog("[CropVideo][Thread] Video processing thread started.");
+    
     while (!threadShouldExit())
     {
         juce::uint32 sourceId = currentSourceId.load();
@@ -87,28 +95,47 @@ void CropVideoModule::run()
             const juce::ScopedLock lock(trackerLock);
             if (tracker)
             {
-                cv::Rect newBox;
-                bool ok = tracker->update(frame, newBox);
+                juce::Logger::writeToLog("[CropVideo][Thread] Updating tracker...");
+                cv::Rect trackerBox;
+                bool ok = tracker->update(frame, trackerBox);
 
                 if (ok)
                 {
-                    // Update parameters from tracker results
-                    float newW = (float)newBox.width / (float)frame.cols;
-                    float newH = (float)newBox.height / (float)frame.rows;
-                    float newX = ((float)newBox.x + (float)newBox.width / 2.0f) / (float)frame.cols;
-                    float newY = ((float)newBox.y + (float)newBox.height / 2.0f) / (float)frame.rows;
-
-                    *cropXParam = newX;
-                    *cropYParam = newY;
-                    *cropWParam = newW;
-                    *cropHParam = newH;
+                    juce::Logger::writeToLog("[CropVideo][Thread] Tracker update SUCCESS.");
+                    // Tracker follows the small tracker box, but we need to move the entire crop area
+                    // Calculate where the tracker box center is in absolute coordinates
+                    float trackerBoxCenterX = ((float)trackerBox.x + (float)trackerBox.width / 2.0f) / (float)frame.cols;
+                    float trackerBoxCenterY = ((float)trackerBox.y + (float)trackerBox.height / 2.0f) / (float)frame.rows;
+                    
+                    // Get current tracker box position relative to crop box
+                    float trackXRel = apvts.getRawParameterValue("trackerX")->load();
+                    float trackYRel = apvts.getRawParameterValue("trackerY")->load();
+                    
+                    // Calculate the offset between tracker box and crop box center
+                    float cropW = cropWParam->load();
+                    float cropH = cropHParam->load();
+                    float trackBoxRelCenterX = trackXRel + 0.5f * apvts.getRawParameterValue("trackerW")->load();
+                    float trackBoxRelCenterY = trackYRel + 0.5f * apvts.getRawParameterValue("trackerH")->load();
+                    
+                    float offsetX = (trackBoxRelCenterX - 0.5f) * cropW;
+                    float offsetY = (trackBoxRelCenterY - 0.5f) * cropH;
+                    
+                    // Adjust crop center to keep tracker box in same relative position
+                    *cropXParam = trackerBoxCenterX - offsetX;
+                    *cropYParam = trackerBoxCenterY - offsetY;
                 }
                 else
                 {
+                    juce::Logger::writeToLog("[CropVideo][Thread] Tracker update FAILED. Disengaging tracker.");
                     // Tracking failed, disengage
                     trackingActive.store(false);
                     tracker.release();
                 }
+            }
+            else
+            {
+                juce::Logger::writeToLog("[CropVideo][Thread] WARNING: trackingActive is true, but tracker object is null!");
+                trackingActive.store(false);
             }
         }
 
@@ -152,6 +179,7 @@ void CropVideoModule::run()
 
         wait(33);
     }
+    juce::Logger::writeToLog("[CropVideo][Thread] Video processing thread finished.");
 }
 
 void CropVideoModule::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midi)
@@ -238,6 +266,7 @@ void CropVideoModule::drawParametersInNode(float itemWidth, const std::function<
     // State for tracking drag operations (per-instance using logical ID)
     static std::map<int, bool> isResizingCropBoxByNode; // Left-click drag for resizing
     static std::map<int, bool> isMovingCropBoxByNode;   // Right-click drag for moving
+    static std::map<int, bool> isEditingTrackerBoxByNode; // Ctrl + Left-click drag for tracker box
     static std::map<int, ImVec2> dragStartPosByNode;
     static std::map<int, float> initialCropXByNode; // Store crop center at the start of a move operation
     static std::map<int, float> initialCropYByNode;
@@ -245,6 +274,7 @@ void CropVideoModule::drawParametersInNode(float itemWidth, const std::function<
     int nodeId = (int)getLogicalId();
     bool& isResizingCropBox = isResizingCropBoxByNode[nodeId];
     bool& isMovingCropBox = isMovingCropBoxByNode[nodeId];
+    bool& isEditingTrackerBox = isEditingTrackerBoxByNode[nodeId];
     ImVec2& dragStartPos = dragStartPosByNode[nodeId];
     float& initialCropX = initialCropXByNode[nodeId];
     float& initialCropY = initialCropYByNode[nodeId];
@@ -293,24 +323,47 @@ void CropVideoModule::drawParametersInNode(float itemWidth, const std::function<
             ImVec2 currentCropMax = ImVec2(imageRectMin.x + (currX + currW/2.0f) * imageSize.x, imageRectMin.y + (currY + currH/2.0f) * imageSize.y);
             bool isMouseInCropBox = (mousePos.x >= currentCropMin.x && mousePos.x <= currentCropMax.x && mousePos.y >= currentCropMin.y && mousePos.y <= currentCropMax.y);
             
+            // Get tracker box rect (relative to the main crop box)
+            float trackX = apvts.getRawParameterValue("trackerX")->load();
+            float trackY = apvts.getRawParameterValue("trackerY")->load();
+            float trackW = apvts.getRawParameterValue("trackerW")->load();
+            float trackH = apvts.getRawParameterValue("trackerH")->load();
+            
+            ImVec2 trackerMin = ImVec2(currentCropMin.x + trackX * (currentCropMax.x - currentCropMin.x), currentCropMin.y + trackY * (currentCropMax.y - currentCropMin.y));
+            ImVec2 trackerMax = ImVec2(trackerMin.x + trackW * (currentCropMax.x - currentCropMin.x), trackerMin.y + trackH * (currentCropMax.y - currentCropMin.y));
+            bool isMouseInTrackerBox = (mousePos.x >= trackerMin.x && mousePos.x <= trackerMax.x && mousePos.y >= trackerMin.y && mousePos.y <= trackerMax.y);
+            
+            bool ctrlHeld = ImGui::GetIO().KeyCtrl;
+            
             // Set tooltip and cursor based on mouse position
             if (ImGui::IsItemHovered())
             {
-                if (isMouseInCropBox && !isResizingCropBox && !isMovingCropBox)
+                if (ctrlHeld)
+                {
+                    ImGui::SetTooltip("Define Tracker Box (Red)");
+                }
+                else if (isMouseInCropBox && !isResizingCropBox && !isMovingCropBox)
                 {
                     ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
-                    ImGui::SetTooltip("Right-click and drag to move\nLeft-click and drag outside to resize");
+                    ImGui::SetTooltip("Right-drag to move Crop Box (Yellow)\nCtrl + Left-drag to edit Tracker Box (Red)");
                 }
                 else
                 {
-                    ImGui::SetTooltip("Left-click and drag to define new crop area");
+                    ImGui::SetTooltip("Left-drag to define new Crop Box (Yellow)");
                 }
             }
             
             // --- Handle Mouse Clicks ---
-            if (ImGui::IsItemClicked(ImGuiMouseButton_Left) && !isMouseInCropBox)
+            if (ImGui::IsItemClicked(ImGuiMouseButton_Left))
             {
-                isResizingCropBox = true;
+                if (ctrlHeld)
+                {
+                    isEditingTrackerBox = true;
+                }
+                else if (!isMouseInCropBox)
+                {
+                    isResizingCropBox = true;
+                }
                 dragStartPos = mousePos;
             }
             if (ImGui::IsItemClicked(ImGuiMouseButton_Right) && isMouseInCropBox)
@@ -321,8 +374,27 @@ void CropVideoModule::drawParametersInNode(float itemWidth, const std::function<
                 initialCropY = currY;
             }
             
-            // Draw current crop rect with a yellow border
-            drawList->AddRect(currentCropMin, currentCropMax, IM_COL32(255, 255, 0, 150), 0.0f, 0, 2.0f);
+            // Draw crop rect - green for tracking, yellow for manual
+            if (trackingActive.load())
+            {
+                // Draw a thick green rectangle for active tracking
+                drawList->AddRect(currentCropMin, currentCropMax, IM_COL32(0, 255, 0, 255), 0.0f, 0, 3.0f);
+                const char* text = "TRACKING";
+                ImVec2 textSize = ImGui::CalcTextSize(text);
+                ImVec2 textPos = ImVec2(currentCropMin.x + 5, currentCropMin.y + 5);
+                if (textPos.x + textSize.x < imageRectMax.x && textPos.y + textSize.y < imageRectMax.y)
+                {
+                    drawList->AddText(textPos, IM_COL32(0, 255, 0, 255), text);
+                }
+            }
+            else
+            {
+                // Draw the yellow rectangle for manual selection
+                drawList->AddRect(currentCropMin, currentCropMax, IM_COL32(255, 255, 0, 150), 0.0f, 0, 2.0f);
+            }
+            
+            // Draw tracker box (red) inside crop box
+            drawList->AddRect(trackerMin, trackerMax, IM_COL32(255, 0, 0, 200), 0.0f, 0, 1.5f);
             
             // Handle Resize Drag (Left Click)
             if (isResizingCropBox)
@@ -341,6 +413,24 @@ void CropVideoModule::drawParametersInNode(float itemWidth, const std::function<
                 drawList->AddRectFilled(ImVec2(imageRectMin.x, rectMax.y), imageRectMax, overlayColor);
                 drawList->AddRectFilled(ImVec2(imageRectMin.x, rectMin.y), ImVec2(rectMin.x, rectMax.y), overlayColor);
                 drawList->AddRectFilled(ImVec2(rectMax.x, rectMin.y), ImVec2(imageRectMax.x, rectMax.y), overlayColor);
+            }
+            else if (isEditingTrackerBox)
+            {
+                ImVec2 dragCurrentPos = mousePos;
+                ImVec2 tRectMin = ImVec2(std::min(dragStartPos.x, dragCurrentPos.x), std::min(dragStartPos.y, dragCurrentPos.y));
+                ImVec2 tRectMax = ImVec2(std::max(dragStartPos.x, dragCurrentPos.x), std::max(dragStartPos.y, dragCurrentPos.y));
+                
+                // Clamp tracker box to be inside the main crop box
+                tRectMin.x = std::max(tRectMin.x, currentCropMin.x);
+                tRectMin.y = std::max(tRectMin.y, currentCropMin.y);
+                tRectMax.x = std::min(tRectMax.x, currentCropMax.x);
+                tRectMax.y = std::min(tRectMax.y, currentCropMax.y);
+                
+                ImU32 overlayColor = IM_COL32(0, 0, 0, 120);
+                drawList->AddRectFilled(currentCropMin, ImVec2(currentCropMax.x, tRectMin.y), overlayColor);
+                drawList->AddRectFilled(ImVec2(currentCropMin.x, tRectMax.y), currentCropMax, overlayColor);
+                drawList->AddRectFilled(ImVec2(currentCropMin.x, tRectMin.y), ImVec2(tRectMin.x, tRectMax.y), overlayColor);
+                drawList->AddRectFilled(ImVec2(tRectMax.x, tRectMin.y), ImVec2(currentCropMax.x, tRectMax.y), overlayColor);
             }
             
             // Handle Move Drag (Right Click)
@@ -394,6 +484,34 @@ void CropVideoModule::drawParametersInNode(float itemWidth, const std::function<
                 isMovingCropBox = false;
                 onModificationEnded();
             }
+            else if (isEditingTrackerBox && ImGui::IsMouseReleased(ImGuiMouseButton_Left))
+            {
+                isEditingTrackerBox = false;
+                ImVec2 dragEndPos = mousePos;
+                ImVec2 tRectMin = ImVec2(std::min(dragStartPos.x, dragEndPos.x), std::min(dragStartPos.y, dragEndPos.y));
+                ImVec2 tRectMax = ImVec2(std::max(dragStartPos.x, dragEndPos.x), std::max(dragStartPos.y, dragEndPos.y));
+                
+                tRectMin.x = std::max(tRectMin.x, currentCropMin.x);
+                tRectMin.y = std::max(tRectMin.y, currentCropMin.y);
+                tRectMax.x = std::min(tRectMax.x, currentCropMax.x);
+                tRectMax.y = std::min(tRectMax.y, currentCropMax.y);
+                
+                float cropBoxW_px = currentCropMax.x - currentCropMin.x;
+                float cropBoxH_px = currentCropMax.y - currentCropMin.y;
+                if (cropBoxW_px > 0 && cropBoxH_px > 0)
+                {
+                    float newTX = (tRectMin.x - currentCropMin.x) / cropBoxW_px;
+                    float newTY = (tRectMin.y - currentCropMin.y) / cropBoxH_px;
+                    float newTW = (tRectMax.x - tRectMin.x) / cropBoxW_px;
+                    float newTH = (tRectMax.y - tRectMin.y) / cropBoxH_px;
+                    
+                    if (auto* p = dynamic_cast<juce::AudioParameterFloat*>(apvts.getParameter("trackerX"))) *p = newTX;
+                    if (auto* p = dynamic_cast<juce::AudioParameterFloat*>(apvts.getParameter("trackerY"))) *p = newTY;
+                    if (auto* p = dynamic_cast<juce::AudioParameterFloat*>(apvts.getParameter("trackerW"))) *p = newTW;
+                    if (auto* p = dynamic_cast<juce::AudioParameterFloat*>(apvts.getParameter("trackerH"))) *p = newTH;
+                    onModificationEnded();
+                }
+            }
         }
     }
     
@@ -406,6 +524,7 @@ void CropVideoModule::drawParametersInNode(float itemWidth, const std::function<
         ImGui::PushStyleColor(ImGuiCol_ButtonActive, (ImVec4)ImColor::HSV(0.0f, 0.8f, 0.8f));
         if (ImGui::Button("Stop Tracking", ImVec2(itemWidth, 0)))
         {
+            juce::Logger::writeToLog("[CropVideo][UI] 'Stop Tracking' clicked.");
             const juce::ScopedLock lock(trackerLock);
             trackingActive.store(false);
             tracker.release();
@@ -416,29 +535,60 @@ void CropVideoModule::drawParametersInNode(float itemWidth, const std::function<
     {
         if (ImGui::Button("Start Tracking", ImVec2(itemWidth, 0)))
         {
+            juce::Logger::writeToLog("[CropVideo][UI] 'Start Tracking' clicked.");
             const juce::ScopedLock lock(trackerLock);
             if (!lastFrameForTracker.empty())
             {
-                // Get current rect from params to initialize tracker
+                juce::Logger::writeToLog("[CropVideo][UI] lastFrameForTracker is valid (" + juce::String(lastFrameForTracker.cols) + "x" + juce::String(lastFrameForTracker.rows) + "). Initializing tracker.");
+                // Get crop box and tracker box from params to initialize tracker
                 float cx = cropXParam ? cropXParam->load() : 0.5f;
                 float cy = cropYParam ? cropYParam->load() : 0.5f;
-                float w = cropWParam ? cropWParam->load() : 0.5f;
-                float h = cropHParam ? cropHParam->load() : 0.5f;
+                float cw = cropWParam ? cropWParam->load() : 0.5f;
+                float ch = cropHParam ? cropHParam->load() : 0.5f;
+                float tx = apvts.getRawParameterValue("trackerX")->load();
+                float ty = apvts.getRawParameterValue("trackerY")->load();
+                float tw = apvts.getRawParameterValue("trackerW")->load();
+                float th = apvts.getRawParameterValue("trackerH")->load();
+                
                 int frameW = lastFrameForTracker.cols;
                 int frameH = lastFrameForTracker.rows;
+                
+                // Calculate crop box in pixels
+                float cropW_px = cw * frameW;
+                float cropH_px = ch * frameH;
+                float cropX_px = (cx - cw / 2.0f) * frameW;
+                float cropY_px = (cy - ch / 2.0f) * frameH;
+                
+                // Calculate tracker box in pixels (relative to crop box)
                 cv::Rect initBox(
-                    (int)((cx - w / 2.0f) * frameW),
-                    (int)((cy - h / 2.0f) * frameH),
-                    (int)(w * frameW),
-                    (int)(h * frameH)
+                    (int)(cropX_px + tx * cropW_px),
+                    (int)(cropY_px + ty * cropH_px),
+                    (int)(tw * cropW_px),
+                    (int)(th * cropH_px)
                 );
 
                 if (initBox.area() > 0)
                 {
-                    tracker = cv::TrackerMIL::create();
-                    tracker->init(lastFrameForTracker, initBox);
-                    trackingActive.store(true);
+                    juce::Logger::writeToLog("[CropVideo][UI] Initializing with tracker box: x=" + juce::String(initBox.x) + " y=" + juce::String(initBox.y) + " w=" + juce::String(initBox.width) + " h=" + juce::String(initBox.height));
+                    try {
+                        tracker = cv::TrackerMIL::create();
+                        tracker->init(lastFrameForTracker, initBox);
+                        trackingActive.store(true);
+                        juce::Logger::writeToLog("[CropVideo][UI] Tracker initialized SUCCESSFULLY.");
+                    } catch (const cv::Exception& e) {
+                        juce::Logger::writeToLog("[CropVideo][UI] CRITICAL: OpenCV exception during tracker->init(): " + juce::String(e.what()));
+                        trackingActive.store(false);
+                        tracker.release();
+                    }
                 }
+                else
+                {
+                    juce::Logger::writeToLog("[CropVideo][UI] ERROR: Cannot start tracking with a zero-area box.");
+                }
+            }
+            else
+            {
+                juce::Logger::writeToLog("[CropVideo][UI] ERROR: Cannot start tracking because lastFrameForTracker is empty.");
             }
         }
         if (ImGui::IsItemHovered()) ImGui::SetTooltip("Lock onto the current crop box and follow it automatically.");

@@ -21,7 +21,7 @@ extern "C" {
 FFmpegAudioReader::FFmpegAudioReader(const juce::String& path)
     : juce::AudioFormatReader(nullptr, "FFmpeg"), filePath(path)
 {
-    // Initialize FFmpeg
+    // Initialize FFmpeg networking capabilities once.
     static std::once_flag ffmpegInitialized;
     std::call_once(ffmpegInitialized, []() { avformat_network_init(); });
 
@@ -41,19 +41,19 @@ FFmpegAudioReader::FFmpegAudioReader(const juce::String& path)
     if (avcodec_parameters_to_context(codecContext, audioStream->codecpar) < 0) { cleanup(); return; }
     if (avcodec_open2(codecContext, codec, nullptr) < 0) { cleanup(); return; }
 
-    // Set up JUCE properties
+    // Set up the JUCE AudioFormatReader properties based on the decoded stream
     this->sampleRate = (double)codecContext->sample_rate;
     this->numChannels = (unsigned int)codecContext->ch_layout.nb_channels;
     this->bitsPerSample = 32;
-    this->usesFloatingPointData = true;
+    this->usesFloatingPointData = true; // We will provide float data directly
 
-    // Calculate duration
+    // Calculate total audio duration in samples
     if (audioStream->duration != AV_NOPTS_VALUE) {
         double durationInSeconds = (double)audioStream->duration * av_q2d(audioStream->time_base);
         this->lengthInSamples = (juce::int64)(durationInSeconds * this->sampleRate);
     }
 
-    // Set up the resampler to convert any input format to 32-bit float planar for JUCE
+    // Configure the resampler to convert FFmpeg's decoded audio format to 32-bit float
     resamplerContext = swr_alloc();
     if (!resamplerContext) { cleanup(); return; }
     
@@ -87,11 +87,17 @@ bool FFmpegAudioReader::readSamples(int* const* destSamples, int numDestChannels
 {
     if (!isInitialized || numSamples <= 0) return true;
 
-    // **THE FIX**: Cast the destination buffer to float**, as this is what JUCE provides
-    // when usesFloatingPointData is true.
+    // Correctly interpret the destination buffer as float** since usesFloatingPointData is true.
     auto* floatDestSamples = reinterpret_cast<float* const*>(destSamples);
+    
+    // Clear destination buffers to ensure silence if we fail to read
+    for (int i = 0; i < numDestChannels; ++i) {
+        if (floatDestSamples[i] != nullptr) {
+            juce::FloatVectorOperations::clear(floatDestSamples[i] + startOffsetInDestBuffer, numSamples);
+        }
+    }
 
-    // Seek to the requested position
+    // Seek to the requested position within the audio stream. This is a crucial step.
     int64_t targetTimestamp = (int64_t)((double)startSampleInFile / sampleRate / av_q2d(audioStream->time_base));
     if (av_seek_frame(formatContext, streamIndex, targetTimestamp, AVSEEK_FLAG_BACKWARD) < 0) {
         return false;
@@ -110,7 +116,7 @@ bool FFmpegAudioReader::readSamples(int* const* destSamples, int numDestChannels
                 while (avcodec_receive_frame(codecContext, decodedFrame) == 0)
                 {
                     int maxOutSamples = (int)av_rescale_rnd(decodedFrame->nb_samples, (int)this->sampleRate, codecContext->sample_rate, AV_ROUND_UP);
-                    tempResampledBuffer.setSize((int)this->numChannels, maxOutSamples);
+                    tempResampledBuffer.setSize((int)this->numChannels, maxOutSamples, false, false, true);
                     
                     // Prepare output pointers for planar format (one pointer per channel)
                     uint8_t* outData[64];  // FFmpeg supports up to 64 channels
@@ -125,6 +131,7 @@ bool FFmpegAudioReader::readSamples(int* const* destSamples, int numDestChannels
                         int samplesToCopy = std::min(samplesConverted, numSamples - samplesWritten);
                         for (int ch = 0; ch < std::min((int)this->numChannels, numDestChannels); ++ch) {
                             if (floatDestSamples[ch] != nullptr) {
+                                // Directly copy the decoded float samples into the destination buffer
                                 juce::FloatVectorOperations::copy(floatDestSamples[ch] + startOffsetInDestBuffer + samplesWritten,
                                                                   tempResampledBuffer.getReadPointer(ch),
                                                                   samplesToCopy);
@@ -137,13 +144,6 @@ bool FFmpegAudioReader::readSamples(int* const* destSamples, int numDestChannels
         }
         av_packet_unref(packet);
         if (samplesWritten >= numSamples) break;
-    }
-
-    // Clear any remaining part of the destination buffer
-    for (int ch = 0; ch < numDestChannels; ++ch) {
-        if (floatDestSamples[ch] != nullptr) {
-            juce::FloatVectorOperations::clear(floatDestSamples[ch] + startOffsetInDestBuffer + samplesWritten, numSamples - samplesWritten);
-        }
     }
 
     return true;

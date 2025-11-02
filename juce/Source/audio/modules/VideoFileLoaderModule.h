@@ -2,13 +2,13 @@
 
 #include "ModuleProcessor.h"
 #include "FFmpegAudioReader.h"
+#include "../dsp/TimePitchProcessor.h"
 #include <opencv2/core.hpp>
 #include <opencv2/videoio.hpp>
 #include <juce_core/juce_core.h>
 #include <juce_audio_processors/juce_audio_processors.h>
 #include <juce_audio_formats/juce_audio_formats.h>
 #include <juce_audio_basics/juce_audio_basics.h>
-#include <juce_audio_devices/juce_audio_devices.h>
 #include <juce_graphics/juce_graphics.h>
 
 /**
@@ -67,6 +67,8 @@ private:
     std::atomic<float>* inNormParam = nullptr;  // 0..1
     std::atomic<float>* outNormParam = nullptr; // 0..1
     std::atomic<float>* syncParam = nullptr; // bool as float
+    juce::AudioParameterChoice* engineParam = nullptr;
+    
     std::atomic<bool> playing { true };
     std::atomic<bool> syncToTransport { true };
     std::atomic<bool> lastTransportPlaying { false };
@@ -75,10 +77,10 @@ private:
     std::atomic<int> lastFourcc { 0 }; // cached FOURCC
     std::atomic<int> pendingSeekFrame { -1 };
     std::atomic<int> lastPosFrame { 0 };
-    // Normalized pending requests (used when totalFrames not ready yet)
-    std::atomic<float> pendingSeekNorm { -1.0f };
-    std::atomic<float> pendingStartNorm { -1.0f };
     std::atomic<double> totalDurationMs { 0.0 };
+    
+    // Unified, thread-safe seeking mechanism for both video and audio
+    std::atomic<float> pendingSeekNormalized { -1.0f };
     
     cv::VideoCapture videoCapture;
     juce::CriticalSection captureLock;
@@ -119,16 +121,19 @@ private:
     // Cached metadata (atomic for cross-thread visibility)
     std::atomic<int> totalFrames { 0 };
     
-    // Audio playback
-    std::unique_ptr<juce::AudioFormatReaderSource> audioSource;
-    juce::AudioTransportSource audioTransport;
-    juce::AudioBuffer<float> audioBuffer;
+    // Audio playback engine
+    std::unique_ptr<FFmpegAudioReader> audioReader;
+    TimePitchProcessor timePitch;
+    double audioReadPosition = 0.0;
     double audioSampleRate = 44100.0;
-    std::atomic<double> audioPosition { 0.0 }; // Position in samples
     std::atomic<bool> audioLoaded { false };
     juce::CriticalSection audioLock;
     
+    // Buffers for audio processing
+    juce::HeapBlock<float> interleavedInput;
+    juce::HeapBlock<float> interleavedOutput;
+    int interleavedCapacityFrames = 0;
+    
     void loadAudioFromVideo();
-    void updateAudioPlayback();
 };
 

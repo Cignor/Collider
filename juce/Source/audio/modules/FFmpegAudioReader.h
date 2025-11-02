@@ -11,13 +11,17 @@ struct AVFrame;
 struct AVPacket;
 struct SwrContext;
 
+/**
+ * Custom audio format reader that uses FFmpeg to decode audio from video files.
+ * This provides robust support for a wide range of audio codecs (AAC, AC3, etc.)
+ * found in video containers (.mp4, .mkv, .mov).
+ */
 class FFmpegAudioReader final : public juce::AudioFormatReader
 {
 public:
     explicit FFmpegAudioReader(const juce::String& filePath);
     ~FFmpegAudioReader() override;
 
-    // This is the correct, simpler readSamples method used by AudioFormatReaderSource
     bool readSamples(int* const* destSamples, int numDestChannels, int startOffsetInDestBuffer, juce::int64 startSampleInFile, int numSamples) override;
 
 private:
@@ -35,7 +39,7 @@ private:
     juce::String filePath;
     bool isInitialized = false;
 
-    // Buffer for resampled audio, used temporarily inside readSamples
+    // A temporary buffer for holding resampled audio data before copying to JUCE's buffers
     juce::AudioBuffer<float> tempResampledBuffer;
     
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(FFmpegAudioReader)

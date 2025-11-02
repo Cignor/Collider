@@ -713,6 +713,8 @@ target_sources(ColliderApp PRIVATE
     Source/audio/modules/VideoFileLoaderModule.cpp
     Source/audio/modules/FFmpegAudioReader.h
     Source/audio/modules/FFmpegAudioReader.cpp
+    Source/audio/modules/TimeStretcherAudioSource.h
+    Source/audio/modules/TimeStretcherAudioSource.cpp
     Source/audio/modules/VideoFXModule.h
     Source/audio/modules/VideoFXModule.cpp
     Source/audio/modules/MovementDetectorModule.h
@@ -1045,6 +1047,8 @@ target_sources(PresetCreatorApp PRIVATE
     Source/audio/modules/VideoFileLoaderModule.cpp
     Source/audio/modules/FFmpegAudioReader.h
     Source/audio/modules/FFmpegAudioReader.cpp
+    Source/audio/modules/TimeStretcherAudioSource.h
+    Source/audio/modules/TimeStretcherAudioSource.cpp
     Source/audio/modules/VideoFXModule.h
     Source/audio/modules/VideoFXModule.cpp
     Source/audio/modules/MovementDetectorModule.h
