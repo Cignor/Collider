@@ -43,6 +43,7 @@ public:
 
     // UI integration helpers
     void addColorAt(int x, int y);
+    void autoTrackColors(); // Auto-detect and track 12 dominant colors
     bool isPickerActive() const { return isColorPickerActive.load(); }
     void exitPickerMode() { isColorPickerActive.store(false); }
 
@@ -54,6 +55,17 @@ public:
     void setExtraStateTree(const juce::ValueTree& state) override;
 
 #if defined(PRESET_CREATOR_UI)
+    // Auto-connect trigger flags (similar to MultiSequencerModuleProcessor)
+    std::atomic<bool> autoConnectPolyVCOTriggered { false };
+    std::atomic<bool> autoConnectSamplersTriggered { false };
+    
+    // Helper for auto-connect
+    int getTrackedColorsCount() const
+    {
+        const juce::ScopedLock lock(colorListLock);
+        return (int)trackedColors.size();
+    }
+    
     void drawParametersInNode(float itemWidth,
                               const std::function<bool(const juce::String& paramId)>& isParamModulated,
                               const std::function<void()>& onModificationEnded) override;
@@ -71,6 +83,7 @@ private:
     std::atomic<float>* sourceIdParam = nullptr;
     std::atomic<float>* zoomLevelParam = nullptr; // 0=Small,1=Normal,2=Large
     juce::AudioParameterBool* useGpuParam = nullptr;
+    juce::AudioParameterInt* numAutoColorsParam = nullptr;
     
     // Thread-safe color list
     std::vector<TrackedColor> trackedColors;

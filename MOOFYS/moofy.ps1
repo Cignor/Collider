@@ -6,7 +6,7 @@
 # =============================================================
 
 # --- Configuration ---
-$projectRoot = $PSScriptRoot
+$projectRoot = Split-Path -Parent $PSScriptRoot
 $outputFile = Join-Path $projectRoot "moofy_Collider.txt"
 
 # --- List of files relevant to the JUCE audio engine and test harness ---

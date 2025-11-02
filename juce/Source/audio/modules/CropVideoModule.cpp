@@ -1,18 +1,54 @@
 #include "CropVideoModule.h"
 #include "../../video/VideoFrameManager.h"
 #include <opencv2/imgproc.hpp>
+#include <opencv2/dnn.hpp>
+#include <fstream>
 #include <map>
 #include <unordered_map>
 #include <algorithm>
+#include <array>
 
 #if defined(PRESET_CREATOR_UI)
 #include <imgui.h>
 #include "../../preset_creator/ImGuiNodeEditorComponent.h"
 #endif
 
+// YOLOv3 default input size
+static constexpr int CROP_YOLO_INPUT_SIZE = 416;
+
+// Embedded COCO-80 labels used if coco.names is missing
+static const char* kCoco80[] = {
+    "person","bicycle","car","motorbike","aeroplane","bus","train","truck","boat","traffic light",
+    "fire hydrant","stop sign","parking meter","bench","bird","cat","dog","horse","sheep","cow",
+    "elephant","bear","zebra","giraffe","backpack","umbrella","handbag","tie","suitcase","frisbee",
+    "skis","snowboard","sports ball","kite","baseball bat","baseball glove","skateboard","surfboard","tennis racket","bottle",
+    "wine glass","cup","fork","knife","spoon","bowl","banana","apple","sandwich","orange",
+    "broccoli","carrot","hot dog","pizza","donut","cake","chair","sofa","pottedplant","bed",
+    "diningtable","toilet","tvmonitor","laptop","mouse","remote","keyboard","cell phone","microwave","oven",
+    "toaster","sink","refrigerator","book","clock","vase","scissors","teddy bear","hair drier","toothbrush"
+};
+
 juce::AudioProcessorValueTreeState::ParameterLayout CropVideoModule::createParameterLayout()
 {
     std::vector<std::unique_ptr<juce::RangedAudioParameter>> params;
+    
+    // GPU acceleration toggle - default from global setting
+    #if defined(PRESET_CREATOR_UI)
+        bool defaultGpu = ImGuiNodeEditorComponent::getGlobalGpuEnabled();
+    #else
+        bool defaultGpu = true;
+    #endif
+    params.push_back(std::make_unique<juce::AudioParameterBool>("useGpu", "Use GPU (CUDA)", defaultGpu));
+    
+    params.push_back(std::make_unique<juce::AudioParameterChoice>("trackerMode", "Tracking Mode", 
+        juce::StringArray{ "Manual", "Track Face", "Track Object" }, 0));
+    
+    // Initialize with the full list of classes for stable preset saving by index
+    juce::StringArray cocoClasses;
+    for (const auto& name : kCoco80) cocoClasses.add(name);
+    params.push_back(std::make_unique<juce::AudioParameterChoice>("targetClass", "Target Class", cocoClasses, 0));
+    
+    params.push_back(std::make_unique<juce::AudioParameterFloat>("confidence", "Confidence", 0.0f, 1.0f, 0.5f));
     
     params.push_back(std::make_unique<juce::AudioParameterChoice>("zoomLevel", "Zoom Level", juce::StringArray{ "Small", "Normal", "Large" }, 1));
     params.push_back(std::make_unique<juce::AudioParameterFloat>("padding", "Padding", 0.0f, 2.0f, 0.1f)); // 10% padding default
@@ -23,12 +59,6 @@ juce::AudioProcessorValueTreeState::ParameterLayout CropVideoModule::createParam
     params.push_back(std::make_unique<juce::AudioParameterFloat>("cropY", "Center Y", 0.0f, 1.0f, 0.5f));
     params.push_back(std::make_unique<juce::AudioParameterFloat>("cropW", "Width", 0.0f, 1.0f, 0.5f));
     params.push_back(std::make_unique<juce::AudioParameterFloat>("cropH", "Height", 0.0f, 1.0f, 0.5f));
-    
-    // Tracker box controls (relative to crop box, normalized 0-1)
-    params.push_back(std::make_unique<juce::AudioParameterFloat>("trackerX", "Tracker X", 0.0f, 1.0f, 0.25f));
-    params.push_back(std::make_unique<juce::AudioParameterFloat>("trackerY", "Tracker Y", 0.0f, 1.0f, 0.25f));
-    params.push_back(std::make_unique<juce::AudioParameterFloat>("trackerW", "Tracker Width", 0.0f, 1.0f, 0.5f));
-    params.push_back(std::make_unique<juce::AudioParameterFloat>("trackerH", "Tracker Height", 0.0f, 1.0f, 0.5f));
     
     return { params.begin(), params.end() };
 }
@@ -41,6 +71,10 @@ CropVideoModule::CropVideoModule()
       juce::Thread("CropVideo Thread"),
       apvts(*this, nullptr, "CropVideoParams", createParameterLayout())
 {
+    useGpuParam = dynamic_cast<juce::AudioParameterBool*>(apvts.getParameter("useGpu"));
+    trackerModeParam = dynamic_cast<juce::AudioParameterChoice*>(apvts.getParameter("trackerMode"));
+    targetClassParam = dynamic_cast<juce::AudioParameterChoice*>(apvts.getParameter("targetClass"));
+    confidenceParam = apvts.getRawParameterValue("confidence");
     zoomLevelParam = apvts.getRawParameterValue("zoomLevel");
     paddingParam = apvts.getRawParameterValue("padding");
     aspectRatioModeParam = dynamic_cast<juce::AudioParameterChoice*>(apvts.getParameter("aspectRatio"));
@@ -48,6 +82,8 @@ CropVideoModule::CropVideoModule()
     cropYParam = apvts.getRawParameterValue("cropY");
     cropWParam = apvts.getRawParameterValue("cropW");
     cropHParam = apvts.getRawParameterValue("cropH");
+    
+    loadModels();
 }
 
 CropVideoModule::~CropVideoModule()
@@ -59,6 +95,126 @@ CropVideoModule::~CropVideoModule()
 void CropVideoModule::prepareToPlay(double, int) { startThread(); }
 
 void CropVideoModule::releaseResources() { signalThreadShouldExit(); stopThread(5000); }
+
+void CropVideoModule::loadModels()
+{
+    juce::File appDir = juce::File::getSpecialLocation(juce::File::currentApplicationFile).getParentDirectory();
+    juce::File assetsDir = appDir.getChildFile("assets");
+
+    // --- CORRECTED: YOLO Model Loading with Fallback (from ObjectDetectorModule) ---
+    juce::File weights = assetsDir.getChildFile("yolov3.weights");
+    juce::File cfg = assetsDir.getChildFile("yolov3.cfg");
+    // Fallback to tiny if standard is missing
+    if (!weights.existsAsFile() || !cfg.existsAsFile())
+    {
+        weights = assetsDir.getChildFile("yolov3-tiny.weights");
+        cfg = assetsDir.getChildFile("yolov3-tiny.cfg");
+        juce::Logger::writeToLog("[CropVideo] Standard YOLOv3 not found, falling back to yolov3-tiny.");
+    }
+    juce::File names = assetsDir.getChildFile("coco.names");
+ 
+    yoloModelLoaded = false;
+    if (weights.existsAsFile() && cfg.existsAsFile())
+    {
+        try
+        {
+            yoloNet = cv::dnn::readNetFromDarknet(cfg.getFullPathName().toStdString(), weights.getFullPathName().toStdString());
+            
+            // CRITICAL: Set backend immediately after loading model (matches ObjectDetectorModule)
+            #if WITH_CUDA_SUPPORT
+                bool useGpu = useGpuParam ? useGpuParam->get() : false;
+                if (useGpu && cv::cuda::getCudaEnabledDeviceCount() > 0)
+                {
+                    yoloNet.setPreferableBackend(cv::dnn::DNN_BACKEND_CUDA);
+                    yoloNet.setPreferableTarget(cv::dnn::DNN_TARGET_CUDA);
+                    juce::Logger::writeToLog("[CropVideo] ✓ Model loaded with CUDA backend (GPU)");
+                }
+                else
+                {
+                    yoloNet.setPreferableBackend(cv::dnn::DNN_BACKEND_OPENCV);
+                    yoloNet.setPreferableTarget(cv::dnn::DNN_TARGET_CPU);
+                    juce::Logger::writeToLog("[CropVideo] Model loaded with CPU backend");
+                }
+            #else
+                yoloNet.setPreferableBackend(cv::dnn::DNN_BACKEND_OPENCV);
+                yoloNet.setPreferableTarget(cv::dnn::DNN_TARGET_CPU);
+                juce::Logger::writeToLog("[CropVideo] Model loaded with CPU backend (CUDA not compiled)");
+            #endif
+            
+            yoloModelLoaded = true;
+            juce::Logger::writeToLog("[CropVideo] ✓ YOLO model loaded successfully from: " + weights.getFullPathName());
+            
+            if (names.existsAsFile())
+            {
+                yoloClassNames.clear();
+                std::ifstream ifs(names.getFullPathName().toStdString().c_str());
+                std::string line;
+                while (std::getline(ifs, line))
+                    if (!line.empty()) yoloClassNames.push_back(line);
+            }
+            if (yoloClassNames.empty())
+            {
+                yoloClassNames.assign(std::begin(kCoco80), std::end(kCoco80));
+                juce::Logger::writeToLog("[CropVideo] coco.names missing; using embedded COCO-80 labels.");
+            }
+        }
+        catch (const cv::Exception& e)
+        {
+            juce::Logger::writeToLog("[CropVideo] ❌ ERROR loading YOLO model: " + juce::String(e.what()));
+            yoloModelLoaded = false;
+            // Still populate class names for UI even if model failed to load
+            yoloClassNames.assign(std::begin(kCoco80), std::end(kCoco80));
+        }
+    }
+    else
+    {
+        juce::Logger::writeToLog("[CropVideo] ❌ WARNING: No YOLO model files found in " + assetsDir.getFullPathName());
+        yoloModelLoaded = false;
+        // Still populate class names for UI even if model failed to load
+        yoloClassNames.assign(std::begin(kCoco80), std::end(kCoco80));
+    }
+
+    // --- CORRECTED: Haar Cascade Loading with Robust Path Finding ---
+    juce::File cascadeFile = assetsDir.getChildFile("haarcascade_frontalface_default.xml");
+    if (!cascadeFile.existsAsFile())
+        cascadeFile = appDir.getChildFile("haarcascade_frontalface_default.xml");
+
+    if (cascadeFile.existsAsFile())
+    {
+        if (faceCascadeCpu.load(cascadeFile.getFullPathName().toStdString()))
+        {
+            juce::Logger::writeToLog("[CropVideo] ✓ Haar cascade (CPU) loaded successfully: " + cascadeFile.getFileName());
+            
+            #if WITH_CUDA_SUPPORT
+                try
+                {
+                    faceCascadeGpu = cv::cuda::CascadeClassifier::create(cascadeFile.getFullPathName().toStdString());
+                    if (faceCascadeGpu && !faceCascadeGpu->empty())
+                    {
+                        juce::Logger::writeToLog("[CropVideo] ✓ GPU cascade created successfully.");
+                    }
+                    else
+                    {
+                        faceCascadeGpu.release();
+                    }
+                }
+                catch (const cv::Exception& e)
+                {
+                    faceCascadeGpu.release();
+                    juce::Logger::writeToLog("[CropVideo] ❌ WARNING: Failed to create GPU cascade classifier: " + juce::String(e.what()));
+                }
+            #endif
+        }
+        else
+        {
+            juce::Logger::writeToLog("[CropVideo] ❌ ERROR: Failed to load Haar cascade XML for CPU.");
+        }
+    }
+    else
+    {
+        juce::Logger::writeToLog("[CropVideo] ❌ WARNING: haarcascade_frontalface_default.xml not found.");
+    }
+}
 
 bool CropVideoModule::getParamRouting(const juce::String& paramId, int& outBusIndex, int& outChannelIndexInBus) const
 {
@@ -72,7 +228,10 @@ bool CropVideoModule::getParamRouting(const juce::String& paramId, int& outBusIn
 
 void CropVideoModule::run()
 {
-    juce::Logger::writeToLog("[CropVideo][Thread] Video processing thread started.");
+    #if WITH_CUDA_SUPPORT
+        bool lastGpuStateForYolo = useGpuParam->get(); // Initialize with current state
+        bool loggedGpuWarning = false; // Only warn once if no GPU available
+    #endif
     
     while (!threadShouldExit())
     {
@@ -89,53 +248,155 @@ void CropVideoModule::run()
         }
         updateInputGuiFrame(frame);
 
-        // Tracking Logic
-        if (trackingActive.load())
+        // --- TRACKING / DETECTION LOGIC ---
+        int mode = trackerModeParam ? trackerModeParam->getIndex() : 0;
+        
+        if (mode == 0 && manualTrackingActive.load()) // Manual Tracker
         {
             const juce::ScopedLock lock(trackerLock);
-            if (tracker)
+            if (manualTracker)
             {
-                juce::Logger::writeToLog("[CropVideo][Thread] Updating tracker...");
-                cv::Rect trackerBox;
-                bool ok = tracker->update(frame, trackerBox);
-
-                if (ok)
+                cv::Rect newBox;
+                if (manualTracker->update(frame, newBox))
                 {
-                    juce::Logger::writeToLog("[CropVideo][Thread] Tracker update SUCCESS.");
-                    // Tracker follows the small tracker box, but we need to move the entire crop area
-                    // Calculate where the tracker box center is in absolute coordinates
-                    float trackerBoxCenterX = ((float)trackerBox.x + (float)trackerBox.width / 2.0f) / (float)frame.cols;
-                    float trackerBoxCenterY = ((float)trackerBox.y + (float)trackerBox.height / 2.0f) / (float)frame.rows;
-                    
-                    // Get current tracker box position relative to crop box
-                    float trackXRel = apvts.getRawParameterValue("trackerX")->load();
-                    float trackYRel = apvts.getRawParameterValue("trackerY")->load();
-                    
-                    // Calculate the offset between tracker box and crop box center
-                    float cropW = cropWParam->load();
-                    float cropH = cropHParam->load();
-                    float trackBoxRelCenterX = trackXRel + 0.5f * apvts.getRawParameterValue("trackerW")->load();
-                    float trackBoxRelCenterY = trackYRel + 0.5f * apvts.getRawParameterValue("trackerH")->load();
-                    
-                    float offsetX = (trackBoxRelCenterX - 0.5f) * cropW;
-                    float offsetY = (trackBoxRelCenterY - 0.5f) * cropH;
-                    
-                    // Adjust crop center to keep tracker box in same relative position
-                    *cropXParam = trackerBoxCenterX - offsetX;
-                    *cropYParam = trackerBoxCenterY - offsetY;
+                    *cropXParam = ((float)newBox.x + (float)newBox.width / 2.0f) / (float)frame.cols;
+                    *cropYParam = ((float)newBox.y + (float)newBox.height / 2.0f) / (float)frame.rows;
+                    *cropWParam = (float)newBox.width / (float)frame.cols;
+                    *cropHParam = (float)newBox.height / (float)frame.rows;
                 }
                 else
                 {
-                    juce::Logger::writeToLog("[CropVideo][Thread] Tracker update FAILED. Disengaging tracker.");
-                    // Tracking failed, disengage
-                    trackingActive.store(false);
-                    tracker.release();
+                    manualTrackingActive.store(false);
+                    manualTracker.release();
                 }
             }
-            else
+        }
+        else // Automatic Detection Modes
+        {
+            cv::Rect detectedBox;
+            bool found = false;
+            
+            bool useGpu = false;
+            #if WITH_CUDA_SUPPORT
+                useGpu = useGpuParam ? useGpuParam->get() : false;
+                if (useGpu && cv::cuda::getCudaEnabledDeviceCount() == 0)
+                {
+                    useGpu = false;
+                    if (!loggedGpuWarning)
+                    {
+                        juce::Logger::writeToLog("[CropVideo] WARNING: GPU requested but no CUDA device found. Using CPU.");
+                        loggedGpuWarning = true;
+                    }
+                }
+            #endif
+            
+            if (mode == 1) // Track Face
             {
-                juce::Logger::writeToLog("[CropVideo][Thread] WARNING: trackingActive is true, but tracker object is null!");
-                trackingActive.store(false);
+                // RUNTIME SAFETY: Check if CPU detector is loaded before attempting to use it
+                if (faceCascadeCpu.empty())
+                {
+                    // Model not loaded, skip detection
+                    found = false;
+                }
+                else
+                {
+                    bool executedOnGpu = false;
+                    if (useGpu)
+                    {
+                    #if WITH_CUDA_SUPPORT
+                        // RUNTIME SAFETY: Verify GPU cascade exists and is not empty before using
+                        if (faceCascadeGpu && !faceCascadeGpu->empty())
+                        {
+                            cv::cuda::GpuMat frameGpu, grayGpu, facesGpu;
+                            frameGpu.upload(frame);
+                            cv::cuda::cvtColor(frameGpu, grayGpu, cv::COLOR_BGR2GRAY);
+                            faceCascadeGpu->detectMultiScale(grayGpu, facesGpu);
+                            std::vector<cv::Rect> faces;
+                            faceCascadeGpu->convert(facesGpu, faces);
+                            if (!faces.empty())
+                            {
+                                detectedBox = *std::max_element(faces.begin(), faces.end(), 
+                                    [](const cv::Rect& a, const cv::Rect& b) { return a.area() < b.area(); });
+                                found = true;
+                            }
+                            executedOnGpu = true;
+                        }
+                    #endif
+                    }
+                    if (!executedOnGpu) // CPU Path
+                    {
+                        cv::Mat gray;
+                        cv::cvtColor(frame, gray, cv::COLOR_BGR2GRAY);
+                        std::vector<cv::Rect> faces;
+                        faceCascadeCpu.detectMultiScale(gray, faces);
+                        if (!faces.empty())
+                        {
+                            detectedBox = *std::max_element(faces.begin(), faces.end(), 
+                                [](const cv::Rect& a, const cv::Rect& b) { return a.area() < b.area(); });
+                            found = true;
+                        }
+                    }
+                }
+            }
+            else if (mode == 2 && yoloModelLoaded) // Track Object (YOLO)
+            {
+                #if WITH_CUDA_SUPPORT
+                    if (useGpu != lastGpuStateForYolo)
+                    {
+                        yoloNet.setPreferableBackend(useGpu ? cv::dnn::DNN_BACKEND_CUDA : cv::dnn::DNN_BACKEND_OPENCV);
+                        yoloNet.setPreferableTarget(useGpu ? cv::dnn::DNN_TARGET_CUDA : cv::dnn::DNN_TARGET_CPU);
+                        lastGpuStateForYolo = useGpu;
+                        juce::Logger::writeToLog("[CropVideo] YOLO backend set to " + juce::String(useGpu ? "CUDA" : "CPU"));
+                    }
+                #endif
+
+                // Prepare input blob
+                cv::Mat blob = cv::dnn::blobFromImage(frame, 1.0/255.0, cv::Size(CROP_YOLO_INPUT_SIZE, CROP_YOLO_INPUT_SIZE), cv::Scalar(), true, false);
+                yoloNet.setInput(blob);
+                std::vector<cv::Mat> outs;
+                yoloNet.forward(outs, yoloNet.getUnconnectedOutLayersNames());
+
+                std::vector<cv::Rect> boxes;
+                std::vector<float> confidences;
+                int targetClassId = targetClassParam ? targetClassParam->getIndex() : 0;
+                float confThreshold = confidenceParam ? confidenceParam->load() : 0.5f;
+
+                for (const auto& out : outs)
+                {
+                    const float* data = (const float*)out.data;
+                    for (int i = 0; i < out.rows; ++i, data += out.cols)
+                    {
+                        cv::Mat scores = out.row(i).colRange(5, out.cols);
+                        cv::Point classIdPoint;
+                        double maxScore;
+                        cv::minMaxLoc(scores, 0, &maxScore, 0, &classIdPoint);
+                        if (maxScore > confThreshold && classIdPoint.x == targetClassId)
+                        {
+                            int centerX = (int)(data[0] * frame.cols);
+                            int centerY = (int)(data[1] * frame.rows);
+                            int width   = (int)(data[2] * frame.cols);
+                            int height  = (int)(data[3] * frame.rows);
+                            boxes.emplace_back(centerX - width/2, centerY - height/2, width, height);
+                            confidences.push_back((float)maxScore);
+                        }
+                    }
+                }
+
+                std::vector<int> indices;
+                cv::dnn::NMSBoxes(boxes, confidences, confThreshold, 0.4f, indices);
+                if (!indices.empty())
+                {
+                    detectedBox = boxes[indices[0]];
+                    found = true;
+                }
+            }
+            
+            if (found)
+            {
+                *cropWParam = (float)detectedBox.width / (float)frame.cols;
+                *cropHParam = (float)detectedBox.height / (float)frame.rows;
+                *cropXParam = ((float)detectedBox.x + (float)detectedBox.width / 2.0f) / (float)frame.cols;
+                *cropYParam = ((float)detectedBox.y + (float)detectedBox.height / 2.0f) / (float)frame.rows;
             }
         }
 
@@ -266,15 +527,15 @@ void CropVideoModule::drawParametersInNode(float itemWidth, const std::function<
     // State for tracking drag operations (per-instance using logical ID)
     static std::map<int, bool> isResizingCropBoxByNode; // Left-click drag for resizing
     static std::map<int, bool> isMovingCropBoxByNode;   // Right-click drag for moving
-    static std::map<int, bool> isEditingTrackerBoxByNode; // Ctrl + Left-click drag for tracker box
     static std::map<int, ImVec2> dragStartPosByNode;
     static std::map<int, float> initialCropXByNode; // Store crop center at the start of a move operation
     static std::map<int, float> initialCropYByNode;
+    static std::map<int, std::array<char, 64>> filterBufByNode;
     
+    int mode = trackerModeParam ? trackerModeParam->getIndex() : 0;
     int nodeId = (int)getLogicalId();
     bool& isResizingCropBox = isResizingCropBoxByNode[nodeId];
     bool& isMovingCropBox = isMovingCropBoxByNode[nodeId];
-    bool& isEditingTrackerBox = isEditingTrackerBoxByNode[nodeId];
     ImVec2& dragStartPos = dragStartPosByNode[nodeId];
     float& initialCropX = initialCropXByNode[nodeId];
     float& initialCropY = initialCropYByNode[nodeId];
@@ -323,47 +584,24 @@ void CropVideoModule::drawParametersInNode(float itemWidth, const std::function<
             ImVec2 currentCropMax = ImVec2(imageRectMin.x + (currX + currW/2.0f) * imageSize.x, imageRectMin.y + (currY + currH/2.0f) * imageSize.y);
             bool isMouseInCropBox = (mousePos.x >= currentCropMin.x && mousePos.x <= currentCropMax.x && mousePos.y >= currentCropMin.y && mousePos.y <= currentCropMax.y);
             
-            // Get tracker box rect (relative to the main crop box)
-            float trackX = apvts.getRawParameterValue("trackerX")->load();
-            float trackY = apvts.getRawParameterValue("trackerY")->load();
-            float trackW = apvts.getRawParameterValue("trackerW")->load();
-            float trackH = apvts.getRawParameterValue("trackerH")->load();
-            
-            ImVec2 trackerMin = ImVec2(currentCropMin.x + trackX * (currentCropMax.x - currentCropMin.x), currentCropMin.y + trackY * (currentCropMax.y - currentCropMin.y));
-            ImVec2 trackerMax = ImVec2(trackerMin.x + trackW * (currentCropMax.x - currentCropMin.x), trackerMin.y + trackH * (currentCropMax.y - currentCropMin.y));
-            bool isMouseInTrackerBox = (mousePos.x >= trackerMin.x && mousePos.x <= trackerMax.x && mousePos.y >= trackerMin.y && mousePos.y <= trackerMax.y);
-            
-            bool ctrlHeld = ImGui::GetIO().KeyCtrl;
-            
             // Set tooltip and cursor based on mouse position
             if (ImGui::IsItemHovered())
             {
-                if (ctrlHeld)
-                {
-                    ImGui::SetTooltip("Define Tracker Box (Red)");
-                }
-                else if (isMouseInCropBox && !isResizingCropBox && !isMovingCropBox)
+                if (isMouseInCropBox && !isResizingCropBox && !isMovingCropBox)
                 {
                     ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
-                    ImGui::SetTooltip("Right-drag to move Crop Box (Yellow)\nCtrl + Left-drag to edit Tracker Box (Red)");
+                    ImGui::SetTooltip("Right-drag to move Crop Box\nLeft-drag outside to resize");
                 }
                 else
                 {
-                    ImGui::SetTooltip("Left-drag to define new Crop Box (Yellow)");
+                    ImGui::SetTooltip("Left-drag to define new Crop Box");
                 }
             }
             
             // --- Handle Mouse Clicks ---
-            if (ImGui::IsItemClicked(ImGuiMouseButton_Left))
+            if (ImGui::IsItemClicked(ImGuiMouseButton_Left) && !isMouseInCropBox)
             {
-                if (ctrlHeld)
-                {
-                    isEditingTrackerBox = true;
-                }
-                else if (!isMouseInCropBox)
-                {
-                    isResizingCropBox = true;
-                }
+                isResizingCropBox = true;
                 dragStartPos = mousePos;
             }
             if (ImGui::IsItemClicked(ImGuiMouseButton_Right) && isMouseInCropBox)
@@ -375,9 +613,9 @@ void CropVideoModule::drawParametersInNode(float itemWidth, const std::function<
             }
             
             // Draw crop rect - green for tracking, yellow for manual
-            if (trackingActive.load())
+            if (mode == 0 && manualTrackingActive.load())
             {
-                // Draw a thick green rectangle for active tracking
+                // Draw a thick green rectangle for manual tracking
                 drawList->AddRect(currentCropMin, currentCropMax, IM_COL32(0, 255, 0, 255), 0.0f, 0, 3.0f);
                 const char* text = "TRACKING";
                 ImVec2 textSize = ImGui::CalcTextSize(text);
@@ -387,14 +625,16 @@ void CropVideoModule::drawParametersInNode(float itemWidth, const std::function<
                     drawList->AddText(textPos, IM_COL32(0, 255, 0, 255), text);
                 }
             }
+            else if (mode != 0)
+            {
+                // Green for auto-detection modes
+                drawList->AddRect(currentCropMin, currentCropMax, IM_COL32(0, 255, 0, 255), 0.0f, 0, 3.0f);
+            }
             else
             {
                 // Draw the yellow rectangle for manual selection
                 drawList->AddRect(currentCropMin, currentCropMax, IM_COL32(255, 255, 0, 150), 0.0f, 0, 2.0f);
             }
-            
-            // Draw tracker box (red) inside crop box
-            drawList->AddRect(trackerMin, trackerMax, IM_COL32(255, 0, 0, 200), 0.0f, 0, 1.5f);
             
             // Handle Resize Drag (Left Click)
             if (isResizingCropBox)
@@ -413,24 +653,6 @@ void CropVideoModule::drawParametersInNode(float itemWidth, const std::function<
                 drawList->AddRectFilled(ImVec2(imageRectMin.x, rectMax.y), imageRectMax, overlayColor);
                 drawList->AddRectFilled(ImVec2(imageRectMin.x, rectMin.y), ImVec2(rectMin.x, rectMax.y), overlayColor);
                 drawList->AddRectFilled(ImVec2(rectMax.x, rectMin.y), ImVec2(imageRectMax.x, rectMax.y), overlayColor);
-            }
-            else if (isEditingTrackerBox)
-            {
-                ImVec2 dragCurrentPos = mousePos;
-                ImVec2 tRectMin = ImVec2(std::min(dragStartPos.x, dragCurrentPos.x), std::min(dragStartPos.y, dragCurrentPos.y));
-                ImVec2 tRectMax = ImVec2(std::max(dragStartPos.x, dragCurrentPos.x), std::max(dragStartPos.y, dragCurrentPos.y));
-                
-                // Clamp tracker box to be inside the main crop box
-                tRectMin.x = std::max(tRectMin.x, currentCropMin.x);
-                tRectMin.y = std::max(tRectMin.y, currentCropMin.y);
-                tRectMax.x = std::min(tRectMax.x, currentCropMax.x);
-                tRectMax.y = std::min(tRectMax.y, currentCropMax.y);
-                
-                ImU32 overlayColor = IM_COL32(0, 0, 0, 120);
-                drawList->AddRectFilled(currentCropMin, ImVec2(currentCropMax.x, tRectMin.y), overlayColor);
-                drawList->AddRectFilled(ImVec2(currentCropMin.x, tRectMax.y), currentCropMax, overlayColor);
-                drawList->AddRectFilled(ImVec2(currentCropMin.x, tRectMin.y), ImVec2(tRectMin.x, tRectMax.y), overlayColor);
-                drawList->AddRectFilled(ImVec2(tRectMax.x, tRectMin.y), ImVec2(currentCropMax.x, tRectMax.y), overlayColor);
             }
             
             // Handle Move Drag (Right Click)
@@ -484,125 +706,172 @@ void CropVideoModule::drawParametersInNode(float itemWidth, const std::function<
                 isMovingCropBox = false;
                 onModificationEnded();
             }
-            else if (isEditingTrackerBox && ImGui::IsMouseReleased(ImGuiMouseButton_Left))
+        }
+    }
+    
+    // --- GPU Checkbox ---
+    ImGui::Separator();
+    #if WITH_CUDA_SUPPORT
+        bool cudaAvailable = (cv::cuda::getCudaEnabledDeviceCount() > 0);
+        if (!cudaAvailable) ImGui::BeginDisabled();
+        
+        bool useGpu = useGpuParam ? useGpuParam->get() : false;
+        if (ImGui::Checkbox("⚡ Use GPU (CUDA)", &useGpu))
+        {
+            *useGpuParam = useGpu;
+            onModificationEnded();
+        }
+        
+        if (!cudaAvailable)
+        {
+            ImGui::EndDisabled();
+            if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
+                ImGui::SetTooltip("No CUDA-enabled GPU detected.\nCheck that your GPU supports CUDA and drivers are installed.");
+        }
+    #else
+        ImGui::TextDisabled("🚫 GPU support not compiled");
+    #endif
+    
+    // --- CORRECTED MODE SELECTION WITH DISABLED STATES ---
+    if (trackerModeParam && ImGui::BeginCombo("Tracking Mode", trackerModeParam->getCurrentChoiceName().toRawUTF8()))
+    {
+        if (ImGui::Selectable("Manual", mode == 0))
+        {
+            *trackerModeParam = 0;
+            onModificationEnded();
+        }
+        
+        // Disable "Track Face" if CPU cascade is not loaded
+        if (faceCascadeCpu.empty()) ImGui::BeginDisabled();
+        if (ImGui::Selectable("Track Face", mode == 1))
+        {
+            *trackerModeParam = 1;
+            if (mode != 0) // If switching to an auto mode, stop manual tracking
             {
-                isEditingTrackerBox = false;
-                ImVec2 dragEndPos = mousePos;
-                ImVec2 tRectMin = ImVec2(std::min(dragStartPos.x, dragEndPos.x), std::min(dragStartPos.y, dragEndPos.y));
-                ImVec2 tRectMax = ImVec2(std::max(dragStartPos.x, dragEndPos.x), std::max(dragStartPos.y, dragEndPos.y));
-                
-                tRectMin.x = std::max(tRectMin.x, currentCropMin.x);
-                tRectMin.y = std::max(tRectMin.y, currentCropMin.y);
-                tRectMax.x = std::min(tRectMax.x, currentCropMax.x);
-                tRectMax.y = std::min(tRectMax.y, currentCropMax.y);
-                
-                float cropBoxW_px = currentCropMax.x - currentCropMin.x;
-                float cropBoxH_px = currentCropMax.y - currentCropMin.y;
-                if (cropBoxW_px > 0 && cropBoxH_px > 0)
+                const juce::ScopedLock lock(trackerLock);
+                manualTrackingActive.store(false);
+                manualTracker.release();
+            }
+            onModificationEnded();
+        }
+        if (ImGui::IsItemHovered() && faceCascadeCpu.empty())
+            ImGui::SetTooltip("Face model not loaded!");
+        if (faceCascadeCpu.empty()) ImGui::EndDisabled();
+        
+        // Disable "Track Object" if YOLO model is not loaded
+        if (!yoloModelLoaded) ImGui::BeginDisabled();
+        if (ImGui::Selectable("Track Object", mode == 2))
+        {
+            *trackerModeParam = 2;
+            if (mode != 0) // If switching to an auto mode, stop manual tracking
+            {
+                const juce::ScopedLock lock(trackerLock);
+                manualTrackingActive.store(false);
+                manualTracker.release();
+            }
+            onModificationEnded();
+        }
+        if (ImGui::IsItemHovered() && !yoloModelLoaded)
+            ImGui::SetTooltip("Object model not loaded!");
+        if (!yoloModelLoaded) ImGui::EndDisabled();
+        
+        ImGui::EndCombo();
+    }
+    
+    if (mode == 2) // Object Tracking
+    {
+        if (targetClassParam && !yoloClassNames.empty())
+        {
+            int idx = targetClassParam->getIndex();
+            idx = juce::jlimit(0, (int)yoloClassNames.size() - 1, idx);
+            const char* currentLabel = yoloClassNames[idx].c_str();
+            
+            auto& filterBuf = filterBufByNode[nodeId];
+            
+            ImGui::InputTextWithHint("##class_filter", "Filter...", filterBuf.data(), 64);
+            
+            ImGui::SetNextItemWidth(itemWidth * 0.55f);
+            if (ImGui::BeginCombo("Target Class", currentLabel))
+            {
+                juce::String filter = juce::String(filterBuf.data()).toLowerCase();
+                for (int i = 0; i < (int)yoloClassNames.size(); ++i)
                 {
-                    float newTX = (tRectMin.x - currentCropMin.x) / cropBoxW_px;
-                    float newTY = (tRectMin.y - currentCropMin.y) / cropBoxH_px;
-                    float newTW = (tRectMax.x - tRectMin.x) / cropBoxW_px;
-                    float newTH = (tRectMax.y - tRectMin.y) / cropBoxH_px;
-                    
-                    if (auto* p = dynamic_cast<juce::AudioParameterFloat*>(apvts.getParameter("trackerX"))) *p = newTX;
-                    if (auto* p = dynamic_cast<juce::AudioParameterFloat*>(apvts.getParameter("trackerY"))) *p = newTY;
-                    if (auto* p = dynamic_cast<juce::AudioParameterFloat*>(apvts.getParameter("trackerW"))) *p = newTW;
-                    if (auto* p = dynamic_cast<juce::AudioParameterFloat*>(apvts.getParameter("trackerH"))) *p = newTH;
-                    onModificationEnded();
+                    juce::String name(yoloClassNames[i]);
+                    if (filter.isNotEmpty() && !name.toLowerCase().contains(filter))
+                        continue;
+                    if (ImGui::Selectable(name.toRawUTF8(), idx == i))
+                    {
+                        *targetClassParam = i;
+                        onModificationEnded();
+                    }
+                    if (idx == i) ImGui::SetItemDefaultFocus();
                 }
+                ImGui::EndCombo();
+            }
+        }
+        
+        ImGui::SameLine();
+        ImGui::SetNextItemWidth(itemWidth * 0.45f - ImGui::GetStyle().ItemSpacing.x);
+        float conf = confidenceParam ? confidenceParam->load() : 0.5f;
+        if (ImGui::SliderFloat("##conf", &conf, 0.0f, 1.0f, "Conf %.2f"))
+        {
+            if (auto* p = dynamic_cast<juce::AudioParameterFloat*>(apvts.getParameter("confidence")))
+            {
+                *p = conf;
+                onModificationEnded();
             }
         }
     }
     
-    // --- Tracking Buttons ---
-    ImGui::Separator();
-    if (trackingActive.load())
+    if (mode == 0) // Manual Mode
     {
-        ImGui::PushStyleColor(ImGuiCol_Button, (ImVec4)ImColor::HSV(0.0f, 0.6f, 0.6f));
-        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, (ImVec4)ImColor::HSV(0.0f, 0.7f, 0.7f));
-        ImGui::PushStyleColor(ImGuiCol_ButtonActive, (ImVec4)ImColor::HSV(0.0f, 0.8f, 0.8f));
-        if (ImGui::Button("Stop Tracking", ImVec2(itemWidth, 0)))
+        if (manualTrackingActive.load())
         {
-            juce::Logger::writeToLog("[CropVideo][UI] 'Stop Tracking' clicked.");
-            const juce::ScopedLock lock(trackerLock);
-            trackingActive.store(false);
-            tracker.release();
-        }
-        ImGui::PopStyleColor(3);
-    }
-    else
-    {
-        if (ImGui::Button("Start Tracking", ImVec2(itemWidth, 0)))
-        {
-            juce::Logger::writeToLog("[CropVideo][UI] 'Start Tracking' clicked.");
-            const juce::ScopedLock lock(trackerLock);
-            if (!lastFrameForTracker.empty())
+            if (ImGui::Button("Stop Tracking", ImVec2(itemWidth, 0)))
             {
-                juce::Logger::writeToLog("[CropVideo][UI] lastFrameForTracker is valid (" + juce::String(lastFrameForTracker.cols) + "x" + juce::String(lastFrameForTracker.rows) + "). Initializing tracker.");
-                // Get crop box and tracker box from params to initialize tracker
-                float cx = cropXParam ? cropXParam->load() : 0.5f;
-                float cy = cropYParam ? cropYParam->load() : 0.5f;
-                float cw = cropWParam ? cropWParam->load() : 0.5f;
-                float ch = cropHParam ? cropHParam->load() : 0.5f;
-                float tx = apvts.getRawParameterValue("trackerX")->load();
-                float ty = apvts.getRawParameterValue("trackerY")->load();
-                float tw = apvts.getRawParameterValue("trackerW")->load();
-                float th = apvts.getRawParameterValue("trackerH")->load();
-                
-                int frameW = lastFrameForTracker.cols;
-                int frameH = lastFrameForTracker.rows;
-                
-                // Calculate crop box in pixels
-                float cropW_px = cw * frameW;
-                float cropH_px = ch * frameH;
-                float cropX_px = (cx - cw / 2.0f) * frameW;
-                float cropY_px = (cy - ch / 2.0f) * frameH;
-                
-                // Calculate tracker box in pixels (relative to crop box)
-                cv::Rect initBox(
-                    (int)(cropX_px + tx * cropW_px),
-                    (int)(cropY_px + ty * cropH_px),
-                    (int)(tw * cropW_px),
-                    (int)(th * cropH_px)
-                );
-
-                if (initBox.area() > 0)
+                const juce::ScopedLock lock(trackerLock);
+                manualTrackingActive.store(false);
+                manualTracker.release();
+            }
+        }
+        else
+        {
+            if (ImGui::Button("Start Tracking", ImVec2(itemWidth, 0)))
+            {
+                const juce::ScopedLock lock(trackerLock);
+                if (!lastFrameForTracker.empty())
                 {
-                    juce::Logger::writeToLog("[CropVideo][UI] Initializing with tracker box: x=" + juce::String(initBox.x) + " y=" + juce::String(initBox.y) + " w=" + juce::String(initBox.width) + " h=" + juce::String(initBox.height));
-                    try {
-                        tracker = cv::TrackerMIL::create();
-                        tracker->init(lastFrameForTracker, initBox);
-                        trackingActive.store(true);
-                        juce::Logger::writeToLog("[CropVideo][UI] Tracker initialized SUCCESSFULLY.");
-                    } catch (const cv::Exception& e) {
-                        juce::Logger::writeToLog("[CropVideo][UI] CRITICAL: OpenCV exception during tracker->init(): " + juce::String(e.what()));
-                        trackingActive.store(false);
-                        tracker.release();
+                    cv::Rect initBox(
+                        (int)((cropXParam->load() - cropWParam->load()/2.f) * lastFrameForTracker.cols),
+                        (int)((cropYParam->load() - cropHParam->load()/2.f) * lastFrameForTracker.rows),
+                        (int)(cropWParam->load() * lastFrameForTracker.cols),
+                        (int)(cropHParam->load() * lastFrameForTracker.rows)
+                    );
+                    
+                    if (initBox.area() > 0)
+                    {
+                        manualTracker = cv::TrackerMIL::create();
+                        manualTracker->init(lastFrameForTracker, initBox);
+                        manualTrackingActive.store(true);
                     }
                 }
-                else
-                {
-                    juce::Logger::writeToLog("[CropVideo][UI] ERROR: Cannot start tracking with a zero-area box.");
-                }
-            }
-            else
-            {
-                juce::Logger::writeToLog("[CropVideo][UI] ERROR: Cannot start tracking because lastFrameForTracker is empty.");
             }
         }
-        if (ImGui::IsItemHovered()) ImGui::SetTooltip("Lock onto the current crop box and follow it automatically.");
     }
     
     // --- Parameter Sliders ---
+    ImGui::Separator();
     ImGui::PushItemWidth(itemWidth);
     ImGui::Text("Manual Crop Controls:");
+    
+    // Disable sliders if any automatic tracking is active
+    bool slidersDisabled = (mode != 0) || manualTrackingActive.load();
+    if (slidersDisabled) ImGui::BeginDisabled();
     
     auto drawModSlider = [&](const char* label, const char* paramId, std::atomic<float>* paramPtr)
     {
         bool modulated = isParamModulated(juce::String(paramId) + "_mod");
-        bool isControlled = modulated || trackingActive.load();
-        if (isControlled) ImGui::BeginDisabled();
+        if (modulated) ImGui::BeginDisabled();
         
         float value = paramPtr ? paramPtr->load() : 0.5f;
         if (ImGui::SliderFloat(label, &value, 0.0f, 1.0f, "%.3f"))
@@ -614,16 +883,11 @@ void CropVideoModule::drawParametersInNode(float itemWidth, const std::function<
             }
         }
         
-        if (isControlled)
+        if (modulated)
         {
             ImGui::EndDisabled();
             if (ImGui::IsItemHovered())
-            {
-                if (trackingActive.load())
-                    ImGui::SetTooltip("Tracking active");
-                else if (modulated)
-                    ImGui::SetTooltip("CV input connected");
-            }
+                ImGui::SetTooltip("CV input connected");
         }
     };
     
@@ -631,6 +895,8 @@ void CropVideoModule::drawParametersInNode(float itemWidth, const std::function<
     drawModSlider("Center Y", "cropY", cropYParam);
     drawModSlider("Width", "cropW", cropWParam);
     drawModSlider("Height", "cropH", cropHParam);
+    
+    if (slidersDisabled) ImGui::EndDisabled();
     
     ImGui::Separator();
     

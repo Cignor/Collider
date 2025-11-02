@@ -6,7 +6,7 @@
 #=============================================================
 
 #--- Configuration ---
-$projectRoot = $PSScriptRoot
+$projectRoot = Split-Path -Parent $PSScriptRoot
 $outputFile = Join-Path $projectRoot "moofy_TimeStretching_Pattern.txt"
 
 #--- Essential Time-Stretching Files ---

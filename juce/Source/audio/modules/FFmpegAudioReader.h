@@ -23,6 +23,9 @@ public:
     ~FFmpegAudioReader() override;
 
     bool readSamples(int* const* destSamples, int numDestChannels, int startOffsetInDestBuffer, juce::int64 startSampleInFile, int numSamples) override;
+    
+    // Reset internal position tracker - call this before seeking to ensure a seek occurs
+    void resetPosition() { currentPositionInSamples = -1; }
 
 private:
     void cleanup();
@@ -38,6 +41,9 @@ private:
     int streamIndex = -1;
     juce::String filePath;
     bool isInitialized = false;
+    
+    // Track current position for sequential reading (avoid unnecessary seeks)
+    juce::int64 currentPositionInSamples = 0;
 
     // A temporary buffer for holding resampled audio data before copying to JUCE's buffers
     juce::AudioBuffer<float> tempResampledBuffer;

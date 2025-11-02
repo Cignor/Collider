@@ -127,7 +127,7 @@ private:
         {
             if (channels<=0) channels=2;
             const double pitchFactor = std::pow (2.0, (double) pitchSemi / 12.0);
-            const double stepFrames  = (1.0 / (double) juce::jmax (0.001f, timeRatio)) * pitchFactor;
+            const double stepFrames  = (double) juce::jmax (0.001f, timeRatio) * pitchFactor;
             const int availableFrames = (int) (fifo.size() / channels);
             int framesWritten = 0; float* out = outLR;
             while (framesWritten < framesRequested)

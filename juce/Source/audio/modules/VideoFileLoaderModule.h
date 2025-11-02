@@ -79,6 +79,10 @@ private:
     std::atomic<int> lastPosFrame { 0 };
     std::atomic<double> totalDurationMs { 0.0 };
     
+    // Master clock: audio-driven synchronization for video sync
+    std::atomic<juce::int64> currentAudioSamplePosition { 0 }; // The master clock - only advanced by audio thread
+    std::atomic<double> sourceAudioSampleRate { 44100.0 }; // Sample rate of the loaded file
+    
     // Unified, thread-safe seeking mechanism for both video and audio
     std::atomic<float> pendingSeekNormalized { -1.0f };
     
@@ -129,10 +133,10 @@ private:
     std::atomic<bool> audioLoaded { false };
     juce::CriticalSection audioLock;
     
-    // Buffers for audio processing
-    juce::HeapBlock<float> interleavedInput;
-    juce::HeapBlock<float> interleavedOutput;
-    int interleavedCapacityFrames = 0;
+    // FIFO buffer for thread-safe audio streaming
+    juce::AudioBuffer<float> audioFifo;
+    juce::AbstractFifo abstractFifo { 0 };
+    int fifoSize { 0 };
     
     void loadAudioFromVideo();
 };

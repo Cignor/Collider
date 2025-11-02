@@ -1,5 +1,7 @@
 #include "FFmpegAudioReader.h"
 #include <mutex>
+#include <cmath>
+#include <algorithm>
 
 #if defined(_WIN32) || defined(_WIN64)
     #pragma warning(push)
@@ -68,6 +70,7 @@ FFmpegAudioReader::FFmpegAudioReader(const juce::String& path)
 
     decodedFrame = av_frame_alloc();
     packet = av_packet_alloc();
+    currentPositionInSamples = 0; // Initialize position tracker
     isInitialized = (decodedFrame && packet);
 }
 
@@ -97,12 +100,18 @@ bool FFmpegAudioReader::readSamples(int* const* destSamples, int numDestChannels
         }
     }
 
-    // Seek to the requested position within the audio stream. This is a crucial step.
-    int64_t targetTimestamp = (int64_t)((double)startSampleInFile / sampleRate / av_q2d(audioStream->time_base));
-    if (av_seek_frame(formatContext, streamIndex, targetTimestamp, AVSEEK_FLAG_BACKWARD) < 0) {
-        return false;
+    // Only seek if the requested position differs significantly from current position
+    // This allows sequential reading without expensive seeks on every call
+    const juce::int64 seekThreshold = 1000; // Only seek if difference is > 1000 samples
+    if (std::abs(startSampleInFile - currentPositionInSamples) > seekThreshold)
+    {
+        int64_t targetTimestamp = (int64_t)((double)startSampleInFile / sampleRate / av_q2d(audioStream->time_base));
+        if (av_seek_frame(formatContext, streamIndex, targetTimestamp, AVSEEK_FLAG_BACKWARD) < 0) {
+            return false;
+        }
+        avcodec_flush_buffers(codecContext);
     }
-    avcodec_flush_buffers(codecContext);
+    currentPositionInSamples = startSampleInFile;
 
     int samplesWritten = 0;
     while (samplesWritten < numSamples)
@@ -145,6 +154,9 @@ bool FFmpegAudioReader::readSamples(int* const* destSamples, int numDestChannels
         av_packet_unref(packet);
         if (samplesWritten >= numSamples) break;
     }
+    
+    // Update current position after successful read
+    currentPositionInSamples = startSampleInFile + samplesWritten;
 
     return true;
 }

@@ -7,32 +7,56 @@
         <ColorTrackerParams>
           <PARAM id="sourceId" value="0.0"/>
           <PARAM id="zoomLevel" value="1.0"/>
+          <PARAM id="numAutoColors" value="8.0"/>
+          <PARAM id="useGpu"/>
         </ColorTrackerParams>
       </params>
       <extra>
         <ColorTrackerState>
-          <TrackedColor name="Color 1" displayColour="ff161a43" hsvLower0="107" hsvLower1="131"
-                        hsvLower2="27" hsvUpper0="127" hsvUpper1="211" hsvUpper2="107"
-                        tolerance="1.899999976158142"/>
-          <TrackedColor name="Color 2" displayColour="ffa94664" hsvLower0="161" hsvLower1="109"
-                        hsvLower2="129" hsvUpper0="179" hsvUpper1="189" hsvUpper2="209"
-                        tolerance="1.600000023841858"/>
-          <TrackedColor name="Color 3" displayColour="ffd79d9d" hsvLower0="0" hsvLower1="29"
-                        hsvLower2="175" hsvUpper0="10" hsvUpper1="109" hsvUpper2="255"
-                        tolerance="1.899999976158142"/>
-          <TrackedColor name="Color 4" displayColour="ff6d3030" hsvLower0="0" hsvLower1="103"
-                        hsvLower2="69" hsvUpper0="10" hsvUpper1="183" hsvUpper2="149"
-                        tolerance="1.419999957084656"/>
-          <TrackedColor name="Color 5" displayColour="ffceecc4" hsvLower0="43" hsvLower1="3"
-                        hsvLower2="196" hsvUpper0="63" hsvUpper1="83" hsvUpper2="255"
+          <TrackedColor name="Color 1" displayColour="ff6a504a" hsvLower0="0" hsvLower1="42"
+                        hsvLower2="71" hsvUpper0="14" hsvUpper1="112" hsvUpper2="141"
                         tolerance="1.0"/>
-          <TrackedColor name="Color 6" displayColour="ff506c5b" hsvLower0="62" hsvLower1="26"
-                        hsvLower2="68" hsvUpper0="82" hsvUpper1="106" hsvUpper2="148"
-                        tolerance="3.029999971389771"/>
+          <TrackedColor name="Color 2" displayColour="ffc5d1d3" hsvLower0="86" hsvLower1="0"
+                        hsvLower2="176" hsvUpper0="102" hsvUpper1="52" hsvUpper2="246"
+                        tolerance="1.0"/>
+          <TrackedColor name="Color 3" displayColour="ff463030" hsvLower0="0" hsvLower1="45"
+                        hsvLower2="35" hsvUpper0="8" hsvUpper1="115" hsvUpper2="105"
+                        tolerance="1.0"/>
+          <TrackedColor name="Color 4" displayColour="ffae5e4e" hsvLower0="0" hsvLower1="106"
+                        hsvLower2="139" hsvUpper0="13" hsvUpper1="176" hsvUpper2="209"
+                        tolerance="1.0"/>
+          <TrackedColor name="Color 5" displayColour="ffcfa293" hsvLower0="0" hsvLower1="39"
+                        hsvLower2="172" hsvUpper0="16" hsvUpper1="109" hsvUpper2="242"
+                        tolerance="1.0"/>
+          <TrackedColor name="Color 6" displayColour="ff8b7e80" hsvLower0="167" hsvLower1="0"
+                        hsvLower2="104" hsvUpper0="179" hsvUpper1="59" hsvUpper2="174"
+                        tolerance="1.0"/>
+          <TrackedColor name="Color 7" displayColour="ff85121e" hsvLower0="169" hsvLower1="185"
+                        hsvLower2="98" hsvUpper0="179" hsvUpper1="255" hsvUpper2="168"
+                        tolerance="1.0"/>
+          <TrackedColor name="Color 8" displayColour="ff27161c" hsvLower0="161" hsvLower1="76"
+                        hsvLower2="4" hsvUpper0="177" hsvUpper1="146" hsvUpper2="74"
+                        tolerance="1.0"/>
         </ColorTrackerState>
       </extra>
     </module>
-    <module logicalId="6" type="polyvco">
+    <module logicalId="12" type="video_file_loader">
+      <params>
+        <VideoFileLoaderParams>
+          <PARAM id="loop" value="1.0"/>
+          <PARAM id="sync" value="1.0"/>
+          <PARAM id="zoomLevel" value="1.0"/>
+          <PARAM id="engine"/>
+          <PARAM id="in"/>
+          <PARAM id="out"/>
+          <PARAM id="speed"/>
+        </VideoFileLoaderParams>
+      </params>
+      <extra>
+        <VideoFileLoaderState videoFilePath="C:\Users\PIMP-TOWERPRIMUS\Downloads\Traffic - Traffic jam - city Traffic _ Free full hd videos - no copyright.mp4"/>
+      </extra>
+    </module>
+    <module logicalId="21" type="polyvco">
       <params>
         <PolyVCOParams>
           <PARAM id="freq_1" value="440.0"/>
@@ -67,7 +91,7 @@
           <PARAM id="freq_7" value="440.0"/>
           <PARAM id="freq_8" value="440.0"/>
           <PARAM id="freq_9" value="440.0"/>
-          <PARAM id="gate_1" value="0.8799999952316284"/>
+          <PARAM id="gate_1" value="1.0"/>
           <PARAM id="gate_10" value="1.0"/>
           <PARAM id="gate_11" value="1.0"/>
           <PARAM id="gate_12" value="1.0"/>
@@ -78,7 +102,7 @@
           <PARAM id="gate_17" value="1.0"/>
           <PARAM id="gate_18" value="1.0"/>
           <PARAM id="gate_19" value="1.0"/>
-          <PARAM id="gate_2" value="0.7899999618530273"/>
+          <PARAM id="gate_2" value="1.0"/>
           <PARAM id="gate_20" value="1.0"/>
           <PARAM id="gate_21" value="1.0"/>
           <PARAM id="gate_22" value="1.0"/>
@@ -89,19 +113,19 @@
           <PARAM id="gate_27" value="1.0"/>
           <PARAM id="gate_28" value="1.0"/>
           <PARAM id="gate_29" value="1.0"/>
-          <PARAM id="gate_3" value="0.5600000023841858"/>
+          <PARAM id="gate_3" value="1.0"/>
           <PARAM id="gate_30" value="1.0"/>
           <PARAM id="gate_31" value="1.0"/>
           <PARAM id="gate_32" value="1.0"/>
-          <PARAM id="gate_4" value="0.4899999797344208"/>
+          <PARAM id="gate_4" value="1.0"/>
           <PARAM id="gate_5" value="1.0"/>
           <PARAM id="gate_6" value="1.0"/>
           <PARAM id="gate_7" value="1.0"/>
           <PARAM id="gate_8" value="1.0"/>
           <PARAM id="gate_9" value="1.0"/>
-          <PARAM id="numVoices" value="5.0"/>
+          <PARAM id="numVoices" value="8.0"/>
           <PARAM id="portamento" value="0.0"/>
-          <PARAM id="relativeFreqMod" value="1.0"/>
+          <PARAM id="relativeFreqMod" value="0.0"/>
           <PARAM id="wave_1" value="0.0"/>
           <PARAM id="wave_10" value="0.0"/>
           <PARAM id="wave_11" value="0.0"/>
@@ -137,12 +161,12 @@
         </PolyVCOParams>
       </params>
     </module>
-    <module logicalId="7" type="track_mixer">
+    <module logicalId="23" type="track_mixer">
       <params>
         <TrackMixerParams>
           <PARAM id="numTracks" value="8.0"/>
           <PARAM id="numTracks_max" value="64.0"/>
-          <PARAM id="track_gain_1" value="-9.700000762939453"/>
+          <PARAM id="track_gain_1" value="0.0"/>
           <PARAM id="track_gain_10" value="0.0"/>
           <PARAM id="track_gain_11" value="0.0"/>
           <PARAM id="track_gain_12" value="0.0"/>
@@ -153,7 +177,7 @@
           <PARAM id="track_gain_17" value="0.0"/>
           <PARAM id="track_gain_18" value="0.0"/>
           <PARAM id="track_gain_19" value="0.0"/>
-          <PARAM id="track_gain_2" value="-12.09999847412109"/>
+          <PARAM id="track_gain_2" value="0.0"/>
           <PARAM id="track_gain_20" value="0.0"/>
           <PARAM id="track_gain_21" value="0.0"/>
           <PARAM id="track_gain_22" value="0.0"/>
@@ -164,7 +188,7 @@
           <PARAM id="track_gain_27" value="0.0"/>
           <PARAM id="track_gain_28" value="0.0"/>
           <PARAM id="track_gain_29" value="0.0"/>
-          <PARAM id="track_gain_3" value="-11.29999923706055"/>
+          <PARAM id="track_gain_3" value="0.0"/>
           <PARAM id="track_gain_30" value="0.0"/>
           <PARAM id="track_gain_31" value="0.0"/>
           <PARAM id="track_gain_32" value="0.0"/>
@@ -175,7 +199,7 @@
           <PARAM id="track_gain_37" value="0.0"/>
           <PARAM id="track_gain_38" value="0.0"/>
           <PARAM id="track_gain_39" value="0.0"/>
-          <PARAM id="track_gain_4" value="-9.700000762939453"/>
+          <PARAM id="track_gain_4" value="0.0"/>
           <PARAM id="track_gain_40" value="0.0"/>
           <PARAM id="track_gain_41" value="0.0"/>
           <PARAM id="track_gain_42" value="0.0"/>
@@ -186,7 +210,7 @@
           <PARAM id="track_gain_47" value="0.0"/>
           <PARAM id="track_gain_48" value="0.0"/>
           <PARAM id="track_gain_49" value="0.0"/>
-          <PARAM id="track_gain_5" value="-9.700000762939453"/>
+          <PARAM id="track_gain_5" value="0.0"/>
           <PARAM id="track_gain_50" value="0.0"/>
           <PARAM id="track_gain_51" value="0.0"/>
           <PARAM id="track_gain_52" value="0.0"/>
@@ -197,7 +221,7 @@
           <PARAM id="track_gain_57" value="0.0"/>
           <PARAM id="track_gain_58" value="0.0"/>
           <PARAM id="track_gain_59" value="0.0"/>
-          <PARAM id="track_gain_6" value="-6.599998474121094"/>
+          <PARAM id="track_gain_6" value="0.0"/>
           <PARAM id="track_gain_60" value="0.0"/>
           <PARAM id="track_gain_61" value="0.0"/>
           <PARAM id="track_gain_62" value="0.0"/>
@@ -273,42 +297,43 @@
         </TrackMixerParams>
       </params>
     </module>
-    <module logicalId="12" type="video_file_loader">
-      <params>
-        <VideoFileLoaderParams>
-          <PARAM id="loop" value="1.0"/>
-          <PARAM id="sync" value="1.0"/>
-          <PARAM id="zoomLevel" value="1.0"/>
-        </VideoFileLoaderParams>
-      </params>
-      <extra>
-        <VideoFileLoaderState videoFilePath="C:\Users\PIMP-TOWERPRIMUS\Downloads\Traffic - Traffic jam - city Traffic _ Free full hd videos - no copyright.mp4"/>
-      </extra>
-    </module>
   </modules>
   <connections>
-    <connection srcId="5" srcChan="0" dstId="6" dstChan="1"/>
-    <connection srcId="5" srcChan="3" dstId="6" dstChan="2"/>
-    <connection srcId="5" srcChan="6" dstId="6" dstChan="3"/>
-    <connection srcId="5" srcChan="9" dstId="6" dstChan="4"/>
-    <connection srcId="5" srcChan="12" dstId="6" dstChan="5"/>
-    <connection srcId="6" srcChan="0" dstId="7" dstChan="0"/>
-    <connection srcId="6" srcChan="1" dstId="7" dstChan="1"/>
-    <connection srcId="6" srcChan="2" dstId="7" dstChan="2"/>
-    <connection srcId="6" srcChan="3" dstId="7" dstChan="3"/>
-    <connection srcId="6" srcChan="4" dstId="7" dstChan="4"/>
-    <connection srcId="6" srcChan="5" dstId="7" dstChan="5"/>
-    <connection srcId="6" srcChan="6" dstId="7" dstChan="6"/>
-    <connection srcId="6" srcChan="7" dstId="7" dstChan="7"/>
-    <connection srcId="7" srcChan="0" dstId="output" dstChan="0"/>
-    <connection srcId="7" srcChan="1" dstId="output" dstChan="1"/>
+    <connection srcId="5" srcChan="0" dstId="21" dstChan="1"/>
+    <connection srcId="5" srcChan="2" dstId="21" dstChan="65"/>
+    <connection srcId="5" srcChan="3" dstId="21" dstChan="2"/>
+    <connection srcId="5" srcChan="5" dstId="21" dstChan="66"/>
+    <connection srcId="5" srcChan="6" dstId="21" dstChan="3"/>
+    <connection srcId="5" srcChan="8" dstId="21" dstChan="67"/>
+    <connection srcId="5" srcChan="9" dstId="21" dstChan="4"/>
+    <connection srcId="5" srcChan="11" dstId="21" dstChan="68"/>
+    <connection srcId="5" srcChan="12" dstId="21" dstChan="5"/>
+    <connection srcId="5" srcChan="14" dstId="21" dstChan="69"/>
+    <connection srcId="5" srcChan="15" dstId="21" dstChan="6"/>
+    <connection srcId="5" srcChan="17" dstId="21" dstChan="70"/>
+    <connection srcId="5" srcChan="18" dstId="21" dstChan="7"/>
+    <connection srcId="5" srcChan="20" dstId="21" dstChan="71"/>
+    <connection srcId="5" srcChan="21" dstId="21" dstChan="8"/>
+    <connection srcId="5" srcChan="23" dstId="21" dstChan="72"/>
+    <connection srcId="5" srcChan="72" dstId="21" dstChan="0"/>
+    <connection srcId="5" srcChan="72" dstId="23" dstChan="64"/>
     <connection srcId="12" srcChan="0" dstId="5" dstChan="0"/>
+    <connection srcId="21" srcChan="0" dstId="23" dstChan="0"/>
+    <connection srcId="21" srcChan="1" dstId="23" dstChan="1"/>
+    <connection srcId="21" srcChan="2" dstId="23" dstChan="2"/>
+    <connection srcId="21" srcChan="3" dstId="23" dstChan="3"/>
+    <connection srcId="21" srcChan="4" dstId="23" dstChan="4"/>
+    <connection srcId="21" srcChan="5" dstId="23" dstChan="5"/>
+    <connection srcId="21" srcChan="6" dstId="23" dstChan="6"/>
+    <connection srcId="21" srcChan="7" dstId="23" dstChan="7"/>
+    <connection srcId="23" srcChan="0" dstId="output" dstChan="0"/>
+    <connection srcId="23" srcChan="1" dstId="output" dstChan="1"/>
   </connections>
   <NodeEditorUI>
-    <node id="5" x="766.0" y="501.0"/>
-    <node id="6" x="1657.0" y="352.0"/>
-    <node id="7" x="2198.2939453125" y="454.3846435546875"/>
+    <node id="5" x="540.0" y="286.0"/>
     <node id="12" x="-192.0" y="687.0"/>
+    <node id="21" x="1430.0" y="445.0"/>
+    <node id="23" x="1946.0" y="490.0"/>
     <node id="0" x="2848.54541015625" y="452.2258911132812"/>
   </NodeEditorUI>
 </ModularSynthPreset>

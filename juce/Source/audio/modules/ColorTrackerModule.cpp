@@ -24,13 +24,15 @@ juce::AudioProcessorValueTreeState::ParameterLayout ColorTrackerModule::createPa
     #endif
     params.push_back(std::make_unique<juce::AudioParameterBool>(
         "useGpu", "Use GPU (CUDA)", defaultGpu));
+    params.push_back(std::make_unique<juce::AudioParameterInt>(
+        "numAutoColors", "Auto-Track Colors", 2, 24, 12));
     return { params.begin(), params.end() };
 }
 
 ColorTrackerModule::ColorTrackerModule()
     : ModuleProcessor(BusesProperties()
                       .withInput("Input", juce::AudioChannelSet::mono(), true)
-                      .withOutput("CV Out", juce::AudioChannelSet::discreteChannels(24), true) // up to 8 colors x 3
+                      .withOutput("CV Out", juce::AudioChannelSet::discreteChannels(73), true) // 24 colors x 3 + 1 for numColors
                       .withOutput("Video Out", juce::AudioChannelSet::mono(), true)), // PASSTHROUGH
       juce::Thread("Color Tracker Thread"),
       apvts(*this, nullptr, "ColorTrackerParams", createParameterLayout())
@@ -38,6 +40,7 @@ ColorTrackerModule::ColorTrackerModule()
     sourceIdParam = apvts.getRawParameterValue("sourceId");
     zoomLevelParam = apvts.getRawParameterValue("zoomLevel");
     useGpuParam = dynamic_cast<juce::AudioParameterBool*>(apvts.getParameter("useGpu"));
+    numAutoColorsParam = dynamic_cast<juce::AudioParameterInt*>(apvts.getParameter("numAutoColors"));
     fifoBuffer.resize(16);
 }
 
@@ -161,7 +164,17 @@ void ColorTrackerModule::run()
                         cv::Moments m = cv::moments(c);
                         float cx = (m.m00 > 0.0) ? (float)(m.m10 / m.m00) / (float)frame.cols : 0.5f;
                         float cy = (m.m00 > 0.0) ? (float)(m.m01 / m.m00) / (float)frame.rows : 0.5f;
-                        float area = juce::jlimit(0.0f, 1.0f, (float)(maxArea / (frame.cols * frame.rows)));
+                        
+                        // Normalize area to frame size (0.0 to 1.0)
+                        float normalizedArea = juce::jlimit(0.0f, 1.0f, (float)(maxArea / (frame.cols * frame.rows)));
+                        
+                        // Apply power curve to boost smaller values, then map to [0.5, 1.0]
+                        // sqrt curve: smaller areas get boosted more, large areas scale smoothly
+                        float sqrtArea = std::sqrt(normalizedArea);
+                        // Map sqrt [0,1] to [0.5, 1.0]: 0.5 + sqrtArea * 0.5
+                        float area = 0.5f + sqrtArea * 0.5f;
+                        area = juce::jlimit(0.5f, 1.0f, area);
+                        
                         result.emplace_back(cx, cy, area);
                         
                         // Draw
@@ -171,6 +184,7 @@ void ColorTrackerModule::run()
                     }
                     else
                     {
+                        // No color found: strict 0 output
                         result.emplace_back(0.5f, 0.5f, 0.0f);
                     }
                 }
@@ -286,6 +300,75 @@ void ColorTrackerModule::addColorAt(int x, int y)
     isColorPickerActive.store(false);
 }
 
+void ColorTrackerModule::autoTrackColors()
+{
+    cv::Mat frameCopy;
+    {
+        const juce::ScopedLock lk(frameLock);
+        if (!lastFrameBgr.empty())
+            frameCopy = lastFrameBgr.clone();
+    }
+
+    if (frameCopy.empty())
+    {
+        juce::Logger::writeToLog("[ColorTracker] Auto-Track failed: No video frame available.");
+        return;
+    }
+
+    juce::Logger::writeToLog("[ColorTracker] Starting Auto-Track color analysis...");
+
+    // 1. Resize for performance. K-means is slow on large images.
+    cv::Mat smallFrame;
+    cv::resize(frameCopy, smallFrame, cv::Size(100, (int)(100.0f * (float)frameCopy.rows / (float)frameCopy.cols)));
+
+    // 2. Reshape image into a list of pixels for clustering
+    cv::Mat data;
+    smallFrame.convertTo(data, CV_32F);
+    data = data.reshape(1, data.total());
+
+    // 3. Perform k-means clustering to find the dominant colors
+    const int k = numAutoColorsParam ? numAutoColorsParam->get() : 12;
+    cv::Mat labels, centers;
+    cv::kmeans(data, k, labels,
+               cv::TermCriteria(cv::TermCriteria::EPS + cv::TermCriteria::COUNT, 10, 1.0),
+               3, cv::KMEANS_PP_CENTERS, centers);
+
+    // 4. Clear existing colors and create new ones from the cluster centers
+    const juce::ScopedLock lock(colorListLock);
+    trackedColors.clear();
+
+    for (int i = 0; i < centers.rows; ++i)
+    {
+        cv::Vec3f center_bgr_float = centers.at<cv::Vec3f>(i);
+        cv::Vec3b bgr8((uchar)center_bgr_float[0], (uchar)center_bgr_float[1], (uchar)center_bgr_float[2]);
+
+        // Convert the BGR center to HSV to create a tracking window
+        cv::Mat onePix(1,1,CV_8UC3);
+        onePix.at<cv::Vec3b>(0,0) = bgr8;
+        cv::Mat onePixHsv;
+        cv::cvtColor(onePix, onePixHsv, cv::COLOR_BGR2HSV);
+        cv::Vec3b avgHsv = onePixHsv.at<cv::Vec3b>(0,0);
+        int avgHue = (int)avgHsv[0];
+        int avgSat = (int)avgHsv[1];
+        int avgVal = (int)avgHsv[2];
+
+        TrackedColor tc;
+        tc.name = juce::String("Color ") + juce::String(i + 1);
+        tc.hsvLower = cv::Scalar(
+            juce::jlimit(0, 179, avgHue - 8),
+            juce::jlimit(0, 255, avgSat - 35),
+            juce::jlimit(0, 255, avgVal - 35));
+        tc.hsvUpper = cv::Scalar(
+            juce::jlimit(0, 179, avgHue + 8),
+            juce::jlimit(0, 255, avgSat + 35),
+            juce::jlimit(0, 255, avgVal + 35));
+        tc.displayColour = juce::Colour(bgr8[2], bgr8[1], bgr8[0]);
+        trackedColors.push_back(tc);
+    }
+    
+    juce::Logger::writeToLog("[ColorTracker] Auto-Track complete. Found " + juce::String((int)trackedColors.size()) + " colors.");
+}
+
 juce::ValueTree ColorTrackerModule::getExtraStateTree() const
 {
     juce::ValueTree state("ColorTrackerState");
@@ -349,7 +432,7 @@ void ColorTrackerModule::processBlock(juce::AudioBuffer<float>& buffer, juce::Mi
             lastResultForAudio = fifoBuffer[readScope.startIndex1];
     }
 
-    // Map each tracked color to 3 outputs: X, Y, Area (bus 0 - CV Out)
+    // Map each tracked color to 3 outputs: X, Y, Area Gate (bus 0 - CV Out)
     auto cvOutBus = getBusBuffer(buffer, false, 0);
     for (size_t i = 0; i < lastResultForAudio.size(); ++i)
     {
@@ -371,6 +454,15 @@ void ColorTrackerModule::processBlock(juce::AudioBuffer<float>& buffer, juce::Mi
         }
     }
     
+    // Output the number of tracked colors on channel 72
+    const int numColorsChannel = 72;
+    if (cvOutBus.getNumChannels() > numColorsChannel)
+    {
+        const juce::ScopedLock lock(colorListLock);
+        float numColorsValue = (float)trackedColors.size();
+        juce::FloatVectorOperations::fill(cvOutBus.getWritePointer(numColorsChannel), numColorsValue, cvOutBus.getNumSamples());
+    }
+    
     // Passthrough Video ID on bus 1
     auto videoOutBus = getBusBuffer(buffer, false, 1);
     if (videoOutBus.getNumChannels() > 0)
@@ -385,11 +477,16 @@ std::vector<DynamicPinInfo> ColorTrackerModule::getDynamicOutputPins() const
 {
     std::vector<DynamicPinInfo> pins;
     const juce::ScopedLock lock(colorListLock);
+    
+    // Add "Num Colors" output first (channel 72)
+    pins.emplace_back("Num Colors", 72, PinDataType::CV);
+    
+    // Add color outputs: X, Y, Area Gate for each tracked color
     for (size_t i = 0; i < trackedColors.size(); ++i)
     {
         pins.emplace_back(trackedColors[i].name + " X", (int)(i * 3 + 0), PinDataType::CV);
         pins.emplace_back(trackedColors[i].name + " Y", (int)(i * 3 + 1), PinDataType::CV);
-        pins.emplace_back(trackedColors[i].name + " Area", (int)(i * 3 + 2), PinDataType::CV);
+        pins.emplace_back(trackedColors[i].name + " Area Gate", (int)(i * 3 + 2), PinDataType::Gate);
     }
     return pins;
 }
@@ -455,9 +552,56 @@ void ColorTrackerModule::drawParametersInNode(float itemWidth,
         isColorPickerActive.store(true);
     }
 
+    ImGui::Separator();
+    int k = numAutoColorsParam ? numAutoColorsParam->get() : 12;
+    ImGui::PushItemWidth(itemWidth - 60.0f); // Make space for button
+    if (ImGui::SliderInt("##numautocolors", &k, 2, 24, "Auto-Track %d Colors"))
+    {
+        if (numAutoColorsParam) *numAutoColorsParam = k;
+        onModificationEnded();
+    }
+    ImGui::PopItemWidth();
+    ImGui::SameLine();
+    if (ImGui::Button("Go", ImVec2(50.0f, 0)))
+    {
+        autoTrackColors();
+        onModificationEnded(); // Create an undo state
+    }
+    if (ImGui::IsItemHovered())
+    {
+        ImGui::SetTooltip("Automatically finds the N most dominant colors in the current frame.\nThis will replace all existing tracked colors.");
+    }
+
     if (isColorPickerActive.load())
     {
         ImGui::TextColored(ImVec4(1.f,1.f,0.f,1.f), "Click on the video preview to pick a color");
+    }
+
+    // Auto-Connect Buttons
+    ImGui::Spacing();
+    ImGui::Separator();
+    ImGui::Spacing();
+    
+    const int numColors = getTrackedColorsCount();
+    if (numColors > 0)
+    {
+        if (ImGui::Button("Connect to PolyVCO", ImVec2(itemWidth, 0)))
+        {
+            autoConnectPolyVCOTriggered = true;
+        }
+        if (ImGui::Button("Connect to Samplers", ImVec2(itemWidth, 0)))
+        {
+            autoConnectSamplersTriggered = true;
+        }
+        ImGui::TextDisabled("Creates %d voices based on tracked colors", numColors);
+    }
+    else
+    {
+        ImGui::BeginDisabled();
+        ImGui::Button("Connect to PolyVCO", ImVec2(itemWidth, 0));
+        ImGui::Button("Connect to Samplers", ImVec2(itemWidth, 0));
+        ImGui::EndDisabled();
+        ImGui::TextDisabled("No colors tracked. Add colors first.");
     }
 
     // Zoom controls (-/+) like PoseEstimator

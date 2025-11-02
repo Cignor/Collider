@@ -7,13 +7,14 @@ FILE: juce\\Source\\audio\\modules\\VideoFileLoaderModule.h
 #pragma once
 
 #include "ModuleProcessor.h"
+#include "FFmpegAudioReader.h"
+#include "../dsp/TimePitchProcessor.h"
 #include <opencv2/core.hpp>
 #include <opencv2/videoio.hpp>
 #include <juce_core/juce_core.h>
 #include <juce_audio_processors/juce_audio_processors.h>
 #include <juce_audio_formats/juce_audio_formats.h>
 #include <juce_audio_basics/juce_audio_basics.h>
-#include <juce_audio_devices/juce_audio_devices.h>
 #include <juce_graphics/juce_graphics.h>
 
 /**
@@ -72,6 +73,8 @@ private:
     std::atomic<float>* inNormParam = nullptr;  // 0..1
     std::atomic<float>* outNormParam = nullptr; // 0..1
     std::atomic<float>* syncParam = nullptr; // bool as float
+    juce::AudioParameterChoice* engineParam = nullptr;
+    
     std::atomic<bool> playing { true };
     std::atomic<bool> syncToTransport { true };
     std::atomic<bool> lastTransportPlaying { false };
@@ -80,10 +83,14 @@ private:
     std::atomic<int> lastFourcc { 0 }; // cached FOURCC
     std::atomic<int> pendingSeekFrame { -1 };
     std::atomic<int> lastPosFrame { 0 };
-    // Normalized pending requests (used when totalFrames not ready yet)
-    std::atomic<float> pendingSeekNorm { -1.0f };
-    std::atomic<float> pendingStartNorm { -1.0f };
     std::atomic<double> totalDurationMs { 0.0 };
+    
+    // Master clock: audio-driven synchronization for video sync
+    std::atomic<juce::int64> currentAudioSamplePosition { 0 }; // The master clock - only advanced by audio thread
+    std::atomic<double> sourceAudioSampleRate { 44100.0 }; // Sample rate of the loaded file
+    
+    // Unified, thread-safe seeking mechanism for both video and audio
+    std::atomic<float> pendingSeekNormalized { -1.0f };
     
     cv::VideoCapture videoCapture;
     juce::CriticalSection captureLock;
@@ -124,18 +131,20 @@ private:
     // Cached metadata (atomic for cross-thread visibility)
     std::atomic<int> totalFrames { 0 };
     
-    // Audio playback
-    juce::AudioFormatManager audioFormatManager;
-    std::unique_ptr<juce::AudioFormatReaderSource> audioSource;
-    juce::AudioTransportSource audioTransport;
-    juce::AudioBuffer<float> audioBuffer;
+    // Audio playback engine
+    std::unique_ptr<FFmpegAudioReader> audioReader;
+    TimePitchProcessor timePitch;
+    double audioReadPosition = 0.0;
     double audioSampleRate = 44100.0;
-    std::atomic<double> audioPosition { 0.0 }; // Position in samples
     std::atomic<bool> audioLoaded { false };
     juce::CriticalSection audioLock;
     
+    // FIFO buffer for thread-safe audio streaming
+    juce::AudioBuffer<float> audioFifo;
+    juce::AbstractFifo abstractFifo { 0 };
+    int fifoSize { 0 };
+    
     void loadAudioFromVideo();
-    void updateAudioPlayback();
 };
 
 
@@ -169,6 +178,9 @@ juce::AudioProcessorValueTreeState::ParameterLayout VideoFileLoaderModule::creat
     params.push_back(std::make_unique<juce::AudioParameterFloat>(
         "out", "End", 0.0f, 1.0f, 1.0f));
     
+    // Add the engine selection parameter, defaulting to Naive for performance
+    params.push_back(std::make_unique<juce::AudioParameterChoice>("engine", "Engine", juce::StringArray { "RubberBand", "Naive" }, 1));
+    
     return { params.begin(), params.end() };
 }
 
@@ -185,10 +197,8 @@ VideoFileLoaderModule::VideoFileLoaderModule()
     inNormParam = apvts.getRawParameterValue("in");
     outNormParam = apvts.getRawParameterValue("out");
     syncParam = apvts.getRawParameterValue("sync");
+    engineParam = dynamic_cast<juce::AudioParameterChoice*>(apvts.getParameter("engine"));
     syncToTransport.store(syncParam && (*syncParam > 0.5f));
-    
-    // Initialize audio format manager
-    audioFormatManager.registerBasicFormats();
 }
 
 VideoFileLoaderModule::~VideoFileLoaderModule()
@@ -199,8 +209,14 @@ VideoFileLoaderModule::~VideoFileLoaderModule()
 
 void VideoFileLoaderModule::prepareToPlay(double sampleRate, int samplesPerBlock)
 {
+    const juce::ScopedLock lock(audioLock);
     audioSampleRate = sampleRate;
-    audioTransport.prepareToPlay(samplesPerBlock, sampleRate);
+    timePitch.prepare(sampleRate, 2, samplesPerBlock); // Prepare for stereo
+    
+    // Initialize FIFO to ~5 seconds of stereo audio
+    fifoSize = (int)(sampleRate * 5.0);
+    audioFifo.setSize(2, fifoSize, false, true, true); // 2 channels
+    abstractFifo.setTotalSize(fifoSize);
     
     startThread(juce::Thread::Priority::normal);
     // If we already had a file open previously, request re-open on thread start
@@ -210,9 +226,11 @@ void VideoFileLoaderModule::prepareToPlay(double sampleRate, int samplesPerBlock
 
 void VideoFileLoaderModule::releaseResources()
 {
-    audioTransport.releaseResources();
     signalThreadShouldExit();
     stopThread(5000);
+    
+    const juce::ScopedLock lock(audioLock);
+    timePitch.reset();
 }
 
 void VideoFileLoaderModule::chooseVideoFile()
@@ -350,97 +368,52 @@ void VideoFileLoaderModule::run()
             continue;
         }
         
-        // Apply any pending seeks (UI-driven) before processing
-        int tfLocal = totalFrames.load();
+        // --- UNIFIED SEEK LOGIC ---
+        // This is now the single point of control for seeking, triggered by UI.
+        float normSeekPos = pendingSeekNormalized.exchange(-1.0f);
+        if (normSeekPos >= 0.0f)
         {
-            // 1) If we have a normalized pending seek, prefer time-based seek when duration is known
-            float pendingNorm = pendingSeekNorm.exchange(-1.0f);
-            if (pendingNorm >= 0.0f)
-            {
-                const double durMs = totalDurationMs.load();
-                if (durMs > 0.0)
-                {
-                    double seekToMs = juce::jlimit(0.0, durMs, (double)pendingNorm * durMs);
-                    const juce::ScopedLock capLock(captureLock);
-                    if (videoCapture.isOpened())
-                        videoCapture.set(cv::CAP_PROP_POS_MSEC, seekToMs);
-                    needPreviewFrame.store(true);
-                    juce::Logger::writeToLog("[VideoFileLoader][Seek] Applied normalized seek via MSEC=" + juce::String(seekToMs));
-                }
-                else if (tfLocal > 1)
-                {
-                    int toFrame = (int) std::round(juce::jlimit(0.0f, 1.0f, pendingNorm) * (tfLocal - 1));
-                    pendingSeekFrame.store(toFrame);
-                }
-                else
-                {
-                    const juce::ScopedLock capLock(captureLock);
-                    if (videoCapture.isOpened())
-                        videoCapture.set(cv::CAP_PROP_POS_AVI_RATIO, juce::jlimit(0.0, 1.0, (double) pendingNorm));
-                    needPreviewFrame.store(true);
-                    juce::Logger::writeToLog("[VideoFileLoader][Seek] WARNING ratio seek");
-                }
-            }
-
-            // 2) If we have a normalized pending start and frames are now known, convert and seek
-            float pendingStart = pendingStartNorm.exchange(-1.0f);
-            if (pendingStart >= 0.0f)
-            {
-                const double durMs = totalDurationMs.load();
-                if (durMs > 0.0)
-                {
-                    double seekToMs = juce::jlimit(0.0, durMs, (double)pendingStart * durMs);
-                    const juce::ScopedLock capLock(captureLock);
-                    if (videoCapture.isOpened())
-                        videoCapture.set(cv::CAP_PROP_POS_MSEC, seekToMs);
-                    needPreviewFrame.store(true);
-                    juce::Logger::writeToLog("[VideoFileLoader][Seek] Applied normalized start via MSEC=" + juce::String(seekToMs));
-                }
-                else if (tfLocal > 1)
-                {
-                    int inF = (int) std::round(juce::jlimit(0.0f, 1.0f, pendingStart) * (tfLocal - 1));
-                    pendingSeekFrame.store(inF);
-                }
-                else
-                {
-                    const juce::ScopedLock capLock(captureLock);
-                    if (videoCapture.isOpened())
-                        videoCapture.set(cv::CAP_PROP_POS_AVI_RATIO, juce::jlimit(0.0, 1.0, (double) pendingStart));
-                    needPreviewFrame.store(true);
-                    juce::Logger::writeToLog("[VideoFileLoader][Seek] Applied normalized start ratio=" + juce::String(pendingStart, 3));
-                }
-            }
-        }
-
-        // On play edge: seek to IN point
-        bool nowPlaying = playing.load();
-        bool wasPlaying = lastPlaying.exchange(nowPlaying);
-        if (nowPlaying && !wasPlaying)
-        {
-            float inN = inNormParam ? inNormParam->load() : 0.0f;
             const double durMs = totalDurationMs.load();
             if (durMs > 0.0)
             {
-                double seekToMs = juce::jlimit(0.0, durMs, (double)inN * durMs);
+                double seekToMs = juce::jlimit(0.0, durMs, (double)normSeekPos * durMs);
+                
+                // Seek video
                 const juce::ScopedLock capLock(captureLock);
                 if (videoCapture.isOpened())
                     videoCapture.set(cv::CAP_PROP_POS_MSEC, seekToMs);
-                juce::Logger::writeToLog("[VideoFileLoader][PlayEdge] Seeking to in(ms)=" + juce::String(seekToMs));
+                
+                // Seek audio by updating the read position - clear FIFO and reset
+                const juce::ScopedLock audioLk(audioLock);
+                if (audioReader) {
+                    audioReadPosition = normSeekPos * audioReader->lengthInSamples;
+                    currentAudioSamplePosition.store((juce::int64)audioReadPosition); // SET THE MASTER CLOCK
+                    audioReader->resetPosition(); // Force seek on next read
+                    abstractFifo.reset(); // Clear FIFO on seek
+                    timePitch.reset(); // Reset time stretcher state after seek
+                }
             }
-            else if (tfLocal > 1)
-            {
-                int inF = juce::jlimit(0, juce::jmax(1, tfLocal) - 1, (int) std::round(inN * (tfLocal - 1)));
-                pendingSeekFrame.store(inF);
-                juce::Logger::writeToLog("[VideoFileLoader][PlayEdge] Seeking to inF=" + juce::String(inF));
-            }
+            // Fallback to ratio seek if duration is not known
             else
             {
-                pendingSeekNorm.store(juce::jlimit(0.0f, 1.0f, inN));
-                juce::Logger::writeToLog("[VideoFileLoader][PlayEdge] Seeking to inNorm=" + juce::String(inN, 3));
+                const juce::ScopedLock capLock(captureLock);
+                if (videoCapture.isOpened())
+                    videoCapture.set(cv::CAP_PROP_POS_AVI_RATIO, (double)normSeekPos);
+                
+                // Seek audio by ratio - clear FIFO and reset
+                const juce::ScopedLock audioLk(audioLock);
+                if (audioReader) {
+                    audioReadPosition = normSeekPos * audioReader->lengthInSamples;
+                    currentAudioSamplePosition.store((juce::int64)audioReadPosition); // SET THE MASTER CLOCK
+                    audioReader->resetPosition(); // Force seek on next read
+                    abstractFifo.reset(); // Clear FIFO on seek
+                    timePitch.reset();
+                }
             }
             needPreviewFrame.store(true);
         }
 
+        // Legacy frame-based seek support (for compatibility)
         int seekTo = pendingSeekFrame.exchange(-1);
         if (seekTo >= 0)
         {
@@ -448,7 +421,40 @@ void VideoFileLoaderModule::run()
             if (videoCapture.isOpened())
                 videoCapture.set(cv::CAP_PROP_POS_FRAMES, (double) seekTo);
             needPreviewFrame.store(true);
-            juce::Logger::writeToLog("[VideoFileLoader][Seek] Applied pending seek to frame=" + juce::String(seekTo));
+            
+            // Also seek audio - clear FIFO and reset position
+            const juce::ScopedLock audioLk(audioLock);
+            if (audioReader) {
+                int tfLocal = totalFrames.load();
+                if (tfLocal > 1) {
+                    float normPos = (float)seekTo / (float)(tfLocal - 1);
+                    audioReadPosition = normPos * audioReader->lengthInSamples;
+                    currentAudioSamplePosition.store((juce::int64)audioReadPosition); // SET THE MASTER CLOCK
+                    audioReader->resetPosition(); // Force seek on next read
+                    abstractFifo.reset(); // Clear FIFO on seek
+                    timePitch.reset();
+                }
+            }
+        }
+
+        // On play edge: seek to IN point using unified seek
+        bool nowPlaying = playing.load();
+        bool wasPlaying = lastPlaying.exchange(nowPlaying);
+        if (nowPlaying && !wasPlaying)
+        {
+            float inN = inNormParam ? inNormParam->load() : 0.0f;
+            pendingSeekNormalized.store(inN); // Use unified seek
+            needPreviewFrame.store(true);
+            
+            // Also seek audio - clear FIFO and reset position
+            const juce::ScopedLock audioLk(audioLock);
+            if (audioReader) {
+                audioReadPosition = inN * audioReader->lengthInSamples;
+                currentAudioSamplePosition.store((juce::int64)audioReadPosition); // SET THE MASTER CLOCK
+                audioReader->resetPosition(); // Force seek on next read
+                abstractFifo.reset(); // Clear FIFO on seek
+                timePitch.reset();
+            }
         }
 
         // Respect play/pause
@@ -488,111 +494,132 @@ void VideoFileLoaderModule::run()
             continue;
         }
 
-        // Time the frame processing to maintain correct playback speed
-        auto loopStartTime = juce::Time::getMillisecondCounterHiRes();
+        // Get current UI settings for this iteration
+        const bool isLoopingEnabled = loopParam && loopParam->load() > 0.5f;
+        const float startNormalized = inNormParam ? inNormParam->load() : 0.0f;
+        const float endNormalized = outNormParam ? outNormParam->load() : 1.0f;
         
-        cv::Mat frame;
-        if (videoCapture.isOpened())
-            videoCapture.read(frame);
-        if (!frame.empty())
+        // ==============================================================================
+        //  SECTION 1: AUDIO DECODER (The "Producer")
+        //  This thread's only job is to decode audio and keep the FIFO buffer full,
+        //  respecting the start/end points and looping its read position.
+        // ==============================================================================
+        if (playing.load() && audioLoaded.load() && audioReader && abstractFifo.getFreeSpace() > 8192)
         {
-            // Publish frame to central manager
-            VideoFrameManager::getInstance().setFrame(getLogicalId(), frame);
+            const juce::ScopedLock audioLk(audioLock);
+            if (audioReader) 
+            {
+                const juce::int64 startSample = (juce::int64)(startNormalized * audioReader->lengthInSamples);
+                juce::int64 endSample = (juce::int64)(endNormalized * audioReader->lengthInSamples);
+                if (endSample <= startSample) endSample = audioReader->lengthInSamples;
+                
+                // If the decoder's read-head is past the end point, loop it back to the start.
+                if (audioReadPosition >= endSample) {
+                    if (isLoopingEnabled) {
+                        audioReadPosition = (double)startSample;
+                    }
+                }
+                
+                // If the read-head is within the valid range, decode a chunk of audio.
+                if (audioReadPosition < endSample) {
+                    const int samplesToRead = 4096;
+                    const int numSamplesAvailable = (int)(endSample - audioReadPosition);
+                    const int numSamplesToReadNow = juce::jmin(samplesToRead, numSamplesAvailable);
+                    
+                    if (numSamplesToReadNow > 0) {
+                        juce::AudioBuffer<float> tempReadBuffer(2, numSamplesToReadNow);
+                        float* channelPointers[] = { tempReadBuffer.getWritePointer(0), tempReadBuffer.getWritePointer(1) };
+                        if (audioReader->readSamples(reinterpret_cast<int* const*>(channelPointers), 2, 0, (juce::int64)audioReadPosition, numSamplesToReadNow)) {
+                            audioReadPosition += numSamplesToReadNow;
+                            
+                            // Write decoded audio into the FIFO buffer for the audio thread
+                            int s1, z1, s2, z2;
+                            abstractFifo.prepareToWrite(numSamplesToReadNow, s1, z1, s2, z2);
+                            if (z1 > 0) audioFifo.copyFrom(0, s1, tempReadBuffer, 0, 0, z1);
+                            if (z1 > 0) audioFifo.copyFrom(1, s1, tempReadBuffer, 1, 0, z1);
+                            if (z2 > 0) audioFifo.copyFrom(0, s2, tempReadBuffer, 0, z1, z2);
+                            if (z2 > 0) audioFifo.copyFrom(1, s2, tempReadBuffer, 1, z1, z2);
+                            abstractFifo.finishedWrite(z1 + z2);
+                        }
+                    }
+                }
+            }
+        }
+        
+        // ==============================================================================
+        //  SECTION 2: VIDEO DISPLAY (The "Slave")
+        //  This thread syncs the video to the master audio clock and handles the actual loop event.
+        // ==============================================================================
+        if (playing.load() && sourceIsOpen && totalFrames.load() > 1 && videoFps > 0)
+        {
+            // Get the current time from the master audio clock
+            const juce::int64 audioMasterPosition = currentAudioSamplePosition.load();
+            const double sourceRate = sourceAudioSampleRate.load();
+            const double currentTimeInSeconds = (double)audioMasterPosition / sourceRate;
             
-            // Update local preview
-            updateGuiFrame(frame);
-            lastPosFrame.store((int) videoCapture.get(cv::CAP_PROP_POS_FRAMES));
-            if (lastFourcc.load() == 0)
-                lastFourcc.store((int) videoCapture.get(cv::CAP_PROP_FOURCC));
-            // If frame count was unknown at open time, refresh it after first (or any) read
-            if (totalFrames.load() <= 1)
+            // Calculate the target video frame that corresponds to the audio time
+            int targetVideoFrame = (int)(currentTimeInSeconds * videoFps);
+            
+            const int totalVideoFrames = totalFrames.load();
+            const int startFrame = (int)(startNormalized * totalVideoFrames);
+            const int endFrame = (int)(endNormalized * totalVideoFrames);
+            
+            // **THE CRITICAL FIX**: Check if the MASTER AUDIO CLOCK has passed the end point.
+            if (targetVideoFrame >= endFrame)
             {
-                int tf = (int) videoCapture.get(cv::CAP_PROP_FRAME_COUNT);
-                if (tf > 1)
+                if (isLoopingEnabled)
                 {
-                    totalFrames.store(tf);
-                    if (videoFps > 0.0)
-                        totalDurationMs.store((double)tf * (1000.0 / videoFps));
-                    juce::Logger::writeToLog("[VideoFileLoader] Frame count acquired after playing read: " + juce::String(tf));
-                }
-            }
-
-            // Trim window enforcement (only when frame count available)
-            if (totalFrames.load() > 1)
-            {
-                int pos = 0;
-                {
+                    // The loop is triggered HERE. Atomically reset all playback state for both audio and video.
+                    const juce::ScopedLock audioLk(audioLock);
                     const juce::ScopedLock capLock(captureLock);
-                    if (videoCapture.isOpened())
-                        pos = (int) videoCapture.get(cv::CAP_PROP_POS_FRAMES);
+                    
+                    const juce::int64 startSample = (juce::int64)(startNormalized * audioReader->lengthInSamples);
+                    
+                    // Reset master clock to the start position
+                    currentAudioSamplePosition.store(startSample); 
+                    // Reset audio decoder's read position
+                    audioReadPosition = (double)startSample; 
+                    // Reset video to the start frame
+                    if (videoCapture.isOpened()) videoCapture.set(cv::CAP_PROP_POS_FRAMES, startFrame); 
+                    // Flush all buffers
+                    abstractFifo.reset(); 
+                    timePitch.reset(); 
+                    
+                    // The new target is now the start frame
+                    targetVideoFrame = startFrame; 
                 }
-                float inN = inNormParam ? inNormParam->load() : 0.0f;
-                float outN = outNormParam ? outNormParam->load() : 1.0f;
-                inN = juce::jlimit(0.0f, 1.0f, inN);
-                outN = juce::jlimit(0.0f, 1.0f, outN);
-                if (outN <= inN) outN = juce::jmin(1.0f, inN + 0.01f);
-                const int tfLocal = totalFrames.load();
-                int inF = juce::jlimit(0, juce::jmax(0, tfLocal - 1), (int)std::round(inN * (tfLocal - 1)));
-                int outF = juce::jlimit(inF + 1, juce::jmax(1, tfLocal), (int)std::round(outN * (tfLocal - 1)));
-                if (pos < inF)
+                else 
                 {
-                    juce::Logger::writeToLog("[VideoFileLoader][Trim] pos=" + juce::String(pos) + " < inF=" + juce::String(inF) + " -> seeking to inF");
-                    const juce::ScopedLock capLock(captureLock);
-                    if (videoCapture.isOpened())
-                        videoCapture.set(cv::CAP_PROP_POS_FRAMES, (double)inF);
-                }
-                else if (pos >= outF)
-                {
-                    if (loopParam && loopParam->load() > 0.5f)
-                    {
-                        juce::Logger::writeToLog("[VideoFileLoader][Trim] pos>=outF looping to inF=" + juce::String(inF));
-                        const juce::ScopedLock capLock(captureLock);
-                        if (videoCapture.isOpened())
-                            videoCapture.set(cv::CAP_PROP_POS_FRAMES, (double)inF);
-                    }
-                    else
-                    {
-                        juce::Logger::writeToLog("[VideoFileLoader][Trim] pos>=outF stopping playback");
-                        playing.store(false);
-                    }
+                    // Not looping, so stop playback
+                    playing.store(false);
                 }
             }
-        }
-        else
-        {
-            // End of video file
-            if (loopParam->load() > 0.5f && currentVideoFile.existsAsFile())
+            
+            // With the correct target frame determined, seek the video capture directly to that frame.
+            if (playing.load() && videoCapture.isOpened())
             {
-                // Loop: reopen the file
-                videoCapture.release();
-                if (videoCapture.open(currentVideoFile.getFullPathName().toStdString()))
-                {
-                    sourceIsOpen = true;
-                    juce::Logger::writeToLog("[VideoFileLoader] Looping: " + currentVideoFile.getFileName());
+                const juce::ScopedLock capLock(captureLock);
+                int currentVideoFrame = (int)videoCapture.get(cv::CAP_PROP_POS_FRAMES);
+                
+                // Only update the video if the target frame is different from the current one.
+                if (currentVideoFrame != targetVideoFrame) {
+                    videoCapture.set(cv::CAP_PROP_POS_FRAMES, targetVideoFrame);
                 }
-                else
-                {
-                    sourceIsOpen = false;
+                
+                // Read and display the single, correct frame for this point in time.
+                cv::Mat frame;
+                if (videoCapture.read(frame)) {
+                    VideoFrameManager::getInstance().setFrame(getLogicalId(), frame);
+                    updateGuiFrame(frame);
+                    lastPosFrame.store((int)videoCapture.get(cv::CAP_PROP_POS_FRAMES));
+                    if (lastFourcc.load() == 0)
+                        lastFourcc.store((int)videoCapture.get(cv::CAP_PROP_FOURCC));
                 }
-            }
-            else
-            {
-                // Stop
-                sourceIsOpen = false;
-                videoCapture.release();
             }
         }
         
-        // Calculate how long to wait to maintain the original FPS
-        auto processingTime = juce::Time::getMillisecondCounterHiRes() - loopStartTime;
-        float spd = speedParam ? speedParam->load() : 1.0f;
-        spd = juce::jlimit(0.1f, 4.0f, spd);
-        int waitTime = (int)((frameDurationMs / spd) - processingTime);
-        if (waitTime > 0)
-        {
-            wait(waitTime);
-        }
-        // If processing took longer than frame duration, don't wait (play as fast as possible)
+        // A short sleep to prevent this thread from consuming 100% CPU
+        wait(5);
     }
     
     videoCapture.release();
@@ -627,107 +654,33 @@ void VideoFileLoaderModule::loadAudioFromVideo()
 {
     const juce::ScopedLock lock(audioLock);
     
-    // Stop and clear existing audio
-    audioTransport.stop();
-    audioTransport.setSource(nullptr);
-    audioSource.reset();
+    audioReader.reset();
+    timePitch.reset(); // Reset the processing engine
+    audioReadPosition = 0.0;
+    currentAudioSamplePosition.store(0); // Reset master clock
+    abstractFifo.reset(); // Clear FIFO
     audioLoaded.store(false);
     
-    if (!currentVideoFile.existsAsFile())
-        return;
+    if (!currentVideoFile.existsAsFile()) return;
     
-    // Try to load audio from the video file
-    // Note: JUCE's AudioFormatManager may not support all video containers directly
-    // This is a best-effort attempt. For full compatibility, you might need FFmpeg extraction
-    std::unique_ptr<juce::AudioFormatReader> reader(audioFormatManager.createReaderFor(currentVideoFile));
-    
-    if (reader != nullptr)
+    try
     {
-        audioSource = std::make_unique<juce::AudioFormatReaderSource>(reader.release(), true);
-        double sourceSampleRate = audioSource->getAudioFormatReader()->sampleRate;
+        audioReader = std::make_unique<FFmpegAudioReader>(currentVideoFile.getFullPathName());
         
-        // Use the current processing sample rate, not the source file's sample rate
-        // The AudioTransportSource will handle resampling if needed
-        audioTransport.setSource(audioSource.get(), 0, nullptr, audioSampleRate);
-        
-        // Set looping
-        if (loopParam && *loopParam > 0.5f)
-            audioTransport.setLooping(true);
-        
-        audioLoaded.store(true);
-        juce::Logger::writeToLog("[VideoFileLoader] Audio loaded from video file. "
-                                  "Source SR: " + juce::String(sourceSampleRate) + " Hz, "
-                                  "Processing SR: " + juce::String(audioSampleRate) + " Hz");
-    }
-    else
-    {
-        juce::Logger::writeToLog("[VideoFileLoader] Could not extract audio from video file. "
-                                  "Video file may not contain audio, or format is not supported by JUCE.");
-    }
-}
-
-void VideoFileLoaderModule::updateAudioPlayback()
-{
-    if (!audioLoaded.load())
-        return;
-    
-    // Sync play/pause state
-    bool shouldPlay = playing.load();
-    
-    if (shouldPlay && !audioTransport.isPlaying())
-    {
-        audioTransport.start();
-        
-        // Seek to start position if needed
-        float inN = inNormParam ? inNormParam->load() : 0.0f;
-        if (inN > 0.0f && audioSource != nullptr)
+        if (audioReader != nullptr && audioReader->lengthInSamples > 0)
         {
-            int64 totalSamples = audioSource->getTotalLength();
-            int64 startSample = (int64)(inN * totalSamples);
-            audioTransport.setPosition(startSample / audioSampleRate);
+            audioLoaded.store(true);
+            sourceAudioSampleRate.store(audioReader->sampleRate); // Store the source sample rate
+            juce::Logger::writeToLog("[VideoFileLoader] Audio loaded via FFmpeg.");
+        }
+        else
+        {
+            juce::Logger::writeToLog("[VideoFileLoader] Could not extract audio stream via FFmpeg.");
         }
     }
-    else if (!shouldPlay && audioTransport.isPlaying())
+    catch (const std::exception& e)
     {
-        audioTransport.stop();
-    }
-    
-    // Handle looping
-    bool shouldLoop = loopParam && *loopParam > 0.5f;
-    audioTransport.setLooping(shouldLoop);
-    
-    // Check if we've reached the end (and not looping)
-    if (!shouldLoop && audioTransport.hasStreamFinished())
-    {
-        playing.store(false);
-        audioTransport.stop();
-    }
-    
-    // Handle in/out points
-    float inN = inNormParam ? inNormParam->load() : 0.0f;
-    float outN = outNormParam ? outNormParam->load() : 1.0f;
-    
-    if (audioSource != nullptr && audioSampleRate > 0.0)
-    {
-        int64 totalSamples = audioSource->getTotalLength();
-        double currentPos = audioTransport.getCurrentPosition();
-        double totalDuration = totalSamples / audioSampleRate;
-        double outTime = outN * totalDuration;
-        
-        if (currentPos >= outTime && shouldPlay)
-        {
-            if (shouldLoop)
-            {
-                // Loop back to in point
-                double inTime = inN * totalDuration;
-                audioTransport.setPosition(inTime);
-            }
-            else
-            {
-                playing.store(false);
-                audioTransport.stop();
-            }
-        }
+        juce::Logger::writeToLog("[VideoFileLoader] Exception loading audio: " + juce::String(e.what()));
     }
 }
 
@@ -735,49 +688,101 @@ void VideoFileLoaderModule::processBlock(juce::AudioBuffer<float>& buffer, juce:
 {
     juce::ignoreUnused(midi);
     
-    // Update audio playback state first
-    updateAudioPlayback();
-    
-    // Get output buses
-    auto cvOutBus = getBusBuffer(buffer, false, 0);  // CV output (mono)
-    auto audioOutBus = getBusBuffer(buffer, false, 1); // Audio output (stereo)
+    auto cvOutBus = getBusBuffer(buffer, false, 0);
+    auto audioOutBus = getBusBuffer(buffer, false, 1);
     
     cvOutBus.clear();
     audioOutBus.clear();
     
-    // Output this module's logical ID on CV bus
+    // Output Source ID on CV bus
     if (cvOutBus.getNumChannels() > 0)
     {
         float sourceId = (float)getLogicalId();
-        for (int sample = 0; sample < cvOutBus.getNumSamples(); ++sample)
-        {
-            cvOutBus.setSample(0, sample, sourceId);
-        }
+        cvOutBus.setSample(0, 0, sourceId);
+        for (int ch = 0; ch < cvOutBus.getNumChannels(); ++ch)
+            cvOutBus.copyFrom(ch, 1, cvOutBus, ch, 0, cvOutBus.getNumSamples() - 1);
     }
     
-    // Output audio from the video file
-    if (audioLoaded.load() && audioOutBus.getNumChannels() >= 2 && audioOutBus.getNumSamples() > 0)
+    // Return early if not playing
+    if (!audioLoaded.load() || !playing.load())
     {
-        // Ensure audioTransport is playing if we're in play mode
-        bool shouldPlay = playing.load();
-        if (shouldPlay && !audioTransport.isPlaying())
-        {
-            audioTransport.start();
+        return;
+    }
+    
+    // --- NEW FIFO-BASED AUDIO PROCESSING ---
+    const juce::ScopedLock lock(audioLock);
+    const int numSamples = audioOutBus.getNumSamples();
+    
+    // 1. Configure the time-stretcher
+    const float speed = juce::jlimit(0.25f, 4.0f, speedParam ? speedParam->load() : 1.0f);
+    const int engineIdx = engineParam ? engineParam->getIndex() : 1;
+    auto requestedMode = (engineIdx == 0) ? TimePitchProcessor::Mode::RubberBand : TimePitchProcessor::Mode::Fifo;
+    
+    timePitch.setMode(requestedMode);
+    
+    // THIS IS THE FIX: Calculate the correct ratio based on which engine is active.
+    double ratioForEngine = (double)speed;
+    if (requestedMode == TimePitchProcessor::Mode::RubberBand)
+    {
+        // RubberBand expects a time-stretch ratio, which is the inverse of playback speed.
+        // A speed of 2.0x requires a stretch ratio of 0.5 to play twice as fast.
+        ratioForEngine = 1.0 / juce::jmax(0.01, (double)speed);
+    }
+    
+    // The Naive engine expects a direct playback speed, so `ratioForEngine` is unchanged.
+    timePitch.setTimeStretchRatio(ratioForEngine);
+    
+    // 2. Determine how many source frames we need to pull from the FIFO
+    const int framesToReadFromFifo = (int)std::ceil((double)numSamples / speed);
+    
+    if (abstractFifo.getNumReady() >= framesToReadFromFifo)
+    {
+        // Use a temporary buffer for interleaving
+        juce::AudioBuffer<float> interleavedBuffer(1, framesToReadFromFifo * 2);
+        float* interleavedData = interleavedBuffer.getWritePointer(0);
+        
+        // 3. Read from FIFO and interleave the data
+        int start1, size1, start2, size2;
+        abstractFifo.prepareToRead(framesToReadFromFifo, start1, size1, start2, size2);
+        
+        const float* fifoDataL = audioFifo.getReadPointer(0);
+        const float* fifoDataR = audioFifo.getReadPointer(1);
+        
+        for (int i = 0; i < size1; ++i) {
+            interleavedData[2 * i] = fifoDataL[start1 + i];
+            interleavedData[2 * i + 1] = fifoDataR[start1 + i];
         }
+        if (size2 > 0) {
+            for (int i = 0; i < size2; ++i) {
+                interleavedData[2 * (size1 + i)] = fifoDataL[start2 + i];
+                interleavedData[2 * (size1 + i) + 1] = fifoDataR[start2 + i];
+            }
+        }
+        abstractFifo.finishedRead(size1 + size2);
+        const int readCount = size1 + size2; // How many samples we actually read from FIFO
         
-        // AudioSourceChannelInfo constructor takes the buffer and uses all its channels
-        // Since audioOutBus is already stereo (2 channels), this should work correctly
-        juce::AudioSourceChannelInfo info(audioOutBus);
-        audioTransport.getNextAudioBlock(info);
+        // 4. Feed the time-stretcher
+        timePitch.putInterleaved(interleavedData, framesToReadFromFifo);
         
-        // Note: Speed control for audio would require a time-stretching library like RubberBand
-        // For now, audio plays at normal speed while video can be sped up/slowed down
-        // To add speed control, integrate a time-stretcher similar to SampleLoaderModule
+        // 5. Retrieve processed audio
+        juce::AudioBuffer<float> tempOutput(1, numSamples * 2);
+        int produced = timePitch.receiveInterleaved(tempOutput.getWritePointer(0), numSamples);
         
-        // Update audio position for synchronization
-        if (playing.load())
+        // 6. De-interleave into the output bus
+        if (produced > 0)
         {
-            audioPosition.store(audioTransport.getCurrentPosition() * audioSampleRate);
+            const float* processedData = tempOutput.getReadPointer(0);
+            for (int ch = 0; ch < audioOutBus.getNumChannels(); ++ch)
+            {
+                float* dest = audioOutBus.getWritePointer(ch);
+                for (int i = 0; i < produced; ++i)
+                {
+                    dest[i] = (ch == 0) ? processedData[i * 2] : processedData[i * 2 + 1];
+                }
+            }
+            
+            // THIS IS THE FIX: Advance the master clock by the number of samples consumed
+            currentAudioSamplePosition.store(currentAudioSamplePosition.load() + readCount);
         }
     }
 }
@@ -924,11 +929,24 @@ void VideoFileLoaderModule::drawParametersInNode(float itemWidth,
             ImGui::TextColored(ImVec4(0.9f, 0.7f, 0.2f, 1.0f), "Length unknown yet (ratio seeks)");
     }
 
+    // ADD ENGINE SELECTION COMBO BOX
+    ImGui::Separator();
+    int engineIdx = engineParam ? engineParam->getIndex() : 1;
+    const char* items[] = { "RubberBand (High Quality)", "Naive (Low CPU)" };
+    if (ImGui::Combo("Engine", &engineIdx, items, 2))
+    {
+        if (engineParam) *engineParam = engineIdx;
+        onModificationEnded();
+    }
+    ImGui::Separator();
+
     // --- Playback speed (slider only) ---
     float spd = speedParam ? speedParam->load() : 1.0f;
-    ImGui::Separator();
-    ImGui::SliderFloat("Speed", &spd, 0.25f, 4.0f, "%.2fx");
-    if (auto* p = dynamic_cast<juce::AudioParameterFloat*>(apvts.getParameter("speed"))) *p = spd;
+        if (ImGui::SliderFloat("Speed", &spd, 0.25f, 4.0f, "%.2fx"))
+        {
+            if (auto* p = dynamic_cast<juce::AudioParameterFloat*>(apvts.getParameter("speed"))) *p = spd;
+        }
+        if (ImGui::IsItemDeactivatedAfterEdit()) onModificationEnded();
 
     // --- Trim / Timeline --- (always visible, never greyed)
     {
@@ -936,53 +954,33 @@ void VideoFileLoaderModule::drawParametersInNode(float itemWidth,
         float inN = inNormParam ? inNormParam->load() : 0.0f;
         float outN = outNormParam ? outNormParam->load() : 1.0f;
         ImGui::Separator();
-        if (ImGui::SliderFloat("Start", &inN, 0.0f, 1.0f))
+        
+        if (ImGui::SliderFloat("Start", &inN, 0.0f, 1.0f, "%.3f"))
         {
             inN = juce::jlimit(0.0f, outN - 0.01f, inN);
             if (auto* p = dynamic_cast<juce::AudioParameterFloat*>(apvts.getParameter("in"))) *p = inN;
-            if (tf > 1)
-            {
-                int inF = (int)std::round(inN * (tf - 1));
-                pendingSeekFrame.store(inF);
-                needPreviewFrame.store(true);
-                juce::Logger::writeToLog("[VideoFileLoader][UI] Start set: inN=" + juce::String(inN, 3) + " inF=" + juce::String(inF));
-            }
-            else
-            {
-                pendingStartNorm.store(inN);
-            }
+            pendingSeekNormalized.store(inN); // Use unified seek
         }
-        if (ImGui::SliderFloat("End", &outN, 0.0f, 1.0f))
+        if (ImGui::IsItemDeactivatedAfterEdit()) onModificationEnded();
+
+        if (ImGui::SliderFloat("End", &outN, 0.0f, 1.0f, "%.3f"))
         {
             outN = juce::jlimit(inN + 0.01f, 1.0f, outN);
             if (auto* p = dynamic_cast<juce::AudioParameterFloat*>(apvts.getParameter("out"))) *p = outN;
-            if (tf > 1)
-            {
-                int outF = (int)std::round(outN * (tf - 1));
-                juce::Logger::writeToLog("[VideoFileLoader][UI] End set: outN=" + juce::String(outN, 3) + " outF=" + juce::String(outF));
-            }
+            onModificationEnded();
         }
 
-        int currentFrame = lastPosFrame.load();
-        float pos = (tf > 1) ? ((float) currentFrame / (float) tf) : 0.0f;
+        float pos = (tf > 1) ? ((float)lastPosFrame.load() / (float)tf) : 0.0f;
         // Clamp position UI between in/out
         float minPos = juce::jlimit(0.0f, 1.0f, inN);
         float maxPos = juce::jlimit(minPos, 1.0f, outN);
         pos = juce::jlimit(minPos, maxPos, pos);
-        if (ImGui::SliderFloat("Position", &pos, 0.0f, 1.0f))
+
+        if (ImGui::SliderFloat("Position", &pos, 0.0f, 1.0f, "%.3f"))
         {
-            if (tf > 1)
-            {
-                int targetF = (int)std::round(pos * (float)(tf - 1));
-                pendingSeekFrame.store(targetF);
-                needPreviewFrame.store(true);
-                juce::Logger::writeToLog("[VideoFileLoader][UI] Position set: posN=" + juce::String(pos, 3) + " frame=" + juce::String(targetF));
-            }
-            else
-            {
-                pendingSeekNorm.store(pos);
-            }
+            pendingSeekNormalized.store(pos); // Use unified seek
         }
+        if (ImGui::IsItemDeactivatedAfterEdit()) onModificationEnded();
     }
     
     ImGui::PopItemWidth();
@@ -990,9 +988,10 @@ void VideoFileLoaderModule::drawParametersInNode(float itemWidth,
 
 void VideoFileLoaderModule::drawIoPins(const NodePinHelpers& helpers)
 {
-    // Pins are handled via getDynamicOutputPins for proper type coloring
-    // This method is kept for backward compatibility but dynamic pins take precedence
+    // Although getDynamicOutputPins takes precedence, this ensures correctness if it's ever used as a fallback.
     helpers.drawAudioOutputPin("Source ID", 0);
+    helpers.drawAudioOutputPin("Audio L", 1);
+    helpers.drawAudioOutputPin("Audio R", 2);
 }
 #endif
 
@@ -2439,6 +2438,8 @@ public:
     juce::AudioProcessorValueTreeState& getAPVTS() override { return apvts; }
     juce::Image getLatestFrame();
 
+    std::vector<DynamicPinInfo> getDynamicOutputPins() const override;
+
 #if defined(PRESET_CREATOR_UI)
     void drawParametersInNode(float itemWidth,
                               const std::function<bool(const juce::String& paramId)>& isParamModulated,
@@ -2861,6 +2862,26 @@ juce::Image ObjectDetectorModule::getLatestFrame()
     return latestFrameForGui.createCopy();
 }
 
+std::vector<DynamicPinInfo> ObjectDetectorModule::getDynamicOutputPins() const
+{
+    // Bus 0: CV Out (5 channels)
+    // Bus 1: Video Out (1 channel)
+    // Bus 2: Cropped Out (1 channel)
+    const int cvOutChannels = 5;
+    const int videoOutStartChannel = cvOutChannels;
+    const int croppedOutStartChannel = videoOutStartChannel + 1;
+
+    return {
+        { "X", 0, PinDataType::CV },
+        { "Y", 1, PinDataType::CV },
+        { "Width", 2, PinDataType::CV },
+        { "Height", 3, PinDataType::CV },
+        { "Gate", 4, PinDataType::Gate },
+        { "Video Out", videoOutStartChannel, PinDataType::Video },
+        { "Cropped Out", croppedOutStartChannel, PinDataType::Video }
+    };
+}
+
 void ObjectDetectorModule::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midi)
 {
     juce::ignoreUnused(midi);
@@ -3106,6 +3127,8 @@ public:
 
     const juce::String getName() const override { return "face_tracker"; }
     juce::Image getLatestFrame();
+
+    std::vector<DynamicPinInfo> getDynamicOutputPins() const override;
 
     void prepareToPlay(double sampleRate, int samplesPerBlock) override;
     void releaseResources() override;
@@ -3492,6 +3515,30 @@ juce::Image FaceTrackerModule::getLatestFrame()
     return latestFrameForGui.createCopy();
 }
 
+std::vector<DynamicPinInfo> FaceTrackerModule::getDynamicOutputPins() const
+{
+    // Bus 0: CV Out (140 channels - 70 keypoints * 2 coordinates)
+    // Bus 1: Video Out (1 channel)
+    // Bus 2: Cropped Out (1 channel)
+    std::vector<DynamicPinInfo> pins;
+    
+    // Add all 70 keypoint pins
+    for (int i = 0; i < 70; ++i)
+    {
+        std::string base = "Pt " + std::to_string(i + 1);
+        pins.emplace_back(base + " X", i * 2, PinDataType::CV);
+        pins.emplace_back(base + " Y", i * 2 + 1, PinDataType::CV);
+    }
+    
+    // Add Video Out and Cropped Out pins
+    const int videoOutStartChannel = 140;
+    const int croppedOutStartChannel = videoOutStartChannel + 1;
+    pins.emplace_back("Video Out", videoOutStartChannel, PinDataType::Video);
+    pins.emplace_back("Cropped Out", croppedOutStartChannel, PinDataType::Video);
+    
+    return pins;
+}
+
 
 
 
@@ -3529,6 +3576,8 @@ public:
 
     const juce::String getName() const override { return "hand_tracker"; }
     juce::Image getLatestFrame();
+
+    std::vector<DynamicPinInfo> getDynamicOutputPins() const override;
 
     void prepareToPlay(double sampleRate, int samplesPerBlock) override;
     void releaseResources() override;
@@ -3974,6 +4023,39 @@ juce::Image HandTrackerModule::getLatestFrame()
     return latestFrameForGui.createCopy();
 }
 
+std::vector<DynamicPinInfo> HandTrackerModule::getDynamicOutputPins() const
+{
+    // Bus 0: CV Out (42 channels - 21 keypoints * 2 coordinates)
+    // Bus 1: Video Out (1 channel)
+    // Bus 2: Cropped Out (1 channel)
+    std::vector<DynamicPinInfo> pins;
+    
+    // Hand keypoint names matching PinDatabase
+    const char* handNames[21] = {
+        "Wrist",
+        "Thumb 1","Thumb 2","Thumb 3","Thumb 4",
+        "Index 1","Index 2","Index 3","Index 4",
+        "Middle 1","Middle 2","Middle 3","Middle 4",
+        "Ring 1","Ring 2","Ring 3","Ring 4",
+        "Pinky 1","Pinky 2","Pinky 3","Pinky 4"
+    };
+    
+    // Add all 21 keypoint pins
+    for (int i = 0; i < 21; ++i)
+    {
+        pins.emplace_back(std::string(handNames[i]) + " X", i * 2, PinDataType::CV);
+        pins.emplace_back(std::string(handNames[i]) + " Y", i * 2 + 1, PinDataType::CV);
+    }
+    
+    // Add Video Out and Cropped Out pins
+    const int videoOutStartChannel = 42;
+    const int croppedOutStartChannel = videoOutStartChannel + 1;
+    pins.emplace_back("Video Out", videoOutStartChannel, PinDataType::Video);
+    pins.emplace_back("Cropped Out", croppedOutStartChannel, PinDataType::Video);
+    
+    return pins;
+}
+
 
 
 
@@ -4039,6 +4121,8 @@ public:
 
     // For UI: get latest frame with skeleton overlay for preview
     juce::Image getLatestFrame();
+
+    std::vector<DynamicPinInfo> getDynamicOutputPins() const override;
 
 #if defined(PRESET_CREATOR_UI)
     void drawParametersInNode(float itemWidth,
@@ -4295,7 +4379,8 @@ PoseEstimatorModule::PoseEstimatorModule()
     : ModuleProcessor(BusesProperties()
                      .withInput("Input", juce::AudioChannelSet::mono(), true)
                      .withOutput("CV Out", juce::AudioChannelSet::discreteChannels(30), true) // 15 keypoints x 2 (x,y)
-                     .withOutput("Video Out", juce::AudioChannelSet::mono(), true)), // PASSTHROUGH
+                     .withOutput("Video Out", juce::AudioChannelSet::mono(), true)    // PASSTHROUGH
+                     .withOutput("Cropped Out", juce::AudioChannelSet::mono(), true)), // CROPPED
       juce::Thread("Pose Estimator Thread"),
       apvts(*this, nullptr, "PoseEstimatorParams", createParameterLayout())
 {
@@ -4460,6 +4545,25 @@ void PoseEstimatorModule::run()
                 }
             }
             
+            // --- CROP LOGIC ---
+            std::vector<cv::Point> validPoints;
+            for (int i = 0; i < MPI_NUM_KEYPOINTS; ++i) {
+                if (result.keypoints[i][0] >= 0) {
+                    validPoints.emplace_back((int)result.keypoints[i][0], (int)result.keypoints[i][1]);
+                }
+            }
+            if (validPoints.size() > 2) {
+                cv::Rect box = cv::boundingRect(validPoints);
+                box &= cv::Rect(0, 0, frame.cols, frame.rows);
+                if (box.area() > 0) {
+                    cv::Mat cropped = frame(box);
+                    VideoFrameManager::getInstance().setFrame(getSecondaryLogicalId(), cropped);
+                }
+            } else {
+                cv::Mat emptyFrame;
+                VideoFrameManager::getInstance().setFrame(getSecondaryLogicalId(), emptyFrame);
+            }
+            
             // --- PASSTHROUGH LOGIC ---
             VideoFrameManager::getInstance().setFrame(getLogicalId(), frame);
             // 6. Update the GUI preview frame
@@ -4536,6 +4640,35 @@ juce::Image PoseEstimatorModule::getLatestFrame()
     return latestFrameForGui.createCopy();
 }
 
+std::vector<DynamicPinInfo> PoseEstimatorModule::getDynamicOutputPins() const
+{
+    // Bus 0: CV Out (30 channels - 15 keypoints * 2 coordinates)
+    // Bus 1: Video Out (1 channel)
+    // Bus 2: Cropped Out (1 channel)
+    std::vector<DynamicPinInfo> pins;
+    
+    // Add all 15 keypoint pins
+    const std::vector<std::string> keypointNames = {
+        "Head", "Neck", "R Shoulder", "R Elbow", "R Wrist",
+        "L Shoulder", "L Elbow", "L Wrist", "R Hip", "R Knee",
+        "R Ankle", "L Hip", "L Knee", "L Ankle", "Chest"
+    };
+    
+    for (size_t i = 0; i < keypointNames.size(); ++i)
+    {
+        pins.emplace_back(keypointNames[i] + " X", static_cast<int>(i * 2), PinDataType::CV);
+        pins.emplace_back(keypointNames[i] + " Y", static_cast<int>(i * 2 + 1), PinDataType::CV);
+    }
+    
+    // Add Video Out and Cropped Out pins
+    const int videoOutStartChannel = 30;
+    const int croppedOutStartChannel = videoOutStartChannel + 1;
+    pins.emplace_back("Video Out", videoOutStartChannel, PinDataType::Video);
+    pins.emplace_back("Cropped Out", croppedOutStartChannel, PinDataType::Video);
+    
+    return pins;
+}
+
 void PoseEstimatorModule::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midi)
 {
     juce::ignoreUnused(midi);
@@ -4597,6 +4730,15 @@ void PoseEstimatorModule::processBlock(juce::AudioBuffer<float>& buffer, juce::M
         float primaryId = static_cast<float>(getLogicalId());
         for (int s = 0; s < videoOutBus.getNumSamples(); ++s)
             videoOutBus.setSample(0, s, primaryId);
+    }
+    
+    // Output Cropped Out ID on bus 2
+    auto croppedOutBus = getBusBuffer(buffer, false, 2);
+    if (croppedOutBus.getNumChannels() > 0)
+    {
+        float secondaryId = static_cast<float>(getSecondaryLogicalId());
+        for (int s = 0; s < croppedOutBus.getNumSamples(); ++s)
+            croppedOutBus.setSample(0, s, secondaryId);
     }
 }
 
@@ -4800,6 +4942,8 @@ public:
     
     // For UI: get latest annotated frame
     juce::Image getLatestFrame();
+
+    std::vector<DynamicPinInfo> getDynamicOutputPins() const override;
 
 #if defined(PRESET_CREATOR_UI)
     void drawParametersInNode(float itemWidth,
@@ -5253,6 +5397,26 @@ juce::Image HumanDetectorModule::getLatestFrame()
     return latestFrameForGui.createCopy();
 }
 
+std::vector<DynamicPinInfo> HumanDetectorModule::getDynamicOutputPins() const
+{
+    // Bus 0: CV Out (5 channels)
+    // Bus 1: Video Out (1 channel)
+    // Bus 2: Cropped Out (1 channel)
+    const int cvOutChannels = 5;
+    const int videoOutStartChannel = cvOutChannels;
+    const int croppedOutStartChannel = videoOutStartChannel + 1;
+
+    return {
+        { "X", 0, PinDataType::CV },
+        { "Y", 1, PinDataType::CV },
+        { "Width", 2, PinDataType::CV },
+        { "Height", 3, PinDataType::CV },
+        { "Gate", 4, PinDataType::Gate },
+        { "Video Out", videoOutStartChannel, PinDataType::Video },
+        { "Cropped Out", croppedOutStartChannel, PinDataType::Video }
+    };
+}
+
 void HumanDetectorModule::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midi)
 {
     // Read Source ID from input pin
@@ -5504,6 +5668,8 @@ public:
     const juce::String getName() const override { return "movement_detector"; }
     juce::AudioProcessorValueTreeState& getAPVTS() override { return apvts; }
     
+    std::vector<DynamicPinInfo> getDynamicOutputPins() const override;
+
     void prepareToPlay(double sampleRate, int samplesPerBlock) override;
     void releaseResources() override;
     void processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midi) override;
@@ -5845,6 +6011,22 @@ juce::Image MovementDetectorModule::getLatestFrame()
 {
     const juce::ScopedLock lock(imageLock);
     return latestFrameForGui.createCopy();
+}
+
+std::vector<DynamicPinInfo> MovementDetectorModule::getDynamicOutputPins() const
+{
+    // Bus 0: CV Out (4 channels)
+    // Bus 1: Video Out (1 channel)
+    const int cvOutChannels = 4;
+    const int videoOutStartChannel = cvOutChannels;
+
+    return {
+        { "X", 0, PinDataType::CV },
+        { "Y", 1, PinDataType::CV },
+        { "Amount", 2, PinDataType::CV },
+        { "Gate", 3, PinDataType::Gate },
+        { "Video Out", videoOutStartChannel, PinDataType::Video }
+    };
 }
 
 void MovementDetectorModule::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midi)
@@ -6250,6 +6432,7 @@ public:
 
     // UI integration helpers
     void addColorAt(int x, int y);
+    void autoTrackColors(); // Auto-detect and track 12 dominant colors
     bool isPickerActive() const { return isColorPickerActive.load(); }
     void exitPickerMode() { isColorPickerActive.store(false); }
 
@@ -6261,6 +6444,17 @@ public:
     void setExtraStateTree(const juce::ValueTree& state) override;
 
 #if defined(PRESET_CREATOR_UI)
+    // Auto-connect trigger flags (similar to MultiSequencerModuleProcessor)
+    std::atomic<bool> autoConnectPolyVCOTriggered { false };
+    std::atomic<bool> autoConnectSamplersTriggered { false };
+    
+    // Helper for auto-connect
+    int getTrackedColorsCount() const
+    {
+        const juce::ScopedLock lock(colorListLock);
+        return (int)trackedColors.size();
+    }
+    
     void drawParametersInNode(float itemWidth,
                               const std::function<bool(const juce::String& paramId)>& isParamModulated,
                               const std::function<void()>& onModificationEnded) override;
@@ -6278,6 +6472,7 @@ private:
     std::atomic<float>* sourceIdParam = nullptr;
     std::atomic<float>* zoomLevelParam = nullptr; // 0=Small,1=Normal,2=Large
     juce::AudioParameterBool* useGpuParam = nullptr;
+    juce::AudioParameterInt* numAutoColorsParam = nullptr;
     
     // Thread-safe color list
     std::vector<TrackedColor> trackedColors;
@@ -6341,13 +6536,15 @@ juce::AudioProcessorValueTreeState::ParameterLayout ColorTrackerModule::createPa
     #endif
     params.push_back(std::make_unique<juce::AudioParameterBool>(
         "useGpu", "Use GPU (CUDA)", defaultGpu));
+    params.push_back(std::make_unique<juce::AudioParameterInt>(
+        "numAutoColors", "Auto-Track Colors", 2, 24, 12));
     return { params.begin(), params.end() };
 }
 
 ColorTrackerModule::ColorTrackerModule()
     : ModuleProcessor(BusesProperties()
                       .withInput("Input", juce::AudioChannelSet::mono(), true)
-                      .withOutput("CV Out", juce::AudioChannelSet::discreteChannels(24), true) // up to 8 colors x 3
+                      .withOutput("CV Out", juce::AudioChannelSet::discreteChannels(73), true) // 24 colors x 3 + 1 for numColors
                       .withOutput("Video Out", juce::AudioChannelSet::mono(), true)), // PASSTHROUGH
       juce::Thread("Color Tracker Thread"),
       apvts(*this, nullptr, "ColorTrackerParams", createParameterLayout())
@@ -6355,6 +6552,7 @@ ColorTrackerModule::ColorTrackerModule()
     sourceIdParam = apvts.getRawParameterValue("sourceId");
     zoomLevelParam = apvts.getRawParameterValue("zoomLevel");
     useGpuParam = dynamic_cast<juce::AudioParameterBool*>(apvts.getParameter("useGpu"));
+    numAutoColorsParam = dynamic_cast<juce::AudioParameterInt*>(apvts.getParameter("numAutoColors"));
     fifoBuffer.resize(16);
 }
 
@@ -6603,6 +6801,75 @@ void ColorTrackerModule::addColorAt(int x, int y)
     isColorPickerActive.store(false);
 }
 
+void ColorTrackerModule::autoTrackColors()
+{
+    cv::Mat frameCopy;
+    {
+        const juce::ScopedLock lk(frameLock);
+        if (!lastFrameBgr.empty())
+            frameCopy = lastFrameBgr.clone();
+    }
+
+    if (frameCopy.empty())
+    {
+        juce::Logger::writeToLog("[ColorTracker] Auto-Track failed: No video frame available.");
+        return;
+    }
+
+    juce::Logger::writeToLog("[ColorTracker] Starting Auto-Track color analysis...");
+
+    // 1. Resize for performance. K-means is slow on large images.
+    cv::Mat smallFrame;
+    cv::resize(frameCopy, smallFrame, cv::Size(100, (int)(100.0f * (float)frameCopy.rows / (float)frameCopy.cols)));
+
+    // 2. Reshape image into a list of pixels for clustering
+    cv::Mat data;
+    smallFrame.convertTo(data, CV_32F);
+    data = data.reshape(1, data.total());
+
+    // 3. Perform k-means clustering to find the dominant colors
+    const int k = numAutoColorsParam ? numAutoColorsParam->get() : 12;
+    cv::Mat labels, centers;
+    cv::kmeans(data, k, labels,
+               cv::TermCriteria(cv::TermCriteria::EPS + cv::TermCriteria::COUNT, 10, 1.0),
+               3, cv::KMEANS_PP_CENTERS, centers);
+
+    // 4. Clear existing colors and create new ones from the cluster centers
+    const juce::ScopedLock lock(colorListLock);
+    trackedColors.clear();
+
+    for (int i = 0; i < centers.rows; ++i)
+    {
+        cv::Vec3f center_bgr_float = centers.at<cv::Vec3f>(i);
+        cv::Vec3b bgr8((uchar)center_bgr_float[0], (uchar)center_bgr_float[1], (uchar)center_bgr_float[2]);
+
+        // Convert the BGR center to HSV to create a tracking window
+        cv::Mat onePix(1,1,CV_8UC3);
+        onePix.at<cv::Vec3b>(0,0) = bgr8;
+        cv::Mat onePixHsv;
+        cv::cvtColor(onePix, onePixHsv, cv::COLOR_BGR2HSV);
+        cv::Vec3b avgHsv = onePixHsv.at<cv::Vec3b>(0,0);
+        int avgHue = (int)avgHsv[0];
+        int avgSat = (int)avgHsv[1];
+        int avgVal = (int)avgHsv[2];
+
+        TrackedColor tc;
+        tc.name = juce::String("Color ") + juce::String(i + 1);
+        tc.hsvLower = cv::Scalar(
+            juce::jlimit(0, 179, avgHue - 8),
+            juce::jlimit(0, 255, avgSat - 35),
+            juce::jlimit(0, 255, avgVal - 35));
+        tc.hsvUpper = cv::Scalar(
+            juce::jlimit(0, 179, avgHue + 8),
+            juce::jlimit(0, 255, avgSat + 35),
+            juce::jlimit(0, 255, avgVal + 35));
+        tc.displayColour = juce::Colour(bgr8[2], bgr8[1], bgr8[0]);
+        trackedColors.push_back(tc);
+    }
+    
+    juce::Logger::writeToLog("[ColorTracker] Auto-Track complete. Found " + juce::String((int)trackedColors.size()) + " colors.");
+}
+
 juce::ValueTree ColorTrackerModule::getExtraStateTree() const
 {
     juce::ValueTree state("ColorTrackerState");
@@ -6688,6 +6955,15 @@ void ColorTrackerModule::processBlock(juce::AudioBuffer<float>& buffer, juce::Mi
         }
     }
     
+    // Output the number of tracked colors on channel 72
+    const int numColorsChannel = 72;
+    if (cvOutBus.getNumChannels() > numColorsChannel)
+    {
+        const juce::ScopedLock lock(colorListLock);
+        float numColorsValue = (float)trackedColors.size();
+        juce::FloatVectorOperations::fill(cvOutBus.getWritePointer(numColorsChannel), numColorsValue, cvOutBus.getNumSamples());
+    }
+    
     // Passthrough Video ID on bus 1
     auto videoOutBus = getBusBuffer(buffer, false, 1);
     if (videoOutBus.getNumChannels() > 0)
@@ -6702,6 +6978,11 @@ std::vector<DynamicPinInfo> ColorTrackerModule::getDynamicOutputPins() const
 {
     std::vector<DynamicPinInfo> pins;
     const juce::ScopedLock lock(colorListLock);
+    
+    // Add "Num Colors" output first (channel 72)
+    pins.emplace_back("Num Colors", 72, PinDataType::CV);
+    
+    // Add color outputs: X, Y, Area for each tracked color
     for (size_t i = 0; i < trackedColors.size(); ++i)
     {
         pins.emplace_back(trackedColors[i].name + " X", (int)(i * 3 + 0), PinDataType::CV);
@@ -6772,9 +7053,56 @@ void ColorTrackerModule::drawParametersInNode(float itemWidth,
         isColorPickerActive.store(true);
     }
 
+    ImGui::Separator();
+    int k = numAutoColorsParam ? numAutoColorsParam->get() : 12;
+    ImGui::PushItemWidth(itemWidth - 60.0f); // Make space for button
+    if (ImGui::SliderInt("##numautocolors", &k, 2, 24, "Auto-Track %d Colors"))
+    {
+        if (numAutoColorsParam) *numAutoColorsParam = k;
+        onModificationEnded();
+    }
+    ImGui::PopItemWidth();
+    ImGui::SameLine();
+    if (ImGui::Button("Go", ImVec2(50.0f, 0)))
+    {
+        autoTrackColors();
+        onModificationEnded(); // Create an undo state
+    }
+    if (ImGui::IsItemHovered())
+    {
+        ImGui::SetTooltip("Automatically finds the N most dominant colors in the current frame.\nThis will replace all existing tracked colors.");
+    }
+
     if (isColorPickerActive.load())
     {
         ImGui::TextColored(ImVec4(1.f,1.f,0.f,1.f), "Click on the video preview to pick a color");
+    }
+
+    // Auto-Connect Buttons
+    ImGui::Spacing();
+    ImGui::Separator();
+    ImGui::Spacing();
+    
+    const int numColors = getTrackedColorsCount();
+    if (numColors > 0)
+    {
+        if (ImGui::Button("Connect to PolyVCO", ImVec2(itemWidth, 0)))
+        {
+            autoConnectPolyVCOTriggered = true;
+        }
+        if (ImGui::Button("Connect to Samplers", ImVec2(itemWidth, 0)))
+        {
+            autoConnectSamplersTriggered = true;
+        }
+        ImGui::TextDisabled("Creates %d voices based on tracked colors", numColors);
+    }
+    else
+    {
+        ImGui::BeginDisabled();
+        ImGui::Button("Connect to PolyVCO", ImVec2(itemWidth, 0));
+        ImGui::Button("Connect to Samplers", ImVec2(itemWidth, 0));
+        ImGui::EndDisabled();
+        ImGui::TextDisabled("No colors tracked. Add colors first.");
     }
 
     // Zoom controls (-/+) like PoseEstimator
@@ -6891,6 +7219,8 @@ public:
     
     juce::AudioProcessorValueTreeState& getAPVTS() override { return apvts; }
     juce::Image getLatestFrame();
+
+    std::vector<DynamicPinInfo> getDynamicOutputPins() const override;
 
 #if defined(PRESET_CREATOR_UI)
     void drawParametersInNode(float itemWidth,
@@ -7082,6 +7412,21 @@ juce::Image ContourDetectorModule::getLatestFrame()
     return latestFrameForGui.createCopy();
 }
 
+std::vector<DynamicPinInfo> ContourDetectorModule::getDynamicOutputPins() const
+{
+    // Bus 0: CV Out (3 channels)
+    // Bus 1: Video Out (1 channel)
+    const int cvOutChannels = 3;
+    const int videoOutStartChannel = cvOutChannels;
+
+    return {
+        { "Area", 0, PinDataType::CV },
+        { "Complexity", 1, PinDataType::CV },
+        { "Aspect Ratio", 2, PinDataType::CV },
+        { "Video Out", videoOutStartChannel, PinDataType::Video }
+    };
+}
+
 void ContourDetectorModule::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midi)
 {
     juce::ignoreUnused(midi);
@@ -7262,6 +7607,8 @@ public:
     ~SemanticSegmentationModule() override;
 
     const juce::String getName() const override { return "semantic_segmentation"; }
+    
+    std::vector<DynamicPinInfo> getDynamicOutputPins() const override;
     
     void prepareToPlay(double sampleRate, int samplesPerBlock) override;
     void releaseResources() override;
@@ -7595,6 +7942,22 @@ juce::Image SemanticSegmentationModule::getLatestFrame()
 {
     const juce::ScopedLock lock(imageLock);
     return latestFrameForGui.createCopy();
+}
+
+std::vector<DynamicPinInfo> SemanticSegmentationModule::getDynamicOutputPins() const
+{
+    // Bus 0: CV Out (4 channels)
+    // Bus 1: Video Out (1 channel)
+    const int cvOutChannels = 4;
+    const int videoOutStartChannel = cvOutChannels;
+
+    return {
+        { "Area", 0, PinDataType::CV },
+        { "Center X", 1, PinDataType::CV },
+        { "Center Y", 2, PinDataType::CV },
+        { "Gate", 3, PinDataType::Gate },
+        { "Video Out", videoOutStartChannel, PinDataType::Video }
+    };
 }
 
 void SemanticSegmentationModule::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midi)
@@ -8627,6 +8990,945 @@ void VideoFXModule::drawIoPins(const NodePinHelpers& helpers)
     // This method is called but dynamic pins take precedence
     helpers.drawAudioInputPin("Source In", 0);
     helpers.drawAudioOutputPin("Output", 0);
+}
+#endif
+
+
+
+================================================================================
+FILE: juce\\Source\\audio\\modules\\CropVideoModule.h
+================================================================================
+
+
+#pragma once
+
+#include "ModuleProcessor.h"
+#include <opencv2/core.hpp>
+#include <opencv2/video/tracking.hpp>
+#include <opencv2/objdetect.hpp>
+#include <opencv2/dnn.hpp>
+#if WITH_CUDA_SUPPORT
+    #include <opencv2/core/cuda.hpp>
+    #include <opencv2/cudaobjdetect.hpp>
+    #include <opencv2/cudaimgproc.hpp>
+#endif
+#include <juce_core/juce_core.h>
+#include <juce_audio_processors/juce_audio_processors.h>
+#include <juce_graphics/juce_graphics.h>
+#if defined(PRESET_CREATOR_UI)
+#include <juce_gui_basics/juce_gui_basics.h>
+#endif
+
+class CropVideoModule : public ModuleProcessor, private juce::Thread
+{
+public:
+    CropVideoModule();
+    ~CropVideoModule() override;
+
+    const juce::String getName() const override { return "crop_video"; }
+    
+    void prepareToPlay(double sampleRate, int samplesPerBlock) override;
+    void releaseResources() override;
+    void processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midi) override;
+    
+    juce::AudioProcessorValueTreeState& getAPVTS() override { return apvts; }
+    juce::Image getLatestFrame(); // This will return the CROPPED output frame for chaining previews
+
+    // Override to declare modulatable parameters
+    bool getParamRouting(const juce::String& paramId, int& outBusIndex, int& outChannelIndexInBus) const override;
+
+#if defined(PRESET_CREATOR_UI)
+    void drawParametersInNode(float itemWidth,
+                              const std::function<bool(const juce::String& paramId)>& isParamModulated,
+                              const std::function<void()>& onModificationEnded) override;
+    void drawIoPins(const NodePinHelpers& helpers) override;
+    ImVec2 getCustomNodeSize() const override;
+#endif
+
+private:
+    void run() override;
+    void updateGuiFrame(const cv::Mat& frame);
+    void updateInputGuiFrame(const cv::Mat& frame); // NEW: For the uncropped preview
+    void loadModels();
+    
+    static juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout();
+    juce::AudioProcessorValueTreeState apvts;
+    
+    // Parameters
+    juce::AudioParameterBool* useGpuParam = nullptr;
+    juce::AudioParameterChoice* trackerModeParam = nullptr;
+    juce::AudioParameterChoice* targetClassParam = nullptr;
+    std::atomic<float>* confidenceParam = nullptr;
+    std::atomic<float>* zoomLevelParam = nullptr;
+    std::atomic<float>* paddingParam = nullptr;
+    juce::AudioParameterChoice* aspectRatioModeParam = nullptr;
+    std::atomic<float>* cropXParam = nullptr;
+    std::atomic<float>* cropYParam = nullptr;
+    std::atomic<float>* cropWParam = nullptr;
+    std::atomic<float>* cropHParam = nullptr;
+    
+    // CV Input Value
+    std::atomic<juce::uint32> currentSourceId { 0 };
+    
+    // Tracking & Detection State
+    std::atomic<bool> manualTrackingActive { false };
+    cv::Ptr<cv::Tracker> manualTracker;
+    juce::CriticalSection trackerLock;
+    cv::Mat lastFrameForTracker;
+    
+    // Detectors
+    cv::dnn::Net yoloNet;
+    bool yoloModelLoaded = false;
+    std::vector<std::string> yoloClassNames;
+    
+    cv::CascadeClassifier faceCascadeCpu;
+#if WITH_CUDA_SUPPORT
+    cv::Ptr<cv::cuda::CascadeClassifier> faceCascadeGpu;
+#endif
+    
+    // UI Previews
+    juce::Image latestInputFrameForGui;  // NEW: Holds the uncropped input for drawing
+    juce::Image latestOutputFrameForGui; // RENAMED: Holds the cropped output
+    juce::CriticalSection imageLock;
+};
+
+
+
+================================================================================
+FILE: juce\\Source\\audio\\modules\\CropVideoModule.cpp
+================================================================================
+
+
+#include "CropVideoModule.h"
+#include "../../video/VideoFrameManager.h"
+#include <opencv2/imgproc.hpp>
+#include <opencv2/dnn.hpp>
+#include <fstream>
+#include <map>
+#include <unordered_map>
+#include <algorithm>
+
+#if defined(PRESET_CREATOR_UI)
+#include <imgui.h>
+#include "../../preset_creator/ImGuiNodeEditorComponent.h"
+#endif
+
+// YOLOv3 default input size
+static constexpr int CROP_YOLO_INPUT_SIZE = 416;
+
+// Embedded COCO-80 labels used if coco.names is missing
+static const char* kCoco80[] = {
+    "person","bicycle","car","motorbike","aeroplane","bus","train","truck","boat","traffic light",
+    "fire hydrant","stop sign","parking meter","bench","bird","cat","dog","horse","sheep","cow",
+    "elephant","bear","zebra","giraffe","backpack","umbrella","handbag","tie","suitcase","frisbee",
+    "skis","snowboard","sports ball","kite","baseball bat","baseball glove","skateboard","surfboard","tennis racket","bottle",
+    "wine glass","cup","fork","knife","spoon","bowl","banana","apple","sandwich","orange",
+    "broccoli","carrot","hot dog","pizza","donut","cake","chair","sofa","pottedplant","bed",
+    "diningtable","toilet","tvmonitor","laptop","mouse","remote","keyboard","cell phone","microwave","oven",
+    "toaster","sink","refrigerator","book","clock","vase","scissors","teddy bear","hair drier","toothbrush"
+};
+
+juce::AudioProcessorValueTreeState::ParameterLayout CropVideoModule::createParameterLayout()
+{
+    std::vector<std::unique_ptr<juce::RangedAudioParameter>> params;
+    
+    // GPU acceleration toggle - default from global setting
+    #if defined(PRESET_CREATOR_UI)
+        bool defaultGpu = ImGuiNodeEditorComponent::getGlobalGpuEnabled();
+    #else
+        bool defaultGpu = true;
+    #endif
+    params.push_back(std::make_unique<juce::AudioParameterBool>("useGpu", "Use GPU (CUDA)", defaultGpu));
+    
+    params.push_back(std::make_unique<juce::AudioParameterChoice>("trackerMode", "Tracking Mode", 
+        juce::StringArray{ "Manual", "Track Face", "Track Object" }, 0));
+    
+    // Initialize with the full list of classes for stable preset saving by index
+    juce::StringArray cocoClasses;
+    for (const auto& name : kCoco80) cocoClasses.add(name);
+    params.push_back(std::make_unique<juce::AudioParameterChoice>("targetClass", "Target Class", cocoClasses, 0));
+    
+    params.push_back(std::make_unique<juce::AudioParameterFloat>("confidence", "Confidence", 0.0f, 1.0f, 0.5f));
+    
+    params.push_back(std::make_unique<juce::AudioParameterChoice>("zoomLevel", "Zoom Level", juce::StringArray{ "Small", "Normal", "Large" }, 1));
+    params.push_back(std::make_unique<juce::AudioParameterFloat>("padding", "Padding", 0.0f, 2.0f, 0.1f)); // 10% padding default
+    params.push_back(std::make_unique<juce::AudioParameterChoice>("aspectRatio", "Aspect Ratio", juce::StringArray{ "Stretch", "Preserve (Fit)" }, 1));
+    
+    // Manual crop controls (normalized 0-1)
+    params.push_back(std::make_unique<juce::AudioParameterFloat>("cropX", "Center X", 0.0f, 1.0f, 0.5f));
+    params.push_back(std::make_unique<juce::AudioParameterFloat>("cropY", "Center Y", 0.0f, 1.0f, 0.5f));
+    params.push_back(std::make_unique<juce::AudioParameterFloat>("cropW", "Width", 0.0f, 1.0f, 0.5f));
+    params.push_back(std::make_unique<juce::AudioParameterFloat>("cropH", "Height", 0.0f, 1.0f, 0.5f));
+    
+    return { params.begin(), params.end() };
+}
+
+CropVideoModule::CropVideoModule()
+    : ModuleProcessor(BusesProperties()
+                      .withInput("Source In", juce::AudioChannelSet::mono(), true) // Bus 0 for Video Source ID
+                      .withInput("Modulation In", juce::AudioChannelSet::discreteChannels(4), true) // Bus 1 for CV modulation
+                      .withOutput("Output ID", juce::AudioChannelSet::mono(), true)),
+      juce::Thread("CropVideo Thread"),
+      apvts(*this, nullptr, "CropVideoParams", createParameterLayout())
+{
+    useGpuParam = dynamic_cast<juce::AudioParameterBool*>(apvts.getParameter("useGpu"));
+    trackerModeParam = dynamic_cast<juce::AudioParameterChoice*>(apvts.getParameter("trackerMode"));
+    targetClassParam = dynamic_cast<juce::AudioParameterChoice*>(apvts.getParameter("targetClass"));
+    confidenceParam = apvts.getRawParameterValue("confidence");
+    zoomLevelParam = apvts.getRawParameterValue("zoomLevel");
+    paddingParam = apvts.getRawParameterValue("padding");
+    aspectRatioModeParam = dynamic_cast<juce::AudioParameterChoice*>(apvts.getParameter("aspectRatio"));
+    cropXParam = apvts.getRawParameterValue("cropX");
+    cropYParam = apvts.getRawParameterValue("cropY");
+    cropWParam = apvts.getRawParameterValue("cropW");
+    cropHParam = apvts.getRawParameterValue("cropH");
+    
+    loadModels();
+}
+
+CropVideoModule::~CropVideoModule()
+{
+    stopThread(5000);
+    VideoFrameManager::getInstance().removeSource(getLogicalId());
+}
+
+void CropVideoModule::prepareToPlay(double, int) { startThread(); }
+
+void CropVideoModule::releaseResources() { signalThreadShouldExit(); stopThread(5000); }
+
+void CropVideoModule::loadModels()
+{
+    juce::File appDir = juce::File::getSpecialLocation(juce::File::currentApplicationFile).getParentDirectory();
+    juce::File assetsDir = appDir.getChildFile("assets");
+    
+    // Load YOLO model
+    juce::File weights = assetsDir.getChildFile("yolov3-tiny.weights");
+    juce::File cfg = assetsDir.getChildFile("yolov3-tiny.cfg");
+    juce::File names = assetsDir.getChildFile("coco.names");
+    
+    if (weights.existsAsFile() && cfg.existsAsFile())
+    {
+        try
+        {
+            yoloNet = cv::dnn::readNetFromDarknet(cfg.getFullPathName().toStdString(), weights.getFullPathName().toStdString());
+            yoloModelLoaded = true;
+            juce::Logger::writeToLog("[CropVideo] YOLOv3-tiny model loaded successfully");
+            
+            if (names.existsAsFile())
+            {
+                std::ifstream ifs(names.getFullPathName().toStdString().c_str());
+                std::string line;
+                while (std::getline(ifs, line))
+                    if (!line.empty()) yoloClassNames.push_back(line);
+            }
+            if (yoloClassNames.empty())
+            {
+                yoloClassNames.assign(std::begin(kCoco80), std::end(kCoco80));
+                juce::Logger::writeToLog("[CropVideo] coco.names missing; using embedded COCO-80 labels.");
+            }
+        }
+        catch (const cv::Exception& e)
+        {
+            juce::Logger::writeToLog("[CropVideo] FAILED to load YOLO model: " + juce::String(e.what()));
+            yoloModelLoaded = false;
+        }
+    }
+    else
+    {
+        juce::Logger::writeToLog("[CropVideo] WARNING: YOLO model not found.");
+        yoloModelLoaded = false;
+    }
+    
+    // Load Haar Cascade
+    juce::File cascadeFile = assetsDir.getChildFile("haarcascade_frontalface_default.xml");
+    if (!cascadeFile.existsAsFile())
+    {
+        // Try alternative location
+        auto faceDir = assetsDir.getChildFile("openpose_models").getChildFile("face");
+        auto haarPath = faceDir.getChildFile("haarcascade_frontalface_alt.xml").getFullPathName();
+        cascadeFile = juce::File(haarPath);
+    }
+    
+    if (cascadeFile.existsAsFile())
+    {
+        faceCascadeCpu.load(cascadeFile.getFullPathName().toStdString());
+        juce::Logger::writeToLog("[CropVideo] Haar cascade loaded: " + cascadeFile.getFileName());
+        
+        #if WITH_CUDA_SUPPORT
+            try
+            {
+                faceCascadeGpu = cv::cuda::CascadeClassifier::create(cascadeFile.getFullPathName().toStdString());
+                juce::Logger::writeToLog("[CropVideo] GPU cascade loaded successfully");
+            }
+            catch (const cv::Exception& e)
+            {
+                juce::Logger::writeToLog("[CropVideo] WARNING: Failed to create GPU cascade classifier: " + juce::String(e.what()));
+            }
+        #endif
+    }
+    else
+    {
+        juce::Logger::writeToLog("[CropVideo] WARNING: Haar cascade for face detection not found.");
+    }
+}
+
+bool CropVideoModule::getParamRouting(const juce::String& paramId, int& outBusIndex, int& outChannelIndexInBus) const
+{
+    outBusIndex = 1; // Modulation inputs are on bus 1
+    if (paramId == "cropX_mod") { outChannelIndexInBus = 0; return true; }
+    if (paramId == "cropY_mod") { outChannelIndexInBus = 1; return true; }
+    if (paramId == "cropW_mod") { outChannelIndexInBus = 2; return true; }
+    if (paramId == "cropH_mod") { outChannelIndexInBus = 3; return true; }
+    return false;
+}
+
+void CropVideoModule::run()
+{
+    #if WITH_CUDA_SUPPORT
+        bool lastGpuStateForYolo = !useGpuParam->get(); // Force initial setup
+        bool loggedGpuWarning = false; // Only warn once if no GPU available
+    #endif
+    
+    while (!threadShouldExit())
+    {
+        juce::uint32 sourceId = currentSourceId.load();
+        if (sourceId == 0) { wait(50); continue; }
+
+        cv::Mat frame = VideoFrameManager::getInstance().getFrame(sourceId);
+        if (frame.empty()) { wait(33); continue; }
+
+        // Cache the full, uncropped input frame for the UI and tracker initialization
+        {
+            const juce::ScopedLock lock(trackerLock);
+            frame.copyTo(lastFrameForTracker);
+        }
+        updateInputGuiFrame(frame);
+
+        // --- TRACKING / DETECTION LOGIC ---
+        int mode = trackerModeParam ? trackerModeParam->getIndex() : 0;
+        
+        if (mode == 0 && manualTrackingActive.load()) // Manual Tracker
+        {
+            const juce::ScopedLock lock(trackerLock);
+            if (manualTracker)
+            {
+                cv::Rect newBox;
+                if (manualTracker->update(frame, newBox))
+                {
+                    *cropXParam = ((float)newBox.x + (float)newBox.width / 2.0f) / (float)frame.cols;
+                    *cropYParam = ((float)newBox.y + (float)newBox.height / 2.0f) / (float)frame.rows;
+                    *cropWParam = (float)newBox.width / (float)frame.cols;
+                    *cropHParam = (float)newBox.height / (float)frame.rows;
+                }
+                else
+                {
+                    manualTrackingActive.store(false);
+                    manualTracker.release();
+                }
+            }
+        }
+        else // Automatic Detection Modes
+        {
+            cv::Rect detectedBox;
+            bool found = false;
+            
+            bool useGpu = false;
+            #if WITH_CUDA_SUPPORT
+                useGpu = useGpuParam ? useGpuParam->get() : false;
+                if (useGpu && cv::cuda::getCudaEnabledDeviceCount() == 0)
+                {
+                    useGpu = false;
+                    if (!loggedGpuWarning)
+                    {
+                        juce::Logger::writeToLog("[CropVideo] WARNING: GPU requested but no CUDA device found. Using CPU.");
+                        loggedGpuWarning = true;
+                    }
+                }
+            #endif
+            
+            if (mode == 1) // Track Face
+            {
+                bool executedOnGpu = false;
+                if (useGpu)
+                {
+                #if WITH_CUDA_SUPPORT
+                    if (faceCascadeGpu)
+                    {
+                        cv::cuda::GpuMat frameGpu, grayGpu, facesGpu;
+                        frameGpu.upload(frame);
+                        cv::cuda::cvtColor(frameGpu, grayGpu, cv::COLOR_BGR2GRAY);
+                        faceCascadeGpu->detectMultiScale(grayGpu, facesGpu);
+                        std::vector<cv::Rect> faces;
+                        faceCascadeGpu->convert(facesGpu, faces);
+                        if (!faces.empty())
+                        {
+                            detectedBox = *std::max_element(faces.begin(), faces.end(), 
+                                [](const cv::Rect& a, const cv::Rect& b) { return a.area() < b.area(); });
+                            found = true;
+                        }
+                        executedOnGpu = true;
+                    }
+                #endif
+                }
+                if (!executedOnGpu) // CPU Path
+                {
+                    cv::Mat gray;
+                    cv::cvtColor(frame, gray, cv::COLOR_BGR2GRAY);
+                    std::vector<cv::Rect> faces;
+                    faceCascadeCpu.detectMultiScale(gray, faces);
+                    if (!faces.empty())
+                    {
+                        detectedBox = *std::max_element(faces.begin(), faces.end(), 
+                            [](const cv::Rect& a, const cv::Rect& b) { return a.area() < b.area(); });
+                        found = true;
+                    }
+                }
+            }
+            else if (mode == 2 && yoloModelLoaded) // Track Object (YOLO)
+            {
+                #if WITH_CUDA_SUPPORT
+                    if (useGpu != lastGpuStateForYolo)
+                    {
+                        yoloNet.setPreferableBackend(useGpu ? cv::dnn::DNN_BACKEND_CUDA : cv::dnn::DNN_BACKEND_OPENCV);
+                        yoloNet.setPreferableTarget(useGpu ? cv::dnn::DNN_TARGET_CUDA : cv::dnn::DNN_TARGET_CPU);
+                        lastGpuStateForYolo = useGpu;
+                    }
+                #endif
+
+                // Prepare input blob
+                cv::Mat blob = cv::dnn::blobFromImage(frame, 1.0/255.0, cv::Size(CROP_YOLO_INPUT_SIZE, CROP_YOLO_INPUT_SIZE), cv::Scalar(), true, false);
+                yoloNet.setInput(blob);
+                std::vector<cv::Mat> outs;
+                yoloNet.forward(outs, yoloNet.getUnconnectedOutLayersNames());
+
+                std::vector<cv::Rect> boxes;
+                std::vector<float> confidences;
+                int targetClassId = targetClassParam ? targetClassParam->getIndex() : 0;
+                float confThreshold = confidenceParam ? confidenceParam->load() : 0.5f;
+
+                for (const auto& out : outs)
+                {
+                    const float* data = (const float*)out.data;
+                    for (int i = 0; i < out.rows; ++i, data += out.cols)
+                    {
+                        cv::Mat scores = out.row(i).colRange(5, out.cols);
+                        cv::Point classIdPoint;
+                        double maxScore;
+                        cv::minMaxLoc(scores, 0, &maxScore, 0, &classIdPoint);
+                        if (maxScore > confThreshold && classIdPoint.x == targetClassId)
+                        {
+                            int centerX = (int)(data[0] * frame.cols);
+                            int centerY = (int)(data[1] * frame.rows);
+                            int width   = (int)(data[2] * frame.cols);
+                            int height  = (int)(data[3] * frame.rows);
+                            boxes.emplace_back(centerX - width/2, centerY - height/2, width, height);
+                            confidences.push_back((float)maxScore);
+                        }
+                    }
+                }
+
+                std::vector<int> indices;
+                cv::dnn::NMSBoxes(boxes, confidences, confThreshold, 0.4f, indices);
+                if (!indices.empty())
+                {
+                    detectedBox = boxes[indices[0]];
+                    found = true;
+                }
+            }
+            
+            if (found)
+            {
+                *cropWParam = (float)detectedBox.width / (float)frame.cols;
+                *cropHParam = (float)detectedBox.height / (float)frame.rows;
+                *cropXParam = ((float)detectedBox.x + (float)detectedBox.width / 2.0f) / (float)frame.cols;
+                *cropYParam = ((float)detectedBox.y + (float)detectedBox.height / 2.0f) / (float)frame.rows;
+            }
+        }
+
+        // Get final crop values (these are already modulated by the audio thread if connected)
+        float cx = cropXParam ? cropXParam->load() : 0.5f;
+        float cy = cropYParam ? cropYParam->load() : 0.5f;
+        float w = cropWParam ? cropWParam->load() : 0.5f;
+        float h = cropHParam ? cropHParam->load() : 0.5f;
+        
+        int frameW = frame.cols;
+        int frameH = frame.rows;
+        int pixelW = static_cast<int>(w * frameW);
+        int pixelH = static_cast<int>(h * frameH);
+        int pixelX = static_cast<int>(cx * frameW - pixelW / 2.0f);
+        int pixelY = static_cast<int>(cy * frameH - pixelH / 2.0f);
+        
+        float pad = paddingParam ? paddingParam->load() : 0.1f;
+        int padX = static_cast<int>(pixelW * pad);
+        int padY = static_cast<int>(pixelH * pad);
+        pixelX -= padX;
+        pixelY -= padY;
+        pixelW += (padX * 2);
+        pixelH += (padY * 2);
+
+        cv::Rect roi(pixelX, pixelY, pixelW, pixelH);
+        roi &= cv::Rect(0, 0, frame.cols, frame.rows);
+        
+        if (roi.area() > 0)
+        {
+            cv::Mat croppedFrame = frame(roi);
+            VideoFrameManager::getInstance().setFrame(getLogicalId(), croppedFrame);
+            // This now updates the *output* frame preview (which we don't display in this node)
+            updateGuiFrame(croppedFrame);
+        }
+        else
+        {
+            // If crop is invalid, publish an empty frame
+            VideoFrameManager::getInstance().setFrame(getLogicalId(), cv::Mat());
+            updateGuiFrame(cv::Mat());
+        }
+
+        wait(33);
+    }
+    juce::Logger::writeToLog("[CropVideo][Thread] Video processing thread finished.");
+}
+
+void CropVideoModule::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midi)
+{
+    juce::ignoreUnused(midi);
+    // Read the Source ID from the dedicated input bus (bus 0)
+    auto sourceIdBus = getBusBuffer(buffer, true, 0);
+    if (sourceIdBus.getNumChannels() > 0 && sourceIdBus.getNumSamples() > 0)
+    {
+        currentSourceId.store(static_cast<juce::uint32>(sourceIdBus.getSample(0, 0)));
+    }
+    else
+    {
+        currentSourceId.store(0);
+    }
+    // Note: CV modulation is handled automatically by ModularSynthProcessor
+    // because we implemented getParamRouting(). The values in cropXParam etc.
+    // are already the final, modulated values.
+    buffer.clear();
+    // Output our own Logical ID for chaining
+    auto outputBus = getBusBuffer(buffer, false, 0);
+    if (outputBus.getNumChannels() > 0)
+    {
+        float logicalId = static_cast<float>(getLogicalId());
+        for (int s = 0; s < outputBus.getNumSamples(); ++s)
+            outputBus.setSample(0, s, logicalId);
+    }
+}
+
+void CropVideoModule::updateGuiFrame(const cv::Mat& frame)
+{
+    const juce::ScopedLock lock(imageLock);
+    if (frame.empty())
+    {
+        latestOutputFrameForGui = juce::Image();
+        return;
+    }
+    cv::Mat bgraFrame;
+    cv::cvtColor(frame, bgraFrame, cv::COLOR_BGR2BGRA);
+    if (latestOutputFrameForGui.isNull() || latestOutputFrameForGui.getWidth() != bgraFrame.cols || latestOutputFrameForGui.getHeight() != bgraFrame.rows)
+    {
+        latestOutputFrameForGui = juce::Image(juce::Image::ARGB, bgraFrame.cols, bgraFrame.rows, true);
+    }
+    juce::Image::BitmapData dest(latestOutputFrameForGui, juce::Image::BitmapData::writeOnly);
+    memcpy(dest.data, bgraFrame.data, bgraFrame.total() * bgraFrame.elemSize());
+}
+
+// NEW function to handle the input frame preview
+void CropVideoModule::updateInputGuiFrame(const cv::Mat& frame)
+{
+    const juce::ScopedLock lock(imageLock);
+    if (frame.empty())
+    {
+        latestInputFrameForGui = juce::Image();
+        return;
+    }
+    cv::Mat bgraFrame;
+    cv::cvtColor(frame, bgraFrame, cv::COLOR_BGR2BGRA);
+    if (latestInputFrameForGui.isNull() || latestInputFrameForGui.getWidth() != bgraFrame.cols || latestInputFrameForGui.getHeight() != bgraFrame.rows)
+    {
+        latestInputFrameForGui = juce::Image(juce::Image::ARGB, bgraFrame.cols, bgraFrame.rows, true);
+    }
+    juce::Image::BitmapData dest(latestInputFrameForGui, juce::Image::BitmapData::writeOnly);
+    memcpy(dest.data, bgraFrame.data, bgraFrame.total() * bgraFrame.elemSize());
+}
+
+juce::Image CropVideoModule::getLatestFrame()
+{
+    const juce::ScopedLock lock(imageLock);
+    // This returns the cropped output, useful if another node wants a preview
+    return latestOutputFrameForGui.createCopy();
+}
+
+#if defined(PRESET_CREATOR_UI)
+ImVec2 CropVideoModule::getCustomNodeSize() const
+{
+    int level = zoomLevelParam ? (int)zoomLevelParam->load() : 1;
+    const float widths[] { 240.0f, 480.0f, 960.0f };
+    return ImVec2(widths[juce::jlimit(0, 2, level)], 0.0f);
+}
+
+void CropVideoModule::drawParametersInNode(float itemWidth, const std::function<bool(const juce::String& paramId)>& isParamModulated, const std::function<void()>& onModificationEnded)
+{
+    // State for tracking drag operations (per-instance using logical ID)
+    static std::map<int, bool> isResizingCropBoxByNode; // Left-click drag for resizing
+    static std::map<int, bool> isMovingCropBoxByNode;   // Right-click drag for moving
+    static std::map<int, ImVec2> dragStartPosByNode;
+    static std::map<int, float> initialCropXByNode; // Store crop center at the start of a move operation
+    static std::map<int, float> initialCropYByNode;
+    
+    int mode = trackerModeParam ? trackerModeParam->getIndex() : 0;
+    int nodeId = (int)getLogicalId();
+    bool& isResizingCropBox = isResizingCropBoxByNode[nodeId];
+    bool& isMovingCropBox = isMovingCropBoxByNode[nodeId];
+    ImVec2& dragStartPos = dragStartPosByNode[nodeId];
+    float& initialCropX = initialCropXByNode[nodeId];
+    float& initialCropY = initialCropYByNode[nodeId];
+    
+    juce::Image frame;
+    {
+        const juce::ScopedLock lock(imageLock);
+        frame = latestInputFrameForGui.createCopy(); // Always draw the full, uncropped input frame
+    }
+    
+    if (!frame.isNull())
+    {
+        // Use a local static map for texture management (per-module-instance textures)
+        static std::unordered_map<int, std::unique_ptr<juce::OpenGLTexture>> localVisionTextures;
+        
+        if (localVisionTextures.find((int)getLogicalId()) == localVisionTextures.end())
+            localVisionTextures[(int)getLogicalId()] = std::make_unique<juce::OpenGLTexture>();
+        
+        auto* texture = localVisionTextures[(int)getLogicalId()].get();
+        texture->loadImage(frame);
+        
+        if (texture->getTextureID() != 0)
+        {
+            float ar = (float)frame.getHeight() / juce::jmax(1.0f, (float)frame.getWidth());
+            ImVec2 size(itemWidth, itemWidth * ar);
+            ImGui::Image((void*)(intptr_t)texture->getTextureID(), size, ImVec2(0, 1), ImVec2(1, 0));
+            
+            // Get image screen coordinates and size for interaction
+            ImVec2 imageRectMin = ImGui::GetItemRectMin();
+            ImVec2 imageRectMax = ImGui::GetItemRectMax();
+            ImVec2 imageSize = ImGui::GetItemRectSize();
+            ImDrawList* drawList = ImGui::GetWindowDrawList();
+            
+            ImGui::SetCursorScreenPos(imageRectMin);
+            ImGui::InvisibleButton("##crop_interaction", imageSize);
+            
+            ImVec2 mousePos = ImGui::GetMousePos();
+            
+            // Get current crop rect from parameters to display it and check for hover
+            float currX = cropXParam ? cropXParam->load() : 0.5f;
+            float currY = cropYParam ? cropYParam->load() : 0.5f;
+            float currW = cropWParam ? cropWParam->load() : 0.5f;
+            float currH = cropHParam ? cropHParam->load() : 0.5f;
+            
+            ImVec2 currentCropMin = ImVec2(imageRectMin.x + (currX - currW/2.0f) * imageSize.x, imageRectMin.y + (currY - currH/2.0f) * imageSize.y);
+            ImVec2 currentCropMax = ImVec2(imageRectMin.x + (currX + currW/2.0f) * imageSize.x, imageRectMin.y + (currY + currH/2.0f) * imageSize.y);
+            bool isMouseInCropBox = (mousePos.x >= currentCropMin.x && mousePos.x <= currentCropMax.x && mousePos.y >= currentCropMin.y && mousePos.y <= currentCropMax.y);
+            
+            // Set tooltip and cursor based on mouse position
+            if (ImGui::IsItemHovered())
+            {
+                if (isMouseInCropBox && !isResizingCropBox && !isMovingCropBox)
+                {
+                    ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
+                    ImGui::SetTooltip("Right-drag to move Crop Box\nLeft-drag outside to resize");
+                }
+                else
+                {
+                    ImGui::SetTooltip("Left-drag to define new Crop Box");
+                }
+            }
+            
+            // --- Handle Mouse Clicks ---
+            if (ImGui::IsItemClicked(ImGuiMouseButton_Left) && !isMouseInCropBox)
+            {
+                isResizingCropBox = true;
+                dragStartPos = mousePos;
+            }
+            if (ImGui::IsItemClicked(ImGuiMouseButton_Right) && isMouseInCropBox)
+            {
+                isMovingCropBox = true;
+                dragStartPos = mousePos;
+                initialCropX = currX;
+                initialCropY = currY;
+            }
+            
+            // Draw crop rect - green for tracking, yellow for manual
+            if (mode == 0 && manualTrackingActive.load())
+            {
+                // Draw a thick green rectangle for manual tracking
+                drawList->AddRect(currentCropMin, currentCropMax, IM_COL32(0, 255, 0, 255), 0.0f, 0, 3.0f);
+                const char* text = "TRACKING";
+                ImVec2 textSize = ImGui::CalcTextSize(text);
+                ImVec2 textPos = ImVec2(currentCropMin.x + 5, currentCropMin.y + 5);
+                if (textPos.x + textSize.x < imageRectMax.x && textPos.y + textSize.y < imageRectMax.y)
+                {
+                    drawList->AddText(textPos, IM_COL32(0, 255, 0, 255), text);
+                }
+            }
+            else if (mode != 0)
+            {
+                // Green for auto-detection modes
+                drawList->AddRect(currentCropMin, currentCropMax, IM_COL32(0, 255, 0, 255), 0.0f, 0, 3.0f);
+            }
+            else
+            {
+                // Draw the yellow rectangle for manual selection
+                drawList->AddRect(currentCropMin, currentCropMax, IM_COL32(255, 255, 0, 150), 0.0f, 0, 2.0f);
+            }
+            
+            // Handle Resize Drag (Left Click)
+            if (isResizingCropBox)
+            {
+                ImVec2 dragCurrentPos = mousePos;
+                ImVec2 rectMin = ImVec2(std::min(dragStartPos.x, dragCurrentPos.x), std::min(dragStartPos.y, dragCurrentPos.y));
+                ImVec2 rectMax = ImVec2(std::max(dragStartPos.x, dragCurrentPos.x), std::max(dragStartPos.y, dragCurrentPos.y));
+                
+                rectMin.x = std::max(rectMin.x, imageRectMin.x);
+                rectMin.y = std::max(rectMin.y, imageRectMin.y);
+                rectMax.x = std::min(rectMax.x, imageRectMax.x);
+                rectMax.y = std::min(rectMax.y, imageRectMax.y);
+                
+                ImU32 overlayColor = IM_COL32(0, 0, 0, 120);
+                drawList->AddRectFilled(imageRectMin, ImVec2(imageRectMax.x, rectMin.y), overlayColor);
+                drawList->AddRectFilled(ImVec2(imageRectMin.x, rectMax.y), imageRectMax, overlayColor);
+                drawList->AddRectFilled(ImVec2(imageRectMin.x, rectMin.y), ImVec2(rectMin.x, rectMax.y), overlayColor);
+                drawList->AddRectFilled(ImVec2(rectMax.x, rectMin.y), ImVec2(imageRectMax.x, rectMax.y), overlayColor);
+            }
+            
+            // Handle Move Drag (Right Click)
+            if (isMovingCropBox && ImGui::IsMouseDragging(ImGuiMouseButton_Right))
+            {
+                ImVec2 dragDelta = ImVec2(mousePos.x - dragStartPos.x, mousePos.y - dragStartPos.y);
+                if (imageSize.x > 0 && imageSize.y > 0)
+                {
+                    float normDeltaX = dragDelta.x / imageSize.x;
+                    float normDeltaY = dragDelta.y / imageSize.y;
+                    
+                    // Calculate new position and clamp it so the box stays within the image bounds
+                    float newX = juce::jlimit(currW / 2.0f, 1.0f - currW / 2.0f, initialCropX + normDeltaX);
+                    float newY = juce::jlimit(currH / 2.0f, 1.0f - currH / 2.0f, initialCropY + normDeltaY);
+                    
+                    if (auto* p = dynamic_cast<juce::AudioParameterFloat*>(apvts.getParameter("cropX"))) *p = newX;
+                    if (auto* p = dynamic_cast<juce::AudioParameterFloat*>(apvts.getParameter("cropY"))) *p = newY;
+                }
+            }
+            
+            // --- Handle Mouse Release ---
+            if (isResizingCropBox && ImGui::IsMouseReleased(ImGuiMouseButton_Left))
+            {
+                isResizingCropBox = false;
+                ImVec2 dragEndPos = mousePos;
+                ImVec2 rectMin = ImVec2(std::min(dragStartPos.x, dragEndPos.x), std::min(dragStartPos.y, dragEndPos.y));
+                ImVec2 rectMax = ImVec2(std::max(dragStartPos.x, dragEndPos.x), std::max(dragStartPos.y, dragEndPos.y));
+                
+                rectMin.x = std::max(rectMin.x, imageRectMin.x);
+                rectMin.y = std::max(rectMin.y, imageRectMin.y);
+                rectMax.x = std::min(rectMax.x, imageRectMax.x);
+                rectMax.y = std::min(rectMax.y, imageRectMax.y);
+                
+                if (imageSize.x > 0 && imageSize.y > 0)
+                {
+                    float newW = (rectMax.x - rectMin.x) / imageSize.x;
+                    float newH = (rectMax.y - rectMin.y) / imageSize.y;
+                    float newX = ((rectMin.x - imageRectMin.x) / imageSize.x) + newW / 2.0f;
+                    float newY = ((rectMin.y - imageRectMin.y) / imageSize.y) + newH / 2.0f;
+                    
+                    if (auto* p = dynamic_cast<juce::AudioParameterFloat*>(apvts.getParameter("cropX"))) *p = newX;
+                    if (auto* p = dynamic_cast<juce::AudioParameterFloat*>(apvts.getParameter("cropY"))) *p = newY;
+                    if (auto* p = dynamic_cast<juce::AudioParameterFloat*>(apvts.getParameter("cropW"))) *p = newW;
+                    if (auto* p = dynamic_cast<juce::AudioParameterFloat*>(apvts.getParameter("cropH"))) *p = newH;
+                    onModificationEnded();
+                }
+            }
+            
+            if (isMovingCropBox && ImGui::IsMouseReleased(ImGuiMouseButton_Right))
+            {
+                isMovingCropBox = false;
+                onModificationEnded();
+            }
+        }
+    }
+    
+    // --- GPU Checkbox ---
+    ImGui::Separator();
+    #if WITH_CUDA_SUPPORT
+        bool cudaAvailable = (cv::cuda::getCudaEnabledDeviceCount() > 0);
+        if (!cudaAvailable) ImGui::BeginDisabled();
+        
+        bool useGpu = useGpuParam ? useGpuParam->get() : false;
+        if (ImGui::Checkbox("⚡ Use GPU (CUDA)", &useGpu))
+        {
+            *useGpuParam = useGpu;
+            onModificationEnded();
+        }
+        
+        if (!cudaAvailable)
+        {
+            ImGui::EndDisabled();
+            if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
+                ImGui::SetTooltip("No CUDA-enabled GPU detected.\nCheck that your GPU supports CUDA and drivers are installed.");
+        }
+    #else
+        ImGui::TextDisabled("🚫 GPU support not compiled");
+    #endif
+    
+    const char* modes[] = { "Manual", "Track Face", "Track Object" };
+    if (ImGui::Combo("Tracking Mode", &mode, modes, IM_ARRAYSIZE(modes)))
+    {
+        *trackerModeParam = mode;
+        if (mode != 0) // If switching to an auto mode, stop manual tracking
+        {
+            const juce::ScopedLock lock(trackerLock);
+            manualTrackingActive.store(false);
+            manualTracker.release();
+        }
+        onModificationEnded();
+    }
+    
+    if (mode == 2) // Object Tracking
+    {
+        if (targetClassParam && !yoloClassNames.empty())
+        {
+            int idx = targetClassParam->getIndex();
+            ImGui::SetNextItemWidth(itemWidth * 0.55f);
+            if (ImGui::BeginCombo("Target Class", yoloClassNames[idx].c_str()))
+            {
+                for (int i = 0; i < (int)yoloClassNames.size(); ++i)
+                {
+                    if (ImGui::Selectable(yoloClassNames[i].c_str(), idx == i))
+                    {
+                        *targetClassParam = i;
+                        onModificationEnded();
+                    }
+                }
+                ImGui::EndCombo();
+            }
+        }
+        
+        ImGui::SameLine();
+        ImGui::SetNextItemWidth(itemWidth * 0.45f - ImGui::GetStyle().ItemSpacing.x);
+        float conf = confidenceParam ? confidenceParam->load() : 0.5f;
+        if (ImGui::SliderFloat("##conf", &conf, 0.0f, 1.0f, "Conf %.2f"))
+        {
+            if (auto* p = dynamic_cast<juce::AudioParameterFloat*>(apvts.getParameter("confidence")))
+            {
+                *p = conf;
+                onModificationEnded();
+            }
+        }
+    }
+    
+    if (mode == 0) // Manual Mode
+    {
+        if (manualTrackingActive.load())
+        {
+            if (ImGui::Button("Stop Tracking", ImVec2(itemWidth, 0)))
+            {
+                const juce::ScopedLock lock(trackerLock);
+                manualTrackingActive.store(false);
+                manualTracker.release();
+            }
+        }
+        else
+        {
+            if (ImGui::Button("Start Tracking", ImVec2(itemWidth, 0)))
+            {
+                const juce::ScopedLock lock(trackerLock);
+                if (!lastFrameForTracker.empty())
+                {
+                    cv::Rect initBox(
+                        (int)((cropXParam->load() - cropWParam->load()/2.f) * lastFrameForTracker.cols),
+                        (int)((cropYParam->load() - cropHParam->load()/2.f) * lastFrameForTracker.rows),
+                        (int)(cropWParam->load() * lastFrameForTracker.cols),
+                        (int)(cropHParam->load() * lastFrameForTracker.rows)
+                    );
+                    
+                    if (initBox.area() > 0)
+                    {
+                        manualTracker = cv::TrackerMIL::create();
+                        manualTracker->init(lastFrameForTracker, initBox);
+                        manualTrackingActive.store(true);
+                    }
+                }
+            }
+        }
+    }
+    
+    // --- Parameter Sliders ---
+    ImGui::Separator();
+    ImGui::PushItemWidth(itemWidth);
+    ImGui::Text("Manual Crop Controls:");
+    
+    // Disable sliders if any automatic tracking is active
+    bool slidersDisabled = (mode != 0) || manualTrackingActive.load();
+    if (slidersDisabled) ImGui::BeginDisabled();
+    
+    auto drawModSlider = [&](const char* label, const char* paramId, std::atomic<float>* paramPtr)
+    {
+        bool modulated = isParamModulated(juce::String(paramId) + "_mod");
+        if (modulated) ImGui::BeginDisabled();
+        
+        float value = paramPtr ? paramPtr->load() : 0.5f;
+        if (ImGui::SliderFloat(label, &value, 0.0f, 1.0f, "%.3f"))
+        {
+            if (auto* p = dynamic_cast<juce::AudioParameterFloat*>(apvts.getParameter(paramId)))
+            {
+                *p = value;
+                onModificationEnded();
+            }
+        }
+        
+        if (modulated)
+        {
+            ImGui::EndDisabled();
+            if (ImGui::IsItemHovered())
+                ImGui::SetTooltip("CV input connected");
+        }
+    };
+    
+    drawModSlider("Center X", "cropX", cropXParam);
+    drawModSlider("Center Y", "cropY", cropYParam);
+    drawModSlider("Width", "cropW", cropWParam);
+    drawModSlider("Height", "cropH", cropHParam);
+    
+    if (slidersDisabled) ImGui::EndDisabled();
+    
+    ImGui::Separator();
+    
+    float padding = paddingParam ? paddingParam->load() : 0.1f;
+    if (ImGui::SliderFloat("Padding", &padding, 0.0f, 2.0f, "%.2f"))
+    {
+        if (auto* p = dynamic_cast<juce::AudioParameterFloat*>(apvts.getParameter("padding")))
+        {
+            *p = padding;
+            onModificationEnded();
+        }
+    }
+    
+    if (aspectRatioModeParam)
+    {
+        int mode = aspectRatioModeParam->getIndex();
+        const char* items[] = { "Stretch", "Preserve (Fit)" };
+        if (ImGui::Combo("Aspect Ratio", &mode, items, 2))
+        {
+            *aspectRatioModeParam = mode;
+            onModificationEnded();
+        }
+    }
+    
+    ImGui::PopItemWidth();
+    ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1.0f), "Output ID: %d", (int)getLogicalId());
+}
+
+void CropVideoModule::drawIoPins(const NodePinHelpers& helpers)
+{
+    helpers.drawAudioInputPin("Source In", 0);
+    // Modulation pins are now drawn automatically by the editor
+    helpers.drawAudioOutputPin("Output ID", 0);
 }
 #endif
 
@@ -17691,6 +18993,130 @@ void ImGuiNodeEditorComponent::handleMultiSequencerAutoConnectVCO(MultiSequencer
     graphNeedsRebuild = true;
 }
 
+void ImGuiNodeEditorComponent::handleColorTrackerAutoConnectPolyVCO(ColorTrackerModule* colorTracker, juce::uint32 colorTrackerLid)
+{
+    if (!synth || !colorTracker) return;
+
+    // 1. Get ColorTracker info and get number of tracked colors
+    auto colorTrackerNodeId = synth->getNodeIdForLogical(colorTrackerLid);
+    ImVec2 colorTrackerPos = ImNodes::GetNodeGridSpacePos((int)colorTrackerLid);
+    
+    // Get tracked colors count using the new helper method
+    int numColors = colorTracker->getTrackedColorsCount();
+    
+    if (numColors == 0)
+    {
+        juce::Logger::writeToLog("[ColorTracker Auto-Connect] No colors tracked, aborting.");
+        return;
+    }
+    
+    // 2. Create PolyVCO with matching number of voices
+    auto polyVcoNodeId = synth->addModule("polyvco");
+    auto polyVcoLid = synth->getLogicalIdForNode(polyVcoNodeId);
+    pendingNodePositions[(int)polyVcoLid] = ImVec2(colorTrackerPos.x + 400.0f, colorTrackerPos.y);
+    
+    if (auto* vco = dynamic_cast<PolyVCOModuleProcessor*>(synth->getModuleForLogical(polyVcoLid)))
+    {
+        if (auto* p = dynamic_cast<juce::AudioParameterInt*>(vco->getAPVTS().getParameter("numVoices")))
+            *p = numColors;
+    }
+    
+    // 3. Create Track Mixer
+    auto mixerNodeId = synth->addModule("track_mixer");
+    auto mixerLid = synth->getLogicalIdForNode(mixerNodeId);
+    pendingNodePositions[(int)mixerLid] = ImVec2(colorTrackerPos.x + 800.0f, colorTrackerPos.y);
+    
+    if (auto* mixer = dynamic_cast<TrackMixerModuleProcessor*>(synth->getModuleForLogical(mixerLid)))
+    {
+        if (auto* p = dynamic_cast<juce::AudioParameterInt*>(mixer->getAPVTS().getParameter("numTracks")))
+            *p = numColors;
+    }
+
+    // 4. Connect Num Colors output to PolyVCO's NumVoices Mod and TrackMixer's Num Tracks Mod
+    synth->connect(colorTrackerNodeId, 72, polyVcoNodeId, 0); // Num Colors -> NumVoices Mod
+    synth->connect(colorTrackerNodeId, 72, mixerNodeId, 64);  // Num Colors -> Num Tracks Mod
+    
+    // 5. Connect ColorTracker outputs to PolyVCO inputs
+    for (int i = 0; i < numColors; ++i)
+    {
+        // Map X position to pitch/frequency for voice i
+        synth->connect(colorTrackerNodeId, i * 3 + 0, polyVcoNodeId, 1 + i); // X -> Freq Mod
+        
+        // Map Area to gate level for voice i
+        const int gateModChannel = 1 + PolyVCOModuleProcessor::MAX_VOICES * 2 + i;
+        synth->connect(colorTrackerNodeId, i * 3 + 2, polyVcoNodeId, gateModChannel); // Area -> Gate Mod
+    }
+    
+    // 6. Connect PolyVCO audio outputs to Track Mixer inputs
+    for (int i = 0; i < numColors; ++i)
+    {
+        synth->connect(polyVcoNodeId, i, mixerNodeId, i); // Voice i -> Mixer Track i
+    }
+    
+    // 7. Connect Track Mixer to Main Output
+    auto outputNodeId = synth->getOutputNodeID();
+    synth->connect(mixerNodeId, 0, outputNodeId, 0); // Out L
+    synth->connect(mixerNodeId, 1, outputNodeId, 1); // Out R
+
+    graphNeedsRebuild = true;
+    juce::Logger::writeToLog("[ColorTracker Auto-Connect] Connected " + juce::String(numColors) + " colors to PolyVCO.");
+}
+
+void ImGuiNodeEditorComponent::handleColorTrackerAutoConnectSamplers(ColorTrackerModule* colorTracker, juce::uint32 colorTrackerLid)
+{
+    if (!synth || !colorTracker) return;
+
+    // 1. Get ColorTracker info
+    auto colorTrackerNodeId = synth->getNodeIdForLogical(colorTrackerLid);
+    ImVec2 colorTrackerPos = ImNodes::GetNodeGridSpacePos((int)colorTrackerLid);
+    
+    // Get tracked colors count
+    int numColors = colorTracker->getTrackedColorsCount();
+    
+    if (numColors == 0)
+    {
+        juce::Logger::writeToLog("[ColorTracker Auto-Connect] No colors tracked, aborting.");
+        return;
+    }
+    
+    // 2. Create Track Mixer
+    auto mixerNodeId = synth->addModule("track_mixer");
+    auto mixerLid = synth->getLogicalIdForNode(mixerNodeId);
+    pendingNodePositions[(int)mixerLid] = ImVec2(colorTrackerPos.x + 800.0f, colorTrackerPos.y + 100.0f);
+    
+    if (auto* mixer = dynamic_cast<TrackMixerModuleProcessor*>(synth->getModuleForLogical(mixerLid)))
+    {
+        if (auto* p = dynamic_cast<juce::AudioParameterInt*>(mixer->getAPVTS().getParameter("numTracks")))
+            *p = numColors;
+    }
+
+    // 3. Connect Num Colors output to TrackMixer's Num Tracks Mod
+    synth->connect(colorTrackerNodeId, 72, mixerNodeId, 64); // Num Colors -> Num Tracks Mod
+
+    // 4. Create a Sample Loader for each tracked color
+    for (int i = 0; i < numColors; ++i)
+    {
+        auto samplerNodeId = synth->addModule("sample_loader");
+        auto samplerLid = synth->getLogicalIdForNode(samplerNodeId);
+        pendingNodePositions[(int)samplerLid] = ImVec2(colorTrackerPos.x + 400.0f, colorTrackerPos.y + (i * 220.0f));
+
+        // Connect Sample Loader audio output to mixer
+        synth->connect(samplerNodeId, 0, mixerNodeId, i); // Audio -> Mixer Track i
+        
+        // Connect ColorTracker CV outputs to Sample Loader modulation inputs
+        synth->connect(colorTrackerNodeId, i * 3 + 0, samplerNodeId, 0); // X -> Pitch Mod
+        synth->connect(colorTrackerNodeId, i * 3 + 2, samplerNodeId, 2); // Area -> Gate Mod
+    }
+    
+    // 5. Connect Track Mixer to Main Output
+    auto outputNodeId = synth->getOutputNodeID();
+    synth->connect(mixerNodeId, 0, outputNodeId, 0); // Out L
+    synth->connect(mixerNodeId, 1, outputNodeId, 1); // Out R
+
+    graphNeedsRebuild = true;
+    juce::Logger::writeToLog("[ColorTracker Auto-Connect] Connected " + juce::String(numColors) + " colors to Sample Loaders.");
+}
+
 // Add this exact helper function to the class
 void ImGuiNodeEditorComponent::parsePinName(const juce::String& fullName, juce::String& outType, int& outIndex)
 {
@@ -17945,6 +19371,23 @@ void ImGuiNodeEditorComponent::handleAutoConnectionRequests()
             if (multiSeq->autoConnectVCOTriggered.exchange(false))
             {
                 handleMultiSequencerAutoConnectVCO(multiSeq, modInfo.first); // Call the new specific handler
+                pushSnapshot();
+                return;
+            }
+        }
+        
+        // --- Check ColorTracker Flags ---
+        if (auto* colorTracker = dynamic_cast<ColorTrackerModule*>(module))
+        {
+            if (colorTracker->autoConnectPolyVCOTriggered.exchange(false))
+            {
+                handleColorTrackerAutoConnectPolyVCO(colorTracker, modInfo.first);
+                pushSnapshot();
+                return;
+            }
+            if (colorTracker->autoConnectSamplersTriggered.exchange(false))
+            {
+                handleColorTrackerAutoConnectSamplers(colorTracker, modInfo.first);
                 pushSnapshot();
                 return;
             }
@@ -20210,6 +21653,116 @@ else()
     set(CUDA_SUPPORT_ENABLED FALSE)
 endif()
 
+# ==============================================================================
+# FFmpeg (Pre-built vendor binaries - SIMPLIFIED!)
+# ==============================================================================
+# Windows: Download from https://github.com/BtbN/FFmpeg-Builds/releases
+# Extract to vendor/ffmpeg/ (see FFMPEG_SETUP_GUIDE.md)
+set(FFMPEG_DIR "${CMAKE_SOURCE_DIR}/../vendor/ffmpeg" CACHE PATH "Path to FFmpeg")
+set(FFMPEG_FOUND FALSE)
+
+if(WIN32)
+    # Windows: Use pre-built vendor binaries
+    if(EXISTS "${FFMPEG_DIR}/include/libavformat/avformat.h")
+        message(STATUS "✓ FFmpeg found at ${FFMPEG_DIR}")
+        
+        set(FFMPEG_INCLUDE_DIR "${FFMPEG_DIR}/include")
+        set(FFMPEG_LIB_DIR "${FFMPEG_DIR}/lib")
+        set(FFMPEG_BIN_DIR "${FFMPEG_DIR}/bin")
+        
+        # Find all required libraries
+        find_library(AVFORMAT_LIBRARY avformat PATHS "${FFMPEG_LIB_DIR}" NO_DEFAULT_PATH REQUIRED)
+        find_library(AVCODEC_LIBRARY avcodec PATHS "${FFMPEG_LIB_DIR}" NO_DEFAULT_PATH REQUIRED)
+        find_library(AVUTIL_LIBRARY avutil PATHS "${FFMPEG_LIB_DIR}" NO_DEFAULT_PATH REQUIRED)
+        find_library(SWRESAMPLE_LIBRARY swresample PATHS "${FFMPEG_LIB_DIR}" NO_DEFAULT_PATH REQUIRED)
+        find_library(SWSCALE_LIBRARY swscale PATHS "${FFMPEG_LIB_DIR}" NO_DEFAULT_PATH REQUIRED)
+        
+        set(FFMPEG_LIBRARIES 
+            ${AVFORMAT_LIBRARY}
+            ${AVCODEC_LIBRARY}
+            ${AVUTIL_LIBRARY}
+            ${SWRESAMPLE_LIBRARY}
+            ${SWSCALE_LIBRARY}
+        )
+        
+        message(STATUS "  - Include: ${FFMPEG_INCLUDE_DIR}")
+        message(STATUS "  - Libraries: ${FFMPEG_LIBRARIES}")
+        set(FFMPEG_FOUND TRUE)
+    else()
+        message(FATAL_ERROR 
+            "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            "❌ FFmpeg NOT FOUND!\n"
+            "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            "Expected location: ${FFMPEG_DIR}\n"
+            "\n"
+            "📦 Quick Setup (5 minutes):\n"
+            "  1. Download: https://github.com/BtbN/FFmpeg-Builds/releases\n"
+            "     Get: ffmpeg-master-latest-win64-gpl-shared.zip\n"
+            "  2. Extract to: ${FFMPEG_DIR}\n"
+            "  3. Folder structure should be:\n"
+            "     vendor/ffmpeg/\n"
+            "       ├── bin/     (DLL files)\n"
+            "       ├── include/ (header files)\n"
+            "       └── lib/     (.lib files)\n"
+            "\n"
+            "📖 See FFMPEG_SETUP_GUIDE.md for detailed instructions\n"
+            "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+        )
+    endif()
+else()
+    # Linux/Mac: Use system packages
+    find_package(PkgConfig QUIET)
+    if(PKG_CONFIG_FOUND)
+        pkg_check_modules(FFMPEG
+            libavformat>=57.0
+            libavcodec>=57.0
+            libavutil>=55.0
+            libswresample>=3.0
+            libswscale>=5.0
+        )
+        if(FFMPEG_FOUND)
+            set(FFMPEG_INCLUDE_DIR ${FFMPEG_INCLUDE_DIRS})
+            set(FFMPEG_LIBRARIES ${FFMPEG_LIBRARIES})
+            message(STATUS "✓ FFmpeg found via pkg-config")
+            message(STATUS "  - Include: ${FFMPEG_INCLUDE_DIR}")
+        endif()
+    endif()
+    
+    # Fallback: try finding libraries directly
+    if(NOT FFMPEG_FOUND)
+        find_path(FFMPEG_INCLUDE_DIR NAMES libavformat/avformat.h
+            PATHS /usr/include /usr/local/include /opt/homebrew/include
+        )
+        find_library(AVFORMAT_LIBRARY avformat)
+        find_library(AVCODEC_LIBRARY avcodec)
+        find_library(AVUTIL_LIBRARY avutil)
+        find_library(SWRESAMPLE_LIBRARY swresample)
+        find_library(SWSCALE_LIBRARY swscale)
+        
+        if(FFMPEG_INCLUDE_DIR AND AVFORMAT_LIBRARY)
+            set(FFMPEG_LIBRARIES 
+                ${AVFORMAT_LIBRARY}
+                ${AVCODEC_LIBRARY}
+                ${AVUTIL_LIBRARY}
+                ${SWRESAMPLE_LIBRARY}
+                ${SWSCALE_LIBRARY}
+            )
+            set(FFMPEG_FOUND TRUE)
+            message(STATUS "✓ FFmpeg found")
+        else()
+            message(FATAL_ERROR
+                "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+                "❌ FFmpeg NOT FOUND!\n"
+                "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+                "📦 Install FFmpeg:\n"
+                "  Linux:  sudo apt-get install libavformat-dev libavcodec-dev libavutil-dev libswresample-dev libswscale-dev\n"
+                "  macOS:  brew install ffmpeg\n"
+                "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+            )
+        endif()
+    endif()
+endif()
+
 # --------------------------------------------------------------
 # Rubber Band (optional, real-time timestretcher/pitch-shifter)
 # --------------------------------------------------------------
@@ -20437,6 +21990,10 @@ target_sources(ColliderApp PRIVATE
     Source/audio/modules/WebcamLoaderModule.cpp
     Source/audio/modules/VideoFileLoaderModule.h
     Source/audio/modules/VideoFileLoaderModule.cpp
+    Source/audio/modules/FFmpegAudioReader.h
+    Source/audio/modules/FFmpegAudioReader.cpp
+    Source/audio/modules/TimeStretcherAudioSource.h
+    Source/audio/modules/TimeStretcherAudioSource.cpp
     Source/audio/modules/VideoFXModule.h
     Source/audio/modules/VideoFXModule.cpp
     Source/audio/modules/MovementDetectorModule.h
@@ -20510,6 +22067,11 @@ target_link_libraries(ColliderApp PRIVATE
     ufbx_static
     opencv_world
     $<$<BOOL:${USE_RUBBERBAND}>:${RUBBERBAND_TARGET}>
+    $<$<BOOL:${FFMPEG_FOUND}>:${AVFORMAT_LIBRARY}>
+    $<$<BOOL:${FFMPEG_FOUND}>:${AVCODEC_LIBRARY}>
+    $<$<BOOL:${FFMPEG_FOUND}>:${AVUTIL_LIBRARY}>
+    $<$<BOOL:${FFMPEG_FOUND}>:${SWRESAMPLE_LIBRARY}>
+    $<$<BOOL:${FFMPEG_FOUND}>:${SWSCALE_LIBRARY}>
     # Piper TTS libraries (pre-built)
     ${ONNXRUNTIME_DIR}/lib/onnxruntime.lib
 )
@@ -20535,6 +22097,7 @@ target_include_directories(ColliderApp PRIVATE
     ${CMAKE_SOURCE_DIR}/../soundtouch/include
     ${CMAKE_SOURCE_DIR}/../soundtouch/source/SoundTouch
     ${ufbx_SOURCE_DIR}
+    $<$<BOOL:${FFMPEG_FOUND}>:${FFMPEG_INCLUDE_DIR}>
     # OpenCV include directories - source and generated headers
     ${opencv_SOURCE_DIR}/include
     ${opencv_SOURCE_DIR}/modules/core/include
@@ -20761,6 +22324,10 @@ target_sources(PresetCreatorApp PRIVATE
     Source/audio/modules/WebcamLoaderModule.cpp
     Source/audio/modules/VideoFileLoaderModule.h
     Source/audio/modules/VideoFileLoaderModule.cpp
+    Source/audio/modules/FFmpegAudioReader.h
+    Source/audio/modules/FFmpegAudioReader.cpp
+    Source/audio/modules/TimeStretcherAudioSource.h
+    Source/audio/modules/TimeStretcherAudioSource.cpp
     Source/audio/modules/VideoFXModule.h
     Source/audio/modules/VideoFXModule.cpp
     Source/audio/modules/MovementDetectorModule.h
@@ -20812,6 +22379,7 @@ target_include_directories(PresetCreatorApp PRIVATE
     ${CMAKE_SOURCE_DIR}/../soundtouch/include
     ${CMAKE_SOURCE_DIR}/../soundtouch/source/SoundTouch
     ${ufbx_SOURCE_DIR}
+    $<$<BOOL:${FFMPEG_FOUND}>:${FFMPEG_INCLUDE_DIR}>
     # OpenCV include directories - source and generated headers
     ${opencv_SOURCE_DIR}/include
     ${opencv_SOURCE_DIR}/modules/core/include
@@ -20869,6 +22437,10 @@ target_link_libraries(PresetCreatorApp PRIVATE
     ufbx_static
     opencv_world
     $<$<BOOL:${USE_RUBBERBAND}>:${RUBBERBAND_TARGET}>
+    $<$<BOOL:${FFMPEG_FOUND}>:${AVFORMAT_LIBRARY}>
+    $<$<BOOL:${FFMPEG_FOUND}>:${AVCODEC_LIBRARY}>
+    $<$<BOOL:${FFMPEG_FOUND}>:${AVUTIL_LIBRARY}>
+    $<$<BOOL:${FFMPEG_FOUND}>:${SWRESAMPLE_LIBRARY}>
     # Piper TTS libraries (pre-built)
     ${ONNXRUNTIME_DIR}/lib/onnxruntime.lib
 )
@@ -20909,13 +22481,47 @@ if(WIN32)
         COMMAND ${CMAKE_COMMAND} -E copy_if_different
                 "${CMAKE_BINARY_DIR}/bin/$<CONFIG>/opencv_videoio_ffmpeg4130_64.dll"
                 "$<TARGET_FILE_DIR:ColliderApp>"
+    )
+    
+    # Copy FFmpeg DLLs separately (if FFmpeg is found)
+    # We need to copy each DLL individually to avoid generator expression issues
+    if(FFMPEG_FOUND AND EXISTS "${FFMPEG_BIN_DIR}")
+        file(GLOB FFMPEG_DLLS "${FFMPEG_BIN_DIR}/*.dll")
+        if(FFMPEG_DLLS)
+            foreach(DLL ${FFMPEG_DLLS})
+                get_filename_component(DLL_NAME ${DLL} NAME)
+                add_custom_command(
+                    TARGET ColliderApp POST_BUILD
+                    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                            "${DLL}"
+                            "$<TARGET_FILE_DIR:ColliderApp>"
+                    COMMENT "Copying ${DLL_NAME} to ColliderApp"
+                )
+                add_custom_command(
+                    TARGET PresetCreatorApp POST_BUILD
+                    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                            "${DLL}"
+                            "$<TARGET_FILE_DIR:PresetCreatorApp>"
+                    COMMENT "Copying ${DLL_NAME} to PresetCreatorApp"
+                )
+            endforeach()
+        endif()
+    endif()
+    
+    # Continue with other files for ColliderApp
+    add_custom_command(
+        TARGET ColliderApp POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E copy_directory
                 "${PIPER_DIR}/espeak-ng-data"
                 "$<TARGET_FILE_DIR:ColliderApp>/espeak-ng-data"
+        COMMENT "Copying espeak-ng-data to ColliderApp output directory"
+    )
+    add_custom_command(
+        TARGET ColliderApp POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E copy_if_different
                 "${opencv_SOURCE_DIR}/data/haarcascades/haarcascade_frontalface_default.xml"
                 "$<TARGET_FILE_DIR:ColliderApp>"
-        COMMENT "Copying Piper TTS and OpenCV data files to ColliderApp output directory"
+        COMMENT "Copying OpenCV data to ColliderApp output directory"
     )
     add_custom_command(
         TARGET PresetCreatorApp POST_BUILD
@@ -20948,7 +22554,7 @@ if(WIN32)
         COMMAND ${CMAKE_COMMAND} -E copy_if_different
                 "${opencv_SOURCE_DIR}/data/haarcascades/haarcascade_frontalface_default.xml"
                 "$<TARGET_FILE_DIR:PresetCreatorApp>"
-        COMMENT "Copying Piper TTS, OpenPose, and other runtime assets to PresetCreatorApp output directory"
+        COMMENT "Copying Piper TTS, OpenPose, FFmpeg, and other runtime assets to PresetCreatorApp output directory"
     )
 endif()
 
@@ -22537,253 +24143,7 @@ cmake --build juce/build --config Release
 
 
 ================================================================================
-FILE: CUDA_OPENCV_INTEGRATION_SUMMARY.md
+FILE NOT FOUND: CUDA_OPENCV_INTEGRATION_SUMMARY.md
 ================================================================================
-
-
-# CUDA + OpenCV Integration Summary - ColliderAudioEngine Project
-
-**Date**: Current Session  
-**Project**: ColliderAudioEngine  
-**Goal**: Compile OpenCV 4.9.0 with CUDA 13.0 and cuDNN support for NVIDIA RTX 5090 (Blackwell architecture)
-
----
-
-## Current Status: **INCOMPLETE** ❌
-
-The build currently fails at the patch application step during OpenCV source fetching. The patch file needs to be corrected to match OpenCV 4.9.0's actual source code structure.
-
----
-
-## CUDA and cuDNN Installation Locations
-
-### CUDA Toolkit 13.0
-- **Location**: `C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v13.0`
-- **Status**: ✅ Installed and detected by CMake
-- **Version**: 13.0.88
-- **CMake Detection**: Via `find_package(CUDAToolkit REQUIRED)` (Line 162 in CMakeLists.txt)
-
-### cuDNN
-- **Expected Location**: `C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v13.0\bin\` (for DLLs)
-- **Status**: ⚠️ Installation needs verification
-- **Version**: Expected 9.1.4.0 (per your engineering report)
-- **CMake Detection**: OpenCV's build system should auto-detect if cuDNN files are copied into CUDA Toolkit directory
-
-### CUDA Architecture Target
-- **GPU**: NVIDIA RTX 5090 (Blackwell)
-- **Compute Capability**: 12.0 (sm_120)
-- **Distribution Strategy**: 
-  - `CUDA_ARCH_BIN "8.6;8.9;12.0"` (Ampere, Ada Lovelace, Blackwell)
-  - `CUDA_ARCH_PTX "12.0"` (Forward compatibility)
-
----
-
-## What We Tried - Complete Timeline
-
-### Phase 1: Initial Configuration Errors
-1. **Problem**: `CUDA_ARCH_BIN "12.0"` was a string, not numeric format
-   - **Fix**: Corrected to proper format for nvcc compiler
-   - **Status**: ✅ Resolved
-
-2. **Problem**: Hardcoded paths (`C:/CUDA128`) made build non-portable
-   - **Fix**: Switched to standard path detection (`C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v13.0`)
-   - **Status**: ✅ Resolved
-
-3. **Problem**: `BUILD_opencv_world OFF` but linking to `opencv_world`
-   - **Fix**: Changed to `BUILD_opencv_world ON`
-   - **Status**: ✅ Resolved
-
-### Phase 2: Linker Errors
-4. **Problem**: `LNK2019: unresolved external symbol cudaGetDeviceProperties_v2`
-   - **Cause**: OpenCV Python bindings trying to use CUDA without linking cudart
-   - **Fix**: Disabled `BUILD_opencv_python3 OFF` and linked `CUDAToolkit::cudart`
-   - **Status**: ✅ Resolved
-
-5. **Problem**: `CMake Error: Target "ColliderApp" links to: CUDAToolkit::cudart but the target was not found`
-   - **Cause**: `find_package(CUDAToolkit)` called before CUDA path was set
-   - **Fix**: Moved `find_package(CUDAToolkit REQUIRED)` after path setup (now at line 162)
-   - **Status**: ✅ Resolved
-
-### Phase 3: NPP Library Errors
-6. **Problem**: `error C3861: 'nppGetStream': identifier not found`
-   - **Cause**: OpenCV 4.9.0 uses NPP functions removed in CUDA 13.0
-   - **Attempted Fixes**:
-     - Enabled `WITH_NVIDIA_NPP ON` ✅
-     - Disabled `WITH_NVCUVID OFF` and `WITH_NVCUVENC OFF` ✅
-     - **Current Status**: ❌ **BLOCKER** - Requires source code patch
-
-### Phase 4: Patch Application (Current Blocker)
-7. **Problem**: `CUSTOMBUILD : error : File structure different than expected`
-   - **Error Details**:
-     ```
-     Looking for patch file at: H:\0000_CODE\01_collider_pyo\build\_deps\opencv-src\modules\core\include\opencv2\core\private.cuda.hpp
-     File contains npp.h: False
-     File contains nppGetStream: True
-     ```
-   - **Cause**: The patch file format doesn't match OpenCV 4.9.0's actual source structure
-   - **Status**: ❌ **CURRENT BLOCKER**
-
----
-
-## Current CMake Configuration (juce/CMakeLists.txt)
-
-### Key Sections:
-
-#### CUDA Detection (Lines 160-162)
-```cmake
-# Find the CUDA Toolkit (will use default installation path or environment variables)
-# This must be done before OpenCV configuration so OpenCV can find CUDA
-find_package(CUDAToolkit REQUIRED)
-```
-
-#### OpenCV with Patch (Lines 164-179)
-```cmake
-# Fetch OpenCV contrib for CUDA 'cudev' and other extra modules
-FetchContent_Declare(opencv_contrib ...)
-FetchContent_MakeAvailable(opencv_contrib)
-
-# Apply CUDA 13.0 NPP compatibility patch to OpenCV
-FetchContent_Declare(
-  opencv
-  GIT_REPOSITORY https://github.com/opencv/opencv.git
-  GIT_TAG        4.9.0
-  PATCH_COMMAND git apply --ignore-whitespace "${CMAKE_CURRENT_SOURCE_DIR}/opencv_cuda13_npp.patch"
-)
-```
-
-#### CUDA Configuration (Lines 191-204)
-```cmake
-set(WITH_CUDA ON CACHE BOOL "" FORCE)
-set(OPENCV_DNN_CUDA ON CACHE BOOL "" FORCE)
-set(WITH_CUDNN ON CACHE BOOL "" FORCE)
-set(WITH_NVIDIA_NPP ON CACHE BOOL "" FORCE)
-set(WITH_NVCUVID OFF CACHE BOOL "" FORCE)
-set(WITH_NVCUVENC OFF CACHE BOOL "" FORCE)
-
-# Distribution Strategy
-set(CUDA_ARCH_BIN "8.6;8.9;12.0" CACHE STRING "" FORCE)
-set(CUDA_ARCH_PTX "12.0" CACHE STRING "" FORCE)
-```
-
-#### CUDA Linking (Lines 576, 901)
-```cmake
-# ColliderApp and PresetCreatorApp both link:
-target_link_libraries(... CUDAToolkit::cudart)
-```
-
----
-
-## Patch File Status
-
-### Location
-- **Path**: `juce/opencv_cuda13_npp.patch`
-- **Status**: ⚠️ File exists but patch application fails
-
-### What the Patch Should Do
-The patch needs to modify `modules/core/include/opencv2/core/private.cuda.hpp` to:
-1. Detect CUDA 13.0+ (via `__CUDACC_VER_MAJOR__ >= 13`)
-2. Use new NPP API: `nppGetStreamContext()` instead of `nppGetStream()`
-3. Maintain backward compatibility with CUDA < 13.0
-
-### Current Patch Content
-The patch file was recreated with proper diff format, but it may not match the exact line numbers and context in OpenCV 4.9.0's source code.
-
----
-
-## Files Modified During This Session
-
-1. **juce/CMakeLists.txt**
-   - Added CUDA detection before OpenCV
-   - Enabled all CUDA flags (`WITH_CUDA`, `OPENCV_DNN_CUDA`, `WITH_CUDNN`, `WITH_NVIDIA_NPP`)
-   - Set distribution strategy for CUDA architectures
-   - Added `CUDAToolkit::cudart` linking to both app targets
-   - Fixed imnodes integration (switched to `FetchContent_Populate`)
-
-2. **juce/opencv_cuda13_npp.patch**
-   - Created/recreated patch file for CUDA 13.0 NPP compatibility
-   - ⚠️ Needs verification against actual OpenCV 4.9.0 source
-
----
-
-## What Needs to Happen Next
-
-### For Another Expert to Continue:
-
-1. **Verify OpenCV 4.9.0 Source Structure**
-   - Download/clone OpenCV 4.9.0 source code
-   - Examine `modules/core/include/opencv2/core/private.cuda.hpp`
-   - Find exact line numbers and context around NPP stream functions
-
-2. **Create Correct Patch**
-   - Generate patch using actual OpenCV 4.9.0 source as base
-   - Ensure patch matches exact formatting (whitespace, line numbers)
-   - Test patch application: `git apply --check <patch_file>`
-
-3. **Alternative Approaches** (if patch doesn't work):
-   - **Option A**: Use Python script to modify source during FetchContent
-   - **Option B**: Fork OpenCV 4.9.0 and apply fix manually, then use custom GIT_TAG
-   - **Option C**: Upgrade to OpenCV 4.11.0+ (if NPP fix is more complete)
-   - **Option D**: Temporarily disable NPP (`WITH_NVIDIA_NPP OFF`) - CPU fallback
-
-4. **Verify cuDNN Installation**
-   - Confirm cuDNN files are in CUDA Toolkit directory:
-     - `bin/cudnn*.dll`
-     - `include/cudnn.h`
-     - `lib/x64/cudnn.lib`
-   - If missing, follow NVIDIA installation guide to copy cuDNN into CUDA directory
-
----
-
-## Critical Information for Next Expert
-
-### Environment
-- **OS**: Windows 10.0.26200
-- **Compiler**: MSVC 19.44.35219.0 (Visual Studio 2022)
-- **CMake**: 4.1 (from output logs)
-- **Project Root**: `H:\0000_CODE\01_collider_pyo`
-- **CMakeLists.txt**: `juce/CMakeLists.txt`
-
-### Build Command
-```powershell
-# Clean build
-Remove-Item -Recurse -Force build
-cmake -S juce -B build -G "Visual Studio 17 2022" -A x64 -DCMAKE_BUILD_TYPE=Release
-cmake --build build --config Release --parallel
-```
-
-### Current Error Location
-```
-Build step for opencv failed: 1
-File structure different than expected
-Patch command: git apply --ignore-whitespace
-```
-
-### Key Dependencies Status
-- ✅ CUDA 13.0: Installed and detected
-- ⚠️ cuDNN: Needs verification
-- ✅ OpenCV 4.9.0: Source fetched successfully, patch fails
-- ✅ OpenCV contrib 4.9.0: Fetched successfully
-- ✅ CUDAToolkit::cudart: Linked to both app targets
-
----
-
-## References
-
-1. **CUDA_COMPILATION_ERRORS_SUMMARY.md**: Detailed analysis of NPP API incompatibility
-2. **Engineering Report**: User's comprehensive analysis of CUDA architecture targeting
-3. **OpenCV Issue #27289**: GitHub issue about CUDA 13.0 NPP compatibility
-
----
-
-## Next Steps Summary
-
-1. ❗ **IMMEDIATE**: Fix patch file to match OpenCV 4.9.0 source structure
-2. ⚠️ **VERIFY**: Confirm cuDNN installation location
-3. ✅ **TEST**: Build with corrected patch
-4. ✅ **VALIDATE**: Test CUDA acceleration at runtime
-
----
-
-**End of Summary**
 
 

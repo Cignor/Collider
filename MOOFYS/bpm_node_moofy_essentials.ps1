@@ -3,7 +3,7 @@
 #       Focused only on BPM Node implementation and related systems
 #=============================================================
 
-$projectRoot = $PSScriptRoot
+$projectRoot = Split-Path -Parent $PSScriptRoot
 $outputFile = Join-Path $projectRoot "bpm_node_Essentials.txt"
 
 #--- BPM Node Specific Files ---

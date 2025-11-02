@@ -7,7 +7,7 @@
 #=============================================================
 
 #--- Configuration ---
-$projectRoot = $PSScriptRoot
+$projectRoot = Split-Path -Parent $PSScriptRoot
 $outputFile = Join-Path $projectRoot "moofy_VideoNode.txt"
 
 #--- Related Files (Complete Computer Vision System) ---
@@ -70,6 +70,8 @@ $sourceFiles = @(
     #=============================================================
     "juce/Source/audio/modules/VideoFXModule.h",
     "juce/Source/audio/modules/VideoFXModule.cpp",
+    "juce/Source/audio/modules/CropVideoModule.h",
+    "juce/Source/audio/modules/CropVideoModule.cpp",
 
     #=============================================================
     # SECTION 7: MODULE FACTORY REGISTRATION

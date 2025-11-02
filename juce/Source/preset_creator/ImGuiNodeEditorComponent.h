@@ -20,6 +20,7 @@ class MIDIPlayerModuleProcessor;
 class MultiSequencerModuleProcessor;
 class StrokeSequencerModuleProcessor;
 class AnimationModuleProcessor;
+class ColorTrackerModule;
 
 // === NODE SIZING SYSTEM ===
 // Standardized node width categories for consistent visual layout
@@ -147,6 +148,10 @@ public:
     // MultiSequencer specific handlers
     void handleMultiSequencerAutoConnectSamplers(MultiSequencerModuleProcessor* sequencer, juce::uint32 sequencerLid);
     void handleMultiSequencerAutoConnectVCO(MultiSequencerModuleProcessor* sequencer, juce::uint32 sequencerLid);
+    
+    // Color Tracker auto-connect handlers
+    void handleColorTrackerAutoConnectPolyVCO(ColorTrackerModule* colorTracker, juce::uint32 colorTrackerLid);
+    void handleColorTrackerAutoConnectSamplers(ColorTrackerModule* colorTracker, juce::uint32 colorTrackerLid);
 
     void renderImGui();
     void handleDeletion();

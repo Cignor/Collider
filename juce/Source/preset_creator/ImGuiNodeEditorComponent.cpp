@@ -6415,6 +6415,130 @@ void ImGuiNodeEditorComponent::handleMultiSequencerAutoConnectVCO(MultiSequencer
     graphNeedsRebuild = true;
 }
 
+void ImGuiNodeEditorComponent::handleColorTrackerAutoConnectPolyVCO(ColorTrackerModule* colorTracker, juce::uint32 colorTrackerLid)
+{
+    if (!synth || !colorTracker) return;
+
+    // 1. Get ColorTracker info and get number of tracked colors
+    auto colorTrackerNodeId = synth->getNodeIdForLogical(colorTrackerLid);
+    ImVec2 colorTrackerPos = ImNodes::GetNodeGridSpacePos((int)colorTrackerLid);
+    
+    // Get tracked colors count using the new helper method
+    int numColors = colorTracker->getTrackedColorsCount();
+    
+    if (numColors == 0)
+    {
+        juce::Logger::writeToLog("[ColorTracker Auto-Connect] No colors tracked, aborting.");
+        return;
+    }
+    
+    // 2. Create PolyVCO with matching number of voices
+    auto polyVcoNodeId = synth->addModule("polyvco");
+    auto polyVcoLid = synth->getLogicalIdForNode(polyVcoNodeId);
+    pendingNodePositions[(int)polyVcoLid] = ImVec2(colorTrackerPos.x + 400.0f, colorTrackerPos.y);
+    
+    if (auto* vco = dynamic_cast<PolyVCOModuleProcessor*>(synth->getModuleForLogical(polyVcoLid)))
+    {
+        if (auto* p = dynamic_cast<juce::AudioParameterInt*>(vco->getAPVTS().getParameter("numVoices")))
+            *p = numColors;
+    }
+    
+    // 3. Create Track Mixer
+    auto mixerNodeId = synth->addModule("track_mixer");
+    auto mixerLid = synth->getLogicalIdForNode(mixerNodeId);
+    pendingNodePositions[(int)mixerLid] = ImVec2(colorTrackerPos.x + 800.0f, colorTrackerPos.y);
+    
+    if (auto* mixer = dynamic_cast<TrackMixerModuleProcessor*>(synth->getModuleForLogical(mixerLid)))
+    {
+        if (auto* p = dynamic_cast<juce::AudioParameterInt*>(mixer->getAPVTS().getParameter("numTracks")))
+            *p = numColors;
+    }
+
+    // 4. Connect Num Colors output to PolyVCO's NumVoices Mod and TrackMixer's Num Tracks Mod
+    synth->connect(colorTrackerNodeId, 72, polyVcoNodeId, 0); // Num Colors -> NumVoices Mod
+    synth->connect(colorTrackerNodeId, 72, mixerNodeId, 64);  // Num Colors -> Num Tracks Mod
+    
+    // 5. Connect ColorTracker outputs to PolyVCO inputs
+    for (int i = 0; i < numColors; ++i)
+    {
+        // Map X position to pitch/frequency for voice i
+        synth->connect(colorTrackerNodeId, i * 3 + 0, polyVcoNodeId, 1 + i); // X -> Freq Mod
+        
+        // Map Area to gate level for voice i
+        const int gateModChannel = 1 + PolyVCOModuleProcessor::MAX_VOICES * 2 + i;
+        synth->connect(colorTrackerNodeId, i * 3 + 2, polyVcoNodeId, gateModChannel); // Area -> Gate Mod
+    }
+    
+    // 6. Connect PolyVCO audio outputs to Track Mixer inputs
+    for (int i = 0; i < numColors; ++i)
+    {
+        synth->connect(polyVcoNodeId, i, mixerNodeId, i); // Voice i -> Mixer Track i
+    }
+    
+    // 7. Connect Track Mixer to Main Output
+    auto outputNodeId = synth->getOutputNodeID();
+    synth->connect(mixerNodeId, 0, outputNodeId, 0); // Out L
+    synth->connect(mixerNodeId, 1, outputNodeId, 1); // Out R
+
+    graphNeedsRebuild = true;
+    juce::Logger::writeToLog("[ColorTracker Auto-Connect] Connected " + juce::String(numColors) + " colors to PolyVCO.");
+}
+
+void ImGuiNodeEditorComponent::handleColorTrackerAutoConnectSamplers(ColorTrackerModule* colorTracker, juce::uint32 colorTrackerLid)
+{
+    if (!synth || !colorTracker) return;
+
+    // 1. Get ColorTracker info
+    auto colorTrackerNodeId = synth->getNodeIdForLogical(colorTrackerLid);
+    ImVec2 colorTrackerPos = ImNodes::GetNodeGridSpacePos((int)colorTrackerLid);
+    
+    // Get tracked colors count
+    int numColors = colorTracker->getTrackedColorsCount();
+    
+    if (numColors == 0)
+    {
+        juce::Logger::writeToLog("[ColorTracker Auto-Connect] No colors tracked, aborting.");
+        return;
+    }
+    
+    // 2. Create Track Mixer
+    auto mixerNodeId = synth->addModule("track_mixer");
+    auto mixerLid = synth->getLogicalIdForNode(mixerNodeId);
+    pendingNodePositions[(int)mixerLid] = ImVec2(colorTrackerPos.x + 800.0f, colorTrackerPos.y + 100.0f);
+    
+    if (auto* mixer = dynamic_cast<TrackMixerModuleProcessor*>(synth->getModuleForLogical(mixerLid)))
+    {
+        if (auto* p = dynamic_cast<juce::AudioParameterInt*>(mixer->getAPVTS().getParameter("numTracks")))
+            *p = numColors;
+    }
+
+    // 3. Connect Num Colors output to TrackMixer's Num Tracks Mod
+    synth->connect(colorTrackerNodeId, 72, mixerNodeId, 64); // Num Colors -> Num Tracks Mod
+
+    // 4. Create a Sample Loader for each tracked color
+    for (int i = 0; i < numColors; ++i)
+    {
+        auto samplerNodeId = synth->addModule("sample_loader");
+        auto samplerLid = synth->getLogicalIdForNode(samplerNodeId);
+        pendingNodePositions[(int)samplerLid] = ImVec2(colorTrackerPos.x + 400.0f, colorTrackerPos.y + (i * 220.0f));
+
+        // Connect Sample Loader audio output to mixer
+        synth->connect(samplerNodeId, 0, mixerNodeId, i); // Audio -> Mixer Track i
+        
+        // Connect ColorTracker CV outputs to Sample Loader modulation inputs
+        synth->connect(colorTrackerNodeId, i * 3 + 0, samplerNodeId, 0); // X -> Pitch Mod
+        synth->connect(colorTrackerNodeId, i * 3 + 2, samplerNodeId, 2); // Area -> Gate Mod
+    }
+    
+    // 5. Connect Track Mixer to Main Output
+    auto outputNodeId = synth->getOutputNodeID();
+    synth->connect(mixerNodeId, 0, outputNodeId, 0); // Out L
+    synth->connect(mixerNodeId, 1, outputNodeId, 1); // Out R
+
+    graphNeedsRebuild = true;
+    juce::Logger::writeToLog("[ColorTracker Auto-Connect] Connected " + juce::String(numColors) + " colors to Sample Loaders.");
+}
+
 // Add this exact helper function to the class
 void ImGuiNodeEditorComponent::parsePinName(const juce::String& fullName, juce::String& outType, int& outIndex)
 {
@@ -6669,6 +6793,23 @@ void ImGuiNodeEditorComponent::handleAutoConnectionRequests()
             if (multiSeq->autoConnectVCOTriggered.exchange(false))
             {
                 handleMultiSequencerAutoConnectVCO(multiSeq, modInfo.first); // Call the new specific handler
+                pushSnapshot();
+                return;
+            }
+        }
+        
+        // --- Check ColorTracker Flags ---
+        if (auto* colorTracker = dynamic_cast<ColorTrackerModule*>(module))
+        {
+            if (colorTracker->autoConnectPolyVCOTriggered.exchange(false))
+            {
+                handleColorTrackerAutoConnectPolyVCO(colorTracker, modInfo.first);
+                pushSnapshot();
+                return;
+            }
+            if (colorTracker->autoConnectSamplersTriggered.exchange(false))
+            {
+                handleColorTrackerAutoConnectSamplers(colorTracker, modInfo.first);
                 pushSnapshot();
                 return;
             }

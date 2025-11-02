@@ -5,7 +5,7 @@
 #=============================================================
 
 #--- Configuration ---
-$projectRoot = $PSScriptRoot
+$projectRoot = Split-Path -Parent $PSScriptRoot
 $outputFile = Join-Path $projectRoot "timeline_node_Essentials.txt"
 
 #--- Essential Architecture Files ---

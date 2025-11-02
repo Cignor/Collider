@@ -57,10 +57,10 @@ void VideoFileLoaderModule::prepareToPlay(double sampleRate, int samplesPerBlock
     audioSampleRate = sampleRate;
     timePitch.prepare(sampleRate, 2, samplesPerBlock); // Prepare for stereo
     
-    // Allocate interleaved buffers for processing
-    interleavedCapacityFrames = samplesPerBlock * 2; // Headroom
-    interleavedInput.allocate((size_t)(interleavedCapacityFrames * 2), true);
-    interleavedOutput.allocate((size_t)(interleavedCapacityFrames * 2), true);
+    // Initialize FIFO to ~5 seconds of stereo audio
+    fifoSize = (int)(sampleRate * 5.0);
+    audioFifo.setSize(2, fifoSize, false, true, true); // 2 channels
+    abstractFifo.setTotalSize(fifoSize);
     
     startThread(juce::Thread::Priority::normal);
     // If we already had a file open previously, request re-open on thread start
@@ -227,10 +227,13 @@ void VideoFileLoaderModule::run()
                 if (videoCapture.isOpened())
                     videoCapture.set(cv::CAP_PROP_POS_MSEC, seekToMs);
                 
-                // Seek audio by updating the read position
+                // Seek audio by updating the read position - clear FIFO and reset
                 const juce::ScopedLock audioLk(audioLock);
                 if (audioReader) {
                     audioReadPosition = normSeekPos * audioReader->lengthInSamples;
+                    currentAudioSamplePosition.store((juce::int64)audioReadPosition); // SET THE MASTER CLOCK
+                    audioReader->resetPosition(); // Force seek on next read
+                    abstractFifo.reset(); // Clear FIFO on seek
                     timePitch.reset(); // Reset time stretcher state after seek
                 }
             }
@@ -241,10 +244,13 @@ void VideoFileLoaderModule::run()
                 if (videoCapture.isOpened())
                     videoCapture.set(cv::CAP_PROP_POS_AVI_RATIO, (double)normSeekPos);
                 
-                // Seek audio by ratio
+                // Seek audio by ratio - clear FIFO and reset
                 const juce::ScopedLock audioLk(audioLock);
                 if (audioReader) {
                     audioReadPosition = normSeekPos * audioReader->lengthInSamples;
+                    currentAudioSamplePosition.store((juce::int64)audioReadPosition); // SET THE MASTER CLOCK
+                    audioReader->resetPosition(); // Force seek on next read
+                    abstractFifo.reset(); // Clear FIFO on seek
                     timePitch.reset();
                 }
             }
@@ -260,13 +266,16 @@ void VideoFileLoaderModule::run()
                 videoCapture.set(cv::CAP_PROP_POS_FRAMES, (double) seekTo);
             needPreviewFrame.store(true);
             
-            // Also seek audio
+            // Also seek audio - clear FIFO and reset position
             const juce::ScopedLock audioLk(audioLock);
             if (audioReader) {
                 int tfLocal = totalFrames.load();
                 if (tfLocal > 1) {
                     float normPos = (float)seekTo / (float)(tfLocal - 1);
                     audioReadPosition = normPos * audioReader->lengthInSamples;
+                    currentAudioSamplePosition.store((juce::int64)audioReadPosition); // SET THE MASTER CLOCK
+                    audioReader->resetPosition(); // Force seek on next read
+                    abstractFifo.reset(); // Clear FIFO on seek
                     timePitch.reset();
                 }
             }
@@ -281,10 +290,13 @@ void VideoFileLoaderModule::run()
             pendingSeekNormalized.store(inN); // Use unified seek
             needPreviewFrame.store(true);
             
-            // Also seek audio
+            // Also seek audio - clear FIFO and reset position
             const juce::ScopedLock audioLk(audioLock);
             if (audioReader) {
                 audioReadPosition = inN * audioReader->lengthInSamples;
+                currentAudioSamplePosition.store((juce::int64)audioReadPosition); // SET THE MASTER CLOCK
+                audioReader->resetPosition(); // Force seek on next read
+                abstractFifo.reset(); // Clear FIFO on seek
                 timePitch.reset();
             }
         }
@@ -326,111 +338,132 @@ void VideoFileLoaderModule::run()
             continue;
         }
 
-        // Time the frame processing to maintain correct playback speed
-        auto loopStartTime = juce::Time::getMillisecondCounterHiRes();
+        // Get current UI settings for this iteration
+        const bool isLoopingEnabled = loopParam && loopParam->load() > 0.5f;
+        const float startNormalized = inNormParam ? inNormParam->load() : 0.0f;
+        const float endNormalized = outNormParam ? outNormParam->load() : 1.0f;
         
-        cv::Mat frame;
-        if (videoCapture.isOpened())
-            videoCapture.read(frame);
-        if (!frame.empty())
+        // ==============================================================================
+        //  SECTION 1: AUDIO DECODER (The "Producer")
+        //  This thread's only job is to decode audio and keep the FIFO buffer full,
+        //  respecting the start/end points and looping its read position.
+        // ==============================================================================
+        if (playing.load() && audioLoaded.load() && audioReader && abstractFifo.getFreeSpace() > 8192)
         {
-            // Publish frame to central manager
-            VideoFrameManager::getInstance().setFrame(getLogicalId(), frame);
+            const juce::ScopedLock audioLk(audioLock);
+            if (audioReader) 
+            {
+                const juce::int64 startSample = (juce::int64)(startNormalized * audioReader->lengthInSamples);
+                juce::int64 endSample = (juce::int64)(endNormalized * audioReader->lengthInSamples);
+                if (endSample <= startSample) endSample = audioReader->lengthInSamples;
+                
+                // If the decoder's read-head is past the end point, loop it back to the start.
+                if (audioReadPosition >= endSample) {
+                    if (isLoopingEnabled) {
+                        audioReadPosition = (double)startSample;
+                    }
+                }
+                
+                // If the read-head is within the valid range, decode a chunk of audio.
+                if (audioReadPosition < endSample) {
+                    const int samplesToRead = 4096;
+                    const int numSamplesAvailable = (int)(endSample - audioReadPosition);
+                    const int numSamplesToReadNow = juce::jmin(samplesToRead, numSamplesAvailable);
+                    
+                    if (numSamplesToReadNow > 0) {
+                        juce::AudioBuffer<float> tempReadBuffer(2, numSamplesToReadNow);
+                        float* channelPointers[] = { tempReadBuffer.getWritePointer(0), tempReadBuffer.getWritePointer(1) };
+                        if (audioReader->readSamples(reinterpret_cast<int* const*>(channelPointers), 2, 0, (juce::int64)audioReadPosition, numSamplesToReadNow)) {
+                            audioReadPosition += numSamplesToReadNow;
+                            
+                            // Write decoded audio into the FIFO buffer for the audio thread
+                            int s1, z1, s2, z2;
+                            abstractFifo.prepareToWrite(numSamplesToReadNow, s1, z1, s2, z2);
+                            if (z1 > 0) audioFifo.copyFrom(0, s1, tempReadBuffer, 0, 0, z1);
+                            if (z1 > 0) audioFifo.copyFrom(1, s1, tempReadBuffer, 1, 0, z1);
+                            if (z2 > 0) audioFifo.copyFrom(0, s2, tempReadBuffer, 0, z1, z2);
+                            if (z2 > 0) audioFifo.copyFrom(1, s2, tempReadBuffer, 1, z1, z2);
+                            abstractFifo.finishedWrite(z1 + z2);
+                        }
+                    }
+                }
+            }
+        }
+        
+        // ==============================================================================
+        //  SECTION 2: VIDEO DISPLAY (The "Slave")
+        //  This thread syncs the video to the master audio clock and handles the actual loop event.
+        // ==============================================================================
+        if (playing.load() && sourceIsOpen && totalFrames.load() > 1 && videoFps > 0)
+        {
+            // Get the current time from the master audio clock
+            const juce::int64 audioMasterPosition = currentAudioSamplePosition.load();
+            const double sourceRate = sourceAudioSampleRate.load();
+            const double currentTimeInSeconds = (double)audioMasterPosition / sourceRate;
             
-            // Update local preview
-            updateGuiFrame(frame);
-            lastPosFrame.store((int) videoCapture.get(cv::CAP_PROP_POS_FRAMES));
-            if (lastFourcc.load() == 0)
-                lastFourcc.store((int) videoCapture.get(cv::CAP_PROP_FOURCC));
-            // If frame count was unknown at open time, refresh it after first (or any) read
-            if (totalFrames.load() <= 1)
+            // Calculate the target video frame that corresponds to the audio time
+            int targetVideoFrame = (int)(currentTimeInSeconds * videoFps);
+            
+            const int totalVideoFrames = totalFrames.load();
+            const int startFrame = (int)(startNormalized * totalVideoFrames);
+            const int endFrame = (int)(endNormalized * totalVideoFrames);
+            
+            // **THE CRITICAL FIX**: Check if the MASTER AUDIO CLOCK has passed the end point.
+            if (targetVideoFrame >= endFrame)
             {
-                int tf = (int) videoCapture.get(cv::CAP_PROP_FRAME_COUNT);
-                if (tf > 1)
+                if (isLoopingEnabled)
                 {
-                    totalFrames.store(tf);
-                    if (videoFps > 0.0)
-                        totalDurationMs.store((double)tf * (1000.0 / videoFps));
-                    juce::Logger::writeToLog("[VideoFileLoader] Frame count acquired after playing read: " + juce::String(tf));
-                }
-            }
-
-            // Trim window enforcement (only when frame count available)
-            if (totalFrames.load() > 1)
-            {
-                int pos = 0;
-                {
+                    // The loop is triggered HERE. Atomically reset all playback state for both audio and video.
+                    const juce::ScopedLock audioLk(audioLock);
                     const juce::ScopedLock capLock(captureLock);
-                    if (videoCapture.isOpened())
-                        pos = (int) videoCapture.get(cv::CAP_PROP_POS_FRAMES);
+                    
+                    const juce::int64 startSample = (juce::int64)(startNormalized * audioReader->lengthInSamples);
+                    
+                    // Reset master clock to the start position
+                    currentAudioSamplePosition.store(startSample); 
+                    // Reset audio decoder's read position
+                    audioReadPosition = (double)startSample; 
+                    // Reset video to the start frame
+                    if (videoCapture.isOpened()) videoCapture.set(cv::CAP_PROP_POS_FRAMES, startFrame); 
+                    // Flush all buffers
+                    abstractFifo.reset(); 
+                    timePitch.reset(); 
+                    
+                    // The new target is now the start frame
+                    targetVideoFrame = startFrame; 
                 }
-                float inN = inNormParam ? inNormParam->load() : 0.0f;
-                float outN = outNormParam ? outNormParam->load() : 1.0f;
-                inN = juce::jlimit(0.0f, 1.0f, inN);
-                outN = juce::jlimit(0.0f, 1.0f, outN);
-                if (outN <= inN) outN = juce::jmin(1.0f, inN + 0.01f);
-                const int tfLocal = totalFrames.load();
-                int inF = juce::jlimit(0, juce::jmax(0, tfLocal - 1), (int)std::round(inN * (tfLocal - 1)));
-                int outF = juce::jlimit(inF + 1, juce::jmax(1, tfLocal), (int)std::round(outN * (tfLocal - 1)));
-                if (pos < inF)
+                else 
                 {
-                    juce::Logger::writeToLog("[VideoFileLoader][Trim] pos=" + juce::String(pos) + " < inF=" + juce::String(inF) + " -> seeking to inF");
-                    const juce::ScopedLock capLock(captureLock);
-                    if (videoCapture.isOpened())
-                        videoCapture.set(cv::CAP_PROP_POS_FRAMES, (double)inF);
-                }
-                else if (pos >= outF)
-                {
-                    if (loopParam && loopParam->load() > 0.5f)
-                    {
-                        juce::Logger::writeToLog("[VideoFileLoader][Trim] pos>=outF looping to inF=" + juce::String(inF));
-                        const juce::ScopedLock capLock(captureLock);
-                        if (videoCapture.isOpened())
-                            videoCapture.set(cv::CAP_PROP_POS_FRAMES, (double)inF);
-                    }
-                    else
-                    {
-                        juce::Logger::writeToLog("[VideoFileLoader][Trim] pos>=outF stopping playback");
-                        playing.store(false);
-                    }
+                    // Not looping, so stop playback
+                    playing.store(false);
                 }
             }
-        }
-        else
-        {
-            // End of video file
-            if (loopParam->load() > 0.5f && currentVideoFile.existsAsFile())
+            
+            // With the correct target frame determined, seek the video capture directly to that frame.
+            if (playing.load() && videoCapture.isOpened())
             {
-                // Loop: reopen the file
-                videoCapture.release();
-                if (videoCapture.open(currentVideoFile.getFullPathName().toStdString()))
-                {
-                    sourceIsOpen = true;
-                    juce::Logger::writeToLog("[VideoFileLoader] Looping: " + currentVideoFile.getFileName());
+                const juce::ScopedLock capLock(captureLock);
+                int currentVideoFrame = (int)videoCapture.get(cv::CAP_PROP_POS_FRAMES);
+                
+                // Only update the video if the target frame is different from the current one.
+                if (currentVideoFrame != targetVideoFrame) {
+                    videoCapture.set(cv::CAP_PROP_POS_FRAMES, targetVideoFrame);
                 }
-                else
-                {
-                    sourceIsOpen = false;
+                
+                // Read and display the single, correct frame for this point in time.
+                cv::Mat frame;
+                if (videoCapture.read(frame)) {
+                    VideoFrameManager::getInstance().setFrame(getLogicalId(), frame);
+                    updateGuiFrame(frame);
+                    lastPosFrame.store((int)videoCapture.get(cv::CAP_PROP_POS_FRAMES));
+                    if (lastFourcc.load() == 0)
+                        lastFourcc.store((int)videoCapture.get(cv::CAP_PROP_FOURCC));
                 }
-            }
-            else
-            {
-                // Stop
-                sourceIsOpen = false;
-                videoCapture.release();
             }
         }
         
-        // Calculate how long to wait to maintain the original FPS
-        auto processingTime = juce::Time::getMillisecondCounterHiRes() - loopStartTime;
-        float spd = speedParam ? speedParam->load() : 1.0f;
-        spd = juce::jlimit(0.1f, 4.0f, spd);
-        int waitTime = (int)((frameDurationMs / spd) - processingTime);
-        if (waitTime > 0)
-        {
-            wait(waitTime);
-        }
-        // If processing took longer than frame duration, don't wait (play as fast as possible)
+        // A short sleep to prevent this thread from consuming 100% CPU
+        wait(5);
     }
     
     videoCapture.release();
@@ -468,6 +501,8 @@ void VideoFileLoaderModule::loadAudioFromVideo()
     audioReader.reset();
     timePitch.reset(); // Reset the processing engine
     audioReadPosition = 0.0;
+    currentAudioSamplePosition.store(0); // Reset master clock
+    abstractFifo.reset(); // Clear FIFO
     audioLoaded.store(false);
     
     if (!currentVideoFile.existsAsFile()) return;
@@ -479,6 +514,7 @@ void VideoFileLoaderModule::loadAudioFromVideo()
         if (audioReader != nullptr && audioReader->lengthInSamples > 0)
         {
             audioLoaded.store(true);
+            sourceAudioSampleRate.store(audioReader->sampleRate); // Store the source sample rate
             juce::Logger::writeToLog("[VideoFileLoader] Audio loaded via FFmpeg.");
         }
         else
@@ -506,131 +542,91 @@ void VideoFileLoaderModule::processBlock(juce::AudioBuffer<float>& buffer, juce:
     if (cvOutBus.getNumChannels() > 0)
     {
         float sourceId = (float)getLogicalId();
-        for (int sample = 0; sample < cvOutBus.getNumSamples(); ++sample)
-        {
-            cvOutBus.setSample(0, sample, sourceId);
-        }
+        cvOutBus.setSample(0, 0, sourceId);
+        for (int ch = 0; ch < cvOutBus.getNumChannels(); ++ch)
+            cvOutBus.copyFrom(ch, 1, cvOutBus, ch, 0, cvOutBus.getNumSamples() - 1);
     }
     
-    // --- NEW AUDIO PROCESSING LOGIC ---
-    const juce::ScopedLock lock(audioLock);
-    if (!audioLoaded.load() || !audioReader || !playing.load())
+    // Return early if not playing
+    if (!audioLoaded.load() || !playing.load())
     {
-        return; // Nothing to play
+        return;
     }
-
-    // 1. Get parameters and configure the time-stretching engine
+    
+    // --- NEW FIFO-BASED AUDIO PROCESSING ---
+    const juce::ScopedLock lock(audioLock);
+    const int numSamples = audioOutBus.getNumSamples();
+    
+    // 1. Configure the time-stretcher
     const float speed = juce::jlimit(0.25f, 4.0f, speedParam ? speedParam->load() : 1.0f);
-    const int engineIdx = engineParam ? engineParam->getIndex() : 1; // Default to Naive
+    const int engineIdx = engineParam ? engineParam->getIndex() : 1;
     auto requestedMode = (engineIdx == 0) ? TimePitchProcessor::Mode::RubberBand : TimePitchProcessor::Mode::Fifo;
     
-    timePitch.setMode(requestedMode); // Set engine mode
-    timePitch.setTimeStretchRatio(speed); // Set playback speed
-
-    // 2. Determine playback range in samples
-    const float startNorm = inNormParam ? inNormParam->load() : 0.0f;
-    const float endNorm = outNormParam ? outNormParam->load() : 1.0f;
-    const juce::int64 startSample = (juce::int64)(startNorm * audioReader->lengthInSamples);
-    juce::int64 endSample = (juce::int64)(endNorm * audioReader->lengthInSamples);
-    if (endSample <= startSample) endSample = audioReader->lengthInSamples; // Use full length if range is invalid
+    timePitch.setMode(requestedMode);
     
-    const bool isLooping = loopParam && loopParam->load() > 0.5f;
-    const int numSamples = audioOutBus.getNumSamples();
-    const int numChannels = audioReader->numChannels;
-
-    // 3. THE FIX: Read a BLOCK of audio efficiently - don't read sample-by-sample
-    // Check if we need to loop before reading
-    if (audioReadPosition >= endSample)
+    // THIS IS THE FIX: Calculate the correct ratio based on which engine is active.
+    double ratioForEngine = (double)speed;
+    if (requestedMode == TimePitchProcessor::Mode::RubberBand)
     {
-        if (isLooping) {
-            audioReadPosition = (double)startSample; // Loop back
-        } else {
-            playing.store(false); // Stop playback
-            return;
+        // RubberBand expects a time-stretch ratio, which is the inverse of playback speed.
+        // A speed of 2.0x requires a stretch ratio of 0.5 to play twice as fast.
+        ratioForEngine = 1.0 / juce::jmax(0.01, (double)speed);
+    }
+    
+    // The Naive engine expects a direct playback speed, so `ratioForEngine` is unchanged.
+    timePitch.setTimeStretchRatio(ratioForEngine);
+    
+    // 2. Determine how many source frames we need to pull from the FIFO
+    const int framesToReadFromFifo = (int)std::ceil((double)numSamples / speed);
+    
+    if (abstractFifo.getNumReady() >= framesToReadFromFifo)
+    {
+        // Use a temporary buffer for interleaving
+        juce::AudioBuffer<float> interleavedBuffer(1, framesToReadFromFifo * 2);
+        float* interleavedData = interleavedBuffer.getWritePointer(0);
+        
+        // 3. Read from FIFO and interleave the data
+        int start1, size1, start2, size2;
+        abstractFifo.prepareToRead(framesToReadFromFifo, start1, size1, start2, size2);
+        
+        const float* fifoDataL = audioFifo.getReadPointer(0);
+        const float* fifoDataR = audioFifo.getReadPointer(1);
+        
+        for (int i = 0; i < size1; ++i) {
+            interleavedData[2 * i] = fifoDataL[start1 + i];
+            interleavedData[2 * i + 1] = fifoDataR[start1 + i];
         }
-    }
-    
-    // Calculate how many source samples we need to read to produce numSamples of output at current speed
-    const int framesToFeed = (int)std::ceil((double)numSamples / speed);
-    
-    // Clamp to available range
-    juce::int64 currentPos = (juce::int64)audioReadPosition;
-    currentPos = juce::jlimit((juce::int64)0, (juce::int64)(audioReader->lengthInSamples - 1), currentPos);
-    int samplesToRead = juce::jmin(framesToFeed, (int)(endSample - audioReadPosition));
-    if (samplesToRead <= 0) {
-        // No samples available in range
-        return;
-    }
-    
-    // Allocate source buffer for reading a block
-    juce::AudioBuffer<float> sourceBuffer(numChannels, samplesToRead);
-    
-    // Prepare channel pointers for readSamples - it expects int* const* but with
-    // usesFloatingPointData=true, we cast to float* const*
-    float* channelPointers[64]; // Support up to 64 channels
-    for (int ch = 0; ch < numChannels; ++ch) {
-        channelPointers[ch] = sourceBuffer.getWritePointer(ch);
-    }
-    
-    // Cast to int* const* for readSamples (the function signature uses int* but
-    // when usesFloatingPointData is true, it's actually float data)
-    int* const* channelPointersInt = reinterpret_cast<int* const*>(channelPointers);
-    
-    // Read a contiguous block of samples from the FFmpeg reader in one efficient operation
-    if (!audioReader->readSamples(channelPointersInt, numChannels, 0, currentPos, samplesToRead))
-    {
-        // Failed to read, stop playback
-        playing.store(false);
-        return;
-    }
-    
-    // Advance the read position by the block size
-    audioReadPosition += samplesToRead;
-
-    // 4. Convert planar to interleaved and feed to time stretcher
-    // Ensure our interleaved buffers are large enough
-    if (samplesToRead > interleavedCapacityFrames)
-    {
-        interleavedCapacityFrames = samplesToRead * 2;
-        interleavedInput.allocate((size_t)(interleavedCapacityFrames * numChannels), true);
-        interleavedOutput.allocate((size_t)(interleavedCapacityFrames * numChannels), true);
-    }
-    
-    float* inLR = interleavedInput.getData();
-    for (int i = 0; i < samplesToRead; ++i) {
-        for (int ch = 0; ch < numChannels; ++ch) {
-            inLR[i * numChannels + ch] = sourceBuffer.getSample(ch, i);
+        if (size2 > 0) {
+            for (int i = 0; i < size2; ++i) {
+                interleavedData[2 * (size1 + i)] = fifoDataL[start2 + i];
+                interleavedData[2 * (size1 + i) + 1] = fifoDataR[start2 + i];
+            }
         }
-    }
-    
-    timePitch.putInterleaved(inLR, samplesToRead);
-    
-    // 5. Retrieve the processed audio from time stretcher
-    if (numSamples > interleavedCapacityFrames)
-    {
-        interleavedCapacityFrames = numSamples * 2;
-        interleavedOutput.allocate((size_t)(interleavedCapacityFrames * numChannels), true);
-    }
-    
-    float* outLR = interleavedOutput.getData();
-    int produced = timePitch.receiveInterleaved(outLR, numSamples);
-
-    // 6. De-interleave the processed audio into the output buffer
-    if (produced > 0)
-    {
-        const int actualProduced = juce::jmin(produced, numSamples);
-        for (int ch = 0; ch < juce::jmin(numChannels, audioOutBus.getNumChannels()); ++ch)
+        abstractFifo.finishedRead(size1 + size2);
+        const int readCount = size1 + size2; // How many samples we actually read from FIFO
+        
+        // 4. Feed the time-stretcher
+        timePitch.putInterleaved(interleavedData, framesToReadFromFifo);
+        
+        // 5. Retrieve processed audio
+        juce::AudioBuffer<float> tempOutput(1, numSamples * 2);
+        int produced = timePitch.receiveInterleaved(tempOutput.getWritePointer(0), numSamples);
+        
+        // 6. De-interleave into the output bus
+        if (produced > 0)
         {
-            float* dest = audioOutBus.getWritePointer(ch);
-            for (int i = 0; i < actualProduced; ++i)
+            const float* processedData = tempOutput.getReadPointer(0);
+            for (int ch = 0; ch < audioOutBus.getNumChannels(); ++ch)
             {
-                dest[i] = outLR[i * numChannels + ch];
+                float* dest = audioOutBus.getWritePointer(ch);
+                for (int i = 0; i < produced; ++i)
+                {
+                    dest[i] = (ch == 0) ? processedData[i * 2] : processedData[i * 2 + 1];
+                }
             }
-            // Zero any remaining samples
-            if (actualProduced < numSamples)
-            {
-                juce::FloatVectorOperations::clear(dest + actualProduced, numSamples - actualProduced);
-            }
+            
+            // THIS IS THE FIX: Advance the master clock by the number of samples consumed
+            currentAudioSamplePosition.store(currentAudioSamplePosition.load() + readCount);
         }
     }
 }
@@ -790,8 +786,11 @@ void VideoFileLoaderModule::drawParametersInNode(float itemWidth,
 
     // --- Playback speed (slider only) ---
     float spd = speedParam ? speedParam->load() : 1.0f;
-    ImGui::SliderFloat("Speed", &spd, 0.25f, 4.0f, "%.2fx");
-    if (auto* p = dynamic_cast<juce::AudioParameterFloat*>(apvts.getParameter("speed"))) *p = spd;
+        if (ImGui::SliderFloat("Speed", &spd, 0.25f, 4.0f, "%.2fx"))
+        {
+            if (auto* p = dynamic_cast<juce::AudioParameterFloat*>(apvts.getParameter("speed"))) *p = spd;
+        }
+        if (ImGui::IsItemDeactivatedAfterEdit()) onModificationEnded();
 
     // --- Trim / Timeline --- (always visible, never greyed)
     {

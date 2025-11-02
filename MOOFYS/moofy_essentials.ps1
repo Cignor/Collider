@@ -6,7 +6,7 @@
 #=============================================================
 
 #--- Configuration ---
-$projectRoot = $PSScriptRoot
+$projectRoot = Split-Path -Parent $PSScriptRoot
 $outputFile = Join-Path $projectRoot "moofy_Essentials.txt"
 
 #--- Essential Architecture Files ---
