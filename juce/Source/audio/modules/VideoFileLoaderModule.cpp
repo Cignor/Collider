@@ -699,8 +699,6 @@ void VideoFileLoaderModule::drawParametersInNode(float itemWidth,
         onModificationEnded();
     }
     
-    ImGui::Separator();
-    
     // Transport sync and play/stop controls
     bool sync = syncParam ? (*syncParam > 0.5f) : true;
     if (ImGui::Checkbox("Sync to Transport", &sync))
@@ -774,7 +772,6 @@ void VideoFileLoaderModule::drawParametersInNode(float itemWidth,
     }
 
     // ADD ENGINE SELECTION COMBO BOX
-    ImGui::Separator();
     int engineIdx = engineParam ? engineParam->getIndex() : 1;
     const char* items[] = { "RubberBand (High Quality)", "Naive (Low CPU)" };
     if (ImGui::Combo("Engine", &engineIdx, items, 2))
@@ -782,7 +779,6 @@ void VideoFileLoaderModule::drawParametersInNode(float itemWidth,
         if (engineParam) *engineParam = engineIdx;
         onModificationEnded();
     }
-    ImGui::Separator();
 
     // --- Playback speed (slider only) ---
     float spd = speedParam ? speedParam->load() : 1.0f;
@@ -797,7 +793,6 @@ void VideoFileLoaderModule::drawParametersInNode(float itemWidth,
         const int tf = juce::jmax(1, totalFrames.load());
         float inN = inNormParam ? inNormParam->load() : 0.0f;
         float outN = outNormParam ? outNormParam->load() : 1.0f;
-        ImGui::Separator();
         
         if (ImGui::SliderFloat("Start", &inN, 0.0f, 1.0f, "%.3f"))
         {

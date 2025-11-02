@@ -710,7 +710,6 @@ void CropVideoModule::drawParametersInNode(float itemWidth, const std::function<
     }
     
     // --- GPU Checkbox ---
-    ImGui::Separator();
     #if WITH_CUDA_SUPPORT
         bool cudaAvailable = (cv::cuda::getCudaEnabledDeviceCount() > 0);
         if (!cudaAvailable) ImGui::BeginDisabled();
@@ -733,6 +732,7 @@ void CropVideoModule::drawParametersInNode(float itemWidth, const std::function<
     #endif
     
     // --- CORRECTED MODE SELECTION WITH DISABLED STATES ---
+    ImGui::SetNextItemWidth(itemWidth);
     if (trackerModeParam && ImGui::BeginCombo("Tracking Mode", trackerModeParam->getCurrentChoiceName().toRawUTF8()))
     {
         if (ImGui::Selectable("Manual", mode == 0))
@@ -788,6 +788,7 @@ void CropVideoModule::drawParametersInNode(float itemWidth, const std::function<
             
             auto& filterBuf = filterBufByNode[nodeId];
             
+            ImGui::SetNextItemWidth(itemWidth);
             ImGui::InputTextWithHint("##class_filter", "Filter...", filterBuf.data(), 64);
             
             ImGui::SetNextItemWidth(itemWidth * 0.55f);
@@ -860,7 +861,6 @@ void CropVideoModule::drawParametersInNode(float itemWidth, const std::function<
     }
     
     // --- Parameter Sliders ---
-    ImGui::Separator();
     ImGui::PushItemWidth(itemWidth);
     ImGui::Text("Manual Crop Controls:");
     
@@ -897,8 +897,6 @@ void CropVideoModule::drawParametersInNode(float itemWidth, const std::function<
     drawModSlider("Height", "cropH", cropHParam);
     
     if (slidersDisabled) ImGui::EndDisabled();
-    
-    ImGui::Separator();
     
     float padding = paddingParam ? paddingParam->load() : 0.1f;
     if (ImGui::SliderFloat("Padding", &padding, 0.0f, 2.0f, "%.2f"))

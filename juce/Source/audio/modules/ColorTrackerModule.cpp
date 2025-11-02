@@ -535,15 +535,12 @@ void ColorTrackerModule::drawParametersInNode(float itemWidth,
         {
             ImGui::SetTooltip("Enable GPU acceleration for color tracking.\nRequires CUDA-capable NVIDIA GPU.");
         }
-        
-        ImGui::Separator();
     #else
         ImGui::TextDisabled("🚫 GPU support not compiled");
         if (ImGui::IsItemHovered())
         {
             ImGui::SetTooltip("OpenCV was built without CUDA support.\nRebuild with WITH_CUDA=ON to enable GPU acceleration.");
         }
-        ImGui::Separator();
     #endif
 
     if (ImGui::Button("Add Color...", ImVec2(itemWidth, 0)))
@@ -552,7 +549,6 @@ void ColorTrackerModule::drawParametersInNode(float itemWidth,
         isColorPickerActive.store(true);
     }
 
-    ImGui::Separator();
     int k = numAutoColorsParam ? numAutoColorsParam->get() : 12;
     ImGui::PushItemWidth(itemWidth - 60.0f); // Make space for button
     if (ImGui::SliderInt("##numautocolors", &k, 2, 24, "Auto-Track %d Colors"))
@@ -578,8 +574,6 @@ void ColorTrackerModule::drawParametersInNode(float itemWidth,
     }
 
     // Auto-Connect Buttons
-    ImGui::Spacing();
-    ImGui::Separator();
     ImGui::Spacing();
     
     const int numColors = getTrackedColorsCount();
@@ -635,7 +629,6 @@ void ColorTrackerModule::drawParametersInNode(float itemWidth,
         const juce::ScopedLock lock(colorListLock);
         for (size_t i = 0; i < trackedColors.size(); )
         {
-            ImGui::Separator();
             const auto& tc = trackedColors[i];
             ImVec4 imc(tc.displayColour.getFloatRed(), tc.displayColour.getFloatGreen(), tc.displayColour.getFloatBlue(), 1.0f);
             if (ImGui::ColorButton((tc.name + "##swatch" + juce::String((int)i)).toRawUTF8(), imc, ImGuiColorEditFlags_NoTooltip, ImVec2(20,20)))

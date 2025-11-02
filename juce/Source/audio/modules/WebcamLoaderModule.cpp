@@ -214,8 +214,6 @@ void WebcamLoaderModule::drawParametersInNode(float itemWidth,
         ImGui::EndDisabled();
     }
     
-    ImGui::Separator();
-    
     // Zoom buttons (+ to increase, - to decrease) across 3 levels
     int level = zoomLevelParam ? (int) zoomLevelParam->load() : 1;
     level = juce::jlimit(0, 2, level);

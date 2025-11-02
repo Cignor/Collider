@@ -1,7 +1,7 @@
 # Collider Modular Synthesizer - Node Dictionary
 
-**Last Updated:** December 17, 2024  
-**Version:** 1.1
+**Last Updated:** December 18, 2024  
+**Version:** 1.2
 
 ---
 
@@ -102,6 +102,8 @@
 - [Color Tracker](#color-tracker) - Multi-Color Tracking
 - [Contour Detector](#contour-detector) - Shape Detection
 - [Semantic Segmentation](#semantic-segmentation) - Scene Segmentation
+- [Video FX](#video-fx) - Real-Time Video Effects
+- [Crop Video](#crop-video) - Video Cropping and Tracking
 
 #### 11. SYSTEM NODES
 - [Meta](#meta) - Meta Module Container
@@ -1824,11 +1826,12 @@ Analyzes video for motion via optical flow or background subtraction.
 - `Motion X` (CV), `Motion Y` (CV) - Motion vector components
 - `Amount` (CV) - Total motion amount
 - `Trigger` (Gate) - Trigger on significant motion
+- `Video Out` (Video) - Passthrough video output for chaining
 
 **Auto-Connect Shortcuts:**
-- **V (Video)**: Connect loader `Source ID` → `Source In`.
-- **B (CV)**: Chain `Motion X/Y/Amount` to CV destinations.
-- **Y (Gate)**: Chain `Trigger` to gate inputs.
+- **V (Video)**: Connect loader `Source ID` → `Source In`; chain `Video Out` → next video module
+- **B (CV)**: Chain `Motion X/Y/Amount` to CV destinations
+- **Y (Gate)**: Chain `Trigger` to gate inputs
 
 **How to Use:**
 1. Connect webcam or video file loader
@@ -1850,11 +1853,13 @@ Detects faces or bodies in video via Haar Cascades or HOG.
 - `X` (CV), `Y` (CV) - Center position
 - `Width` (CV), `Height` (CV) - Bounding box size
 - `Gate` (Gate) - High when person detected
+- `Video Out` (Video) - Passthrough video output for chaining
+- `Cropped Out` (Video) - Cropped region around detected face/body
 
 **Auto-Connect Shortcuts:**
-- **V (Video)**: Connect loader `Source ID` → `Source In`.
-- **B (CV)**: Chain X/Y/Width/Height to CV inputs.
-- **Y (Gate)**: Chain `Gate` to gate inputs.
+- **V (Video)**: Connect loader `Source ID` → `Source In`; chain `Video Out` or `Cropped Out` → next video module
+- **B (CV)**: Chain X/Y/Width/Height to CV inputs
+- **Y (Gate)**: Chain `Gate` to gate inputs
 
 **How to Use:**
 1. Connect video source
@@ -1874,10 +1879,12 @@ Uses OpenPose MPI model to detect 15 body keypoints. Outputs 30 CV pins programm
 
 **Outputs (dynamic/programmatic):**
 - `Head X/Y`, `Neck X/Y`, `R Shoulder X/Y`, `R Elbow X/Y`, `R Wrist X/Y`, `L Shoulder X/Y`, `L Elbow X/Y`, `L Wrist X/Y`, `R Hip X/Y`, `R Knee X/Y`, `R Ankle X/Y`, `L Hip X/Y`, `L Knee X/Y`, `L Ankle X/Y`, `Chest X/Y` (all CV)
+- `Video Out` (Video) - Passthrough video output for chaining
+- `Cropped Out` (Video) - Cropped region around detected body
 
 **Auto-Connect Shortcuts:**
-- **V (Video)**: Connect loader `Source ID` → `Source In`.
-- **B (CV)**: Chain any keypoint X/Y outputs to CV targets.
+- **V (Video)**: Connect loader `Source ID` → `Source In`; chain `Video Out` or `Cropped Out` → next video module
+- **B (CV)**: Chain any keypoint X/Y outputs to CV targets
 
 **Parameters:**
 - `Confidence` (0.0-1.0) - Detection confidence threshold (default: 0.1). Lower values detect more keypoints but may include false positives
@@ -1931,10 +1938,12 @@ Uses OpenPose hand model to detect 21 hand keypoints. Outputs 42 CV pins (X/Y pe
 
 **Outputs (dynamic/programmatic):**
 - `Wrist X/Y`, `Thumb 1-4 X/Y`, `Index 1-4 X/Y`, `Middle 1-4 X/Y`, `Ring 1-4 X/Y`, `Pinky 1-4 X/Y` (all CV)
+- `Video Out` (Video) - Passthrough video output for chaining
+- `Cropped Out` (Video) - Cropped region around detected hand
 
 **Auto-Connect Shortcuts:**
-- **V (Video)**: Connect loader `Source ID` → `Source In`.
-- **B (CV)**: Chain any keypoint X/Y outputs to CV targets.
+- **V (Video)**: Connect loader `Source ID` → `Source In`; chain `Video Out` or `Cropped Out` → next video module
+- **B (CV)**: Chain any keypoint X/Y outputs to CV targets
 
 **Parameters:**
 - `Confidence` (0.0-1.0) - Detection confidence threshold (default: 0.1)
@@ -1972,10 +1981,12 @@ Uses OpenPose face model to detect 70 facial landmarks. Outputs 140 CV pins (X/Y
 
 **Outputs (dynamic/programmatic):**
 - `Pt 1-70 X/Y` (CV) - Landmark positions
+- `Video Out` (Video) - Passthrough video output for chaining
+- `Cropped Out` (Video) - Cropped region around detected face
 
 **Auto-Connect Shortcuts:**
-- **V (Video)**: Connect loader `Source ID` → `Source In`.
-- **B (CV)**: Chain landmark X/Y outputs to CV targets.
+- **V (Video)**: Connect loader `Source ID` → `Source In`; chain `Video Out` or `Cropped Out` → next video module
+- **B (CV)**: Chain landmark X/Y outputs to CV targets
 
 **Parameters:**
 - `Confidence` (0.0-1.0) - Detection confidence threshold (default: 0.1)
@@ -2017,11 +2028,13 @@ Uses YOLOv3 deep learning model to detect objects from 80 COCO classes (person, 
 - `Width` (CV) - Width (0-1)
 - `Height` (CV) - Height (0-1)
 - `Gate` (Gate) - High when target detected
+- `Video Out` (Video) - Passthrough video output for chaining
+- `Cropped Out` (Video) - Cropped region around detected object
 
 **Auto-Connect Shortcuts:**
-- **V (Video)**: Connect loader `Source ID` → `Source In`.
-- **B (CV)**: Chain X/Y/Width/Height to CV inputs.
-- **Y (Gate)**: Chain `Gate` to gate inputs.
+- **V (Video)**: Connect loader `Source ID` → `Source In`; chain `Video Out` or `Cropped Out` → next video module
+- **B (CV)**: Chain X/Y/Width/Height to CV inputs
+- **Y (Gate)**: Chain `Gate` to gate inputs
 
 **Parameters:**
 - `Target Class` (Choice) - Object class to detect (person, car, bicycle, etc.)
@@ -2065,10 +2078,11 @@ Tracks multiple custom colors in video using HSV color space. Outputs are dynami
   - `[Color] X` (CV) - Center X (0-1)
   - `[Color] Y` (CV) - Center Y (0-1)
   - `[Color] Area` (CV) - Covered area (0-1)
+- `Video Out` (Video) - Passthrough video output for chaining
 
 **Auto-Connect Shortcuts:**
-- **V (Video)**: Connect loader `Source ID` → `Source In`.
-- **B (CV)**: Chain per-color X/Y/Area to CV inputs.
+- **V (Video)**: Connect loader `Source ID` → `Source In`; chain `Video Out` → next video module
+- **B (CV)**: Chain per-color X/Y/Area to CV inputs
 
 **Parameters:**
 - `Add Color...` (Button) - Click to pick a color from the video preview
@@ -2110,10 +2124,11 @@ Detects shapes and their properties using background subtraction and contour ana
 - `Area` (CV) - Detected shape area (0-1)
 - `Complexity` (CV) - Polygon complexity (0-1)
 - `Aspect Ratio` (CV) - Width/height ratio
+- `Video Out` (Video) - Passthrough video output for chaining
 
 **Auto-Connect Shortcuts:**
-- **V (Video)**: Connect loader `Source ID` → `Source In`.
-- **B (CV)**: Chain outputs to CV inputs.
+- **V (Video)**: Connect loader `Source ID` → `Source In`; chain `Video Out` → next video module
+- **B (CV)**: Chain outputs to CV inputs
 
 **Parameters:**
 - `Threshold` (0-255) - Threshold for foreground/background separation (default: 128)
@@ -2155,9 +2170,10 @@ Uses semantic segmentation (ENet or DeepLabV3) to identify a target class and ou
 - `Center X` (CV) - Center X of detected region (0-1)
 - `Center Y` (CV) - Center Y of detected region (0-1)
 - `Gate` (Gate) - High when target detected
+- `Video Out` (Video) - Passthrough video output for chaining
 
 **Auto-Connect Shortcuts:**
-- **V (Video)**: Connect loader `Source ID` → `Source In`.
+- **V (Video)**: Connect loader `Source ID` → `Source In`; chain `Video Out` → next video module
 - **B (CV)**: Chain Area and Center outputs to CV targets.
 - **Y (Gate)**: Chain `Gate` to gate inputs.
 
@@ -2184,6 +2200,158 @@ Uses semantic segmentation (ENet or DeepLabV3) to identify a target class and ou
 - Supports Cityscapes dataset classes by default
 - Runs at ~10 FPS on CPU
 - Outputs normalized region properties with colored preview overlay
+
+---
+
+### Video FX
+**Real-Time Video Effects Processor**
+
+A comprehensive video processing node that applies real-time effects to video streams. Supports chaining multiple effects for complex video transformations. All parameters can be modulated via CV inputs.
+
+**Inputs:**
+- `Source In` (Video) - Video source ID from webcam, video file, or other video processing nodes
+
+**Outputs:**
+- `Output ID` (Video) - Processed video source ID for chaining to other video modules
+
+**Parameters (All CV-Modulatable):**
+
+**Color Adjustments:**
+- `Brightness` (-100 to +100) - Brightness adjustment
+- `Contrast` (0.0-3.0) - Contrast multiplier
+- `Saturation` (0.0-3.0) - Color saturation (0=grayscale, 1=normal, >1=enhanced)
+- `Hue Shift` (-180 to +180) - Hue rotation in degrees
+- `Red/Green/Blue Gain` (0.0-2.0) - Per-channel gain control
+- `Temperature` (-1.0 to +1.0) - Color temperature (cold to warm)
+- `Sepia` (Bool) - Apply sepia tone effect
+
+**Filters & Effects:**
+- `Sharpen` (0.0-2.0) - Sharpening amount
+- `Blur` (0-20) - Blur radius
+- `Grayscale` (Bool) - Convert to grayscale
+- `Invert Colors` (Bool) - Invert color values
+- `Flip Horizontal/Vertical` (Bool) - Mirror frames
+
+**Advanced Effects:**
+- `Threshold Enable` (Bool) - Enable threshold effect
+- `Threshold Level` (0-255) - Threshold cutoff
+- `Posterize Levels` (2-32) - Color quantization (lower = fewer colors)
+- `Vignette Amount` (0.0-1.0) - Vignette darkening intensity
+- `Vignette Size` (0.1-2.0) - Vignette radius
+- `Pixelate Block Size` (1-128) - Pixelation block size
+- `Edge Detect (Canny)` (Bool) - Enable Canny edge detection
+- `Canny Threshold 1/2` (0-255) - Edge detection thresholds
+- `Kaleidoscope` (Choice) - None, 4-Way, or 8-Way mirroring
+
+**System:**
+- `Use GPU (CUDA)` (Bool) - Enable GPU acceleration (if available)
+- `Zoom` (+/-) - Adjust preview size: Small (240px), Normal (480px), Large (960px)
+
+**Auto-Connect Shortcuts:**
+- **V (Video)**: Chain video source → `Source In`, `Output ID` → next video module
+- All color/filter parameters accept CV modulation for dynamic effects
+
+**How to Use:**
+1. **Connect Video Source:** Connect Webcam, Video File Loader, or another Video FX node to `Source In`
+2. **Chain Effects:** Connect `Output ID` to another Video FX or CV processing module
+3. **Adjust Parameters:** Use sliders for real-time preview
+4. **Modulate with CV:** Connect LFOs, envelopes, or sequencers to CV inputs for animated effects
+5. **Example Chains:**
+   - **Color Grading Chain:** Video FX (saturation + temperature) → Video FX (contrast + brightness)
+   - **Stylization:** Video FX (posterize + vignette) → Video FX (sepia + blur)
+   - **Motion Effects:** LFO → Brightness CV, ADSR → Blur CV for dynamic effects
+6. **Performance Tips:**
+   - GPU acceleration significantly improves performance (enable if available)
+   - Chain multiple Video FX nodes for complex effect combinations
+   - Use CV modulation for automated video transformations
+   - Preview size affects UI performance (use Small for many nodes)
+
+**Technical Details:**
+- Passthrough video processing (zero latency)
+- Supports GPU acceleration via CUDA (when compiled with CUDA support)
+- Real-time processing at video frame rate
+- All effects are composable and can be combined
+- Dynamic CV modulation inputs for all parameters
+- Creates new video source ID for processed output (enables chaining)
+
+---
+
+### Crop Video
+**Video Cropping with Automatic Tracking**
+
+Crops video frames to a specified region. Supports three modes: manual cropping, automatic face tracking, and automatic object tracking (YOLOv3). Perfect for following detected objects or isolating regions of interest.
+
+**Inputs:**
+- `Source In` (Video) - Video source ID
+- `Center X Mod` (CV) - Center X position modulation (0-1)
+- `Center Y Mod` (CV) - Center Y position modulation (0-1)
+- `Width Mod` (CV) - Crop width modulation (0-1)
+- `Height Mod` (CV) - Crop height modulation (0-1)
+
+**Outputs:**
+- `Output ID` (Video) - Cropped video source ID for chaining
+
+**Parameters:**
+- `Tracking Mode` (Choice) - Manual, Track Face, or Track Object
+- `Target Class` (Choice) - Object class when tracking objects (person, car, etc.)
+- `Confidence` (0.0-1.0) - Detection confidence threshold
+- `Padding` (0.0-2.0) - Padding around tracked region (0.1 = 10% padding)
+- `Aspect Ratio` (Choice) - Stretch or Preserve (Fit)
+- `Use GPU (CUDA)` (Bool) - Enable GPU acceleration for tracking
+- `Zoom` (+/-) - Adjust preview size: Small (240px), Normal (480px), Large (960px)
+
+**Manual Crop Controls:**
+- `Center X/Y` (0-1) - Crop region center position
+- `Width/Height` (0-1) - Crop region size
+
+**Auto-Connect Shortcuts:**
+- **V (Video)**: Chain video source → `Source In`, `Output ID` → next video module
+- **B (CV)**: Connect CV signals (from Object/Human/Pose detectors) to Center X/Y/Width/Height modulation inputs
+
+**How to Use:**
+1. **Manual Mode:**
+   - Connect video source to `Source In`
+   - Adjust Center X/Y and Width/Height sliders
+   - Use Aspect Ratio "Preserve" to maintain original proportions
+   
+2. **Track Face Mode:**
+   - Select "Track Face" from Tracking Mode
+   - Automatically detects and tracks faces using Haar Cascade
+   - Adjust Padding to add space around face
+   - GPU acceleration recommended for better performance
+
+3. **Track Object Mode:**
+   - Select "Track Object" from Tracking Mode
+   - Choose Target Class (e.g., "person", "car", "bottle")
+   - Requires YOLOv3 model files in `assets/`
+   - Automatically tracks and crops to detected object bounding box
+   - Adjust Confidence threshold to filter detections
+
+4. **CV Modulation:**
+   - Connect Object Detector X/Y/Width/Height outputs to Crop Video modulation inputs
+   - Connect Pose Estimator keypoint positions for dynamic cropping
+   - Use sequencers or LFOs for automated crop animations
+
+5. **Example Patches:**
+   - **Face Isolation:** Track Face mode → Cropped output to Face Tracker for detailed analysis
+   - **Person Following:** Object Detector (person) → Crop Video CV inputs → Cropped region to Pose Estimator
+   - **Dynamic Cropping:** LFO → Center X Mod, ADSR → Width Mod for animated crops
+   - **Multi-Stage Processing:** Crop Video → Video FX (stylize cropped region) → Further processing
+
+6. **Performance Tips:**
+   - GPU acceleration improves tracking performance (especially for YOLOv3)
+   - Lower confidence thresholds detect more objects but may include false positives
+   - Padding helps maintain context around tracked objects
+   - Use Preserve aspect ratio to avoid distortion
+
+**Technical Details:**
+- Three tracking modes: Manual (slider-based), Face (Haar Cascade), Object (YOLOv3)
+- YOLOv3 tracking requires model files (`yolov3.cfg`, `yolov3.weights`, `coco.names`)
+- Falls back to YOLOv3-tiny if standard model not available
+- GPU acceleration via CUDA (optional, improves performance)
+- Real-time processing at video frame rate
+- Passthrough video processing with zero latency
+- CV modulation allows dynamic crop region control
 
 ---
 

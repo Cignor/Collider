@@ -239,15 +239,12 @@ void ContourDetectorModule::drawParametersInNode(float itemWidth,
         {
             ImGui::SetTooltip("Enable GPU acceleration for contour detection.\nRequires CUDA-capable NVIDIA GPU.");
         }
-        
-        ImGui::Separator();
     #else
         ImGui::TextDisabled("🚫 GPU support not compiled");
         if (ImGui::IsItemHovered())
         {
             ImGui::SetTooltip("OpenCV was built without CUDA support.\nRebuild with WITH_CUDA=ON to enable GPU acceleration.");
         }
-        ImGui::Separator();
     #endif
 
     float th = thresholdParam ? thresholdParam->load() : 128.0f;

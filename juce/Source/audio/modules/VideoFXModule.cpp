@@ -488,8 +488,6 @@ void VideoFXModule::drawParametersInNode(float itemWidth,
         onModificationEnded(); // Create an undo state for the reset
     }
     
-    ImGui::Separator();
-    
     // GPU checkbox
     bool useGpu = useGpuParam ? useGpuParam->get() : true;
     if (ImGui::Checkbox("Use GPU", &useGpu))
@@ -497,8 +495,6 @@ void VideoFXModule::drawParametersInNode(float itemWidth,
         if (useGpuParam) *useGpuParam = useGpu;
         onModificationEnded();
     }
-    
-    ImGui::Separator();
     
     // Zoom buttons
     int level = zoomLevelParam ? (int) zoomLevelParam->load() : 1;
@@ -529,11 +525,9 @@ void VideoFXModule::drawParametersInNode(float itemWidth,
     }
     if (atMax) ImGui::EndDisabled();
     
-    ImGui::Separator();
     ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1.0f), "Source ID In: %d", (int)currentSourceId.load());
     ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1.0f), "Output ID: %d", (int)getLogicalId());
     
-    ImGui::Separator();
     ImGui::TextColored(ImVec4(0.9f, 0.9f, 0.5f, 1.0f), "Color Adjustments");
     
     // Color sliders
@@ -600,7 +594,6 @@ void VideoFXModule::drawParametersInNode(float itemWidth,
         onModificationEnded();
     }
     
-    ImGui::Separator();
     ImGui::TextColored(ImVec4(0.9f, 0.9f, 0.5f, 1.0f), "Filters & Effects");
     
     // Filter sliders
@@ -647,7 +640,6 @@ void VideoFXModule::drawParametersInNode(float itemWidth,
         onModificationEnded();
     }
     
-    ImGui::Separator();
     ImGui::TextColored(ImVec4(0.9f, 0.9f, 0.5f, 1.0f), "More Filters");
 
     // Threshold Effect
@@ -712,7 +704,6 @@ void VideoFXModule::drawParametersInNode(float itemWidth,
         }
     }
     
-    ImGui::Separator();
     ImGui::TextColored(ImVec4(0.9f, 0.9f, 0.5f, 1.0f), "Advanced Effects");
     
     // Vignette

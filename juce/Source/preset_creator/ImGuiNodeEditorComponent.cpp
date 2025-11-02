@@ -7064,7 +7064,13 @@ void ImGuiNodeEditorComponent::drawInsertNodeOnLinkPopup()
             // Sequencers
             {"Timeline", "timeline"},
             // Computer Vision (Video processing - Video cables are treated as mod)
-            {"Video FX", "video_fx"}, {"Crop Video", "crop_video"}
+            // Passthrough nodes (Video In → Video Out)
+            {"Video FX", "video_fx"}, {"Crop Video", "crop_video"},
+            {"Movement Detector", "movement_detector"},
+            {"Human Detector", "human_detector"}, {"Object Detector", "object_detector"},
+            {"Pose Estimator", "pose_estimator"}, {"Hand Tracker", "hand_tracker"},
+            {"Face Tracker", "face_tracker"}, {"Color Tracker", "color_tracker"},
+            {"Contour Detector", "contour_detector"}, {"Semantic Segmentation", "semantic_segmentation"}
         };
         const auto& listToShow = linkToInsertOn.isMod ? modInsertable : audioInsertable;
 

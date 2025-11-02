@@ -287,7 +287,6 @@ void BPMMonitorModuleProcessor::drawParametersInNode(float itemWidth,
     ImGui::PushItemWidth(itemWidth);
     
     ImGui::TextColored(ImVec4(0.3f, 0.8f, 1.0f, 1.0f), "BPM MONITOR");
-    ImGui::Separator();
     
     // Mode selector
     int mode = apvts.getRawParameterValue("mode")->load();
@@ -301,7 +300,6 @@ void BPMMonitorModuleProcessor::drawParametersInNode(float itemWidth,
     }
     
     // BPM Normalization Range
-    ImGui::Separator();
     ImGui::Text("CV Normalization Range:");
     
     float minBPM = apvts.getRawParameterValue("minBPM")->load();
@@ -323,7 +321,6 @@ void BPMMonitorModuleProcessor::drawParametersInNode(float itemWidth,
     // Beat Detection Settings (only show if detection is enabled)
     if (mode == (int)OperationMode::Auto || mode == (int)OperationMode::DetectionOnly)
     {
-        ImGui::Separator();
         ImGui::Text("Beat Detection Settings:");
         
         int numInputs = apvts.getRawParameterValue("numInputs")->load();
@@ -360,7 +357,6 @@ void BPMMonitorModuleProcessor::drawParametersInNode(float itemWidth,
     }
     
     // Display detected rhythm sources
-    ImGui::Separator();
     ImGui::Text("Detected Rhythm Sources:");
     
     {

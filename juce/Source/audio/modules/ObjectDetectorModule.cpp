@@ -489,15 +489,12 @@ void ObjectDetectorModule::drawParametersInNode(float itemWidth,
         {
             ImGui::SetTooltip("Enable GPU acceleration for object detection.\nRequires CUDA-capable NVIDIA GPU.");
         }
-        
-        ImGui::Separator();
     #else
         ImGui::TextDisabled("🚫 GPU support not compiled");
         if (ImGui::IsItemHovered())
         {
             ImGui::SetTooltip("OpenCV was built without CUDA support.\nRebuild with WITH_CUDA=ON to enable GPU acceleration.");
         }
-        ImGui::Separator();
     #endif
     
     if (targetClassParam)
@@ -567,7 +564,6 @@ void ObjectDetectorModule::drawParametersInNode(float itemWidth,
     }
     if (atMax) ImGui::EndDisabled();
     
-    ImGui::Separator();
     if (modelLoaded)
     {
         ImGui::TextColored(ImVec4(0.0f, 1.0f, 0.0f, 1.0f), "Model: Loaded");

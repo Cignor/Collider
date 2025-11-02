@@ -383,15 +383,12 @@ void MovementDetectorModule::drawParametersInNode(float itemWidth,
         {
             ImGui::SetTooltip("Enable GPU acceleration for movement detection.\nRequires CUDA-capable NVIDIA GPU.\nOnly affects Optical Flow mode.");
         }
-        
-        ImGui::Separator();
     #else
         ImGui::TextDisabled("🚫 GPU support not compiled");
         if (ImGui::IsItemHovered())
         {
             ImGui::SetTooltip("OpenCV was built without CUDA support.\nRebuild with WITH_CUDA=ON to enable GPU acceleration.");
         }
-        ImGui::Separator();
     #endif
     
     // Mode selection
@@ -414,7 +411,6 @@ void MovementDetectorModule::drawParametersInNode(float itemWidth,
         onModificationEnded();
     }
     
-    ImGui::Separator();
     // Zoom controls (-/+) Small/Normal/Large
     int level = zoomLevelParam ? (int) zoomLevelParam->load() : 1;
     level = juce::jlimit(0, 2, level);
@@ -442,7 +438,6 @@ void MovementDetectorModule::drawParametersInNode(float itemWidth,
     if (atMax) ImGui::EndDisabled();
 
     // NEW: Algorithm tuning controls
-    ImGui::Separator();
     if (mode == 0) // Optical Flow
     {
         ImGui::Text("Optical Flow Settings");

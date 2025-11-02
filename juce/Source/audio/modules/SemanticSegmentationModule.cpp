@@ -374,15 +374,12 @@ void SemanticSegmentationModule::drawParametersInNode(float itemWidth,
         {
             ImGui::SetTooltip("Enable GPU acceleration for semantic segmentation.\nRequires CUDA-capable NVIDIA GPU.");
         }
-        
-        ImGui::Separator();
     #else
         ImGui::TextDisabled("🚫 GPU support not compiled");
         if (ImGui::IsItemHovered())
         {
             ImGui::SetTooltip("OpenCV was built without CUDA support.\nRebuild with WITH_CUDA=ON to enable GPU acceleration.");
         }
-        ImGui::Separator();
     #endif
 
     // Target class dropdown (populated from classNames if available)
@@ -423,7 +420,6 @@ void SemanticSegmentationModule::drawParametersInNode(float itemWidth,
     }
 
     // Zoom (-/+) controls, consistent with PoseEstimatorModule
-    ImGui::Separator();
     int level = zoomLevelParam ? (int) zoomLevelParam->load() : 1;
     level = juce::jlimit(0, 2, level);
     float buttonWidth = (itemWidth / 2.0f) - 4.0f;
