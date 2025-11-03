@@ -68,6 +68,16 @@ private:
     std::array<bool, 3> m_hasTriggeredThisSegment { false, false, false };
     bool m_isPrimed { false }; // Require one stable sample on-stroke before allowing triggers
 
+    // --- Pre-calculated per-stroke info for audio thread (parallel to userStrokes) ---
+    struct AudioStrokeInfo {
+        float minY = 1.0f;
+        float maxY = 0.0f;
+    };
+    std::vector<AudioStrokeInfo> audioStrokeInfo;
+
+    // --- Held crossing status for currently active stroke (Floor/Mid/Ceiling) ---
+    std::array<bool, 3> m_activeStrokeCrosses { false, false, false };
+
     // Mapping from flattened audio points to their parent stroke index (kept in lockstep with audioStrokePoints)
     std::vector<int> audioPointToStrokeIndex;
     

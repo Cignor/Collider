@@ -116,6 +116,24 @@ void StrokeSequencerModuleProcessor::processBlock(juce::AudioBuffer<float>& buff
     // --- Thread-safe Update Block ---
     if (strokeDataDirty.load())
     {
+        // Precompute min/max Y per stroke for audio-thread usage
+        audioStrokeInfo.clear();
+        audioStrokeInfo.resize(userStrokes.size());
+        for (size_t si = 0; si < userStrokes.size(); ++si)
+        {
+            const auto& stroke = userStrokes[si];
+            if (stroke.empty()) continue;
+            float minY = stroke[0].y;
+            float maxY = stroke[0].y;
+            for (const auto& p : stroke)
+            {
+                if (p.y < minY) minY = p.y;
+                if (p.y > maxY) maxY = p.y;
+            }
+            audioStrokeInfo[si].minY = minY;
+            audioStrokeInfo[si].maxY = maxY;
+        }
+
         audioStrokePoints.clear();
         audioPointToStrokeIndex.clear();
         // Build pairs so we can sort points and keep stroke indices aligned
@@ -271,6 +289,7 @@ void StrokeSequencerModuleProcessor::processBlock(juce::AudioBuffer<float>& buff
                 currentStrokeY = 0.0f;
                 m_activeStrokeIndex = -1;
                 m_isPrimed = false;
+                m_activeStrokeCrosses = { false, false, false };
             }
             else if (it == audioStrokePoints.end())
             {
@@ -278,6 +297,7 @@ void StrokeSequencerModuleProcessor::processBlock(juce::AudioBuffer<float>& buff
                 currentStrokeY = 0.0f;
                 m_activeStrokeIndex = -1;
                 m_isPrimed = false;
+                m_activeStrokeCrosses = { false, false, false };
             }
             else
             {
@@ -302,20 +322,23 @@ void StrokeSequencerModuleProcessor::processBlock(juce::AudioBuffer<float>& buff
                         m_activeStrokeIndex = strokeIdx1;
                         m_hasTriggeredThisSegment = { false, false, false };
                         m_isPrimed = false; // new stroke: require one stable sample
-                    }
 
-                    // Per-line pitch arming when this segment crosses thresholds
-                    const float y1 = p1.y;
-                    const float y2 = p2.y;
-                    const float threshFloor = finalThresholds[0];
-                    const float threshMid   = finalThresholds[1];
-                    const float threshCeil  = finalThresholds[2];
-                    if ((y1 - threshFloor) * (y2 - threshFloor) < 0.0f)
-                        floorPitchThisSample = currentStrokeY;
-                    if ((y1 - threshMid) * (y2 - threshMid) < 0.0f)
-                        midPitchThisSample = currentStrokeY;
-                    if ((y1 - threshCeil) * (y2 - threshCeil) < 0.0f)
-                        ceilPitchThisSample = currentStrokeY;
+                        // Determine held pitch crossing for this stroke using precomputed min/max
+                        if (m_activeStrokeIndex >= 0 && m_activeStrokeIndex < (int)audioStrokeInfo.size())
+                        {
+                            const auto& info = audioStrokeInfo[m_activeStrokeIndex];
+                            const float threshFloor = finalThresholds[0];
+                            const float threshMid   = finalThresholds[1];
+                            const float threshCeil  = finalThresholds[2];
+                            m_activeStrokeCrosses[0] = (info.minY - threshFloor) * (info.maxY - threshFloor) < 0.0f;
+                            m_activeStrokeCrosses[1] = (info.minY - threshMid)   * (info.maxY - threshMid)   < 0.0f;
+                            m_activeStrokeCrosses[2] = (info.minY - threshCeil)  * (info.maxY - threshCeil)  < 0.0f;
+                        }
+                        else
+                        {
+                            m_activeStrokeCrosses = { false, false, false };
+                        }
+                    }
                 }
                 else
                 {
@@ -323,6 +346,7 @@ void StrokeSequencerModuleProcessor::processBlock(juce::AudioBuffer<float>& buff
                     currentStrokeY = 0.0f;
                     m_activeStrokeIndex = -1;
                     m_isPrimed = false;
+                    m_activeStrokeCrosses = { false, false, false };
                 }
             }
         }
@@ -335,10 +359,10 @@ void StrokeSequencerModuleProcessor::processBlock(juce::AudioBuffer<float>& buff
         // Continuous pitch (live under playhead)
         m_continuousPitchCV.store(currentStrokeY);
         continuousPitchOut[i] = currentStrokeY;
-        // Per-line pitch based on whether the active segment crosses the line
-        floorPitchOut[i] = floorPitchThisSample;
-        midPitchOut[i]   = midPitchThisSample;
-        ceilPitchOut[i]  = ceilPitchThisSample;
+        // Held per-line pitch: output for duration of stroke if stroke crosses that line
+        floorPitchOut[i] = m_activeStrokeCrosses[0] ? currentStrokeY : 0.0f;
+        midPitchOut[i]   = m_activeStrokeCrosses[1] ? currentStrokeY : 0.0f;
+        ceilPitchOut[i]  = m_activeStrokeCrosses[2] ? currentStrokeY : 0.0f;
 
         // === Line Segment Intersection Detection ===
         // Check if playhead movement from previous position to current position crosses any threshold
