@@ -1,0 +1,4320 @@
+
+================================================================================
+FILE: juce\Source\audio\modules\VideoFileLoaderModule.h
+================================================================================
+
+
+#pragma once
+
+#include "ModuleProcessor.h"
+#include "FFmpegAudioReader.h"
+#include "../dsp/TimePitchProcessor.h"
+#include <opencv2/core.hpp>
+#include <opencv2/videoio.hpp>
+#include <juce_core/juce_core.h>
+#include <juce_audio_processors/juce_audio_processors.h>
+#include <juce_audio_formats/juce_audio_formats.h>
+#include <juce_audio_basics/juce_audio_basics.h>
+#include <juce_graphics/juce_graphics.h>
+
+/**
+ * Source node that loads a video file and publishes frames to VideoFrameManager.
+ * Outputs its own logical ID as a CV signal for routing to processing nodes.
+ */
+class VideoFileLoaderModule : public ModuleProcessor, private juce::Thread
+{
+public:
+    VideoFileLoaderModule();
+    ~VideoFileLoaderModule() override;
+
+    const juce::String getName() const override { return "video_file_loader"; }
+    
+    void prepareToPlay(double sampleRate, int samplesPerBlock) override;
+    void releaseResources() override;
+    void processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midi) override;
+    void setTimingInfo(const TransportState& state) override { lastTransportPlaying.store(state.isPlaying); if (syncToTransport.load()) playing.store(state.isPlaying); }
+    
+    juce::AudioProcessorValueTreeState& getAPVTS() override { return apvts; }
+    
+    // Dynamic pin definitions
+    std::vector<DynamicPinInfo> getDynamicOutputPins() const override;
+    
+    // State management for saving/loading video file path
+    juce::ValueTree getExtraStateTree() const override;
+    void setExtraStateTree(const juce::ValueTree& state) override;
+
+    // For UI
+    juce::Image getLatestFrame();
+    void chooseVideoFile();
+
+#if defined(PRESET_CREATOR_UI)
+    void drawParametersInNode(float itemWidth,
+                              const std::function<bool(const juce::String& paramId)>& isParamModulated,
+                              const std::function<void()>& onModificationEnded) override;
+    void drawIoPins(const NodePinHelpers& helpers) override;
+    
+    // Override to specify custom node width. Height is calculated dynamically based on video aspect ratio.
+    // Width changes based on zoom level (Small=240px, Normal=480px, Large=960px).
+    ImVec2 getCustomNodeSize() const override;
+#endif
+
+private:
+    void run() override;
+    void updateGuiFrame(const cv::Mat& frame);
+    
+    static juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout();
+    juce::AudioProcessorValueTreeState apvts;
+    
+    std::atomic<float>* loopParam = nullptr;
+    // 0 = Small (240), 1 = Normal (480), 2 = Large (960)
+    std::atomic<float>* zoomLevelParam = nullptr;
+    // Playback controls
+    std::atomic<float>* speedParam = nullptr;   // 0.25 .. 4.0 (1.0 default)
+    std::atomic<float>* inNormParam = nullptr;  // 0..1
+    std::atomic<float>* outNormParam = nullptr; // 0..1
+    std::atomic<float>* syncParam = nullptr; // bool as float
+    juce::AudioParameterChoice* engineParam = nullptr;
+    
+    std::atomic<bool> playing { true };
+    std::atomic<bool> syncToTransport { true };
+    std::atomic<bool> lastTransportPlaying { false };
+    std::atomic<bool> needPreviewFrame { false };
+    std::atomic<bool> lastPlaying { false }; // for play-edge detection
+    std::atomic<int> lastFourcc { 0 }; // cached FOURCC
+    std::atomic<int> pendingSeekFrame { -1 };
+    std::atomic<int> lastPosFrame { 0 };
+    std::atomic<double> totalDurationMs { 0.0 };
+    
+    // Master clock: audio-driven synchronization for video sync
+    std::atomic<juce::int64> currentAudioSamplePosition { 0 }; // The master clock - only advanced by audio thread
+    std::atomic<double> sourceAudioSampleRate { 44100.0 }; // Sample rate of the loaded file
+    
+    // Unified, thread-safe seeking mechanism for both video and audio
+    std::atomic<float> pendingSeekNormalized { -1.0f };
+    
+    cv::VideoCapture videoCapture;
+    juce::CriticalSection captureLock;
+
+    static juce::String fourccToString(int fourcc)
+    {
+        if (fourcc == 0) return "unknown";
+        char c[5];
+        c[0] = (char)(fourcc & 0xFF);
+        c[1] = (char)((fourcc >> 8) & 0xFF);
+        c[2] = (char)((fourcc >> 16) & 0xFF);
+        c[3] = (char)((fourcc >> 24) & 0xFF);
+        c[4] = '\0';
+        return juce::String(c);
+    }
+
+    static juce::String fourccFriendlyName(const juce::String& code)
+    {
+        const juce::String c = code.toLowerCase();
+        if (c == "avc1" || c == "h264") return "H.264";
+        if (c == "hvc1" || c == "hevc" || c == "hev1") return "H.265/HEVC";
+        if (c == "mp4v" || c == "m4v") return "MPEG-4 Part 2";
+        if (c == "mjpg" || c == "mjpa" || c == "jpeg") return "Motion JPEG";
+        if (c == "xvid" ) return "MPEG-4 ASP (Xvid)";
+        if (c == "vp09") return "VP9";
+        if (c == "av01") return "AV1";
+        if (c == "wmv3" || c == "wvc1") return "VC-1";
+        if (c == "h263") return "H.263";
+        return "unknown";
+    }
+    juce::Image latestFrameForGui;
+    juce::CriticalSection imageLock;
+    
+    juce::File videoFileToLoad;
+    juce::File currentVideoFile;
+    std::unique_ptr<juce::FileChooser> fileChooser;
+
+    // Cached metadata (atomic for cross-thread visibility)
+    std::atomic<int> totalFrames { 0 };
+    
+    // Audio playback engine
+    std::unique_ptr<FFmpegAudioReader> audioReader;
+    TimePitchProcessor timePitch;
+    double audioReadPosition = 0.0;
+    double audioSampleRate = 44100.0;
+    std::atomic<bool> audioLoaded { false };
+    juce::CriticalSection audioLock;
+    
+    // FIFO buffer for thread-safe audio streaming
+    juce::AudioBuffer<float> audioFifo;
+    juce::AbstractFifo abstractFifo { 0 };
+    int fifoSize { 0 };
+    
+    void loadAudioFromVideo();
+};
+
+
+
+================================================================================
+FILE: juce\Source\audio\modules\VideoFileLoaderModule.cpp
+================================================================================
+
+
+#include "VideoFileLoaderModule.h"
+#include "../../video/VideoFrameManager.h"
+#include <opencv2/imgproc.hpp>
+
+#if defined(PRESET_CREATOR_UI)
+#include <imgui.h>
+#endif
+
+juce::AudioProcessorValueTreeState::ParameterLayout VideoFileLoaderModule::createParameterLayout()
+{
+    std::vector<std::unique_ptr<juce::RangedAudioParameter>> params;
+    
+    params.push_back(std::make_unique<juce::AudioParameterBool>("loop", "Loop", true));
+    params.push_back(std::make_unique<juce::AudioParameterBool>("sync", "Sync to Transport", true));
+    params.push_back(std::make_unique<juce::AudioParameterChoice>(
+        "zoomLevel", "Zoom Level", juce::StringArray{ "Small", "Normal", "Large" }, 1));
+    // Playback controls
+    params.push_back(std::make_unique<juce::AudioParameterFloat>(
+        "speed", "Speed", juce::NormalisableRange<float>(0.25f, 4.0f, 0.01f), 1.0f));
+    params.push_back(std::make_unique<juce::AudioParameterFloat>(
+        "in", "Start", 0.0f, 1.0f, 0.0f));
+    params.push_back(std::make_unique<juce::AudioParameterFloat>(
+        "out", "End", 0.0f, 1.0f, 1.0f));
+    
+    // Add the engine selection parameter, defaulting to Naive for performance
+    params.push_back(std::make_unique<juce::AudioParameterChoice>("engine", "Engine", juce::StringArray { "RubberBand", "Naive" }, 1));
+    
+    return { params.begin(), params.end() };
+}
+
+VideoFileLoaderModule::VideoFileLoaderModule()
+    : ModuleProcessor(BusesProperties()
+                     .withOutput("CV Out", juce::AudioChannelSet::mono(), true)
+                     .withOutput("Audio Out", juce::AudioChannelSet::stereo(), true)),
+      juce::Thread("Video File Loader Thread"),
+      apvts(*this, nullptr, "VideoFileLoaderParams", createParameterLayout())
+{
+    loopParam = apvts.getRawParameterValue("loop");
+    zoomLevelParam = apvts.getRawParameterValue("zoomLevel");
+    speedParam = apvts.getRawParameterValue("speed");
+    inNormParam = apvts.getRawParameterValue("in");
+    outNormParam = apvts.getRawParameterValue("out");
+    syncParam = apvts.getRawParameterValue("sync");
+    engineParam = dynamic_cast<juce::AudioParameterChoice*>(apvts.getParameter("engine"));
+    syncToTransport.store(syncParam && (*syncParam > 0.5f));
+}
+
+VideoFileLoaderModule::~VideoFileLoaderModule()
+{
+    stopThread(5000);
+    VideoFrameManager::getInstance().removeSource(getLogicalId());
+}
+
+void VideoFileLoaderModule::prepareToPlay(double sampleRate, int samplesPerBlock)
+{
+    const juce::ScopedLock lock(audioLock);
+    audioSampleRate = sampleRate;
+    timePitch.prepare(sampleRate, 2, samplesPerBlock); // Prepare for stereo
+    
+    // Initialize FIFO to ~5 seconds of stereo audio
+    fifoSize = (int)(sampleRate * 5.0);
+    audioFifo.setSize(2, fifoSize, false, true, true); // 2 channels
+    abstractFifo.setTotalSize(fifoSize);
+    
+    startThread(juce::Thread::Priority::normal);
+    // If we already had a file open previously, request re-open on thread start
+    if (currentVideoFile.existsAsFile())
+        videoFileToLoad = currentVideoFile;
+}
+
+void VideoFileLoaderModule::releaseResources()
+{
+    signalThreadShouldExit();
+    stopThread(5000);
+    
+    const juce::ScopedLock lock(audioLock);
+    timePitch.reset();
+}
+
+void VideoFileLoaderModule::chooseVideoFile()
+{
+    fileChooser = std::make_unique<juce::FileChooser>("Select a video file...", 
+                                                       juce::File{}, 
+                                                       "*.mp4;*.mov;*.avi;*.mkv;*.wmv");
+    auto chooserFlags = juce::FileBrowserComponent::openMode | juce::FileBrowserComponent::canSelectFiles;
+    
+    fileChooser->launchAsync(chooserFlags, [this](const juce::FileChooser& fc)
+    {
+        auto file = fc.getResult();
+        if (file.existsAsFile())
+        {
+            videoFileToLoad = file;
+        }
+    });
+}
+
+void VideoFileLoaderModule::run()
+{
+    // One-time OpenCV build summary: detect if FFMPEG is integrated
+    {
+        static std::atomic<bool> buildInfoLogged { false };
+        if (!buildInfoLogged.exchange(true))
+        {
+            juce::String info(cv::getBuildInformation().c_str());
+            bool ffmpegYes = false;
+            juce::String ffmpegLine;
+            {
+                juce::StringArray lines;
+                lines.addLines(info);
+                for (const auto& ln : lines)
+                {
+                    if (ln.containsIgnoreCase("FFMPEG:"))
+                    {
+                        ffmpegLine = ln.trim();
+                        if (ln.containsIgnoreCase("YES")) ffmpegYes = true;
+                        break;
+                    }
+                }
+            }
+            juce::Logger::writeToLog("[OpenCV Build] FFMPEG integrated: " + juce::String(ffmpegYes ? "YES" : "NO") +
+                                     (ffmpegLine.isNotEmpty() ? juce::String(" | ") + ffmpegLine : juce::String()));
+        }
+    }
+
+    bool sourceIsOpen = false;
+    double videoFps = 30.0; // Default FPS
+    double frameDurationMs = 33.0; // Default to ~30fps
+    
+    while (!threadShouldExit())
+    {
+        // Check if user requested a new file OR we need to (re)open the same file after restart
+        if (videoFileToLoad.existsAsFile() && (!videoCapture.isOpened() || videoFileToLoad != currentVideoFile))
+        {
+            if (videoCapture.isOpened())
+            {
+                videoCapture.release();
+            }
+            
+            bool opened = videoCapture.open(videoFileToLoad.getFullPathName().toStdString(), cv::CAP_FFMPEG);
+            if (!opened)
+            {
+                juce::Logger::writeToLog("[VideoFileLoader] FFmpeg backend open failed, retrying default backend: " + videoFileToLoad.getFullPathName());
+                opened = videoCapture.open(videoFileToLoad.getFullPathName().toStdString());
+            }
+            if (opened)
+            {
+                currentVideoFile = videoFileToLoad;
+                videoFileToLoad = juce::File{}; // Clear request immediately after processing
+                sourceIsOpen = true;
+                needPreviewFrame.store(true);
+                // Log backend name (helps diagnose FFmpeg vs MSMF at runtime)
+               #if (CV_VERSION_MAJOR >= 4)
+                juce::String backendName = videoCapture.getBackendName().c_str();
+                juce::Logger::writeToLog("[VideoFileLoader] Backend: " + backendName);
+               #endif
+                // Reset state for new media, but keep user-defined in/out ranges
+                totalFrames.store(0); // force re-evaluation
+                lastPosFrame.store(0);
+                pendingSeekFrame.store(0);
+                
+                // Get the video's native FPS and codec
+                videoFps = videoCapture.get(cv::CAP_PROP_FPS);
+                lastFourcc.store((int) videoCapture.get(cv::CAP_PROP_FOURCC));
+                {
+                    // Backend and raw FOURCC diagnostics
+                    #if CV_VERSION_MAJOR >= 4
+                    const std::string backendName = videoCapture.getBackendName();
+                    juce::Logger::writeToLog("[VideoFileLoader] Backend: " + juce::String(backendName.c_str()));
+                    #endif
+                    const int fourccRaw = lastFourcc.load();
+                    juce::Logger::writeToLog("[VideoFileLoader] Metadata: FPS=" + juce::String(videoFps,2) +
+                                             ", Raw FOURCC=" + juce::String(fourccRaw) +
+                                             " ('" + fourccToString(fourccRaw) + "')");
+                }
+                {
+                    int tf = (int) videoCapture.get(cv::CAP_PROP_FRAME_COUNT);
+                    if (tf <= 1) tf = 0; // treat unknown/invalid as 0 so UI uses normalized seeks
+                    totalFrames.store(tf);
+                    juce::Logger::writeToLog("[VideoFileLoader] Opened '" + currentVideoFile.getFileName() + "' frames=" + juce::String(tf) +
+                                             ", fps=" + juce::String(videoFps,2) + ", fourcc='" + fourccToString(lastFourcc.load()) + "'");
+                    if (tf > 1 && videoFps > 0.0)
+                        totalDurationMs.store((double)tf * (1000.0 / videoFps));
+                    else
+                        totalDurationMs.store(0.0);
+                }
+                if (videoFps > 0.0 && videoFps < 1000.0) // Sanity check
+                {
+                    frameDurationMs = 1000.0 / videoFps;
+                    juce::Logger::writeToLog("[VideoFileLoader] Opened: " + currentVideoFile.getFileName() + 
+                                            " (FPS: " + juce::String(videoFps, 2) + ")");
+                }
+                else
+                {
+                    frameDurationMs = 33.0; // Fallback to 30fps
+                    juce::Logger::writeToLog("[VideoFileLoader] Opened: " + currentVideoFile.getFileName() + 
+                                            " (FPS unknown, using 30fps)");
+                }
+                
+                // Load audio from the video file
+                loadAudioFromVideo();
+            }
+            else
+            {
+                juce::Logger::writeToLog("[VideoFileLoader] Failed to open: " + videoFileToLoad.getFullPathName());
+                videoFileToLoad = juce::File{};
+            }
+        }
+        
+        if (!sourceIsOpen)
+        {
+            wait(500);
+            continue;
+        }
+        
+        // --- UNIFIED SEEK LOGIC ---
+        // This is now the single point of control for seeking, triggered by UI.
+        float normSeekPos = pendingSeekNormalized.exchange(-1.0f);
+        if (normSeekPos >= 0.0f)
+        {
+            const double durMs = totalDurationMs.load();
+            if (durMs > 0.0)
+            {
+                double seekToMs = juce::jlimit(0.0, durMs, (double)normSeekPos * durMs);
+                
+                // Seek video
+                const juce::ScopedLock capLock(captureLock);
+                if (videoCapture.isOpened())
+                    videoCapture.set(cv::CAP_PROP_POS_MSEC, seekToMs);
+                
+                // Seek audio by updating the read position - clear FIFO and reset
+                const juce::ScopedLock audioLk(audioLock);
+                if (audioReader) {
+                    audioReadPosition = normSeekPos * audioReader->lengthInSamples;
+                    currentAudioSamplePosition.store((juce::int64)audioReadPosition); // SET THE MASTER CLOCK
+                    audioReader->resetPosition(); // Force seek on next read
+                    abstractFifo.reset(); // Clear FIFO on seek
+                    timePitch.reset(); // Reset time stretcher state after seek
+                }
+            }
+            // Fallback to ratio seek if duration is not known
+            else
+            {
+                const juce::ScopedLock capLock(captureLock);
+                if (videoCapture.isOpened())
+                    videoCapture.set(cv::CAP_PROP_POS_AVI_RATIO, (double)normSeekPos);
+                
+                // Seek audio by ratio - clear FIFO and reset
+                const juce::ScopedLock audioLk(audioLock);
+                if (audioReader) {
+                    audioReadPosition = normSeekPos * audioReader->lengthInSamples;
+                    currentAudioSamplePosition.store((juce::int64)audioReadPosition); // SET THE MASTER CLOCK
+                    audioReader->resetPosition(); // Force seek on next read
+                    abstractFifo.reset(); // Clear FIFO on seek
+                    timePitch.reset();
+                }
+            }
+            needPreviewFrame.store(true);
+        }
+
+        // Legacy frame-based seek support (for compatibility)
+        int seekTo = pendingSeekFrame.exchange(-1);
+        if (seekTo >= 0)
+        {
+            const juce::ScopedLock capLock(captureLock);
+            if (videoCapture.isOpened())
+                videoCapture.set(cv::CAP_PROP_POS_FRAMES, (double) seekTo);
+            needPreviewFrame.store(true);
+            
+            // Also seek audio - clear FIFO and reset position
+            const juce::ScopedLock audioLk(audioLock);
+            if (audioReader) {
+                int tfLocal = totalFrames.load();
+                if (tfLocal > 1) {
+                    float normPos = (float)seekTo / (float)(tfLocal - 1);
+                    audioReadPosition = normPos * audioReader->lengthInSamples;
+                    currentAudioSamplePosition.store((juce::int64)audioReadPosition); // SET THE MASTER CLOCK
+                    audioReader->resetPosition(); // Force seek on next read
+                    abstractFifo.reset(); // Clear FIFO on seek
+                    timePitch.reset();
+                }
+            }
+        }
+
+        // On play edge: seek to IN point using unified seek
+        bool nowPlaying = playing.load();
+        bool wasPlaying = lastPlaying.exchange(nowPlaying);
+        if (nowPlaying && !wasPlaying)
+        {
+            float inN = inNormParam ? inNormParam->load() : 0.0f;
+            pendingSeekNormalized.store(inN); // Use unified seek
+            needPreviewFrame.store(true);
+            
+            // Also seek audio - clear FIFO and reset position
+            const juce::ScopedLock audioLk(audioLock);
+            if (audioReader) {
+                audioReadPosition = inN * audioReader->lengthInSamples;
+                currentAudioSamplePosition.store((juce::int64)audioReadPosition); // SET THE MASTER CLOCK
+                audioReader->resetPosition(); // Force seek on next read
+                abstractFifo.reset(); // Clear FIFO on seek
+                timePitch.reset();
+            }
+        }
+
+        // Respect play/pause
+        if (!playing.load())
+        {
+            // If paused, show a single preview frame after (re)open
+            if (needPreviewFrame.exchange(false))
+            {
+                cv::Mat preview;
+                if (videoCapture.isOpened())
+                {
+                    videoCapture.read(preview);
+                }
+                {
+                    if (!preview.empty())
+                    {
+                        VideoFrameManager::getInstance().setFrame(getLogicalId(), preview);
+                        updateGuiFrame(preview);
+                        juce::Logger::writeToLog("[VideoFileLoader][Preview] Published paused preview frame");
+                        lastPosFrame.store((int) videoCapture.get(cv::CAP_PROP_POS_FRAMES));
+                        if (lastFourcc.load() == 0)
+                            lastFourcc.store((int) videoCapture.get(cv::CAP_PROP_FOURCC));
+                        // Also try to refresh total frames after the first paused read
+                        if (totalFrames.load() <= 1)
+                        {
+                            int tf = (int) videoCapture.get(cv::CAP_PROP_FRAME_COUNT);
+                            if (tf > 1)
+                            {
+                                totalFrames.store(tf);
+                                juce::Logger::writeToLog("[VideoFileLoader] Frame count acquired after paused read: " + juce::String(tf));
+                            }
+                        }
+                    }
+                }
+            }
+            wait(40);
+            continue;
+        }
+
+        // Get current UI settings for this iteration
+        const bool isLoopingEnabled = loopParam && loopParam->load() > 0.5f;
+        const float startNormalized = inNormParam ? inNormParam->load() : 0.0f;
+        const float endNormalized = outNormParam ? outNormParam->load() : 1.0f;
+        
+        // ==============================================================================
+        //  SECTION 1: AUDIO DECODER (The "Producer")
+        //  This thread's only job is to decode audio and keep the FIFO buffer full,
+        //  respecting the start/end points and looping its read position.
+        // ==============================================================================
+        if (playing.load() && audioLoaded.load() && audioReader && abstractFifo.getFreeSpace() > 8192)
+        {
+            const juce::ScopedLock audioLk(audioLock);
+            if (audioReader) 
+            {
+                const juce::int64 startSample = (juce::int64)(startNormalized * audioReader->lengthInSamples);
+                juce::int64 endSample = (juce::int64)(endNormalized * audioReader->lengthInSamples);
+                if (endSample <= startSample) endSample = audioReader->lengthInSamples;
+                
+                // If the decoder's read-head is past the end point, loop it back to the start.
+                if (audioReadPosition >= endSample) {
+                    if (isLoopingEnabled) {
+                        audioReadPosition = (double)startSample;
+                    }
+                }
+                
+                // If the read-head is within the valid range, decode a chunk of audio.
+                if (audioReadPosition < endSample) {
+                    const int samplesToRead = 4096;
+                    const int numSamplesAvailable = (int)(endSample - audioReadPosition);
+                    const int numSamplesToReadNow = juce::jmin(samplesToRead, numSamplesAvailable);
+                    
+                    if (numSamplesToReadNow > 0) {
+                        juce::AudioBuffer<float> tempReadBuffer(2, numSamplesToReadNow);
+                        float* channelPointers[] = { tempReadBuffer.getWritePointer(0), tempReadBuffer.getWritePointer(1) };
+                        if (audioReader->readSamples(reinterpret_cast<int* const*>(channelPointers), 2, 0, (juce::int64)audioReadPosition, numSamplesToReadNow)) {
+                            audioReadPosition += numSamplesToReadNow;
+                            
+                            // Write decoded audio into the FIFO buffer for the audio thread
+                            int s1, z1, s2, z2;
+                            abstractFifo.prepareToWrite(numSamplesToReadNow, s1, z1, s2, z2);
+                            if (z1 > 0) audioFifo.copyFrom(0, s1, tempReadBuffer, 0, 0, z1);
+                            if (z1 > 0) audioFifo.copyFrom(1, s1, tempReadBuffer, 1, 0, z1);
+                            if (z2 > 0) audioFifo.copyFrom(0, s2, tempReadBuffer, 0, z1, z2);
+                            if (z2 > 0) audioFifo.copyFrom(1, s2, tempReadBuffer, 1, z1, z2);
+                            abstractFifo.finishedWrite(z1 + z2);
+                        }
+                    }
+                }
+            }
+        }
+        
+        // ==============================================================================
+        //  SECTION 2: VIDEO DISPLAY (The "Slave")
+        //  This thread syncs the video to the master audio clock and handles the actual loop event.
+        // ==============================================================================
+        if (playing.load() && sourceIsOpen && totalFrames.load() > 1 && videoFps > 0)
+        {
+            // Get the current time from the master audio clock
+            const juce::int64 audioMasterPosition = currentAudioSamplePosition.load();
+            const double sourceRate = sourceAudioSampleRate.load();
+            const double currentTimeInSeconds = (double)audioMasterPosition / sourceRate;
+            
+            // Calculate the target video frame that corresponds to the audio time
+            int targetVideoFrame = (int)(currentTimeInSeconds * videoFps);
+            
+            const int totalVideoFrames = totalFrames.load();
+            const int startFrame = (int)(startNormalized * totalVideoFrames);
+            const int endFrame = (int)(endNormalized * totalVideoFrames);
+            
+            // **THE CRITICAL FIX**: Check if the MASTER AUDIO CLOCK has passed the end point.
+            if (targetVideoFrame >= endFrame)
+            {
+                if (isLoopingEnabled)
+                {
+                    // The loop is triggered HERE. Atomically reset all playback state for both audio and video.
+                    const juce::ScopedLock audioLk(audioLock);
+                    const juce::ScopedLock capLock(captureLock);
+                    
+                    const juce::int64 startSample = (juce::int64)(startNormalized * audioReader->lengthInSamples);
+                    
+                    // Reset master clock to the start position
+                    currentAudioSamplePosition.store(startSample); 
+                    // Reset audio decoder's read position
+                    audioReadPosition = (double)startSample; 
+                    // Reset video to the start frame
+                    if (videoCapture.isOpened()) videoCapture.set(cv::CAP_PROP_POS_FRAMES, startFrame); 
+                    // Flush all buffers
+                    abstractFifo.reset(); 
+                    timePitch.reset(); 
+                    
+                    // The new target is now the start frame
+                    targetVideoFrame = startFrame; 
+                }
+                else 
+                {
+                    // Not looping, so stop playback
+                    playing.store(false);
+                }
+            }
+            
+            // With the correct target frame determined, seek the video capture directly to that frame.
+            if (playing.load() && videoCapture.isOpened())
+            {
+                const juce::ScopedLock capLock(captureLock);
+                int currentVideoFrame = (int)videoCapture.get(cv::CAP_PROP_POS_FRAMES);
+                
+                // Only update the video if the target frame is different from the current one.
+                if (currentVideoFrame != targetVideoFrame) {
+                    videoCapture.set(cv::CAP_PROP_POS_FRAMES, targetVideoFrame);
+                }
+                
+                // Read and display the single, correct frame for this point in time.
+                cv::Mat frame;
+                if (videoCapture.read(frame)) {
+                    VideoFrameManager::getInstance().setFrame(getLogicalId(), frame);
+                    updateGuiFrame(frame);
+                    lastPosFrame.store((int)videoCapture.get(cv::CAP_PROP_POS_FRAMES));
+                    if (lastFourcc.load() == 0)
+                        lastFourcc.store((int)videoCapture.get(cv::CAP_PROP_FOURCC));
+                }
+            }
+        }
+        
+        // A short sleep to prevent this thread from consuming 100% CPU
+        wait(5);
+    }
+    
+    videoCapture.release();
+    VideoFrameManager::getInstance().removeSource(getLogicalId());
+}
+
+void VideoFileLoaderModule::updateGuiFrame(const cv::Mat& frame)
+{
+    cv::Mat bgraFrame;
+    cv::cvtColor(frame, bgraFrame, cv::COLOR_BGR2BGRA);
+    
+    const juce::ScopedLock lock(imageLock);
+    
+    if (latestFrameForGui.isNull() || 
+        latestFrameForGui.getWidth() != bgraFrame.cols || 
+        latestFrameForGui.getHeight() != bgraFrame.rows)
+    {
+        latestFrameForGui = juce::Image(juce::Image::ARGB, bgraFrame.cols, bgraFrame.rows, true);
+    }
+    
+    juce::Image::BitmapData destData(latestFrameForGui, juce::Image::BitmapData::writeOnly);
+    memcpy(destData.data, bgraFrame.data, bgraFrame.total() * bgraFrame.elemSize());
+}
+
+juce::Image VideoFileLoaderModule::getLatestFrame()
+{
+    const juce::ScopedLock lock(imageLock);
+    return latestFrameForGui.createCopy();
+}
+
+void VideoFileLoaderModule::loadAudioFromVideo()
+{
+    const juce::ScopedLock lock(audioLock);
+    
+    audioReader.reset();
+    timePitch.reset(); // Reset the processing engine
+    audioReadPosition = 0.0;
+    currentAudioSamplePosition.store(0); // Reset master clock
+    abstractFifo.reset(); // Clear FIFO
+    audioLoaded.store(false);
+    
+    if (!currentVideoFile.existsAsFile()) return;
+    
+    try
+    {
+        audioReader = std::make_unique<FFmpegAudioReader>(currentVideoFile.getFullPathName());
+        
+        if (audioReader != nullptr && audioReader->lengthInSamples > 0)
+        {
+            audioLoaded.store(true);
+            sourceAudioSampleRate.store(audioReader->sampleRate); // Store the source sample rate
+            juce::Logger::writeToLog("[VideoFileLoader] Audio loaded via FFmpeg.");
+        }
+        else
+        {
+            juce::Logger::writeToLog("[VideoFileLoader] Could not extract audio stream via FFmpeg.");
+        }
+    }
+    catch (const std::exception& e)
+    {
+        juce::Logger::writeToLog("[VideoFileLoader] Exception loading audio: " + juce::String(e.what()));
+    }
+}
+
+void VideoFileLoaderModule::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midi)
+{
+    juce::ignoreUnused(midi);
+    
+    auto cvOutBus = getBusBuffer(buffer, false, 0);
+    auto audioOutBus = getBusBuffer(buffer, false, 1);
+    
+    cvOutBus.clear();
+    audioOutBus.clear();
+    
+    // Output Source ID on CV bus
+    if (cvOutBus.getNumChannels() > 0)
+    {
+        float sourceId = (float)getLogicalId();
+        cvOutBus.setSample(0, 0, sourceId);
+        for (int ch = 0; ch < cvOutBus.getNumChannels(); ++ch)
+            cvOutBus.copyFrom(ch, 1, cvOutBus, ch, 0, cvOutBus.getNumSamples() - 1);
+    }
+    
+    // Return early if not playing
+    if (!audioLoaded.load() || !playing.load())
+    {
+        return;
+    }
+    
+    // --- NEW FIFO-BASED AUDIO PROCESSING ---
+    const juce::ScopedLock lock(audioLock);
+    const int numSamples = audioOutBus.getNumSamples();
+    
+    // 1. Configure the time-stretcher
+    const float speed = juce::jlimit(0.25f, 4.0f, speedParam ? speedParam->load() : 1.0f);
+    const int engineIdx = engineParam ? engineParam->getIndex() : 1;
+    auto requestedMode = (engineIdx == 0) ? TimePitchProcessor::Mode::RubberBand : TimePitchProcessor::Mode::Fifo;
+    
+    timePitch.setMode(requestedMode);
+    
+    // THIS IS THE FIX: Calculate the correct ratio based on which engine is active.
+    double ratioForEngine = (double)speed;
+    if (requestedMode == TimePitchProcessor::Mode::RubberBand)
+    {
+        // RubberBand expects a time-stretch ratio, which is the inverse of playback speed.
+        // A speed of 2.0x requires a stretch ratio of 0.5 to play twice as fast.
+        ratioForEngine = 1.0 / juce::jmax(0.01, (double)speed);
+    }
+    
+    // The Naive engine expects a direct playback speed, so `ratioForEngine` is unchanged.
+    timePitch.setTimeStretchRatio(ratioForEngine);
+    
+    // 2. Determine how many source frames we need to pull from the FIFO
+    const int framesToReadFromFifo = (int)std::ceil((double)numSamples * speed);
+    
+    if (abstractFifo.getNumReady() >= framesToReadFromFifo)
+    {
+        // Use a temporary buffer for interleaving
+        juce::AudioBuffer<float> interleavedBuffer(1, framesToReadFromFifo * 2);
+        float* interleavedData = interleavedBuffer.getWritePointer(0);
+        
+        // 3. Read from FIFO and interleave the data
+        int start1, size1, start2, size2;
+        abstractFifo.prepareToRead(framesToReadFromFifo, start1, size1, start2, size2);
+        
+        const float* fifoDataL = audioFifo.getReadPointer(0);
+        const float* fifoDataR = audioFifo.getReadPointer(1);
+        
+        for (int i = 0; i < size1; ++i) {
+            interleavedData[2 * i] = fifoDataL[start1 + i];
+            interleavedData[2 * i + 1] = fifoDataR[start1 + i];
+        }
+        if (size2 > 0) {
+            for (int i = 0; i < size2; ++i) {
+                interleavedData[2 * (size1 + i)] = fifoDataL[start2 + i];
+                interleavedData[2 * (size1 + i) + 1] = fifoDataR[start2 + i];
+            }
+        }
+        abstractFifo.finishedRead(size1 + size2);
+        const int readCount = size1 + size2; // How many samples we actually read from FIFO
+        
+        // 4. Feed the time-stretcher
+        timePitch.putInterleaved(interleavedData, framesToReadFromFifo);
+        
+        // 5. Retrieve processed audio
+        juce::AudioBuffer<float> tempOutput(1, numSamples * 2);
+        int produced = timePitch.receiveInterleaved(tempOutput.getWritePointer(0), numSamples);
+        
+        // 6. De-interleave into the output bus
+        if (produced > 0)
+        {
+            const float* processedData = tempOutput.getReadPointer(0);
+            for (int ch = 0; ch < audioOutBus.getNumChannels(); ++ch)
+            {
+                float* dest = audioOutBus.getWritePointer(ch);
+                for (int i = 0; i < produced; ++i)
+                {
+                    dest[i] = (ch == 0) ? processedData[i * 2] : processedData[i * 2 + 1];
+                }
+            }
+            
+            // THIS IS THE FIX: Advance the master clock by the number of samples consumed
+            currentAudioSamplePosition.store(currentAudioSamplePosition.load() + readCount);
+        }
+    }
+}
+
+juce::ValueTree VideoFileLoaderModule::getExtraStateTree() const
+{
+    juce::ValueTree state("VideoFileLoaderState");
+    // Save the absolute path of the currently loaded video file
+    if (currentVideoFile.existsAsFile())
+    {
+        state.setProperty("videoFilePath", currentVideoFile.getFullPathName(), nullptr);
+    }
+    return state;
+}
+
+void VideoFileLoaderModule::setExtraStateTree(const juce::ValueTree& state)
+{
+    if (!state.hasType("VideoFileLoaderState")) return;
+    
+    juce::String filePath = state.getProperty("videoFilePath", "").toString();
+    if (filePath.isNotEmpty())
+    {
+        juce::File restoredFile(filePath);
+        if (restoredFile.existsAsFile())
+        {
+            videoFileToLoad = restoredFile;
+            juce::Logger::writeToLog("[VideoFileLoader] Restored video file from preset: " + filePath);
+        }
+        else
+        {
+            juce::Logger::writeToLog("[VideoFileLoader] Warning: Saved video file not found: " + filePath);
+        }
+    }
+}
+
+#if defined(PRESET_CREATOR_UI)
+ImVec2 VideoFileLoaderModule::getCustomNodeSize() const
+{
+    // Return different width based on zoom level (0=240,1=480,2=960)
+    int level = zoomLevelParam ? (int) zoomLevelParam->load() : 1;
+    level = juce::jlimit(0, 2, level);
+    const float widths[3] { 240.0f, 480.0f, 960.0f };
+    return ImVec2(widths[level], 0.0f);
+}
+
+void VideoFileLoaderModule::drawParametersInNode(float itemWidth,
+                                                 const std::function<bool(const juce::String& paramId)>& isParamModulated,
+                                                 const std::function<void()>& onModificationEnded)
+{
+    ImGui::PushItemWidth(itemWidth);
+    
+    if (ImGui::Button("Load Video File...", ImVec2(itemWidth, 0)))
+    {
+        chooseVideoFile();
+    }
+    
+    if (currentVideoFile.existsAsFile())
+    {
+        ImGui::TextColored(ImVec4(0.5f, 1.0f, 0.5f, 1.0f), "%s", currentVideoFile.getFileName().toRawUTF8());
+    }
+    else
+    {
+        ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1.0f), "No file loaded");
+    }
+    
+    bool loop = loopParam->load() > 0.5f;
+    if (ImGui::Checkbox("Loop", &loop))
+    {
+        *dynamic_cast<juce::AudioParameterBool*>(apvts.getParameter("loop")) = loop;
+        onModificationEnded();
+    }
+    
+    // Transport sync and play/stop controls
+    bool sync = syncParam ? (*syncParam > 0.5f) : true;
+    if (ImGui::Checkbox("Sync to Transport", &sync))
+    {
+        syncToTransport.store(sync);
+        if (auto* p = dynamic_cast<juce::AudioParameterBool*>(apvts.getParameter("sync"))) *p = sync;
+        if (sync)
+        {
+            playing.store(lastTransportPlaying.load());
+            // Ensure thread will (re)open current file if needed after transport resumes
+            if (currentVideoFile.existsAsFile())
+                videoFileToLoad = currentVideoFile;
+        }
+    }
+
+    ImGui::SameLine();
+    bool localPlaying = playing.load();
+    if (sync) ImGui::BeginDisabled();
+    const char* btn = localPlaying ? "Stop" : "Play";
+    if (sync)
+    {
+        // Mirror transport state in label when synced
+        btn = lastTransportPlaying.load() ? "Stop" : "Play";
+    }
+    if (ImGui::Button(btn))
+    {
+        playing.store(!localPlaying);
+    }
+    if (sync) ImGui::EndDisabled();
+
+    // Zoom buttons (+/-) across 3 levels
+    int level = zoomLevelParam ? (int) zoomLevelParam->load() : 1;
+    level = juce::jlimit(0, 2, level);
+    float buttonWidth = (itemWidth / 2.0f) - 4.0f;
+    const bool atMin = (level <= 0);
+    const bool atMax = (level >= 2);
+
+    if (atMin) ImGui::BeginDisabled();
+    if (ImGui::Button("-", ImVec2(buttonWidth, 0)))
+    {
+        int newLevel = juce::jmax(0, level - 1);
+        if (auto* p = apvts.getParameter("zoomLevel"))
+            p->setValueNotifyingHost((float)newLevel / 2.0f);
+        onModificationEnded();
+    }
+    if (atMin) ImGui::EndDisabled();
+
+    ImGui::SameLine();
+
+    if (atMax) ImGui::BeginDisabled();
+    if (ImGui::Button("+", ImVec2(buttonWidth, 0)))
+    {
+        int newLevel = juce::jmin(2, level + 1);
+        if (auto* p = apvts.getParameter("zoomLevel"))
+            p->setValueNotifyingHost((float)newLevel / 2.0f);
+        onModificationEnded();
+    }
+    if (atMax) ImGui::EndDisabled();
+    
+    ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1.0f), "Source ID: %d", (int)getLogicalId());
+    {
+        int fcc = lastFourcc.load();
+        juce::String codec = fourccToString(fcc);
+        juce::String friendly = fourccFriendlyName(codec);
+        juce::String ext = currentVideoFile.getFileExtension();
+        if (ext.startsWithChar('.')) ext = ext.substring(1);
+        ImGui::TextColored(ImVec4(0.5f, 0.8f, 0.5f, 1.0f), "Codec: %s (%s)   Container: %s",
+                           codec.toRawUTF8(), friendly.toRawUTF8(), (ext.isEmpty() ? "unknown" : ext.toRawUTF8()));
+        if (totalFrames.load() <= 1)
+            ImGui::TextColored(ImVec4(0.9f, 0.7f, 0.2f, 1.0f), "Length unknown yet (ratio seeks)");
+    }
+
+    // ADD ENGINE SELECTION COMBO BOX
+    int engineIdx = engineParam ? engineParam->getIndex() : 1;
+    const char* items[] = { "RubberBand (High Quality)", "Naive (Low CPU)" };
+    if (ImGui::Combo("Engine", &engineIdx, items, 2))
+    {
+        if (engineParam) *engineParam = engineIdx;
+        onModificationEnded();
+    }
+
+    // --- Playback speed (slider only) ---
+    float spd = speedParam ? speedParam->load() : 1.0f;
+        if (ImGui::SliderFloat("Speed", &spd, 0.25f, 4.0f, "%.2fx"))
+        {
+            if (auto* p = dynamic_cast<juce::AudioParameterFloat*>(apvts.getParameter("speed"))) *p = spd;
+        }
+        if (ImGui::IsItemDeactivatedAfterEdit()) onModificationEnded();
+
+    // --- Trim / Timeline --- (always visible, never greyed)
+    {
+        const int tf = juce::jmax(1, totalFrames.load());
+        float inN = inNormParam ? inNormParam->load() : 0.0f;
+        float outN = outNormParam ? outNormParam->load() : 1.0f;
+        
+        if (ImGui::SliderFloat("Start", &inN, 0.0f, 1.0f, "%.3f"))
+        {
+            inN = juce::jlimit(0.0f, outN - 0.01f, inN);
+            if (auto* p = dynamic_cast<juce::AudioParameterFloat*>(apvts.getParameter("in"))) *p = inN;
+            pendingSeekNormalized.store(inN); // Use unified seek
+        }
+        if (ImGui::IsItemDeactivatedAfterEdit()) onModificationEnded();
+
+        if (ImGui::SliderFloat("End", &outN, 0.0f, 1.0f, "%.3f"))
+        {
+            outN = juce::jlimit(inN + 0.01f, 1.0f, outN);
+            if (auto* p = dynamic_cast<juce::AudioParameterFloat*>(apvts.getParameter("out"))) *p = outN;
+            onModificationEnded();
+        }
+
+        float pos = (tf > 1) ? ((float)lastPosFrame.load() / (float)tf) : 0.0f;
+        // Clamp position UI between in/out
+        float minPos = juce::jlimit(0.0f, 1.0f, inN);
+        float maxPos = juce::jlimit(minPos, 1.0f, outN);
+        pos = juce::jlimit(minPos, maxPos, pos);
+
+        if (ImGui::SliderFloat("Position", &pos, 0.0f, 1.0f, "%.3f"))
+        {
+            pendingSeekNormalized.store(pos); // Use unified seek
+        }
+        if (ImGui::IsItemDeactivatedAfterEdit()) onModificationEnded();
+    }
+    
+    ImGui::PopItemWidth();
+}
+
+void VideoFileLoaderModule::drawIoPins(const NodePinHelpers& helpers)
+{
+    // Although getDynamicOutputPins takes precedence, this ensures correctness if it's ever used as a fallback.
+    helpers.drawAudioOutputPin("Source ID", 0);
+    helpers.drawAudioOutputPin("Audio L", 1);
+    helpers.drawAudioOutputPin("Audio R", 2);
+}
+#endif
+
+std::vector<DynamicPinInfo> VideoFileLoaderModule::getDynamicOutputPins() const
+{
+    std::vector<DynamicPinInfo> pins;
+    
+    // CV Output: Bus 0, Channel 0 (mono - contains logical ID for video routing)
+    pins.push_back({ "Source ID", 0, PinDataType::Video });
+    
+    // Audio Outputs: Bus 1, Channels 0-1 (stereo)
+    // Note: Channel indices are absolute, so bus 1 channel 0 = absolute channel 1
+    // (bus 0 has 1 channel, so bus 1 starts at absolute index 1)
+    int bus1StartChannel = 1; // After bus 0's 1 channel
+    pins.push_back({ "Audio L", bus1StartChannel + 0, PinDataType::Audio });
+    pins.push_back({ "Audio R", bus1StartChannel + 1, PinDataType::Audio });
+    
+    return pins;
+}
+
+
+
+================================================================================
+FILE: juce\Source\audio\modules\VideoFXModule.h
+================================================================================
+
+
+#pragma once
+
+#include "ModuleProcessor.h"
+#include <opencv2/core.hpp>
+#include <juce_core/juce_core.h>
+#include <juce_audio_processors/juce_audio_processors.h>
+#include <juce_graphics/juce_graphics.h>
+#if defined(WITH_CUDA_SUPPORT)
+    #include <opencv2/core/cuda.hpp>
+#endif
+
+/**
+ * A "Swiss Army knife" video processing node.
+ * Takes a source ID as input, applies a chain of effects, and outputs a new
+ * source ID for the processed video stream, allowing for effect chaining.
+ */
+class VideoFXModule : public ModuleProcessor, private juce::Thread
+{
+public:
+    VideoFXModule();
+    ~VideoFXModule() override;
+
+    const juce::String getName() const override { return "video_fx"; }
+    
+    void prepareToPlay(double sampleRate, int samplesPerBlock) override;
+    void releaseResources() override;
+    void processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midi) override;
+    
+    juce::AudioProcessorValueTreeState& getAPVTS() override { return apvts; }
+    juce::Image getLatestFrame();
+    
+    juce::ValueTree getExtraStateTree() const override;
+    void setExtraStateTree(const juce::ValueTree& state) override;
+    
+    std::vector<DynamicPinInfo> getDynamicInputPins() const override;
+    std::vector<DynamicPinInfo> getDynamicOutputPins() const override;
+
+#if defined(PRESET_CREATOR_UI)
+    void drawParametersInNode(float itemWidth,
+                              const std::function<bool(const juce::String& paramId)>& isParamModulated,
+                              const std::function<void()>& onModificationEnded) override;
+    void drawIoPins(const NodePinHelpers& helpers) override;
+    ImVec2 getCustomNodeSize() const override;
+#endif
+
+private:
+    void run() override;
+    void updateGuiFrame(const cv::Mat& frame);
+    
+    static juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout();
+    juce::AudioProcessorValueTreeState apvts;
+    
+    // Parameters
+    juce::AudioParameterBool* useGpuParam = nullptr;
+    std::atomic<float>* zoomLevelParam = nullptr;
+    
+    // Color Adjustments
+    std::atomic<float>* brightnessParam = nullptr; // -100 to 100
+    std::atomic<float>* contrastParam = nullptr;   // 0.0 to 3.0
+    std::atomic<float>* saturationParam = nullptr; // 0.0 to 3.0
+    std::atomic<float>* hueShiftParam = nullptr;   // -180 to 180 degrees
+    std::atomic<float>* gainRedParam = nullptr;
+    std::atomic<float>* gainGreenParam = nullptr;
+    std::atomic<float>* gainBlueParam = nullptr;
+    juce::AudioParameterBool* sepiaParam = nullptr;
+    std::atomic<float>* temperatureParam = nullptr; // -1.0 to 1.0
+
+    // Filters & Effects
+    std::atomic<float>* sharpenParam = nullptr;    // 0.0 to 2.0
+    std::atomic<float>* blurParam = nullptr;       // 0 to 20
+    juce::AudioParameterBool* grayscaleParam = nullptr;
+    juce::AudioParameterBool* invertParam = nullptr;
+    juce::AudioParameterBool* flipHorizontalParam = nullptr;
+    juce::AudioParameterBool* flipVerticalParam = nullptr;
+    
+    // Threshold Effect
+    juce::AudioParameterBool* thresholdEnableParam = nullptr;
+    std::atomic<float>* thresholdLevelParam = nullptr; // 0 to 255
+    
+    // New Effects
+    juce::AudioParameterInt* posterizeLevelsParam = nullptr; // 2 to 16
+    std::atomic<float>* vignetteAmountParam = nullptr; // 0.0 to 1.0
+    std::atomic<float>* vignetteSizeParam = nullptr; // 0.1 to 2.0
+    juce::AudioParameterInt* pixelateBlockSizeParam = nullptr; // 2 to 64
+    juce::AudioParameterBool* cannyEnableParam = nullptr;
+    std::atomic<float>* cannyThresh1Param = nullptr; // 0 to 255
+    std::atomic<float>* cannyThresh2Param = nullptr; // 0 to 255
+    juce::AudioParameterChoice* kaleidoscopeModeParam = nullptr; // None, 4-Way, 8-Way
+
+    // Source ID (read from input pin)
+    std::atomic<juce::uint32> currentSourceId { 0 };
+    
+    // UI Preview
+    juce::Image latestFrameForGui;
+    juce::CriticalSection imageLock;
+};
+
+
+
+================================================================================
+FILE: juce\Source\audio\modules\VideoFXModule.cpp
+================================================================================
+
+
+#include "VideoFXModule.h"
+#include "../../video/VideoFrameManager.h"
+#include <opencv2/imgproc.hpp>
+#if defined(WITH_CUDA_SUPPORT)
+    #include <opencv2/cudaimgproc.hpp>
+    #include <opencv2/cudaarithm.hpp>
+    #include <opencv2/cudafilters.hpp>
+#endif
+
+#if defined(PRESET_CREATOR_UI)
+#include <imgui.h>
+#endif
+
+juce::AudioProcessorValueTreeState::ParameterLayout VideoFXModule::createParameterLayout()
+{
+    std::vector<std::unique_ptr<juce::RangedAudioParameter>> params;
+
+    params.push_back(std::make_unique<juce::AudioParameterBool>("useGpu", "Use GPU (CUDA)", true)); // Default ON for better performance
+    params.push_back(std::make_unique<juce::AudioParameterChoice>("zoomLevel", "Zoom Level", juce::StringArray{ "Small", "Normal", "Large" }, 1));
+    
+    // Color
+    params.push_back(std::make_unique<juce::AudioParameterFloat>("brightness", "Brightness", -100.0f, 100.0f, 0.0f));
+    params.push_back(std::make_unique<juce::AudioParameterFloat>("contrast", "Contrast", 0.0f, 3.0f, 1.0f));
+    params.push_back(std::make_unique<juce::AudioParameterFloat>("saturation", "Saturation", 0.0f, 3.0f, 1.0f));
+    params.push_back(std::make_unique<juce::AudioParameterFloat>("hueShift", "Hue Shift", -180.0f, 180.0f, 0.0f));
+    params.push_back(std::make_unique<juce::AudioParameterFloat>("gainRed", "Red Gain", 0.0f, 2.0f, 1.0f));
+    params.push_back(std::make_unique<juce::AudioParameterFloat>("gainGreen", "Green Gain", 0.0f, 2.0f, 1.0f));
+    params.push_back(std::make_unique<juce::AudioParameterFloat>("gainBlue", "Blue Gain", 0.0f, 2.0f, 1.0f));
+    params.push_back(std::make_unique<juce::AudioParameterBool>("sepia", "Sepia", false));
+    params.push_back(std::make_unique<juce::AudioParameterFloat>("temperature", "Temperature", -1.0f, 1.0f, 0.0f));
+    
+    // Filters & Effects
+    params.push_back(std::make_unique<juce::AudioParameterFloat>("sharpen", "Sharpen", 0.0f, 2.0f, 0.0f));
+    params.push_back(std::make_unique<juce::AudioParameterFloat>("blur", "Blur", 0.0f, 20.0f, 0.0f));
+    params.push_back(std::make_unique<juce::AudioParameterBool>("grayscale", "Grayscale", false));
+    params.push_back(std::make_unique<juce::AudioParameterBool>("invert", "Invert Colors", false));
+    params.push_back(std::make_unique<juce::AudioParameterBool>("flipH", "Flip Horizontal", false));
+    params.push_back(std::make_unique<juce::AudioParameterBool>("flipV", "Flip Vertical", false));
+
+    // Threshold Effect
+    params.push_back(std::make_unique<juce::AudioParameterBool>("thresholdEnable", "Enable Threshold", false));
+    params.push_back(std::make_unique<juce::AudioParameterFloat>("thresholdLevel", "Threshold Level", 0.0f, 255.0f, 127.0f));
+    
+    // New Effects
+    params.push_back(std::make_unique<juce::AudioParameterInt>("posterizeLevels", "Posterize Levels", 2, 32, 32));
+    params.push_back(std::make_unique<juce::AudioParameterFloat>("vignetteAmount", "Vignette Amount", 0.0f, 1.0f, 0.0f));
+    params.push_back(std::make_unique<juce::AudioParameterFloat>("vignetteSize", "Vignette Size", 0.1f, 2.0f, 0.5f));
+    params.push_back(std::make_unique<juce::AudioParameterInt>("pixelateSize", "Pixelate Block Size", 1, 128, 1));
+    params.push_back(std::make_unique<juce::AudioParameterBool>("cannyEnable", "Edge Detect", false));
+    params.push_back(std::make_unique<juce::AudioParameterFloat>("cannyThresh1", "Canny Thresh 1", 0.0f, 255.0f, 50.0f));
+    params.push_back(std::make_unique<juce::AudioParameterFloat>("cannyThresh2", "Canny Thresh 2", 0.0f, 255.0f, 150.0f));
+    params.push_back(std::make_unique<juce::AudioParameterChoice>("kaleidoscope", "Kaleidoscope", juce::StringArray{ "None", "4-Way", "8-Way" }, 0));
+
+    return { params.begin(), params.end() };
+}
+
+VideoFXModule::VideoFXModule()
+    : ModuleProcessor(BusesProperties()
+                      .withInput("Input", juce::AudioChannelSet::mono(), true)
+                      .withOutput("Output", juce::AudioChannelSet::mono(), true)),
+      juce::Thread("VideoFX Thread"),
+      apvts(*this, nullptr, "VideoFXParams", createParameterLayout())
+{
+    useGpuParam = dynamic_cast<juce::AudioParameterBool*>(apvts.getParameter("useGpu"));
+    zoomLevelParam = apvts.getRawParameterValue("zoomLevel");
+    brightnessParam = apvts.getRawParameterValue("brightness");
+    contrastParam = apvts.getRawParameterValue("contrast");
+    saturationParam = apvts.getRawParameterValue("saturation");
+    hueShiftParam = apvts.getRawParameterValue("hueShift");
+    gainRedParam = apvts.getRawParameterValue("gainRed");
+    gainGreenParam = apvts.getRawParameterValue("gainGreen");
+    gainBlueParam = apvts.getRawParameterValue("gainBlue");
+    sharpenParam = apvts.getRawParameterValue("sharpen");
+    blurParam = apvts.getRawParameterValue("blur");
+    grayscaleParam = dynamic_cast<juce::AudioParameterBool*>(apvts.getParameter("grayscale"));
+    invertParam = dynamic_cast<juce::AudioParameterBool*>(apvts.getParameter("invert"));
+    flipHorizontalParam = dynamic_cast<juce::AudioParameterBool*>(apvts.getParameter("flipH"));
+    flipVerticalParam = dynamic_cast<juce::AudioParameterBool*>(apvts.getParameter("flipV"));
+    
+    // Initialize threshold parameters
+    thresholdEnableParam = dynamic_cast<juce::AudioParameterBool*>(apvts.getParameter("thresholdEnable"));
+    thresholdLevelParam = apvts.getRawParameterValue("thresholdLevel");
+    
+    // Initialize new effect parameters
+    sepiaParam = dynamic_cast<juce::AudioParameterBool*>(apvts.getParameter("sepia"));
+    temperatureParam = apvts.getRawParameterValue("temperature");
+    posterizeLevelsParam = dynamic_cast<juce::AudioParameterInt*>(apvts.getParameter("posterizeLevels"));
+    vignetteAmountParam = apvts.getRawParameterValue("vignetteAmount");
+    vignetteSizeParam = apvts.getRawParameterValue("vignetteSize");
+    pixelateBlockSizeParam = dynamic_cast<juce::AudioParameterInt*>(apvts.getParameter("pixelateSize"));
+    cannyEnableParam = dynamic_cast<juce::AudioParameterBool*>(apvts.getParameter("cannyEnable"));
+    cannyThresh1Param = apvts.getRawParameterValue("cannyThresh1");
+    cannyThresh2Param = apvts.getRawParameterValue("cannyThresh2");
+    kaleidoscopeModeParam = dynamic_cast<juce::AudioParameterChoice*>(apvts.getParameter("kaleidoscope"));
+}
+
+VideoFXModule::~VideoFXModule()
+{
+    stopThread(5000);
+    VideoFrameManager::getInstance().removeSource(getLogicalId());
+}
+
+void VideoFXModule::prepareToPlay(double, int) { startThread(); }
+void VideoFXModule::releaseResources() { signalThreadShouldExit(); stopThread(5000); }
+
+void VideoFXModule::run()
+{
+    while (!threadShouldExit())
+    {
+        juce::uint32 sourceId = currentSourceId.load();
+        if (sourceId == 0) { wait(50); continue; }
+
+        cv::Mat frame = VideoFrameManager::getInstance().getFrame(sourceId);
+        if (frame.empty()) { wait(33); continue; }
+
+        // Get all parameter values once at the start of the frame
+        float brightness = brightnessParam ? brightnessParam->load() : 0.0f;
+        float contrast = contrastParam ? contrastParam->load() : 1.0f;
+        float saturation = saturationParam ? saturationParam->load() : 1.0f;
+        float hueShift = hueShiftParam ? hueShiftParam->load() : 0.0f;
+        float gainR = gainRedParam ? gainRedParam->load() : 1.0f;
+        float gainG = gainGreenParam ? gainGreenParam->load() : 1.0f;
+        float gainB = gainBlueParam ? gainBlueParam->load() : 1.0f;
+        bool sepia = sepiaParam ? sepiaParam->get() : false;
+        float temperature = temperatureParam ? temperatureParam->load() : 0.0f;
+        float sharpen = sharpenParam ? sharpenParam->load() : 0.0f;
+        float blur = blurParam ? blurParam->load() : 0.0f;
+        bool grayscale = grayscaleParam ? grayscaleParam->get() : false;
+        bool invert = invertParam ? invertParam->get() : false;
+        bool flipH = flipHorizontalParam ? flipHorizontalParam->get() : false;
+        bool flipV = flipVerticalParam ? flipVerticalParam->get() : false;
+        bool thresholdEnable = thresholdEnableParam ? thresholdEnableParam->get() : false;
+        float thresholdLevel = thresholdLevelParam ? thresholdLevelParam->load() : 127.0f;
+        int posterizeLevels = posterizeLevelsParam ? posterizeLevelsParam->get() : 32;
+        float vignetteAmount = vignetteAmountParam ? vignetteAmountParam->load() : 0.0f;
+        float vignetteSize = vignetteSizeParam ? vignetteSizeParam->load() : 0.5f;
+        int pixelateSize = pixelateBlockSizeParam ? pixelateBlockSizeParam->get() : 1;
+        bool cannyEnable = cannyEnableParam ? cannyEnableParam->get() : false;
+        float cannyThresh1 = cannyThresh1Param ? cannyThresh1Param->load() : 50.0f;
+        float cannyThresh2 = cannyThresh2Param ? cannyThresh2Param->load() : 150.0f;
+        int kaleidoscopeMode = kaleidoscopeModeParam ? kaleidoscopeModeParam->getIndex() : 0;
+        bool useGpu = useGpuParam ? useGpuParam->get() : false;
+
+        cv::Mat processedFrame;
+
+#if defined(WITH_CUDA_SUPPORT)
+        if (useGpu && cv::cuda::getCudaEnabledDeviceCount() > 0)
+        {
+            try
+            {
+                cv::cuda::GpuMat gpuFrame, gpuTemp;
+                gpuFrame.upload(frame);
+
+                // GPU processing chain (simplified for now, complex effects fallback to CPU)
+                if (brightness != 0.0f || contrast != 1.0f) {
+                    gpuFrame.convertTo(gpuTemp, CV_8UC3, contrast, brightness);
+                    gpuTemp.copyTo(gpuFrame);
+                }
+                if (grayscale) {
+                    cv::cuda::cvtColor(gpuFrame, gpuTemp, cv::COLOR_BGR2GRAY);
+                    cv::cuda::cvtColor(gpuTemp, gpuFrame, cv::COLOR_GRAY2BGR);
+                }
+                if (blur > 0.0f) {
+                    int ksize = juce::jmax(1, static_cast<int>(blur) * 2 + 1);
+                    auto gaussian = cv::cuda::createGaussianFilter(gpuFrame.type(), -1, cv::Size(ksize, ksize), 0);
+                    gaussian->apply(gpuFrame, gpuTemp);
+                    gpuTemp.copyTo(gpuFrame);
+                }
+                if (invert) {
+                    cv::cuda::bitwise_not(gpuFrame, gpuTemp);
+                    gpuTemp.copyTo(gpuFrame);
+                }
+                if (flipH || flipV) {
+                    int flipCode = flipH && flipV ? -1 : (flipH ? 1 : 0);
+                    cv::cuda::flip(gpuFrame, gpuTemp, flipCode);
+                    gpuTemp.copyTo(gpuFrame);
+                }
+
+                gpuFrame.download(processedFrame);
+                goto cpu_color_ops_label; // Jump to CPU section for complex color ops
+            }
+            catch (const cv::Exception& e)
+            {
+                juce::Logger::writeToLog("[VideoFX] GPU processing error, falling back to CPU: " + juce::String(e.what()));
+                processedFrame = frame.clone();
+                goto cpu_path_label;
+            }
+        }
+        else
+#endif
+        {
+        cpu_path_label:
+            processedFrame = frame.clone();
+
+            // --- REORDERED & CORRECTED CPU EFFECTS CHAIN ---
+
+            // 1. Core Color Adjustments
+            if (brightness != 0.0f || contrast != 1.0f) {
+                processedFrame.convertTo(processedFrame, -1, contrast, brightness);
+            }
+            
+        cpu_color_ops_label: // Label for GPU fallback to join here
+
+            if (temperature != 0.0f) {
+                std::vector<cv::Mat> bgr;
+                cv::split(processedFrame, bgr);
+                float factor = temperature;
+                if (factor < 0.0f) { // Cool
+                    bgr[0] = bgr[0] * (1.0f - factor * 0.5f);
+                    bgr[2] = bgr[2] * (1.0f + factor * 0.5f);
+                } else { // Warm
+                    bgr[0] = bgr[0] * (1.0f - factor * 0.5f);
+                    bgr[2] = bgr[2] * (1.0f + factor * 0.5f);
+                }
+                cv::merge(bgr, processedFrame);
+            }
+            if (sepia) {
+                cv::Mat sepiaKernel = (cv::Mat_<float>(3,3) << 0.272, 0.534, 0.131, 0.349, 0.686, 0.168, 0.393, 0.769, 0.189);
+                cv::transform(processedFrame, processedFrame, sepiaKernel);
+            }
+            if (saturation != 1.0f || hueShift != 0.0f) {
+                cv::Mat hsv;
+                cv::cvtColor(processedFrame, hsv, cv::COLOR_BGR2HSV);
+                std::vector<cv::Mat> hsvChannels;
+                cv::split(hsv, hsvChannels);
+                if (hueShift != 0.0f) {
+                     hsvChannels[0].convertTo(hsvChannels[0], CV_32F);
+                     hsvChannels[0] += (hueShift / 2.0f);
+                     cv::Mat mask = hsvChannels[0] < 0;
+                     cv::add(hsvChannels[0], 180, hsvChannels[0], mask);
+                     mask = hsvChannels[0] >= 180;
+                     cv::subtract(hsvChannels[0], 180, hsvChannels[0], mask);
+                     hsvChannels[0].convertTo(hsvChannels[0], CV_8U);
+                }
+                if (saturation != 1.0f) {
+                    hsvChannels[1].convertTo(hsvChannels[1], CV_32F);
+                    hsvChannels[1] *= saturation;
+                    hsvChannels[1].convertTo(hsvChannels[1], CV_8U);
+                }
+                cv::merge(hsvChannels, hsv);
+                cv::cvtColor(hsv, processedFrame, cv::COLOR_HSV2BGR);
+            }
+            if (gainR != 1.0f || gainG != 1.0f || gainB != 1.0f) {
+                std::vector<cv::Mat> bgr;
+                cv::split(processedFrame, bgr);
+                if (gainB != 1.0f) bgr[0] *= gainB;
+                if (gainG != 1.0f) bgr[1] *= gainG;
+                if (gainR != 1.0f) bgr[2] *= gainR;
+                cv::merge(bgr, processedFrame);
+            }
+            if (posterizeLevels < 32) {
+                int levels = 256 / posterizeLevels;
+                if (levels > 0) {
+                    processedFrame = (processedFrame / levels) * levels + levels / 2;
+                }
+            }
+            
+            // 2. Monochrome & Edge Effects
+            if (grayscale) {
+                cv::cvtColor(processedFrame, processedFrame, cv::COLOR_BGR2GRAY);
+                cv::cvtColor(processedFrame, processedFrame, cv::COLOR_GRAY2BGR);
+            }
+            if (cannyEnable) {
+                cv::Mat gray;
+                cv::cvtColor(processedFrame, gray, cv::COLOR_BGR2GRAY);
+                cv::Canny(gray, gray, cannyThresh1, cannyThresh2);
+                cv::cvtColor(gray, processedFrame, cv::COLOR_GRAY2BGR);
+            } else if (thresholdEnable) {
+                cv::Mat gray;
+                cv::cvtColor(processedFrame, gray, cv::COLOR_BGR2GRAY);
+                cv::threshold(gray, gray, thresholdLevel, 255, cv::THRESH_BINARY);
+                cv::cvtColor(gray, processedFrame, cv::COLOR_GRAY2BGR);
+            }
+            if (invert) {
+                cv::bitwise_not(processedFrame, processedFrame);
+            }
+
+            // 3. Geometric & Spatial Filters (applied last for maximum impact)
+            if (flipH || flipV) {
+                int flipCode = flipH && flipV ? -1 : (flipH ? 1 : 0);
+                cv::flip(processedFrame, processedFrame, flipCode);
+            }
+            if (vignetteAmount > 0.0f) {
+                 cv::Mat vignette = cv::Mat::zeros(processedFrame.size(), CV_32F);
+                 int centerX = processedFrame.cols / 2;
+                 int centerY = processedFrame.rows / 2;
+                 float maxDist = std::sqrt((float)centerX * centerX + (float)centerY * centerY) * vignetteSize;
+                 for (int y = 0; y < processedFrame.rows; y++) {
+                     for (int x = 0; x < processedFrame.cols; x++) {
+                         float dist = std::sqrt(std::pow(x - centerX, 2) + std::pow(y - centerY, 2));
+                         float v = 1.0f - (dist / maxDist) * vignetteAmount;
+                         vignette.at<float>(y, x) = juce::jlimit(0.0f, 1.0f, v);
+                     }
+                 }
+                 std::vector<cv::Mat> bgr;
+                 cv::split(processedFrame, bgr);
+                 for (size_t i = 0; i < bgr.size(); i++) {
+                     bgr[i].convertTo(bgr[i], CV_32F);
+                     cv::multiply(bgr[i], vignette, bgr[i]);
+                     bgr[i].convertTo(bgr[i], CV_8U);
+                 }
+                 cv::merge(bgr, processedFrame);
+            }
+            if (pixelateSize > 1) {
+                int w = processedFrame.cols;
+                int h = processedFrame.rows;
+                cv::Mat temp;
+                cv::resize(processedFrame, temp, cv::Size(w / pixelateSize, h / pixelateSize), 0, 0, cv::INTER_NEAREST);
+                cv::resize(temp, processedFrame, cv::Size(w, h), 0, 0, cv::INTER_NEAREST);
+            }
+            if (blur > 0.0f) {
+                int ksize = juce::jmax(1, static_cast<int>(blur) * 2 + 1);
+                cv::GaussianBlur(processedFrame, processedFrame, cv::Size(ksize, ksize), 0);
+            }
+            if (sharpen > 0.0f) {
+                cv::Mat temp;
+                processedFrame.convertTo(temp, CV_16SC3);
+                cv::Mat blurred;
+                cv::GaussianBlur(temp, blurred, cv::Size(0, 0), 3);
+                cv::addWeighted(temp, 1.0 + sharpen, blurred, -sharpen, 0, temp);
+                temp.convertTo(processedFrame, CV_8UC3);
+            }
+        }
+        
+        // --- KALEIDOSCOPE (APPLIED LAST - after all other effects) ---
+        if (kaleidoscopeMode > 0) {
+            int w = processedFrame.cols;
+            int h = processedFrame.rows;
+            int halfW = w / 2;
+            int halfH = h / 2;
+            cv::Mat quadrant = processedFrame(cv::Rect(0, 0, halfW, halfH)).clone();
+
+            if (kaleidoscopeMode == 1) { // 4-Way
+                cv::Mat flippedH, flippedV, flippedBoth;
+                cv::flip(quadrant, flippedH, 1);
+                cv::flip(quadrant, flippedV, 0);
+                cv::flip(quadrant, flippedBoth, -1);
+                quadrant.copyTo(processedFrame(cv::Rect(0, 0, halfW, halfH)));
+                flippedH.copyTo(processedFrame(cv::Rect(halfW, 0, halfW, halfH)));
+                flippedV.copyTo(processedFrame(cv::Rect(0, halfH, halfW, halfH)));
+                flippedBoth.copyTo(processedFrame(cv::Rect(halfW, halfH, halfW, halfH)));
+            } else if (kaleidoscopeMode == 2) { // 8-Way (CORRECTED LOGIC)
+                cv::Mat symmQuadrant = quadrant.clone();
+                cv::Mat mask = cv::Mat::zeros(quadrant.size(), CV_8U);
+                std::vector<cv::Point> triangle_pts = {cv::Point(0,0), cv::Point(halfW, 0), cv::Point(0, halfH)};
+                cv::fillConvexPoly(mask, triangle_pts, cv::Scalar(255));
+                
+                cv::Mat tri;
+                quadrant.copyTo(tri, mask);
+
+                cv::Mat tri_flipped_h;
+                cv::flip(tri, tri_flipped_h, 1);
+                tri_flipped_h.copyTo(symmQuadrant, ~mask);
+
+                cv::Mat flippedH, flippedV, flippedBoth;
+                cv::flip(symmQuadrant, flippedH, 1);
+                cv::flip(symmQuadrant, flippedV, 0);
+                cv::flip(symmQuadrant, flippedBoth, -1);
+                symmQuadrant.copyTo(processedFrame(cv::Rect(0, 0, halfW, halfH)));
+                flippedH.copyTo(processedFrame(cv::Rect(halfW, 0, halfW, halfH)));
+                flippedV.copyTo(processedFrame(cv::Rect(0, halfH, halfW, halfH)));
+                flippedBoth.copyTo(processedFrame(cv::Rect(halfW, halfH, halfW, halfH)));
+            }
+        }
+        
+        // Publish and update UI
+        VideoFrameManager::getInstance().setFrame(getLogicalId(), processedFrame);
+        updateGuiFrame(processedFrame);
+
+        wait(33); // ~30 FPS
+    }
+}
+
+void VideoFXModule::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midi)
+{
+    juce::ignoreUnused(midi);
+    
+    // Read the Source ID from our input pin
+    auto inputBuffer = getBusBuffer(buffer, true, 0);
+    if (inputBuffer.getNumSamples() > 0)
+    {
+        currentSourceId.store((juce::uint32)inputBuffer.getSample(0, 0));
+    }
+    
+    buffer.clear();
+    
+    // Output our own Logical ID on the output pin, so we can be chained
+    if (buffer.getNumChannels() > 0 && buffer.getNumSamples() > 0)
+    {
+        float sourceId = (float)getLogicalId();
+        for (int sample = 0; sample < buffer.getNumSamples(); ++sample)
+        {
+            buffer.setSample(0, sample, sourceId);
+        }
+    }
+}
+
+void VideoFXModule::updateGuiFrame(const cv::Mat& frame)
+{
+    cv::Mat bgraFrame;
+    cv::cvtColor(frame, bgraFrame, cv::COLOR_BGR2BGRA);
+    
+    const juce::ScopedLock lock(imageLock);
+    
+    if (latestFrameForGui.isNull() || 
+        latestFrameForGui.getWidth() != bgraFrame.cols || 
+        latestFrameForGui.getHeight() != bgraFrame.rows)
+    {
+        latestFrameForGui = juce::Image(juce::Image::ARGB, bgraFrame.cols, bgraFrame.rows, true);
+    }
+    
+    juce::Image::BitmapData destData(latestFrameForGui, juce::Image::BitmapData::writeOnly);
+    memcpy(destData.data, bgraFrame.data, bgraFrame.total() * bgraFrame.elemSize());
+}
+
+juce::Image VideoFXModule::getLatestFrame()
+{
+    const juce::ScopedLock lock(imageLock);
+    return latestFrameForGui.createCopy();
+}
+
+juce::ValueTree VideoFXModule::getExtraStateTree() const
+{
+    // No special state to save for VideoFX module
+    return juce::ValueTree("VideoFXState");
+}
+
+void VideoFXModule::setExtraStateTree(const juce::ValueTree& state)
+{
+    // No special state to restore for VideoFX module
+    juce::ignoreUnused(state);
+}
+
+std::vector<DynamicPinInfo> VideoFXModule::getDynamicInputPins() const
+{
+    std::vector<DynamicPinInfo> pins;
+    pins.push_back({ "Source In", 0, PinDataType::Video });
+    return pins;
+}
+
+std::vector<DynamicPinInfo> VideoFXModule::getDynamicOutputPins() const
+{
+    std::vector<DynamicPinInfo> pins;
+    pins.push_back({ "Output", 0, PinDataType::Video });
+    return pins;
+}
+
+#if defined(PRESET_CREATOR_UI)
+ImVec2 VideoFXModule::getCustomNodeSize() const
+{
+    // Return different width based on zoom level (0=240,1=480,2=960)
+    int level = zoomLevelParam ? (int) zoomLevelParam->load() : 1;
+    level = juce::jlimit(0, 2, level);
+    const float widths[3] { 240.0f, 480.0f, 960.0f };
+    return ImVec2(widths[level], 0.0f);
+}
+
+void VideoFXModule::drawParametersInNode(float itemWidth,
+                                         const std::function<bool(const juce::String& paramId)>& isParamModulated,
+                                         const std::function<void()>& onModificationEnded)
+{
+    juce::ignoreUnused(isParamModulated);
+    
+    ImGui::PushItemWidth(itemWidth);
+    
+    // --- FEATURE: RESET BUTTON ---
+    if (ImGui::Button("Reset All Effects", ImVec2(itemWidth, 0)))
+    {
+        // Reset all parameters to their default values
+        const char* paramIds[] = {
+            "useGpu", "zoomLevel", "brightness", "contrast", "saturation", "hueShift",
+            "gainRed", "gainGreen", "gainBlue", "sepia", "temperature", "sharpen", "blur", 
+            "grayscale", "invert", "flipH", "flipV", "thresholdEnable", "thresholdLevel",
+            "posterizeLevels", "vignetteAmount", "vignetteSize", "pixelateSize", 
+            "cannyEnable", "cannyThresh1", "cannyThresh2", "kaleidoscope"
+        };
+        
+        for (const char* paramId : paramIds)
+        {
+            if (auto* param = apvts.getParameter(paramId))
+            {
+                if (auto* rangedParam = dynamic_cast<juce::RangedAudioParameter*>(param))
+                {
+                    rangedParam->setValueNotifyingHost(rangedParam->getDefaultValue());
+                }
+            }
+        }
+        onModificationEnded(); // Create an undo state for the reset
+    }
+    
+    // GPU checkbox
+    bool useGpu = useGpuParam ? useGpuParam->get() : true;
+    if (ImGui::Checkbox("Use GPU", &useGpu))
+    {
+        if (useGpuParam) *useGpuParam = useGpu;
+        onModificationEnded();
+    }
+    
+    // Zoom buttons
+    int level = zoomLevelParam ? (int) zoomLevelParam->load() : 1;
+    level = juce::jlimit(0, 2, level);
+    float buttonWidth = (itemWidth / 2.0f) - 4.0f;
+    const bool atMin = (level <= 0);
+    const bool atMax = (level >= 2);
+
+    if (atMin) ImGui::BeginDisabled();
+    if (ImGui::Button("-", ImVec2(buttonWidth, 0)))
+    {
+        int newLevel = juce::jmax(0, level - 1);
+        if (auto* p = apvts.getParameter("zoomLevel"))
+            p->setValueNotifyingHost((float)newLevel / 2.0f);
+        onModificationEnded();
+    }
+    if (atMin) ImGui::EndDisabled();
+
+    ImGui::SameLine();
+
+    if (atMax) ImGui::BeginDisabled();
+    if (ImGui::Button("+", ImVec2(buttonWidth, 0)))
+    {
+        int newLevel = juce::jmin(2, level + 1);
+        if (auto* p = apvts.getParameter("zoomLevel"))
+            p->setValueNotifyingHost((float)newLevel / 2.0f);
+        onModificationEnded();
+    }
+    if (atMax) ImGui::EndDisabled();
+    
+    ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1.0f), "Source ID In: %d", (int)currentSourceId.load());
+    ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1.0f), "Output ID: %d", (int)getLogicalId());
+    
+    ImGui::TextColored(ImVec4(0.9f, 0.9f, 0.5f, 1.0f), "Color Adjustments");
+    
+    // Color sliders
+    float brightness = brightnessParam ? brightnessParam->load() : 0.0f;
+    if (ImGui::SliderFloat("Brightness", &brightness, -100.0f, 100.0f))
+    {
+        if (auto* p = dynamic_cast<juce::AudioParameterFloat*>(apvts.getParameter("brightness"))) *p = brightness;
+        onModificationEnded();
+    }
+    
+    float contrast = contrastParam ? contrastParam->load() : 1.0f;
+    if (ImGui::SliderFloat("Contrast", &contrast, 0.0f, 3.0f))
+    {
+        if (auto* p = dynamic_cast<juce::AudioParameterFloat*>(apvts.getParameter("contrast"))) *p = contrast;
+        onModificationEnded();
+    }
+    
+    float saturation = saturationParam ? saturationParam->load() : 1.0f;
+    if (ImGui::SliderFloat("Saturation", &saturation, 0.0f, 3.0f))
+    {
+        if (auto* p = dynamic_cast<juce::AudioParameterFloat*>(apvts.getParameter("saturation"))) *p = saturation;
+        onModificationEnded();
+    }
+    
+    float hueShift = hueShiftParam ? hueShiftParam->load() : 0.0f;
+    if (ImGui::SliderFloat("Hue Shift", &hueShift, -180.0f, 180.0f))
+    {
+        if (auto* p = dynamic_cast<juce::AudioParameterFloat*>(apvts.getParameter("hueShift"))) *p = hueShift;
+        onModificationEnded();
+    }
+    
+    float gainR = gainRedParam ? gainRedParam->load() : 1.0f;
+    if (ImGui::SliderFloat("Red Gain", &gainR, 0.0f, 2.0f))
+    {
+        if (auto* p = dynamic_cast<juce::AudioParameterFloat*>(apvts.getParameter("gainRed"))) *p = gainR;
+        onModificationEnded();
+    }
+    
+    float gainG = gainGreenParam ? gainGreenParam->load() : 1.0f;
+    if (ImGui::SliderFloat("Green Gain", &gainG, 0.0f, 2.0f))
+    {
+        if (auto* p = dynamic_cast<juce::AudioParameterFloat*>(apvts.getParameter("gainGreen"))) *p = gainG;
+        onModificationEnded();
+    }
+    
+    float gainB = gainBlueParam ? gainBlueParam->load() : 1.0f;
+    if (ImGui::SliderFloat("Blue Gain", &gainB, 0.0f, 2.0f))
+    {
+        if (auto* p = dynamic_cast<juce::AudioParameterFloat*>(apvts.getParameter("gainBlue"))) *p = gainB;
+        onModificationEnded();
+    }
+    
+    bool sepia = sepiaParam ? sepiaParam->get() : false;
+    if (ImGui::Checkbox("Sepia", &sepia))
+    {
+        if (sepiaParam) *sepiaParam = sepia;
+        onModificationEnded();
+    }
+    
+    float temperature = temperatureParam ? temperatureParam->load() : 0.0f;
+    if (ImGui::SliderFloat("Temperature", &temperature, -1.0f, 1.0f))
+    {
+        if (auto* p = dynamic_cast<juce::AudioParameterFloat*>(apvts.getParameter("temperature"))) *p = temperature;
+        onModificationEnded();
+    }
+    
+    ImGui::TextColored(ImVec4(0.9f, 0.9f, 0.5f, 1.0f), "Filters & Effects");
+    
+    // Filter sliders
+    float sharpen = sharpenParam ? sharpenParam->load() : 0.0f;
+    if (ImGui::SliderFloat("Sharpen", &sharpen, 0.0f, 2.0f))
+    {
+        if (auto* p = dynamic_cast<juce::AudioParameterFloat*>(apvts.getParameter("sharpen"))) *p = sharpen;
+        onModificationEnded();
+    }
+    
+    float blur = blurParam ? blurParam->load() : 0.0f;
+    if (ImGui::SliderFloat("Blur", &blur, 0.0f, 20.0f))
+    {
+        if (auto* p = dynamic_cast<juce::AudioParameterFloat*>(apvts.getParameter("blur"))) *p = blur;
+        onModificationEnded();
+    }
+    
+    // Effect checkboxes
+    bool grayscale = grayscaleParam ? grayscaleParam->get() : false;
+    if (ImGui::Checkbox("Grayscale", &grayscale))
+    {
+        if (grayscaleParam) *grayscaleParam = grayscale;
+        onModificationEnded();
+    }
+    
+    bool invert = invertParam ? invertParam->get() : false;
+    if (ImGui::Checkbox("Invert", &invert))
+    {
+        if (invertParam) *invertParam = invert;
+        onModificationEnded();
+    }
+    
+    bool flipH = flipHorizontalParam ? flipHorizontalParam->get() : false;
+    if (ImGui::Checkbox("Flip H", &flipH))
+    {
+        if (flipHorizontalParam) *flipHorizontalParam = flipH;
+        onModificationEnded();
+    }
+    
+    bool flipV = flipVerticalParam ? flipVerticalParam->get() : false;
+    if (ImGui::Checkbox("Flip V", &flipV))
+    {
+        if (flipVerticalParam) *flipVerticalParam = flipV;
+        onModificationEnded();
+    }
+    
+    ImGui::TextColored(ImVec4(0.9f, 0.9f, 0.5f, 1.0f), "More Filters");
+
+    // Threshold Effect
+    bool threshEnable = thresholdEnableParam ? thresholdEnableParam->get() : false;
+    if (ImGui::Checkbox("Threshold", &threshEnable))
+    {
+        if (thresholdEnableParam) *thresholdEnableParam = threshEnable;
+        onModificationEnded();
+    }
+
+    if (threshEnable)
+    {
+        ImGui::SameLine();
+        float threshLevel = thresholdLevelParam ? thresholdLevelParam->load() : 127.0f;
+        if (ImGui::SliderFloat("##level", &threshLevel, 0.0f, 255.0f, "%.0f"))
+        {
+             if (auto* p = dynamic_cast<juce::AudioParameterFloat*>(apvts.getParameter("thresholdLevel"))) *p = threshLevel;
+             onModificationEnded();
+        }
+    }
+    
+    // Posterize
+    int posterizeLevels = posterizeLevelsParam ? posterizeLevelsParam->get() : 32;
+    if (ImGui::SliderInt("Posterize", &posterizeLevels, 2, 32))
+    {
+        if (posterizeLevelsParam) *posterizeLevelsParam = posterizeLevels;
+        onModificationEnded();
+    }
+    if (ImGui::IsItemHovered()) ImGui::SetTooltip("Reduces the number of colors.\nLower values = stronger effect.");
+    
+    // Pixelate
+    int pixelateSize = pixelateBlockSizeParam ? pixelateBlockSizeParam->get() : 1;
+    if (ImGui::SliderInt("Pixelate", &pixelateSize, 1, 128))
+    {
+        if (pixelateBlockSizeParam) *pixelateBlockSizeParam = pixelateSize;
+        onModificationEnded();
+    }
+    if (ImGui::IsItemHovered()) ImGui::SetTooltip("Creates a mosaic effect.\nHigher values = larger blocks.");
+    
+    // Edge Detection (Canny)
+    bool cannyEnable = cannyEnableParam ? cannyEnableParam->get() : false;
+    if (ImGui::Checkbox("Edge Detect", &cannyEnable))
+    {
+        if (cannyEnableParam) *cannyEnableParam = cannyEnable;
+        onModificationEnded();
+    }
+    
+    if (cannyEnable)
+    {
+        float cannyTh1 = cannyThresh1Param ? cannyThresh1Param->load() : 50.0f;
+        if (ImGui::SliderFloat("Canny Thresh 1", &cannyTh1, 0.0f, 255.0f))
+        {
+            if (auto* p = dynamic_cast<juce::AudioParameterFloat*>(apvts.getParameter("cannyThresh1"))) *p = cannyTh1;
+            onModificationEnded();
+        }
+        
+        float cannyTh2 = cannyThresh2Param ? cannyThresh2Param->load() : 150.0f;
+        if (ImGui::SliderFloat("Canny Thresh 2", &cannyTh2, 0.0f, 255.0f))
+        {
+            if (auto* p = dynamic_cast<juce::AudioParameterFloat*>(apvts.getParameter("cannyThresh2"))) *p = cannyTh2;
+            onModificationEnded();
+        }
+    }
+    
+    ImGui::TextColored(ImVec4(0.9f, 0.9f, 0.5f, 1.0f), "Advanced Effects");
+    
+    // Vignette
+    float vignetteAmount = vignetteAmountParam ? vignetteAmountParam->load() : 0.0f;
+    if (ImGui::SliderFloat("Vignette Amount", &vignetteAmount, 0.0f, 1.0f))
+    {
+        if (auto* p = dynamic_cast<juce::AudioParameterFloat*>(apvts.getParameter("vignetteAmount"))) *p = vignetteAmount;
+        onModificationEnded();
+    }
+    
+    if (vignetteAmount > 0.0f)
+    {
+        float vignetteSize = vignetteSizeParam ? vignetteSizeParam->load() : 0.5f;
+        if (ImGui::SliderFloat("Vignette Size", &vignetteSize, 0.1f, 2.0f))
+        {
+            if (auto* p = dynamic_cast<juce::AudioParameterFloat*>(apvts.getParameter("vignetteSize"))) *p = vignetteSize;
+            onModificationEnded();
+        }
+    }
+    
+    // Kaleidoscope
+    int kaleidoscopeMode = kaleidoscopeModeParam ? kaleidoscopeModeParam->getIndex() : 0;
+    const char* kaleidoscopeModes[] = { "None", "4-Way", "8-Way" };
+    if (ImGui::Combo("Kaleidoscope", &kaleidoscopeMode, kaleidoscopeModes, 3))
+    {
+        if (kaleidoscopeModeParam) kaleidoscopeModeParam->setValueNotifyingHost((float)kaleidoscopeMode / 2.0f);
+        onModificationEnded();
+    }
+    
+    ImGui::PopItemWidth();
+}
+
+void VideoFXModule::drawIoPins(const NodePinHelpers& helpers)
+{
+    // Pins are handled via getDynamicInputPins/getDynamicOutputPins for proper Video type coloring
+    // This method is called but dynamic pins take precedence
+    helpers.drawAudioInputPin("Source In", 0);
+    helpers.drawAudioOutputPin("Output", 0);
+}
+#endif
+
+
+
+================================================================================
+FILE: juce\Source\video\VideoFrameManager.h
+================================================================================
+
+
+#pragma once
+
+#include <opencv2/core.hpp>
+#include <juce_core/juce_core.h>
+#include <map>
+
+/**
+ * Thread-safe singleton for sharing video frames between source and processing nodes.
+ * Source nodes publish frames, processing nodes consume them.
+ */
+class VideoFrameManager
+{
+public:
+    static VideoFrameManager& getInstance() 
+    {
+        static VideoFrameManager instance;
+        return instance;
+    }
+
+    // Called by source node's background thread to publish a frame
+    void setFrame(juce::uint32 sourceId, const cv::Mat& frame) 
+    {
+        const juce::ScopedLock lock(frameMapLock);
+        if (!frame.empty())
+        {
+            frame.copyTo(frameMap[sourceId]);
+        }
+    }
+
+    // Called by processing node's background thread to retrieve a frame
+    cv::Mat getFrame(juce::uint32 sourceId) 
+    {
+        const juce::ScopedLock lock(frameMapLock);
+        auto it = frameMap.find(sourceId);
+        if (it != frameMap.end() && !it->second.empty())
+        {
+            return it->second.clone();
+        }
+        return cv::Mat();
+    }
+
+    // Called when a source node is deleted
+    void removeSource(juce::uint32 sourceId) 
+    {
+        const juce::ScopedLock lock(frameMapLock);
+        frameMap.erase(sourceId);
+    }
+
+    // For UI: get list of active sources
+    juce::StringArray getAvailableSources()
+    {
+        const juce::ScopedLock lock(frameMapLock);
+        juce::StringArray sources;
+        for (const auto& pair : frameMap)
+        {
+            sources.add(juce::String((int)pair.first));
+        }
+        return sources;
+    }
+
+private:
+    VideoFrameManager() = default;
+    ~VideoFrameManager() = default;
+    VideoFrameManager(const VideoFrameManager&) = delete;
+    VideoFrameManager& operator=(const VideoFrameManager&) = delete;
+
+    std::map<juce::uint32, cv::Mat> frameMap;
+    juce::CriticalSection frameMapLock;
+};
+
+
+
+================================================================================
+FILE NOT FOUND: juce\Source\video\VideoFrameManager.cpp
+================================================================================
+
+
+
+================================================================================
+FILE: juce\Source\audio\modules\ModuleProcessor.h
+================================================================================
+
+
+#pragma once
+
+#include <juce_audio_processors/juce_audio_processors.h>
+#include <functional> // Required for std::function
+#include <vector>
+#include <map>
+#include <unordered_map>
+#include <atomic>
+
+#if defined(PRESET_CREATOR_UI)
+#include <imgui.h>
+#include <cmath>
+#endif
+
+// <<< TRANSPORT STATE FOR GLOBAL CLOCK >>>
+// Transport state struct shared by all modules
+struct TransportState {
+    bool isPlaying = false;
+    double bpm = 120.0;
+    double songPositionBeats = 0.0;
+    double songPositionSeconds = 0.0;
+    // Optional global division broadcast from a master tempo/clock (-1 means inactive)
+    std::atomic<int> globalDivisionIndex { -1 };
+    // Flag to indicate if a Tempo Clock module is controlling the BPM (for UI feedback)
+    std::atomic<bool> isTempoControlledByModule { false };
+    
+    // Custom copy constructor (atomics are not copyable by default)
+    TransportState() = default;
+    TransportState(const TransportState& other)
+        : isPlaying(other.isPlaying)
+        , bpm(other.bpm)
+        , songPositionBeats(other.songPositionBeats)
+        , songPositionSeconds(other.songPositionSeconds)
+        , globalDivisionIndex(other.globalDivisionIndex.load())
+        , isTempoControlledByModule(other.isTempoControlledByModule.load())
+    {}
+    
+    // Custom copy assignment operator
+    TransportState& operator=(const TransportState& other)
+    {
+        if (this != &other)
+        {
+            isPlaying = other.isPlaying;
+            bpm = other.bpm;
+            songPositionBeats = other.songPositionBeats;
+            songPositionSeconds = other.songPositionSeconds;
+            globalDivisionIndex.store(other.globalDivisionIndex.load());
+            isTempoControlledByModule.store(other.isTempoControlledByModule.load());
+        }
+        return *this;
+    }
+};
+
+// === RHYTHM REPORTING SYSTEM ===
+// Allows modules to report their rhythmic timing for the BPM Monitor node
+
+/**
+ * Rhythm information reported by modules that produce rhythmic patterns
+ */
+struct RhythmInfo
+{
+    juce::String displayName;    // e.g., "Sequencer #3", "Animation: Walk Cycle"
+    float bpm;                    // Current BPM (can be modulated live value)
+    bool isActive;                // Is this source currently producing rhythm?
+    bool isSynced;                // Is it synced to global transport?
+    juce::String sourceType;      // "sequencer", "animation", "physics", etc.
+    
+    RhythmInfo() : bpm(0.0f), isActive(false), isSynced(false) {}
+    RhythmInfo(const juce::String& name, float bpmValue, bool active, bool synced, const juce::String& type = "")
+        : displayName(name), bpm(bpmValue), isActive(active), isSynced(synced), sourceType(type) {}
+};
+
+/**
+ * Beat detection source (from audio input analysis)
+ * Used by the BPM Monitor's tap tempo engine
+ */
+struct DetectedRhythmSource
+{
+    juce::String name;            // e.g., "Input 1 (Detected)"
+    int inputChannel;             // Which input is being analyzed
+    float detectedBPM;            // Calculated BPM from beat detection
+    float confidence;             // 0.0-1.0 (how stable is the detection)
+    bool isActive;                // Currently detecting beats?
+    
+    DetectedRhythmSource() : inputChannel(-1), detectedBPM(0.0f), confidence(0.0f), isActive(false) {}
+};
+
+// <<< MULTI-MIDI DEVICE SUPPORT >>>
+// MIDI message with device source information
+// This struct allows modules to filter MIDI by device and channel
+struct MidiMessageWithDevice {
+    juce::MidiMessage message;
+    juce::String deviceIdentifier;
+    juce::String deviceName;
+    int deviceIndex = -1;
+};
+
+// <<< ALL PIN-RELATED DEFINITIONS ARE NOW CENTRALIZED HERE >>>
+
+// Defines the data type of a modulation or audio signal
+enum class PinDataType { CV, Audio, Gate, Raw, Video };
+
+// Forward declare NodeWidth enum (defined in ImGuiNodeEditorComponent.h)
+// This avoids circular dependency while allowing ModulePinInfo to store it
+enum class NodeWidth;
+
+// Describes a single audio/CV input or output pin
+struct AudioPin
+{
+    juce::String name;
+    int channel;
+    PinDataType type;
+    
+    AudioPin(const juce::String& n, int ch, PinDataType t) : name(n), channel(ch), type(t) {}
+};
+
+// Renamed to avoid conflict with ImGuiNodeEditorComponent's PinInfo
+struct DynamicPinInfo {
+    juce::String name;
+    int channel;
+    PinDataType type;
+
+    // Constructor to allow brace-initialization
+    DynamicPinInfo(const juce::String& n, int c, PinDataType t) : name(n), channel(c), type(t) {}
+};
+
+// Describes a single modulation input pin targeting a parameter
+struct ModPin
+{
+    juce::String name;
+    juce::String paramId;
+    PinDataType type;
+    
+    ModPin(const juce::String& n, const juce::String& p, PinDataType t) : name(n), paramId(p), type(t) {}
+};
+
+// A collection of all pins for a given module type
+struct ModulePinInfo
+{
+    NodeWidth defaultWidth;  // Standardized node width category
+    std::vector<AudioPin> audioIns;
+    std::vector<AudioPin> audioOuts;
+    std::vector<ModPin> modIns;
+    
+    ModulePinInfo() : defaultWidth(static_cast<NodeWidth>(0)) {}  // Default to Small (0)
+    
+    ModulePinInfo(NodeWidth width,
+                  std::initializer_list<AudioPin> ins,
+                  std::initializer_list<AudioPin> outs,
+                  std::initializer_list<ModPin> mods)
+        : defaultWidth(width), audioIns(ins), audioOuts(outs), modIns(mods) {}
+};
+
+// Forward declaration for NodePinHelpers
+class ModuleProcessor;
+
+// Helper struct passed to modules for drawing their pins
+struct NodePinHelpers
+{
+    std::function<void(const char* label, int channel)> drawAudioInputPin;
+    std::function<void(const char* label, int channel)> drawAudioOutputPin;
+    std::function<void(const char* inLabel, int inChannel, const char* outLabel, int outChannel)> drawParallelPins;
+    std::function<void(ModuleProcessor* module)> drawIoPins;
+};
+
+class ModularSynthProcessor; // forward declaration
+
+/**
+    An abstract base class for all modular synthesizer components.
+
+    This class enforces a common interface for modules, ensuring they can be
+    managed by the ModularSynthProcessor. The key requirement is providing access
+    to the module's own parameter state via getAPVTS().
+*/
+class ModuleProcessor : public juce::AudioProcessor
+{
+public:
+    ModuleProcessor(const BusesProperties& ioLayouts) : juce::AudioProcessor(ioLayouts) {}
+    ~ModuleProcessor() override = default;
+
+    // Parent container link (set by ModularSynthProcessor when node is created)
+    void setParent(ModularSynthProcessor* parent) { parentSynth = parent; }
+    ModularSynthProcessor* getParent() const { return parentSynth; }
+
+    // Pure virtual method that all concrete modules MUST implement.
+    // This is crucial for the parameter proxy system.
+    virtual juce::AudioProcessorValueTreeState& getAPVTS() = 0;
+
+    // Optional UI hook for drawing parameters inside nodes (used by Preset Creator)
+    virtual void drawParametersInNode (float itemWidth, const std::function<bool(const juce::String& paramId)>& isParamModulated, const std::function<void()>& onModificationEnded)
+    {
+        juce::ignoreUnused(itemWidth, isParamModulated, onModificationEnded);
+    }
+
+    // Optional UI hook for drawing IO pins inside nodes
+    virtual void drawIoPins(const NodePinHelpers& /*helpers*/) {}
+
+#if defined(PRESET_CREATOR_UI)
+    // Optional UI hook for modules that need custom node dimensions (Exception size category)
+    // Return ImVec2(width, height) for custom size, or ImVec2(0, 0) to use default from PinDatabase
+    // Height of 0 means auto-size to content (recommended for most cases)
+    virtual ImVec2 getCustomNodeSize() const 
+    { 
+        return ImVec2(0.0f, 0.0f); // Default: use PinDatabase size
+    }
+#endif
+
+
+    // Get the current output value for a channel (for visualization)
+    virtual float getOutputChannelValue(int channel) const
+    {
+        if (juce::isPositiveAndBelow(channel, (int)lastOutputValues.size()) && lastOutputValues[channel])
+            return lastOutputValues[channel]->load();
+        return 0.0f;
+    }
+    
+    // Helper method to update output telemetry with peak magnitude
+    // Call this at the end of processBlock to update visualization values
+    void updateOutputTelemetry(const juce::AudioBuffer<float>& buffer)
+    {
+        const int numChannels = juce::jmin(buffer.getNumChannels(), (int)lastOutputValues.size());
+        for (int ch = 0; ch < numChannels; ++ch)
+        {
+            if (lastOutputValues[ch])
+            {
+                // Use peak magnitude (max absolute value) for better visualization
+                const float peak = buffer.getMagnitude(ch, 0, buffer.getNumSamples());
+                lastOutputValues[ch]->store(peak, std::memory_order_relaxed);
+            }
+        }
+    }
+
+    // Standardized labels for module audio I/O channels (override per module if needed)
+    virtual juce::String getAudioInputLabel(int channel) const
+    {
+        return juce::String("In ") + juce::String(channel + 1);
+    }
+
+    virtual juce::String getAudioOutputLabel(int channel) const
+    {
+        return juce::String("Out ") + juce::String(channel + 1);
+    }
+
+    // Stable logical ID assigned by ModularSynthProcessor upon node creation.
+    void setLogicalId(juce::uint32 id) { storedLogicalId = id; }
+    juce::uint32 getLogicalId() const { return storedLogicalId; }
+
+    // Secondary logical ID for extra outputs (like cropped video from detector nodes)
+    void setSecondaryLogicalId(juce::uint32 id) { storedSecondaryLogicalId = id; }
+    juce::uint32 getSecondaryLogicalId() const { return storedSecondaryLogicalId; }
+
+    // === COMPREHENSIVE DIAGNOSTICS SYSTEM ===
+    
+    // Get detailed connection information for debugging
+    virtual juce::String getConnectionDiagnostics() const
+    {
+        juce::String result = "=== CONNECTION DIAGNOSTICS ===\n";
+        
+        // Bus layout info
+        result += "Input Buses: " + juce::String(getBusCount(true)) + "\n";
+        result += "Output Buses: " + juce::String(getBusCount(false)) + "\n";
+        
+        for (int bus = 0; bus < getBusCount(true); ++bus)
+        {
+            auto busName = getBus(true, bus)->getName();
+            auto numChannels = getBus(true, bus)->getNumberOfChannels();
+            result += "  Input Bus " + juce::String(bus) + ": \"" + busName + "\" (" + juce::String(numChannels) + " channels)\n";
+        }
+        
+        for (int bus = 0; bus < getBusCount(false); ++bus)
+        {
+            auto busName = getBus(false, bus)->getName();
+            auto numChannels = getBus(false, bus)->getNumberOfChannels();
+            result += "  Output Bus " + juce::String(bus) + ": \"" + busName + "\" (" + juce::String(numChannels) + " channels)\n";
+        }
+        
+        return result;
+    }
+    
+    // Get parameter routing diagnostics
+    virtual juce::String getParameterRoutingDiagnostics() const
+    {
+        juce::String result = "=== PARAMETER ROUTING DIAGNOSTICS ===\n";
+        
+        // Note: This method is const, so we can't access getAPVTS() directly
+        // We'll return a placeholder for now
+        result += "Parameter routing diagnostics require non-const access.\n";
+        result += "Use getModuleDiagnostics() from ModularSynthProcessor instead.\n";
+        
+        return result;
+    }
+    
+    // Get live parameter values for debugging
+    virtual juce::String getLiveParameterDiagnostics() const
+    {
+        juce::String result = "=== LIVE PARAMETER VALUES ===\n";
+        
+        for (const auto& pair : paramLiveValues)
+        {
+            result += "  " + pair.first + ": " + juce::String(pair.second.load(), 4) + "\n";
+        }
+        
+        return result;
+    }
+    
+    // Get comprehensive module diagnostics
+    virtual juce::String getAllDiagnostics() const
+    {
+        juce::String result = "=== MODULE DIAGNOSTICS ===\n";
+        result += "Module Type: " + getName() + "\n\n";
+        result += getConnectionDiagnostics() + "\n";
+        result += getParameterRoutingDiagnostics() + "\n";
+        result += getLiveParameterDiagnostics();
+        return result;
+    }
+
+
+    /**
+        Resolves a parameter's string ID to its modulation bus and channel.
+
+        This is a virtual function that each module must override to declare which of its
+        parameters can be modulated by an external signal. The function maps parameter IDs
+        to their corresponding input bus and channel indices within that bus.
+
+        @param paramId              The string ID of the parameter to query (e.g., "cutoff", "frequency").
+        @param outBusIndex          Receives the index of the input bus used for modulation.
+        @param outChannelIndexInBus Receives the channel index within that bus.
+        @returns                    True if the parameter supports modulation, false otherwise.
+        
+        @see isParamInputConnected
+    */
+    virtual bool getParamRouting(const juce::String& paramId, int& outBusIndex, int& outChannelIndexInBus) const;
+
+    /**
+        Checks if a parameter's modulation input is connected in the synth graph.
+
+        This is the single, reliable method for a module's audio thread to determine
+        if it should use an incoming CV signal instead of its internal parameter value.
+        The function internally uses getParamRouting() to resolve the parameter to its
+        bus/channel location, then queries the parent synth's connection graph.
+
+        @param paramId The string ID of the parameter to check (e.g., "cutoff", "frequency").
+        @returns       True if a cable is connected to this parameter's modulation input.
+        
+        @see getParamRouting
+    */
+    bool isParamInputConnected(const juce::String& paramId) const;
+
+    // --- Live telemetry for UI (thread-safe, lock-free) ---
+    void setLiveParamValue(const juce::String& paramId, float value)
+    {
+        auto result = paramLiveValues.try_emplace(paramId, value);
+        if (!result.second)
+            result.first->second.store(value, std::memory_order_relaxed);
+    }
+
+    float getLiveParamValue(const juce::String& paramId, float fallback) const
+    {
+        // FIX: Only return the "live" (modulated) value if the corresponding
+        // modulation input is actually connected. Otherwise, always return the
+        // fallback, which is the base parameter's real value.
+        if (isParamInputConnected(paramId))
+        {
+            if (auto it = paramLiveValues.find(paramId); it != paramLiveValues.end())
+                return it->second.load(std::memory_order_relaxed);
+        }
+        return fallback;
+    }
+
+    // New helper: decouple the connectivity check (modParamId) from the live value key (liveKey).
+    // This allows UI code to ask "is X_mod connected?" while reading the corresponding
+    // live telemetry stored under a different key like "X_live".
+    float getLiveParamValueFor(const juce::String& modParamId,
+                               const juce::String& liveKey,
+                               float fallback) const
+    {
+        if (isParamInputConnected(modParamId))
+        {
+            if (auto it = paramLiveValues.find(liveKey); it != paramLiveValues.end())
+                return it->second.load(std::memory_order_relaxed);
+        }
+        return fallback;
+    }
+
+    // Optional extra state hooks for modules that need to persist non-parameter data
+    // Default: return invalid tree / ignore.
+    virtual juce::ValueTree getExtraStateTree() const { return {}; }
+    virtual void setExtraStateTree(const juce::ValueTree&) {}
+    
+    // Optional timing info hook for modules that need global clock/transport
+    // Default: ignore (modules that don't need timing can skip implementing this)
+    virtual void setTimingInfo(const TransportState& state) { juce::ignoreUnused(state); }
+    
+    // Optional rhythm reporting hook for BPM Monitor node
+    // Modules that produce rhythmic patterns can implement this to report their BPM
+    // Default: return empty (module doesn't produce rhythm)
+    virtual std::optional<RhythmInfo> getRhythmInfo() const { return std::nullopt; }
+    
+    // Optional dynamic pin interface for modules with variable I/O (e.g., polyphonic modules)
+    // Default: return empty vector (no dynamic pins)
+    virtual std::vector<DynamicPinInfo> getDynamicInputPins() const { return {}; }
+    virtual std::vector<DynamicPinInfo> getDynamicOutputPins() const { return {}; }
+    
+    /**
+        Device-aware MIDI processing (MULTI-MIDI CONTROLLER SUPPORT)
+        
+        This method is called by ModularSynthProcessor BEFORE the standard graph processing
+        begins. It provides MIDI modules with device-aware MIDI messages that include the
+        source device information (name, identifier, index).
+        
+        MIDI modules should override this method to:
+        - Filter messages by device (e.g., only respond to a specific controller)
+        - Filter messages by MIDI channel
+        - Update internal state based on filtered MIDI input
+        
+        The regular processBlock() can then use this updated state to generate CV outputs.
+        
+        @param midiMessages A vector of MIDI messages with device source information
+        
+        Default implementation: Does nothing (opt-in for MIDI modules only)
+        
+        @see MidiMessageWithDevice
+    */
+    virtual void handleDeviceSpecificMidi(const std::vector<MidiMessageWithDevice>& midiMessages)
+    {
+        juce::ignoreUnused(midiMessages);
+        // Default: do nothing. MIDI-aware modules will override this method.
+    }
+
+public:
+    // OPTION 9: Make public for TTS debugging
+    // Live, modulated parameter values for UI feedback
+    std::unordered_map<juce::String, std::atomic<float>> paramLiveValues;
+
+protected:
+    // Thread-safe storage for last known output values (for tooltips)
+    std::vector<std::unique_ptr<std::atomic<float>>> lastOutputValues;
+
+#if defined(PRESET_CREATOR_UI)
+
+    static void adjustParamOnWheel (juce::RangedAudioParameter* parameter,
+                                    const juce::String& idOrName,
+                                    float displayedValue)
+    {
+        if (parameter == nullptr) return;
+        if (! ImGui::IsItemHovered()) return;
+        const float wheel = ImGui::GetIO().MouseWheel;
+        if (wheel == 0.0f) return;
+
+        if (auto* pf = dynamic_cast<juce::AudioParameterFloat*>(parameter))
+        {
+            // No right-click editing here; modules can add InputFloat next to sliders
+
+            const auto& range = pf->range;
+            const float span = range.end - range.start;
+            const juce::String id = idOrName.toLowerCase();
+
+            float step = span / 200.0f; // default ~0.5% of range
+            if (span <= 1.0f) step = 0.01f;
+            // Custom: fine tune for sequencer steps
+            if (id.contains ("step"))
+            {
+                step = 0.05f;
+            }
+            if (id.contains ("hz") || id.contains ("freq") || id.contains ("cutoff") || id.contains ("rate"))
+            {
+                const float v = std::max (1.0f, std::abs (displayedValue));
+                step = std::max (1.0f, std::pow (10.0f, std::floor (std::log10 (v)) - 1.0f));
+            }
+            else if (id.contains ("ms") || id.contains ("time"))
+            {
+                const float v = std::max (1.0f, std::abs (displayedValue));
+                step = std::max (0.1f, std::pow (10.0f, std::floor (std::log10 (v)) - 1.0f));
+            }
+            else if (id.contains ("db") || id.contains ("gain"))
+            {
+                step = 0.5f;
+            }
+            else if (id.contains ("mix") || id.contains ("depth") || id.contains ("amount") || id.contains ("resonance") || id.contains ("q") || id.contains ("size") || id.contains ("damp") || id.contains ("pan") || id.contains ("threshold"))
+            {
+                step = 0.01f;
+            }
+
+            float newVal = pf->get() + (wheel > 0 ? step : -step);
+            newVal = juce::jlimit (range.start, range.end, newVal);
+            *pf = newVal;
+        }
+        else if (auto* pc = dynamic_cast<juce::AudioParameterChoice*>(parameter))
+        {
+            int idx = pc->getIndex();
+            idx += (ImGui::GetIO().MouseWheel > 0 ? 1 : -1);
+            idx = juce::jlimit (0, pc->choices.size() - 1, idx);
+            *pc = idx;
+        }
+        else if (auto* pi = dynamic_cast<juce::AudioParameterInt*>(parameter))
+        {
+            int currentVal = pi->get();
+            int newVal = currentVal + (wheel > 0 ? 1 : -1);
+            const auto& range = pi->getNormalisableRange();
+            newVal = juce::jlimit((int)range.start, (int)range.end, newVal);
+            *pi = newVal;
+        }
+        else if (auto* pb = dynamic_cast<juce::AudioParameterBool*>(parameter))
+        {
+            // Optional: toggle on strong scroll
+            juce::ignoreUnused (pb);
+        }
+    }
+
+#endif
+
+public:
+    //==============================================================================
+    // Helper function to convert bus index and channel-in-bus to absolute channel index
+    //==============================================================================
+    int getChannelIndexInProcessBlockBuffer(bool isInput, int busIndex, int channelIndexInBus) const
+    {
+        int absoluteChannel = channelIndexInBus;
+        if (busIndex > 0)
+        {
+            int sum = 0;
+            const int numBuses = getBusCount(isInput);
+            for (int b = 0; b < numBuses && b < busIndex; ++b)
+                sum += getChannelCountOfBus(isInput, b);
+            absoluteChannel = sum + channelIndexInBus;
+        }
+        return absoluteChannel;
+    }
+
+    //==============================================================================
+    // Provide default implementations for the pure virtuals to reduce boilerplate
+    // in concrete module classes.
+    //==============================================================================
+    const juce::String getName() const override { return "Module"; }
+    bool acceptsMidi() const override { return false; }
+    bool producesMidi() const override { return false; }
+    double getTailLengthSeconds() const override { return 0.0; }
+    juce::AudioProcessorEditor* createEditor() override { return nullptr; }
+    bool hasEditor() const override { return false; }
+    int getNumPrograms() override { return 1; }
+    int getCurrentProgram() override { return 0; }
+    void setCurrentProgram (int) override {}
+    const juce::String getProgramName (int) override { return {}; }
+    void changeProgramName (int, const juce::String&) override {}
+    void getStateInformation (juce::MemoryBlock&) override {}
+    void setStateInformation (const void*, int) override {}
+
+private:
+    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (ModuleProcessor)
+
+protected:
+    ModularSynthProcessor* parentSynth { nullptr };
+    juce::uint32 storedLogicalId { 0 };
+    juce::uint32 storedSecondaryLogicalId { 0 };
+};
+
+================================================================================
+FILE: juce\Source\audio\modules\ModuleProcessor.cpp
+================================================================================
+
+
+#include "ModuleProcessor.h"
+#include "../graph/ModularSynthProcessor.h"
+#include <unordered_set>
+
+
+bool ModuleProcessor::getParamRouting(const juce::String& /*paramId*/, int& /*outBusIndex*/, int& /*outChannelIndexInBus*/) const
+{
+    return false;
+}
+
+bool ModuleProcessor::isParamInputConnected(const juce::String& paramId) const
+{
+    auto* synth = parentSynth;
+    if (synth == nullptr)
+        return false;
+
+    juce::uint32 myLogicalId = storedLogicalId;
+    if (myLogicalId == 0)
+    {
+        for (const auto& info : synth->getModulesInfo())
+        {
+            if (synth->getModuleForLogical (info.first) == this)
+            {
+                myLogicalId = info.first;
+                break;
+            }
+        }
+        if (myLogicalId == 0)
+            return false;
+    }
+
+    int busIndex = -1;
+    int chanInBus = -1;
+    if (!getParamRouting(paramId, busIndex, chanInBus))
+        return false;
+
+    int absoluteChannel = chanInBus;
+    if (busIndex > 0)
+    {
+        int sum = 0;
+        const int numInputBuses = getBusCount(true);
+        for (int b = 0; b < numInputBuses && b < busIndex; ++b)
+            sum += getChannelCountOfBus(true, b);
+        absoluteChannel = sum + chanInBus;
+    }
+
+    for (const auto& c : synth->getConnectionsInfo())
+        if (c.dstLogicalId == myLogicalId && c.dstChan == absoluteChannel)
+            return true;
+
+    // Fallback: if stored logicalId yields no match, re-resolve by pointer and retry once.
+    {
+        juce::uint32 ptrResolvedId = 0;
+        for (const auto& info : synth->getModulesInfo())
+        {
+            if (synth->getModuleForLogical(info.first) == this)
+            {
+                ptrResolvedId = info.first;
+                break;
+            }
+        }
+        if (ptrResolvedId != 0 && ptrResolvedId != myLogicalId)
+        {
+            for (const auto& c : synth->getConnectionsInfo())
+            {
+                if (c.dstLogicalId == ptrResolvedId && c.dstChan == absoluteChannel)
+                {
+                    const_cast<ModuleProcessor*>(this)->setLogicalId(ptrResolvedId);
+                    return true;
+                }
+            }
+        }
+    }
+
+    return false;
+}
+
+
+================================================================================
+FILE: juce\Source\audio\modules\TimePitchModuleProcessor.h
+================================================================================
+
+
+#pragma once
+
+#include "ModuleProcessor.h"
+#include <juce_core/juce_core.h>
+#include <juce_dsp/juce_dsp.h>
+#include "../dsp/TimePitchProcessor.h"
+
+class TimePitchModuleProcessor : public ModuleProcessor
+{
+public:
+    // Parameter IDs
+    static constexpr const char* paramIdSpeed     = "speed";
+    static constexpr const char* paramIdPitch     = "pitch";
+    static constexpr const char* paramIdEngine    = "engine";
+    static constexpr const char* paramIdSpeedMod  = "speed_mod";
+    static constexpr const char* paramIdPitchMod  = "pitch_mod";
+
+    TimePitchModuleProcessor();
+    ~TimePitchModuleProcessor() override = default;
+
+    const juce::String getName() const override { return "timepitch"; }
+
+    void prepareToPlay (double sampleRate, int samplesPerBlock) override;
+    void releaseResources() override {}
+    void processBlock (juce::AudioBuffer<float>&, juce::MidiBuffer&) override;
+
+    juce::AudioProcessorValueTreeState& getAPVTS() override { return apvts; }
+    
+    juce::String getAudioInputLabel(int channel) const override
+    {
+        switch (channel)
+        {
+            case 0: return "In L";
+            case 1: return "In R";
+            case 2: return "Speed Mod";
+            case 3: return "Pitch Mod";
+            default: return juce::String("In ") + juce::String(channel + 1);
+        }
+    }
+    
+    // Parameter bus contract implementation
+    bool getParamRouting(const juce::String& paramId, int& outBusIndex, int& outChannelIndexInBus) const override;
+    
+    std::vector<DynamicPinInfo> getDynamicInputPins() const override;
+    std::vector<DynamicPinInfo> getDynamicOutputPins() const override;
+
+#if defined(PRESET_CREATOR_UI)
+    void drawParametersInNode (float itemWidth,
+                               const std::function<bool(const juce::String& paramId)>& isParamModulated,
+                               const std::function<void()>& onModificationEnded) override;
+    void drawIoPins (const NodePinHelpers& helpers) override;
+#endif
+
+private:
+    static juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout();
+
+    juce::AudioProcessorValueTreeState apvts;
+
+    TimePitchProcessor timePitch;
+    juce::HeapBlock<float> interleavedInput;
+    juce::HeapBlock<float> interleavedOutput;
+    int interleavedCapacityFrames { 0 };
+
+    // Parameter pointers
+    std::atomic<float>* speedParam { nullptr };
+    std::atomic<float>* pitchParam { nullptr };
+    std::atomic<float>* speedModParam { nullptr };
+    std::atomic<float>* pitchModParam { nullptr };
+    juce::AudioParameterChoice* engineParam { nullptr };
+    double sr { 48000.0 };
+
+    // --- Streaming FIFO for live input buffering ---
+    juce::AudioBuffer<float> inputFifo; // stereo FIFO storage
+    juce::AbstractFifo abstractFifo { 0 }; // manages read/write indices
+    int fifoSize { 0 };
+    
+    // Smoothed parameters for zipper-free modulation
+    juce::SmoothedValue<float> speedSm;
+    juce::SmoothedValue<float> pitchSm;
+};
+
+
+
+
+================================================================================
+FILE: juce\Source\audio\modules\TimePitchModuleProcessor.cpp
+================================================================================
+
+
+#include "TimePitchModuleProcessor.h"
+
+static inline void ensureCapacity (juce::HeapBlock<float>& block, int frames, int channels, int& capacityFrames)
+{
+    if (frames > capacityFrames)
+    {
+        capacityFrames = juce::jmax (frames, capacityFrames * 2 + 128);
+        block.allocate ((size_t) (capacityFrames * channels), true);
+    }
+}
+
+juce::AudioProcessorValueTreeState::ParameterLayout TimePitchModuleProcessor::createParameterLayout()
+{
+    std::vector<std::unique_ptr<juce::RangedAudioParameter>> p;
+    p.push_back (std::make_unique<juce::AudioParameterFloat> (paramIdSpeed, "Speed", juce::NormalisableRange<float> (0.25f, 4.0f, 0.0001f, 0.5f), 1.0f));
+    p.push_back (std::make_unique<juce::AudioParameterFloat> (paramIdPitch, "Pitch (st)", juce::NormalisableRange<float> (-24.0f, 24.0f, 0.01f), 0.0f));
+    p.push_back (std::make_unique<juce::AudioParameterChoice> (paramIdEngine, "Engine", juce::StringArray { "RubberBand", "Naive" }, 0));
+    p.push_back (std::make_unique<juce::AudioParameterFloat> (paramIdSpeedMod, "Speed Mod", juce::NormalisableRange<float> (0.25f, 4.0f, 0.0001f, 0.5f), 1.0f));
+    p.push_back (std::make_unique<juce::AudioParameterFloat> (paramIdPitchMod, "Pitch Mod", juce::NormalisableRange<float> (-24.0f, 24.0f, 0.01f), 0.0f));
+    return { p.begin(), p.end() };
+}
+
+TimePitchModuleProcessor::TimePitchModuleProcessor()
+    : ModuleProcessor (BusesProperties()
+        .withInput ("Inputs", juce::AudioChannelSet::discreteChannels(4), true) // ch0 L in, ch1 R in, ch2 Speed Mod, ch3 Pitch Mod
+        .withOutput("Out", juce::AudioChannelSet::stereo(), true)),
+      apvts (*this, nullptr, "TimePitchParams", createParameterLayout())
+{
+    speedParam     = apvts.getRawParameterValue (paramIdSpeed);
+    pitchParam     = apvts.getRawParameterValue (paramIdPitch);
+    speedModParam  = apvts.getRawParameterValue (paramIdSpeedMod);
+    pitchModParam  = apvts.getRawParameterValue (paramIdPitchMod);
+    engineParam    = dynamic_cast<juce::AudioParameterChoice*>(apvts.getParameter (paramIdEngine));
+
+    lastOutputValues.clear();
+    lastOutputValues.push_back (std::make_unique<std::atomic<float>> (0.0f));
+    lastOutputValues.push_back (std::make_unique<std::atomic<float>> (0.0f));
+    
+    // Initialize smoothed values
+    speedSm.reset(1.0f);
+    pitchSm.reset(0.0f);
+}
+
+void TimePitchModuleProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
+{
+    sr = sampleRate;
+    timePitch.prepare (sampleRate, 2, samplesPerBlock);
+
+    // Initialize FIFO to ~2 seconds of audio
+    fifoSize = (int) (sampleRate * 2.0);
+    if (fifoSize < samplesPerBlock * 4) fifoSize = samplesPerBlock * 4; // safety minimum
+    inputFifo.setSize (2, fifoSize);
+    abstractFifo.setTotalSize (fifoSize);
+
+    interleavedCapacityFrames = 0;
+    ensureCapacity (interleavedInput, samplesPerBlock, 2, interleavedCapacityFrames);
+    ensureCapacity (interleavedOutput, samplesPerBlock * 2, 2, interleavedCapacityFrames); // some headroom
+    timePitch.reset();
+}
+
+void TimePitchModuleProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midi)
+{
+    juce::ignoreUnused (midi);
+    auto inBus = getBusBuffer(buffer, true, 0);  // Single bus
+    auto outBus = getBusBuffer(buffer, false, 0);
+    
+    const int numSamples = buffer.getNumSamples();
+    if (numSamples <= 0) return;
+
+    // 1) Write incoming audio into FIFO (use inBus explicitly)
+    int start1=0,size1=0,start2=0,size2=0;
+    abstractFifo.prepareToWrite (numSamples, start1, size1, start2, size2);
+    if (size1 > 0)
+    {
+        inputFifo.copyFrom (0, start1, inBus, 0, 0, size1);
+        inputFifo.copyFrom (1, start1, inBus, 1, 0, size1);
+    }
+    if (size2 > 0)
+    {
+        inputFifo.copyFrom (0, start2, inBus, 0, size1, size2);
+        inputFifo.copyFrom (1, start2, inBus, 1, size1, size2);
+    }
+    const int written = size1 + size2;
+    abstractFifo.finishedWrite (written);
+
+    // 2) Read params and configure engine
+    const int engineIdx = engineParam != nullptr ? engineParam->getIndex() : 0;
+    {
+        static int currentMode = -1;
+        const int requestedMode = (engineIdx == 0 ? (int) TimePitchProcessor::Mode::RubberBand : (int) TimePitchProcessor::Mode::Fifo);
+        if (requestedMode != currentMode)
+        {
+            timePitch.reset();
+            currentMode = requestedMode;
+        }
+        timePitch.setMode ((TimePitchProcessor::Mode) requestedMode);
+    }
+
+    // Get pointers to modulation CV inputs
+    const bool isSpeedMod = isParamInputConnected("speed");
+    const bool isPitchMod = isParamInputConnected("pitch");
+    
+    const float* speedCV = isSpeedMod && inBus.getNumChannels() > 2 ? inBus.getReadPointer(2) : nullptr;
+    const float* pitchCV = isPitchMod && inBus.getNumChannels() > 3 ? inBus.getReadPointer(3) : nullptr;
+    
+    // Process in slices to reduce engine reconfig cost
+    const int sliceSize = 32;
+    for (int sliceStart = 0; sliceStart < numSamples; sliceStart += sliceSize)
+    {
+        const int sliceEnd = juce::jmin(sliceStart + sliceSize, numSamples);
+        const int sliceSamples = sliceEnd - sliceStart;
+        
+        // Calculate target values from CV (use middle of slice)
+        const int midSample = sliceStart + sliceSamples / 2;
+        
+        float targetSpeed = speedParam->load();
+        if (isSpeedMod && speedCV != nullptr) {
+            const float cv = juce::jlimit(0.0f, 1.0f, speedCV[midSample]);
+            const float minSpeed = 0.25f;
+            const float maxSpeed = 4.0f;
+            targetSpeed = minSpeed * std::pow(maxSpeed / minSpeed, cv);
+        }
+        
+        float targetPitch = pitchParam->load();
+        if (isPitchMod && pitchCV != nullptr) {
+            const float cv = juce::jlimit(0.0f, 1.0f, pitchCV[midSample]);
+            targetPitch = -24.0f + cv * 48.0f; // -24 to +24 semitones
+        }
+        
+        // Set targets and advance smoothing
+        speedSm.setTargetValue(juce::jlimit(0.1f, 4.0f, targetSpeed));
+        pitchSm.setTargetValue(juce::jlimit(-24.0f, 24.0f, targetPitch));
+        
+        // Update telemetry for live UI feedback (once per slice)
+        setLiveParamValue("speed_live", speedSm.getCurrentValue());
+        setLiveParamValue("pitch_live", pitchSm.getCurrentValue());
+        
+        // Advance smoothing for this slice
+        for (int i = 0; i < sliceSamples; ++i) {
+            speedSm.skip(1);
+            pitchSm.skip(1);
+        }
+        
+        // Configure engine with current smoothed values
+        timePitch.setTimeStretchRatio(speedSm.getCurrentValue());
+        timePitch.setPitchSemitones(pitchSm.getCurrentValue());
+        
+        // Publish telemetry
+        setLiveParamValue("speed", speedSm.getCurrentValue());
+        setLiveParamValue("pitch", pitchSm.getCurrentValue());
+    }
+
+    // 3) Compute frames needed to fill this block
+    const double safeSpeed = juce::jlimit (0.1, 4.0, (double) speedSm.getCurrentValue());
+    const int framesToFeed = juce::jmax (1, (int) std::ceil ((double) numSamples / safeSpeed));
+
+    outBus.clear();
+    if (abstractFifo.getNumReady() >= framesToFeed)
+    {
+        // 4) Read from FIFO and interleave
+        ensureCapacity (interleavedInput, framesToFeed, 2, interleavedCapacityFrames);
+        abstractFifo.prepareToRead (framesToFeed, start1, size1, start2, size2);
+        auto* inL = inputFifo.getReadPointer (0);
+        auto* inR = inputFifo.getReadPointer (1);
+        float* inLR = interleavedInput.getData();
+        for (int i = 0; i < size1; ++i) { inLR[2*i+0] = inL[start1 + i]; inLR[2*i+1] = inR[start1 + i]; }
+        if (size2 > 0)
+            for (int i = 0; i < size2; ++i) { inLR[2*(size1+i)+0] = inL[start2 + i]; inLR[2*(size1+i)+1] = inR[start2 + i]; }
+        const int readCount = size1 + size2;
+        abstractFifo.finishedRead (readCount);
+
+        // 5) Process and copy back
+        // Guard against engine internal errors with try/catch (non-RT critical path)
+        try { timePitch.putInterleaved (inLR, framesToFeed); }
+        catch (...) { /* swallow to avoid crash; output will be silence */ }
+        ensureCapacity (interleavedOutput, numSamples, 2, interleavedCapacityFrames);
+        int produced = 0;
+        try { produced = timePitch.receiveInterleaved (interleavedOutput.getData(), numSamples); }
+        catch (...) { produced = 0; }
+        if (produced > 0)
+        {
+            const int outFrames = juce::jmin (numSamples, produced);
+            const float* outLR = interleavedOutput.getData();
+            float* L = outBus.getNumChannels() > 0 ? outBus.getWritePointer (0) : buffer.getWritePointer(0);
+            float* R = outBus.getNumChannels() > 1 ? outBus.getWritePointer (1) : L;
+            for (int i = 0; i < outFrames; ++i) { L[i] = outLR[2*i+0]; if (R) R[i] = outLR[2*i+1]; }
+        }
+    }
+
+    // Update lastOutputValues
+    if (lastOutputValues.size() >= 2)
+    {
+        lastOutputValues[0]->store (buffer.getMagnitude (0, 0, numSamples));
+        lastOutputValues[1]->store (buffer.getNumChannels() > 1 ? buffer.getMagnitude (1, 0, numSamples) : 0.0f);
+    }
+}
+
+// Parameter bus contract implementation
+bool TimePitchModuleProcessor::getParamRouting(const juce::String& paramId, int& outBusIndex, int& outChannelIndexInBus) const
+{
+    outBusIndex = 0;
+    if (paramId == "speed") { outChannelIndexInBus = 2; return true; }  // Speed Mod
+    if (paramId == "pitch") { outChannelIndexInBus = 3; return true; }  // Pitch Mod
+    return false;
+}
+
+#if defined(PRESET_CREATOR_UI)
+void TimePitchModuleProcessor::drawParametersInNode (float itemWidth,
+                                                    const std::function<bool(const juce::String& paramId)>& isParamModulated,
+                                                    const std::function<void()>& onModificationEnded)
+{
+    ImGui::PushItemWidth (itemWidth);
+    auto& ap = getAPVTS();
+
+    // Speed
+    bool spMod = isParamModulated ("speed");
+    if (spMod) { 
+        ImGui::BeginDisabled(); 
+        ImGui::PushStyleColor (ImGuiCol_FrameBg, ImVec4 (1,1,0,0.3f)); 
+    }
+    float speed = ap.getRawParameterValue (paramIdSpeed)->load();
+    if (spMod) {
+        speed = getLiveParamValueFor("speed", "speed_live", speed);
+    }
+    if (ImGui::SliderFloat ("Speed", &speed, 0.25f, 4.0f, "%.2fx")) {
+        if (!spMod) {
+            if (auto* p = dynamic_cast<juce::AudioParameterFloat*>(ap.getParameter (paramIdSpeed))) *p = speed;
+        }
+    }
+    if (!spMod) adjustParamOnWheel (ap.getParameter (paramIdSpeed), paramIdSpeed, speed);
+    if (ImGui::IsItemDeactivatedAfterEdit()) onModificationEnded();
+    if (spMod) { ImGui::PopStyleColor(); ImGui::EndDisabled(); }
+
+    // Pitch
+    bool piMod = isParamModulated ("pitch");
+    if (piMod) { 
+        ImGui::BeginDisabled(); 
+        ImGui::PushStyleColor (ImGuiCol_FrameBg, ImVec4 (1,1,0,0.3f)); 
+    }
+    float pitch = ap.getRawParameterValue (paramIdPitch)->load();
+    if (piMod) {
+        pitch = getLiveParamValueFor("pitch", "pitch_live", pitch);
+    }
+    if (ImGui::SliderFloat ("Pitch", &pitch, -24.0f, 24.0f, "%.1f st"))
+        if (!piMod) if (auto* p = dynamic_cast<juce::AudioParameterFloat*>(ap.getParameter (paramIdPitch))) *p = pitch;
+    if (!piMod) adjustParamOnWheel (ap.getParameter (paramIdPitch), paramIdPitch, pitch);
+    if (ImGui::IsItemDeactivatedAfterEdit()) onModificationEnded();
+    if (piMod) { ImGui::PopStyleColor(); ImGui::EndDisabled(); }
+
+    // Engine
+    int engineIdx = engineParam != nullptr ? engineParam->getIndex() : 0;
+    const char* items[] = { "RubberBand", "Naive" };
+    if (ImGui::Combo ("Engine", &engineIdx, items, 2))
+        if (engineParam) *engineParam = engineIdx;
+    if (ImGui::IsItemDeactivatedAfterEdit()) onModificationEnded();
+
+    ImGui::PopItemWidth();
+}
+
+void TimePitchModuleProcessor::drawIoPins (const NodePinHelpers& helpers)
+{
+    helpers.drawAudioInputPin ("In L", 0);
+    helpers.drawAudioInputPin ("In R", 1);
+    helpers.drawAudioInputPin ("Speed Mod", 2);
+    helpers.drawAudioInputPin ("Pitch Mod", 3);
+
+    helpers.drawAudioOutputPin ("Out L", 0);
+    helpers.drawAudioOutputPin ("Out R", 1);
+}
+#endif
+
+std::vector<DynamicPinInfo> TimePitchModuleProcessor::getDynamicInputPins() const
+{
+    std::vector<DynamicPinInfo> pins;
+    
+    // Audio inputs (channels 0-1)
+    pins.push_back({"In L", 0, PinDataType::Audio});
+    pins.push_back({"In R", 1, PinDataType::Audio});
+    
+    // Modulation inputs (channels 2-3)
+    pins.push_back({"Speed Mod", 2, PinDataType::CV});
+    pins.push_back({"Pitch Mod", 3, PinDataType::CV});
+    
+    return pins;
+}
+
+std::vector<DynamicPinInfo> TimePitchModuleProcessor::getDynamicOutputPins() const
+{
+    std::vector<DynamicPinInfo> pins;
+    
+    // Audio outputs (channels 0-1)
+    pins.push_back({"Out L", 0, PinDataType::Audio});
+    pins.push_back({"Out R", 1, PinDataType::Audio});
+    
+    return pins;
+}
+
+
+
+
+================================================================================
+FILE NOT FOUND: juce\Source\audio\time_pitch\TimePitchProcessor.h
+================================================================================
+
+
+
+================================================================================
+FILE NOT FOUND: juce\Source\audio\time_pitch\TimePitchProcessor.cpp
+================================================================================
+
+
+
+================================================================================
+FILE NOT FOUND: juce\Source\audio\ffmpeg\FFmpegAudioReader.h
+================================================================================
+
+
+
+================================================================================
+FILE NOT FOUND: juce\Source\audio\ffmpeg\FFmpegAudioReader.cpp
+================================================================================
+
+
+
+================================================================================
+FILE NOT FOUND: juce\Source\audio\codecs\FFmpegAudioReader.h
+================================================================================
+
+
+
+================================================================================
+FILE NOT FOUND: juce\Source\audio\codecs\FFmpegAudioReader.cpp
+================================================================================
+
+
+
+================================================================================
+FILE: juce\CMakeLists.txt
+================================================================================
+
+
+cmake_minimum_required(VERSION 3.22)
+project(ColliderAudioEngine VERSION 0.1.0)
+
+# --- TTS Integration (Piper) ---
+
+# 1. Set paths to pre-built Piper and ONNX Runtime
+set(PIPER_DIR "${CMAKE_SOURCE_DIR}/../vendor/piper/piper" CACHE PATH "Path to Piper TTS")
+set(ONNXRUNTIME_DIR "${CMAKE_SOURCE_DIR}/../vendor/onnxruntime" CACHE PATH "Path to ONNX Runtime")
+
+if(NOT EXISTS "${PIPER_DIR}")
+    message(WARNING "Piper TTS not found at ${PIPER_DIR}. TTS features will be limited.")
+endif()
+
+if(NOT EXISTS "${ONNXRUNTIME_DIR}")
+    message(WARNING "ONNX Runtime not found at ${ONNXRUNTIME_DIR}. TTS features will be limited.")
+endif()
+
+# 2. Add SoundTouch library
+set(SOUNDTOUCH_SOURCE_DIR "${CMAKE_SOURCE_DIR}/../soundtouch/source")
+add_library(soundtouch STATIC
+    ${SOUNDTOUCH_SOURCE_DIR}/SoundTouch/AAFilter.cpp
+    ${SOUNDTOUCH_SOURCE_DIR}/SoundTouch/BPMDetect.cpp
+    ${SOUNDTOUCH_SOURCE_DIR}/SoundTouch/FIFOSampleBuffer.cpp
+    ${SOUNDTOUCH_SOURCE_DIR}/SoundTouch/FIRFilter.cpp
+    ${SOUNDTOUCH_SOURCE_DIR}/SoundTouch/InterpolateCubic.cpp
+    ${SOUNDTOUCH_SOURCE_DIR}/SoundTouch/InterpolateLinear.cpp
+    ${SOUNDTOUCH_SOURCE_DIR}/SoundTouch/InterpolateShannon.cpp
+    ${SOUNDTOUCH_SOURCE_DIR}/SoundTouch/PeakFinder.cpp
+    ${SOUNDTOUCH_SOURCE_DIR}/SoundTouch/RateTransposer.cpp
+    ${SOUNDTOUCH_SOURCE_DIR}/SoundTouch/SoundTouch.cpp
+    ${SOUNDTOUCH_SOURCE_DIR}/SoundTouch/TDStretch.cpp
+    ${SOUNDTOUCH_SOURCE_DIR}/SoundTouch/cpu_detect_x86.cpp
+    ${SOUNDTOUCH_SOURCE_DIR}/SoundTouch/mmx_optimized.cpp
+    ${SOUNDTOUCH_SOURCE_DIR}/SoundTouch/sse_optimized.cpp
+)
+target_include_directories(soundtouch PUBLIC 
+    ${CMAKE_SOURCE_DIR}/../soundtouch/include
+    ${CMAKE_SOURCE_DIR}/../soundtouch/source/SoundTouch
+)
+
+set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
+include(FetchContent)
+
+# ==============================================================================
+# Third-Party Dependencies (Fetch Only)
+# ==============================================================================
+
+FetchContent_Declare(JUCE
+    GIT_REPOSITORY https://github.com/juce-framework/JUCE.git
+    GIT_TAG 7.0.9
+)
+set(JUCE_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
+set(JUCE_BUILD_EXTRAS OFF CACHE BOOL "" FORCE)
+FetchContent_MakeAvailable(JUCE)
+
+FetchContent_Declare(imgui_fc
+    GIT_REPOSITORY https://github.com/ocornut/imgui.git
+    GIT_TAG v1.92.0
+)
+FetchContent_MakeAvailable(imgui_fc)
+
+# imnodes uses find_package(imgui) in its CMake; build as sources instead
+FetchContent_Declare(imnodes_fc
+    GIT_REPOSITORY https://github.com/Nelarius/imnodes.git
+    GIT_TAG b2ec254ce576ac3d42dfb7aef61deadbff8e7211
+)
+FetchContent_GetProperties(imnodes_fc)
+if(NOT imnodes_fc_POPULATED)
+  FetchContent_Populate(imnodes_fc)
+endif()
+
+# imgui_juce backend (dedicated JUCE bridge for ImGui)
+FetchContent_Declare(imgui_juce_fc
+    GIT_REPOSITORY https://github.com/Krasjet/imgui_juce.git
+    GIT_TAG master
+)
+FetchContent_MakeAvailable(imgui_juce_fc)
+
+# --------------------------------------------------------------
+# Box2D (2D physics engine for physics-based audio module)
+# --------------------------------------------------------------
+FetchContent_Declare(box2d_fc
+    GIT_REPOSITORY https://github.com/erincatto/box2d.git
+    GIT_TAG v2.4.1
+)
+set(BOX2D_BUILD_UNIT_TESTS OFF CACHE BOOL "" FORCE)
+set(BOX2D_BUILD_TESTBED OFF CACHE BOOL "" FORCE)
+set(BOX2D_BUILD_DOCS OFF CACHE BOOL "" FORCE)
+FetchContent_MakeAvailable(box2d_fc)
+
+# --------------------------------------------------------------
+# GLM (OpenGL Mathematics library for 3D vector/matrix math)
+# --------------------------------------------------------------
+FetchContent_Declare(
+  glm
+  GIT_REPOSITORY https://github.com/g-truc/glm.git
+  GIT_TAG        1.0.1 # Latest stable version
+)
+FetchContent_MakeAvailable(glm)
+
+# --------------------------------------------------------------
+# nlohmann/json (required by tinygltf)
+# --------------------------------------------------------------
+FetchContent_Declare(
+  nlohmann_json
+  GIT_REPOSITORY https://github.com/nlohmann/json.git
+  GIT_TAG        v3.11.3 # A recent stable version
+)
+FetchContent_MakeAvailable(nlohmann_json)
+
+# --------------------------------------------------------------
+# tinygltf (glTF 2.0 file loader for animation system)
+# --------------------------------------------------------------
+FetchContent_Declare(
+  tinygltf
+  GIT_REPOSITORY https://github.com/syoyo/tinygltf.git
+  GIT_TAG        v2.8.20 # A recent stable version
+)
+FetchContent_MakeAvailable(tinygltf)
+
+# --------------------------------------------------------------
+# ufbx (FBX file loader for animation system)
+# --------------------------------------------------------------
+FetchContent_Declare(
+  ufbx
+  GIT_REPOSITORY https://github.com/ufbx/ufbx.git
+  GIT_TAG        v0.10.0 # A recent stable version of ufbx
+)
+FetchContent_MakeAvailable(ufbx)
+
+# Get the path to the downloaded ufbx source code
+FetchContent_GetProperties(ufbx SOURCE_DIR ufbx_SOURCE_DIR)
+
+# Create a dedicated static library target for ufbx (single-header library needs separate compilation unit)
+add_library(ufbx_static STATIC ${ufbx_SOURCE_DIR}/ufbx.c)
+target_include_directories(ufbx_static PUBLIC ${ufbx_SOURCE_DIR})
+
+# ==============================================================================
+# CUDA & cuDNN Configuration (MUST be done before OpenCV)
+# ==============================================================================
+# Find the CUDA Toolkit. This will use the default installation path or environment
+# variables. This is essential for OpenCV's configuration to detect CUDA correctly.
+find_package(CUDAToolkit REQUIRED)
+
+# Find CUDA runtime library for direct linking if CUDAToolkit::cudart target is not available
+if(MSVC)
+    find_library(CUDA_CUDART_LIBRARY
+        NAMES cudart_static.lib cudart.lib
+        PATHS "${CUDAToolkit_LIBRARY_DIR}"
+        NO_DEFAULT_PATH
+    )
+else()
+    find_library(CUDA_CUDART_LIBRARY
+        NAMES cudart
+        PATHS "${CUDAToolkit_LIBRARY_DIR}"
+        NO_DEFAULT_PATH
+    )
+endif()
+
+# --- NPP (NVIDIA Performance Primitives) Configuration ---
+# Explicitly set CUDA and NPP paths for OpenCV to find them
+set(CUDA_TOOLKIT_ROOT_DIR "${CUDAToolkit_TARGET_DIR}" CACHE PATH "CUDA Toolkit root directory")
+set(CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES "${CUDAToolkit_INCLUDE_DIRS}" CACHE PATH "CUDA Toolkit include directories")
+
+# Set NPP include and library directories explicitly
+# NPP headers are in the CUDA Toolkit include directory
+set(CUDA_INCLUDE_DIRS "${CUDAToolkit_INCLUDE_DIRS}" CACHE PATH "CUDA include directories")
+set(CUDA_NPP_LIBRARY_ROOT_DIR "${CUDAToolkit_LIBRARY_DIR}" CACHE PATH "NPP library root directory")
+
+# Provide hints for cuDNN path.
+# First check if cuDNN is integrated into CUDA Toolkit (recommended approach)
+# Then fall back to standalone cuDNN installation
+set(CUDNN_FOUND FALSE)
+
+# CRITICAL FIX: CUDAToolkit_INCLUDE_DIRS is a LIST, extract the first element
+list(GET CUDAToolkit_INCLUDE_DIRS 0 CUDA_MAIN_INCLUDE_DIR)
+
+# Check in CUDA Toolkit directory first
+if(EXISTS "${CUDA_MAIN_INCLUDE_DIR}/cudnn.h")
+    set(CUDNN_INCLUDE_DIR "${CUDA_MAIN_INCLUDE_DIR}" CACHE PATH "Path to cuDNN include directory")
+    set(CUDNN_LIBRARY "${CUDAToolkit_LIBRARY_DIR}/cudnn.lib" CACHE FILEPATH "Path to cuDNN library")
+    set(CUDNN_FOUND TRUE)
+    message(STATUS "Found cuDNN integrated into CUDA Toolkit at ${CUDA_MAIN_INCLUDE_DIR}")
+# Fall back to standalone cuDNN installation
+elseif(EXISTS "C:/Program Files/NVIDIA/CUDNN/v9.14/include/cudnn.h")
+    set(CUDNN_INCLUDE_DIR "C:/Program Files/NVIDIA/CUDNN/v9.14/include" CACHE PATH "Path to cuDNN include directory")
+    set(CUDNN_LIBRARY "C:/Program Files/NVIDIA/CUDNN/v9.14/lib/x64/cudnn.lib" CACHE FILEPATH "Path to cuDNN library")
+    set(CUDNN_FOUND TRUE)
+    message(STATUS "Found standalone cuDNN at C:/Program Files/NVIDIA/CUDNN/v9.14/")
+endif()
+
+# Configure OpenCV based on cuDNN availability
+if(CUDNN_FOUND)
+    set(WITH_CUDNN ON CACHE BOOL "" FORCE)
+    set(OPENCV_DNN_CUDA ON CACHE BOOL "" FORCE)
+else()
+    message(WARNING "cuDNN not found. OpenCV will build without cuDNN support.")
+    message(WARNING "Disabling OPENCV_DNN_CUDA since cuDNN is required for CUDA DNN backend.")
+    set(WITH_CUDNN OFF CACHE BOOL "" FORCE)
+    set(OPENCV_DNN_CUDA OFF CACHE BOOL "" FORCE)
+endif()
+
+# --------------------------------------------------------------
+# OpenCV (Computer Vision Library - used for Preset Creator UI)
+# --------------------------------------------------------------
+
+# Add /FS flag for MSVC BEFORE declaring OpenCV to fix parallel compilation PDB access issues
+if(MSVC)
+    # Save current flags
+    set(SAVED_CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}")
+    set(SAVED_CMAKE_C_FLAGS "${CMAKE_C_FLAGS}")
+    
+    # Add /FS flag to init variables (used by subprojects)
+    set(CMAKE_CXX_FLAGS_INIT "${CMAKE_CXX_FLAGS_INIT} /FS" CACHE STRING "" FORCE)
+    set(CMAKE_C_FLAGS_INIT "${CMAKE_C_FLAGS_INIT} /FS" CACHE STRING "" FORCE)
+    
+    # Also add to current flags
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /FS")
+    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} /FS")
+endif()
+
+# CRITICAL FIX: Add CUDA include directories using CMake's proper mechanism
+# This works for both C++ and CUDA compilation (unlike compiler flags which break on spaces)
+include_directories(SYSTEM ${CUDAToolkit_INCLUDE_DIRS})
+
+# UPGRADED: Using OpenCV 4.x development branch with CUDA 12.9+ fix
+# This includes PR #27288 which fixes nppGetStreamContext() issue for CUDA 12.9+
+FetchContent_Declare(
+  opencv
+  GIT_REPOSITORY https://github.com/opencv/opencv.git
+  GIT_TAG        4.x # Latest development branch with CUDA 13.0 support
+)
+
+# ADDED: opencv_contrib is required for many CUDA modules and advanced features (especially cudev).
+FetchContent_Declare(
+  opencv_contrib
+  GIT_REPOSITORY https://github.com/opencv/opencv_contrib.git
+  GIT_TAG        4.x # Must match the main OpenCV branch
+)
+
+# Fetch and populate opencv_contrib FIRST so we can get its source directory
+FetchContent_GetProperties(opencv_contrib)
+if(NOT opencv_contrib_POPULATED)
+    FetchContent_Populate(opencv_contrib)
+endif()
+
+# Get the opencv_contrib source directory BEFORE configuring OpenCV
+FetchContent_GetProperties(opencv_contrib SOURCE_DIR opencv_contrib_SOURCE_DIR)
+
+# CRITICAL: Set OPENCV_EXTRA_MODULES_PATH BEFORE FetchContent_MakeAvailable(opencv)
+# This ensures OpenCV can find the cudev module during configuration
+set(OPENCV_EXTRA_MODULES_PATH "${opencv_contrib_SOURCE_DIR}/modules" CACHE PATH "" FORCE)
+
+# --- OpenCV Build Configuration ---
+set(BUILD_SHARED_LIBS OFF)
+set(BUILD_opencv_world ON)
+set(BUILD_TESTS OFF)
+set(BUILD_PERF_TESTS OFF)
+set(BUILD_EXAMPLES OFF)
+set(BUILD_opencv_apps OFF)
+set(ENABLE_PRECOMPILED_HEADERS OFF)
+set(BUILD_WITH_STATIC_CRT OFF) # Correctly matches JUCE's dynamic runtime
+set(WITH_IPP OFF) # Disable Intel IPP to avoid header path issues
+
+# --- CUDA and cuDNN Configuration ---
+set(WITH_CUDA ON CACHE BOOL "" FORCE)
+# OPENCV_DNN_CUDA and WITH_CUDNN are set above based on cuDNN availability
+set(WITH_NVIDIA_NPP ON CACHE BOOL "" FORCE)
+set(WITH_NVCUVID OFF) # Video decoding, disable if not needed.
+set(WITH_NVCUVENC OFF) # Video encoding, disable if not needed.
+
+# Explicitly provide CUDA paths to OpenCV (critical for finding NPP headers)
+set(CUDA_TOOLKIT_ROOT_DIR "${CUDAToolkit_TARGET_DIR}" CACHE PATH "" FORCE)
+set(CUDA_INCLUDE_DIRS "${CUDAToolkit_INCLUDE_DIRS}" CACHE PATH "" FORCE)
+# DO NOT set CUDA_LIBRARIES to a directory - causes "x64.lib" linker error
+# OpenCV will find CUDA libraries automatically via CUDA_TOOLKIT_ROOT_DIR
+
+# --- CUDA Architecture Targeting ---
+# Target NVIDIA Blackwell (RTX 5090), Ada Lovelace (40-series), and Ampere (30-series)
+set(CUDA_ARCH_BIN "8.6;8.9;12.0")
+# Provide forward compatibility for future architectures
+set(CUDA_ARCH_PTX "12.0")
+
+# Explicitly enable required modules.
+set(BUILD_opencv_core ON)
+set(BUILD_opencv_dnn ON)
+set(BUILD_opencv_features2d ON)
+set(BUILD_opencv_highgui ON)
+set(BUILD_opencv_imgcodecs ON)
+set(BUILD_opencv_imgproc ON)
+set(BUILD_opencv_objdetect ON)
+set(BUILD_opencv_tracking ON)
+set(BUILD_opencv_video ON)
+set(BUILD_opencv_videoio ON)
+set(BUILD_opencv_calib3d ON)
+set(OPENCV_DNN_CAFFE ON)
+
+# --- Finalize and Build OpenCV ---
+FetchContent_MakeAvailable(opencv)
+
+# Get the OpenCV build directory for generated headers
+FetchContent_GetProperties(opencv)
+if(NOT opencv_POPULATED)
+    FetchContent_Populate(opencv)
+endif()
+set(OPENCV_BUILD_DIR "${CMAKE_BINARY_DIR}/_deps/opencv-build")
+
+# ==============================================================================
+# AUTO-GENERATE opencv_modules.hpp
+# ==============================================================================
+# OpenCV's build system should generate this file, but sometimes it doesn't
+# create it during the initial configuration. This ensures it always exists.
+set(OPENCV_MODULES_HPP "${OPENCV_BUILD_DIR}/opencv2/opencv_modules.hpp")
+if(NOT EXISTS "${OPENCV_MODULES_HPP}")
+    message(STATUS "Generating missing opencv_modules.hpp...")
+    file(MAKE_DIRECTORY "${OPENCV_BUILD_DIR}/opencv2")
+    file(WRITE "${OPENCV_MODULES_HPP}"
+"/*
+ * This file is auto-generated. Do not edit!
+ */
+
+#ifndef OPENCV_MODULES_HPP
+#define OPENCV_MODULES_HPP
+
+#define HAVE_OPENCV_CALIB3D
+#define HAVE_OPENCV_CORE
+#define HAVE_OPENCV_DNN
+#define HAVE_OPENCV_FEATURES2D
+#define HAVE_OPENCV_FLANN
+#define HAVE_OPENCV_GAPI
+#define HAVE_OPENCV_HIGHGUI
+#define HAVE_OPENCV_IMGCODECS
+#define HAVE_OPENCV_IMGPROC
+#define HAVE_OPENCV_ML
+#define HAVE_OPENCV_OBJDETECT
+#define HAVE_OPENCV_PHOTO
+#define HAVE_OPENCV_STITCHING
+#define HAVE_OPENCV_VIDEO
+#define HAVE_OPENCV_VIDEOIO
+#define HAVE_OPENCV_WORLD
+
+#endif
+")
+    message(STATUS "Generated opencv_modules.hpp at ${OPENCV_MODULES_HPP}")
+endif()
+# ==============================================================================
+
+# Restore flags after OpenCV if needed
+if(MSVC)
+    set(CMAKE_CXX_FLAGS "${SAVED_CMAKE_CXX_FLAGS} /FS")
+    set(CMAKE_C_FLAGS "${SAVED_CMAKE_C_FLAGS} /FS")
+endif()
+
+# ==============================================================================
+# Define CUDA Support Preprocessor Macro for Application Code
+# ==============================================================================
+# This allows C++ code to check #if WITH_CUDA_SUPPORT at compile time
+# Only define if both CUDA and cuDNN are available (required for full DNN CUDA support)
+if(WITH_CUDA AND CUDNN_FOUND)
+    message(STATUS "✓ Enabling WITH_CUDA_SUPPORT preprocessor definition")
+    message(STATUS "  - CUDA Version: ${CUDAToolkit_VERSION}")
+    message(STATUS "  - cuDNN Found: ${CUDNN_INCLUDE_DIR}")
+    # Will be added to targets later via target_compile_definitions
+    set(CUDA_SUPPORT_ENABLED TRUE)
+else()
+    message(STATUS "CUDA support disabled - WITH_CUDA_SUPPORT not defined")
+    if(NOT WITH_CUDA)
+        message(STATUS "  Reason: WITH_CUDA is OFF")
+    elseif(NOT CUDNN_FOUND)
+        message(STATUS "  Reason: cuDNN not found")
+    endif()
+    set(CUDA_SUPPORT_ENABLED FALSE)
+endif()
+
+# ==============================================================================
+# FFmpeg (Pre-built vendor binaries - SIMPLIFIED!)
+# ==============================================================================
+# Windows: Download from https://github.com/BtbN/FFmpeg-Builds/releases
+# Extract to vendor/ffmpeg/ (see FFMPEG_SETUP_GUIDE.md)
+set(FFMPEG_DIR "${CMAKE_SOURCE_DIR}/../vendor/ffmpeg" CACHE PATH "Path to FFmpeg")
+set(FFMPEG_FOUND FALSE)
+
+if(WIN32)
+    # Windows: Use pre-built vendor binaries
+    if(EXISTS "${FFMPEG_DIR}/include/libavformat/avformat.h")
+        message(STATUS "✓ FFmpeg found at ${FFMPEG_DIR}")
+        
+        set(FFMPEG_INCLUDE_DIR "${FFMPEG_DIR}/include")
+        set(FFMPEG_LIB_DIR "${FFMPEG_DIR}/lib")
+        set(FFMPEG_BIN_DIR "${FFMPEG_DIR}/bin")
+        
+        # Find all required libraries
+        find_library(AVFORMAT_LIBRARY avformat PATHS "${FFMPEG_LIB_DIR}" NO_DEFAULT_PATH REQUIRED)
+        find_library(AVCODEC_LIBRARY avcodec PATHS "${FFMPEG_LIB_DIR}" NO_DEFAULT_PATH REQUIRED)
+        find_library(AVUTIL_LIBRARY avutil PATHS "${FFMPEG_LIB_DIR}" NO_DEFAULT_PATH REQUIRED)
+        find_library(SWRESAMPLE_LIBRARY swresample PATHS "${FFMPEG_LIB_DIR}" NO_DEFAULT_PATH REQUIRED)
+        find_library(SWSCALE_LIBRARY swscale PATHS "${FFMPEG_LIB_DIR}" NO_DEFAULT_PATH REQUIRED)
+        
+        set(FFMPEG_LIBRARIES 
+            ${AVFORMAT_LIBRARY}
+            ${AVCODEC_LIBRARY}
+            ${AVUTIL_LIBRARY}
+            ${SWRESAMPLE_LIBRARY}
+            ${SWSCALE_LIBRARY}
+        )
+        
+        message(STATUS "  - Include: ${FFMPEG_INCLUDE_DIR}")
+        message(STATUS "  - Libraries: ${FFMPEG_LIBRARIES}")
+        set(FFMPEG_FOUND TRUE)
+    else()
+        message(FATAL_ERROR 
+            "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            "❌ FFmpeg NOT FOUND!\n"
+            "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            "Expected location: ${FFMPEG_DIR}\n"
+            "\n"
+            "📦 Quick Setup (5 minutes):\n"
+            "  1. Download: https://github.com/BtbN/FFmpeg-Builds/releases\n"
+            "     Get: ffmpeg-master-latest-win64-gpl-shared.zip\n"
+            "  2. Extract to: ${FFMPEG_DIR}\n"
+            "  3. Folder structure should be:\n"
+            "     vendor/ffmpeg/\n"
+            "       ├── bin/     (DLL files)\n"
+            "       ├── include/ (header files)\n"
+            "       └── lib/     (.lib files)\n"
+            "\n"
+            "📖 See FFMPEG_SETUP_GUIDE.md for detailed instructions\n"
+            "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+        )
+    endif()
+else()
+    # Linux/Mac: Use system packages
+    find_package(PkgConfig QUIET)
+    if(PKG_CONFIG_FOUND)
+        pkg_check_modules(FFMPEG
+            libavformat>=57.0
+            libavcodec>=57.0
+            libavutil>=55.0
+            libswresample>=3.0
+            libswscale>=5.0
+        )
+        if(FFMPEG_FOUND)
+            set(FFMPEG_INCLUDE_DIR ${FFMPEG_INCLUDE_DIRS})
+            set(FFMPEG_LIBRARIES ${FFMPEG_LIBRARIES})
+            message(STATUS "✓ FFmpeg found via pkg-config")
+            message(STATUS "  - Include: ${FFMPEG_INCLUDE_DIR}")
+        endif()
+    endif()
+    
+    # Fallback: try finding libraries directly
+    if(NOT FFMPEG_FOUND)
+        find_path(FFMPEG_INCLUDE_DIR NAMES libavformat/avformat.h
+            PATHS /usr/include /usr/local/include /opt/homebrew/include
+        )
+        find_library(AVFORMAT_LIBRARY avformat)
+        find_library(AVCODEC_LIBRARY avcodec)
+        find_library(AVUTIL_LIBRARY avutil)
+        find_library(SWRESAMPLE_LIBRARY swresample)
+        find_library(SWSCALE_LIBRARY swscale)
+        
+        if(FFMPEG_INCLUDE_DIR AND AVFORMAT_LIBRARY)
+            set(FFMPEG_LIBRARIES 
+                ${AVFORMAT_LIBRARY}
+                ${AVCODEC_LIBRARY}
+                ${AVUTIL_LIBRARY}
+                ${SWRESAMPLE_LIBRARY}
+                ${SWSCALE_LIBRARY}
+            )
+            set(FFMPEG_FOUND TRUE)
+            message(STATUS "✓ FFmpeg found")
+        else()
+            message(FATAL_ERROR
+                "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+                "❌ FFmpeg NOT FOUND!\n"
+                "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+                "📦 Install FFmpeg:\n"
+                "  Linux:  sudo apt-get install libavformat-dev libavcodec-dev libavutil-dev libswresample-dev libswscale-dev\n"
+                "  macOS:  brew install ffmpeg\n"
+                "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+            )
+        endif()
+    endif()
+endif()
+
+# --------------------------------------------------------------
+# Rubber Band (optional, real-time timestretcher/pitch-shifter)
+# --------------------------------------------------------------
+set(USE_RUBBERBAND ON CACHE BOOL "Enable Rubber Band time/pitch processing")
+if (USE_RUBBERBAND)
+  FetchContent_Declare(rubberband_fc
+    GIT_REPOSITORY https://github.com/breakfastquay/rubberband.git
+    GIT_TAG v3.3.0
+  )
+  FetchContent_MakeAvailable(rubberband_fc)
+  # Build from single-file amalgamation to avoid external link issues
+  # Use official amalgamated single-file build (works cross-platform)
+  add_library(rubberband_single STATIC
+    ${rubberband_fc_SOURCE_DIR}/single/RubberBandSingle.cpp
+  )
+  target_include_directories(rubberband_single PUBLIC
+    ${rubberband_fc_SOURCE_DIR}
+    ${rubberband_fc_SOURCE_DIR}/single
+  )
+  target_compile_definitions(rubberband_single PUBLIC
+    NOMINMAX
+    _USE_MATH_DEFINES
+    RUBBERBAND_USE_R3=1
+    RUBBERBAND_BUILD_FFT=KISSFFT
+    RUBBERBAND_BUILD_RESAMPLER=NONE
+  )
+  set(RUBBERBAND_TARGET rubberband_single)
+  set(RUBBERBAND_INCLUDE_DIR "${rubberband_fc_SOURCE_DIR}")
+endif()
+
+# ==============================================================================
+# Main Engine App Target (Unchanged)
+# ==============================================================================
+juce_add_gui_app(ColliderApp
+    PRODUCT_NAME "Collider Audio Engine"
+    VERSION "0.1.0"
+    COMPANY_NAME "Collider"
+)
+
+target_sources(ColliderApp PRIVATE
+    Source/main.cpp
+    Source/app/MainApplication.cpp
+    Source/app/MainApplication.h
+    Source/ui/MainComponent.cpp
+    Source/ui/MainComponent.h
+    Source/ui/TestHarnessComponent.cpp
+    Source/ui/TestHarnessComponent.h
+    Source/ui/VisualiserComponent.cpp
+    Source/ui/VisualiserComponent.h
+    Source/ui/DebugInfo.h
+    Source/audio/AudioEngine.h
+    Source/audio/AudioEngine.cpp
+    Source/audio/MidiDeviceManager.h
+    Source/audio/MidiDeviceManager.cpp
+    Source/audio/voices/SampleVoiceProcessor.h
+    Source/audio/voices/SampleVoiceProcessor.cpp
+    Source/audio/voices/SynthVoiceProcessor.h
+    Source/audio/voices/SynthVoiceProcessor.cpp
+    Source/audio/voices/NoiseVoiceProcessor.h
+    Source/audio/voices/NoiseVoiceProcessor.cpp
+    Source/audio/voices/ModularVoice.h
+    Source/audio/graph/VoiceProcessor.h
+    Source/audio/graph/VoiceProcessor.cpp
+    Source/audio/graph/ModularSynthProcessor.h
+    Source/audio/graph/ModularSynthProcessor.cpp
+    Source/audio/fx/FXChain.h
+    Source/audio/fx/GainProcessor.h
+    Source/audio/fx/GainProcessor.cpp
+    Source/audio/assets/SampleBank.h
+    Source/audio/assets/SampleBank.cpp
+    Source/audio/modules/ModuleProcessor.h
+    Source/audio/modules/ModuleProcessor.cpp
+    Source/audio/modules/AudioInputModuleProcessor.h
+    Source/audio/modules/AudioInputModuleProcessor.cpp
+    Source/audio/modules/VCOModuleProcessor.h
+    Source/audio/modules/VCOModuleProcessor.cpp
+    Source/audio/modules/VCFModuleProcessor.h
+    Source/audio/modules/VCFModuleProcessor.cpp
+    Source/audio/modules/VCAModuleProcessor.h
+    Source/audio/modules/VCAModuleProcessor.cpp
+    Source/audio/modules/NoiseModuleProcessor.h
+    Source/audio/modules/NoiseModuleProcessor.cpp
+    Source/audio/modules/LFOModuleProcessor.h
+    Source/audio/modules/LFOModuleProcessor.cpp
+    Source/audio/modules/ADSRModuleProcessor.h
+    Source/audio/modules/ADSRModuleProcessor.cpp
+    Source/audio/modules/MixerModuleProcessor.h
+    Source/audio/modules/MixerModuleProcessor.cpp
+    Source/audio/modules/CVMixerModuleProcessor.h
+    Source/audio/modules/CVMixerModuleProcessor.cpp
+    Source/audio/modules/DelayModuleProcessor.h
+    Source/audio/modules/DelayModuleProcessor.cpp
+    Source/audio/modules/ReverbModuleProcessor.h
+    Source/audio/modules/ReverbModuleProcessor.cpp
+    Source/audio/modules/SAndHModuleProcessor.h
+    Source/audio/modules/SAndHModuleProcessor.cpp
+    Source/audio/modules/AttenuverterModuleProcessor.h
+    Source/audio/modules/AttenuverterModuleProcessor.cpp
+    Source/audio/modules/ScopeModuleProcessor.h
+    Source/audio/modules/ScopeModuleProcessor.cpp
+    Source/audio/modules/StepSequencerModuleProcessor.h
+    Source/audio/modules/StepSequencerModuleProcessor.cpp
+    Source/audio/modules/MultiSequencerModuleProcessor.h
+    Source/audio/modules/MultiSequencerModuleProcessor.cpp
+    Source/audio/modules/LagProcessorModuleProcessor.h
+    Source/audio/modules/LagProcessorModuleProcessor.cpp
+    Source/audio/modules/DeCrackleModuleProcessor.h
+    Source/audio/modules/DeCrackleModuleProcessor.cpp
+    Source/audio/modules/GraphicEQModuleProcessor.h
+    Source/audio/modules/GraphicEQModuleProcessor.cpp
+    Source/audio/modules/FrequencyGraphModuleProcessor.h
+    Source/audio/modules/FrequencyGraphModuleProcessor.cpp
+    Source/audio/modules/ChorusModuleProcessor.h
+    Source/audio/modules/ChorusModuleProcessor.cpp
+    Source/audio/modules/PhaserModuleProcessor.h
+    Source/audio/modules/PhaserModuleProcessor.cpp
+    Source/audio/modules/CompressorModuleProcessor.h
+    Source/audio/modules/CompressorModuleProcessor.cpp
+    Source/audio/modules/RecordModuleProcessor.h
+    Source/audio/modules/RecordModuleProcessor.cpp
+    Source/audio/modules/CommentModuleProcessor.h
+    Source/audio/modules/CommentModuleProcessor.cpp
+    Source/audio/modules/LimiterModuleProcessor.h
+    Source/audio/modules/LimiterModuleProcessor.cpp
+    Source/audio/modules/GateModuleProcessor.h
+    Source/audio/modules/GateModuleProcessor.cpp
+    Source/audio/modules/DriveModuleProcessor.h
+    Source/audio/modules/DriveModuleProcessor.cpp
+    Source/audio/modules/MathModuleProcessor.h
+    Source/audio/modules/MathModuleProcessor.cpp
+    Source/audio/modules/MapRangeModuleProcessor.h
+    Source/audio/modules/MapRangeModuleProcessor.cpp
+    Source/audio/modules/ComparatorModuleProcessor.h
+    Source/audio/modules/ComparatorModuleProcessor.cpp
+    Source/audio/modules/RandomModuleProcessor.h
+    Source/audio/modules/RandomModuleProcessor.cpp
+    Source/audio/modules/RateModuleProcessor.h
+    Source/audio/modules/RateModuleProcessor.cpp
+    Source/audio/modules/QuantizerModuleProcessor.h
+    Source/audio/modules/QuantizerModuleProcessor.cpp
+    Source/audio/modules/SequentialSwitchModuleProcessor.h
+    Source/audio/modules/SequentialSwitchModuleProcessor.cpp
+    Source/audio/modules/LogicModuleProcessor.h
+    Source/audio/modules/LogicModuleProcessor.cpp
+    Source/audio/modules/ClockDividerModuleProcessor.h
+    Source/audio/modules/ClockDividerModuleProcessor.cpp
+    Source/audio/modules/WaveshaperModuleProcessor.h
+    Source/audio/modules/WaveshaperModuleProcessor.cpp
+    Source/audio/modules/MultiBandShaperModuleProcessor.h
+    Source/audio/modules/MultiBandShaperModuleProcessor.cpp
+    Source/audio/modules/GranulatorModuleProcessor.h
+    Source/audio/modules/GranulatorModuleProcessor.cpp
+    Source/audio/modules/HarmonicShaperModuleProcessor.h
+    Source/audio/modules/HarmonicShaperModuleProcessor.cpp
+    Source/audio/modules/ValueModuleProcessor.h
+    Source/audio/modules/ValueModuleProcessor.cpp
+    Source/audio/modules/TimePitchModuleProcessor.h
+    Source/audio/modules/TimePitchModuleProcessor.cpp
+    Source/audio/modules/MIDIPlayerModuleProcessor.h
+    Source/audio/modules/MIDIPlayerModuleProcessor.cpp
+        Source/audio/modules/TrackMixerModuleProcessor.h
+        Source/audio/modules/TrackMixerModuleProcessor.cpp
+    Source/audio/modules/PolyVCOModuleProcessor.h
+    Source/audio/modules/PolyVCOModuleProcessor.cpp
+        Source/audio/modules/DebugModuleProcessor.h
+        Source/audio/modules/DebugModuleProcessor.cpp
+        Source/audio/modules/CommentModuleProcessor.h
+        Source/audio/modules/CommentModuleProcessor.cpp
+        Source/audio/modules/InputDebugModuleProcessor.h
+        Source/audio/modules/InputDebugModuleProcessor.cpp
+    Source/audio/modules/TTSPerformerModuleProcessor.h
+    Source/audio/modules/TTSPerformerModuleProcessor.cpp
+    Source/audio/modules/TimingData.h
+    Source/audio/modules/SampleLoaderModuleProcessor.h
+    Source/audio/modules/SampleLoaderModuleProcessor.cpp
+    Source/audio/modules/FunctionGeneratorModuleProcessor.h
+    Source/audio/modules/FunctionGeneratorModuleProcessor.cpp
+    Source/audio/modules/BestPracticeNodeProcessor.h
+    Source/audio/modules/BestPracticeNodeProcessor.cpp
+    Source/audio/modules/TimelineModuleProcessor.h
+    Source/audio/modules/TimelineModuleProcessor.cpp
+    Source/audio/modules/VocalTractFilterModuleProcessor.h
+    Source/audio/modules/VocalTractFilterModuleProcessor.cpp
+    Source/audio/modules/VstHostModuleProcessor.h
+    Source/audio/modules/VstHostModuleProcessor.cpp
+    Source/audio/modules/ShapingOscillatorModuleProcessor.h
+    Source/audio/modules/ShapingOscillatorModuleProcessor.cpp
+    Source/audio/modules/InletModuleProcessor.h
+    Source/audio/modules/InletModuleProcessor.cpp
+    Source/audio/modules/OutletModuleProcessor.h
+    Source/audio/modules/OutletModuleProcessor.cpp
+    Source/audio/modules/MetaModuleProcessor.h
+    Source/audio/modules/MetaModuleProcessor.cpp
+    Source/audio/modules/SnapshotSequencerModuleProcessor.h
+    Source/audio/modules/SnapshotSequencerModuleProcessor.cpp
+    Source/audio/modules/MIDICVModuleProcessor.h
+    Source/audio/modules/MIDICVModuleProcessor.cpp
+    Source/audio/modules/MIDIFadersModuleProcessor.h
+    Source/audio/modules/MIDIFadersModuleProcessor.cpp
+    Source/audio/modules/MIDIKnobsModuleProcessor.h
+    Source/audio/modules/MIDIKnobsModuleProcessor.cpp
+    Source/audio/modules/MIDIButtonsModuleProcessor.h
+    Source/audio/modules/MIDIButtonsModuleProcessor.cpp
+    Source/audio/modules/MIDIJogWheelModuleProcessor.h
+    Source/audio/modules/MIDIJogWheelModuleProcessor.cpp
+    Source/audio/modules/MIDIPadModuleProcessor.h
+    Source/audio/modules/MIDIPadModuleProcessor.cpp
+    Source/audio/modules/MidiLoggerModuleProcessor.h
+    Source/audio/modules/MidiLoggerModuleProcessor.cpp
+    Source/audio/modules/TempoClockModuleProcessor.h
+    Source/audio/modules/TempoClockModuleProcessor.cpp
+    Source/audio/modules/PhysicsModuleProcessor.h
+    Source/audio/modules/PhysicsModuleProcessor.cpp
+    Source/audio/modules/StrokeSequencerModuleProcessor.h
+    Source/audio/modules/StrokeSequencerModuleProcessor.cpp
+    Source/audio/modules/TapTempo.h
+    Source/audio/modules/TapTempo.cpp
+    Source/audio/modules/BPMMonitorModuleProcessor.h
+    Source/audio/modules/BPMMonitorModuleProcessor.cpp
+    Source/audio/modules/AnimationModuleProcessor.h
+    Source/audio/modules/AnimationModuleProcessor.cpp
+    Source/video/VideoFrameManager.h
+    Source/video/CameraEnumerator.h
+    Source/audio/modules/WebcamLoaderModule.h
+    Source/audio/modules/WebcamLoaderModule.cpp
+    Source/audio/modules/VideoFileLoaderModule.h
+    Source/audio/modules/VideoFileLoaderModule.cpp
+    Source/audio/modules/FFmpegAudioReader.h
+    Source/audio/modules/FFmpegAudioReader.cpp
+    Source/audio/modules/TimeStretcherAudioSource.h
+    Source/audio/modules/TimeStretcherAudioSource.cpp
+    Source/audio/modules/VideoFXModule.h
+    Source/audio/modules/VideoFXModule.cpp
+    Source/audio/modules/MovementDetectorModule.h
+    Source/audio/modules/MovementDetectorModule.cpp
+    Source/audio/modules/HumanDetectorModule.h
+    Source/audio/modules/HumanDetectorModule.cpp
+    Source/audio/modules/PoseEstimatorModule.h
+    Source/audio/modules/PoseEstimatorModule.cpp
+    Source/audio/modules/HandTrackerModule.h
+    Source/audio/modules/HandTrackerModule.cpp
+    Source/audio/modules/FaceTrackerModule.h
+    Source/audio/modules/FaceTrackerModule.cpp
+    Source/audio/modules/ObjectDetectorModule.h
+    Source/audio/modules/ObjectDetectorModule.cpp
+    Source/audio/modules/ColorTrackerModule.h
+    Source/audio/modules/ColorTrackerModule.cpp
+    Source/audio/modules/ContourDetectorModule.h
+    Source/audio/modules/ContourDetectorModule.cpp
+    Source/audio/modules/SemanticSegmentationModule.h
+    Source/audio/modules/SemanticSegmentationModule.cpp
+    Source/audio/modules/CropVideoModule.h
+    Source/audio/modules/CropVideoModule.cpp
+    Source/animation/AnimationData.h
+    Source/animation/RawAnimationData.h
+    Source/animation/RawAnimationData.cpp
+    Source/animation/AnimationBinder.h
+    Source/animation/AnimationBinder.cpp
+    Source/animation/Animator.h
+    Source/animation/Animator.cpp
+    Source/animation/AnimationFileLoader.h
+    Source/animation/AnimationFileLoader.cpp
+    Source/animation/GltfLoader.h
+    Source/animation/GltfLoader.cpp
+    Source/animation/FbxLoader.h
+    Source/animation/FbxLoader.cpp
+    Source/animation/AnimationRenderer.h
+    Source/animation/AnimationRenderer.cpp
+    Source/ipc/IpcServer.cpp
+    Source/ipc/IpcServer.h
+    Source/ipc/OscClient.h
+    Source/ipc/CommandBus.cpp
+    Source/ipc/CommandBus.h
+    Source/audio/utils/VoiceDeletionUtils.h
+    Source/audio/dsp/TimePitchProcessor.h
+    Source/utils/RtLogger.h
+    Source/utils/RtLogger.cpp
+)
+
+target_compile_definitions(ColliderApp PRIVATE
+    JUCE_APPLICATION_NAME_STRING="$<TARGET_PROPERTY:ColliderApp,PRODUCT_NAME>"
+    JUCE_APPLICATION_VERSION_STRING="$<TARGET_PROPERTY:ColliderApp,VERSION>"
+    JUCE_WEB_BROWSER=0 JUCE_USE_CURL=0
+    JUCE_PLUGINHOST_VST3=1
+    $<$<BOOL:${USE_RUBBERBAND}>:USE_RUBBERBAND=1>
+    $<$<NOT:$<BOOL:${USE_RUBBERBAND}>>:USE_RUBBERBAND=0>
+    $<$<BOOL:${CUDA_SUPPORT_ENABLED}>:WITH_CUDA_SUPPORT=1>
+)
+
+target_link_libraries(ColliderApp PRIVATE
+    juce::juce_gui_extra
+    juce::juce_opengl
+    juce::juce_audio_processors
+    juce::juce_audio_utils
+    juce::juce_audio_formats
+    juce::juce_dsp
+    juce::juce_osc
+    soundtouch
+    box2d
+    glm::glm
+    tinygltf
+    ufbx_static
+    opencv_world
+    $<$<BOOL:${USE_RUBBERBAND}>:${RUBBERBAND_TARGET}>
+    $<$<BOOL:${FFMPEG_FOUND}>:${AVFORMAT_LIBRARY}>
+    $<$<BOOL:${FFMPEG_FOUND}>:${AVCODEC_LIBRARY}>
+    $<$<BOOL:${FFMPEG_FOUND}>:${AVUTIL_LIBRARY}>
+    $<$<BOOL:${FFMPEG_FOUND}>:${SWRESAMPLE_LIBRARY}>
+    $<$<BOOL:${FFMPEG_FOUND}>:${SWSCALE_LIBRARY}>
+    # Piper TTS libraries (pre-built)
+    ${ONNXRUNTIME_DIR}/lib/onnxruntime.lib
+)
+
+# Link CUDA runtime for OpenCV CUDA symbols
+# Use CUDAToolkit::cudart if available, otherwise link directly
+if(TARGET CUDAToolkit::cudart)
+    target_link_libraries(ColliderApp PRIVATE CUDAToolkit::cudart)
+elseif(CUDA_CUDART_LIBRARY)
+    target_link_libraries(ColliderApp PRIVATE ${CUDA_CUDART_LIBRARY})
+endif()
+
+# Link Windows libraries for native camera enumeration (DirectShow)
+if(WIN32)
+    target_link_libraries(ColliderApp PRIVATE ole32 strmiids)
+endif()
+
+# Add include directories for ColliderApp
+target_include_directories(ColliderApp PRIVATE
+    ${PIPER_DIR}
+    ${ONNXRUNTIME_DIR}/include
+    ${CMAKE_SOURCE_DIR}/../vendor/openvino_toolkit_windows_2025.3.0.19807.44526285f24_x86_64/samples/cpp/thirdparty/nlohmann_json/single_include
+    ${CMAKE_SOURCE_DIR}/../soundtouch/include
+    ${CMAKE_SOURCE_DIR}/../soundtouch/source/SoundTouch
+    ${ufbx_SOURCE_DIR}
+    $<$<BOOL:${FFMPEG_FOUND}>:${FFMPEG_INCLUDE_DIR}>
+    # OpenCV include directories - source and generated headers
+    ${opencv_SOURCE_DIR}/include
+    ${opencv_SOURCE_DIR}/modules/core/include
+    ${opencv_SOURCE_DIR}/modules/imgproc/include
+    ${opencv_SOURCE_DIR}/modules/imgcodecs/include
+    ${opencv_SOURCE_DIR}/modules/videoio/include
+    ${opencv_SOURCE_DIR}/modules/highgui/include
+    ${opencv_SOURCE_DIR}/modules/video/include
+    ${opencv_SOURCE_DIR}/modules/objdetect/include
+    ${opencv_SOURCE_DIR}/modules/features2d/include
+    ${opencv_SOURCE_DIR}/modules/calib3d/include
+    ${opencv_SOURCE_DIR}/modules/dnn/include              # For DNN headers (dnn.hpp)
+    ${OPENCV_BUILD_DIR}
+    ${OPENCV_BUILD_DIR}/modules/world
+    # OpenCV CUDA modules (from opencv_contrib source)
+    $<$<BOOL:${CUDA_SUPPORT_ENABLED}>:${opencv_contrib_SOURCE_DIR}/modules/cudaimgproc/include>
+    $<$<BOOL:${CUDA_SUPPORT_ENABLED}>:${opencv_contrib_SOURCE_DIR}/modules/cudawarping/include>
+    $<$<BOOL:${CUDA_SUPPORT_ENABLED}>:${opencv_contrib_SOURCE_DIR}/modules/cudaarithm/include>
+    $<$<BOOL:${CUDA_SUPPORT_ENABLED}>:${opencv_contrib_SOURCE_DIR}/modules/cudafilters/include>
+    $<$<BOOL:${CUDA_SUPPORT_ENABLED}>:${opencv_contrib_SOURCE_DIR}/modules/cudafeatures2d/include>
+    $<$<BOOL:${CUDA_SUPPORT_ENABLED}>:${opencv_contrib_SOURCE_DIR}/modules/cudaobjdetect/include>
+    $<$<BOOL:${CUDA_SUPPORT_ENABLED}>:${opencv_contrib_SOURCE_DIR}/modules/cudaoptflow/include>
+    $<$<BOOL:${USE_RUBBERBAND}>:${RUBBERBAND_INCLUDE_DIR}>
+)
+
+# ==============================================================================
+# Preset Creator App Target (Final Corrected Version)
+# ==============================================================================
+
+juce_add_gui_app(PresetCreatorApp
+    PRODUCT_NAME "Preset Creator"
+    VERSION "0.1.0"
+    COMPANY_NAME "Collider"
+)
+
+target_sources(PresetCreatorApp PRIVATE
+    # Your application sources
+    Source/preset_creator/PresetCreatorMain.cpp
+    Source/preset_creator/PinDatabase.h
+    Source/preset_creator/PinDatabase.cpp
+    Source/preset_creator/NotificationManager.h
+    Source/preset_creator/NotificationManager.cpp
+    Source/preset_creator/PresetValidator.h
+    Source/preset_creator/PresetValidator.cpp
+    Source/preset_creator/PresetAutoHealer.h
+    Source/preset_creator/PresetAutoHealer.cpp
+    Source/preset_creator/SavePresetJob.h
+    Source/preset_creator/SavePresetJob.cpp
+    Source/preset_creator/ImGuiNodeEditorComponent.h
+    Source/preset_creator/ImGuiNodeEditorComponent.cpp
+    Source/preset_creator/PresetCreatorComponent.h
+    Source/preset_creator/PresetCreatorComponent.cpp
+    Source/preset_creator/ControllerPresetManager.h
+    Source/preset_creator/ControllerPresetManager.cpp
+
+    # Add ImGui, imnodes, and the backend DIRECTLY as source files
+    ${imgui_fc_SOURCE_DIR}/imgui.cpp
+    ${imgui_fc_SOURCE_DIR}/imgui_draw.cpp
+    ${imgui_fc_SOURCE_DIR}/imgui_tables.cpp
+    ${imgui_fc_SOURCE_DIR}/imgui_widgets.cpp
+    ${imgui_fc_SOURCE_DIR}/backends/imgui_impl_opengl2.cpp
+    ${imnodes_fc_SOURCE_DIR}/imnodes.cpp
+
+    # Your other reused engine modules
+    Source/audio/MidiDeviceManager.h
+    Source/audio/MidiDeviceManager.cpp
+    Source/audio/graph/ModularSynthProcessor.h
+    Source/audio/graph/ModularSynthProcessor.cpp
+    Source/audio/modules/ModuleProcessor.h
+    Source/audio/modules/ModuleProcessor.cpp
+    Source/audio/modules/AudioInputModuleProcessor.h
+    Source/audio/modules/AudioInputModuleProcessor.cpp
+    Source/audio/modules/VCOModuleProcessor.h
+    Source/audio/modules/VCOModuleProcessor.cpp
+    Source/audio/modules/VCFModuleProcessor.h
+    Source/audio/modules/VCFModuleProcessor.cpp
+    Source/audio/modules/VCAModuleProcessor.h
+    Source/audio/modules/VCAModuleProcessor.cpp
+    Source/audio/modules/NoiseModuleProcessor.h
+    Source/audio/modules/NoiseModuleProcessor.cpp
+    Source/audio/modules/LFOModuleProcessor.h
+    Source/audio/modules/LFOModuleProcessor.cpp
+    Source/audio/modules/ADSRModuleProcessor.h
+    Source/audio/modules/ADSRModuleProcessor.cpp
+    Source/audio/modules/MixerModuleProcessor.h
+    Source/audio/modules/MixerModuleProcessor.cpp
+    Source/audio/modules/CVMixerModuleProcessor.h
+    Source/audio/modules/CVMixerModuleProcessor.cpp
+    Source/audio/modules/DelayModuleProcessor.h
+    Source/audio/modules/DelayModuleProcessor.cpp
+    Source/audio/modules/ReverbModuleProcessor.h
+    Source/audio/modules/ReverbModuleProcessor.cpp
+    Source/audio/modules/SAndHModuleProcessor.h
+    Source/audio/modules/SAndHModuleProcessor.cpp
+    Source/audio/modules/AttenuverterModuleProcessor.h
+    Source/audio/modules/AttenuverterModuleProcessor.cpp
+    Source/audio/modules/ScopeModuleProcessor.h
+    Source/audio/modules/ScopeModuleProcessor.cpp
+    Source/audio/modules/StepSequencerModuleProcessor.h
+    Source/audio/modules/StepSequencerModuleProcessor.cpp
+    Source/audio/modules/MathModuleProcessor.h
+    Source/audio/modules/MathModuleProcessor.cpp
+    Source/audio/modules/MapRangeModuleProcessor.h
+    Source/audio/modules/MapRangeModuleProcessor.cpp
+    Source/audio/modules/ComparatorModuleProcessor.h
+    Source/audio/modules/ComparatorModuleProcessor.cpp
+    Source/audio/modules/RandomModuleProcessor.h
+    Source/audio/modules/RandomModuleProcessor.cpp
+    Source/audio/modules/RateModuleProcessor.h
+    Source/audio/modules/RateModuleProcessor.cpp
+    Source/audio/modules/QuantizerModuleProcessor.h
+    Source/audio/modules/QuantizerModuleProcessor.cpp
+    Source/audio/modules/SequentialSwitchModuleProcessor.h
+    Source/audio/modules/SequentialSwitchModuleProcessor.cpp
+    Source/audio/modules/LogicModuleProcessor.h
+    Source/audio/modules/LogicModuleProcessor.cpp
+    Source/audio/modules/ClockDividerModuleProcessor.h
+    Source/audio/modules/ClockDividerModuleProcessor.cpp
+    Source/audio/modules/WaveshaperModuleProcessor.h
+    Source/audio/modules/WaveshaperModuleProcessor.cpp
+    Source/audio/modules/MultiBandShaperModuleProcessor.h
+    Source/audio/modules/MultiBandShaperModuleProcessor.cpp
+    Source/audio/modules/GranulatorModuleProcessor.h
+    Source/audio/modules/GranulatorModuleProcessor.cpp
+    Source/audio/modules/HarmonicShaperModuleProcessor.h
+    Source/audio/modules/HarmonicShaperModuleProcessor.cpp
+    Source/audio/modules/ValueModuleProcessor.h
+    Source/audio/modules/ValueModuleProcessor.cpp
+        Source/audio/modules/DebugModuleProcessor.h
+        Source/audio/modules/DebugModuleProcessor.cpp
+        Source/audio/modules/CommentModuleProcessor.h
+        Source/audio/modules/CommentModuleProcessor.cpp
+        Source/audio/modules/InputDebugModuleProcessor.h
+        Source/audio/modules/InputDebugModuleProcessor.cpp
+    Source/audio/modules/TimePitchModuleProcessor.h
+    Source/audio/modules/TimePitchModuleProcessor.cpp
+    Source/audio/modules/MIDIPlayerModuleProcessor.h
+    Source/audio/modules/MIDIPlayerModuleProcessor.cpp
+        Source/audio/modules/TrackMixerModuleProcessor.h
+        Source/audio/modules/TrackMixerModuleProcessor.cpp
+    Source/audio/modules/PolyVCOModuleProcessor.h
+    Source/audio/modules/PolyVCOModuleProcessor.cpp
+    
+    Source/audio/modules/TTSPerformerModuleProcessor.h
+    Source/audio/modules/TTSPerformerModuleProcessor.cpp
+    Source/audio/modules/TimingData.h
+    Source/audio/modules/SampleLoaderModuleProcessor.h
+    Source/audio/modules/SampleLoaderModuleProcessor.cpp
+    Source/audio/modules/FunctionGeneratorModuleProcessor.h
+    Source/audio/modules/FunctionGeneratorModuleProcessor.cpp
+    Source/audio/modules/BestPracticeNodeProcessor.h
+    Source/audio/modules/BestPracticeNodeProcessor.cpp
+    Source/audio/modules/TimelineModuleProcessor.h
+    Source/audio/modules/TimelineModuleProcessor.cpp
+    Source/audio/modules/ShapingOscillatorModuleProcessor.h
+    Source/audio/modules/ShapingOscillatorModuleProcessor.cpp
+    Source/audio/voices/SampleVoiceProcessor.h
+    Source/audio/voices/SampleVoiceProcessor.cpp
+    Source/audio/graph/VoiceProcessor.h
+    Source/audio/graph/VoiceProcessor.cpp
+    Source/audio/assets/SampleBank.h
+    Source/audio/assets/SampleBank.cpp
+    Source/utils/RtLogger.h
+    Source/utils/RtLogger.cpp
+    Source/audio/modules/VocalTractFilterModuleProcessor.h
+    Source/audio/modules/VocalTractFilterModuleProcessor.cpp
+    Source/audio/modules/VstHostModuleProcessor.h
+    Source/audio/modules/VstHostModuleProcessor.cpp
+    Source/audio/modules/MultiSequencerModuleProcessor.h
+    Source/audio/modules/MultiSequencerModuleProcessor.cpp
+    Source/audio/modules/LagProcessorModuleProcessor.h
+    Source/audio/modules/LagProcessorModuleProcessor.cpp
+    Source/audio/modules/DeCrackleModuleProcessor.h
+    Source/audio/modules/DeCrackleModuleProcessor.cpp
+    Source/audio/modules/GraphicEQModuleProcessor.h
+    Source/audio/modules/GraphicEQModuleProcessor.cpp
+    Source/audio/modules/FrequencyGraphModuleProcessor.h
+    Source/audio/modules/FrequencyGraphModuleProcessor.cpp
+    Source/audio/modules/ChorusModuleProcessor.h
+    Source/audio/modules/ChorusModuleProcessor.cpp
+    Source/audio/modules/PhaserModuleProcessor.h
+    Source/audio/modules/PhaserModuleProcessor.cpp
+    Source/audio/modules/CompressorModuleProcessor.h
+    Source/audio/modules/CompressorModuleProcessor.cpp
+    Source/audio/modules/RecordModuleProcessor.h
+    Source/audio/modules/RecordModuleProcessor.cpp
+    Source/audio/modules/CommentModuleProcessor.h
+    Source/audio/modules/CommentModuleProcessor.cpp
+    Source/audio/modules/LimiterModuleProcessor.h
+    Source/audio/modules/LimiterModuleProcessor.cpp
+    Source/audio/modules/GateModuleProcessor.h
+    Source/audio/modules/GateModuleProcessor.cpp
+    Source/audio/modules/DriveModuleProcessor.h
+    Source/audio/modules/DriveModuleProcessor.cpp
+    Source/audio/modules/InletModuleProcessor.h
+    Source/audio/modules/InletModuleProcessor.cpp
+    Source/audio/modules/OutletModuleProcessor.h
+    Source/audio/modules/OutletModuleProcessor.cpp
+    Source/audio/modules/MetaModuleProcessor.h
+    Source/audio/modules/MetaModuleProcessor.cpp
+    Source/audio/modules/SnapshotSequencerModuleProcessor.h
+    Source/audio/modules/SnapshotSequencerModuleProcessor.cpp
+    Source/audio/modules/MIDICVModuleProcessor.h
+    Source/audio/modules/MIDICVModuleProcessor.cpp
+    Source/audio/modules/MIDIFadersModuleProcessor.h
+    Source/audio/modules/MIDIFadersModuleProcessor.cpp
+    Source/audio/modules/MIDIKnobsModuleProcessor.h
+    Source/audio/modules/MIDIKnobsModuleProcessor.cpp
+    Source/audio/modules/MIDIButtonsModuleProcessor.h
+    Source/audio/modules/MIDIButtonsModuleProcessor.cpp
+    Source/audio/modules/MIDIJogWheelModuleProcessor.h
+    Source/audio/modules/MIDIJogWheelModuleProcessor.cpp
+    Source/audio/modules/MIDIPadModuleProcessor.h
+    Source/audio/modules/MIDIPadModuleProcessor.cpp
+    Source/audio/modules/MidiLoggerModuleProcessor.h
+    Source/audio/modules/MidiLoggerModuleProcessor.cpp
+    Source/audio/modules/TempoClockModuleProcessor.h
+    Source/audio/modules/TempoClockModuleProcessor.cpp
+    Source/audio/modules/PhysicsModuleProcessor.h
+    Source/audio/modules/PhysicsModuleProcessor.cpp
+    Source/audio/modules/StrokeSequencerModuleProcessor.h
+    Source/audio/modules/StrokeSequencerModuleProcessor.cpp
+    Source/audio/modules/TapTempo.h
+    Source/audio/modules/TapTempo.cpp
+    Source/audio/modules/BPMMonitorModuleProcessor.h
+    Source/audio/modules/BPMMonitorModuleProcessor.cpp
+    Source/audio/modules/AnimationModuleProcessor.h
+    Source/audio/modules/AnimationModuleProcessor.cpp
+    Source/video/VideoFrameManager.h
+    Source/video/CameraEnumerator.h
+    Source/audio/modules/WebcamLoaderModule.h
+    Source/audio/modules/WebcamLoaderModule.cpp
+    Source/audio/modules/VideoFileLoaderModule.h
+    Source/audio/modules/VideoFileLoaderModule.cpp
+    Source/audio/modules/FFmpegAudioReader.h
+    Source/audio/modules/FFmpegAudioReader.cpp
+    Source/audio/modules/TimeStretcherAudioSource.h
+    Source/audio/modules/TimeStretcherAudioSource.cpp
+    Source/audio/modules/VideoFXModule.h
+    Source/audio/modules/VideoFXModule.cpp
+    Source/audio/modules/MovementDetectorModule.h
+    Source/audio/modules/MovementDetectorModule.cpp
+    Source/audio/modules/HumanDetectorModule.h
+    Source/audio/modules/HumanDetectorModule.cpp
+    Source/audio/modules/PoseEstimatorModule.h
+    Source/audio/modules/PoseEstimatorModule.cpp
+    Source/audio/modules/HandTrackerModule.h
+    Source/audio/modules/HandTrackerModule.cpp
+    Source/audio/modules/FaceTrackerModule.h
+    Source/audio/modules/FaceTrackerModule.cpp
+    Source/audio/modules/ObjectDetectorModule.h
+    Source/audio/modules/ObjectDetectorModule.cpp
+    Source/audio/modules/ColorTrackerModule.h
+    Source/audio/modules/ColorTrackerModule.cpp
+    Source/audio/modules/ContourDetectorModule.h
+    Source/audio/modules/ContourDetectorModule.cpp
+    Source/audio/modules/SemanticSegmentationModule.h
+    Source/audio/modules/SemanticSegmentationModule.cpp
+    Source/audio/modules/CropVideoModule.h
+    Source/audio/modules/CropVideoModule.cpp
+    Source/animation/AnimationData.h
+    Source/animation/RawAnimationData.h
+    Source/animation/RawAnimationData.cpp
+    Source/animation/AnimationBinder.h
+    Source/animation/AnimationBinder.cpp
+    Source/animation/Animator.h
+    Source/animation/Animator.cpp
+    Source/animation/AnimationFileLoader.h
+    Source/animation/AnimationFileLoader.cpp
+    Source/animation/GltfLoader.h
+    Source/animation/GltfLoader.cpp
+    Source/animation/FbxLoader.h
+    Source/animation/FbxLoader.cpp
+    Source/animation/AnimationRenderer.h
+    Source/animation/AnimationRenderer.cpp
+)
+
+# This target now needs to know where to find all the headers
+target_include_directories(PresetCreatorApp PRIVATE
+    ${imgui_fc_SOURCE_DIR}
+    ${imgui_fc_SOURCE_DIR}/backends
+    ${imnodes_fc_SOURCE_DIR}
+    ${imgui_juce_fc_SOURCE_DIR}
+    ${PIPER_DIR}
+    ${ONNXRUNTIME_DIR}/include
+    ${CMAKE_SOURCE_DIR}/../vendor/openvino_toolkit_windows_2025.3.0.19807.44526285f24_x86_64/samples/cpp/thirdparty/nlohmann_json/single_include
+    ${CMAKE_SOURCE_DIR}/../soundtouch/include
+    ${CMAKE_SOURCE_DIR}/../soundtouch/source/SoundTouch
+    ${ufbx_SOURCE_DIR}
+    $<$<BOOL:${FFMPEG_FOUND}>:${FFMPEG_INCLUDE_DIR}>
+    # OpenCV include directories - source and generated headers
+    ${opencv_SOURCE_DIR}/include
+    ${opencv_SOURCE_DIR}/modules/core/include
+    ${opencv_SOURCE_DIR}/modules/imgproc/include
+    ${opencv_SOURCE_DIR}/modules/imgcodecs/include
+    ${opencv_SOURCE_DIR}/modules/videoio/include
+    ${opencv_SOURCE_DIR}/modules/highgui/include
+    ${opencv_SOURCE_DIR}/modules/video/include
+    ${opencv_SOURCE_DIR}/modules/objdetect/include
+    ${opencv_SOURCE_DIR}/modules/features2d/include
+    ${opencv_SOURCE_DIR}/modules/calib3d/include
+    ${opencv_SOURCE_DIR}/modules/dnn/include              # For DNN headers (dnn.hpp)
+    ${OPENCV_BUILD_DIR}
+    ${OPENCV_BUILD_DIR}/modules/world
+    # OpenCV CUDA modules (from opencv_contrib source)
+    $<$<BOOL:${CUDA_SUPPORT_ENABLED}>:${opencv_contrib_SOURCE_DIR}/modules/cudaimgproc/include>
+    $<$<BOOL:${CUDA_SUPPORT_ENABLED}>:${opencv_contrib_SOURCE_DIR}/modules/cudawarping/include>
+    $<$<BOOL:${CUDA_SUPPORT_ENABLED}>:${opencv_contrib_SOURCE_DIR}/modules/cudaarithm/include>
+    $<$<BOOL:${CUDA_SUPPORT_ENABLED}>:${opencv_contrib_SOURCE_DIR}/modules/cudafilters/include>
+    $<$<BOOL:${CUDA_SUPPORT_ENABLED}>:${opencv_contrib_SOURCE_DIR}/modules/cudafeatures2d/include>
+    $<$<BOOL:${CUDA_SUPPORT_ENABLED}>:${opencv_contrib_SOURCE_DIR}/modules/cudaobjdetect/include>
+    $<$<BOOL:${CUDA_SUPPORT_ENABLED}>:${opencv_contrib_SOURCE_DIR}/modules/cudaoptflow/include>
+    $<$<BOOL:${USE_RUBBERBAND}>:${RUBBERBAND_INCLUDE_DIR}>
+)
+
+# This target also needs the compile definitions
+target_compile_definitions(PresetCreatorApp PRIVATE
+    JUCE_APPLICATION_NAME_STRING="$<TARGET_PROPERTY:PresetCreatorApp,PRODUCT_NAME>"
+    JUCE_APPLICATION_VERSION_STRING="$<TARGET_PROPERTY:PresetCreatorApp,VERSION>"
+    JUCE_WEB_BROWSER=0 JUCE_USE_CURL=0
+    JUCE_PLUGINHOST_VST3=1
+    IMGUI_IMPL_JUCE_BEZEL=0
+    IMGUI_DEFINE_MATH_OPERATORS
+    IMNODES_NAMESPACE=ImNodes
+    IMNODES_STATIC_DEFINE
+    PRESET_CREATOR_UI=1
+    $<$<BOOL:${USE_RUBBERBAND}>:USE_RUBBERBAND=1>
+    $<$<NOT:$<BOOL:${USE_RUBBERBAND}>>:USE_RUBBERBAND=0>
+    $<$<BOOL:${CUDA_SUPPORT_ENABLED}>:WITH_CUDA_SUPPORT=1>
+)
+
+target_link_libraries(PresetCreatorApp PRIVATE
+    juce::juce_gui_extra
+    juce::juce_opengl
+    juce::juce_audio_devices
+    juce::juce_audio_processors
+    juce::juce_audio_utils
+    juce::juce_audio_formats
+    juce::juce_dsp
+    imgui_impl_juce
+    soundtouch
+    box2d
+    glm::glm
+    tinygltf
+    ufbx_static
+    opencv_world
+    $<$<BOOL:${USE_RUBBERBAND}>:${RUBBERBAND_TARGET}>
+    $<$<BOOL:${FFMPEG_FOUND}>:${AVFORMAT_LIBRARY}>
+    $<$<BOOL:${FFMPEG_FOUND}>:${AVCODEC_LIBRARY}>
+    $<$<BOOL:${FFMPEG_FOUND}>:${AVUTIL_LIBRARY}>
+    $<$<BOOL:${FFMPEG_FOUND}>:${SWRESAMPLE_LIBRARY}>
+    # Piper TTS libraries (pre-built)
+    ${ONNXRUNTIME_DIR}/lib/onnxruntime.lib
+)
+
+# Link CUDA runtime for OpenCV CUDA symbols
+# Use CUDAToolkit::cudart if available, otherwise link directly
+if(TARGET CUDAToolkit::cudart)
+    target_link_libraries(PresetCreatorApp PRIVATE CUDAToolkit::cudart)
+elseif(CUDA_CUDART_LIBRARY)
+    target_link_libraries(PresetCreatorApp PRIVATE ${CUDA_CUDART_LIBRARY})
+endif()
+
+# Link Windows libraries for native camera enumeration (DirectShow)
+if(WIN32)
+    target_link_libraries(PresetCreatorApp PRIVATE ole32 strmiids)
+endif()
+
+if(WIN32)
+    # Copy Piper executable and DLLs to output directories
+    add_custom_command(
+        TARGET ColliderApp POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                "${PIPER_DIR}/piper.exe"
+                "$<TARGET_FILE_DIR:ColliderApp>"
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                "${PIPER_DIR}/piper_phonemize.dll"
+                "$<TARGET_FILE_DIR:ColliderApp>"
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                "${PIPER_DIR}/espeak-ng.dll"
+                "$<TARGET_FILE_DIR:ColliderApp>"
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                "${ONNXRUNTIME_DIR}/lib/onnxruntime.dll"
+                "$<TARGET_FILE_DIR:ColliderApp>"
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                "${ONNXRUNTIME_DIR}/lib/onnxruntime_providers_shared.dll"
+                "$<TARGET_FILE_DIR:ColliderApp>"
+        # Copy OpenCV FFmpeg video backend DLL (relative to build tree)
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                "${CMAKE_BINARY_DIR}/bin/$<CONFIG>/opencv_videoio_ffmpeg4130_64.dll"
+                "$<TARGET_FILE_DIR:ColliderApp>"
+    )
+    
+    # Copy FFmpeg DLLs separately (if FFmpeg is found)
+    # We need to copy each DLL individually to avoid generator expression issues
+    if(FFMPEG_FOUND AND EXISTS "${FFMPEG_BIN_DIR}")
+        file(GLOB FFMPEG_DLLS "${FFMPEG_BIN_DIR}/*.dll")
+        if(FFMPEG_DLLS)
+            foreach(DLL ${FFMPEG_DLLS})
+                get_filename_component(DLL_NAME ${DLL} NAME)
+                add_custom_command(
+                    TARGET ColliderApp POST_BUILD
+                    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                            "${DLL}"
+                            "$<TARGET_FILE_DIR:ColliderApp>"
+                    COMMENT "Copying ${DLL_NAME} to ColliderApp"
+                )
+                add_custom_command(
+                    TARGET PresetCreatorApp POST_BUILD
+                    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                            "${DLL}"
+                            "$<TARGET_FILE_DIR:PresetCreatorApp>"
+                    COMMENT "Copying ${DLL_NAME} to PresetCreatorApp"
+                )
+            endforeach()
+        endif()
+    endif()
+    
+    # Continue with other files for ColliderApp
+    add_custom_command(
+        TARGET ColliderApp POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_directory
+                "${PIPER_DIR}/espeak-ng-data"
+                "$<TARGET_FILE_DIR:ColliderApp>/espeak-ng-data"
+        COMMENT "Copying espeak-ng-data to ColliderApp output directory"
+    )
+    add_custom_command(
+        TARGET ColliderApp POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                "${opencv_SOURCE_DIR}/data/haarcascades/haarcascade_frontalface_default.xml"
+                "$<TARGET_FILE_DIR:ColliderApp>"
+        COMMENT "Copying OpenCV data to ColliderApp output directory"
+    )
+    add_custom_command(
+        TARGET PresetCreatorApp POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                "${PIPER_DIR}/piper.exe"
+                "$<TARGET_FILE_DIR:PresetCreatorApp>"
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                "${PIPER_DIR}/piper_phonemize.dll"
+                "$<TARGET_FILE_DIR:PresetCreatorApp>"
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                "${PIPER_DIR}/espeak-ng.dll"
+                "$<TARGET_FILE_DIR:PresetCreatorApp>"
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                "${ONNXRUNTIME_DIR}/lib/onnxruntime.dll"
+                "$<TARGET_FILE_DIR:PresetCreatorApp>"
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                "${ONNXRUNTIME_DIR}/lib/onnxruntime_providers_shared.dll"
+                "$<TARGET_FILE_DIR:PresetCreatorApp>"
+        # Copy OpenCV FFmpeg video backend DLL (relative to build tree)
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                "${CMAKE_BINARY_DIR}/bin/$<CONFIG>/opencv_videoio_ffmpeg4130_64.dll"
+                "$<TARGET_FILE_DIR:PresetCreatorApp>"
+        COMMAND ${CMAKE_COMMAND} -E copy_directory
+                "${PIPER_DIR}/espeak-ng-data"
+                "$<TARGET_FILE_DIR:PresetCreatorApp>/espeak-ng-data"
+        # NEW (Corrected): Copy the entire assets folder
+        COMMAND ${CMAKE_COMMAND} -E copy_directory
+                "${CMAKE_SOURCE_DIR}/assets"
+                "$<TARGET_FILE_DIR:PresetCreatorApp>/assets"
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                "${opencv_SOURCE_DIR}/data/haarcascades/haarcascade_frontalface_default.xml"
+                "$<TARGET_FILE_DIR:PresetCreatorApp>"
+        COMMENT "Copying Piper TTS, OpenPose, FFmpeg, and other runtime assets to PresetCreatorApp output directory"
+    )
+endif()
+

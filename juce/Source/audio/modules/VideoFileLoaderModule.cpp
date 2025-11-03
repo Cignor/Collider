@@ -577,7 +577,7 @@ void VideoFileLoaderModule::processBlock(juce::AudioBuffer<float>& buffer, juce:
     timePitch.setTimeStretchRatio(ratioForEngine);
     
     // 2. Determine how many source frames we need to pull from the FIFO
-    const int framesToReadFromFifo = (int)std::ceil((double)numSamples / speed);
+    const int framesToReadFromFifo = (int)std::ceil((double)numSamples * speed);
     
     if (abstractFifo.getNumReady() >= framesToReadFromFifo)
     {
