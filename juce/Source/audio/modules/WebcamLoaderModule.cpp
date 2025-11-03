@@ -1,6 +1,7 @@
 #include "WebcamLoaderModule.h"
 #include "../../video/VideoFrameManager.h"
 #include "../../video/CameraEnumerator.h"
+#include "../graph/ModularSynthProcessor.h"
 #include <opencv2/imgproc.hpp>
 
 #if defined(PRESET_CREATOR_UI)
@@ -51,6 +52,21 @@ void WebcamLoaderModule::run()
 {
     int currentCameraIndex = -1;
     
+    // Resolve our logical ID once at the start
+    juce::uint32 myLogicalId = storedLogicalId;
+    if (myLogicalId == 0 && parentSynth != nullptr)
+    {
+        for (const auto& info : parentSynth->getModulesInfo())
+        {
+            if (parentSynth->getModuleForLogical(info.first) == this)
+            {
+                myLogicalId = info.first;
+                storedLogicalId = myLogicalId; // Cache it
+                break;
+            }
+        }
+    }
+    
     while (!threadShouldExit())
     {
         int requestedIndex = (int)cameraIndexParam->load();
@@ -62,6 +78,10 @@ void WebcamLoaderModule::run()
             {
                 videoCapture.release();
             }
+            
+            // Check exit before blocking open() call
+            if (threadShouldExit())
+                break;
             
             if (videoCapture.open(requestedIndex))
             {
@@ -75,11 +95,15 @@ void WebcamLoaderModule::run()
             }
         }
         
+        // Check exit before blocking read() call
+        if (threadShouldExit())
+            break;
+        
         cv::Mat frame;
         if (videoCapture.read(frame))
         {
             // Publish frame to central manager using this module's logical ID
-            VideoFrameManager::getInstance().setFrame(getLogicalId(), frame);
+            VideoFrameManager::getInstance().setFrame(myLogicalId, frame);
             
             // Update local preview for UI
             updateGuiFrame(frame);
@@ -95,7 +119,8 @@ void WebcamLoaderModule::run()
     }
     
     videoCapture.release();
-    VideoFrameManager::getInstance().removeSource(getLogicalId());
+    if (myLogicalId != 0)
+        VideoFrameManager::getInstance().removeSource(myLogicalId);
 }
 
 void WebcamLoaderModule::updateGuiFrame(const cv::Mat& frame)
@@ -126,10 +151,26 @@ void WebcamLoaderModule::processBlock(juce::AudioBuffer<float>& buffer, juce::Mi
 {
     buffer.clear();
     
+    // --- BEGIN FIX: Find our own ID if it's not set ---
+    juce::uint32 myLogicalId = storedLogicalId;
+    if (myLogicalId == 0 && parentSynth != nullptr)
+    {
+        for (const auto& info : parentSynth->getModulesInfo())
+        {
+            if (parentSynth->getModuleForLogical(info.first) == this)
+            {
+                myLogicalId = info.first;
+                storedLogicalId = myLogicalId; // Cache it
+                break;
+            }
+        }
+    }
+    // --- END FIX ---
+    
     // Output this module's logical ID on the "Source ID" pin
     if (buffer.getNumChannels() > 0)
     {
-        float sourceId = (float)getLogicalId();
+        float sourceId = (float)myLogicalId; // Use the resolved ID
         for (int sample = 0; sample < buffer.getNumSamples(); ++sample)
         {
             buffer.setSample(0, sample, sourceId);

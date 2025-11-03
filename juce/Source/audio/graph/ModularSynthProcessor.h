@@ -7,6 +7,9 @@
 #include "../modules/ModuleProcessor.h"
 #include "../modules/InputDebugModuleProcessor.h"
 
+// Forward declaration
+class ScopeModuleProcessor;
+
 class ModularSynthProcessor : public juce::AudioProcessor
 {
 public:
@@ -175,7 +178,7 @@ public:
     // Probe system for instant signal debugging without manual patching
     void setProbeConnection(const NodeID& sourceNodeID, int sourceChannel);
     void clearProbeConnection();
-    ModuleProcessor* getProbeScopeProcessor() const;
+    ScopeModuleProcessor* getProbeScopeProcessor() const;
 
 private:
     // The internal graph that represents the modular patch

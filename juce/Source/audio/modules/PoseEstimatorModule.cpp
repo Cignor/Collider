@@ -209,6 +209,21 @@ void PoseEstimatorModule::run()
 {
     juce::Logger::writeToLog("[PoseEstimator] Processing thread started");
     
+    // Resolve our logical ID once at the start
+    juce::uint32 myLogicalId = storedLogicalId;
+    if (myLogicalId == 0 && parentSynth != nullptr)
+    {
+        for (const auto& info : parentSynth->getModulesInfo())
+        {
+            if (parentSynth->getModuleForLogical(info.first) == this)
+            {
+                myLogicalId = info.first;
+                storedLogicalId = myLogicalId; // Cache it
+                break;
+            }
+        }
+    }
+    
     #if WITH_CUDA_SUPPORT
         bool lastGpuState = false; // Track GPU state to minimize backend switches
         bool loggedGpuWarning = false; // Only warn once if no GPU available
@@ -353,7 +368,8 @@ void PoseEstimatorModule::run()
             }
             
             // --- PASSTHROUGH LOGIC ---
-            VideoFrameManager::getInstance().setFrame(getLogicalId(), frame);
+            if (myLogicalId != 0)
+                VideoFrameManager::getInstance().setFrame(myLogicalId, frame);
             // 6. Update the GUI preview frame
             updateGuiFrame(frame);
         }
@@ -472,6 +488,22 @@ void PoseEstimatorModule::processBlock(juce::AudioBuffer<float>& buffer, juce::M
     // Clear the buffer for output
     buffer.clear();
     
+    // --- BEGIN FIX: Find our own ID if it's not set ---
+    juce::uint32 myLogicalId = storedLogicalId;
+    if (myLogicalId == 0 && parentSynth != nullptr)
+    {
+        for (const auto& info : parentSynth->getModulesInfo())
+        {
+            if (parentSynth->getModuleForLogical(info.first) == this)
+            {
+                myLogicalId = info.first;
+                storedLogicalId = myLogicalId; // Cache it
+                break;
+            }
+        }
+    }
+    // --- END FIX ---
+    
     // Check if there's new pose data from the processing thread (UPDATED FIFO API)
     if (fifo.getNumReady() > 0)
     {
@@ -515,7 +547,7 @@ void PoseEstimatorModule::processBlock(juce::AudioBuffer<float>& buffer, juce::M
     auto videoOutBus = getBusBuffer(buffer, false, 1);
     if (videoOutBus.getNumChannels() > 0)
     {
-        float primaryId = static_cast<float>(getLogicalId());
+        float primaryId = static_cast<float>(myLogicalId); // Use the resolved ID
         for (int s = 0; s < videoOutBus.getNumSamples(); ++s)
             videoOutBus.setSample(0, s, primaryId);
     }

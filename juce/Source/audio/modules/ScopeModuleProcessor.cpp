@@ -200,6 +200,30 @@ void ScopeModuleProcessor::drawParametersInNode (float itemWidth, const std::fun
     float dBMax = rollMax > 0.0001f ? 20.0f * std::log10(rollMax) : -100.0f;
     ImGui::Text("Max dBFS: %.1f", dBMax);
 }
+
+void ScopeModuleProcessor::getStatistics(float& outMin, float& outMax) const
+{
+    // Compute statistics on-demand from history (thread-safe for read, history written in audio thread)
+    if (histCount > 0)
+    {
+        float hmin = std::numeric_limits<float>::infinity();
+        float hmax = -std::numeric_limits<float>::infinity();
+        for (int i = 0; i < histCount; ++i)
+        {
+            const float v = history[i];
+            hmin = std::min(hmin, v);
+            hmax = std::max(hmax, v);
+        }
+        outMin = hmin;
+        outMax = hmax;
+    }
+    else
+    {
+        outMin = 0.0f;
+        outMax = 0.0f;
+    }
+}
+
 #endif
 
 

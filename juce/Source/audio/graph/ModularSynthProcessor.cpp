@@ -330,6 +330,7 @@ void ModularSynthProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce:
         }
         
         internalGraph->processBlock(buffer, midiMessages);
+        
         static int silentCtr = 0;
         if (buffer.getMagnitude(0, buffer.getNumSamples()) < 1.0e-6f)
         {
@@ -1524,6 +1525,7 @@ void ModularSynthProcessor::setProbeConnection(const NodeID& sourceNodeID, int s
     
     juce::Logger::writeToLog("[PROBE] setProbeConnection called. Source NodeID: " + juce::String(sourceNodeID.uid) + ", Channel: " + juce::String(sourceChannel));
     
+    // Clear old connections to probe scope
     auto connections = internalGraph->getConnections();
     for (const auto& conn : connections)
     {
@@ -1534,6 +1536,7 @@ void ModularSynthProcessor::setProbeConnection(const NodeID& sourceNodeID, int s
         }
     }
     
+    // Connect source to probe scope
     bool success = connect(sourceNodeID, sourceChannel, probeScopeNodeId, 0);
     juce::Logger::writeToLog("[PROBE] New connection attempt " + juce::String(success ? "succeeded." : "FAILED."));
     if (success)
@@ -1574,10 +1577,10 @@ void ModularSynthProcessor::clearProbeConnection()
     }
 }
 
-ModuleProcessor* ModularSynthProcessor::getProbeScopeProcessor() const
+ScopeModuleProcessor* ModularSynthProcessor::getProbeScopeProcessor() const
 {
     if (!probeScopeNode)
         return nullptr;
     
-    return dynamic_cast<ModuleProcessor*>(probeScopeNode->getProcessor());
+    return dynamic_cast<ScopeModuleProcessor*>(probeScopeNode->getProcessor());
 }

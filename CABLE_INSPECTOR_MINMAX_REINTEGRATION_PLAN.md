@@ -49,7 +49,15 @@ This plan describes how to reintegrate the feature that displays the minimum and
 ```cpp
 const double currentTimeSec = juce::Time::getMillisecondCounterHiRes() / 1000.0;
 auto historyKey = std::make_pair(srcPin.logicalId, srcPin.channel);
-inspectorHistory[historyKey].samples.push_back({currentTimeSec, liveValue});
+
+// Get the history entry
+auto& history = inspectorHistory[historyKey];
+
+// Update access time (for Phase 5 stale cleanup)
+history.lastAccessTime = currentTimeSec;
+
+// Add new sample
+history.samples.push_back({currentTimeSec, liveValue});
 ```
 
 ### Phase 2: Clean Old Samples
@@ -84,17 +92,20 @@ while (!samples.empty() && samples.front().first < cutoffTime)
 **Code Pattern**:
 ```cpp
 float minVal = liveValue, maxVal = liveValue;
-if (!inspectorHistory[historyKey].samples.empty())
+auto& samples = inspectorHistory[historyKey].samples;
+if (!samples.empty())
 {
     minVal = std::numeric_limits<float>::max();
     maxVal = std::numeric_limits<float>::lowest();
-    for (const auto& [time, value] : inspectorHistory[historyKey].samples)
+    for (const auto& [time, value] : samples)
     {
         minVal = std::min(minVal, value);
         maxVal = std::max(maxVal, value);
     }
 }
 ```
+
+**Note on Algorithm Choice**: The simple O(n) iteration is the correct choice here. While O(1) "running update" sounds faster, it's complex and would require full recalculation when the min/max sample is removed via `pop_front()`. Given that `n` is small (~300 samples for 5 seconds at 60Hz), iterating 300 floats is negligible and much more robust.
 
 ### Phase 4: Update Tooltip Display
 
@@ -116,18 +127,56 @@ if (srcLabel.isNotEmpty())
 ImGui::EndTooltip();
 ```
 
-### Phase 5: Periodic Cleanup (Optional Optimization)
+### Phase 5: Periodic Stale History Cleanup (Optimization)
 
-**Location**: Add a cleanup function called periodically or when window changes
+**Location**: At the end of `renderImGui()`, after all cable inspector logic
 
-**Purpose**: Prevent unbounded growth if many cables are hovered over time
+**Purpose**: Clean up history entries for modules that were deleted or cables that haven't been hovered in a long time (prevents memory leak)
 
-**Implementation**:
-- Option A: Clean all history entries periodically (e.g., every 5 seconds)
-- Option B: Clean entries not accessed in last `inspectorWindowSeconds * 2`
-- Option C: Limit max samples per channel (e.g., 1000 samples max)
+**Implementation Steps**:
 
-**Recommendation**: Start with Option A - simple periodic cleanup in the render loop.
+1. **Modify `ChannelHistory` struct** (in `ImGuiNodeEditorComponent.h` line 297):
+   ```cpp
+   struct ChannelHistory 
+   { 
+       std::deque<std::pair<double, float>> samples; 
+       double lastAccessTime = 0.0; // Track when this history was last accessed
+   };
+   ```
+
+2. **Update Phase 1 Logic**: The `lastAccessTime` is already updated in Phase 1 (see code pattern above)
+
+3. **Implement Periodic Cleanup**:
+   ```cpp
+   // At the end of renderImGui(), after cable inspector code
+   static double lastCleanupTime = 0.0;
+   const double currentTimeSec = juce::Time::getMillisecondCounterHiRes() / 1000.0;
+   
+   if (currentTimeSec - lastCleanupTime > 10.0) // Run every 10 seconds
+   {
+       lastCleanupTime = currentTimeSec;
+       // Set cutoff for "stale" entries (2x the max window size = 40 seconds)
+       const double staleCutoffTime = currentTimeSec - (20.0 * 2.0);
+       
+       for (auto it = inspectorHistory.begin(); it != inspectorHistory.end(); /* no increment */)
+       {
+           if (it->second.lastAccessTime < staleCutoffTime)
+           {
+               it = inspectorHistory.erase(it); // Erase stale entry
+           }
+           else
+           {
+               ++it;
+           }
+       }
+   }
+   ```
+
+**Why This Approach**:
+- Only cleans up entries that haven't been accessed in 40+ seconds (stale)
+- Active entries are preserved regardless of window size
+- No complex module-deletion tracking needed
+- Runs infrequently (every 10 seconds) to minimize overhead
 
 ---
 
@@ -164,16 +213,21 @@ ImGui::EndTooltip();
 
 ## Testing Checklist
 
+### Core Functionality (Phases 1-4)
 - [ ] Hover cable → see live value + min/max
 - [ ] Change window slider → min/max updates after window period
 - [ ] Hover different cables → independent histories
 - [ ] Hover same cable multiple times → history accumulates correctly
-- [ ] Let cable sit idle → old samples cleaned up
+- [ ] Let cable sit idle → old samples cleaned up (within window)
 - [ ] Rapid value changes → min/max tracks correctly
 - [ ] Negative values → min/max correct
 - [ ] Very large values → min/max correct
-- [ ] Delete module → history cleaned up (if Phase 5 implemented)
 - [ ] Performance: No frame drops with multiple cables hovered
+
+### Memory Leak Prevention (Phase 5)
+- [ ] **(Memory Leak Test)** Hover a cable, wait 5 seconds, then stop hovering. Wait for the stale cleanup period (~40-60 seconds) and confirm (via debugging) that the entry for that cable has been purged from the `inspectorHistory` map.
+- [ ] Delete module → history entry eventually cleaned up by periodic cleanup
+- [ ] Switch between many cables → old entries cleaned up after staleness period
 
 ---
 
@@ -200,11 +254,20 @@ If issues arise, the feature can be disabled by:
 
 ## Implementation Order
 
-1. **Phase 1** (History Tracking) - Core functionality
-2. **Phase 4** (Display) - Immediate user feedback  
-3. **Phase 2** (Cleanup) - Prevent memory issues
-4. **Phase 3** (Min/Max) - Complete feature
-5. **Phase 5** (Periodic Cleanup) - Polish/optimization
+### Recommended Order (Depth-First, Complete Feature First)
+
+1. **Phase 1** (History Tracking) - Add sample to deque
+2. **Phase 2** (Cleanup) - Remove old samples from current deque
+3. **Phase 3** (Min/Max Calculation) - Calculate from current deque
+4. **Phase 4** (Display) - Show live value + min/max in tooltip
+
+This completes the entire user-facing feature in one go. You can test and validate it immediately.
+
+5. **Phase 5** (Stale History Cleanup) - Periodic map-wide cleanup to prevent memory leaks
+
+### Rationale
+
+The depth-first approach completes the feature for a single cable first (Phases 1-4), allowing immediate testing and validation. Phase 5 can then be added as an optimization.
 
 ---
 
@@ -214,10 +277,14 @@ If issues arise, the feature can be disabled by:
 2. **Timestamp Precision**: Using `getMillisecondCounterHiRes()` provides microsecond precision (sufficient)
 3. **Deque Choice**: `std::deque` allows efficient push_back and pop_front (FIFO semantics)
 4. **Map Key**: `(logicalId, channel)` uniquely identifies a signal source
-5. **Alternative Approaches**:
-   - Circular buffer with fixed size (more predictable memory)
-   - Separate min/max tracking with running updates (O(1) instead of O(n))
-   - Sample throttling to reduce history size
+5. **Min/Max Algorithm**: O(n) iteration is chosen over O(1) running updates because:
+   - Running updates require full recalculation when min/max sample is removed
+   - `n` is small (~300 samples) making iteration negligible
+   - Simpler code is more robust and easier to debug
+6. **Alternative Approaches Considered**:
+   - Circular buffer with fixed size (more predictable memory) - rejected: less flexible
+   - Sample throttling to reduce history size - rejected: reduces responsiveness
+   - `lastAccessTime` tracking (chosen) - solves memory leak elegantly
 
 ---
 
@@ -231,5 +298,21 @@ If issues arise, the feature can be disabled by:
 
 ---
 
-**Status**: Ready for Expert Review and Validation
+**Status**: ✅ Expert Validated and Refined
+
+### Expert Review Notes
+
+**Validation**: Plan is sound, performant, and correct.
+
+**Key Refinements Applied**:
+1. ✅ Implementation order changed to depth-first (complete feature first: Phases 1-4, then Phase 5 optimization)
+2. ✅ O(n) min/max algorithm confirmed as correct choice (over complex O(1) running updates)
+3. ✅ Phase 5 enhanced with `lastAccessTime` tracking for targeted stale entry cleanup
+4. ✅ Added memory leak test case to testing checklist
+
+**Expert Reviewer Recommendations** (All Incorporated):
+- **Depth-First Implementation**: Phases 1-4 complete the full user-facing feature, allowing immediate testing. Phase 5 is added as an optimization.
+- **Algorithm Confirmation**: Stick with simple O(n) iteration for min/max - it's robust and fast enough for ~300 samples. O(1) running updates would require full recalculation anyway when the min/max sample is removed.
+- **Enhanced Phase 5**: `lastAccessTime` field added to `ChannelHistory` struct, updated on each access, used for targeted cleanup of stale entries (not accessed in 40+ seconds).
+- **Additional Test Case**: Memory leak test added to verify stale entries are purged correctly.
 

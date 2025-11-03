@@ -45,6 +45,9 @@ public:
 #endif
 
     const juce::AudioBuffer<float>& getScopeBuffer() const { return scopeBuffer; }
+    
+    // Get rolling min/max statistics (computes on-demand)
+    void getStatistics(float& outMin, float& outMax) const;
 
 private:
     static juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout();

@@ -1,5 +1,6 @@
 #include "ObjectDetectorModule.h"
 #include "../../video/VideoFrameManager.h"
+#include "../graph/ModularSynthProcessor.h"
 #include <opencv2/imgproc.hpp>
 #include <opencv2/dnn.hpp>
 #include <fstream>
@@ -174,6 +175,21 @@ void ObjectDetectorModule::loadModel()
 
 void ObjectDetectorModule::run()
 {
+    // Resolve our logical ID once at the start
+    juce::uint32 myLogicalId = storedLogicalId;
+    if (myLogicalId == 0 && parentSynth != nullptr)
+    {
+        for (const auto& info : parentSynth->getModulesInfo())
+        {
+            if (parentSynth->getModuleForLogical(info.first) == this)
+            {
+                myLogicalId = info.first;
+                storedLogicalId = myLogicalId; // Cache it
+                break;
+            }
+        }
+    }
+    
     #if WITH_CUDA_SUPPORT
         bool lastGpuState = false; // Track GPU state to minimize backend switches
         bool loggedGpuWarning = false; // Only warn once if no GPU available
@@ -337,7 +353,8 @@ void ObjectDetectorModule::run()
             
             // --- PASSTHROUGH LOGIC ---
             // Publish the annotated frame under our primary ID and update local GUI
-            VideoFrameManager::getInstance().setFrame(getLogicalId(), frame);
+            if (myLogicalId != 0)
+                VideoFrameManager::getInstance().setFrame(myLogicalId, frame);
             updateGuiFrame(frame);
         }
         
@@ -402,6 +419,22 @@ void ObjectDetectorModule::processBlock(juce::AudioBuffer<float>& buffer, juce::
     
     buffer.clear();
     
+    // --- BEGIN FIX: Find our own ID if it's not set ---
+    juce::uint32 myLogicalId = storedLogicalId;
+    if (myLogicalId == 0 && parentSynth != nullptr)
+    {
+        for (const auto& info : parentSynth->getModulesInfo())
+        {
+            if (parentSynth->getModuleForLogical(info.first) == this)
+            {
+                myLogicalId = info.first;
+                storedLogicalId = myLogicalId; // Cache it
+                break;
+            }
+        }
+    }
+    // --- END FIX ---
+    
     if (fifo.getNumReady() > 0)
     {
         auto readScope = fifo.read(1);
@@ -430,7 +463,7 @@ void ObjectDetectorModule::processBlock(juce::AudioBuffer<float>& buffer, juce::
     auto videoOutBus = getBusBuffer(buffer, false, 1);
     if (videoOutBus.getNumChannels() > 0)
     {
-        float primaryId = static_cast<float>(getLogicalId());
+        float primaryId = static_cast<float>(myLogicalId); // Use the resolved ID
         for (int s = 0; s < videoOutBus.getNumSamples(); ++s)
             videoOutBus.setSample(0, s, primaryId);
     }

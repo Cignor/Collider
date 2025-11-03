@@ -1,5 +1,6 @@
 #include "HumanDetectorModule.h"
 #include "../../video/VideoFrameManager.h"
+#include "../graph/ModularSynthProcessor.h"
 #include <opencv2/imgproc.hpp>
 #include <opencv2/objdetect.hpp>
 
@@ -124,6 +125,21 @@ void HumanDetectorModule::releaseResources()
 
 void HumanDetectorModule::run()
 {
+    // Resolve our logical ID once at the start
+    juce::uint32 myLogicalId = storedLogicalId;
+    if (myLogicalId == 0 && parentSynth != nullptr)
+    {
+        for (const auto& info : parentSynth->getModulesInfo())
+        {
+            if (parentSynth->getModuleForLogical(info.first) == this)
+            {
+                myLogicalId = info.first;
+                storedLogicalId = myLogicalId; // Cache it
+                break;
+            }
+        }
+    }
+    
     // Analysis loop runs on background thread
     while (!threadShouldExit())
     {
@@ -142,7 +158,7 @@ void HumanDetectorModule::run()
         if (!frame.empty())
         {
             // Perform analysis
-            DetectionResult result = analyzeFrame(frame);
+            DetectionResult result = analyzeFrame(frame, myLogicalId);
             
             // Push result to FIFO for audio thread
             if (fifo.getFreeSpace() >= 1)
@@ -159,7 +175,7 @@ void HumanDetectorModule::run()
     }
 }
 
-DetectionResult HumanDetectorModule::analyzeFrame(const cv::Mat& inputFrame)
+DetectionResult HumanDetectorModule::analyzeFrame(const cv::Mat& inputFrame, juce::uint32 logicalId)
 {
     DetectionResult result;
     cv::Mat gray, displayFrame;
@@ -358,7 +374,8 @@ DetectionResult HumanDetectorModule::analyzeFrame(const cv::Mat& inputFrame)
     }
 
     // --- PASSTHROUGH LOGIC ---
-    VideoFrameManager::getInstance().setFrame(getLogicalId(), displayFrame);
+    if (logicalId != 0)
+        VideoFrameManager::getInstance().setFrame(logicalId, displayFrame);
     updateGuiFrame(displayFrame);
     return result;
 }
@@ -417,6 +434,22 @@ void HumanDetectorModule::processBlock(juce::AudioBuffer<float>& buffer, juce::M
         currentSourceId.store((juce::uint32)sourceIdFloat);
     }
     
+    // --- BEGIN FIX: Find our own ID if it's not set ---
+    juce::uint32 myLogicalId = storedLogicalId;
+    if (myLogicalId == 0 && parentSynth != nullptr)
+    {
+        for (const auto& info : parentSynth->getModulesInfo())
+        {
+            if (parentSynth->getModuleForLogical(info.first) == this)
+            {
+                myLogicalId = info.first;
+                storedLogicalId = myLogicalId; // Cache it
+                break;
+            }
+        }
+    }
+    // --- END FIX ---
+    
     // Get latest result from analysis thread via FIFO
     if (fifo.getNumReady() > 0)
     {
@@ -460,7 +493,7 @@ void HumanDetectorModule::processBlock(juce::AudioBuffer<float>& buffer, juce::M
     auto videoOutBus = getBusBuffer(buffer, false, 1);
     if (videoOutBus.getNumChannels() > 0)
     {
-        float primaryId = static_cast<float>(getLogicalId());
+        float primaryId = static_cast<float>(myLogicalId); // Use the resolved ID
         for (int s = 0; s < videoOutBus.getNumSamples(); ++s)
             videoOutBus.setSample(0, s, primaryId);
     }

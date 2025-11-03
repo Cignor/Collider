@@ -64,7 +64,7 @@ public:
 private:
     void run() override;
     void updateGuiFrame(const cv::Mat& frame);
-    DetectionResult analyzeFrame(const cv::Mat& inputFrame);
+    DetectionResult analyzeFrame(const cv::Mat& inputFrame, juce::uint32 logicalId);
     
     static juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout();
 

@@ -1,5 +1,6 @@
 #include "CropVideoModule.h"
 #include "../../video/VideoFrameManager.h"
+#include "../graph/ModularSynthProcessor.h"
 #include <opencv2/imgproc.hpp>
 #include <opencv2/dnn.hpp>
 #include <fstream>
@@ -228,6 +229,21 @@ bool CropVideoModule::getParamRouting(const juce::String& paramId, int& outBusIn
 
 void CropVideoModule::run()
 {
+    // Resolve our logical ID once at the start
+    juce::uint32 myLogicalId = storedLogicalId;
+    if (myLogicalId == 0 && parentSynth != nullptr)
+    {
+        for (const auto& info : parentSynth->getModulesInfo())
+        {
+            if (parentSynth->getModuleForLogical(info.first) == this)
+            {
+                myLogicalId = info.first;
+                storedLogicalId = myLogicalId; // Cache it
+                break;
+            }
+        }
+    }
+    
     #if WITH_CUDA_SUPPORT
         bool lastGpuStateForYolo = useGpuParam->get(); // Initialize with current state
         bool loggedGpuWarning = false; // Only warn once if no GPU available
@@ -427,14 +443,16 @@ void CropVideoModule::run()
         if (roi.area() > 0)
         {
             cv::Mat croppedFrame = frame(roi);
-            VideoFrameManager::getInstance().setFrame(getLogicalId(), croppedFrame);
+            if (myLogicalId != 0)
+                VideoFrameManager::getInstance().setFrame(myLogicalId, croppedFrame);
             // This now updates the *output* frame preview (which we don't display in this node)
             updateGuiFrame(croppedFrame);
         }
         else
         {
             // If crop is invalid, publish an empty frame
-            VideoFrameManager::getInstance().setFrame(getLogicalId(), cv::Mat());
+            if (myLogicalId != 0)
+                VideoFrameManager::getInstance().setFrame(myLogicalId, cv::Mat());
             updateGuiFrame(cv::Mat());
         }
 
@@ -460,11 +478,28 @@ void CropVideoModule::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiB
     // because we implemented getParamRouting(). The values in cropXParam etc.
     // are already the final, modulated values.
     buffer.clear();
+    
+    // --- BEGIN FIX: Find our own ID if it's not set ---
+    juce::uint32 myLogicalId = storedLogicalId;
+    if (myLogicalId == 0 && parentSynth != nullptr)
+    {
+        for (const auto& info : parentSynth->getModulesInfo())
+        {
+            if (parentSynth->getModuleForLogical(info.first) == this)
+            {
+                myLogicalId = info.first;
+                storedLogicalId = myLogicalId; // Cache it
+                break;
+            }
+        }
+    }
+    // --- END FIX ---
+    
     // Output our own Logical ID for chaining
     auto outputBus = getBusBuffer(buffer, false, 0);
     if (outputBus.getNumChannels() > 0)
     {
-        float logicalId = static_cast<float>(getLogicalId());
+        float logicalId = static_cast<float>(myLogicalId); // Use the resolved ID
         for (int s = 0; s < outputBus.getNumSamples(); ++s)
             outputBus.setSample(0, s, logicalId);
     }

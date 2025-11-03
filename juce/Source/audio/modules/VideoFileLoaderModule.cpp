@@ -1,5 +1,6 @@
 #include "VideoFileLoaderModule.h"
 #include "../../video/VideoFrameManager.h"
+#include "../graph/ModularSynthProcessor.h"
 #include <opencv2/imgproc.hpp>
 
 #if defined(PRESET_CREATOR_UI)
@@ -96,6 +97,21 @@ void VideoFileLoaderModule::chooseVideoFile()
 
 void VideoFileLoaderModule::run()
 {
+    // Resolve our logical ID once at the start
+    juce::uint32 myLogicalId = storedLogicalId;
+    if (myLogicalId == 0 && parentSynth != nullptr)
+    {
+        for (const auto& info : parentSynth->getModulesInfo())
+        {
+            if (parentSynth->getModuleForLogical(info.first) == this)
+            {
+                myLogicalId = info.first;
+                storedLogicalId = myLogicalId; // Cache it
+                break;
+            }
+        }
+    }
+    
     // One-time OpenCV build summary: detect if FFMPEG is integrated
     {
         static std::atomic<bool> buildInfoLogged { false };
@@ -315,7 +331,8 @@ void VideoFileLoaderModule::run()
                 {
                     if (!preview.empty())
                     {
-                        VideoFrameManager::getInstance().setFrame(getLogicalId(), preview);
+                        if (myLogicalId != 0)
+                            VideoFrameManager::getInstance().setFrame(myLogicalId, preview);
                         updateGuiFrame(preview);
                         juce::Logger::writeToLog("[VideoFileLoader][Preview] Published paused preview frame");
                         lastPosFrame.store((int) videoCapture.get(cv::CAP_PROP_POS_FRAMES));
@@ -453,7 +470,8 @@ void VideoFileLoaderModule::run()
                 // Read and display the single, correct frame for this point in time.
                 cv::Mat frame;
                 if (videoCapture.read(frame)) {
-                    VideoFrameManager::getInstance().setFrame(getLogicalId(), frame);
+                    if (myLogicalId != 0)
+                        VideoFrameManager::getInstance().setFrame(myLogicalId, frame);
                     updateGuiFrame(frame);
                     lastPosFrame.store((int)videoCapture.get(cv::CAP_PROP_POS_FRAMES));
                     if (lastFourcc.load() == 0)
@@ -538,10 +556,27 @@ void VideoFileLoaderModule::processBlock(juce::AudioBuffer<float>& buffer, juce:
     cvOutBus.clear();
     audioOutBus.clear();
     
+    // --- BEGIN FIX ---
+    // Find our own ID if it's not set
+    juce::uint32 myLogicalId = storedLogicalId;
+    if (myLogicalId == 0 && parentSynth != nullptr)
+    {
+        for (const auto& info : parentSynth->getModulesInfo())
+        {
+            if (parentSynth->getModuleForLogical(info.first) == this)
+            {
+                myLogicalId = info.first;
+                storedLogicalId = myLogicalId; // Cache it
+                break;
+            }
+        }
+    }
+    // --- END FIX ---
+    
     // Output Source ID on CV bus
     if (cvOutBus.getNumChannels() > 0)
     {
-        float sourceId = (float)getLogicalId();
+        float sourceId = (float)myLogicalId; // Use the correct ID
         cvOutBus.setSample(0, 0, sourceId);
         for (int ch = 0; ch < cvOutBus.getNumChannels(); ++ch)
             cvOutBus.copyFrom(ch, 1, cvOutBus, ch, 0, cvOutBus.getNumSamples() - 1);

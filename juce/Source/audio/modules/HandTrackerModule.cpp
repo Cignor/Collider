@@ -1,5 +1,6 @@
 #include "HandTrackerModule.h"
 #include "../../video/VideoFrameManager.h"
+#include "../graph/ModularSynthProcessor.h"
 #include <opencv2/imgproc.hpp>
 
 #if defined(PRESET_CREATOR_UI)
@@ -106,6 +107,21 @@ void HandTrackerModule::loadModel()
 
 void HandTrackerModule::run()
 {
+    // Resolve our logical ID once at the start
+    juce::uint32 myLogicalId = storedLogicalId;
+    if (myLogicalId == 0 && parentSynth != nullptr)
+    {
+        for (const auto& info : parentSynth->getModulesInfo())
+        {
+            if (parentSynth->getModuleForLogical(info.first) == this)
+            {
+                myLogicalId = info.first;
+                storedLogicalId = myLogicalId; // Cache it
+                break;
+            }
+        }
+    }
+    
     if (!modelLoaded) loadModel();
     
     #if WITH_CUDA_SUPPORT
@@ -222,7 +238,8 @@ void HandTrackerModule::run()
                 cv::circle(frame, { (int)result.keypoints[i][0], (int)result.keypoints[i][1] }, 3, {0,0,255}, -1);
         
         // --- PASSTHROUGH LOGIC ---
-        VideoFrameManager::getInstance().setFrame(getLogicalId(), frame);
+        if (myLogicalId != 0)
+            VideoFrameManager::getInstance().setFrame(myLogicalId, frame);
         updateGuiFrame(frame);
         wait(66);
     }
@@ -251,6 +268,22 @@ void HandTrackerModule::processBlock(juce::AudioBuffer<float>& buffer, juce::Mid
     auto in = getBusBuffer(buffer, true, 0);
     if (in.getNumChannels()>0 && in.getNumSamples()>0) currentSourceId.store((juce::uint32)in.getSample(0,0));
     
+    // --- BEGIN FIX: Find our own ID if it's not set ---
+    juce::uint32 myLogicalId = storedLogicalId;
+    if (myLogicalId == 0 && parentSynth != nullptr)
+    {
+        for (const auto& info : parentSynth->getModulesInfo())
+        {
+            if (parentSynth->getModuleForLogical(info.first) == this)
+            {
+                myLogicalId = info.first;
+                storedLogicalId = myLogicalId; // Cache it
+                break;
+            }
+        }
+    }
+    // --- END FIX ---
+    
     if (fifo.getNumReady()>0) { auto r=fifo.read(1); if (r.blockSize1>0) lastResultForAudio=fifoBuffer[r.startIndex1]; }
     
     // Output CV on bus 0
@@ -271,7 +304,7 @@ void HandTrackerModule::processBlock(juce::AudioBuffer<float>& buffer, juce::Mid
     auto videoOutBus = getBusBuffer(buffer, false, 1);
     if (videoOutBus.getNumChannels() > 0)
     {
-        float primaryId = static_cast<float>(getLogicalId());
+        float primaryId = static_cast<float>(myLogicalId); // Use the resolved ID
         for (int s = 0; s < videoOutBus.getNumSamples(); ++s)
             videoOutBus.setSample(0, s, primaryId);
     }

@@ -127,6 +127,8 @@ public:
     void insertNodeBetween(const juce::String& nodeType);
     void insertNodeBetween(const juce::String& nodeType, const PinID& srcPin, const PinID& dstPin);
     void drawInsertNodeOnLinkPopup();
+    struct LinkInfo;
+    void drawLinkInspectorTooltip(const LinkInfo& link);
 
     // New intelligent auto-connection system
     void parsePinName(const juce::String& fullName, juce::String& outType, int& outIndex);
@@ -294,7 +296,11 @@ public:
     std::unordered_map<int, ImVec2> pendingNodeSizes;
 
     // Cable inspector rolling stats (last N seconds) for quick visual validation
-    struct ChannelHistory { std::deque<std::pair<double,float>> samples; };
+    struct ChannelHistory 
+    { 
+        std::deque<std::pair<double, float>> samples; 
+        double lastAccessTime = 0.0; // Track when this history was last accessed
+    };
     std::map<std::pair<juce::uint32,int>, ChannelHistory> inspectorHistory; // key: (logicalId, channel)
     float inspectorWindowSeconds { 5.0f };
 
@@ -369,6 +375,12 @@ public:
         int srcChan;
         juce::uint32 dstLogicalId;
         juce::String paramId;
+        // For inspector/probe tooltip:
+        juce::uint32 srcNodeId = 0;
+        juce::String pinName;
+        juce::String sourceNodeName;
+        int srcChannel = -1;
+        juce::uint32 srcLogicalNodeId = 0;
     };
     LinkInfo linkToInsertOn;
     

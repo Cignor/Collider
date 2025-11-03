@@ -1,5 +1,6 @@
 #include "ContourDetectorModule.h"
 #include "../../video/VideoFrameManager.h"
+#include "../graph/ModularSynthProcessor.h"
 #include <opencv2/imgproc.hpp>
 
 #if defined(PRESET_CREATOR_UI)
@@ -61,6 +62,21 @@ void ContourDetectorModule::releaseResources()
 
 void ContourDetectorModule::run()
 {
+    // Resolve our logical ID once at the start
+    juce::uint32 myLogicalId = storedLogicalId;
+    if (myLogicalId == 0 && parentSynth != nullptr)
+    {
+        for (const auto& info : parentSynth->getModulesInfo())
+        {
+            if (parentSynth->getModuleForLogical(info.first) == this)
+            {
+                myLogicalId = info.first;
+                storedLogicalId = myLogicalId; // Cache it
+                break;
+            }
+        }
+    }
+    
     while (!threadShouldExit())
     {
         juce::uint32 sourceId = currentSourceId.load();
@@ -123,7 +139,8 @@ void ContourDetectorModule::run()
             }
 
             // --- PASSTHROUGH LOGIC ---
-            VideoFrameManager::getInstance().setFrame(getLogicalId(), frame);
+            if (myLogicalId != 0)
+                VideoFrameManager::getInstance().setFrame(myLogicalId, frame);
             updateGuiFrame(frame);
         }
         
@@ -171,6 +188,23 @@ void ContourDetectorModule::processBlock(juce::AudioBuffer<float>& buffer, juce:
         currentSourceId.store((juce::uint32)inputBuffer.getSample(0, 0));
 
     buffer.clear();
+    
+    // --- BEGIN FIX: Find our own ID if it's not set ---
+    juce::uint32 myLogicalId = storedLogicalId;
+    if (myLogicalId == 0 && parentSynth != nullptr)
+    {
+        for (const auto& info : parentSynth->getModulesInfo())
+        {
+            if (parentSynth->getModuleForLogical(info.first) == this)
+            {
+                myLogicalId = info.first;
+                storedLogicalId = myLogicalId; // Cache it
+                break;
+            }
+        }
+    }
+    // --- END FIX ---
+    
     if (fifo.getNumReady() > 0)
     {
         auto readScope = fifo.read(1);
@@ -189,7 +223,7 @@ void ContourDetectorModule::processBlock(juce::AudioBuffer<float>& buffer, juce:
     auto videoOutBus = getBusBuffer(buffer, false, 1);
     if (videoOutBus.getNumChannels() > 0)
     {
-        float primaryId = static_cast<float>(getLogicalId());
+        float primaryId = static_cast<float>(myLogicalId); // Use the resolved ID
         for (int s = 0; s < videoOutBus.getNumSamples(); ++s)
             videoOutBus.setSample(0, s, primaryId);
     }

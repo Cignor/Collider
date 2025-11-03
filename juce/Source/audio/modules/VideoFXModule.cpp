@@ -1,5 +1,6 @@
 #include "VideoFXModule.h"
 #include "../../video/VideoFrameManager.h"
+#include "../graph/ModularSynthProcessor.h"
 #include <opencv2/imgproc.hpp>
 #if defined(WITH_CUDA_SUPPORT)
     #include <opencv2/cudaimgproc.hpp>
@@ -361,6 +362,21 @@ void VideoFXModule::applyKaleidoscope(cv::Mat& ioFrame, int mode)
 
 void VideoFXModule::run()
 {
+    // Resolve our logical ID once at the start
+    juce::uint32 myLogicalId = storedLogicalId;
+    if (myLogicalId == 0 && parentSynth != nullptr)
+    {
+        for (const auto& info : parentSynth->getModulesInfo())
+        {
+            if (parentSynth->getModuleForLogical(info.first) == this)
+            {
+                myLogicalId = info.first;
+                storedLogicalId = myLogicalId; // Cache it
+                break;
+            }
+        }
+    }
+    
     while (!threadShouldExit())
     {
         juce::uint32 sourceId = currentSourceId.load();
@@ -431,7 +447,8 @@ void VideoFXModule::run()
         applyKaleidoscope(processedFrame, kaleidoscopeMode);
 
         // --- 4. Publish and update UI ---
-        VideoFrameManager::getInstance().setFrame(getLogicalId(), processedFrame);
+        if (myLogicalId != 0)
+            VideoFrameManager::getInstance().setFrame(myLogicalId, processedFrame);
         updateGuiFrame(processedFrame);
 
         wait(33); // ~30 FPS
@@ -451,10 +468,27 @@ void VideoFXModule::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuf
     
     buffer.clear();
     
+    // --- BEGIN FIX ---
+    // Find our own ID if it's not set
+    juce::uint32 myLogicalId = storedLogicalId;
+    if (myLogicalId == 0 && parentSynth != nullptr)
+    {
+        for (const auto& info : parentSynth->getModulesInfo())
+        {
+            if (parentSynth->getModuleForLogical(info.first) == this)
+            {
+                myLogicalId = info.first;
+                storedLogicalId = myLogicalId; // Cache it
+                break;
+            }
+        }
+    }
+    // --- END FIX ---
+    
     // Output our own Logical ID on the output pin, so we can be chained
     if (buffer.getNumChannels() > 0 && buffer.getNumSamples() > 0)
     {
-        float sourceId = (float)getLogicalId();
+        float sourceId = (float)myLogicalId; // Use the correct ID
         for (int sample = 0; sample < buffer.getNumSamples(); ++sample)
         {
             buffer.setSample(0, sample, sourceId);

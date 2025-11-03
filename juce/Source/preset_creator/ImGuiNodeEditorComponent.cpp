@@ -12,6 +12,7 @@
 #include <unordered_set>
 #include <cstdint>
 #include <algorithm>
+#include <limits>
 
 // ============================================================================
 // Global GPU/CPU Settings (default: GPU enabled for best performance)
@@ -438,7 +439,7 @@ void ImGuiNodeEditorComponent::renderImGui()
     // === PROBE SCOPE OVERLAY ===
     if (synth != nullptr && showProbeScope)
     {
-        if (auto* scope = dynamic_cast<ScopeModuleProcessor*>(synth->getProbeScopeProcessor()))
+        if (auto* scope = synth->getProbeScopeProcessor())
         {
             ImGui::SetNextWindowPos(ImVec2((float)getWidth() - 270.0f, menuBarHeight + padding), ImGuiCond_FirstUseEver);
             ImGui::SetNextWindowSize(ImVec2(260, 180), ImGuiCond_FirstUseEver);
@@ -452,27 +453,24 @@ void ImGuiNodeEditorComponent::renderImGui()
                 // Get scope buffer
                 const auto& buffer = scope->getScopeBuffer();
                 
-                if (buffer.getNumSamples() > 0)
+                // Get statistics
+                float minVal = 0.0f, maxVal = 0.0f;
+                scope->getStatistics(minVal, maxVal);
+                
+                if (buffer.getNumSamples() > 0 && maxVal - minVal > 0.0001f)
                 {
-                    // Create a simple waveform display
-                    const int numSamples = buffer.getNumSamples();
-                    const float* samples = buffer.getReadPointer(0);
-                    
-                    // Calculate min/max for this buffer
-                    float minVal = 0.0f, maxVal = 0.0f;
-                    for (int i = 0; i < numSamples; ++i)
-                    {
-                        minVal = juce::jmin(minVal, samples[i]);
-                        maxVal = juce::jmax(maxVal, samples[i]);
-                    }
-                    
                     // Display stats
                     ImGui::Text("Min: %.3f  Max: %.3f", minVal, maxVal);
                     ImGui::Text("Peak: %.3f", juce::jmax(std::abs(minVal), std::abs(maxVal)));
                     
                     // Draw waveform with explicit width to avoid node expansion feedback
                     ImVec2 plotSize = ImVec2(ImGui::GetContentRegionAvail().x, 100);
-                    ImGui::PlotLines("##Waveform", samples, numSamples, 0, nullptr, -1.0f, 1.0f, plotSize);
+                    const int numSamples = buffer.getNumSamples();
+                    if (buffer.getNumChannels() > 0)
+                    {
+                        const float* samples = buffer.getReadPointer(0);
+                        ImGui::PlotLines("##Waveform", samples, numSamples, 0, nullptr, -1.0f, 1.0f, plotSize);
+                    }
                     
                     // Button to clear probe connection
                     if (ImGui::Button("Clear Probe"))
@@ -3597,13 +3595,18 @@ if (auto* mp = synth->getModuleForLogical (lid))
                                       " dstAttr=" + juce::String(attrs.second));
             linkToInsertOn.srcPin = decodePinId(attrs.first);
             linkToInsertOn.dstPin = decodePinId(attrs.second);
-            // Decide list based on pin data types (treat CV/Gate/Raw/Video as modulation list)
+            // Decide list based on pin data types
             const PinDataType srcType = getPinDataTypeForPin(linkToInsertOn.srcPin);
             const PinDataType dstType = getPinDataTypeForPin(linkToInsertOn.dstPin);
-            if (srcType == PinDataType::CV || dstType == PinDataType::CV ||
+            // Check if this is a Video cable (both src and dst are Video)
+            if (srcType == PinDataType::Video && dstType == PinDataType::Video)
+            {
+                linkToInsertOn.isMod = false; // Video cables get their own menu, not audio or mod
+            }
+            // Check if this is CV/Gate/Raw (but not Video - handled above)
+            else if (srcType == PinDataType::CV || dstType == PinDataType::CV ||
                 srcType == PinDataType::Gate || dstType == PinDataType::Gate ||
-                srcType == PinDataType::Raw || dstType == PinDataType::Raw ||
-                srcType == PinDataType::Video || dstType == PinDataType::Video)
+                srcType == PinDataType::Raw || dstType == PinDataType::Raw)
             {
                 linkToInsertOn.isMod = true;
             }
@@ -3783,13 +3786,18 @@ if (auto* mp = synth->getModuleForLogical (lid))
             linkToInsertOn.isMod = false;
             linkToInsertOn.srcPin = decodePinId(it->second.first);
             linkToInsertOn.dstPin = decodePinId(it->second.second);
-            // Infer modulation vs audio list from pin data types
+            // Infer modulation vs audio vs video list from pin data types
             const PinDataType srcType = getPinDataTypeForPin(linkToInsertOn.srcPin);
             const PinDataType dstType = getPinDataTypeForPin(linkToInsertOn.dstPin);
-            if (srcType == PinDataType::CV || dstType == PinDataType::CV ||
+            // Check if this is a Video cable (both src and dst are Video)
+            if (srcType == PinDataType::Video && dstType == PinDataType::Video)
+            {
+                linkToInsertOn.isMod = false; // Video cables get their own menu, not audio or mod
+            }
+            // Check if this is CV/Gate/Raw (but not Video - handled above)
+            else if (srcType == PinDataType::CV || dstType == PinDataType::CV ||
                 srcType == PinDataType::Gate || dstType == PinDataType::Gate ||
-                srcType == PinDataType::Raw || dstType == PinDataType::Raw ||
-                srcType == PinDataType::Video || dstType == PinDataType::Video)
+                srcType == PinDataType::Raw || dstType == PinDataType::Raw)
             {
                 linkToInsertOn.isMod = true;
             }
@@ -3838,21 +3846,41 @@ if (auto* mp = synth->getModuleForLogical (lid))
                 const int numOutputs = srcModule->getTotalNumOutputChannels();
                 if (srcPin.channel >= 0 && srcPin.channel < numOutputs)
                 {
-                    // Optional: Throttle value sampling to 60 Hz (every 16.67ms)
-                    // For now, query every frame for responsive UI
-                    const float liveValue = srcModule->getOutputChannelValue(srcPin.channel);
-                    const juce::String srcName = srcModule->getName();
-                    const juce::String srcLabel = srcModule->getAudioOutputLabel(srcPin.channel);
+                    // Tell the audio thread WHAT to probe via setProbeConnection
+                    auto sourceNodeId = synth->getNodeIdForLogical(srcPin.logicalId);
+                    synth->setProbeConnection(sourceNodeId, srcPin.channel);
+                    
+                    // Create link info for the tooltip
+                    LinkInfo linkInfo;
+                    linkInfo.srcLogicalNodeId = srcPin.logicalId;
+                    linkInfo.srcNodeId = srcPin.logicalId;
+                    linkInfo.srcChannel = srcPin.channel;
+                    linkInfo.sourceNodeName = srcModule->getName();
+                    linkInfo.pinName = srcModule->getAudioOutputLabel(srcPin.channel);
+                    if (linkInfo.pinName.isEmpty())
+                        linkInfo.pinName = "Channel " + juce::String(srcPin.channel);
 
-                    // Render tooltip (stateless - no caching)
+                    // Draw our new, advanced tooltip
                     ImGui::BeginTooltip();
-                    ImGui::Text("Value: %.3f", liveValue);
-                    ImGui::Text("From: %s (ID %u)", srcName.toRawUTF8(), (unsigned)srcPin.logicalId);
-                    if (srcLabel.isNotEmpty())
-                        ImGui::Text("Pin: %s", srcLabel.toRawUTF8());
+                    drawLinkInspectorTooltip(linkInfo);
                     ImGui::EndTooltip();
                 }
             }
+        }
+    }
+    else
+    {
+        // If no link is hovered, tell the probe to stop.
+        int hoveredNodeId = -1;
+        bool isNodeHovered = ImNodes::IsNodeHovered(&hoveredNodeId);
+        
+        int hoveredPinId = -1;
+        bool isPinHovered = ImNodes::IsPinHovered(&hoveredPinId);
+        
+        // Only stop probing if we aren't hovering a node, pin, or link
+        if (!isLinkHovered && !isNodeHovered && !isPinHovered && synth != nullptr)
+        {
+            synth->clearProbeConnection();
         }
     }
     
@@ -3892,10 +3920,15 @@ if (auto* mp = synth->getModuleForLogical (lid))
             linkToInsertOn.dstPin = decodePinId(it->second.second);
             const PinDataType srcType = getPinDataTypeForPin(linkToInsertOn.srcPin);
             const PinDataType dstType = getPinDataTypeForPin(linkToInsertOn.dstPin);
-            if (srcType == PinDataType::CV || dstType == PinDataType::CV ||
+            // Check if this is a Video cable (both src and dst are Video)
+            if (srcType == PinDataType::Video && dstType == PinDataType::Video)
+            {
+                linkToInsertOn.isMod = false; // Video cables get their own menu, not audio or mod
+            }
+            // Check if this is CV/Gate/Raw (but not Video - handled above)
+            else if (srcType == PinDataType::CV || dstType == PinDataType::CV ||
                 srcType == PinDataType::Gate || dstType == PinDataType::Gate ||
-                srcType == PinDataType::Raw || dstType == PinDataType::Raw ||
-                srcType == PinDataType::Video || dstType == PinDataType::Video)
+                srcType == PinDataType::Raw || dstType == PinDataType::Raw)
             {
                 linkToInsertOn.isMod = true;
             }
@@ -4885,6 +4918,29 @@ if (auto* mp = synth->getModuleForLogical (lid))
 
     // Render notification system (must be called at the end to appear on top)
     NotificationManager::render();
+
+    // --- Phase 5: Periodic Stale History Cleanup ---
+    static double lastCleanupTime = 0.0;
+    const double currentTimeSec = juce::Time::getMillisecondCounterHiRes() / 1000.0;
+    
+    if (currentTimeSec - lastCleanupTime > 10.0) // Run every 10 seconds
+    {
+        lastCleanupTime = currentTimeSec;
+        // Set cutoff for "stale" entries (2x the max window size = 40 seconds)
+        const double staleCutoffTime = currentTimeSec - (20.0 * 2.0);
+        
+        for (auto it = inspectorHistory.begin(); it != inspectorHistory.end(); /* no increment */)
+        {
+            if (it->second.lastAccessTime < staleCutoffTime)
+            {
+                it = inspectorHistory.erase(it); // Erase stale entry
+            }
+            else
+            {
+                ++it;
+            }
+        }
+    }
 
     // No deferred snapshots; unified pre-state strategy
 }
@@ -7251,17 +7307,24 @@ void ImGuiNodeEditorComponent::drawInsertNodeOnLinkPopup()
             // Modulators
             {"S&H", "s_and_h"}, {"Function Generator", "function_generator"},
             // Sequencers
-            {"Timeline", "timeline"},
-            // Computer Vision (Video processing - Video cables are treated as mod)
+            {"Timeline", "timeline"}
+        };
+        const std::map<const char*, const char*> videoInsertable = {
+            // Computer Vision (Video processing)
             // Passthrough nodes (Video In → Video Out)
             {"Video FX", "video_fx"}, {"Crop Video", "crop_video"},
             {"Movement Detector", "movement_detector"},
             {"Human Detector", "human_detector"}, {"Object Detector", "object_detector"},
             {"Pose Estimator", "pose_estimator"}, {"Hand Tracker", "hand_tracker"},
             {"Face Tracker", "face_tracker"}, {"Color Tracker", "color_tracker"},
-            {"Contour Detector", "contour_detector"}, {"Semantic Segmentation", "semantic_segmentmentation"}
+            {"Contour Detector", "contour_detector"}, {"Semantic Segmentation", "semantic_segmentation"}
         };
-        const auto& listToShow = linkToInsertOn.isMod ? modInsertable : audioInsertable;
+        
+        // Determine which list to show based on cable type
+        const PinDataType srcType = getPinDataTypeForPin(linkToInsertOn.srcPin);
+        const PinDataType dstType = getPinDataTypeForPin(linkToInsertOn.dstPin);
+        const bool isVideoCable = (srcType == PinDataType::Video && dstType == PinDataType::Video);
+        const auto& listToShow = isVideoCable ? videoInsertable : (linkToInsertOn.isMod ? modInsertable : audioInsertable);
 
         if (isMultiInsert)
             ImGui::Text("Insert Node on %d Cables", numSelected);
@@ -7286,8 +7349,8 @@ void ImGuiNodeEditorComponent::drawInsertNodeOnLinkPopup()
             }
         }
         
-        // VST Plugins submenu (only for audio cables)
-        if (!linkToInsertOn.isMod)
+        // VST Plugins submenu (only for audio cables, not video cables)
+        if (!linkToInsertOn.isMod && !isVideoCable)
         {
             ImGui::Separator();
             if (ImGui::BeginMenu("VST"))
@@ -7333,6 +7396,49 @@ void ImGuiNodeEditorComponent::drawInsertNodeOnLinkPopup()
         // is no longer "stuck" in the insert-on-link mode and right-click on
         // empty canvas will work again.
         linkToInsertOn.linkId = -1;
+    }
+}
+
+void ImGuiNodeEditorComponent::drawLinkInspectorTooltip(const LinkInfo& link)
+{
+    if (synth == nullptr) return;
+    
+    // Get the probe scope processor
+    auto* scope = synth->getProbeScopeProcessor();
+    if (scope == nullptr) return;
+
+    // Get the statistics from the scope module
+    float minVal, maxVal;
+    scope->getStatistics(minVal, maxVal);
+
+    // Get the scope buffer for waveform
+    const auto& scopeBuffer = scope->getScopeBuffer();
+
+    // Draw the text info
+    ImGui::Text("Inspecting: %s", link.pinName.toRawUTF8());
+    ImGui::Text("From: %s (ID %d)", link.sourceNodeName.toRawUTF8(), (int)link.srcNodeId);
+    ImGui::Text("Pin: %s", link.pinName.toRawUTF8());
+    
+    ImGui::Separator();
+    
+    ImGui::TextColored(ImVec4(1.0f, 0.3f, 0.3f, 1.0f), "Peak Max: %.3f", maxVal);
+    ImGui::TextColored(ImVec4(1.0f, 0.86f, 0.31f, 1.0f), "Peak Min: %.3f", minVal);
+    
+    float peakToPeak = maxVal - minVal;
+    ImGui::Text("P-P: %.3f", peakToPeak);
+    
+    float dBMax = maxVal > 0.0001f ? 20.0f * std::log10(maxVal) : -100.0f;
+    ImGui::Text("Max dBFS: %.1f", dBMax);
+
+    ImGui::Separator();
+
+    // Draw the waveform using ImGui PlotLines
+    const int numSamples = scopeBuffer.getNumSamples();
+    if (scopeBuffer.getNumChannels() > 0 && numSamples > 0)
+    {
+        const float* samples = scopeBuffer.getReadPointer(0);
+        ImVec2 plotSize = ImVec2(ImGui::GetContentRegionAvail().x, 80.0f);
+        ImGui::PlotLines("##Waveform", samples, numSamples, 0, nullptr, -1.0f, 1.0f, plotSize);
     }
 }
 
