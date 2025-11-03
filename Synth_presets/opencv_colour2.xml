@@ -297,6 +297,15 @@
         </TrackMixerParams>
       </params>
     </module>
+    <module logicalId="32" type="value">
+      <params>
+        <ValueParams>
+          <PARAM id="cvMax" value="1.0"/>
+          <PARAM id="cvMin" value="0.0"/>
+          <PARAM id="value" value="1.0"/>
+        </ValueParams>
+      </params>
+    </module>
   </modules>
   <connections>
     <connection srcId="5" srcChan="0" dstId="21" dstChan="1"/>
@@ -331,9 +340,10 @@
   </connections>
   <NodeEditorUI>
     <node id="5" x="540.0" y="286.0"/>
-    <node id="12" x="-192.0" y="687.0"/>
+    <node id="12" x="-264.0" y="618.0"/>
     <node id="21" x="1430.0" y="445.0"/>
     <node id="23" x="1946.0" y="490.0"/>
+    <node id="32" x="1079.0" y="658.0"/>
     <node id="0" x="2848.54541015625" y="452.2258911132812"/>
   </NodeEditorUI>
 </ModularSynthPreset>

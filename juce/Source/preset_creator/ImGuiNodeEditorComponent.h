@@ -6,6 +6,7 @@
 #include <unordered_map>
 #include <tuple>
 #include <deque>
+#include <atomic>
 #include <imgui.h>
 #include "../audio/modules/ModuleProcessor.h"
 #include "../audio/graph/ModularSynthProcessor.h"
@@ -21,6 +22,9 @@ class MultiSequencerModuleProcessor;
 class StrokeSequencerModuleProcessor;
 class AnimationModuleProcessor;
 class ColorTrackerModule;
+
+// Forward declaration (SavePresetJob is now in its own file to avoid circular dependencies)
+class SavePresetJob;
 
 // === NODE SIZING SYSTEM ===
 // Standardized node width categories for consistent visual layout
@@ -158,7 +162,9 @@ public:
     void bypassDeleteSelectedNodes();
     void bypassDeleteNode(juce::uint32 logicalId);
     void startSaveDialog();
+    void savePresetToFile(const juce::File& file);
     void startLoadDialog();
+    std::vector<juce::uint32> getMutedNodeIds() const;
     juce::String getTypeForLogical (juce::uint32 logicalId) const;
 
     // --- Collision-Proof Pin ID System ---
@@ -321,8 +327,12 @@ public:
     std::unordered_map<int, std::unique_ptr<juce::OpenGLTexture>>& getVisionModuleTextures() { return visionModuleTextures; }
 
     // Preset status tracking
-    juce::String currentPresetFile;
+    juce::File currentPresetFile;  // Full file path for save operations
     bool isPatchDirty { false };
+    
+    // Background save/load operations
+    std::atomic<bool> isSaveInProgress { false }; // Debouncing flag for save operations
+    juce::ThreadPool threadPool { 2 };
 
     // Help window
     bool showShortcutsWindow { false };

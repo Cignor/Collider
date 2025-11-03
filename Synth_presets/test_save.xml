@@ -1,0 +1,90 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<ModularSynthPreset version="1" bpm="120.0">
+  <modules>
+    <module logicalId="1" type="8bandshaper">
+      <params>
+        <MultiBandShaperParams>
+          <PARAM id="drive_1" value="1.0"/>
+          <PARAM id="drive_2" value="1.0"/>
+          <PARAM id="drive_3" value="1.0"/>
+          <PARAM id="drive_4" value="1.0"/>
+          <PARAM id="drive_5" value="1.0"/>
+          <PARAM id="drive_6" value="1.0"/>
+          <PARAM id="drive_7" value="3.919999837875366"/>
+          <PARAM id="drive_8" value="1.0"/>
+          <PARAM id="outputGain" value="0.0"/>
+          <PARAM id="relativeDriveMod_1" value="1.0"/>
+          <PARAM id="relativeDriveMod_2" value="1.0"/>
+          <PARAM id="relativeDriveMod_3" value="1.0"/>
+          <PARAM id="relativeDriveMod_4" value="1.0"/>
+          <PARAM id="relativeDriveMod_5" value="1.0"/>
+          <PARAM id="relativeDriveMod_6" value="1.0"/>
+          <PARAM id="relativeDriveMod_7" value="1.0"/>
+          <PARAM id="relativeDriveMod_8" value="1.0"/>
+          <PARAM id="relativeGainMod" value="1.0"/>
+        </MultiBandShaperParams>
+      </params>
+    </module>
+    <module logicalId="3" type="gate">
+      <params>
+        <GateParams>
+          <PARAM id="attack" value="0.9999999403953552"/>
+          <PARAM id="release" value="50.0"/>
+          <PARAM id="threshold" value="-40.0"/>
+        </GateParams>
+      </params>
+    </module>
+    <module logicalId="5" type="chorus">
+      <params>
+        <ChorusParams>
+          <PARAM id="depth" value="0.25"/>
+          <PARAM id="mix" value="0.5"/>
+          <PARAM id="rate" value="1.0"/>
+          <PARAM id="relativeDepthMod" value="1.0"/>
+          <PARAM id="relativeMixMod" value="1.0"/>
+          <PARAM id="relativeRateMod" value="1.0"/>
+        </ChorusParams>
+      </params>
+    </module>
+    <module logicalId="12" type="8bandshaper">
+      <params>
+        <MultiBandShaperParams>
+          <PARAM id="drive_1" value="1.0"/>
+          <PARAM id="drive_2" value="1.0"/>
+          <PARAM id="drive_3" value="1.0"/>
+          <PARAM id="drive_4" value="1.0"/>
+          <PARAM id="drive_5" value="1.0"/>
+          <PARAM id="drive_6" value="1.0"/>
+          <PARAM id="drive_7" value="1.0"/>
+          <PARAM id="drive_8" value="1.0"/>
+          <PARAM id="outputGain" value="0.0"/>
+          <PARAM id="relativeDriveMod_1" value="1.0"/>
+          <PARAM id="relativeDriveMod_2" value="1.0"/>
+          <PARAM id="relativeDriveMod_3" value="1.0"/>
+          <PARAM id="relativeDriveMod_4" value="1.0"/>
+          <PARAM id="relativeDriveMod_5" value="1.0"/>
+          <PARAM id="relativeDriveMod_6" value="1.0"/>
+          <PARAM id="relativeDriveMod_7" value="1.0"/>
+          <PARAM id="relativeDriveMod_8" value="1.0"/>
+          <PARAM id="relativeGainMod" value="1.0"/>
+        </MultiBandShaperParams>
+      </params>
+    </module>
+  </modules>
+  <connections>
+    <connection srcId="1" srcChan="0" dstId="5" dstChan="0"/>
+    <connection srcId="1" srcChan="1" dstId="5" dstChan="1"/>
+    <connection srcId="5" srcChan="0" dstId="3" dstChan="0"/>
+    <connection srcId="5" srcChan="1" dstId="3" dstChan="1"/>
+    <connection srcId="5" srcChan="0" dstId="12" dstChan="0"/>
+    <connection srcId="5" srcChan="1" dstId="12" dstChan="1"/>
+  </connections>
+  <NodeEditorUI>
+    <node id="1" x="-973.0" y="484.0"/>
+    <node id="3" x="-365.0" y="408.0"/>
+    <node id="5" x="-371.0" y="591.0"/>
+    <node id="12" x="131.0" y="244.0"/>
+    <node id="0" x="0.0" y="0.0"/>
+  </NodeEditorUI>
+</ModularSynthPreset>

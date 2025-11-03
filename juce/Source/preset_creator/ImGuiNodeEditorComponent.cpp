@@ -1,5 +1,7 @@
 #include "ImGuiNodeEditorComponent.h"
 #include "PinDatabase.h"
+#include "SavePresetJob.h"
+#include "NotificationManager.h"
 
 #include <imgui.h>
 #include <imnodes.h>
@@ -347,6 +349,9 @@ void ImGuiNodeEditorComponent::renderOpenGL()
 
 void ImGuiNodeEditorComponent::renderImGui()
 {
+    // Render notification system (must be called early to appear on top)
+    NotificationManager::render();
+    
     static int frameCounter = 0;
     frameCounter++;
 
@@ -408,8 +413,8 @@ void ImGuiNodeEditorComponent::renderImGui()
     ImGui::Begin("Preset Status Overlay", nullptr, ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoFocusOnAppearing | ImGuiWindowFlags_NoNav | ImGuiWindowFlags_AlwaysAutoResize);
 
     // Display the preset name or "Unsaved Patch"
-    if (currentPresetFile.isNotEmpty()) {
-        ImGui::Text("Preset: %s", currentPresetFile.toRawUTF8());
+    if (currentPresetFile.getFullPathName().isNotEmpty()) { // Check if the file path is valid
+        ImGui::Text("Preset: %s", currentPresetFile.getFileName().toRawUTF8()); // Display just the filename
     } else {
         ImGui::Text("Preset: Unsaved Patch");
     }
@@ -423,6 +428,7 @@ void ImGuiNodeEditorComponent::renderImGui()
 
     ImGui::End();
     // --- END OF OVERLAY ---
+
     
     // === PROBE SCOPE OVERLAY ===
     if (synth != nullptr && showProbeScope)
@@ -514,7 +520,14 @@ void ImGuiNodeEditorComponent::renderImGui()
     {
         if (ImGui::BeginMenu("File"))
         {
-            if (ImGui::MenuItem("Save Preset", "Ctrl+S")) { startSaveDialog(); }
+            if (ImGui::MenuItem("Save Preset", "Ctrl+S")) { 
+                if (currentPresetFile.existsAsFile()) {
+                    savePresetToFile(currentPresetFile);
+                } else {
+                    startSaveDialog();
+                }
+            }
+            if (ImGui::MenuItem("Save Preset As...", "Ctrl+Alt+S")) { startSaveDialog(); }
             if (ImGui::MenuItem("Load Preset", "Ctrl+O")) { startLoadDialog(); }
             
             ImGui::Separator();
@@ -1035,8 +1048,8 @@ void ImGuiNodeEditorComponent::renderImGui()
                  ImGuiWindowFlags_NoNav | 
                  ImGuiWindowFlags_AlwaysAutoResize);
 
-    if (currentPresetFile.isNotEmpty()) {
-        ImGui::Text("Preset: %s", currentPresetFile.toRawUTF8());
+    if (currentPresetFile.existsAsFile()) {
+        ImGui::Text("Preset: %s", currentPresetFile.getFileName().toRawUTF8());
     } else {
         ImGui::Text("Preset: Unsaved Patch");
     }
@@ -4349,7 +4362,25 @@ if (auto* mp = synth->getModuleForLogical (lid))
             const bool shift = ImGui::GetIO().KeyShift;
             const bool alt = ImGui::GetIO().KeyAlt;
             
-            if (ctrl && ImGui::IsKeyPressed (ImGuiKey_S)) { startSaveDialog(); }
+            // Save As (Ctrl+Alt+S) - Always opens dialog
+            if (ctrl && alt && ImGui::IsKeyPressed(ImGuiKey_S, false))
+            {
+                startSaveDialog();
+            }
+            // Save (Ctrl+S) - Quick save if file exists, otherwise Save As
+            else if (ctrl && !alt && ImGui::IsKeyPressed(ImGuiKey_S, false))
+            {
+                if (currentPresetFile.existsAsFile())
+                {
+                    // File already exists, so save directly without a dialog
+                    savePresetToFile(currentPresetFile);
+                }
+                else
+                {
+                    // This is a new, unsaved patch, so "Save" should act like "Save As"
+                    startSaveDialog();
+                }
+            }
             if (ctrl && ImGui::IsKeyPressed (ImGuiKey_O)) { startLoadDialog(); }
             if (ctrl && ImGui::IsKeyPressed(ImGuiKey_P)) { handleRandomizePatch(); }
             if (ctrl && ImGui::IsKeyPressed(ImGuiKey_M)) { handleRandomizeConnections(); }
@@ -5382,65 +5413,97 @@ void ImGuiNodeEditorComponent::handleMuteToggle()
     graphNeedsRebuild = true;
 }
 
+
+void ImGuiNodeEditorComponent::savePresetToFile(const juce::File& file)
+{
+    if (isSaveInProgress.exchange(true)) // Atomically check and set
+    {
+        juce::Logger::writeToLog("[SaveWorkflow] Save action ignored (already in progress).");
+        return;
+    }
+
+    if (synth == nullptr) {
+        NotificationManager::post(NotificationManager::Type::Error, "ERROR: Synth not ready!");
+        isSaveInProgress.store(false);
+        return;
+    }
+
+    juce::Logger::writeToLog("--- [Save Workflow] Initiated for: " + file.getFullPathName() + " ---");
+    
+    // Post status notification (long duration since it will be replaced by Success/Error when complete)
+    NotificationManager::post(NotificationManager::Type::Status, "Saving: " + file.getFileNameWithoutExtension(), 1000.0f);
+    
+    // --- All fast operations now happen on the UI thread BEFORE the job is launched ---
+    
+    juce::Logger::writeToLog("[SaveWorkflow][UI_THREAD] Capturing state...");
+    auto mutedNodeIDs = getMutedNodeIds();
+
+    // Temporarily unmute to get correct connections
+    for (auto lid : mutedNodeIDs) unmuteNode(lid);
+    synth->commitChanges();
+
+    // Capture state while unmuted
+    juce::MemoryBlock synthState;
+    synth->getStateInformation(synthState);
+    juce::ValueTree uiState = getUiValueTree();
+
+    // Immediately re-mute to restore visual state
+    for (auto lid : mutedNodeIDs) muteNode(lid);
+    synth->commitChanges();
+    juce::Logger::writeToLog("[SaveWorkflow][UI_THREAD] State captured. Offloading to background thread.");
+
+    // Launch the background job with the captured data
+    auto* job = new SavePresetJob(synthState, uiState, file);
+
+    job->onSaveComplete = [this](const juce::File& savedFile, bool success) {
+        if (success) {
+            NotificationManager::post(NotificationManager::Type::Success, "Saved: " + savedFile.getFileNameWithoutExtension());
+            isPatchDirty = false;
+            currentPresetFile = savedFile;
+        } else {
+            NotificationManager::post(NotificationManager::Type::Error, "Failed to save preset!");
+        }
+        isSaveInProgress.store(false); // Reset the flag
+    };
+
+    threadPool.addJob(job, true);
+}
+
 void ImGuiNodeEditorComponent::startSaveDialog()
 {
-    saveChooser = std::make_unique<juce::FileChooser> ("Save preset", findPresetsDirectory(), "*.xml");
-    saveChooser->launchAsync (juce::FileBrowserComponent::saveMode | juce::FileBrowserComponent::canSelectFiles,
-        [this] (const juce::FileChooser& fc)
+    // Check if a save is already in progress to avoid opening multiple dialogs
+    if (isSaveInProgress.load()) {
+        juce::Logger::writeToLog("[SaveWorkflow] 'Save As' action ignored (a save is already in progress).");
+        return;
+    }
+
+    saveChooser = std::make_unique<juce::FileChooser>("Save Preset As...", 
+                                                      findPresetsDirectory(), 
+                                                      "*.xml");
+    saveChooser->launchAsync(juce::FileBrowserComponent::saveMode | 
+                             juce::FileBrowserComponent::canSelectFiles,
+        [this](const juce::FileChooser& fc)
     {
-        auto f = fc.getResult();
-        if (! f.exists() && ! f.getParentDirectory().exists()) return;
-        if (synth == nullptr) return;
-        
-        // --- FIX: Temporarily unmute nodes to save original connections ---
-        // Collect all currently muted nodes
-        std::vector<juce::uint32> currentlyMutedNodes;
-        for (const auto& pair : mutedNodeStates)
+        auto fileToSave = fc.getResult();
+        if (fileToSave != juce::File{}) // Check if user selected a file and didn't cancel
         {
-            currentlyMutedNodes.push_back(pair.first);
+            // Call the unified, asynchronous save function
+            savePresetToFile(fileToSave);
         }
-        
-        // Temporarily UNMUTE all of them to restore the original connections
-        for (juce::uint32 lid : currentlyMutedNodes)
-        {
-            unmuteNode(lid);
-        }
-        
-        // Force the synth to apply these connection changes immediately
-        if (synth)
-        {
-            synth->commitChanges();
-        }
-        // At this point, the synth graph is in its "true", unmuted state
-        
-        // NOW get the state - this will save the correct, original connections
-        juce::MemoryBlock mb; synth->getStateInformation (mb);
-        auto xml = juce::XmlDocument::parse (mb.toString());
-        
-        // IMMEDIATELY RE-MUTE the nodes to return the editor to its visible state
-        for (juce::uint32 lid : currentlyMutedNodes)
-        {
-            muteNode(lid);
-        }
-        
-        // Force the synth to apply the re-mute changes immediately
-        if (synth)
-        {
-            synth->commitChanges();
-        }
-        // The synth graph is now back to its bypassed state for audio processing
-        // --- END OF FIX ---
-        
-        if (! xml) return;
-        juce::ValueTree presetVT = juce::ValueTree::fromXml (*xml);
-        presetVT.addChild (getUiValueTree(), -1, nullptr);
-        f.replaceWithText (presetVT.createXml()->toString());
-        
-        // Update preset status tracking
-        isPatchDirty = false;
-        currentPresetFile = f.getFileName();
     });
 }
+
+std::vector<juce::uint32> ImGuiNodeEditorComponent::getMutedNodeIds() const
+{
+    std::vector<juce::uint32> ids;
+    // MutedNodeState is a map, so we don't need a lock if we're just reading keys
+    for (const auto& pair : mutedNodeStates)
+    {
+        ids.push_back(pair.first);
+    }
+    return ids;
+}
+
 
 void ImGuiNodeEditorComponent::startLoadDialog()
 {
@@ -8543,7 +8606,7 @@ void ImGuiNodeEditorComponent::loadPresetFromFile(const juce::File& file)
 
     // 6. Update the UI status trackers.
     isPatchDirty = false;
-    currentPresetFile = file.getFileName();
+    currentPresetFile = file; // Store full file path
     
     juce::Logger::writeToLog("[Preset] Successfully loaded preset: " + file.getFullPathName());
 }

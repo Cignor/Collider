@@ -859,6 +859,10 @@ target_sources(PresetCreatorApp PRIVATE
     Source/preset_creator/PresetCreatorMain.cpp
     Source/preset_creator/PinDatabase.h
     Source/preset_creator/PinDatabase.cpp
+    Source/preset_creator/NotificationManager.h
+    Source/preset_creator/NotificationManager.cpp
+    Source/preset_creator/SavePresetJob.h
+    Source/preset_creator/SavePresetJob.cpp
     Source/preset_creator/ImGuiNodeEditorComponent.h
     Source/preset_creator/ImGuiNodeEditorComponent.cpp
     Source/preset_creator/PresetCreatorComponent.h

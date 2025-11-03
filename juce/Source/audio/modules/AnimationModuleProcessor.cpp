@@ -733,11 +733,9 @@ void AnimationModuleProcessor::drawParametersInNode(float itemWidth,
         }
         
         // DEBUG: Display basic info (accessing animator state directly is unsafe due to audio thread)
-        ImGui::Separator();
         ImGui::Text("Debug Info:");
         ImGui::Text("Bones: %d", (int)animData->boneInfoMap.size());
         ImGui::Text("Clips: %d", (int)animData->animationClips.size());
-        ImGui::Separator();
         
         
         // --- RENDERING VIEWPORT ---
@@ -776,7 +774,6 @@ void AnimationModuleProcessor::drawParametersInNode(float itemWidth,
         
         
         // === GROUND PLANE CONTROLS (FIXED) ===
-        ImGui::Separator();
         ImGui::Text("Ground Planes:");
 
         // --- Step 1: Calculate the animation's current Y-bounds for a sensible slider range ---
@@ -855,7 +852,6 @@ void AnimationModuleProcessor::drawParametersInNode(float itemWidth,
                 ImGui::PopID();
             }
         }
-        ImGui::Separator();
         
         
         // Pass the latest values to the renderer before drawing
