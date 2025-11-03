@@ -395,7 +395,7 @@ db["random"] = ModulePinInfo(
     {} // No modulation inputs
 );
 
-    db["tts performer"] = ModulePinInfo(
+    db["tts_performer"] = ModulePinInfo(
         NodeWidth::Big,
         { // Inputs (absolute channels based on bus structure)
             AudioPin("Rate Mod", 0, PinDataType::CV),
@@ -591,7 +591,7 @@ db["random"] = ModulePinInfo(
     );
     
     // Track Mixer - first 8 tracks UI definition (mono per track + gain/pan CV) and a Tracks Mod pin
-    db["track mixer"] = ModulePinInfo(
+    db["track_mixer"] = ModulePinInfo(
         NodeWidth::Big,
         {
             // Mono audio inputs for first 8 tracks (absolute channels 0..7)
@@ -726,8 +726,7 @@ db["random"] = ModulePinInfo(
     // Duplicate entry removed to avoid conflicts
 
     
-    // Add TrackMixer module alias (main definition is "track mixer" above)
-    db["trackmixer"] = db["track mixer"];
+    // Removed alias: enforce canonical name "track_mixer"
     
     
     // Add MIDI Player module
@@ -1133,6 +1132,15 @@ db["random"] = ModulePinInfo(
         NodeWidth::Exception, // Custom size for video preview
         {}, // Dynamic inputs defined by module (video source + optional CV parameters)
         {}, // Dynamic outputs defined by module (processed video output)
+        {}
+    );
+
+    // Animation Module - dynamic outputs (bone velocities/triggers) defined at runtime
+    // Keep empty pins here so validation recognizes the module; connections will be validated as warnings if channels don't match
+    db["animation"] = ModulePinInfo(
+        NodeWidth::Exception,
+        {},
+        {},
         {}
     );
 

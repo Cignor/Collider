@@ -45,7 +45,6 @@ private:
     void refreshModulesList();
     void doConnect();
     void doSave();
-    void doLoad();
     void startAudition();
     void stopAudition();
 

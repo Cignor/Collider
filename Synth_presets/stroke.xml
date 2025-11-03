@@ -235,8 +235,18 @@
         <ValueParams>
           <PARAM id="cvMax" value="1.0"/>
           <PARAM id="cvMin" value="0.0"/>
-          <PARAM id="value" value="6.0"/>
+          <PARAM id="value" value="8.0"/>
         </ValueParams>
+      </params>
+    </module>
+    <module logicalId="26" type="vco">
+      <params>
+        <VCOParams>
+          <PARAM id="frequency" value="440.0"/>
+          <PARAM id="portamento" value="0.0"/>
+          <PARAM id="relative_freq_mod" value="1.0"/>
+          <PARAM id="waveform" value="0.0"/>
+        </VCOParams>
       </params>
     </module>
   </modules>
@@ -244,6 +254,7 @@
     <connection srcId="1" srcChan="0" dstId="5" dstChan="3"/>
     <connection srcId="1" srcChan="1" dstId="7" dstChan="3"/>
     <connection srcId="1" srcChan="2" dstId="9" dstChan="3"/>
+    <connection srcId="1" srcChan="3" dstId="26" dstChan="0"/>
     <connection srcId="5" srcChan="0" dstId="11" dstChan="0"/>
     <connection srcId="5" srcChan="1" dstId="11" dstChan="1"/>
     <connection srcId="7" srcChan="0" dstId="11" dstChan="2"/>
@@ -253,14 +264,16 @@
     <connection srcId="11" srcChan="0" dstId="output" dstChan="0"/>
     <connection srcId="11" srcChan="1" dstId="output" dstChan="1"/>
     <connection srcId="13" srcChan="0" dstId="11" dstChan="64"/>
+    <connection srcId="26" srcChan="0" dstId="11" dstChan="6"/>
   </connections>
   <NodeEditorUI>
-    <node id="1" x="-759.0" y="269.0"/>
+    <node id="1" x="-1086.0" y="290.0"/>
     <node id="5" x="255.0" y="247.0"/>
     <node id="7" x="255.0" y="467.0"/>
     <node id="9" x="255.0" y="687.0"/>
-    <node id="11" x="655.0" y="447.0"/>
-    <node id="13" x="455.0" y="797.0"/>
+    <node id="11" x="817.0" y="484.0"/>
+    <node id="13" x="375.0" y="799.0"/>
+    <node id="26" x="197.0" y="1142.0"/>
     <node id="0" x="1420.0" y="325.0"/>
   </NodeEditorUI>
 </ModularSynthPreset>

@@ -168,6 +168,8 @@ public:
     // Plugin format manager for VST support (optional, set by application)
     void setPluginFormatManager(juce::AudioPluginFormatManager* manager) { pluginFormatManager = manager; }
     void setKnownPluginList(juce::KnownPluginList* list) { knownPluginList = list; }
+    // Notification hook (set by UI to receive creation events without coupling)
+    void setOnModuleCreated(std::function<void(const juce::String& prettyName)> cb) { onModuleCreated = std::move(cb); }
     
     // === PROBE TOOL API ===
     // Probe system for instant signal debugging without manual patching
@@ -236,6 +238,9 @@ private:
     int findOldestVoice();
     void assignNoteToVoice(int voiceIndex, const juce::MidiMessage& noteOn);
     void releaseVoice(const juce::MidiMessage& noteOff);
+
+    // Optional UI callback for notifications (only set by Preset Creator UI)
+    std::function<void(const juce::String&)> onModuleCreated;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (ModularSynthProcessor)
 };

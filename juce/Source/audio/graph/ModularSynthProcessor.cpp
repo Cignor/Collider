@@ -1,4 +1,8 @@
 #include "ModularSynthProcessor.h"
+#if defined(PRESET_CREATOR_UI)
+#include "../../preset_creator/NotificationManager.h"
+#endif
+#include "../../preset_creator/PinDatabase.h"
 #include "../modules/AudioInputModuleProcessor.h"
 #include "../modules/RecordModuleProcessor.h"
 #include "../modules/VCOModuleProcessor.h"
@@ -450,6 +454,81 @@ void ModularSynthProcessor::setStateInformation(const void* data, int sizeInByte
     juce::Logger::writeToLog("[STATE] Cleared existing state.");
 
     juce::ValueTree root = juce::ValueTree::fromXml(*xml);
+
+    // Defensive healing: ensure legacy presets with inconsistent names are normalized
+    {
+        auto modulesVT = root.getChildWithName("modules");
+        if (modulesVT.isValid())
+        {
+            std::set<juce::String> validNames;
+            std::unordered_map<juce::String, juce::String> collapsedToCanonical;
+            for (const auto& pair : getModulePinDatabase())
+            {
+                validNames.insert(pair.first);
+                juce::String collapsed;
+                for (int i = 0; i < pair.first.length(); ++i)
+                {
+                    auto ch = pair.first[i];
+                    if (ch != '_' && ch != ' ')
+                        collapsed += ch;
+                }
+                collapsedToCanonical[collapsed] = pair.first;
+            }
+
+            int fixCount = 0;
+            for (auto moduleNode : modulesVT)
+            {
+                if (!moduleNode.hasType("module")) continue;
+                juce::String currentType = moduleNode.getProperty("type").toString();
+                if (validNames.count(currentType) > 0) continue;
+
+                juce::String normalized = currentType.toLowerCase().replaceCharacter(' ', '_');
+
+                juce::String caseFixed;
+                caseFixed.preallocateBytes((int)currentType.length() * 2);
+                for (int i = 0; i < currentType.length(); ++i)
+                {
+                    juce::juce_wchar c = currentType[i];
+                    bool prevIsLower = (i > 0) && juce::CharacterFunctions::isLowerCase(currentType[i - 1]);
+                    bool isUpper = juce::CharacterFunctions::isUpperCase(c);
+                    if (i > 0 && isUpper && prevIsLower)
+                        caseFixed += '_';
+                    caseFixed += juce::CharacterFunctions::toLowerCase(c);
+                }
+                caseFixed = caseFixed.replace(" ", "_");
+
+                if (validNames.count(normalized) > 0)
+                {
+                    moduleNode.setProperty("type", normalized, nullptr);
+                    ++fixCount;
+                }
+                else if (validNames.count(caseFixed) > 0)
+                {
+                    moduleNode.setProperty("type", caseFixed, nullptr);
+                    ++fixCount;
+                }
+                else
+                {
+                    juce::String collapsedCurrent;
+                    for (int i = 0; i < currentType.length(); ++i)
+                    {
+                        auto ch = currentType[i];
+                        if (ch != '_' && ch != ' ')
+                            collapsedCurrent += juce::CharacterFunctions::toLowerCase(ch);
+                    }
+                    auto it = collapsedToCanonical.find(collapsedCurrent);
+                    if (it != collapsedToCanonical.end())
+                    {
+                        moduleNode.setProperty("type", it->second, nullptr);
+                        ++fixCount;
+                    }
+                }
+            }
+
+            if (fixCount > 0)
+                juce::Logger::writeToLog("[STATE] Auto-heal applied: " + juce::String(fixCount) + " fix(es).");
+        }
+    }
     
     // Restore global transport settings
     m_transportState.bpm = root.getProperty("bpm", 120.0);
@@ -771,6 +850,25 @@ namespace {
         }
         return factory;
     }
+    static juce::String toPrettyModuleName(const juce::String& type)
+    {
+        juce::String name = type;
+        name = name.replaceCharacter('_', ' ').toLowerCase();
+        bool capNext = true;
+        for (int i = 0; i < name.length(); ++i)
+        {
+            if (capNext && juce::CharacterFunctions::isLetter(name[i]))
+            {
+                name = name.substring(0, i) + juce::String::charToString(name[i]).toUpperCase() + name.substring(i + 1);
+                capNext = false;
+            }
+            else if (name[i] == ' ')
+            {
+                capNext = true;
+            }
+        }
+        return name;
+    }
 }
 
 ModularSynthProcessor::NodeID ModularSynthProcessor::addModule(const juce::String& moduleType, bool commit)
@@ -815,6 +913,19 @@ ModularSynthProcessor::NodeID ModularSynthProcessor::addModule(const juce::Strin
             commitChanges();
         }
         
+        // Notify UI if hooked; otherwise fallback to direct post when UI build is present
+        juce::Logger::writeToLog("[Toast] addModule created: " + moduleType + ", invoking notification");
+        if (onModuleCreated)
+        {
+            onModuleCreated(toPrettyModuleName(moduleType));
+        }
+#if defined(PRESET_CREATOR_UI)
+        else
+        {
+            NotificationManager::post(NotificationManager::Type::Info, "Created " + toPrettyModuleName(moduleType) + " node");
+        }
+#endif
+        
         return node->nodeID;
     }
 
@@ -852,6 +963,13 @@ ModularSynthProcessor::NodeID ModularSynthProcessor::addVstModule(
         mp->setLogicalId(logicalIdToAssign);
     
     juce::Logger::writeToLog("[ModSynth] Added VST module: " + vstDesc.name + " with logical ID " + juce::String(logicalIdToAssign));
+    juce::Logger::writeToLog("[Toast] addVstModule created: " + vstDesc.name + ", invoking notification");
+    if (onModuleCreated)
+        onModuleCreated(vstDesc.name);
+#if defined(PRESET_CREATOR_UI)
+    else
+        NotificationManager::post(NotificationManager::Type::Info, "Created " + vstDesc.name + " node");
+#endif
     return node->nodeID;
 }
 

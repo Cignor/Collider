@@ -188,6 +188,25 @@
         <SequencerState sync="0.0" rate_division="3.0"/>
       </extra>
     </module>
+    <module logicalId="36" type="tts_performer">
+      <params>
+        <TTSPerformerParams>
+          <PARAM id="engine" value="1.0"/>
+          <PARAM id="gate" value="0.7999999523162842"/>
+          <PARAM id="pitch" value="0.0"/>
+          <PARAM id="rate" value="2.0"/>
+          <PARAM id="rate_division" value="3.0"/>
+          <PARAM id="speed" value="1.0"/>
+          <PARAM id="sync" value="0.0"/>
+          <PARAM id="trimEnd" value="1.0"/>
+          <PARAM id="trimStart" value="0.0"/>
+          <PARAM id="volume" value="0.7999999523162842"/>
+        </TTSPerformerParams>
+      </params>
+      <extra>
+        <TTSPerformerState/>
+      </extra>
+    </module>
   </modules>
   <connections>
     <connection srcId="1" srcChan="0" dstId="2" dstChan="0"/>
@@ -208,6 +227,7 @@
     <node id="15" x="1837.4658203125" y="552.0336303710938"/>
     <node id="17" x="2036.23291015625" y="437.5168151855469"/>
     <node id="21" x="522.4659423828125" y="852.03369140625"/>
+    <node id="36" x="924.0" y="542.0"/>
     <node id="0" x="2725.4658203125" y="500.0336303710938"/>
   </NodeEditorUI>
 </ModularSynthPreset>

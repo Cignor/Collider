@@ -13,7 +13,7 @@
 StrokeSequencerModuleProcessor::StrokeSequencerModuleProcessor()
     : ModuleProcessor(BusesProperties()
                           .withInput("Inputs", juce::AudioChannelSet::discreteChannels(5), true) // Reset, Rate, 3x Thresholds
-                          .withOutput("Outputs", juce::AudioChannelSet::discreteChannels(4), true)), // 3x Triggers, 1x CV
+                          .withOutput("Outputs", juce::AudioChannelSet::discreteChannels(7), true)), // 3x Triggers, 1x Continuous Pitch, 3x Held Pitch
       apvts(*this, nullptr, "StrokeSeqParams", createParameterLayout())
 {
     // Initialize cached parameter pointers
@@ -24,6 +24,7 @@ StrokeSequencerModuleProcessor::StrokeSequencerModuleProcessor()
     playheadParam = apvts.getRawParameterValue(paramIdPlayhead);
     
     startTimerHz(30); // For UI updates
+    m_isPrimed = false;
 }
 
 StrokeSequencerModuleProcessor::~StrokeSequencerModuleProcessor()
@@ -93,7 +94,10 @@ std::vector<DynamicPinInfo> StrokeSequencerModuleProcessor::getDynamicOutputPins
         { "Floor Trig Out", 0, PinDataType::Gate },
         { "Mid Trig Out",   1, PinDataType::Gate },
         { "Ceiling Trig Out", 2, PinDataType::Gate },
-        { "Value Out",      3, PinDataType::CV }
+        { "Continuous Pitch", 3, PinDataType::CV },
+        { "Floor Pitch",    4, PinDataType::CV },
+        { "Mid Pitch",      5, PinDataType::CV },
+        { "Ceiling Pitch",  6, PinDataType::CV }
     };
 }
 
@@ -113,11 +117,25 @@ void StrokeSequencerModuleProcessor::processBlock(juce::AudioBuffer<float>& buff
     if (strokeDataDirty.load())
     {
         audioStrokePoints.clear();
-        for (const auto& stroke : userStrokes)
+        audioPointToStrokeIndex.clear();
+        // Build pairs so we can sort points and keep stroke indices aligned
+        struct PointWithStroke { StrokePoint pt; int strokeIdx; };
+        std::vector<PointWithStroke> pw;
+        pw.reserve(1024);
+        for (size_t si = 0; si < userStrokes.size(); ++si)
         {
-            audioStrokePoints.insert(audioStrokePoints.end(), stroke.begin(), stroke.end());
+            const auto& stroke = userStrokes[si];
+            for (const auto& p : stroke)
+                pw.push_back({ p, (int)si });
         }
-        std::sort(audioStrokePoints.begin(), audioStrokePoints.end(), [](const StrokePoint& a, const StrokePoint& b) { return a.x < b.x; });
+        std::sort(pw.begin(), pw.end(), [](const PointWithStroke& a, const PointWithStroke& b){ return a.pt.x < b.pt.x; });
+        audioStrokePoints.reserve(pw.size());
+        audioPointToStrokeIndex.reserve(pw.size());
+        for (const auto& e : pw)
+        {
+            audioStrokePoints.push_back(e.pt);
+            audioPointToStrokeIndex.push_back(e.strokeIdx);
+        }
         strokeDataDirty = false;
     }
     // --- End Block ---
@@ -210,7 +228,10 @@ void StrokeSequencerModuleProcessor::processBlock(juce::AudioBuffer<float>& buff
     auto* floorTrigOut = buffer.getWritePointer(0);
     auto* midTrigOut = buffer.getWritePointer(1);
     auto* ceilTrigOut = buffer.getWritePointer(2);
-    auto* valueOut = buffer.getWritePointer(3);
+    auto* continuousPitchOut = buffer.getWritePointer(3);
+    auto* floorPitchOut = buffer.getWritePointer(4);
+    auto* midPitchOut = buffer.getWritePointer(5);
+    auto* ceilPitchOut = buffer.getWritePointer(6);
     
     for (int i = 0; i < numSamples; ++i)
     {
@@ -228,7 +249,17 @@ void StrokeSequencerModuleProcessor::processBlock(juce::AudioBuffer<float>& buff
         }
         
         // Find Stroke Value at Playhead
-        float currentStrokeY = 0.5f; // Default to center if no points
+        float currentStrokeY = 0.0f; // 0 when no active segment
+        float floorPitchThisSample = 0.0f;
+        float midPitchThisSample = 0.0f;
+        float ceilPitchThisSample = 0.0f;
+        const bool justWrapped = (playheadPosition < previousPlayheadPos);
+        if (justWrapped)
+        {
+            m_hasTriggeredThisSegment = { false, false, false };
+            m_activeStrokeIndex = -1;
+            m_isPrimed = false;
+        }
         if (audioStrokePoints.size() > 1)
         {
             auto it = std::lower_bound(audioStrokePoints.begin(), audioStrokePoints.end(), (float)playheadPosition, 
@@ -236,19 +267,63 @@ void StrokeSequencerModuleProcessor::processBlock(juce::AudioBuffer<float>& buff
             
             if (it == audioStrokePoints.begin())
             {
-                currentStrokeY = it->y;
+                // Off-stroke at the very beginning; do not interpolate
+                currentStrokeY = 0.0f;
+                m_activeStrokeIndex = -1;
+                m_isPrimed = false;
             }
             else if (it == audioStrokePoints.end())
             {
-                currentStrokeY = (audioStrokePoints.end() - 1)->y;
+                // Off-stroke at the very end; do not interpolate
+                currentStrokeY = 0.0f;
+                m_activeStrokeIndex = -1;
+                m_isPrimed = false;
             }
             else
             {
-                // Linear interpolation
+                // Between two points p1 and p2
                 const auto p1 = *(it - 1);
                 const auto p2 = *it;
-                const float t = (playheadPosition - p1.x) / (p2.x - p1.x);
-                currentStrokeY = juce::jmap(t, p1.y, p2.y);
+
+                // Determine stroke indices for both endpoints
+                const int p1Index = (int)std::distance(audioStrokePoints.begin(), it) - 1;
+                const int p2Index = p1Index + 1;
+                const int strokeIdx1 = (p1Index >= 0 && p1Index < (int)audioPointToStrokeIndex.size()) ? audioPointToStrokeIndex[p1Index] : -1;
+                const int strokeIdx2 = (p2Index >= 0 && p2Index < (int)audioPointToStrokeIndex.size()) ? audioPointToStrokeIndex[p2Index] : -1;
+
+                // Only interpolate inside a continuous stroke; treat gaps as off-stroke
+                if (strokeIdx1 == strokeIdx2 && strokeIdx1 >= 0)
+                {
+                    const float t = (playheadPosition - p1.x) / (p2.x - p1.x);
+                    currentStrokeY = juce::jmap(t, p1.y, p2.y);
+
+                    if (strokeIdx1 != m_activeStrokeIndex)
+                    {
+                        m_activeStrokeIndex = strokeIdx1;
+                        m_hasTriggeredThisSegment = { false, false, false };
+                        m_isPrimed = false; // new stroke: require one stable sample
+                    }
+
+                    // Per-line pitch arming when this segment crosses thresholds
+                    const float y1 = p1.y;
+                    const float y2 = p2.y;
+                    const float threshFloor = finalThresholds[0];
+                    const float threshMid   = finalThresholds[1];
+                    const float threshCeil  = finalThresholds[2];
+                    if ((y1 - threshFloor) * (y2 - threshFloor) < 0.0f)
+                        floorPitchThisSample = currentStrokeY;
+                    if ((y1 - threshMid) * (y2 - threshMid) < 0.0f)
+                        midPitchThisSample = currentStrokeY;
+                    if ((y1 - threshCeil) * (y2 - threshCeil) < 0.0f)
+                        ceilPitchThisSample = currentStrokeY;
+                }
+                else
+                {
+                    // Gap between strokes
+                    currentStrokeY = 0.0f;
+                    m_activeStrokeIndex = -1;
+                    m_isPrimed = false;
+                }
             }
         }
         else if (!audioStrokePoints.empty())
@@ -257,40 +332,60 @@ void StrokeSequencerModuleProcessor::processBlock(juce::AudioBuffer<float>& buff
         }
 
         currentStrokeYValue.store(currentStrokeY);
-        valueOut[i] = currentStrokeY;
+        // Continuous pitch (live under playhead)
+        m_continuousPitchCV.store(currentStrokeY);
+        continuousPitchOut[i] = currentStrokeY;
+        // Per-line pitch based on whether the active segment crosses the line
+        floorPitchOut[i] = floorPitchThisSample;
+        midPitchOut[i]   = midPitchThisSample;
+        ceilPitchOut[i]  = ceilPitchThisSample;
 
         // === Line Segment Intersection Detection ===
         // Check if playhead movement from previous position to current position crosses any threshold
         
         // Test Floor threshold
-        if (lineSegmentCrossesHorizontalLine(
+        if (!justWrapped && m_isPrimed && !m_hasTriggeredThisSegment[0] && lineSegmentCrossesHorizontalLine(
                 static_cast<float>(previousPlayheadPos), previousStrokeY,
                 static_cast<float>(playheadPosition), currentStrokeY,
                 finalThresholds[0]))
         {
             floorTrigOut[i] = 1.0f; // Trigger!
             juce::Logger::writeToLog("[StrokeSeq] *** FLOOR TRIGGER at sample " + juce::String(i));
+            m_currentPitchCV[0].store(currentStrokeY);
+            m_hasTriggeredThisSegment[0] = true;
         }
         
         // Test Mid threshold
-        if (lineSegmentCrossesHorizontalLine(
+        if (!justWrapped && m_isPrimed && !m_hasTriggeredThisSegment[1] && lineSegmentCrossesHorizontalLine(
                 static_cast<float>(previousPlayheadPos), previousStrokeY,
                 static_cast<float>(playheadPosition), currentStrokeY,
                 finalThresholds[1]))
         {
             midTrigOut[i] = 1.0f; // Trigger!
             juce::Logger::writeToLog("[StrokeSeq] *** MID TRIGGER at sample " + juce::String(i));
+            m_currentPitchCV[1].store(currentStrokeY);
+            m_hasTriggeredThisSegment[1] = true;
         }
         
         // Test Ceiling threshold
-        if (lineSegmentCrossesHorizontalLine(
+        if (!justWrapped && m_isPrimed && !m_hasTriggeredThisSegment[2] && lineSegmentCrossesHorizontalLine(
                 static_cast<float>(previousPlayheadPos), previousStrokeY,
                 static_cast<float>(playheadPosition), currentStrokeY,
                 finalThresholds[2]))
         {
             ceilTrigOut[i] = 1.0f; // Trigger!
             juce::Logger::writeToLog("[StrokeSeq] *** CEILING TRIGGER at sample " + juce::String(i));
+            m_currentPitchCV[2].store(currentStrokeY);
+            m_hasTriggeredThisSegment[2] = true;
         }
+
+        // Prime state: if we are on a stroke this sample, allow triggers next sample
+        // Determine if on stroke by comparing active stroke index validity
+        // When no interpolation occurred (no segment), currentStrokeIndex remains undefined; infer from m_activeStrokeIndex
+        if (m_activeStrokeIndex >= 0)
+            m_isPrimed = true;
+        else
+            m_isPrimed = false;
         
         // Store current position for next sample
         previousStrokeY = currentStrokeY;
@@ -323,16 +418,16 @@ void StrokeSequencerModuleProcessor::clearStrokes()
 bool StrokeSequencerModuleProcessor::lineSegmentCrossesHorizontalLine(float x1, float y1, float x2, float y2, float lineY) const
 {
     // Check if line segment from (x1, y1) to (x2, y2) crosses horizontal line at y = lineY
-    // ONLY trigger on UPWARD crossings (below -> above) to avoid double triggers
-    
-    // Must cross from below to at-or-above
-    if (y1 < lineY && y2 >= lineY)
+    // Trigger on crossings in EITHER direction (above->below or below->above)
+    const float d1 = y1 - lineY;
+    const float d2 = y2 - lineY;
+    if (d1 * d2 < 0.0f)
     {
-        juce::Logger::writeToLog("[StrokeSeq] UPWARD CROSS: y1=" + juce::String(y1, 4) + 
+        juce::Logger::writeToLog("[StrokeSeq] CROSS: y1=" + juce::String(y1, 4) +
                                  " -> y2=" + juce::String(y2, 4) + " crosses lineY=" + juce::String(lineY, 4));
         return true;
     }
-    
+
     return false;
 }
 

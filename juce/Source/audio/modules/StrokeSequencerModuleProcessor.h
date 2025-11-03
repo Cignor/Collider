@@ -57,6 +57,20 @@ private:
     std::atomic<bool> isUnderManualControl { false }; // True when user is actively dragging the playhead slider
     std::atomic<double> livePlayheadPosition { 0.0 }; // Live playhead position for UI tracking
     
+    // --- Continuous Pitch CV (live, interpolated under playhead) ---
+    std::atomic<float> m_continuousPitchCV { 0.0f };
+
+    // --- Captured Pitch CV per trigger line (Floor, Mid, Ceiling) ---
+    std::array<std::atomic<float>, 3> m_currentPitchCV { 0.0f, 0.0f, 0.0f };
+
+    // --- Strict trigger gating: one trigger per line per stroke per loop ---
+    int m_activeStrokeIndex = -1; // Index into userStrokes for the currently active stroke
+    std::array<bool, 3> m_hasTriggeredThisSegment { false, false, false };
+    bool m_isPrimed { false }; // Require one stable sample on-stroke before allowing triggers
+
+    // Mapping from flattened audio points to their parent stroke index (kept in lockstep with audioStrokePoints)
+    std::vector<int> audioPointToStrokeIndex;
+    
     // --- Transport State ---
     TransportState m_currentTransport;
     bool wasPlaying = false;

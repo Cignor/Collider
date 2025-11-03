@@ -2,6 +2,8 @@
 #include "PinDatabase.h"
 #include "SavePresetJob.h"
 #include "NotificationManager.h"
+#include "PresetValidator.h"
+#include "PresetAutoHealer.h"
 
 #include <imgui.h>
 #include <imnodes.h>
@@ -346,12 +348,15 @@ void ImGuiNodeEditorComponent::renderOpenGL()
     // Render via OpenGL2 backend
     ImGui_ImplOpenGL2_RenderDrawData (dd);
 }
-
 void ImGuiNodeEditorComponent::renderImGui()
 {
-    // Render notification system (must be called early to appear on top)
-    NotificationManager::render();
-    
+    // Ensure the synth always has the creation notification hook registered
+    if (synth != nullptr)
+    {
+        synth->setOnModuleCreated([](const juce::String& pretty){
+            NotificationManager::post(NotificationManager::Type::Info, "Created " + pretty + " node");
+        });
+    }
     static int frameCounter = 0;
     frameCounter++;
 
@@ -1141,7 +1146,6 @@ void ImGuiNodeEditorComponent::renderImGui()
         ImGui::PushStyleColor(ImGuiCol_HeaderHovered, ImGui::ColorConvertFloat4ToU32(ImVec4(c.x*1.2f, c.y*1.2f, c.z*1.2f, 1.0f)));
         ImGui::PushStyleColor(ImGuiCol_HeaderActive, ImGui::ColorConvertFloat4ToU32(ImVec4(c.x*1.4f, c.y*1.4f, c.z*1.4f, 1.0f)));
     };
-
     // === PRESET BROWSER ===
     ImGui::PushStyleColor(ImGuiCol_Header, IM_COL32(218, 165, 32, 255)); // Gold
     ImGui::PushStyleColor(ImGuiCol_HeaderHovered, IM_COL32(238, 185, 52, 255));
@@ -2222,65 +2226,6 @@ if (auto* mp = synth->getModuleForLogical (lid))
             }
         }
     }
-    // --- SPECIAL RENDERING FOR SNAPSHOT SEQUENCER ---
-    // Commented out - SnapshotSequencerModuleProcessor causing build errors
-    /*else if (auto* snapshotSeq = dynamic_cast<SnapshotSequencerModuleProcessor*>(mp))
-    {
-        // First, draw the standard parameters (number of steps, etc.)
-        snapshotSeq->drawParametersInNode(nodeContentWidth, isParamModulated, onModificationEnded);
-        
-        ImGui::Separator();
-        ImGui::Text("Snapshot Management:");
-        
-        const int numSteps = 8; // Default, could read from parameter
-        const int currentStepIndex = 0; // TODO: Get from module if exposed
-        
-        // Draw capture/clear buttons for each step
-        for (int i = 0; i < numSteps; ++i)
-        {
-            ImGui::PushID(i);
-            
-            bool stored = snapshotSeq->isSnapshotStored(i);
-            
-            // Capture button
-            if (ImGui::Button("Capture"))
-            {
-                // Get the current state of the whole synth
-                juce::MemoryBlock currentState;
-                synth->getStateInformation(currentState);
-                
-                // Store it in the snapshot sequencer
-                snapshotSeq->setSnapshotForStep(i, currentState);
-                
-                // Create undo state
-                pushSnapshot();
-                
-                juce::Logger::writeToLog("[SnapshotSeq UI] Captured snapshot for step " + juce::String(i));
-            }
-            
-            ImGui::SameLine();
-            
-            // Clear button (only enabled if snapshot exists)
-            if (!stored)
-            {
-                ImGui::BeginDisabled();
-            }
-            
-            if (ImGui::Button("Clear"))
-            {
-                snapshotSeq->clearSnapshotForStep(i);
-                pushSnapshot();
-                juce::Logger::writeToLog("[SnapshotSeq UI] Cleared snapshot for step " + juce::String(i));
-            }
-            
-            if (!stored)
-            {
-                ImGui::EndDisabled();
-            }
-            
-            ImGui::PopID();
-        }
-    }*/
     // --- SPECIAL RENDERING FOR OPENCV MODULES (WITH VIDEO FEED) ---
     else if (auto* webcamModule = dynamic_cast<WebcamLoaderModule*>(mp))
     {
@@ -3005,8 +2950,8 @@ if (auto* mp = synth->getModuleForLogical (lid))
                 mutedNodeStates.erase((juce::uint32)selectedLogicalId); // Clean up muted state if exists
                 synth->removeModule (synth->getNodeIdForLogical ((juce::uint32) selectedLogicalId));
                 graphNeedsRebuild = true;
-                // Post-state snapshot
                 pushSnapshot();
+                NotificationManager::post(NotificationManager::Type::Info, "Deleted " + juce::String(1) + " node(s)");
                 selectedLogicalId = 0;
             }
             if (ImGui::MenuItem("Duplicate") && selectedLogicalId != 0)
@@ -3021,7 +2966,6 @@ if (auto* mp = synth->getModuleForLogical (lid))
                             dst->getAPVTS().replaceState (src->getAPVTS().copyState());
                     ImVec2 pos = ImNodes::GetNodeGridSpacePos (selectedLogicalId);
                     ImNodes::SetNodeGridSpacePos ((int) synth->getLogicalIdForNode(newNodeId), ImVec2 (pos.x + 40.0f, pos.y + 40.0f));
-                    // Post-state snapshot after duplication and position
                     pushSnapshot();
                 }
             }
@@ -3444,7 +3388,6 @@ if (auto* mp = synth->getModuleForLogical (lid))
         }
     }
     // ================== END MIDI PLAYER QUICK CONNECT ==================
-    
     // ================== META MODULE EDITING LOGIC ==================
     // Check if any Meta Module has requested to be edited
     if (synth != nullptr && metaModuleToEditLid == 0) // Only check if not already editing one
@@ -3940,7 +3883,6 @@ if (auto* mp = synth->getModuleForLogical (lid))
         snapshotAfterEditor = false;
         pushSnapshot();
     }
-
     if (synth != nullptr)
     {
         // No persistent panning state when zoom is disabled
@@ -3997,6 +3939,20 @@ if (auto* mp = synth->getModuleForLogical (lid))
 
             auto addAtMouse = [this](const char* type) {
                 auto nodeId = synth->addModule(type);
+                juce::String nodeName = juce::String(type).replaceCharacter('_', ' ');
+                // Capitalize first letter of each word
+                nodeName = nodeName.toLowerCase();
+                bool capitalizeNext = true;
+                for (int i = 0; i < nodeName.length(); ++i)
+                {
+                    if (capitalizeNext && juce::CharacterFunctions::isLetter(nodeName[i]))
+                    {
+                        nodeName = nodeName.substring(0, i) + juce::String::charToString(nodeName[i]).toUpperCase() + nodeName.substring(i + 1);
+                        capitalizeNext = false;
+                    }
+                    else if (nodeName[i] == ' ')
+                        capitalizeNext = true;
+                }
                 const int logicalId = (int) synth->getLogicalIdForNode (nodeId);
                 // This places the new node exactly where the user right-clicked
                 pendingNodeScreenPositions[logicalId] = ImGui::GetMousePosOnOpeningCurrentPopup();
@@ -4143,7 +4099,7 @@ if (auto* mp = synth->getModuleForLogical (lid))
                     if (ImGui::MenuItem("Face Tracker")) addAtMouse("face_tracker");
                     if (ImGui::MenuItem("Color Tracker")) addAtMouse("color_tracker");
                     if (ImGui::MenuItem("Contour Detector")) addAtMouse("contour_detector");
-                    if (ImGui::MenuItem("Semantic Segmentation")) addAtMouse("semantic_segmentation");
+                    if (ImGui::MenuItem("Semantic Segmentation")) addAtMouse("semantic_segmentmentation");
                     ImGui::EndMenu();
                 }
                 
@@ -4570,6 +4526,8 @@ if (auto* mp = synth->getModuleForLogical (lid))
                 // After a restore, clear transient link maps only; keep pending positions so they apply next frame
                 linkIdToAttrs.clear();
                 // modLinkIdToRoute.clear(); // TODO: Remove when fully migrated
+
+                NotificationManager::post(NotificationManager::Type::Info, "Undo");
             }
         }
         if (ctrl && ImGui::IsKeyPressed (ImGuiKey_Y))
@@ -4581,6 +4539,7 @@ if (auto* mp = synth->getModuleForLogical (lid))
                 undoStack.push_back (s);
                 linkIdToAttrs.clear();
                 // modLinkIdToRoute.clear(); // TODO: Remove when fully migrated
+                NotificationManager::post(NotificationManager::Type::Info, "Redo");
             }
         }
 
@@ -4635,6 +4594,7 @@ if (auto* mp = synth->getModuleForLogical (lid))
                     }
                 }
                 pushSnapshot();
+                NotificationManager::post(NotificationManager::Type::Info, "Duplicated " + juce::String(n) + " node(s)");
             }
         }
         
@@ -4657,7 +4617,6 @@ if (auto* mp = synth->getModuleForLogical (lid))
 
         handleDeletion();
     }
-
     // === MIDI DEVICE MANAGER WINDOW ===
     if (showMidiDeviceManager)
     {
@@ -4886,6 +4845,9 @@ if (auto* mp = synth->getModuleForLogical (lid))
 
     ImGui::End();
     // drawPendingModPopup(); // TODO: Remove when fully migrated
+
+    // Render notification system (must be called at the end to appear on top)
+    NotificationManager::render();
 
     // No deferred snapshots; unified pre-state strategy
 }
@@ -5200,6 +5162,7 @@ void ImGuiNodeEditorComponent::handleDeletion()
     }
     graphNeedsRebuild = true;
     pushSnapshot();
+    NotificationManager::post(NotificationManager::Type::Info, "Deleted " + juce::String(numSelNodes) + " node(s)");
 }
 
 void ImGuiNodeEditorComponent::bypassDeleteSelectedNodes()
@@ -5224,6 +5187,7 @@ void ImGuiNodeEditorComponent::bypassDeleteSelectedNodes()
     }
     graphNeedsRebuild = true;
     pushSnapshot();
+    NotificationManager::post(NotificationManager::Type::Info, "Deleted " + juce::String(numSelNodes) + " node(s)");
 }
 
 void ImGuiNodeEditorComponent::bypassDeleteNode(juce::uint32 logicalId)
@@ -5412,8 +5376,6 @@ void ImGuiNodeEditorComponent::handleMuteToggle()
 
     graphNeedsRebuild = true;
 }
-
-
 void ImGuiNodeEditorComponent::savePresetToFile(const juce::File& file)
 {
     if (isSaveInProgress.exchange(true)) // Atomically check and set
@@ -5507,14 +5469,77 @@ std::vector<juce::uint32> ImGuiNodeEditorComponent::getMutedNodeIds() const
 
 void ImGuiNodeEditorComponent::startLoadDialog()
 {
-    loadChooser = std::make_unique<juce::FileChooser> ("Load preset", findPresetsDirectory(), "*.xml");
-    loadChooser->launchAsync (juce::FileBrowserComponent::openMode | juce::FileBrowserComponent::canSelectFiles,
-        [this] (const juce::FileChooser& fc)
+    NotificationManager::post(NotificationManager::Type::Info, "Opening Load Preset dialog...", 3.0f);
+    loadChooser = std::make_unique<juce::FileChooser>("Load preset", findPresetsDirectory(), "*.xml");
+    loadChooser->launchAsync(juce::FileBrowserComponent::openMode | juce::FileBrowserComponent::canSelectFiles,
+        [this](const juce::FileChooser& fc)
     {
-        auto f = fc.getResult();
-        if (f.existsAsFile())
+        auto file = fc.getResult();
+        if (!file.existsAsFile()) return;
+        NotificationManager::post(NotificationManager::Type::Info, "Loading: " + file.getFileName(), 5.0f);
+
+        auto xml = juce::XmlDocument::parse(file);
+        if (!xml)
         {
-            loadPresetFromFile(f); // Use the unified loading function
+            NotificationManager::post(NotificationManager::Type::Error, "Preset failed to load: Not a valid XML file.");
+            return;
+        }
+        juce::ValueTree presetVT = juce::ValueTree::fromXml(*xml);
+
+        // === STAGE 1 & 2: HEAL THE PRESET (RULE-BASED) ===
+        PresetAutoHealer healer;
+        auto healingMessages = healer.heal(presetVT);
+
+        // === STAGE 3: VALIDATE THE (NOW HEALED) PRESET ===
+        PresetValidator validator;
+        auto issues = validator.validate(presetVT);
+        int errorCount = 0;
+        int warningCount = 0;
+        for (const auto& issue : issues)
+        {
+            if (issue.severity == PresetValidator::Issue::Error) errorCount++; else warningCount++;
+        }
+
+        // Report errors/warnings but proceed to load to match built-in loader behavior
+        if (errorCount > 0)
+        {
+            juce::String summary = "Validation found " + juce::String(errorCount) + " error(s). Attempting load anyway.";
+            if (!healingMessages.empty()) summary += " (" + juce::String((int)healingMessages.size()) + " issue(s) auto-healed).";
+            NotificationManager::post(NotificationManager::Type::Warning, summary, 12.0f);
+            for (const auto& issue : issues)
+            {
+                if (issue.severity == PresetValidator::Issue::Error)
+                    NotificationManager::post(NotificationManager::Type::Warning, issue.message, 12.0f);
+            }
+        }
+
+        // === STAGE 4: LOAD THE HEALED DATA ===
+        juce::MemoryBlock mb;
+        juce::MemoryOutputStream mos(mb, false);
+        if (auto healedXml = presetVT.createXml()) healedXml->writeTo(mos);
+        synth->setStateInformation(mb.getData(), (int)mb.getSize());
+        auto uiState = presetVT.getChildWithName("NodeEditorUI");
+        if (uiState.isValid()) applyUiValueTree(uiState);
+        isPatchDirty = false;
+        currentPresetFile = file;
+        pushSnapshot();
+
+        // === STAGE 5: NOTIFY ===
+        if (!healingMessages.empty() || warningCount > 0 || errorCount > 0)
+        {
+            juce::String summary = "Loaded with " + juce::String(warningCount + errorCount) + " issue(s).";
+            NotificationManager::post(NotificationManager::Type::Warning, summary, 8.0f);
+            for (const auto& msg : healingMessages)
+                NotificationManager::post(NotificationManager::Type::Info, msg, 8.0f);
+            for (const auto& issue : issues)
+                NotificationManager::post(
+                    issue.severity == PresetValidator::Issue::Warning ? NotificationManager::Type::Warning
+                                                                       : NotificationManager::Type::Warning,
+                    issue.message, 8.0f);
+        }
+        else
+        {
+            NotificationManager::post(NotificationManager::Type::Success, "Loaded: " + file.getFileNameWithoutExtension());
         }
     });
 }
@@ -6130,7 +6155,6 @@ void ImGuiNodeEditorComponent::handleMidiPlayerAutoConnectVCO(MIDIPlayerModulePr
     graphNeedsRebuild = true;
     juce::Logger::writeToLog("--- [AutoConnectVCO] Routine complete. ---");
 }
-
 void ImGuiNodeEditorComponent::handleMidiPlayerAutoConnectHybrid(MIDIPlayerModuleProcessor* midiPlayer, juce::uint32 midiPlayerLid)
 {
     if (!synth || !midiPlayer) return;
@@ -6924,7 +6948,6 @@ void ImGuiNodeEditorComponent::handleAutoConnectionRequests()
         }
     }
 }
-
 void ImGuiNodeEditorComponent::handleMIDIPlayerConnectionRequest(juce::uint32 midiPlayerLid, MIDIPlayerModuleProcessor* midiPlayer, int requestType)
 {
     if (!synth || !midiPlayer) return;
@@ -7133,7 +7156,7 @@ void ImGuiNodeEditorComponent::drawInsertNodeOnLinkPopup()
             {"Human Detector", "human_detector"}, {"Object Detector", "object_detector"},
             {"Pose Estimator", "pose_estimator"}, {"Hand Tracker", "hand_tracker"},
             {"Face Tracker", "face_tracker"}, {"Color Tracker", "color_tracker"},
-            {"Contour Detector", "contour_detector"}, {"Semantic Segmentation", "semantic_segmentation"}
+            {"Contour Detector", "contour_detector"}, {"Semantic Segmentation", "semantic_segmentmentation"}
         };
         const auto& listToShow = linkToInsertOn.isMod ? modInsertable : audioInsertable;
 
@@ -7242,6 +7265,23 @@ void ImGuiNodeEditorComponent::insertNodeOnLink(const juce::String& nodeType, co
         newNodeId = synth->addModule(nodeType);
     }
     
+    juce::String nodeName = isVst ? nodeType : juce::String(nodeType).replaceCharacter('_', ' ');
+    if (!isVst)
+    {
+        nodeName = nodeName.toLowerCase();
+        bool capitalizeNext = true;
+        for (int i = 0; i < nodeName.length(); ++i)
+        {
+            if (capitalizeNext && juce::CharacterFunctions::isLetter(nodeName[i]))
+            {
+                nodeName = nodeName.substring(0, i) + juce::String::charToString(nodeName[i]).toUpperCase() + nodeName.substring(i + 1);
+                capitalizeNext = false;
+            }
+            else if (nodeName[i] == ' ')
+                capitalizeNext = true;
+        }
+    }
+    
     auto newNodeLid = synth->getLogicalIdForNode(newNodeId);
     pendingNodeScreenPositions[(int)newNodeLid] = position;
 
@@ -7266,7 +7306,7 @@ void ImGuiNodeEditorComponent::insertNodeOnLink(const juce::String& nodeType, co
         }
     }
 
-    // 5. Reconnect Through the New Node
+    // 5. Reconnect through the New Node
     synth->connect(originalSrcNodeId, linkInfo.srcPin.channel, newNodeId, 0);
     synth->connect(newNodeId, newNodeOutputChannel, originalDstNodeId, linkInfo.dstPin.channel);
 }
@@ -7305,6 +7345,23 @@ void ImGuiNodeEditorComponent::insertNodeOnLinkStereo(const juce::String& nodeTy
     if (!isVst)
     {
         newNodeId = synth->addModule(nodeType);
+    }
+    
+    juce::String nodeName = isVst ? nodeType : juce::String(nodeType).replaceCharacter('_', ' ');
+    if (!isVst)
+    {
+        nodeName = nodeName.toLowerCase();
+        bool capitalizeNext = true;
+        for (int i = 0; i < nodeName.length(); ++i)
+        {
+            if (capitalizeNext && juce::CharacterFunctions::isLetter(nodeName[i]))
+            {
+                nodeName = nodeName.substring(0, i) + juce::String::charToString(nodeName[i]).toUpperCase() + nodeName.substring(i + 1);
+                capitalizeNext = false;
+            }
+            else if (nodeName[i] == ' ')
+                capitalizeNext = true;
+        }
     }
     
     auto newNodeLid = synth->getLogicalIdForNode(newNodeId);
@@ -7637,9 +7694,6 @@ const char* ImGuiNodeEditorComponent::pinDataTypeToString(PinDataType type)
         default:                 return "Unknown";
     }
 }
-
-// Add this new function implementation to the .cpp file.
-
 void ImGuiNodeEditorComponent::handleNodeChaining()
 {
     if (synth == nullptr) return;
@@ -7704,8 +7758,6 @@ void ImGuiNodeEditorComponent::handleNodeChaining()
     // 4. Apply all the new connections to the audio graph.
     graphNeedsRebuild = true;
 }
-
-// Add this new helper function implementation.
 
 std::vector<AudioPin> ImGuiNodeEditorComponent::getPinsOfType(juce::uint32 logicalId, bool isInput, PinDataType targetType)
 {
@@ -7785,8 +7837,6 @@ std::vector<AudioPin> ImGuiNodeEditorComponent::getPinsOfType(juce::uint32 logic
 
     return matchingPins;
 }
-
-// Add this new function implementation to the .cpp file.
 
 void ImGuiNodeEditorComponent::handleRecordOutput()
 {
@@ -8113,7 +8163,7 @@ std::map<juce::String, std::pair<const char*, const char*>> ImGuiNodeEditorCompo
         {"Face Tracker", {"face_tracker", "Detects 70 facial landmarks and outputs X/Y positions as CV (140 channels)"}},
         {"Color Tracker", {"color_tracker", "Tracks multiple colors in video and outputs their positions and sizes as CV"}},
         {"Contour Detector", {"contour_detector", "Detects shapes via background subtraction and outputs area, complexity, and aspect ratio as CV"}},
-        {"Semantic Segmentation", {"semantic_segmentation", "Uses deep learning to segment video into semantic regions and outputs detected areas as CV"}},
+        {"Semantic Segmentation", {"semantic_segmentmentation", "Uses deep learning to segment video into semantic regions and outputs detected areas as CV"}},
         
         // Effects
         {"VCF", {"vcf", "Voltage Controlled Filter"}},
@@ -8248,7 +8298,6 @@ void ImGuiNodeEditorComponent::addPluginModules()
         }
     }
 }
-
 void ImGuiNodeEditorComponent::handleCollapseToMetaModule()
 {
     if (!synth)
@@ -8569,6 +8618,7 @@ void ImGuiNodeEditorComponent::handleCollapseToMetaModule()
     synth->commitChanges();
     
     juce::Logger::writeToLog("[META] Reconnected external cables. Collapse complete!");
+    NotificationManager::post(NotificationManager::Type::Info, "Collapsed to Meta Module");
 }
 
 void ImGuiNodeEditorComponent::loadPresetFromFile(const juce::File& file)
@@ -8604,11 +8654,11 @@ void ImGuiNodeEditorComponent::loadPresetFromFile(const juce::File& file)
     undoStack.push_back(std::move(s));
     redoStack.clear();
 
-    // 6. Update the UI status trackers.
+    // 5. Update the UI status trackers.
     isPatchDirty = false;
     currentPresetFile = file; // Store full file path
     
-    juce::Logger::writeToLog("[Preset] Successfully loaded preset: " + file.getFullPathName());
+    // No notification here; the calling function will handle it.
 }
 
 void ImGuiNodeEditorComponent::mergePresetFromFile(const juce::File& file, ImVec2 dropPosition)
@@ -8758,6 +8808,5 @@ void ImGuiNodeEditorComponent::mergePresetFromFile(const juce::File& file, ImVec
     
     juce::Logger::writeToLog("[Preset] Successfully merged preset: " + file.getFullPathName() + 
                              " above existing nodes with offsets (" + juce::String(xOffset) + ", " + juce::String(yOffset) + ")");
+    NotificationManager::post(NotificationManager::Type::Success, "Merged: " + file.getFileNameWithoutExtension());
 }
-
-

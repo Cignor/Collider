@@ -14,6 +14,7 @@
 #include "SampleManager.h"
 #include "MidiManager.h"
 #include "ControllerPresetManager.h"
+#include "NotificationManager.h"
 
 // Forward declarations from Dear ImGui / imnodes
 struct ImGuiContext; struct ImGuiIO; struct ImNodesContext;
@@ -73,6 +74,12 @@ public:
     void setModel (ModularSynthProcessor* model)
     { 
         synth = model; 
+        if (synth)
+        {
+            synth->setOnModuleCreated([](const juce::String& pretty){
+                NotificationManager::post(NotificationManager::Type::Info, "Created " + pretty + " node");
+            });
+        }
         undoStack.clear(); 
         redoStack.clear(); 
     }

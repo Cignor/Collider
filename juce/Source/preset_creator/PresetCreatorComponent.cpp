@@ -188,7 +188,7 @@ void PresetCreatorComponent::buttonClicked (juce::Button* b)
     else if (b == &btnAddVCA) { synth->addModule ("VCA"); synth->commitChanges(); refreshModulesList(); }
     else if (b == &btnConnect) { doConnect(); }
     else if (b == &btnSave) { doSave(); }
-    else if (b == &btnLoad) { doLoad(); }
+    else if (b == &btnLoad) { if (editor) editor->startLoadDialog(); }
 }
 
 void PresetCreatorComponent::refreshModulesList()
@@ -331,54 +331,7 @@ void PresetCreatorComponent::doSave()
     });
 }
 
-void PresetCreatorComponent::doLoad()
-{
-    // Default to project-root/Synth_presets
-    juce::File startDir;
-    {
-        auto exeDir = juce::File::getSpecialLocation(juce::File::currentExecutableFile).getParentDirectory();
-        auto dir = exeDir;
-        for (int i = 0; i < 8 && dir.exists(); ++i)
-        {
-            auto candidate = dir.getSiblingFile("Synth_presets");
-            if (candidate.exists() && candidate.isDirectory()) { startDir = candidate; break; }
-            dir = dir.getParentDirectory();
-        }
-    }
-    if (! startDir.exists()) startDir = juce::File();
-    loadChooser = std::make_unique<juce::FileChooser> ("Load preset", startDir, "*.xml");
-    loadChooser->launchAsync (juce::FileBrowserComponent::openMode | juce::FileBrowserComponent::canSelectFiles,
-        [this] (const juce::FileChooser& fc) noexcept
-    {
-        try {
-            auto f = fc.getResult();
-            if (f.existsAsFile())
-            {
-                juce::MemoryBlock mb;
-                f.loadFileAsData (mb);
-                // First set the synth state
-                synth->setStateInformation (mb.getData(), (int) mb.getSize());
-                // Then parse and queue UI state for next frame (ensures editor exists and nodes are created)
-                if (editor)
-                {
-                    if (auto xml = juce::XmlDocument::parse (mb.toString()))
-                    {
-                        auto vt = juce::ValueTree::fromXml (*xml);
-                        auto ui = vt.getChildWithName ("NodeEditorUI");
-                        if (ui.isValid())
-                            editor->applyUiValueTreeNow (ui);
-                    }
-                }
-                refreshModulesList();
-                log.insertTextAtCaret ("Loaded: " + f.getFullPathName() + "\n");
-                
-                setWindowFileName(f.getFileName()); // Update title bar with filename
-            }
-        } catch (...) {
-            juce::Logger::writeToLog ("[PresetCreator][FATAL] Exception in doLoad callback");
-        }
-    });
-}
+// Removed legacy doLoad(): loading is centralized in ImGuiNodeEditorComponent::startLoadDialog()
 
 bool PresetCreatorComponent::keyPressed (const juce::KeyPress& key)
 {
