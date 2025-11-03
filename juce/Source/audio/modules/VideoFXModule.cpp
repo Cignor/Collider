@@ -15,7 +15,6 @@ juce::AudioProcessorValueTreeState::ParameterLayout VideoFXModule::createParamet
 {
     std::vector<std::unique_ptr<juce::RangedAudioParameter>> params;
 
-    params.push_back(std::make_unique<juce::AudioParameterBool>("useGpu", "Use GPU (CUDA)", true)); // Default ON for better performance
     params.push_back(std::make_unique<juce::AudioParameterChoice>("zoomLevel", "Zoom Level", juce::StringArray{ "Small", "Normal", "Large" }, 1));
     
     // Color
@@ -42,7 +41,7 @@ juce::AudioProcessorValueTreeState::ParameterLayout VideoFXModule::createParamet
     params.push_back(std::make_unique<juce::AudioParameterFloat>("thresholdLevel", "Threshold Level", 0.0f, 255.0f, 127.0f));
     
     // New Effects
-    params.push_back(std::make_unique<juce::AudioParameterInt>("posterizeLevels", "Posterize Levels", 2, 32, 32));
+    params.push_back(std::make_unique<juce::AudioParameterInt>("posterizeLevels", "Posterize Levels", 2, 16, 16));
     params.push_back(std::make_unique<juce::AudioParameterFloat>("vignetteAmount", "Vignette Amount", 0.0f, 1.0f, 0.0f));
     params.push_back(std::make_unique<juce::AudioParameterFloat>("vignetteSize", "Vignette Size", 0.1f, 2.0f, 0.5f));
     params.push_back(std::make_unique<juce::AudioParameterInt>("pixelateSize", "Pixelate Block Size", 1, 128, 1));
@@ -61,7 +60,6 @@ VideoFXModule::VideoFXModule()
       juce::Thread("VideoFX Thread"),
       apvts(*this, nullptr, "VideoFXParams", createParameterLayout())
 {
-    useGpuParam = dynamic_cast<juce::AudioParameterBool*>(apvts.getParameter("useGpu"));
     zoomLevelParam = apvts.getRawParameterValue("zoomLevel");
     brightnessParam = apvts.getRawParameterValue("brightness");
     contrastParam = apvts.getRawParameterValue("contrast");
@@ -103,6 +101,264 @@ VideoFXModule::~VideoFXModule()
 void VideoFXModule::prepareToPlay(double, int) { startThread(); }
 void VideoFXModule::releaseResources() { signalThreadShouldExit(); stopThread(5000); }
 
+// ==============================================================================
+// === PRIVATE EFFECT HELPER FUNCTIONS ==========================================
+// ==============================================================================
+
+void VideoFXModule::applyBrightnessContrast(cv::Mat& ioFrame, float brightness, float contrast)
+{
+    if (brightness != 0.0f || contrast != 1.0f) {
+        ioFrame.convertTo(ioFrame, -1, contrast, brightness);
+    }
+}
+
+void VideoFXModule::applyTemperature(cv::Mat& ioFrame, float temperature)
+{
+    if (temperature == 0.0f) return;
+
+    std::vector<cv::Mat> bgr;
+    cv::split(ioFrame, bgr);
+    float factor = temperature;
+    
+    // Original logic was wrong (applied same effect for warm/cool)
+    // This is corrected:
+    if (factor < 0.0f) { // Cool (add blue, remove red)
+        bgr[0] = bgr[0] * (1.0f - factor); // Add Blue
+        bgr[2] = bgr[2] * (1.0f + factor); // Remove Red
+    } else { // Warm (add red, remove blue)
+        bgr[0] = bgr[0] * (1.0f - factor); // Remove Blue
+        bgr[2] = bgr[2] * (1.0f + factor); // Add Red
+    }
+    
+    cv::merge(bgr, ioFrame);
+}
+
+void VideoFXModule::applySepia(cv::Mat& ioFrame, bool sepia)
+{
+    if (!sepia) return;
+    cv::Mat sepiaKernel = (cv::Mat_<float>(3,3) << 0.272, 0.534, 0.131, 0.349, 0.686, 0.168, 0.393, 0.769, 0.189);
+    cv::transform(ioFrame, ioFrame, sepiaKernel);
+}
+
+void VideoFXModule::applySaturationHue(cv::Mat& ioFrame, float saturation, float hueShift)
+{
+    if (saturation == 1.0f && hueShift == 0.0f) return;
+
+    cv::Mat hsv;
+    cv::cvtColor(ioFrame, hsv, cv::COLOR_BGR2HSV);
+    std::vector<cv::Mat> hsvChannels;
+    cv::split(hsv, hsvChannels);
+    
+    if (hueShift != 0.0f) {
+         hsvChannels[0].convertTo(hsvChannels[0], CV_32F);
+         hsvChannels[0] += (hueShift / 2.0f);
+         cv::Mat mask = hsvChannels[0] < 0;
+         cv::add(hsvChannels[0], 180, hsvChannels[0], mask);
+         mask = hsvChannels[0] >= 180;
+         cv::subtract(hsvChannels[0], 180, hsvChannels[0], mask);
+         hsvChannels[0].convertTo(hsvChannels[0], CV_8U);
+    }
+    if (saturation != 1.0f) {
+        hsvChannels[1].convertTo(hsvChannels[1], CV_32F);
+        hsvChannels[1] *= saturation;
+        hsvChannels[1].convertTo(hsvChannels[1], CV_8U);
+    }
+    cv::merge(hsvChannels, hsv);
+    cv::cvtColor(hsv, ioFrame, cv::COLOR_HSV2BGR);
+}
+
+void VideoFXModule::applyRgbGain(cv::Mat& ioFrame, float gainR, float gainG, float gainB)
+{
+    if (gainR == 1.0f && gainG == 1.0f && gainB == 1.0f) return;
+    
+    std::vector<cv::Mat> bgr;
+    cv::split(ioFrame, bgr);
+    if (gainB != 1.0f) bgr[0] *= gainB;
+    if (gainG != 1.0f) bgr[1] *= gainG;
+    if (gainR != 1.0f) bgr[2] *= gainR;
+    cv::merge(bgr, ioFrame);
+}
+
+void VideoFXModule::applyPosterize(cv::Mat& ioFrame, int levels)
+{
+    // levels is 2-16. 16 is "off".
+    if (levels >= 16) return;
+    if (levels < 2) levels = 2;
+
+    // --- NEW, ROBUST LOGIC ---
+    // This math correctly maps the 0-255 range to 'levels' number of steps.
+    // e.g., if levels = 2, it maps to 0 and 255.
+    // e.g., if levels = 3, it maps to 0, 127, 255.
+
+    // 1. Calculate the divider
+    const int divider = 255 / (levels - 1); // e.g., 255 / (2-1) = 255
+
+    // 2. Convert to 16-bit to prevent overflow during math
+    ioFrame.convertTo(ioFrame, CV_16U);
+
+    // 3. Scale down, round, and scale back up
+    // This is an integer-math version of:
+    // ioFrame = round(ioFrame / divider) * divider;
+    ioFrame = (ioFrame + (divider / 2)) / divider;
+    ioFrame = ioFrame * divider;
+
+    // 4. Convert back to 8-bit
+    ioFrame.convertTo(ioFrame, CV_8U);
+}
+
+void VideoFXModule::applyGrayscale(cv::Mat& ioFrame, bool grayscale)
+{
+    if (!grayscale) return;
+    cv::cvtColor(ioFrame, ioFrame, cv::COLOR_BGR2GRAY);
+    cv::cvtColor(ioFrame, ioFrame, cv::COLOR_GRAY2BGR);
+}
+
+void VideoFXModule::applyCanny(cv::Mat& ioFrame, float thresh1, float thresh2)
+{
+    // Canny needs a grayscale image
+    cv::Mat gray;
+    cv::cvtColor(ioFrame, gray, cv::COLOR_BGR2GRAY);
+    cv::Canny(gray, gray, thresh1, thresh2);
+    cv::cvtColor(gray, ioFrame, cv::COLOR_GRAY2BGR);
+}
+
+void VideoFXModule::applyThreshold(cv::Mat& ioFrame, float level)
+{
+    cv::Mat gray;
+    cv::cvtColor(ioFrame, gray, cv::COLOR_BGR2GRAY);
+    cv::threshold(gray, gray, level, 255, cv::THRESH_BINARY);
+    cv::cvtColor(gray, ioFrame, cv::COLOR_GRAY2BGR);
+}
+
+void VideoFXModule::applyInvert(cv::Mat& ioFrame, bool invert)
+{
+    if (!invert) return;
+    cv::bitwise_not(ioFrame, ioFrame);
+}
+
+void VideoFXModule::applyFlip(cv::Mat& ioFrame, bool flipH, bool flipV)
+{
+    if (!flipH && !flipV) return;
+    int flipCode = flipH && flipV ? -1 : (flipH ? 1 : 0);
+    cv::flip(ioFrame, ioFrame, flipCode);
+}
+
+void VideoFXModule::applyVignette(cv::Mat& ioFrame, float amount, float size)
+{
+    if (amount <= 0.0f) return;
+
+     cv::Mat vignette = cv::Mat::zeros(ioFrame.size(), CV_32F);
+     int centerX = ioFrame.cols / 2;
+     int centerY = ioFrame.rows / 2;
+     float maxDist = std::sqrt((float)centerX * centerX + (float)centerY * centerY) * size;
+     if (maxDist <= 0.0f) maxDist = 1.0f; // Avoid divide by zero
+
+     for (int y = 0; y < ioFrame.rows; y++) {
+         for (int x = 0; x < ioFrame.cols; x++) {
+             float dist = std::sqrt(std::pow(x - centerX, 2) + std::pow(y - centerY, 2));
+             float v = 1.0f - (dist / maxDist) * amount;
+             vignette.at<float>(y, x) = juce::jlimit(0.0f, 1.0f, v);
+         }
+     }
+     
+     std::vector<cv::Mat> bgr;
+     cv::split(ioFrame, bgr);
+     for (size_t i = 0; i < bgr.size(); i++) {
+         bgr[i].convertTo(bgr[i], CV_32F);
+         cv::multiply(bgr[i], vignette, bgr[i]);
+         bgr[i].convertTo(bgr[i], CV_8U);
+     }
+     cv::merge(bgr, ioFrame);
+}
+
+void VideoFXModule::applyPixelate(cv::Mat& ioFrame, int pixelSize)
+{
+    if (pixelSize <= 1) return;
+
+    int w = ioFrame.cols;
+    int h = ioFrame.rows;
+    cv::Mat temp;
+    cv::resize(ioFrame, temp, cv::Size(w / pixelSize, h / pixelSize), 0, 0, cv::INTER_NEAREST);
+    cv::resize(temp, ioFrame, cv::Size(w, h), 0, 0, cv::INTER_NEAREST);
+}
+
+void VideoFXModule::applyBlur(cv::Mat& ioFrame, float blur)
+{
+    // *** THIS IS THE BUG FIX ***
+    // We use a small threshold and ensure the kernel size is an odd number > 1.
+    
+    if (blur <= 0.1f) return; // No blur
+
+    // Round to nearest integer, not truncate
+    int ksize = static_cast<int>(std::round(blur));
+    
+    // Ensure kernel size is ODD
+    if (ksize % 2 == 0) ksize++; 
+    
+    // Ensure kernel size is at least 3
+    if (ksize < 3) ksize = 3; 
+
+    cv::GaussianBlur(ioFrame, ioFrame, cv::Size(ksize, ksize), 0);
+}
+
+void VideoFXModule::applySharpen(cv::Mat& ioFrame, float sharpen)
+{
+    if (sharpen <= 0.0f) return;
+    
+    cv::Mat temp;
+    ioFrame.convertTo(temp, CV_16SC3);
+    cv::Mat blurred;
+    cv::GaussianBlur(temp, blurred, cv::Size(0, 0), 3);
+    cv::addWeighted(temp, 1.0 + sharpen, blurred, -sharpen, 0, temp);
+    temp.convertTo(ioFrame, CV_8UC3);
+}
+
+void VideoFXModule::applyKaleidoscope(cv::Mat& ioFrame, int mode)
+{
+    if (mode == 0) return; // "None"
+
+    int w = ioFrame.cols;
+    int h = ioFrame.rows;
+    int halfW = w / 2;
+    int halfH = h / 2;
+    
+    // Ensure we have at least 2x2 pixels
+    if (halfW < 1 || halfH < 1) return; 
+
+    cv::Mat quadrant = ioFrame(cv::Rect(0, 0, halfW, halfH)).clone();
+
+    if (mode == 1) { // 4-Way
+        cv::Mat flippedH, flippedV, flippedBoth;
+        cv::flip(quadrant, flippedH, 1);
+        cv::flip(quadrant, flippedV, 0);
+        cv::flip(quadrant, flippedBoth, -1);
+        quadrant.copyTo(ioFrame(cv::Rect(0, 0, halfW, halfH)));
+        flippedH.copyTo(ioFrame(cv::Rect(halfW, 0, halfW, halfH)));
+        flippedV.copyTo(ioFrame(cv::Rect(0, halfH, halfW, halfH)));
+        flippedBoth.copyTo(ioFrame(cv::Rect(halfW, halfH, halfW, halfH)));
+    } else if (mode == 2) { // 8-Way
+        cv::Mat symmQuadrant = quadrant.clone();
+        cv::Mat mask = cv::Mat::zeros(quadrant.size(), CV_8U);
+        std::vector<cv::Point> triangle_pts = {cv::Point(0,0), cv::Point(halfW, 0), cv::Point(0, halfH)};
+        cv::fillConvexPoly(mask, triangle_pts, cv::Scalar(255));
+        
+        cv::Mat tri;
+        quadrant.copyTo(tri, mask);
+        cv::Mat tri_flipped_h;
+        cv::flip(tri, tri_flipped_h, 1);
+        tri_flipped_h.copyTo(symmQuadrant, ~mask);
+
+        cv::Mat flippedH, flippedV, flippedBoth;
+        cv::flip(symmQuadrant, flippedH, 1);
+        cv::flip(symmQuadrant, flippedV, 0);
+        cv::flip(symmQuadrant, flippedBoth, -1);
+        symmQuadrant.copyTo(ioFrame(cv::Rect(0, 0, halfW, halfH)));
+        flippedH.copyTo(ioFrame(cv::Rect(halfW, 0, halfW, halfH)));
+        flippedV.copyTo(ioFrame(cv::Rect(0, halfH, halfW, halfH)));
+        flippedBoth.copyTo(ioFrame(cv::Rect(halfW, halfH, halfW, halfH)));
+    }
+}
+
 void VideoFXModule::run()
 {
     while (!threadShouldExit())
@@ -113,7 +369,7 @@ void VideoFXModule::run()
         cv::Mat frame = VideoFrameManager::getInstance().getFrame(sourceId);
         if (frame.empty()) { wait(33); continue; }
 
-        // Get all parameter values once at the start of the frame
+        // --- 1. Get all parameter values once ---
         float brightness = brightnessParam ? brightnessParam->load() : 0.0f;
         float contrast = contrastParam ? contrastParam->load() : 1.0f;
         float saturation = saturationParam ? saturationParam->load() : 1.0f;
@@ -131,7 +387,7 @@ void VideoFXModule::run()
         bool flipV = flipVerticalParam ? flipVerticalParam->get() : false;
         bool thresholdEnable = thresholdEnableParam ? thresholdEnableParam->get() : false;
         float thresholdLevel = thresholdLevelParam ? thresholdLevelParam->load() : 127.0f;
-        int posterizeLevels = posterizeLevelsParam ? posterizeLevelsParam->get() : 32;
+        int posterizeLevels = posterizeLevelsParam ? posterizeLevelsParam->get() : 16;
         float vignetteAmount = vignetteAmountParam ? vignetteAmountParam->load() : 0.0f;
         float vignetteSize = vignetteSizeParam ? vignetteSizeParam->load() : 0.5f;
         int pixelateSize = pixelateBlockSizeParam ? pixelateBlockSizeParam->get() : 1;
@@ -139,231 +395,42 @@ void VideoFXModule::run()
         float cannyThresh1 = cannyThresh1Param ? cannyThresh1Param->load() : 50.0f;
         float cannyThresh2 = cannyThresh2Param ? cannyThresh2Param->load() : 150.0f;
         int kaleidoscopeMode = kaleidoscopeModeParam ? kaleidoscopeModeParam->getIndex() : 0;
-        bool useGpu = useGpuParam ? useGpuParam->get() : false;
-
-        cv::Mat processedFrame;
-
-#if defined(WITH_CUDA_SUPPORT)
-        if (useGpu && cv::cuda::getCudaEnabledDeviceCount() > 0)
-        {
-            try
-            {
-                cv::cuda::GpuMat gpuFrame, gpuTemp;
-                gpuFrame.upload(frame);
-
-                // GPU processing chain (simplified for now, complex effects fallback to CPU)
-                if (brightness != 0.0f || contrast != 1.0f) {
-                    gpuFrame.convertTo(gpuTemp, CV_8UC3, contrast, brightness);
-                    gpuTemp.copyTo(gpuFrame);
-                }
-                if (grayscale) {
-                    cv::cuda::cvtColor(gpuFrame, gpuTemp, cv::COLOR_BGR2GRAY);
-                    cv::cuda::cvtColor(gpuTemp, gpuFrame, cv::COLOR_GRAY2BGR);
-                }
-                if (blur > 0.0f) {
-                    int ksize = juce::jmax(1, static_cast<int>(blur) * 2 + 1);
-                    auto gaussian = cv::cuda::createGaussianFilter(gpuFrame.type(), -1, cv::Size(ksize, ksize), 0);
-                    gaussian->apply(gpuFrame, gpuTemp);
-                    gpuTemp.copyTo(gpuFrame);
-                }
-                if (invert) {
-                    cv::cuda::bitwise_not(gpuFrame, gpuTemp);
-                    gpuTemp.copyTo(gpuFrame);
-                }
-                if (flipH || flipV) {
-                    int flipCode = flipH && flipV ? -1 : (flipH ? 1 : 0);
-                    cv::cuda::flip(gpuFrame, gpuTemp, flipCode);
-                    gpuTemp.copyTo(gpuFrame);
-                }
-
-                gpuFrame.download(processedFrame);
-                goto cpu_color_ops_label; // Jump to CPU section for complex color ops
-            }
-            catch (const cv::Exception& e)
-            {
-                juce::Logger::writeToLog("[VideoFX] GPU processing error, falling back to CPU: " + juce::String(e.what()));
-                processedFrame = frame.clone();
-                goto cpu_path_label;
-            }
-        }
-        else
-#endif
-        {
-        cpu_path_label:
-            processedFrame = frame.clone();
-
-            // --- REORDERED & CORRECTED CPU EFFECTS CHAIN ---
-
-            // 1. Core Color Adjustments
-            if (brightness != 0.0f || contrast != 1.0f) {
-                processedFrame.convertTo(processedFrame, -1, contrast, brightness);
-            }
-            
-        cpu_color_ops_label: // Label for GPU fallback to join here
-
-            if (temperature != 0.0f) {
-                std::vector<cv::Mat> bgr;
-                cv::split(processedFrame, bgr);
-                float factor = temperature;
-                if (factor < 0.0f) { // Cool
-                    bgr[0] = bgr[0] * (1.0f - factor * 0.5f);
-                    bgr[2] = bgr[2] * (1.0f + factor * 0.5f);
-                } else { // Warm
-                    bgr[0] = bgr[0] * (1.0f - factor * 0.5f);
-                    bgr[2] = bgr[2] * (1.0f + factor * 0.5f);
-                }
-                cv::merge(bgr, processedFrame);
-            }
-            if (sepia) {
-                cv::Mat sepiaKernel = (cv::Mat_<float>(3,3) << 0.272, 0.534, 0.131, 0.349, 0.686, 0.168, 0.393, 0.769, 0.189);
-                cv::transform(processedFrame, processedFrame, sepiaKernel);
-            }
-            if (saturation != 1.0f || hueShift != 0.0f) {
-                cv::Mat hsv;
-                cv::cvtColor(processedFrame, hsv, cv::COLOR_BGR2HSV);
-                std::vector<cv::Mat> hsvChannels;
-                cv::split(hsv, hsvChannels);
-                if (hueShift != 0.0f) {
-                     hsvChannels[0].convertTo(hsvChannels[0], CV_32F);
-                     hsvChannels[0] += (hueShift / 2.0f);
-                     cv::Mat mask = hsvChannels[0] < 0;
-                     cv::add(hsvChannels[0], 180, hsvChannels[0], mask);
-                     mask = hsvChannels[0] >= 180;
-                     cv::subtract(hsvChannels[0], 180, hsvChannels[0], mask);
-                     hsvChannels[0].convertTo(hsvChannels[0], CV_8U);
-                }
-                if (saturation != 1.0f) {
-                    hsvChannels[1].convertTo(hsvChannels[1], CV_32F);
-                    hsvChannels[1] *= saturation;
-                    hsvChannels[1].convertTo(hsvChannels[1], CV_8U);
-                }
-                cv::merge(hsvChannels, hsv);
-                cv::cvtColor(hsv, processedFrame, cv::COLOR_HSV2BGR);
-            }
-            if (gainR != 1.0f || gainG != 1.0f || gainB != 1.0f) {
-                std::vector<cv::Mat> bgr;
-                cv::split(processedFrame, bgr);
-                if (gainB != 1.0f) bgr[0] *= gainB;
-                if (gainG != 1.0f) bgr[1] *= gainG;
-                if (gainR != 1.0f) bgr[2] *= gainR;
-                cv::merge(bgr, processedFrame);
-            }
-            if (posterizeLevels < 32) {
-                int levels = 256 / posterizeLevels;
-                if (levels > 0) {
-                    processedFrame = (processedFrame / levels) * levels + levels / 2;
-                }
-            }
-            
-            // 2. Monochrome & Edge Effects
-            if (grayscale) {
-                cv::cvtColor(processedFrame, processedFrame, cv::COLOR_BGR2GRAY);
-                cv::cvtColor(processedFrame, processedFrame, cv::COLOR_GRAY2BGR);
-            }
-            if (cannyEnable) {
-                cv::Mat gray;
-                cv::cvtColor(processedFrame, gray, cv::COLOR_BGR2GRAY);
-                cv::Canny(gray, gray, cannyThresh1, cannyThresh2);
-                cv::cvtColor(gray, processedFrame, cv::COLOR_GRAY2BGR);
-            } else if (thresholdEnable) {
-                cv::Mat gray;
-                cv::cvtColor(processedFrame, gray, cv::COLOR_BGR2GRAY);
-                cv::threshold(gray, gray, thresholdLevel, 255, cv::THRESH_BINARY);
-                cv::cvtColor(gray, processedFrame, cv::COLOR_GRAY2BGR);
-            }
-            if (invert) {
-                cv::bitwise_not(processedFrame, processedFrame);
-            }
-
-            // 3. Geometric & Spatial Filters (applied last for maximum impact)
-            if (flipH || flipV) {
-                int flipCode = flipH && flipV ? -1 : (flipH ? 1 : 0);
-                cv::flip(processedFrame, processedFrame, flipCode);
-            }
-            if (vignetteAmount > 0.0f) {
-                 cv::Mat vignette = cv::Mat::zeros(processedFrame.size(), CV_32F);
-                 int centerX = processedFrame.cols / 2;
-                 int centerY = processedFrame.rows / 2;
-                 float maxDist = std::sqrt((float)centerX * centerX + (float)centerY * centerY) * vignetteSize;
-                 for (int y = 0; y < processedFrame.rows; y++) {
-                     for (int x = 0; x < processedFrame.cols; x++) {
-                         float dist = std::sqrt(std::pow(x - centerX, 2) + std::pow(y - centerY, 2));
-                         float v = 1.0f - (dist / maxDist) * vignetteAmount;
-                         vignette.at<float>(y, x) = juce::jlimit(0.0f, 1.0f, v);
-                     }
-                 }
-                 std::vector<cv::Mat> bgr;
-                 cv::split(processedFrame, bgr);
-                 for (size_t i = 0; i < bgr.size(); i++) {
-                     bgr[i].convertTo(bgr[i], CV_32F);
-                     cv::multiply(bgr[i], vignette, bgr[i]);
-                     bgr[i].convertTo(bgr[i], CV_8U);
-                 }
-                 cv::merge(bgr, processedFrame);
-            }
-            if (pixelateSize > 1) {
-                int w = processedFrame.cols;
-                int h = processedFrame.rows;
-                cv::Mat temp;
-                cv::resize(processedFrame, temp, cv::Size(w / pixelateSize, h / pixelateSize), 0, 0, cv::INTER_NEAREST);
-                cv::resize(temp, processedFrame, cv::Size(w, h), 0, 0, cv::INTER_NEAREST);
-            }
-            if (blur > 0.0f) {
-                int ksize = juce::jmax(1, static_cast<int>(blur) * 2 + 1);
-                cv::GaussianBlur(processedFrame, processedFrame, cv::Size(ksize, ksize), 0);
-            }
-            if (sharpen > 0.0f) {
-                cv::Mat temp;
-                processedFrame.convertTo(temp, CV_16SC3);
-                cv::Mat blurred;
-                cv::GaussianBlur(temp, blurred, cv::Size(0, 0), 3);
-                cv::addWeighted(temp, 1.0 + sharpen, blurred, -sharpen, 0, temp);
-                temp.convertTo(processedFrame, CV_8UC3);
-            }
-        }
         
-        // --- KALEIDOSCOPE (APPLIED LAST - after all other effects) ---
-        if (kaleidoscopeMode > 0) {
-            int w = processedFrame.cols;
-            int h = processedFrame.rows;
-            int halfW = w / 2;
-            int halfH = h / 2;
-            cv::Mat quadrant = processedFrame(cv::Rect(0, 0, halfW, halfH)).clone();
+        // --- 2. Create a working copy of the frame ---
+        cv::Mat processedFrame = frame.clone();
 
-            if (kaleidoscopeMode == 1) { // 4-Way
-                cv::Mat flippedH, flippedV, flippedBoth;
-                cv::flip(quadrant, flippedH, 1);
-                cv::flip(quadrant, flippedV, 0);
-                cv::flip(quadrant, flippedBoth, -1);
-                quadrant.copyTo(processedFrame(cv::Rect(0, 0, halfW, halfH)));
-                flippedH.copyTo(processedFrame(cv::Rect(halfW, 0, halfW, halfH)));
-                flippedV.copyTo(processedFrame(cv::Rect(0, halfH, halfW, halfH)));
-                flippedBoth.copyTo(processedFrame(cv::Rect(halfW, halfH, halfW, halfH)));
-            } else if (kaleidoscopeMode == 2) { // 8-Way (CORRECTED LOGIC)
-                cv::Mat symmQuadrant = quadrant.clone();
-                cv::Mat mask = cv::Mat::zeros(quadrant.size(), CV_8U);
-                std::vector<cv::Point> triangle_pts = {cv::Point(0,0), cv::Point(halfW, 0), cv::Point(0, halfH)};
-                cv::fillConvexPoly(mask, triangle_pts, cv::Scalar(255));
-                
-                cv::Mat tri;
-                quadrant.copyTo(tri, mask);
-
-                cv::Mat tri_flipped_h;
-                cv::flip(tri, tri_flipped_h, 1);
-                tri_flipped_h.copyTo(symmQuadrant, ~mask);
-
-                cv::Mat flippedH, flippedV, flippedBoth;
-                cv::flip(symmQuadrant, flippedH, 1);
-                cv::flip(symmQuadrant, flippedV, 0);
-                cv::flip(symmQuadrant, flippedBoth, -1);
-                symmQuadrant.copyTo(processedFrame(cv::Rect(0, 0, halfW, halfH)));
-                flippedH.copyTo(processedFrame(cv::Rect(halfW, 0, halfW, halfH)));
-                flippedV.copyTo(processedFrame(cv::Rect(0, halfH, halfW, halfH)));
-                flippedBoth.copyTo(processedFrame(cv::Rect(halfW, halfH, halfW, halfH)));
-            }
-        }
+        // --- 3. Apply effects in sequence ---
+        // This is now clean and manageable!
+        // You can re-order these lines to change the effect chain.
         
-        // Publish and update UI
+        // Color Adjustments
+        applyBrightnessContrast(processedFrame, brightness, contrast);
+        applyTemperature(processedFrame, temperature);
+        applySepia(processedFrame, sepia);
+        applySaturationHue(processedFrame, saturation, hueShift);
+        applyRgbGain(processedFrame, gainR, gainG, gainB);
+        applyPosterize(processedFrame, posterizeLevels);
+        
+        // Monochrome & Edge Effects
+        applyGrayscale(processedFrame, grayscale);
+        if (cannyEnable) {
+            applyCanny(processedFrame, cannyThresh1, cannyThresh2);
+        } else if (thresholdEnable) {
+            applyThreshold(processedFrame, thresholdLevel);
+        }
+        applyInvert(processedFrame, invert);
+
+        // Geometric & Spatial Filters
+        applyFlip(processedFrame, flipH, flipV);
+        applyVignette(processedFrame, vignetteAmount, vignetteSize);
+        applyPixelate(processedFrame, pixelateSize);
+        applyBlur(processedFrame, blur);       // <-- Bug is fixed inside this function
+        applySharpen(processedFrame, sharpen);
+        
+        // Final kaleidoscope
+        applyKaleidoscope(processedFrame, kaleidoscopeMode);
+
+        // --- 4. Publish and update UI ---
         VideoFrameManager::getInstance().setFrame(getLogicalId(), processedFrame);
         updateGuiFrame(processedFrame);
 
@@ -468,7 +535,7 @@ void VideoFXModule::drawParametersInNode(float itemWidth,
     {
         // Reset all parameters to their default values
         const char* paramIds[] = {
-            "useGpu", "zoomLevel", "brightness", "contrast", "saturation", "hueShift",
+            "zoomLevel", "brightness", "contrast", "saturation", "hueShift",
             "gainRed", "gainGreen", "gainBlue", "sepia", "temperature", "sharpen", "blur", 
             "grayscale", "invert", "flipH", "flipV", "thresholdEnable", "thresholdLevel",
             "posterizeLevels", "vignetteAmount", "vignetteSize", "pixelateSize", 
@@ -486,14 +553,6 @@ void VideoFXModule::drawParametersInNode(float itemWidth,
             }
         }
         onModificationEnded(); // Create an undo state for the reset
-    }
-    
-    // GPU checkbox
-    bool useGpu = useGpuParam ? useGpuParam->get() : true;
-    if (ImGui::Checkbox("Use GPU", &useGpu))
-    {
-        if (useGpuParam) *useGpuParam = useGpu;
-        onModificationEnded();
     }
     
     // Zoom buttons
@@ -662,8 +721,8 @@ void VideoFXModule::drawParametersInNode(float itemWidth,
     }
     
     // Posterize
-    int posterizeLevels = posterizeLevelsParam ? posterizeLevelsParam->get() : 32;
-    if (ImGui::SliderInt("Posterize", &posterizeLevels, 2, 32))
+    int posterizeLevels = posterizeLevelsParam ? posterizeLevelsParam->get() : 16;
+    if (ImGui::SliderInt("Posterize", &posterizeLevels, 2, 16))
     {
         if (posterizeLevelsParam) *posterizeLevelsParam = posterizeLevels;
         onModificationEnded();

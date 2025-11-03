@@ -25,9 +25,20 @@ void NotificationManager::postImpl(Type type, const juce::String& message, float
 {
     const juce::ScopedLock lock(m_lock);
     
+    // When posting Success or Error, automatically dismiss any existing Status notifications
+    // This allows the "Saving..." status to be replaced by "Saved!" or "Failed to save!"
+    if (type == Type::Success || type == Type::Error)
+    {
+        m_notifications.erase(
+            std::remove_if(m_notifications.begin(), m_notifications.end(),
+                [](const Notification& n) { return n.type == Type::Status; }),
+            m_notifications.end()
+        );
+    }
+    
     // For Status messages, make them persist until replaced or dismissed
     if (type == Type::Status)
-        duration = 3600.0f; // A very long time, effectively persistent
+        duration = 3600.0f; // A very long time, effectively persistent until replaced
     // For Error messages, make them persist until clicked
     if (type == Type::Error)
         duration = 3600.0f; 

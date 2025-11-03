@@ -2663,11 +2663,28 @@ if (auto* mp = synth->getModuleForLogical (lid))
                             bool isConnectedToThisPin = (!c.dstIsOutput && c.dstLogicalId == lid && c.dstChan == channel) || (c.dstIsOutput && lid == 0 && c.dstChan == channel);
                             if (isConnectedToThisPin)
                             {
-                                if (auto* srcMod = synth->getModuleForLogical(c.srcLogicalId))
+                                // CRASH FIX: Verify module exists before accessing it
+                                if (c.srcLogicalId != 0 && synth != nullptr)
                                 {
-                                    float value = srcMod->getOutputChannelValue(c.srcChan);
-                                    ImGui::Text("From %u:%d", c.srcLogicalId, c.srcChan);
-                                    ImGui::Text("Value: %.3f", value);
+                                    bool moduleExists = false;
+                                    for (const auto& modInfo : synth->getModulesInfo())
+                                    {
+                                        if (modInfo.first == c.srcLogicalId)
+                                        {
+                                            moduleExists = true;
+                                            break;
+                                        }
+                                    }
+                                    
+                                    if (moduleExists)
+                                    {
+                                        if (auto* srcMod = synth->getModuleForLogical(c.srcLogicalId))
+                                        {
+                                            float value = srcMod->getOutputChannelValue(c.srcChan);
+                                            ImGui::Text("From %u:%d", c.srcLogicalId, c.srcChan);
+                                            ImGui::Text("Value: %.3f", value);
+                                        }
+                                    }
                                 }
                                 break; 
                             }
@@ -3246,9 +3263,29 @@ if (auto* mp = synth->getModuleForLogical (lid))
             float magnitude = 0.0f;
             bool hasThicknessModification = false;
 
-            if (auto* srcModule = synth->getModuleForLogical(srcPin.logicalId))
+            // CRASH FIX: Verify module still exists before accessing it.
+            // During preset loading, modules may be destroyed while we're iterating connections.
+            if (synth != nullptr && srcPin.logicalId != 0)
             {
-                magnitude = srcModule->getOutputChannelValue(srcPin.channel);
+                // First verify the module exists in the current module list
+                bool moduleExists = false;
+                for (const auto& modInfo : synth->getModulesInfo())
+                {
+                    if (modInfo.first == srcPin.logicalId)
+                    {
+                        moduleExists = true;
+                        break;
+                    }
+                }
+                
+                // Only access if module still exists
+                if (moduleExists)
+                {
+                    if (auto* srcModule = synth->getModuleForLogical(srcPin.logicalId))
+                    {
+                        magnitude = srcModule->getOutputChannelValue(srcPin.channel);
+                    }
+                }
             }
 
             // 2. If the signal is active, calculate a glowing/blinking color.
@@ -4099,7 +4136,7 @@ if (auto* mp = synth->getModuleForLogical (lid))
                     if (ImGui::MenuItem("Face Tracker")) addAtMouse("face_tracker");
                     if (ImGui::MenuItem("Color Tracker")) addAtMouse("color_tracker");
                     if (ImGui::MenuItem("Contour Detector")) addAtMouse("contour_detector");
-                    if (ImGui::MenuItem("Semantic Segmentation")) addAtMouse("semantic_segmentmentation");
+                    if (ImGui::MenuItem("Semantic Segmentation")) addAtMouse("semantic_segmentation");
                     ImGui::EndMenu();
                 }
                 
@@ -5378,15 +5415,20 @@ void ImGuiNodeEditorComponent::handleMuteToggle()
 }
 void ImGuiNodeEditorComponent::savePresetToFile(const juce::File& file)
 {
-    if (isSaveInProgress.exchange(true)) // Atomically check and set
+    bool wasAlreadyInProgress = isSaveInProgress.exchange(true); // Atomically check and set
+    if (wasAlreadyInProgress)
     {
-        juce::Logger::writeToLog("[SaveWorkflow] Save action ignored (already in progress).");
+        juce::Logger::writeToLog("[SaveWorkflow] Save action ignored (already in progress). Current flag state: " + juce::String(isSaveInProgress.load() ? "TRUE" : "FALSE"));
         return;
     }
 
+    juce::Logger::writeToLog("[SaveWorkflow] Flag set to TRUE. Starting save workflow for: " + file.getFullPathName());
+
     if (synth == nullptr) {
+        juce::Logger::writeToLog("[SaveWorkflow] ERROR: Synth is null! Resetting flag and aborting.");
         NotificationManager::post(NotificationManager::Type::Error, "ERROR: Synth not ready!");
         isSaveInProgress.store(false);
+        juce::Logger::writeToLog("[SaveWorkflow] Flag reset to FALSE after synth null check.");
         return;
     }
 
@@ -5399,60 +5441,121 @@ void ImGuiNodeEditorComponent::savePresetToFile(const juce::File& file)
     
     juce::Logger::writeToLog("[SaveWorkflow][UI_THREAD] Capturing state...");
     auto mutedNodeIDs = getMutedNodeIds();
+    juce::Logger::writeToLog("[SaveWorkflow][UI_THREAD] Found " + juce::String((int)mutedNodeIDs.size()) + " muted nodes.");
 
     // Temporarily unmute to get correct connections
+    juce::Logger::writeToLog("[SaveWorkflow][UI_THREAD] Temporarily unmuting nodes for state capture...");
     for (auto lid : mutedNodeIDs) unmuteNode(lid);
     synth->commitChanges();
 
     // Capture state while unmuted
+    juce::Logger::writeToLog("[SaveWorkflow][UI_THREAD] Calling synth->getStateInformation()...");
     juce::MemoryBlock synthState;
-    synth->getStateInformation(synthState);
+    try {
+        synth->getStateInformation(synthState);
+        juce::Logger::writeToLog("[SaveWorkflow][UI_THREAD] Synth state captured (" + juce::String(synthState.getSize()) + " bytes).");
+    } catch (const std::exception& e) {
+        juce::Logger::writeToLog("[SaveWorkflow][UI_THREAD] EXCEPTION in getStateInformation: " + juce::String(e.what()));
+        isSaveInProgress.store(false);
+        juce::Logger::writeToLog("[SaveWorkflow] Flag reset to FALSE after exception.");
+        NotificationManager::post(NotificationManager::Type::Error, "Failed to capture synth state!");
+        return;
+    } catch (...) {
+        juce::Logger::writeToLog("[SaveWorkflow][UI_THREAD] UNKNOWN EXCEPTION in getStateInformation");
+        isSaveInProgress.store(false);
+        juce::Logger::writeToLog("[SaveWorkflow] Flag reset to FALSE after unknown exception.");
+        NotificationManager::post(NotificationManager::Type::Error, "Failed to capture synth state!");
+        return;
+    }
+    
+    juce::Logger::writeToLog("[SaveWorkflow][UI_THREAD] Calling editor->getUiValueTree()...");
     juce::ValueTree uiState = getUiValueTree();
+    juce::Logger::writeToLog("[SaveWorkflow][UI_THREAD] UI state captured (valid: " + juce::String(uiState.isValid() ? 1 : 0) + ").");
 
     // Immediately re-mute to restore visual state
+    juce::Logger::writeToLog("[SaveWorkflow][UI_THREAD] Re-muting nodes to restore visual state...");
     for (auto lid : mutedNodeIDs) muteNode(lid);
     synth->commitChanges();
     juce::Logger::writeToLog("[SaveWorkflow][UI_THREAD] State captured. Offloading to background thread.");
 
     // Launch the background job with the captured data
+    juce::Logger::writeToLog("[SaveWorkflow][UI_THREAD] Creating SavePresetJob...");
     auto* job = new SavePresetJob(synthState, uiState, file);
 
-    job->onSaveComplete = [this](const juce::File& savedFile, bool success) {
+    job->onSaveComplete = [this, filePath = file.getFullPathName()](const juce::File& savedFile, bool success) {
+        juce::Logger::writeToLog("[SaveWorkflow] onSaveComplete callback called (success: " + juce::String(success ? 1 : 0) + ") for: " + savedFile.getFullPathName());
+        
         if (success) {
             NotificationManager::post(NotificationManager::Type::Success, "Saved: " + savedFile.getFileNameWithoutExtension());
             isPatchDirty = false;
             currentPresetFile = savedFile;
+            juce::Logger::writeToLog("[SaveWorkflow] Save completed successfully. Flag will be reset.");
         } else {
+            juce::Logger::writeToLog("[SaveWorkflow] Save FAILED. Flag will be reset.");
             NotificationManager::post(NotificationManager::Type::Error, "Failed to save preset!");
         }
-        isSaveInProgress.store(false); // Reset the flag
+        
+        juce::Logger::writeToLog("[SaveWorkflow] Resetting isSaveInProgress flag to FALSE.");
+        isSaveInProgress.store(false);
+        juce::Logger::writeToLog("[SaveWorkflow] Flag reset complete. Current state: " + juce::String(isSaveInProgress.load() ? "TRUE" : "FALSE"));
     };
 
-    threadPool.addJob(job, true);
+    juce::Logger::writeToLog("[SaveWorkflow][UI_THREAD] Adding job to thread pool...");
+    try {
+        threadPool.addJob(job, true);
+        juce::Logger::writeToLog("[SaveWorkflow][UI_THREAD] Job added to thread pool successfully.");
+    } catch (const std::exception& e) {
+        juce::Logger::writeToLog("[SaveWorkflow][UI_THREAD] EXCEPTION adding job to thread pool: " + juce::String(e.what()));
+        isSaveInProgress.store(false);
+        juce::Logger::writeToLog("[SaveWorkflow] Flag reset to FALSE after thread pool exception.");
+        NotificationManager::post(NotificationManager::Type::Error, "Failed to start save job!");
+        delete job; // Clean up the job we created
+    } catch (...) {
+        juce::Logger::writeToLog("[SaveWorkflow][UI_THREAD] UNKNOWN EXCEPTION adding job to thread pool");
+        isSaveInProgress.store(false);
+        juce::Logger::writeToLog("[SaveWorkflow] Flag reset to FALSE after unknown thread pool exception.");
+        NotificationManager::post(NotificationManager::Type::Error, "Failed to start save job!");
+        delete job; // Clean up the job we created
+    }
 }
 
 void ImGuiNodeEditorComponent::startSaveDialog()
 {
+    juce::Logger::writeToLog("[SaveWorkflow] startSaveDialog() called. isSaveInProgress: " + juce::String(isSaveInProgress.load() ? "TRUE" : "FALSE"));
+    
     // Check if a save is already in progress to avoid opening multiple dialogs
     if (isSaveInProgress.load()) {
         juce::Logger::writeToLog("[SaveWorkflow] 'Save As' action ignored (a save is already in progress).");
+        NotificationManager::post(NotificationManager::Type::Warning, "A save operation is already in progress. Please wait...", 3.0f);
         return;
     }
 
+    juce::Logger::writeToLog("[SaveWorkflow] Opening file chooser dialog...");
+    auto presetsDir = findPresetsDirectory();
+    juce::Logger::writeToLog("[SaveWorkflow] Presets directory: " + presetsDir.getFullPathName());
+    
     saveChooser = std::make_unique<juce::FileChooser>("Save Preset As...", 
-                                                      findPresetsDirectory(), 
+                                                      presetsDir, 
                                                       "*.xml");
     saveChooser->launchAsync(juce::FileBrowserComponent::saveMode | 
                              juce::FileBrowserComponent::canSelectFiles,
         [this](const juce::FileChooser& fc)
     {
+        juce::Logger::writeToLog("[SaveWorkflow] File chooser callback invoked.");
         auto fileToSave = fc.getResult();
+        
         if (fileToSave != juce::File{}) // Check if user selected a file and didn't cancel
         {
+            juce::Logger::writeToLog("[SaveWorkflow] User selected file: " + fileToSave.getFullPathName());
             // Call the unified, asynchronous save function
             savePresetToFile(fileToSave);
         }
+        else
+        {
+            juce::Logger::writeToLog("[SaveWorkflow] User cancelled file chooser dialog.");
+        }
     });
+    juce::Logger::writeToLog("[SaveWorkflow] File chooser launched (async).");
 }
 
 std::vector<juce::uint32> ImGuiNodeEditorComponent::getMutedNodeIds() const

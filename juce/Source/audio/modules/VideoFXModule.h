@@ -47,11 +47,28 @@ private:
     void run() override;
     void updateGuiFrame(const cv::Mat& frame);
     
+    // --- PRIVATE HELPER FUNCTIONS ---
+    void applyBrightnessContrast(cv::Mat& ioFrame, float brightness, float contrast);
+    void applyTemperature(cv::Mat& ioFrame, float temperature);
+    void applySepia(cv::Mat& ioFrame, bool sepia);
+    void applySaturationHue(cv::Mat& ioFrame, float saturation, float hueShift);
+    void applyRgbGain(cv::Mat& ioFrame, float gainR, float gainG, float gainB);
+    void applyPosterize(cv::Mat& ioFrame, int levels);
+    void applyGrayscale(cv::Mat& ioFrame, bool grayscale);
+    void applyCanny(cv::Mat& ioFrame, float thresh1, float thresh2);
+    void applyThreshold(cv::Mat& ioFrame, float level);
+    void applyInvert(cv::Mat& ioFrame, bool invert);
+    void applyFlip(cv::Mat& ioFrame, bool flipH, bool flipV);
+    void applyVignette(cv::Mat& ioFrame, float amount, float size);
+    void applyPixelate(cv::Mat& ioFrame, int pixelSize);
+    void applyBlur(cv::Mat& ioFrame, float blur);
+    void applySharpen(cv::Mat& ioFrame, float sharpen);
+    void applyKaleidoscope(cv::Mat& ioFrame, int mode);
+    
     static juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout();
     juce::AudioProcessorValueTreeState apvts;
     
     // Parameters
-    juce::AudioParameterBool* useGpuParam = nullptr;
     std::atomic<float>* zoomLevelParam = nullptr;
     
     // Color Adjustments

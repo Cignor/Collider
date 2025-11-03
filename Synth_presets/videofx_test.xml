@@ -6,8 +6,8 @@
       <params>
         <VideoFXParams>
           <PARAM id="blur" value="0.0"/>
-          <PARAM id="brightness" value="0.0"/>
-          <PARAM id="contrast" value="1.0"/>
+          <PARAM id="brightness" value="63.78999328613281"/>
+          <PARAM id="contrast" value="0.3400000035762787"/>
           <PARAM id="flipH" value="0.0"/>
           <PARAM id="flipV" value="0.0"/>
           <PARAM id="gainBlue" value="1.0"/>
@@ -16,18 +16,18 @@
           <PARAM id="grayscale" value="0.0"/>
           <PARAM id="hueShift" value="0.0"/>
           <PARAM id="invert" value="0.0"/>
-          <PARAM id="saturation" value="1.0"/>
-          <PARAM id="sharpen" value="0.0"/>
+          <PARAM id="saturation" value="1.939999938011169"/>
+          <PARAM id="sharpen" value="2.0"/>
           <PARAM id="useGpu" value="1.0"/>
           <PARAM id="zoomLevel" value="1.0"/>
           <PARAM id="cannyEnable" value="0.0"/>
           <PARAM id="cannyThresh1" value="50.0"/>
           <PARAM id="cannyThresh2" value="150.0"/>
           <PARAM id="kaleidoscope" value="0.0"/>
-          <PARAM id="pixelateSize" value="1.0"/>
-          <PARAM id="posterizeLevels" value="32.0"/>
+          <PARAM id="pixelateSize" value="6.0"/>
+          <PARAM id="posterizeLevels" value="4.0"/>
           <PARAM id="sepia" value="0.0"/>
-          <PARAM id="temperature" value="0.0"/>
+          <PARAM id="temperature" value="0.009999990463256836"/>
           <PARAM id="thresholdEnable" value="0.0"/>
           <PARAM id="thresholdLevel" value="127.0"/>
           <PARAM id="vignetteAmount" value="0.0"/>
@@ -100,7 +100,7 @@
           <PARAM id="invert" value="0.0"/>
           <PARAM id="kaleidoscope" value="0.0"/>
           <PARAM id="pixelateSize" value="1.0"/>
-          <PARAM id="posterizeLevels" value="32.0"/>
+          <PARAM id="posterizeLevels" value="16.0"/>
           <PARAM id="saturation" value="1.0"/>
           <PARAM id="sepia" value="0.0"/>
           <PARAM id="sharpen" value="0.0"/>
@@ -117,21 +117,68 @@
         <VideoFXState/>
       </extra>
     </module>
+    <module logicalId="30" type="mixer">
+      <params>
+        <MixerParams>
+          <PARAM id="crossfade" value="0.0"/>
+          <PARAM id="gain" value="-5.889999389648438"/>
+          <PARAM id="pan" value="0.0"/>
+        </MixerParams>
+      </params>
+    </module>
+    <module logicalId="43" type="graphic_eq">
+      <params>
+        <GraphicEQParams>
+          <PARAM id="gainBand1" value="12.0"/>
+          <PARAM id="gainBand2" value="12.0"/>
+          <PARAM id="gainBand3" value="12.0"/>
+          <PARAM id="gainBand4" value="12.0"/>
+          <PARAM id="gainBand5" value="7.709999084472656"/>
+          <PARAM id="gainBand6" value="-24.86000061035156"/>
+          <PARAM id="gainBand7" value="-60.0"/>
+          <PARAM id="gainBand8" value="-60.0"/>
+          <PARAM id="gateThreshold" value="-35.09999847412109"/>
+          <PARAM id="outputLevel" value="18.20000076293945"/>
+          <PARAM id="triggerThreshold" value="-27.20000076293945"/>
+        </GraphicEQParams>
+      </params>
+    </module>
+    <module logicalId="45" type="chorus">
+      <params>
+        <ChorusParams>
+          <PARAM id="depth" value="0.25"/>
+          <PARAM id="mix" value="0.9099999666213989"/>
+          <PARAM id="rate" value="2.529999971389771"/>
+          <PARAM id="relativeDepthMod" value="1.0"/>
+          <PARAM id="relativeMixMod" value="1.0"/>
+          <PARAM id="relativeRateMod" value="1.0"/>
+        </ChorusParams>
+      </params>
+    </module>
   </modules>
   <connections>
     <connection srcId="1" srcChan="0" dstId="3" dstChan="0"/>
-    <connection srcId="2" srcChan="1" dstId="output" dstChan="1"/>
-    <connection srcId="2" srcChan="2" dstId="output" dstChan="0"/>
     <connection srcId="2" srcChan="0" dstId="10" dstChan="0"/>
+    <connection srcId="2" srcChan="1" dstId="43" dstChan="0"/>
+    <connection srcId="2" srcChan="2" dstId="43" dstChan="1"/>
     <connection srcId="3" srcChan="141" dstId="19" dstChan="0"/>
     <connection srcId="10" srcChan="0" dstId="1" dstChan="0"/>
+    <connection srcId="30" srcChan="0" dstId="output" dstChan="1"/>
+    <connection srcId="30" srcChan="1" dstId="output" dstChan="0"/>
+    <connection srcId="43" srcChan="0" dstId="45" dstChan="0"/>
+    <connection srcId="43" srcChan="1" dstId="45" dstChan="1"/>
+    <connection srcId="45" srcChan="0" dstId="30" dstChan="0"/>
+    <connection srcId="45" srcChan="1" dstId="30" dstChan="1"/>
   </connections>
   <NodeEditorUI>
-    <node id="1" x="575.0" y="-54.0"/>
-    <node id="2" x="-1047.0" y="61.0"/>
+    <node id="1" x="514.0" y="-60.0"/>
+    <node id="2" x="-1968.0" y="-28.0"/>
     <node id="3" x="1253.0" y="-154.9999084472656"/>
     <node id="10" x="-412.2014770507812" y="92.56614685058594"/>
     <node id="19" x="1867.0" y="353.0"/>
+    <node id="30" x="-825.406005859375" y="65.71765899658203"/>
+    <node id="43" x="-1292.0" y="-219.0"/>
+    <node id="45" x="-792.0" y="-336.0"/>
     <node id="0" x="329.0" y="54.0"/>
   </NodeEditorUI>
 </ModularSynthPreset>
