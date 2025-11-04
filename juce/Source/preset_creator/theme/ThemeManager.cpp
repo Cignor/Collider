@@ -20,6 +20,17 @@ ThemeManager::ThemeManager()
 void ThemeManager::applyTheme()
 {
 	applyImGuiStyle();
+	// Apply accent to common ImGui colors
+	ImVec4 acc = currentTheme.accent;
+	ImGuiStyle& st = ImGui::GetStyle();
+	st.Colors[ImGuiCol_CheckMark] = acc;
+	st.Colors[ImGuiCol_SliderGrabActive] = acc;
+	st.Colors[ImGuiCol_TextSelectedBg] = ImVec4(acc.x, acc.y, acc.z, 0.35f);
+	st.Colors[ImGuiCol_DragDropTarget] = ImVec4(acc.x, acc.y, acc.z, 0.95f);
+	st.Colors[ImGuiCol_SeparatorHovered] = ImVec4(acc.x, acc.y, acc.z, 0.9f);
+	st.Colors[ImGuiCol_TabHovered] = ImVec4(acc.x, acc.y, acc.z, 0.8f);
+	st.Colors[ImGuiCol_ButtonHovered] = ImVec4(acc.x, acc.y, acc.z, 1.0f);
+	// Note: ImNodes colors are applied per-draw via PushColorStyle, not here
 }
 
 void ThemeManager::resetToDefault()
@@ -175,6 +186,12 @@ bool ThemeManager::loadTheme(const juce::File& themeFile)
 				}
 			}
 		}
+	}
+
+	// accent
+	if (auto v = root->getProperty("accent"); v.isArray())
+	{
+		t.accent = varToVec4(v, t.accent);
 	}
 
 	// text
@@ -427,6 +444,9 @@ bool ThemeManager::saveTheme(const juce::File& themeFile)
 		o->setProperty("tooltip_wrap_compact", currentTheme.text.tooltip_wrap_compact);
 		root->setProperty("text", juce::var(o.get()));
 	}
+
+	// accent
+	root->setProperty("accent", vec4ToVar(currentTheme.accent));
 
 	// status
 	{
@@ -701,6 +721,7 @@ bool ThemeManager::stringToPinType(const juce::String& s, PinDataType& out)
 void ThemeManager::loadDefaultTheme()
 {
 	ImGui::StyleColorsDark(&defaultTheme.style);
+	defaultTheme.accent = ImVec4(0.0f, 0.8f, 1.0f, 1.0f);
 
 	// Category colors
 	defaultTheme.imnodes.category_colors[ModuleCategory::Source] = IM_COL32(50, 120, 50, 255);

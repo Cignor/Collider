@@ -15,6 +15,10 @@
 #include <limits>
 #include "theme/ThemeManager.h"
 
+// Lightweight theme change toast state
+static double s_themeToastEndTime = 0.0;
+static juce::String s_themeToastText;
+
 // ============================================================================
 // Global GPU/CPU Settings (default: GPU enabled for best performance)
 // ============================================================================
@@ -712,6 +716,8 @@ void ImGuiNodeEditorComponent::renderImGui()
                             if (ThemeManager::getInstance().loadTheme(presetFile))
                             {
                                 juce::Logger::writeToLog("[Theme] Loaded: " + juce::String(label) + " from " + presetFile.getFullPathName());
+                                s_themeToastText = "Theme Loaded: " + juce::String(label);
+                                s_themeToastEndTime = ImGui::GetTime() + 2.0; // Show toast for 2 seconds
                             }
                             else
                             {
@@ -1122,10 +1128,8 @@ void ImGuiNodeEditorComponent::renderImGui()
     } else {
         ImGui::TextColored(ImVec4(0.0f, 1.0f, 0.0f, 1.0f), "Status: SAVED");
     }
-
     ImGui::End();
     // --- END OF PRESET STATUS OVERLAY ---
-
     ImGui::Columns (2, nullptr, true);
     ImGui::SetColumnWidth (0, 260.0f);
     // Zoom removed
@@ -1905,7 +1909,6 @@ void ImGuiNodeEditorComponent::renderImGui()
             fg_draw_list->AddText(ImVec2(canvas_p0.x + 5, screenY + 2), SCALE_TEXT_COLOR, label);
         }
     }
-
     // Mouse coordinate display overlay (bottom-left)
     ImVec2 mouseScreenPos = ImGui::GetMousePos();
     ImVec2 mouseGridPos = ImVec2(mouseScreenPos.x - canvas_p0.x - panning.x, mouseScreenPos.y - canvas_p0.y - panning.y);

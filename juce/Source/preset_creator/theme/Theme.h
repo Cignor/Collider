@@ -21,6 +21,9 @@ struct Theme
 	// ImGui base style (padding/rounding etc.)
 	ImGuiStyle style {};
 
+	// Global accent color used across highlights
+	ImVec4 accent { 0.0f, 0.8f, 1.0f, 1.0f };
+
 	struct TextColors
 	{
 		ImVec4 section_header { 0.7f, 0.7f, 0.7f, 1.0f };
