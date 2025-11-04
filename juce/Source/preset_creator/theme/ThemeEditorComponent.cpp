@@ -1,0 +1,1708 @@
+#include "ThemeEditorComponent.h"
+#include <juce_core/juce_core.h>
+#include <imgui.h>
+
+ThemeEditorComponent::ThemeEditorComponent()
+{
+    // Initialize working copy with current theme
+    m_workingCopy = ThemeManager::getInstance().getCurrentTheme();
+}
+
+void ThemeEditorComponent::open()
+{
+    m_isOpen = true;
+    // Refresh working copy from current theme
+    m_workingCopy = ThemeManager::getInstance().getCurrentTheme();
+    m_hasChanges = false;
+    m_currentTab = 0;
+    m_showSaveDialog = false;
+    memset(m_saveThemeName, 0, sizeof(m_saveThemeName));
+}
+
+void ThemeEditorComponent::close()
+{
+    if (m_hasChanges)
+    {
+        // TODO: Ask for confirmation if there are unsaved changes
+        // For now, just discard
+    }
+    m_isOpen = false;
+    m_showSaveDialog = false;
+}
+
+void ThemeEditorComponent::render()
+{
+    if (!m_isOpen)
+        return;
+
+    // Window flags
+    ImGuiWindowFlags flags = ImGuiWindowFlags_None;
+    
+    // Set window size and position
+    ImGui::SetNextWindowSize(ImVec2(900, 700), ImGuiCond_FirstUseEver);
+    ImGui::SetNextWindowPos(ImVec2(100, 100), ImGuiCond_FirstUseEver);
+
+    if (ImGui::Begin("Theme Editor", &m_isOpen, flags))
+    {
+        // Toolbar
+        if (ImGui::Button("Apply Changes"))
+        {
+            applyChanges();
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("Reset Tab"))
+        {
+            resetCurrentTab();
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("Save As..."))
+        {
+            m_showSaveDialog = true;
+            strncpy(m_saveThemeName, "CustomTheme", sizeof(m_saveThemeName) - 1);
+        }
+        ImGui::SameLine();
+        if (m_hasChanges)
+        {
+            ImGui::TextColored(ImVec4(1.0f, 1.0f, 0.0f, 1.0f), "* Unsaved changes");
+        }
+
+        ImGui::Separator();
+
+        // Tabs
+        renderTabs();
+
+        // Save dialog (modal)
+        if (m_showSaveDialog)
+        {
+            renderSaveDialog();
+        }
+    }
+    ImGui::End();
+
+    // Close if window X clicked (m_isOpen was set to false by ImGui::Begin)
+    if (!m_isOpen)
+        close();
+}
+
+void ThemeEditorComponent::renderTabs()
+{
+    if (ImGui::BeginTabBar("ThemeEditorTabs"))
+    {
+        // Tab buttons
+        const char* tabNames[] = {
+            "Style", "Colors", "Accent", "Text", "Status", "Headers",
+            "ImNodes", "Links", "Canvas", "Layout", "Fonts", "Windows",
+            "Modulation", "Meters", "Timeline", "Modules"
+        };
+
+        for (int i = 0; i < s_numTabs; ++i)
+        {
+            if (ImGui::BeginTabItem(tabNames[i]))
+            {
+                m_currentTab = i;
+                
+                // Render tab content
+                switch (i)
+                {
+                    case 0: renderImGuiStyleTab(); break;
+                    case 1: renderImGuiColorsTab(); break;
+                    case 2: renderAccentTab(); break;
+                    case 3: renderTextColorsTab(); break;
+                    case 4: renderStatusColorsTab(); break;
+                    case 5: renderHeaderColorsTab(); break;
+                    case 6: renderImNodesTab(); break;
+                    case 7: renderLinksTab(); break;
+                    case 8: renderCanvasTab(); break;
+                    case 9: renderLayoutTab(); break;
+                    case 10: renderFontsTab(); break;
+                    case 11: renderWindowsTab(); break;
+                    case 12: renderModulationTab(); break;
+                    case 13: renderMetersTab(); break;
+                    case 14: renderTimelineTab(); break;
+                    case 15: renderModulesTab(); break;
+                }
+                
+                ImGui::EndTabItem();
+            }
+        }
+        ImGui::EndTabBar();
+    }
+}
+
+// Helper implementations
+bool ThemeEditorComponent::colorEdit4(const char* label, ImVec4& color, ImGuiColorEditFlags flags)
+{
+    bool changed = ImGui::ColorEdit4(label, &color.x, flags);
+    if (changed)
+        m_hasChanges = true;
+    return changed;
+}
+
+bool ThemeEditorComponent::colorEditU32(const char* label, ImU32& color, ImGuiColorEditFlags flags)
+{
+    ImVec4 col = ImGui::ColorConvertU32ToFloat4(color);
+    bool changed = colorEdit4(label, col, flags);
+    if (changed)
+        color = ImGui::ColorConvertFloat4ToU32(col);
+    return changed;
+}
+
+bool ThemeEditorComponent::dragFloat(const char* label, float& value, float speed, float min, float max, const char* format)
+{
+    bool changed = ImGui::DragFloat(label, &value, speed, min, max, format);
+    if (changed)
+        m_hasChanges = true;
+    return changed;
+}
+
+bool ThemeEditorComponent::dragFloat2(const char* label, ImVec2& value, float speed, float min, float max, const char* format)
+{
+    bool changed = ImGui::DragFloat2(label, &value.x, speed, min, max, format);
+    if (changed)
+        m_hasChanges = true;
+    return changed;
+}
+
+bool ThemeEditorComponent::triStateColorEdit(const char* label, TriStateColor& tsc)
+{
+    bool changed = false;
+    if (ImGui::TreeNode(label))
+    {
+        changed |= colorEditU32("Base", tsc.base);
+        changed |= colorEditU32("Hovered", tsc.hovered);
+        changed |= colorEditU32("Active", tsc.active);
+        ImGui::TreePop();
+    }
+    return changed;
+}
+
+// Tab implementations (stubs for now)
+void ThemeEditorComponent::renderImGuiStyleTab()
+{
+    ImGui::Text("ImGui Style Settings");
+    ImGui::Separator();
+    
+    // Split into two columns: controls on left, preview on right
+    ImGui::Columns(2, "StyleColumns", true);
+    
+    // Left column: Controls
+    if (ImGui::CollapsingHeader("Padding & Spacing"))
+    {
+        dragFloat2("Window Padding", m_workingCopy.style.WindowPadding, 1.0f, 0.0f, 50.0f);
+        dragFloat2("Frame Padding", m_workingCopy.style.FramePadding, 1.0f, 0.0f, 50.0f);
+        dragFloat2("Item Spacing", m_workingCopy.style.ItemSpacing, 1.0f, 0.0f, 50.0f);
+        dragFloat2("Item Inner Spacing", m_workingCopy.style.ItemInnerSpacing, 1.0f, 0.0f, 50.0f);
+    }
+    
+    if (ImGui::CollapsingHeader("Rounding"))
+    {
+        dragFloat("Window Rounding", m_workingCopy.style.WindowRounding, 0.5f, 0.0f, 20.0f);
+        dragFloat("Child Rounding", m_workingCopy.style.ChildRounding, 0.5f, 0.0f, 20.0f);
+        dragFloat("Frame Rounding", m_workingCopy.style.FrameRounding, 0.5f, 0.0f, 20.0f);
+        dragFloat("Popup Rounding", m_workingCopy.style.PopupRounding, 0.5f, 0.0f, 20.0f);
+        dragFloat("Scrollbar Rounding", m_workingCopy.style.ScrollbarRounding, 0.5f, 0.0f, 20.0f);
+        dragFloat("Grab Rounding", m_workingCopy.style.GrabRounding, 0.5f, 0.0f, 20.0f);
+        dragFloat("Tab Rounding", m_workingCopy.style.TabRounding, 0.5f, 0.0f, 20.0f);
+    }
+    
+    if (ImGui::CollapsingHeader("Borders"))
+    {
+        dragFloat("Window Border Size", m_workingCopy.style.WindowBorderSize, 0.1f, 0.0f, 5.0f);
+        dragFloat("Frame Border Size", m_workingCopy.style.FrameBorderSize, 0.1f, 0.0f, 5.0f);
+        dragFloat("Popup Border Size", m_workingCopy.style.PopupBorderSize, 0.1f, 0.0f, 5.0f);
+    }
+    
+    ImGui::NextColumn();
+    
+    // Right column: Live Preview
+    ImGui::Text("Live Preview");
+    ImGui::Separator();
+    
+    // Apply working copy style temporarily for preview
+    ImGuiStyle& style = ImGui::GetStyle();
+    ImGuiStyle backup = style;
+    
+    style.WindowPadding = m_workingCopy.style.WindowPadding;
+    style.FramePadding = m_workingCopy.style.FramePadding;
+    style.ItemSpacing = m_workingCopy.style.ItemSpacing;
+    style.ItemInnerSpacing = m_workingCopy.style.ItemInnerSpacing;
+    style.WindowRounding = m_workingCopy.style.WindowRounding;
+    style.ChildRounding = m_workingCopy.style.ChildRounding;
+    style.FrameRounding = m_workingCopy.style.FrameRounding;
+    style.PopupRounding = m_workingCopy.style.PopupRounding;
+    style.ScrollbarRounding = m_workingCopy.style.ScrollbarRounding;
+    style.GrabRounding = m_workingCopy.style.GrabRounding;
+    style.TabRounding = m_workingCopy.style.TabRounding;
+    style.WindowBorderSize = m_workingCopy.style.WindowBorderSize;
+    style.FrameBorderSize = m_workingCopy.style.FrameBorderSize;
+    style.PopupBorderSize = m_workingCopy.style.PopupBorderSize;
+    
+    // Preview window
+    if (ImGui::BeginChild("StylePreview", ImVec2(0, 0), true))
+    {
+        ImGui::Text("Preview Window");
+        ImGui::Separator();
+        
+        // Button preview
+        if (ImGui::Button("Sample Button"))
+        {
+            // Button clicked
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("Another Button"))
+        {
+            // Button clicked
+        }
+        
+        ImGui::Spacing();
+        
+        // Frame preview
+        ImGui::Text("Frame with border:");
+        ImGui::BeginChildFrame(ImGui::GetID("preview_frame"), ImVec2(0, 60));
+        ImGui::Text("Content inside frame");
+        ImGui::Button("Button in Frame");
+        ImGui::EndChildFrame();
+        
+        ImGui::Spacing();
+        
+        // Tab preview
+        if (ImGui::BeginTabBar("PreviewTabs"))
+        {
+            if (ImGui::BeginTabItem("Tab 1"))
+            {
+                ImGui::Text("Tab 1 content");
+                ImGui::EndTabItem();
+            }
+            if (ImGui::BeginTabItem("Tab 2"))
+            {
+                ImGui::Text("Tab 2 content");
+                ImGui::EndTabItem();
+            }
+            ImGui::EndTabBar();
+        }
+        
+        ImGui::Spacing();
+        
+        // Slider preview
+        static float sliderValue = 0.5f;
+        ImGui::SliderFloat("Preview Slider", &sliderValue, 0.0f, 1.0f);
+        
+        ImGui::Spacing();
+        
+        // Checkbox preview
+        static bool check1 = true, check2 = false;
+        ImGui::Checkbox("Checkbox 1", &check1);
+        ImGui::Checkbox("Checkbox 2", &check2);
+        
+        ImGui::Spacing();
+        
+        // Input preview
+        static char text[64] = "Sample text";
+        ImGui::InputText("Text Input", text, sizeof(text));
+    }
+    ImGui::EndChild();
+    
+    // Restore original style
+    style = backup;
+    
+    ImGui::Columns(1);
+}
+
+void ThemeEditorComponent::renderImGuiColorsTab()
+{
+    ImGui::Text("ImGui Colors");
+    ImGui::Separator();
+    ImGui::TextWrapped("Edit core ImGui colors. These affect all ImGui windows and widgets.");
+    
+    ImGui::Columns(2, "ImGuiColorsColumns", true);
+    
+    // Left: Controls organized by category
+    if (ImGui::CollapsingHeader("Window Colors"))
+    {
+        ImVec4& windowBg = m_workingCopy.style.Colors[ImGuiCol_WindowBg];
+        ImVec4& childBg = m_workingCopy.style.Colors[ImGuiCol_ChildBg];
+        ImVec4& popupBg = m_workingCopy.style.Colors[ImGuiCol_PopupBg];
+        ImVec4& titleBg = m_workingCopy.style.Colors[ImGuiCol_TitleBg];
+        ImVec4& titleBgActive = m_workingCopy.style.Colors[ImGuiCol_TitleBgActive];
+        ImVec4& titleBgCollapsed = m_workingCopy.style.Colors[ImGuiCol_TitleBgCollapsed];
+        
+        colorEdit4("Window Background", windowBg);
+        colorEdit4("Child Background", childBg);
+        colorEdit4("Popup Background", popupBg);
+        colorEdit4("Title Background", titleBg);
+        colorEdit4("Title Active", titleBgActive);
+        colorEdit4("Title Collapsed", titleBgCollapsed);
+    }
+    
+    if (ImGui::CollapsingHeader("Text Colors"))
+    {
+        ImVec4& text = m_workingCopy.style.Colors[ImGuiCol_Text];
+        ImVec4& textDisabled = m_workingCopy.style.Colors[ImGuiCol_TextDisabled];
+        ImVec4& textSelectedBg = m_workingCopy.style.Colors[ImGuiCol_TextSelectedBg];
+        
+        colorEdit4("Text", text);
+        colorEdit4("Text Disabled", textDisabled);
+        colorEdit4("Text Selected Background", textSelectedBg);
+    }
+    
+    if (ImGui::CollapsingHeader("Button & Frame Colors"))
+    {
+        ImVec4& button = m_workingCopy.style.Colors[ImGuiCol_Button];
+        ImVec4& buttonHovered = m_workingCopy.style.Colors[ImGuiCol_ButtonHovered];
+        ImVec4& buttonActive = m_workingCopy.style.Colors[ImGuiCol_ButtonActive];
+        ImVec4& frameBg = m_workingCopy.style.Colors[ImGuiCol_FrameBg];
+        ImVec4& frameBgHovered = m_workingCopy.style.Colors[ImGuiCol_FrameBgHovered];
+        ImVec4& frameBgActive = m_workingCopy.style.Colors[ImGuiCol_FrameBgActive];
+        
+        colorEdit4("Button", button);
+        colorEdit4("Button Hovered", buttonHovered);
+        colorEdit4("Button Active", buttonActive);
+        colorEdit4("Frame Background", frameBg);
+        colorEdit4("Frame Hovered", frameBgHovered);
+        colorEdit4("Frame Active", frameBgActive);
+    }
+    
+    if (ImGui::CollapsingHeader("Slider & Scrollbar"))
+    {
+        ImVec4& sliderGrab = m_workingCopy.style.Colors[ImGuiCol_SliderGrab];
+        ImVec4& sliderGrabActive = m_workingCopy.style.Colors[ImGuiCol_SliderGrabActive];
+        ImVec4& scrollbarBg = m_workingCopy.style.Colors[ImGuiCol_ScrollbarBg];
+        ImVec4& scrollbarGrab = m_workingCopy.style.Colors[ImGuiCol_ScrollbarGrab];
+        ImVec4& scrollbarGrabHovered = m_workingCopy.style.Colors[ImGuiCol_ScrollbarGrabHovered];
+        ImVec4& scrollbarGrabActive = m_workingCopy.style.Colors[ImGuiCol_ScrollbarGrabActive];
+        
+        colorEdit4("Slider Grab", sliderGrab);
+        colorEdit4("Slider Grab Active", sliderGrabActive);
+        colorEdit4("Scrollbar Background", scrollbarBg);
+        colorEdit4("Scrollbar Grab", scrollbarGrab);
+        colorEdit4("Scrollbar Grab Hovered", scrollbarGrabHovered);
+        colorEdit4("Scrollbar Grab Active", scrollbarGrabActive);
+    }
+    
+    if (ImGui::CollapsingHeader("Border & Separator"))
+    {
+        ImVec4& border = m_workingCopy.style.Colors[ImGuiCol_Border];
+        ImVec4& borderShadow = m_workingCopy.style.Colors[ImGuiCol_BorderShadow];
+        ImVec4& separator = m_workingCopy.style.Colors[ImGuiCol_Separator];
+        ImVec4& separatorHovered = m_workingCopy.style.Colors[ImGuiCol_SeparatorHovered];
+        ImVec4& separatorActive = m_workingCopy.style.Colors[ImGuiCol_SeparatorActive];
+        
+        colorEdit4("Border", border);
+        colorEdit4("Border Shadow", borderShadow);
+        colorEdit4("Separator", separator);
+        colorEdit4("Separator Hovered", separatorHovered);
+        colorEdit4("Separator Active", separatorActive);
+    }
+    
+    if (ImGui::CollapsingHeader("Tab & Menu"))
+    {
+        ImVec4& tab = m_workingCopy.style.Colors[ImGuiCol_Tab];
+        ImVec4& tabHovered = m_workingCopy.style.Colors[ImGuiCol_TabHovered];
+        ImVec4& tabActive = m_workingCopy.style.Colors[ImGuiCol_TabActive];
+        ImVec4& tabUnfocused = m_workingCopy.style.Colors[ImGuiCol_TabUnfocused];
+        ImVec4& tabUnfocusedActive = m_workingCopy.style.Colors[ImGuiCol_TabUnfocusedActive];
+        ImVec4& menuBarBg = m_workingCopy.style.Colors[ImGuiCol_MenuBarBg];
+        
+        colorEdit4("Tab", tab);
+        colorEdit4("Tab Hovered", tabHovered);
+        colorEdit4("Tab Active", tabActive);
+        colorEdit4("Tab Unfocused", tabUnfocused);
+        colorEdit4("Tab Unfocused Active", tabUnfocusedActive);
+        colorEdit4("Menu Bar Background", menuBarBg);
+    }
+    
+    if (ImGui::CollapsingHeader("Other"))
+    {
+        ImVec4& checkMark = m_workingCopy.style.Colors[ImGuiCol_CheckMark];
+        ImVec4& dragDropTarget = m_workingCopy.style.Colors[ImGuiCol_DragDropTarget];
+        ImVec4& header = m_workingCopy.style.Colors[ImGuiCol_Header];
+        ImVec4& headerHovered = m_workingCopy.style.Colors[ImGuiCol_HeaderHovered];
+        ImVec4& headerActive = m_workingCopy.style.Colors[ImGuiCol_HeaderActive];
+        ImVec4& resizeGrip = m_workingCopy.style.Colors[ImGuiCol_ResizeGrip];
+        ImVec4& resizeGripHovered = m_workingCopy.style.Colors[ImGuiCol_ResizeGripHovered];
+        ImVec4& resizeGripActive = m_workingCopy.style.Colors[ImGuiCol_ResizeGripActive];
+        
+        colorEdit4("Check Mark", checkMark);
+        colorEdit4("Drag Drop Target", dragDropTarget);
+        colorEdit4("Header", header);
+        colorEdit4("Header Hovered", headerHovered);
+        colorEdit4("Header Active", headerActive);
+        colorEdit4("Resize Grip", resizeGrip);
+        colorEdit4("Resize Grip Hovered", resizeGripHovered);
+        colorEdit4("Resize Grip Active", resizeGripActive);
+    }
+    
+    ImGui::NextColumn();
+    
+    // Right: Live Preview
+    ImGui::Text("Live Preview");
+    ImGui::Separator();
+    
+    // Apply working copy colors temporarily for preview
+    ImGuiStyle& style = ImGui::GetStyle();
+    ImGuiStyle backup = style;
+    style = m_workingCopy.style;
+    
+    if (ImGui::BeginChild("ImGuiColorsPreview", ImVec2(0, 0), true))
+    {
+        // Window preview
+        ImGui::Text("Window Preview");
+        ImGui::Separator();
+        
+        if (ImGui::Button("Sample Button"))
+        {
+            // Button clicked
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("Another Button"))
+        {
+            // Button clicked
+        }
+        
+        ImGui::Spacing();
+        
+        // Frame preview
+        ImGui::Text("Frame with border:");
+        ImGui::BeginChildFrame(ImGui::GetID("preview_frame2"), ImVec2(0, 60));
+        ImGui::Text("Content inside frame");
+        ImGui::Button("Button in Frame");
+        ImGui::EndChildFrame();
+        
+        ImGui::Spacing();
+        
+        // Slider preview
+        static float sliderValue = 0.5f;
+        ImGui::SliderFloat("Preview Slider", &sliderValue, 0.0f, 1.0f);
+        
+        ImGui::Spacing();
+        
+        // Checkbox preview
+        static bool check1 = true, check2 = false;
+        ImGui::Checkbox("Checkbox 1", &check1);
+        ImGui::Checkbox("Checkbox 2", &check2);
+        
+        ImGui::Spacing();
+        
+        // Input preview
+        static char text[64] = "Sample text";
+        ImGui::InputText("Text Input", text, sizeof(text));
+        
+        ImGui::Spacing();
+        
+        // Tab preview
+        if (ImGui::BeginTabBar("PreviewTabs2"))
+        {
+            if (ImGui::BeginTabItem("Tab 1"))
+            {
+                ImGui::Text("Tab 1 content");
+                ImGui::EndTabItem();
+            }
+            if (ImGui::BeginTabItem("Tab 2"))
+            {
+                ImGui::Text("Tab 2 content");
+                ImGui::EndTabItem();
+            }
+            ImGui::EndTabBar();
+        }
+    }
+    ImGui::EndChild();
+    
+    // Restore original style
+    style = backup;
+    
+    ImGui::Columns(1);
+}
+
+void ThemeEditorComponent::renderAccentTab()
+{
+    ImGui::Text("Accent Color");
+    ImGui::Separator();
+    ImGui::TextWrapped("The accent color is used throughout the UI for highlights and interactive elements.");
+    
+    ImGui::Columns(2, "AccentColumns", true);
+    
+    // Left: Color picker
+    colorEdit4("Accent", m_workingCopy.accent);
+    
+    ImGui::Spacing();
+    ImGui::Text("RGB Values:");
+    ImGui::Text("R: %.3f", m_workingCopy.accent.x);
+    ImGui::Text("G: %.3f", m_workingCopy.accent.y);
+    ImGui::Text("B: %.3f", m_workingCopy.accent.z);
+    ImGui::Text("A: %.3f", m_workingCopy.accent.w);
+    
+    ImGui::NextColumn();
+    
+    // Right: Live Preview
+    ImGui::Text("Live Preview");
+    ImGui::Separator();
+    
+    // Large color swatch
+    ImVec2 canvasPos = ImGui::GetCursorScreenPos();
+    ImVec2 canvasSize = ImVec2(ImGui::GetContentRegionAvail().x, 100);
+    ImDrawList* drawList = ImGui::GetWindowDrawList();
+    drawList->AddRectFilled(canvasPos, ImVec2(canvasPos.x + canvasSize.x, canvasPos.y + canvasSize.y), 
+                           ImGui::ColorConvertFloat4ToU32(m_workingCopy.accent));
+    ImGui::SetCursorScreenPos(ImVec2(canvasPos.x, canvasPos.y + canvasSize.y + ImGui::GetStyle().ItemSpacing.y));
+    
+    ImGui::Spacing();
+    
+    // Preview accent in UI elements
+    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, m_workingCopy.accent);
+    ImGui::PushStyleColor(ImGuiCol_CheckMark, m_workingCopy.accent);
+    ImGui::PushStyleColor(ImGuiCol_SliderGrabActive, m_workingCopy.accent);
+    ImGui::PushStyleColor(ImGuiCol_TabHovered, ImVec4(m_workingCopy.accent.x, m_workingCopy.accent.y, m_workingCopy.accent.z, 0.8f));
+    
+    if (ImGui::Button("Button (hovered color)"))
+    {
+        // Button clicked
+    }
+    
+    static bool previewCheck = true;
+    ImGui::Checkbox("Checkbox (checkmark color)", &previewCheck);
+    
+    static float previewSlider = 0.5f;
+    ImGui::SliderFloat("Slider (grab color)", &previewSlider, 0.0f, 1.0f);
+    
+    if (ImGui::BeginTabBar("AccentTabs"))
+    {
+        if (ImGui::BeginTabItem("Tab (hover)"))
+        {
+            ImGui::Text("Tab content");
+            ImGui::EndTabItem();
+        }
+        ImGui::EndTabBar();
+    }
+    
+    ImGui::PopStyleColor(4);
+    
+    ImGui::Columns(1);
+}
+
+void ThemeEditorComponent::renderTextColorsTab()
+{
+    ImGui::Text("Text Colors");
+    ImGui::Separator();
+    
+    ImGui::Columns(2, "TextColorsColumns", true);
+    
+    // Left: Controls
+    if (ImGui::CollapsingHeader("Text Colors"))
+    {
+        colorEdit4("Section Header", m_workingCopy.text.section_header);
+        colorEdit4("Warning", m_workingCopy.text.warning);
+        colorEdit4("Success", m_workingCopy.text.success);
+        colorEdit4("Error", m_workingCopy.text.error);
+        colorEdit4("Disabled", m_workingCopy.text.disabled);
+        colorEdit4("Active", m_workingCopy.text.active);
+    }
+    
+    if (ImGui::CollapsingHeader("Tooltip Settings"))
+    {
+        dragFloat("Tooltip Wrap (Standard)", m_workingCopy.text.tooltip_wrap_standard, 1.0f, 10.0f, 100.0f);
+        dragFloat("Tooltip Wrap (Compact)", m_workingCopy.text.tooltip_wrap_compact, 1.0f, 10.0f, 100.0f);
+    }
+    
+    ImGui::NextColumn();
+    
+    // Right: Live Preview
+    ImGui::Text("Live Preview");
+    ImGui::Separator();
+    
+    ImGui::TextColored(m_workingCopy.text.section_header, "Section Header Text");
+    ImGui::Spacing();
+    
+    ImGui::TextColored(m_workingCopy.text.warning, "⚠ Warning Message");
+    ImGui::Spacing();
+    
+    ImGui::TextColored(m_workingCopy.text.success, "✓ Success Message");
+    ImGui::Spacing();
+    
+    ImGui::TextColored(m_workingCopy.text.error, "✗ Error Message");
+    ImGui::Spacing();
+    
+    ImGui::PushStyleColor(ImGuiCol_Text, m_workingCopy.text.disabled);
+    ImGui::Text("Disabled Text (grayed out)");
+    ImGui::PopStyleColor();
+    ImGui::Spacing();
+    
+    ImGui::TextColored(m_workingCopy.text.active, "● Active/Enabled Text");
+    ImGui::Spacing();
+    
+    ImGui::Separator();
+    ImGui::Text("Tooltip Preview:");
+    ImGui::TextDisabled("(Hover over this text)");
+    if (ImGui::IsItemHovered())
+    {
+        ImGui::BeginTooltip();
+        ImGui::PushTextWrapPos(ImGui::GetFontSize() * m_workingCopy.text.tooltip_wrap_standard);
+        ImGui::Text("This is a tooltip with the wrap width you set. It demonstrates how tooltips will wrap at the specified character count.");
+        ImGui::PopTextWrapPos();
+        ImGui::EndTooltip();
+    }
+    
+    ImGui::Columns(1);
+}
+
+void ThemeEditorComponent::renderStatusColorsTab()
+{
+    ImGui::Text("Status Colors");
+    ImGui::Separator();
+    
+    ImGui::Columns(2, "StatusColumns", true);
+    
+    // Left: Controls
+    colorEdit4("Edited", m_workingCopy.status.edited);
+    colorEdit4("Saved", m_workingCopy.status.saved);
+    
+    ImGui::NextColumn();
+    
+    // Right: Live Preview
+    ImGui::Text("Live Preview");
+    ImGui::Separator();
+    
+    ImGui::Text("Status: ");
+    ImGui::SameLine();
+    ImGui::TextColored(m_workingCopy.status.edited, "EDITED");
+    
+    ImGui::Spacing();
+    
+    ImGui::Text("Status: ");
+    ImGui::SameLine();
+    ImGui::TextColored(m_workingCopy.status.saved, "SAVED");
+    
+    ImGui::Spacing();
+    ImGui::Separator();
+    
+    // Preview as overlay-style status indicator
+    ImGui::BeginChild("StatusPreview", ImVec2(0, 80), true);
+    ImGui::SetCursorPos(ImVec2(10, 10));
+    ImGui::TextColored(m_workingCopy.status.edited, "Status: EDITED");
+    
+    ImGui::SetCursorPos(ImVec2(10, 40));
+    ImGui::TextColored(m_workingCopy.status.saved, "Status: SAVED");
+    ImGui::EndChild();
+    
+    ImGui::Columns(1);
+}
+
+void ThemeEditorComponent::renderHeaderColorsTab()
+{
+    ImGui::Text("Header Colors (TriState)");
+    ImGui::Separator();
+    
+    ImGui::Columns(2, "HeaderColumns", true);
+    
+    // Left: Controls
+    triStateColorEdit("Recent", m_workingCopy.headers.recent);
+    triStateColorEdit("Samples", m_workingCopy.headers.samples);
+    triStateColorEdit("Presets", m_workingCopy.headers.presets);
+    triStateColorEdit("System", m_workingCopy.headers.system);
+    
+    ImGui::NextColumn();
+    
+    // Right: Live Preview
+    ImGui::Text("Live Preview");
+    ImGui::Separator();
+    
+    // Preview Recent header
+    ImVec2 pos = ImGui::GetCursorScreenPos();
+    ImVec2 size = ImVec2(ImGui::GetContentRegionAvail().x, 30);
+    ImDrawList* drawList = ImGui::GetWindowDrawList();
+    drawList->AddRectFilled(pos, ImVec2(pos.x + size.x, pos.y + size.y), m_workingCopy.headers.recent.base);
+    ImGui::SetCursorScreenPos(ImVec2(pos.x + 5, pos.y + 8));
+    ImGui::Text("Recent (Base)");
+    ImGui::SetCursorScreenPos(ImVec2(pos.x, pos.y + size.y + 5));
+    
+    // Preview Samples header
+    pos = ImGui::GetCursorScreenPos();
+    drawList->AddRectFilled(pos, ImVec2(pos.x + size.x, pos.y + size.y), m_workingCopy.headers.samples.base);
+    ImGui::SetCursorScreenPos(ImVec2(pos.x + 5, pos.y + 8));
+    ImGui::Text("Samples (Base)");
+    ImGui::SetCursorScreenPos(ImVec2(pos.x, pos.y + size.y + 5));
+    
+    // Preview Presets header
+    pos = ImGui::GetCursorScreenPos();
+    drawList->AddRectFilled(pos, ImVec2(pos.x + size.x, pos.y + size.y), m_workingCopy.headers.presets.base);
+    ImGui::SetCursorScreenPos(ImVec2(pos.x + 5, pos.y + 8));
+    ImGui::Text("Presets (Base)");
+    ImGui::SetCursorScreenPos(ImVec2(pos.x, pos.y + size.y + 5));
+    
+    // Preview System header
+    pos = ImGui::GetCursorScreenPos();
+    drawList->AddRectFilled(pos, ImVec2(pos.x + size.x, pos.y + size.y), m_workingCopy.headers.system.base);
+    ImGui::SetCursorScreenPos(ImVec2(pos.x + 5, pos.y + 8));
+    ImGui::Text("System (Base)");
+    ImGui::SetCursorScreenPos(ImVec2(pos.x, pos.y + size.y + 5));
+    
+    ImGui::Spacing();
+    ImGui::Separator();
+    ImGui::Text("Hover states:");
+    
+    // Hover preview
+    pos = ImGui::GetCursorScreenPos();
+    drawList->AddRectFilled(pos, ImVec2(pos.x + size.x, pos.y + size.y), m_workingCopy.headers.recent.hovered);
+    ImGui::SetCursorScreenPos(ImVec2(pos.x + 5, pos.y + 8));
+    ImGui::Text("Recent (Hovered)");
+    ImGui::SetCursorScreenPos(ImVec2(pos.x, pos.y + size.y + 5));
+    
+    pos = ImGui::GetCursorScreenPos();
+    drawList->AddRectFilled(pos, ImVec2(pos.x + size.x, pos.y + size.y), m_workingCopy.headers.recent.active);
+    ImGui::SetCursorScreenPos(ImVec2(pos.x + 5, pos.y + 8));
+    ImGui::Text("Recent (Active)");
+    
+    ImGui::Columns(1);
+}
+
+void ThemeEditorComponent::renderImNodesTab()
+{
+    ImGui::Text("ImNodes Colors");
+    ImGui::Separator();
+    
+    ImGui::Columns(2, "ImNodesColumns", true);
+    
+    // Left: Controls
+    if (ImGui::CollapsingHeader("Category Colors"))
+    {
+        // Module categories
+        const char* categoryNames[] = {
+            "Source", "Effect", "Modulator", "Utility", "Seq", "MIDI",
+            "Analysis", "TTS_Voice", "Special_Exp", "OpenCV", "Sys", "Comment", "Plugin", "Default"
+        };
+        
+        ModuleCategory categories[] = {
+            ModuleCategory::Source, ModuleCategory::Effect, ModuleCategory::Modulator,
+            ModuleCategory::Utility, ModuleCategory::Seq, ModuleCategory::MIDI,
+            ModuleCategory::Analysis, ModuleCategory::TTS_Voice, ModuleCategory::Special_Exp,
+            ModuleCategory::OpenCV, ModuleCategory::Sys, ModuleCategory::Comment,
+            ModuleCategory::Plugin, ModuleCategory::Default
+        };
+        
+        for (int i = 0; i < 14; ++i)
+        {
+            ImU32& color = m_workingCopy.imnodes.category_colors[categories[i]];
+            if (colorEditU32(categoryNames[i], color))
+            {
+                m_hasChanges = true;
+            }
+        }
+    }
+    
+    if (ImGui::CollapsingHeader("Pin Colors"))
+    {
+        // Pin data types
+        const char* pinTypeNames[] = { "CV", "Audio", "Gate", "Raw", "Video" };
+        PinDataType pinTypes[] = {
+            PinDataType::CV, PinDataType::Audio, PinDataType::Gate,
+            PinDataType::Raw, PinDataType::Video
+        };
+        
+        for (int i = 0; i < 5; ++i)
+        {
+            ImU32& color = m_workingCopy.imnodes.pin_colors[pinTypes[i]];
+            if (colorEditU32(pinTypeNames[i], color))
+            {
+                m_hasChanges = true;
+            }
+        }
+        
+        ImGui::Separator();
+        colorEditU32("Pin Connected", m_workingCopy.imnodes.pin_connected);
+        colorEditU32("Pin Disconnected", m_workingCopy.imnodes.pin_disconnected);
+    }
+    
+    if (ImGui::CollapsingHeader("Node States"))
+    {
+        colorEditU32("Node Muted", m_workingCopy.imnodes.node_muted);
+        dragFloat("Node Muted Alpha", m_workingCopy.imnodes.node_muted_alpha, 0.01f, 0.0f, 1.0f);
+        colorEditU32("Node Hovered Link Highlight", m_workingCopy.imnodes.node_hovered_link_highlight);
+    }
+    
+    ImGui::NextColumn();
+    
+    // Right: Live Preview
+    ImGui::Text("Live Preview");
+    ImGui::Separator();
+    
+    ImDrawList* drawList = ImGui::GetWindowDrawList();
+    ImVec2 canvasPos = ImGui::GetCursorScreenPos();
+    ImVec2 canvasSize = ImVec2(ImGui::GetContentRegionAvail().x, 300);
+    
+    // Draw category color previews
+    ImGui::Text("Category Colors:");
+    float y = canvasPos.y + 20;
+    float boxSize = 20.0f;
+    float spacing = 5.0f;
+    
+    const char* categoryNames[] = {
+        "Source", "Effect", "Modulator", "Utility", "Seq", "MIDI",
+        "Analysis", "TTS_Voice", "Special_Exp", "OpenCV", "Sys", "Comment", "Plugin", "Default"
+    };
+    
+    ModuleCategory categories[] = {
+        ModuleCategory::Source, ModuleCategory::Effect, ModuleCategory::Modulator,
+        ModuleCategory::Utility, ModuleCategory::Seq, ModuleCategory::MIDI,
+        ModuleCategory::Analysis, ModuleCategory::TTS_Voice, ModuleCategory::Special_Exp,
+        ModuleCategory::OpenCV, ModuleCategory::Sys, ModuleCategory::Comment,
+        ModuleCategory::Plugin, ModuleCategory::Default
+    };
+    
+    for (int i = 0; i < 14; ++i)
+    {
+        float x = canvasPos.x + (i % 7) * (boxSize + spacing + 60);
+        float rowY = y + (i / 7) * (boxSize + spacing + 15);
+        
+        ImU32 color = m_workingCopy.imnodes.category_colors[categories[i]];
+        drawList->AddRectFilled(ImVec2(x, rowY), ImVec2(x + boxSize, rowY + boxSize), color);
+        drawList->AddRect(ImVec2(x, rowY), ImVec2(x + boxSize, rowY + boxSize), IM_COL32(100, 100, 100, 255));
+        ImGui::SetCursorScreenPos(ImVec2(x + boxSize + 5, rowY));
+        ImGui::Text("%s", categoryNames[i]);
+    }
+    
+    y += 80;
+    ImGui::SetCursorScreenPos(ImVec2(canvasPos.x, y));
+    ImGui::Text("Pin Colors:");
+    y += 20;
+    
+    // Draw pin color previews
+    const char* pinTypeNames[] = { "CV", "Audio", "Gate", "Raw", "Video" };
+    PinDataType pinTypes[] = {
+        PinDataType::CV, PinDataType::Audio, PinDataType::Gate,
+        PinDataType::Raw, PinDataType::Video
+    };
+    
+    for (int i = 0; i < 5; ++i)
+    {
+        float x = canvasPos.x + i * 80;
+        ImU32 color = m_workingCopy.imnodes.pin_colors[pinTypes[i]];
+        
+        // Draw pin circle
+        ImVec2 center = ImVec2(x + 15, y + 10);
+        drawList->AddCircleFilled(center, 8.0f, color, 0);
+        drawList->AddCircle(center, 8.0f, IM_COL32(100, 100, 100, 255), 0, 1.0f);
+        
+        ImGui::SetCursorScreenPos(ImVec2(x, y + 25));
+        ImGui::Text("%s", pinTypeNames[i]);
+    }
+    
+    y += 60;
+    ImGui::SetCursorScreenPos(ImVec2(canvasPos.x, y));
+    
+    // Node muted preview
+    ImGui::Text("Node Muted Preview:");
+    ImVec2 nodePos = ImVec2(canvasPos.x, y + 20);
+    ImVec2 nodeSize = ImVec2(150, 60);
+    ImU32 nodeColor = m_workingCopy.imnodes.node_muted;
+    ImU32 nodeColorAlpha = IM_COL32(
+        (int)((nodeColor & 0xFF) * m_workingCopy.imnodes.node_muted_alpha),
+        (int)(((nodeColor >> 8) & 0xFF) * m_workingCopy.imnodes.node_muted_alpha),
+        (int)(((nodeColor >> 16) & 0xFF) * m_workingCopy.imnodes.node_muted_alpha),
+        255
+    );
+    drawList->AddRectFilled(nodePos, ImVec2(nodePos.x + nodeSize.x, nodePos.y + nodeSize.y), nodeColorAlpha);
+    drawList->AddRect(nodePos, ImVec2(nodePos.x + nodeSize.x, nodePos.y + nodeSize.y), IM_COL32(100, 100, 100, 255));
+    ImGui::SetCursorScreenPos(ImVec2(nodePos.x + 5, nodePos.y + 20));
+    ImGui::Text("Muted Node");
+    
+    ImGui::Columns(1);
+}
+
+void ThemeEditorComponent::renderLinksTab()
+{
+    ImGui::Text("Link Colors");
+    ImGui::Separator();
+    
+    ImGui::Columns(2, "LinksColumns", true);
+    
+    // Left: Controls
+    colorEditU32("Link Hovered", m_workingCopy.links.link_hovered);
+    colorEditU32("Link Selected", m_workingCopy.links.link_selected);
+    colorEditU32("Link Highlighted", m_workingCopy.links.link_highlighted);
+    colorEditU32("Preview Color", m_workingCopy.links.preview_color);
+    dragFloat("Preview Width", m_workingCopy.links.preview_width, 0.1f, 1.0f, 10.0f);
+    colorEditU32("Label Background", m_workingCopy.links.label_background);
+    colorEditU32("Label Text", m_workingCopy.links.label_text);
+    
+    ImGui::NextColumn();
+    
+    // Right: Live Preview
+    ImGui::Text("Live Preview");
+    ImGui::Separator();
+    
+    ImDrawList* drawList = ImGui::GetWindowDrawList();
+    ImVec2 canvasPos = ImGui::GetCursorScreenPos();
+    ImVec2 canvasSize = ImVec2(ImGui::GetContentRegionAvail().x, 200);
+    
+    // Draw link previews
+    float y = canvasPos.y;
+    float x = canvasPos.x + 20;
+    
+    // Hovered link
+    ImVec2 p1 = ImVec2(x, y + 20);
+    ImVec2 p2 = ImVec2(x + 100, y + 40);
+    drawList->AddBezierCubic(p1, ImVec2(p1.x + 30, p1.y), ImVec2(p2.x - 30, p2.y), p2, 
+                            m_workingCopy.links.link_hovered, m_workingCopy.links.preview_width);
+    ImGui::SetCursorScreenPos(ImVec2(x, y));
+    ImGui::Text("Hovered Link");
+    
+    // Selected link
+    y += 50;
+    p1 = ImVec2(x, y + 20);
+    p2 = ImVec2(x + 100, y + 40);
+    drawList->AddBezierCubic(p1, ImVec2(p1.x + 30, p1.y), ImVec2(p2.x - 30, p2.y), p2, 
+                            m_workingCopy.links.link_selected, m_workingCopy.links.preview_width);
+    ImGui::SetCursorScreenPos(ImVec2(x, y));
+    ImGui::Text("Selected Link");
+    
+    // Highlighted link
+    y += 50;
+    p1 = ImVec2(x, y + 20);
+    p2 = ImVec2(x + 100, y + 40);
+    drawList->AddBezierCubic(p1, ImVec2(p1.x + 30, p1.y), ImVec2(p2.x - 30, p2.y), p2, 
+                            m_workingCopy.links.link_highlighted, m_workingCopy.links.preview_width);
+    ImGui::SetCursorScreenPos(ImVec2(x, y));
+    ImGui::Text("Highlighted Link");
+    
+    // Preview color
+    y += 50;
+    p1 = ImVec2(x, y + 20);
+    p2 = ImVec2(x + 100, y + 40);
+    drawList->AddBezierCubic(p1, ImVec2(p1.x + 30, p1.y), ImVec2(p2.x - 30, p2.y), p2, 
+                            m_workingCopy.links.preview_color, m_workingCopy.links.preview_width);
+    ImGui::SetCursorScreenPos(ImVec2(x, y));
+    ImGui::Text("Preview Color");
+    
+    ImGui::SetCursorScreenPos(ImVec2(canvasPos.x, canvasPos.y + canvasSize.y + 10));
+    
+    // Label preview
+    ImGui::Text("Link Label Preview:");
+    ImVec2 labelPos = ImGui::GetCursorScreenPos();
+    ImVec2 labelSize = ImVec2(120, 30);
+    drawList->AddRectFilled(labelPos, ImVec2(labelPos.x + labelSize.x, labelPos.y + labelSize.y), 
+                           m_workingCopy.links.label_background);
+    ImGui::SetCursorScreenPos(ImVec2(labelPos.x + 5, labelPos.y + 8));
+    ImGui::PushStyleColor(ImGuiCol_Text, ImGui::ColorConvertU32ToFloat4(m_workingCopy.links.label_text));
+    ImGui::Text("Link Label");
+    ImGui::PopStyleColor();
+    ImGui::SetCursorScreenPos(ImVec2(labelPos.x, labelPos.y + labelSize.y + 5));
+    
+    ImGui::Columns(1);
+}
+
+void ThemeEditorComponent::renderCanvasTab()
+{
+    ImGui::Text("Canvas Colors");
+    ImGui::Separator();
+    
+    ImGui::Columns(2, "CanvasColumns", true);
+    
+    // Left: Controls
+    if (ImGui::CollapsingHeader("Grid Settings"))
+    {
+        colorEditU32("Grid Color", m_workingCopy.canvas.grid_color);
+        colorEditU32("Grid Origin Color", m_workingCopy.canvas.grid_origin_color);
+        dragFloat("Grid Size", m_workingCopy.canvas.grid_size, 1.0f, 10.0f, 200.0f);
+        colorEditU32("Scale Text Color", m_workingCopy.canvas.scale_text_color);
+        dragFloat("Scale Interval", m_workingCopy.canvas.scale_interval, 10.0f, 50.0f, 1000.0f);
+    }
+    
+    if (ImGui::CollapsingHeader("Overlays & UI"))
+    {
+        colorEditU32("Drop Target Overlay", m_workingCopy.canvas.drop_target_overlay);
+        colorEditU32("Mouse Position Text", m_workingCopy.canvas.mouse_position_text);
+    }
+    
+    ImGui::NextColumn();
+    
+    // Right: Live Preview
+    ImGui::Text("Live Preview");
+    ImGui::Separator();
+    
+    ImDrawList* drawList = ImGui::GetWindowDrawList();
+    ImVec2 canvasPos = ImGui::GetCursorScreenPos();
+    ImVec2 canvasSize = ImVec2(ImGui::GetContentRegionAvail().x, 300);
+    
+    // Draw grid preview
+    float gridSize = m_workingCopy.canvas.grid_size;
+    float scaleInterval = m_workingCopy.canvas.scale_interval;
+    
+    // Draw grid lines
+    for (float x = canvasPos.x; x < canvasPos.x + canvasSize.x; x += gridSize)
+    {
+        drawList->AddLine(ImVec2(x, canvasPos.y), ImVec2(x, canvasPos.y + canvasSize.y), 
+                         m_workingCopy.canvas.grid_color);
+    }
+    for (float y = canvasPos.y; y < canvasPos.y + canvasSize.y; y += gridSize)
+    {
+        drawList->AddLine(ImVec2(canvasPos.x, y), ImVec2(canvasPos.x + canvasSize.x, y), 
+                         m_workingCopy.canvas.grid_color);
+    }
+    
+    // Draw origin (center)
+    ImVec2 center = ImVec2(canvasPos.x + canvasSize.x * 0.5f, canvasPos.y + canvasSize.y * 0.5f);
+    drawList->AddCircle(center, 3.0f, m_workingCopy.canvas.grid_origin_color, 0, 2.0f);
+    drawList->AddLine(ImVec2(center.x - 10, center.y), ImVec2(center.x + 10, center.y), 
+                     m_workingCopy.canvas.grid_origin_color, 2.0f);
+    drawList->AddLine(ImVec2(center.x, center.y - 10), ImVec2(center.x, center.y + 10), 
+                     m_workingCopy.canvas.grid_origin_color, 2.0f);
+    
+    // Draw scale markers
+    for (float x = canvasPos.x; x < canvasPos.x + canvasSize.x; x += scaleInterval)
+    {
+        ImVec2 textPos = ImVec2(x, canvasPos.y + 5);
+        char label[32];
+        snprintf(label, sizeof(label), "%.0f", (x - canvasPos.x));
+        drawList->AddText(textPos, m_workingCopy.canvas.scale_text_color, label);
+    }
+    
+    // Draw drop target overlay preview
+    ImVec2 dropPos = ImVec2(canvasPos.x + canvasSize.x * 0.3f, canvasPos.y + canvasSize.y * 0.3f);
+    ImVec2 dropSize = ImVec2(80, 60);
+    drawList->AddRectFilled(dropPos, ImVec2(dropPos.x + dropSize.x, dropPos.y + dropSize.y), 
+                           m_workingCopy.canvas.drop_target_overlay);
+    drawList->AddRect(dropPos, ImVec2(dropPos.x + dropSize.x, dropPos.y + dropSize.y), 
+                     m_workingCopy.canvas.drop_target_overlay, 0.0f, 0, 2.0f);
+    
+    ImGui::SetCursorScreenPos(ImVec2(canvasPos.x, canvasPos.y + canvasSize.y + 10));
+    
+    // Mouse position text preview
+    ImGui::PushStyleColor(ImGuiCol_Text, ImGui::ColorConvertU32ToFloat4(m_workingCopy.canvas.mouse_position_text));
+    ImGui::Text("Mouse: 1234, 567");
+    ImGui::PopStyleColor();
+    
+    ImGui::Columns(1);
+}
+
+void ThemeEditorComponent::renderLayoutTab()
+{
+    ImGui::Text("Layout Settings");
+    ImGui::Separator();
+    
+    ImGui::Columns(2, "LayoutColumns", true);
+    
+    // Left: Controls
+    dragFloat("Sidebar Width", m_workingCopy.layout.sidebar_width, 1.0f, 100.0f, 500.0f);
+    dragFloat("Window Padding", m_workingCopy.layout.window_padding, 1.0f, 0.0f, 50.0f);
+    dragFloat("Node Vertical Padding", m_workingCopy.layout.node_vertical_padding, 1.0f, 0.0f, 200.0f);
+    dragFloat("Preset Vertical Padding", m_workingCopy.layout.preset_vertical_padding, 1.0f, 0.0f, 300.0f);
+    dragFloat("Node Default Width", m_workingCopy.layout.node_default_width, 1.0f, 100.0f, 1000.0f);
+    dragFloat2("Node Default Padding", m_workingCopy.layout.node_default_padding, 1.0f, 0.0f, 50.0f);
+    dragFloat2("Node Muted Padding", m_workingCopy.layout.node_muted_padding, 1.0f, 0.0f, 50.0f);
+    
+    ImGui::NextColumn();
+    
+    // Right: Live Preview
+    ImGui::Text("Live Preview");
+    ImGui::Separator();
+    
+    ImDrawList* drawList = ImGui::GetWindowDrawList();
+    ImVec2 canvasPos = ImGui::GetCursorScreenPos();
+    ImVec2 canvasSize = ImVec2(ImGui::GetContentRegionAvail().x, 250);
+    
+    // Draw sidebar
+    float sidebarWidth = m_workingCopy.layout.sidebar_width;
+    if (sidebarWidth > canvasSize.x * 0.4f) sidebarWidth = canvasSize.x * 0.4f; // Limit for preview
+    drawList->AddRectFilled(canvasPos, ImVec2(canvasPos.x + sidebarWidth, canvasPos.y + canvasSize.y), 
+                           IM_COL32(40, 40, 40, 255));
+    drawList->AddLine(ImVec2(canvasPos.x + sidebarWidth, canvasPos.y), 
+                     ImVec2(canvasPos.x + sidebarWidth, canvasPos.y + canvasSize.y), 
+                     IM_COL32(60, 60, 60, 255), 1.0f);
+    
+    // Draw main area with padding
+    float padding = m_workingCopy.layout.window_padding;
+    ImVec2 mainAreaStart = ImVec2(canvasPos.x + sidebarWidth + padding, canvasPos.y + padding);
+    ImVec2 mainAreaSize = ImVec2(canvasSize.x - sidebarWidth - padding * 2, canvasSize.y - padding * 2);
+    
+    // Draw node preview
+    float nodeWidth = m_workingCopy.layout.node_default_width;
+    if (nodeWidth > mainAreaSize.x * 0.8f) nodeWidth = mainAreaSize.x * 0.8f;
+    float nodeHeight = 60.0f;
+    ImVec2 nodePos = ImVec2(mainAreaStart.x + m_workingCopy.layout.node_default_padding.x, 
+                           mainAreaStart.y + m_workingCopy.layout.node_default_padding.y);
+    ImVec2 nodeSize = ImVec2(nodeWidth, nodeHeight);
+    
+    drawList->AddRectFilled(nodePos, ImVec2(nodePos.x + nodeSize.x, nodePos.y + nodeSize.y), 
+                           IM_COL32(50, 50, 50, 255));
+    drawList->AddRect(nodePos, ImVec2(nodePos.x + nodeSize.x, nodePos.y + nodeSize.y), 
+                     IM_COL32(100, 100, 100, 255), 0.0f, 0, 1.0f);
+    
+    // Draw second node with vertical padding
+    ImVec2 node2Pos = ImVec2(nodePos.x, 
+                             nodePos.y + nodeHeight + m_workingCopy.layout.node_vertical_padding);
+    drawList->AddRectFilled(node2Pos, ImVec2(node2Pos.x + nodeSize.x, node2Pos.y + nodeSize.y), 
+                           IM_COL32(50, 50, 50, 255));
+    drawList->AddRect(node2Pos, ImVec2(node2Pos.x + nodeSize.x, node2Pos.y + nodeSize.y), 
+                     IM_COL32(100, 100, 100, 255), 0.0f, 0, 1.0f);
+    
+    // Labels
+    ImGui::SetCursorScreenPos(ImVec2(canvasPos.x + 5, canvasPos.y + 5));
+    ImGui::Text("Sidebar");
+    
+    ImGui::SetCursorScreenPos(ImVec2(nodePos.x + 5, nodePos.y + 5));
+    ImGui::Text("Node");
+    
+    ImGui::SetCursorScreenPos(ImVec2(node2Pos.x + 5, node2Pos.y + 5));
+    ImGui::Text("Node");
+    
+    ImGui::SetCursorScreenPos(ImVec2(canvasPos.x, canvasPos.y + canvasSize.y + 10));
+    
+    ImGui::Text("Sidebar: %.0fpx | Node Width: %.0fpx | Padding: %.0fpx", 
+                m_workingCopy.layout.sidebar_width, 
+                m_workingCopy.layout.node_default_width,
+                m_workingCopy.layout.window_padding);
+    
+    ImGui::Columns(1);
+}
+
+void ThemeEditorComponent::renderFontsTab()
+{
+    ImGui::Text("Font Settings");
+    ImGui::Separator();
+    ImGui::TextWrapped("Font settings are managed through the application's font loading system. "
+                       "Currently, font paths are configured in the application initialization code.");
+    
+    ImGui::Spacing();
+    ImGui::Separator();
+    ImGui::Spacing();
+    
+    ImGui::Text("Font Size Settings:");
+    dragFloat("Default Font Size", m_workingCopy.fonts.default_size, 0.5f, 8.0f, 72.0f);
+    
+    ImGui::Spacing();
+    ImGui::Separator();
+    ImGui::Spacing();
+    
+    ImGui::Text("Note:");
+    ImGui::BulletText("Font file paths are configured in the application initialization.");
+    ImGui::BulletText("To change fonts, modify the font loading code in ImGuiNodeEditorComponent.");
+    ImGui::BulletText("Font size can be adjusted here and will affect text rendering.");
+    
+    ImGui::Spacing();
+    
+    // Preview font sizes
+    ImGui::Text("Font Size Preview:");
+    ImGui::BeginChild("FontPreview", ImVec2(0, 200), true);
+    
+    ImGui::Text("Default Font Size (%.1f):", m_workingCopy.fonts.default_size);
+    ImGui::Text("The quick brown fox jumps over the lazy dog.");
+    ImGui::Text("0123456789 !@#$%%^&*()");
+    
+    ImGui::EndChild();
+}
+
+void ThemeEditorComponent::renderWindowsTab()
+{
+    ImGui::Text("Window Settings");
+    ImGui::Separator();
+    
+    ImGui::Columns(2, "WindowsColumns", true);
+    
+    // Left: Controls
+    dragFloat("Status Overlay Alpha", m_workingCopy.windows.status_overlay_alpha, 0.01f, 0.0f, 1.0f);
+    dragFloat("Probe Scope Alpha", m_workingCopy.windows.probe_scope_alpha, 0.01f, 0.0f, 1.0f);
+    dragFloat("Preset Status Alpha", m_workingCopy.windows.preset_status_alpha, 0.01f, 0.0f, 1.0f);
+    dragFloat("Notifications Alpha", m_workingCopy.windows.notifications_alpha, 0.01f, 0.0f, 1.0f);
+    dragFloat("Probe Scope Width", m_workingCopy.windows.probe_scope_width, 1.0f, 100.0f, 500.0f);
+    dragFloat("Probe Scope Height", m_workingCopy.windows.probe_scope_height, 1.0f, 50.0f, 500.0f);
+    
+    ImGui::NextColumn();
+    
+    // Right: Live Preview
+    ImGui::Text("Live Preview");
+    ImGui::Separator();
+    
+    ImDrawList* drawList = ImGui::GetWindowDrawList();
+    ImVec2 canvasPos = ImGui::GetCursorScreenPos();
+    ImVec2 canvasSize = ImVec2(ImGui::GetContentRegionAvail().x, 250);
+    
+    // Draw background
+    drawList->AddRectFilled(canvasPos, ImVec2(canvasPos.x + canvasSize.x, canvasPos.y + canvasSize.y), 
+                           IM_COL32(10, 10, 10, 255));
+    
+    // Status overlay preview
+    ImVec2 statusPos = ImVec2(canvasPos.x + 10, canvasPos.y + 10);
+    ImVec2 statusSize = ImVec2(150, 40);
+    ImU32 statusColor = IM_COL32(255, 255, 255, (int)(m_workingCopy.windows.status_overlay_alpha * 255));
+    drawList->AddRectFilled(statusPos, ImVec2(statusPos.x + statusSize.x, statusPos.y + statusSize.y), 
+                           statusColor);
+    drawList->AddRect(statusPos, ImVec2(statusPos.x + statusSize.x, statusPos.y + statusSize.y), 
+                     IM_COL32(200, 200, 200, 255), 0.0f, 0, 1.0f);
+    ImGui::SetCursorScreenPos(ImVec2(statusPos.x + 5, statusPos.y + 12));
+    ImGui::Text("Status Overlay");
+    ImGui::SetCursorScreenPos(ImVec2(statusPos.x, statusPos.y + statusSize.y + 5));
+    
+    // Probe scope preview
+    float scopeWidth = m_workingCopy.windows.probe_scope_width;
+    float scopeHeight = m_workingCopy.windows.probe_scope_height;
+    if (scopeWidth > canvasSize.x * 0.8f) scopeWidth = canvasSize.x * 0.8f;
+    if (scopeHeight > canvasSize.y * 0.5f) scopeHeight = canvasSize.y * 0.5f;
+    
+    ImVec2 scopePos = ImVec2(canvasPos.x + 10, ImGui::GetCursorScreenPos().y);
+    ImVec2 scopeSize = ImVec2(scopeWidth, scopeHeight);
+    ImU32 scopeColor = IM_COL32(0, 200, 255, (int)(m_workingCopy.windows.probe_scope_alpha * 255));
+    drawList->AddRectFilled(scopePos, ImVec2(scopePos.x + scopeSize.x, scopePos.y + scopeSize.y), 
+                           IM_COL32(20, 20, 20, 255));
+    drawList->AddRect(scopePos, ImVec2(scopePos.x + scopeSize.x, scopePos.y + scopeSize.y), 
+                     scopeColor, 0.0f, 0, 2.0f);
+    
+    // Draw scope waveform
+    for (int i = 0; i < (int)scopeSize.x - 4; i += 2)
+    {
+        float x = scopePos.x + 2 + i;
+        float y = scopePos.y + scopeSize.y * 0.5f + sinf(i * 0.1f) * scopeSize.y * 0.3f;
+        drawList->AddLine(ImVec2(x, y), ImVec2(x + 2, y + sinf((i + 2) * 0.1f) * scopeSize.y * 0.3f), 
+                         scopeColor, 1.5f);
+    }
+    
+    ImGui::SetCursorScreenPos(ImVec2(scopePos.x + 5, scopePos.y + 5));
+    ImGui::Text("Probe Scope");
+    
+    ImGui::SetCursorScreenPos(ImVec2(canvasPos.x, canvasPos.y + canvasSize.y + 10));
+    
+    ImGui::Text("Scope: %.0fx%.0fpx | Alpha: %.2f", 
+                m_workingCopy.windows.probe_scope_width,
+                m_workingCopy.windows.probe_scope_height,
+                m_workingCopy.windows.probe_scope_alpha);
+    
+    ImGui::Columns(1);
+}
+
+void ThemeEditorComponent::renderModulationTab()
+{
+    ImGui::Text("Modulation Colors");
+    ImGui::Separator();
+    
+    ImGui::Columns(2, "ModulationColumns", true);
+    
+    // Left: Controls
+    colorEdit4("Frequency", m_workingCopy.modulation.frequency);
+    colorEdit4("Timbre", m_workingCopy.modulation.timbre);
+    colorEdit4("Amplitude", m_workingCopy.modulation.amplitude);
+    colorEdit4("Filter", m_workingCopy.modulation.filter);
+    
+    ImGui::NextColumn();
+    
+    // Right: Live Preview
+    ImGui::Text("Live Preview");
+    ImGui::Separator();
+    
+    ImDrawList* drawList = ImGui::GetWindowDrawList();
+    ImVec2 canvasPos = ImGui::GetCursorScreenPos();
+    ImVec2 canvasSize = ImVec2(ImGui::GetContentRegionAvail().x, 200);
+    
+    // Draw waveform previews for each modulation type
+    float waveHeight = 30.0f;
+    float ySpacing = 40.0f;
+    
+    // Frequency
+    ImVec2 freqStart = ImVec2(canvasPos.x, canvasPos.y);
+    ImGui::SetCursorScreenPos(freqStart);
+    ImGui::Text("Frequency:");
+    for (int i = 0; i < 50; ++i)
+    {
+        float x = freqStart.x + i * 5.0f;
+        float y = freqStart.y + 20.0f + sinf(i * 0.2f) * waveHeight * 0.5f;
+        drawList->AddCircleFilled(ImVec2(x, y), 2.0f, 
+                                  ImGui::ColorConvertFloat4ToU32(m_workingCopy.modulation.frequency), 0);
+    }
+    
+    // Timbre
+    ImVec2 timbreStart = ImVec2(canvasPos.x, canvasPos.y + ySpacing);
+    ImGui::SetCursorScreenPos(timbreStart);
+    ImGui::Text("Timbre:");
+    for (int i = 0; i < 50; ++i)
+    {
+        float x = timbreStart.x + i * 5.0f;
+        float y = timbreStart.y + 20.0f + sinf(i * 0.15f) * waveHeight * 0.5f;
+        drawList->AddCircleFilled(ImVec2(x, y), 2.0f, 
+                                  ImGui::ColorConvertFloat4ToU32(m_workingCopy.modulation.timbre), 0);
+    }
+    
+    // Amplitude
+    ImVec2 ampStart = ImVec2(canvasPos.x, canvasPos.y + ySpacing * 2);
+    ImGui::SetCursorScreenPos(ampStart);
+    ImGui::Text("Amplitude:");
+    for (int i = 0; i < 50; ++i)
+    {
+        float x = ampStart.x + i * 5.0f;
+        float y = ampStart.y + 20.0f + sinf(i * 0.3f) * waveHeight * 0.5f;
+        drawList->AddCircleFilled(ImVec2(x, y), 2.0f, 
+                                  ImGui::ColorConvertFloat4ToU32(m_workingCopy.modulation.amplitude), 0);
+    }
+    
+    // Filter
+    ImVec2 filterStart = ImVec2(canvasPos.x, canvasPos.y + ySpacing * 3);
+    ImGui::SetCursorScreenPos(filterStart);
+    ImGui::Text("Filter:");
+    for (int i = 0; i < 50; ++i)
+    {
+        float x = filterStart.x + i * 5.0f;
+        float y = filterStart.y + 20.0f + sinf(i * 0.1f) * waveHeight * 0.5f;
+        drawList->AddCircleFilled(ImVec2(x, y), 2.0f, 
+                                  ImGui::ColorConvertFloat4ToU32(m_workingCopy.modulation.filter), 0);
+    }
+    
+    ImGui::SetCursorScreenPos(ImVec2(canvasPos.x, canvasPos.y + canvasSize.y));
+    
+    ImGui::Columns(1);
+}
+
+void ThemeEditorComponent::renderMetersTab()
+{
+    ImGui::Text("Meter Colors");
+    ImGui::Separator();
+    
+    ImGui::Columns(2, "MetersColumns", true);
+    
+    // Left: Controls
+    colorEdit4("Safe", m_workingCopy.meters.safe);
+    colorEdit4("Warning", m_workingCopy.meters.warning);
+    colorEdit4("Clipping", m_workingCopy.meters.clipping);
+    
+    ImGui::NextColumn();
+    
+    // Right: Live Preview
+    ImGui::Text("Live Preview");
+    ImGui::Separator();
+    
+    ImDrawList* drawList = ImGui::GetWindowDrawList();
+    ImVec2 canvasPos = ImGui::GetCursorScreenPos();
+    
+    // Draw meter bars
+    float meterWidth = ImGui::GetContentRegionAvail().x;
+    float meterHeight = 20.0f;
+    float spacing = 5.0f;
+    
+    // Safe level meter
+    ImVec2 safePos = canvasPos;
+    float safeLevel = 0.6f; // 60% full
+    drawList->AddRectFilled(safePos, ImVec2(safePos.x + meterWidth, safePos.y + meterHeight), 
+                           IM_COL32(30, 30, 30, 255));
+    drawList->AddRectFilled(safePos, ImVec2(safePos.x + meterWidth * safeLevel, safePos.y + meterHeight), 
+                           ImGui::ColorConvertFloat4ToU32(m_workingCopy.meters.safe));
+    ImGui::SetCursorScreenPos(ImVec2(safePos.x, safePos.y));
+    ImGui::Text("Safe (60%):");
+    ImGui::SetCursorScreenPos(ImVec2(safePos.x, safePos.y + meterHeight + spacing));
+    
+    // Warning level meter
+    ImVec2 warnPos = ImGui::GetCursorScreenPos();
+    float warnLevel = 0.85f; // 85% full
+    drawList->AddRectFilled(warnPos, ImVec2(warnPos.x + meterWidth, warnPos.y + meterHeight), 
+                           IM_COL32(30, 30, 30, 255));
+    drawList->AddRectFilled(warnPos, ImVec2(warnPos.x + meterWidth * 0.8f, warnPos.y + meterHeight), 
+                           ImGui::ColorConvertFloat4ToU32(m_workingCopy.meters.safe));
+    drawList->AddRectFilled(ImVec2(warnPos.x + meterWidth * 0.8f, warnPos.y), 
+                           ImVec2(warnPos.x + meterWidth * warnLevel, warnPos.y + meterHeight), 
+                           ImGui::ColorConvertFloat4ToU32(m_workingCopy.meters.warning));
+    ImGui::SetCursorScreenPos(ImVec2(warnPos.x, warnPos.y));
+    ImGui::Text("Warning (85%):");
+    ImGui::SetCursorScreenPos(ImVec2(warnPos.x, warnPos.y + meterHeight + spacing));
+    
+    // Clipping level meter
+    ImVec2 clipPos = ImGui::GetCursorScreenPos();
+    float clipLevel = 1.0f; // 100% full (clipping)
+    drawList->AddRectFilled(clipPos, ImVec2(clipPos.x + meterWidth, clipPos.y + meterHeight), 
+                           IM_COL32(30, 30, 30, 255));
+    drawList->AddRectFilled(clipPos, ImVec2(clipPos.x + meterWidth * 0.8f, clipPos.y + meterHeight), 
+                           ImGui::ColorConvertFloat4ToU32(m_workingCopy.meters.safe));
+    drawList->AddRectFilled(ImVec2(clipPos.x + meterWidth * 0.8f, clipPos.y), 
+                           ImVec2(clipPos.x + meterWidth * 0.95f, clipPos.y + meterHeight), 
+                           ImGui::ColorConvertFloat4ToU32(m_workingCopy.meters.warning));
+    drawList->AddRectFilled(ImVec2(clipPos.x + meterWidth * 0.95f, clipPos.y), 
+                           ImVec2(clipPos.x + meterWidth * clipLevel, clipPos.y + meterHeight), 
+                           ImGui::ColorConvertFloat4ToU32(m_workingCopy.meters.clipping));
+    ImGui::SetCursorScreenPos(ImVec2(clipPos.x, clipPos.y));
+    ImGui::Text("Clipping (100%):");
+    
+    ImGui::Columns(1);
+}
+
+void ThemeEditorComponent::renderTimelineTab()
+{
+    ImGui::Text("Timeline Colors");
+    ImGui::Separator();
+    
+    ImGui::Columns(2, "TimelineColumns", true);
+    
+    // Left: Controls
+    colorEditU32("Marker Start/End", m_workingCopy.timeline.marker_start_end);
+    colorEditU32("Marker Gate", m_workingCopy.timeline.marker_gate);
+    colorEditU32("Marker Trigger", m_workingCopy.timeline.marker_trigger);
+    
+    ImGui::NextColumn();
+    
+    // Right: Live Preview
+    ImGui::Text("Live Preview");
+    ImGui::Separator();
+    
+    ImDrawList* drawList = ImGui::GetWindowDrawList();
+    ImVec2 canvasPos = ImGui::GetCursorScreenPos();
+    ImVec2 canvasSize = ImVec2(ImGui::GetContentRegionAvail().x, 150);
+    
+    // Draw timeline preview
+    float timelineHeight = 40.0f;
+    ImVec2 timelineStart = ImVec2(canvasPos.x, canvasPos.y + 20);
+    
+    // Draw timeline background
+    drawList->AddRectFilled(timelineStart, 
+                           ImVec2(timelineStart.x + canvasSize.x, timelineStart.y + timelineHeight), 
+                           IM_COL32(20, 20, 20, 255));
+    
+    // Draw markers
+    // Start marker
+    ImVec2 startMarker = ImVec2(timelineStart.x + 20, timelineStart.y);
+    drawList->AddLine(ImVec2(startMarker.x, startMarker.y), 
+                     ImVec2(startMarker.x, startMarker.y + timelineHeight), 
+                     m_workingCopy.timeline.marker_start_end, 3.0f);
+    drawList->AddTriangleFilled(ImVec2(startMarker.x, startMarker.y), 
+                                ImVec2(startMarker.x - 5, startMarker.y - 8), 
+                                ImVec2(startMarker.x + 5, startMarker.y - 8), 
+                                m_workingCopy.timeline.marker_start_end);
+    ImGui::SetCursorScreenPos(ImVec2(startMarker.x - 10, startMarker.y - 20));
+    ImGui::Text("Start");
+    
+    // End marker
+    ImVec2 endMarker = ImVec2(timelineStart.x + canvasSize.x - 20, timelineStart.y);
+    drawList->AddLine(ImVec2(endMarker.x, endMarker.y), 
+                     ImVec2(endMarker.x, endMarker.y + timelineHeight), 
+                     m_workingCopy.timeline.marker_start_end, 3.0f);
+    drawList->AddTriangleFilled(ImVec2(endMarker.x, endMarker.y), 
+                                ImVec2(endMarker.x - 5, endMarker.y - 8), 
+                                ImVec2(endMarker.x + 5, endMarker.y - 8), 
+                                m_workingCopy.timeline.marker_start_end);
+    ImGui::SetCursorScreenPos(ImVec2(endMarker.x - 10, endMarker.y - 20));
+    ImGui::Text("End");
+    
+    // Gate markers
+    float gateY = timelineStart.y + timelineHeight * 0.3f;
+    for (int i = 0; i < 3; ++i)
+    {
+        float x = timelineStart.x + 60 + i * 40;
+        drawList->AddRectFilled(ImVec2(x, gateY), ImVec2(x + 20, gateY + 15), 
+                               m_workingCopy.timeline.marker_gate);
+    }
+    ImGui::SetCursorScreenPos(ImVec2(timelineStart.x + 60, gateY - 15));
+    ImGui::Text("Gates");
+    
+    // Trigger markers
+    float triggerY = timelineStart.y + timelineHeight * 0.7f;
+    for (int i = 0; i < 5; ++i)
+    {
+        float x = timelineStart.x + 80 + i * 25;
+        drawList->AddLine(ImVec2(x, triggerY), ImVec2(x, triggerY + 10), 
+                         m_workingCopy.timeline.marker_trigger, 2.0f);
+    }
+    ImGui::SetCursorScreenPos(ImVec2(timelineStart.x + 80, triggerY - 15));
+    ImGui::Text("Triggers");
+    
+    ImGui::SetCursorScreenPos(ImVec2(canvasPos.x, canvasPos.y + canvasSize.y));
+    
+    ImGui::Columns(1);
+}
+
+void ThemeEditorComponent::renderModulesTab()
+{
+    ImGui::Text("Module-Specific Colors");
+    ImGui::Separator();
+    
+    ImGui::Columns(2, "ModulesColumns", true);
+    
+    // Left: Controls
+    if (ImGui::CollapsingHeader("VideoFX Module"))
+    {
+        colorEdit4("Section Header", m_workingCopy.modules.videofx_section_header);
+        colorEdit4("Section Subheader", m_workingCopy.modules.videofx_section_subheader);
+    }
+    
+    if (ImGui::CollapsingHeader("Scope Module"))
+    {
+        colorEdit4("Section Header", m_workingCopy.modules.scope_section_header);
+        colorEditU32("Plot Background", m_workingCopy.modules.scope_plot_bg);
+        colorEditU32("Plot Foreground", m_workingCopy.modules.scope_plot_fg);
+        colorEditU32("Plot Max", m_workingCopy.modules.scope_plot_max);
+        colorEditU32("Plot Min", m_workingCopy.modules.scope_plot_min);
+        colorEdit4("Text Max", m_workingCopy.modules.scope_text_max);
+        colorEdit4("Text Min", m_workingCopy.modules.scope_text_min);
+    }
+    
+    if (ImGui::CollapsingHeader("Stroke Sequencer"))
+    {
+        colorEditU32("Border", m_workingCopy.modules.stroke_seq_border);
+        colorEditU32("Canvas Background", m_workingCopy.modules.stroke_seq_canvas_bg);
+        colorEditU32("Line Inactive", m_workingCopy.modules.stroke_seq_line_inactive);
+        colorEditU32("Line Active", m_workingCopy.modules.stroke_seq_line_active);
+        colorEditU32("Playhead", m_workingCopy.modules.stroke_seq_playhead);
+        colorEditU32("Threshold Floor", m_workingCopy.modules.stroke_seq_thresh_floor);
+        colorEditU32("Threshold Mid", m_workingCopy.modules.stroke_seq_thresh_mid);
+        colorEditU32("Threshold Ceil", m_workingCopy.modules.stroke_seq_thresh_ceil);
+        colorEdit4("Frame Background", m_workingCopy.modules.stroke_seq_frame_bg);
+        colorEdit4("Frame Hovered", m_workingCopy.modules.stroke_seq_frame_bg_hovered);
+        colorEdit4("Frame Active", m_workingCopy.modules.stroke_seq_frame_bg_active);
+    }
+    
+    ImGui::NextColumn();
+    
+    // Right: Live Preview
+    ImGui::Text("Live Preview");
+    ImGui::Separator();
+    
+    ImDrawList* drawList = ImGui::GetWindowDrawList();
+    ImVec2 canvasPos = ImGui::GetCursorScreenPos();
+    
+    // VideoFX Preview
+    ImGui::TextColored(m_workingCopy.modules.videofx_section_header, "VideoFX Section Header");
+    ImGui::TextColored(m_workingCopy.modules.videofx_section_subheader, "VideoFX Section Subheader");
+    ImGui::Spacing();
+    
+    // Scope Preview
+    ImGui::TextColored(m_workingCopy.modules.scope_section_header, "Scope Section Header");
+    ImVec2 scopePos = ImVec2(canvasPos.x, ImGui::GetCursorScreenPos().y + 10);
+    ImVec2 scopeSize = ImVec2(200, 100);
+    
+    // Draw scope background
+    drawList->AddRectFilled(scopePos, ImVec2(scopePos.x + scopeSize.x, scopePos.y + scopeSize.y), 
+                           m_workingCopy.modules.scope_plot_bg);
+    drawList->AddRect(scopePos, ImVec2(scopePos.x + scopeSize.x, scopePos.y + scopeSize.y), 
+                     IM_COL32(100, 100, 100, 255));
+    
+    // Draw scope waveform
+    for (int i = 0; i < (int)scopeSize.x - 4; i += 2)
+    {
+        float x = scopePos.x + 2 + i;
+        float y = scopePos.y + scopeSize.y * 0.5f + sinf(i * 0.1f) * scopeSize.y * 0.3f;
+        drawList->AddLine(ImVec2(x, y), ImVec2(x + 2, y + sinf((i + 2) * 0.1f) * scopeSize.y * 0.3f), 
+                         m_workingCopy.modules.scope_plot_fg, 1.5f);
+    }
+    
+    // Draw max/min markers
+    drawList->AddLine(ImVec2(scopePos.x + 5, scopePos.y + 5), 
+                     ImVec2(scopePos.x + scopeSize.x - 5, scopePos.y + 5), 
+                     m_workingCopy.modules.scope_plot_max, 2.0f);
+    drawList->AddLine(ImVec2(scopePos.x + 5, scopePos.y + scopeSize.y - 5), 
+                     ImVec2(scopePos.x + scopeSize.x - 5, scopePos.y + scopeSize.y - 5), 
+                     m_workingCopy.modules.scope_plot_min, 2.0f);
+    
+    ImGui::SetCursorScreenPos(ImVec2(scopePos.x + 5, scopePos.y + 5));
+    ImGui::TextColored(m_workingCopy.modules.scope_text_max, "MAX");
+    ImGui::SetCursorScreenPos(ImVec2(scopePos.x + 5, scopePos.y + scopeSize.y - 20));
+    ImGui::TextColored(m_workingCopy.modules.scope_text_min, "MIN");
+    
+    ImGui::SetCursorScreenPos(ImVec2(canvasPos.x, scopePos.y + scopeSize.y + 20));
+    ImGui::Spacing();
+    
+    // Stroke Sequencer Preview
+    ImGui::Text("Stroke Sequencer Preview:");
+    ImVec2 seqPos = ImVec2(canvasPos.x, ImGui::GetCursorScreenPos().y + 5);
+    ImVec2 seqSize = ImVec2(250, 120);
+    
+    // Draw canvas background
+    drawList->AddRectFilled(seqPos, ImVec2(seqPos.x + seqSize.x, seqPos.y + seqSize.y), 
+                           m_workingCopy.modules.stroke_seq_canvas_bg);
+    drawList->AddRect(seqPos, ImVec2(seqPos.x + seqSize.x, seqPos.y + seqSize.y), 
+                     m_workingCopy.modules.stroke_seq_border, 0.0f, 0, 2.0f);
+    
+    // Draw lines
+    float lineY = seqPos.y + 20;
+    for (int i = 0; i < 5; ++i)
+    {
+        float x1 = seqPos.x + 10 + i * 20;
+        float x2 = seqPos.x + 10 + (i + 1) * 20;
+        ImU32 lineColor = (i == 2) ? m_workingCopy.modules.stroke_seq_line_active : 
+                                     m_workingCopy.modules.stroke_seq_line_inactive;
+        drawList->AddLine(ImVec2(x1, lineY + i * 15), ImVec2(x2, lineY + i * 15), lineColor, 2.0f);
+    }
+    
+    // Draw playhead
+    float playheadX = seqPos.x + 100;
+    drawList->AddLine(ImVec2(playheadX, seqPos.y), ImVec2(playheadX, seqPos.y + seqSize.y), 
+                     m_workingCopy.modules.stroke_seq_playhead, 2.0f);
+    
+    // Draw threshold markers
+    float threshY1 = seqPos.y + seqSize.y * 0.3f;
+    float threshY2 = seqPos.y + seqSize.y * 0.5f;
+    float threshY3 = seqPos.y + seqSize.y * 0.7f;
+    drawList->AddLine(ImVec2(seqPos.x + 5, threshY1), ImVec2(seqPos.x + seqSize.x - 5, threshY1), 
+                     m_workingCopy.modules.stroke_seq_thresh_floor, 1.0f);
+    drawList->AddLine(ImVec2(seqPos.x + 5, threshY2), ImVec2(seqPos.x + seqSize.x - 5, threshY2), 
+                     m_workingCopy.modules.stroke_seq_thresh_mid, 1.0f);
+    drawList->AddLine(ImVec2(seqPos.x + 5, threshY3), ImVec2(seqPos.x + seqSize.x - 5, threshY3), 
+                     m_workingCopy.modules.stroke_seq_thresh_ceil, 1.0f);
+    
+    // Draw frame preview
+    ImVec2 framePos = ImVec2(seqPos.x + seqSize.x - 60, seqPos.y + 10);
+    ImVec2 frameSize = ImVec2(50, 30);
+    drawList->AddRectFilled(framePos, ImVec2(framePos.x + frameSize.x, framePos.y + frameSize.y), 
+                           ImGui::ColorConvertFloat4ToU32(m_workingCopy.modules.stroke_seq_frame_bg));
+    drawList->AddRect(framePos, ImVec2(framePos.x + frameSize.x, framePos.y + frameSize.y), 
+                     IM_COL32(100, 100, 100, 255));
+    
+    ImGui::Columns(1);
+}
+
+void ThemeEditorComponent::renderSaveDialog()
+{
+    ImGui::OpenPopup("Save Theme");
+    if (ImGui::BeginPopupModal("Save Theme", nullptr, ImGuiWindowFlags_AlwaysAutoResize))
+    {
+        ImGui::Text("Enter theme name:");
+        ImGui::InputText("##ThemeName", m_saveThemeName, sizeof(m_saveThemeName));
+        
+        ImGui::Separator();
+        
+        if (ImGui::Button("Save"))
+        {
+            saveTheme();
+            m_showSaveDialog = false;
+            ImGui::CloseCurrentPopup();
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("Cancel"))
+        {
+            m_showSaveDialog = false;
+            ImGui::CloseCurrentPopup();
+        }
+        
+        ImGui::EndPopup();
+    }
+}
+
+void ThemeEditorComponent::saveTheme()
+{
+    juce::String themeName(m_saveThemeName);
+    if (themeName.isEmpty())
+    {
+        return;
+    }
+    
+    themeName = themeName.replaceCharacter(' ', '_');
+    
+    auto themeFile = juce::File::getSpecialLocation(juce::File::userDocumentsDirectory)
+                        .getChildFile("Preset Creator Themes")
+                        .getChildFile(themeName + ".json");
+    themeFile.getParentDirectory().createDirectory();
+    
+    ThemeManager::getInstance().getEditableTheme() = m_workingCopy;
+    ThemeManager::getInstance().saveTheme(themeFile);
+    m_hasChanges = false;
+}
+
+void ThemeEditorComponent::resetCurrentTab()
+{
+    // TODO: Reset current tab to default values
+    // For now, just reload from current theme
+    m_workingCopy = ThemeManager::getInstance().getCurrentTheme();
+    m_hasChanges = false;
+}
+
+void ThemeEditorComponent::applyChanges()
+{
+    // Apply working copy to ThemeManager
+    ThemeManager::getInstance().getEditableTheme() = m_workingCopy;
+    ThemeManager::getInstance().applyTheme();
+    m_hasChanges = false;
+    juce::Logger::writeToLog("[ThemeEditor] Applied theme changes");
+    
+    // Also save user preference if they want persistence
+    // (Theme preference is saved when selecting from menu, not when editing)
+}
+

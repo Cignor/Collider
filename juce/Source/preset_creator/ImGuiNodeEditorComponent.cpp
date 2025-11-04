@@ -247,7 +247,7 @@ void ImGuiNodeEditorComponent::newOpenGLContextCreated()
     imguiContext = ImGui::CreateContext();
     imguiIO = &ImGui::GetIO();
     // Apply theme (replaces ImGui::StyleColorsDark())
-    ThemeManager::getInstance().applyTheme();
+    ImGui::StyleColorsDark();
 
     // --- FONT LOADING FOR CHINESE CHARACTERS ---
     ImGuiIO& io = ImGui::GetIO();
@@ -350,6 +350,7 @@ void ImGuiNodeEditorComponent::renderOpenGL()
     ImGui::NewFrame();
     // Demo is hidden by default; toggle can be added later if needed
     renderImGui();
+    themeEditor.render();  // Render theme editor if open
     ImGui::Render();
     auto* dd = ImGui::GetDrawData();
     // Render via OpenGL2 backend
@@ -675,69 +676,57 @@ void ImGuiNodeEditorComponent::renderImGui()
             
             ImGui::Separator();
 
-            if (ImGui::BeginMenu("Theme"))
-            {
-                auto loadThemePreset = [&](const char* label, const char* filename)
+                if (ImGui::BeginMenu("Theme"))
                 {
-                    if (ImGui::MenuItem(label))
+                    if (ImGui::MenuItem("Edit Current Theme..."))
                     {
-                        // Try multiple paths in priority order
-                        juce::File presetFile;
-
-                        // 1) exe-local themes folder (preferred at runtime): <exe>/themes/<file>
-                        {
-                            auto appFile = juce::File::getSpecialLocation(juce::File::currentApplicationFile);
-                            auto exeDir = appFile.getParentDirectory();
-                            auto exeThemeDir = exeDir.getChildFile("themes");
-                            auto candidate = exeThemeDir.getChildFile(filename);
-                            if (candidate.existsAsFile())
-                                presetFile = candidate;
-                        }
-
-                        // 2) development source tree (while running from IDE)
-                        if (!presetFile.existsAsFile())
-                        {
-                            auto sourceDir = juce::File(__FILE__).getParentDirectory().getParentDirectory().getParentDirectory();
-                            auto candidate = sourceDir.getChildFile("Source/preset_creator/theme/presets/").getChildFile(filename);
-                            if (candidate.existsAsFile())
-                                presetFile = candidate;
-                        }
-
-                        // 3) workspace absolute path (fallback)
-                        if (!presetFile.existsAsFile())
-                        {
-                            auto candidate = juce::File("H:/0000_CODE/01_collider_pyo/juce/Source/preset_creator/theme/presets/").getChildFile(filename);
-                            if (candidate.existsAsFile())
-                                presetFile = candidate;
-                        }
-
-                        if (presetFile.existsAsFile())
-                        {
-                            if (ThemeManager::getInstance().loadTheme(presetFile))
-                            {
-                                juce::Logger::writeToLog("[Theme] Loaded: " + juce::String(label) + " from " + presetFile.getFullPathName());
-                                s_themeToastText = "Theme Loaded: " + juce::String(label);
-                                s_themeToastEndTime = ImGui::GetTime() + 2.0; // Show toast for 2 seconds
-                            }
-                            else
-                            {
-                                juce::Logger::writeToLog("[Theme] Failed to load: " + presetFile.getFullPathName());
-                            }
-                        }
-                        else
-                        {
-                            juce::Logger::writeToLog("[Theme] Preset not found (checked exe/themes and source paths): " + juce::String(filename));
-                        }
+                        themeEditor.open();
                     }
-                };
+                    ImGui::Separator();
+                    
+                    // Simple static theme list for now - will add dynamic scanning later
+                    auto loadThemePreset = [&](const char* label, const char* filename)
+                    {
+                        if (ImGui::MenuItem(label))
+                        {
+                            juce::File presetFile;
+                            auto exeFile = juce::File::getSpecialLocation(juce::File::currentExecutableFile);
+                            auto exeDir = exeFile.getParentDirectory();
+                            auto themesDir = exeDir.getChildFile("themes");
+                            auto candidate = themesDir.getChildFile(filename);
+                            
+                            if (candidate.existsAsFile())
+                            {
+                                if (ThemeManager::getInstance().loadTheme(candidate))
+                                {
+                                    juce::Logger::writeToLog("[Theme] Loaded: " + juce::String(label));
+                                    s_themeToastText = "Theme Loaded: " + juce::String(label);
+                                    s_themeToastEndTime = ImGui::GetTime() + 2.0;
+                                }
+                            }
+                        }
+                    };
+                    
+                    loadThemePreset("Moofy Dark (Default)", "MoofyDark.json");
+                    loadThemePreset("Classic", "ClassicTheme.json");
+                    loadThemePreset("Light", "LightTheme.json");
+                    loadThemePreset("Electric Grey", "ElectricGrey.json");
+                    loadThemePreset("Solarized Light", "SolarizedLight.json");
+                    loadThemePreset("Solarized Dark", "SolarizedDark.json");
+                    loadThemePreset("Dracula", "Dracula.json");
+                    loadThemePreset("Nord", "Nord.json");
+                    loadThemePreset("Monokai Pro", "MonokaiPro.json");
+                    loadThemePreset("One Dark Pro", "OneDarkPro.json");
+                    loadThemePreset("Gruvbox Dark", "GruvboxDark.json");
+                    loadThemePreset("Tokyo Night", "TokyoNight.json");
+                    loadThemePreset("High Contrast Neon", "HighContrastNeon.json");
+                    loadThemePreset("Retro Terminal Green", "RetroTerminalGreen.json");
+                    loadThemePreset("Retro Terminal Amber", "RetroTerminalAmber.json");
+                    loadThemePreset("Paper White", "PaperWhite.json");
+                    loadThemePreset("Cyberpunk", "Cyberpunk.json");
 
-                loadThemePreset("Moofy Dark (Default)", "MoofyDark.json");
-                loadThemePreset("Classic",            "ClassicTheme.json");
-                loadThemePreset("Light",              "LightTheme.json");
-                loadThemePreset("Electric Grey",      "ElectricGrey.json");
-
-                ImGui::EndMenu();
-            }
+                    ImGui::EndMenu();
+                }
             
             ImGui::Separator();
             
@@ -1135,10 +1124,8 @@ void ImGuiNodeEditorComponent::renderImGui()
     // Zoom removed
     // ADD THIS BLOCK:
     ImGui::Text("Browser");
-    
     // Create a scrolling child window to contain the entire browser
     ImGui::BeginChild("BrowserScrollRegion", ImVec2(0, 0), true);
-    
     // Helper lambda to recursively draw the directory tree for presets
     std::function<void(const PresetManager::DirectoryNode*)> drawPresetTree = 
         [&](const PresetManager::DirectoryNode* node)
@@ -1785,9 +1772,11 @@ void ImGuiNodeEditorComponent::renderImGui()
 
     // --- DEFINITIVE FIX FOR PRESET DRAG-AND-DROP WITH VISUAL FEEDBACK ---
     // Step 1: Define canvas dimensions first (needed for the drop target)
-    const ImU32 GRID_COLOR = IM_COL32(50, 50, 50, 255);
-    const ImU32 GRID_ORIGIN_COLOR = IM_COL32(80, 80, 80, 255);
-    const float GRID_SIZE = 64.0f;
+    // Get grid/canvas colors from theme
+    auto& themeMgr = ThemeManager::getInstance();
+    const ImU32 GRID_COLOR = themeMgr.getGridColor();
+    const ImU32 GRID_ORIGIN_COLOR = themeMgr.getGridOriginColor();
+    const float GRID_SIZE = themeMgr.getGridSize();
     ImVec2 canvas_p0 = ImGui::GetCursorScreenPos();
     ImVec2 canvas_sz = ImGui::GetContentRegionAvail();
     ImVec2 canvas_p1 = ImVec2(canvas_p0.x + canvas_sz.x, canvas_p0.y + canvas_sz.y);
@@ -1804,7 +1793,7 @@ void ImGuiNodeEditorComponent::renderImGui()
         {
             // Draw a semi-transparent overlay to show the canvas is a valid drop zone
             ImDrawList* drawList = ImGui::GetForegroundDrawList();
-            drawList->AddRectFilled(canvas_p0, canvas_p1, IM_COL32(218, 165, 32, 80)); // Preset Gold color
+            drawList->AddRectFilled(canvas_p0, canvas_p1, themeMgr.getDropTargetOverlay());
             
             // Check if the mouse button was released to complete the drop
             if (payload->IsDelivery())
@@ -1850,7 +1839,10 @@ void ImGuiNodeEditorComponent::renderImGui()
     // --- BACKGROUND GRID AND COORDINATE DISPLAY ---
     // (Canvas dimensions already defined above in the drop target code)
     ImDrawList* draw_list = ImGui::GetBackgroundDrawList();
-    ImVec2 panning = ImNodes::EditorContextGetPanning();
+    // Note: EditorContextGetPanning() can only be called AFTER BeginNodeEditor()
+    // Since we draw the grid before BeginNodeEditor, we use zero panning here
+    // The grid will be drawn correctly after BeginNodeEditor is called
+    ImVec2 panning(0.0f, 0.0f);
 
     // Draw grid lines
     for (float x = fmodf(panning.x, GRID_SIZE); x < canvas_sz.x; x += GRID_SIZE)
@@ -1863,9 +1855,9 @@ void ImGuiNodeEditorComponent::renderImGui()
     draw_list->AddLine(ImVec2(origin_on_screen.x, canvas_p0.y), ImVec2(origin_on_screen.x, canvas_p1.y), GRID_ORIGIN_COLOR, 2.0f);
     draw_list->AddLine(ImVec2(canvas_p0.x, origin_on_screen.y), ImVec2(canvas_p1.x, origin_on_screen.y), GRID_ORIGIN_COLOR, 2.0f);
 
-    // Draw scale markers every 400 grid units as a grid (not a cross)
-    const float SCALE_INTERVAL = 400.0f;
-    const ImU32 SCALE_TEXT_COLOR = IM_COL32(150, 150, 150, 80); // Reduced opacity
+    // Draw scale markers every SCALE_INTERVAL grid units as a grid (not a cross)
+    const float SCALE_INTERVAL = themeMgr.getScaleInterval();
+    const ImU32 SCALE_TEXT_COLOR = themeMgr.getScaleTextColor();
     ImDrawList* fg_draw_list = ImGui::GetForegroundDrawList();
     
     // X-axis scale markers - always at the bottom edge
@@ -1916,10 +1908,12 @@ void ImGuiNodeEditorComponent::renderImGui()
     snprintf(posStr, sizeof(posStr), "%.0f, %.0f", mouseGridPos.x, mouseGridPos.y);
     // Use the foreground draw list to ensure text is on top of everything
     // Position at bottom-left: canvas_p1.y is bottom edge, subtract text height plus padding
-    ImGui::GetForegroundDrawList()->AddText(ImVec2(canvas_p0.x + 10, canvas_p1.y - 25), IM_COL32(200, 200, 200, 150), posStr);
+    ImGui::GetForegroundDrawList()->AddText(ImVec2(canvas_p0.x + 10, canvas_p1.y - 25), themeMgr.getMousePositionText(), posStr);
     // --- END OF BACKGROUND GRID AND COORDINATE DISPLAY ---
     // Node canvas bound to the underlying model if available
     ImNodes::BeginNodeEditor();
+    // Now we can safely get the actual panning for any future use
+    // (Grid is already drawn with zero panning above, which is fine for background)
     // Begin the editor
     // +++ ADD THIS LINE AT THE START OF THE RENDER LOOP +++
     attrPositions.clear(); // Clear the cache at the beginning of each frame.
@@ -1933,7 +1927,6 @@ void ImGuiNodeEditorComponent::renderImGui()
     {
         return getLinkId(srcAttr, dstAttr);
     };
-
     if (synth != nullptr)
     {
         // Apply any pending UI state restore (first frame after load)
@@ -7814,7 +7807,7 @@ juce::File ImGuiNodeEditorComponent::findPresetsDirectory()
 {
     // Search upwards from the executable's location for a sibling directory
     // named "Synth_presets". This is robust to different build configurations.
-    juce::File dir = juce::File::getSpecialLocation(juce::File::currentApplicationFile);
+    juce::File dir = juce::File::getSpecialLocation(juce::File::currentExecutableFile);
 
     for (int i = 0; i < 8; ++i) // Limit search depth to 8 levels
     {

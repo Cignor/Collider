@@ -12,8 +12,13 @@ public:
 	bool saveTheme(const juce::File& themeFile);
 	void applyTheme();
 	void resetToDefault();
+	
+	// Persistence
+	void saveUserThemePreference(const juce::String& themeFilename);
+	bool loadUserThemePreference();
 
 	const Theme& getCurrentTheme() const;
+	Theme& getEditableTheme();  // For theme editor - returns mutable reference
 
 	// Colors
 	ImU32 getCategoryColor(ModuleCategory cat, bool hovered = false);
@@ -25,6 +30,15 @@ public:
 	float getSidebarWidth() const;
 	float getNodeDefaultWidth() const;
 	float getWindowPadding() const;
+	
+	// Canvas
+	ImU32 getGridColor() const;
+	ImU32 getGridOriginColor() const;
+	float getGridSize() const;
+	ImU32 getScaleTextColor() const;
+	float getScaleInterval() const;
+	ImU32 getDropTargetOverlay() const;
+	ImU32 getMousePositionText() const;
 
 private:
 	ThemeManager();

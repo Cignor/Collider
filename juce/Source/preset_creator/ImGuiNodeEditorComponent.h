@@ -15,6 +15,7 @@
 #include "MidiManager.h"
 #include "ControllerPresetManager.h"
 #include "NotificationManager.h"
+#include "theme/ThemeEditorComponent.h"
 
 // Forward declarations from Dear ImGui / imnodes
 struct ImGuiContext; struct ImGuiIO; struct ImNodesContext;
@@ -356,6 +357,7 @@ public:
     bool showInsertNodePopup { false };
     bool showDebugMenu { false };
     bool showMidiDeviceManager { false };
+    ThemeEditorComponent themeEditor;
     int pendingInsertLinkId { -1 };
     
     // Probe tool state

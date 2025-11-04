@@ -30,7 +30,11 @@ void ThemeManager::applyTheme()
 	st.Colors[ImGuiCol_SeparatorHovered] = ImVec4(acc.x, acc.y, acc.z, 0.9f);
 	st.Colors[ImGuiCol_TabHovered] = ImVec4(acc.x, acc.y, acc.z, 0.8f);
 	st.Colors[ImGuiCol_ButtonHovered] = ImVec4(acc.x, acc.y, acc.z, 1.0f);
-	// Note: ImNodes colors are applied per-draw via PushColorStyle, not here
+	
+	// Apply ImNodes style properties
+	ImNodesStyle& nodesStyle = ImNodes::GetStyle();
+	nodesStyle.GridSpacing = currentTheme.canvas.grid_size;
+	// Note: ImNodes colors (canvas background, node colors, etc.) are applied per-draw via PushColorStyle
 }
 
 void ThemeManager::resetToDefault()
@@ -40,6 +44,11 @@ void ThemeManager::resetToDefault()
 }
 
 const Theme& ThemeManager::getCurrentTheme() const
+{
+	return currentTheme;
+}
+
+Theme& ThemeManager::getEditableTheme()
 {
 	return currentTheme;
 }
@@ -93,6 +102,42 @@ float ThemeManager::getNodeDefaultWidth() const
 float ThemeManager::getWindowPadding() const
 {
 	return currentTheme.layout.window_padding;
+}
+
+// Canvas getters
+ImU32 ThemeManager::getGridColor() const
+{
+	return currentTheme.canvas.grid_color;
+}
+
+ImU32 ThemeManager::getGridOriginColor() const
+{
+	return currentTheme.canvas.grid_origin_color;
+}
+
+float ThemeManager::getGridSize() const
+{
+	return currentTheme.canvas.grid_size;
+}
+
+ImU32 ThemeManager::getScaleTextColor() const
+{
+	return currentTheme.canvas.scale_text_color;
+}
+
+float ThemeManager::getScaleInterval() const
+{
+	return currentTheme.canvas.scale_interval;
+}
+
+ImU32 ThemeManager::getDropTargetOverlay() const
+{
+	return currentTheme.canvas.drop_target_overlay;
+}
+
+ImU32 ThemeManager::getMousePositionText() const
+{
+	return currentTheme.canvas.mouse_position_text;
 }
 
 // JSON save/load (Phase 5)
@@ -413,6 +458,66 @@ bool ThemeManager::loadTheme(const juce::File& themeFile)
 bool ThemeManager::saveTheme(const juce::File& themeFile)
 {
 	juce::DynamicObject::Ptr root = new juce::DynamicObject();
+	
+	// ImGui style (padding, rounding, borders, etc.)
+	{
+		juce::DynamicObject::Ptr styleObj = new juce::DynamicObject();
+		styleObj->setProperty("WindowPadding", vec4ToVar(ImVec4(currentTheme.style.WindowPadding.x, currentTheme.style.WindowPadding.y, 0, 0)));
+		styleObj->setProperty("FramePadding", vec4ToVar(ImVec4(currentTheme.style.FramePadding.x, currentTheme.style.FramePadding.y, 0, 0)));
+		styleObj->setProperty("ItemSpacing", vec4ToVar(ImVec4(currentTheme.style.ItemSpacing.x, currentTheme.style.ItemSpacing.y, 0, 0)));
+		styleObj->setProperty("ItemInnerSpacing", vec4ToVar(ImVec4(currentTheme.style.ItemInnerSpacing.x, currentTheme.style.ItemInnerSpacing.y, 0, 0)));
+		styleObj->setProperty("WindowRounding", currentTheme.style.WindowRounding);
+		styleObj->setProperty("ChildRounding", currentTheme.style.ChildRounding);
+		styleObj->setProperty("FrameRounding", currentTheme.style.FrameRounding);
+		styleObj->setProperty("PopupRounding", currentTheme.style.PopupRounding);
+		styleObj->setProperty("ScrollbarRounding", currentTheme.style.ScrollbarRounding);
+		styleObj->setProperty("GrabRounding", currentTheme.style.GrabRounding);
+		styleObj->setProperty("TabRounding", currentTheme.style.TabRounding);
+		styleObj->setProperty("WindowBorderSize", currentTheme.style.WindowBorderSize);
+		styleObj->setProperty("FrameBorderSize", currentTheme.style.FrameBorderSize);
+		styleObj->setProperty("PopupBorderSize", currentTheme.style.PopupBorderSize);
+		
+		// Save ImGui colors - map ImGuiCol enum to string names
+		juce::DynamicObject::Ptr colorsObj = new juce::DynamicObject();
+		static std::map<ImGuiCol, juce::String> colorMap = {
+			{ ImGuiCol_Text, "Text" }, { ImGuiCol_TextDisabled, "TextDisabled" },
+			{ ImGuiCol_WindowBg, "WindowBg" }, { ImGuiCol_ChildBg, "ChildBg" },
+			{ ImGuiCol_PopupBg, "PopupBg" }, { ImGuiCol_Border, "Border" },
+			{ ImGuiCol_BorderShadow, "BorderShadow" }, { ImGuiCol_FrameBg, "FrameBg" },
+			{ ImGuiCol_FrameBgHovered, "FrameBgHovered" }, { ImGuiCol_FrameBgActive, "FrameBgActive" },
+			{ ImGuiCol_TitleBg, "TitleBg" }, { ImGuiCol_TitleBgActive, "TitleBgActive" },
+			{ ImGuiCol_TitleBgCollapsed, "TitleBgCollapsed" }, { ImGuiCol_MenuBarBg, "MenuBarBg" },
+			{ ImGuiCol_ScrollbarBg, "ScrollbarBg" }, { ImGuiCol_ScrollbarGrab, "ScrollbarGrab" },
+			{ ImGuiCol_ScrollbarGrabHovered, "ScrollbarGrabHovered" }, { ImGuiCol_ScrollbarGrabActive, "ScrollbarGrabActive" },
+			{ ImGuiCol_CheckMark, "CheckMark" }, { ImGuiCol_SliderGrab, "SliderGrab" },
+			{ ImGuiCol_SliderGrabActive, "SliderGrabActive" }, { ImGuiCol_Button, "Button" },
+			{ ImGuiCol_ButtonHovered, "ButtonHovered" }, { ImGuiCol_ButtonActive, "ButtonActive" },
+			{ ImGuiCol_Header, "Header" }, { ImGuiCol_HeaderHovered, "HeaderHovered" },
+			{ ImGuiCol_HeaderActive, "HeaderActive" }, { ImGuiCol_Separator, "Separator" },
+			{ ImGuiCol_SeparatorHovered, "SeparatorHovered" }, { ImGuiCol_SeparatorActive, "SeparatorActive" },
+			{ ImGuiCol_ResizeGrip, "ResizeGrip" }, { ImGuiCol_ResizeGripHovered, "ResizeGripHovered" },
+			{ ImGuiCol_ResizeGripActive, "ResizeGripActive" }, { ImGuiCol_Tab, "Tab" },
+			{ ImGuiCol_TabHovered, "TabHovered" }, { ImGuiCol_TabActive, "TabActive" },
+			{ ImGuiCol_TabUnfocused, "TabUnfocused" }, { ImGuiCol_TabUnfocusedActive, "TabUnfocusedActive" },
+			{ ImGuiCol_PlotLines, "PlotLines" }, { ImGuiCol_PlotLinesHovered, "PlotLinesHovered" },
+			{ ImGuiCol_PlotHistogram, "PlotHistogram" }, { ImGuiCol_PlotHistogramHovered, "PlotHistogramHovered" },
+			{ ImGuiCol_TableHeaderBg, "TableHeaderBg" }, { ImGuiCol_TableBorderStrong, "TableBorderStrong" },
+			{ ImGuiCol_TableBorderLight, "TableBorderLight" }, { ImGuiCol_TableRowBg, "TableRowBg" },
+			{ ImGuiCol_TableRowBgAlt, "TableRowBgAlt" }, { ImGuiCol_TextSelectedBg, "TextSelectedBg" },
+			{ ImGuiCol_DragDropTarget, "DragDropTarget" }, { ImGuiCol_NavHighlight, "NavHighlight" },
+			{ ImGuiCol_NavWindowingHighlight, "NavWindowingHighlight" }, { ImGuiCol_NavWindowingDimBg, "NavWindowingDimBg" },
+			{ ImGuiCol_ModalWindowDimBg, "ModalWindowDimBg" }
+		};
+		
+		for (auto& pair : colorMap)
+		{
+			colorsObj->setProperty(pair.second, vec4ToVar(currentTheme.style.Colors[pair.first]));
+		}
+		
+		styleObj->setProperty("Colors", juce::var(colorsObj.get()));
+		root->setProperty("style", juce::var(styleObj.get()));
+	}
+	
 	// headers
 	{
 		juce::DynamicObject::Ptr o = new juce::DynamicObject();
@@ -773,6 +878,83 @@ void ThemeManager::loadDefaultTheme()
 	defaultTheme.windows.notifications_alpha = 0.92f;
 	defaultTheme.windows.probe_scope_width = 260.0f;
 	defaultTheme.windows.probe_scope_height = 180.0f;
+}
+
+void ThemeManager::saveUserThemePreference(const juce::String& themeFilename)
+{
+	// Save to exe/themes/.last_theme
+	auto exeFile = juce::File::getSpecialLocation(juce::File::currentExecutableFile);
+	auto exeDir = exeFile.getParentDirectory();
+	auto themesDir = exeDir.getChildFile("themes");
+	themesDir.createDirectory(); // Ensure it exists
+	auto preferenceFile = themesDir.getChildFile(".last_theme");
+	
+	if (preferenceFile.replaceWithText(themeFilename))
+	{
+		juce::Logger::writeToLog("[Theme] Saved preference: " + themeFilename);
+	}
+	else
+	{
+		juce::Logger::writeToLog("[Theme] Failed to save preference");
+	}
+}
+
+bool ThemeManager::loadUserThemePreference()
+{
+	// Load from exe/themes/.last_theme
+	auto exeFile = juce::File::getSpecialLocation(juce::File::currentExecutableFile);
+	auto exeDir = exeFile.getParentDirectory();
+	auto themesDir = exeDir.getChildFile("themes");
+	auto preferenceFile = themesDir.getChildFile(".last_theme");
+	
+	if (!preferenceFile.existsAsFile())
+		return false;
+	
+	juce::String themeFilename = preferenceFile.loadFileAsString().trim();
+	if (themeFilename.isEmpty())
+		return false;
+	
+	// Try to find and load the theme
+	std::vector<juce::File> candidateDirs;
+	
+	// 1. currentExecutableFile/themes (primary)
+	{
+		candidateDirs.push_back(exeDir);
+	}
+	
+	// 2. currentApplicationFile/themes (fallback)
+	{
+		auto appFile = juce::File::getSpecialLocation(juce::File::currentApplicationFile);
+		auto appDir = appFile.getParentDirectory();
+		candidateDirs.push_back(appDir);
+	}
+	
+	// 3. Source tree (development fallback)
+	{
+		auto sourceDir = exeDir.getParentDirectory().getParentDirectory()
+			.getChildFile("Source")
+			.getChildFile("preset_creator").getChildFile("theme").getChildFile("presets");
+		if (sourceDir.exists())
+			candidateDirs.push_back(sourceDir.getParentDirectory().getParentDirectory().getParentDirectory());
+	}
+	
+	for (auto& dir : candidateDirs)
+	{
+		auto themesDir = dir.getChildFile("themes");
+		auto themeFile = themesDir.getChildFile(themeFilename);
+		
+		if (themeFile.existsAsFile())
+		{
+			if (loadTheme(themeFile))
+			{
+				juce::Logger::writeToLog("[Theme] Loaded saved preference: " + themeFilename);
+				return true;
+			}
+		}
+	}
+	
+	juce::Logger::writeToLog("[Theme] Saved preference theme not found: " + themeFilename);
+	return false;
 }
 
 

@@ -878,6 +878,8 @@ target_sources(PresetCreatorApp PRIVATE
     Source/preset_creator/theme/Theme.h
     Source/preset_creator/theme/ThemeManager.h
     Source/preset_creator/theme/ThemeManager.cpp
+    Source/preset_creator/theme/ThemeEditorComponent.h
+    Source/preset_creator/theme/ThemeEditorComponent.cpp
 
     # Add ImGui, imnodes, and the backend DIRECTLY as source files
     ${imgui_fc_SOURCE_DIR}/imgui.cpp

@@ -74,6 +74,7 @@ struct Theme
 
 	struct CanvasColors
 	{
+		// Grid settings (custom drawn)
 		ImU32 grid_color { 0 };
 		ImU32 grid_origin_color { 0 };
 		float grid_size { 64.0f };
