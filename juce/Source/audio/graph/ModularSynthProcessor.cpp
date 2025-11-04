@@ -1519,11 +1519,8 @@ void ModularSynthProcessor::setProbeConnection(const NodeID& sourceNodeID, int s
 {
     if (!probeScopeNode || probeScopeNodeId.uid == 0)
     {
-        juce::Logger::writeToLog("[PROBE] ERROR: Probe scope not initialized!");
         return;
     }
-    
-    juce::Logger::writeToLog("[PROBE] setProbeConnection called. Source NodeID: " + juce::String(sourceNodeID.uid) + ", Channel: " + juce::String(sourceChannel));
     
     // Clear old connections to probe scope
     auto connections = internalGraph->getConnections();
@@ -1532,21 +1529,11 @@ void ModularSynthProcessor::setProbeConnection(const NodeID& sourceNodeID, int s
         if (conn.destination.nodeID == probeScopeNodeId)
         {
             internalGraph->removeConnection(conn, juce::AudioProcessorGraph::UpdateKind::none);
-            juce::Logger::writeToLog("[PROBE] Cleared old probe connection.");
         }
     }
     
     // Connect source to probe scope
     bool success = connect(sourceNodeID, sourceChannel, probeScopeNodeId, 0);
-    juce::Logger::writeToLog("[PROBE] New connection attempt " + juce::String(success ? "succeeded." : "FAILED."));
-    if (success)
-    {
-        juce::Logger::writeToLog("[Probe] Successfully connected to probe scope");
-    }
-    else
-    {
-        juce::Logger::writeToLog("[Probe] ERROR: Failed to connect to probe scope");
-    }
     
     commitChanges();
 }
@@ -1556,7 +1543,6 @@ void ModularSynthProcessor::clearProbeConnection()
     if (!probeScopeNode || probeScopeNodeId.uid == 0)
         return;
     
-    juce::Logger::writeToLog("[PROBE] clearProbeConnection called.");
     bool cleared = false;
     
     auto connections = internalGraph->getConnections();
@@ -1570,10 +1556,7 @@ void ModularSynthProcessor::clearProbeConnection()
     }
     
     if (cleared) {
-        juce::Logger::writeToLog("[PROBE] Cleared active probe connection.");
         commitChanges();
-    } else {
-        juce::Logger::writeToLog("[PROBE] No active probe connection to clear.");
     }
 }
 

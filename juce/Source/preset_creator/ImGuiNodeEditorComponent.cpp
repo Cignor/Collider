@@ -13,6 +13,7 @@
 #include <cstdint>
 #include <algorithm>
 #include <limits>
+#include "theme/ThemeManager.h"
 
 // ============================================================================
 // Global GPU/CPU Settings (default: GPU enabled for best performance)
@@ -241,7 +242,8 @@ void ImGuiNodeEditorComponent::newOpenGLContextCreated()
     // Create ImGui context
     imguiContext = ImGui::CreateContext();
     imguiIO = &ImGui::GetIO();
-    ImGui::StyleColorsDark();
+    // Apply theme (replaces ImGui::StyleColorsDark())
+    ThemeManager::getInstance().applyTheme();
 
     // --- FONT LOADING FOR CHINESE CHARACTERS ---
     ImGuiIO& io = ImGui::GetIO();
@@ -668,6 +670,70 @@ void ImGuiNodeEditorComponent::renderImGui()
             }
             
             ImGui::Separator();
+
+            if (ImGui::BeginMenu("Theme"))
+            {
+                auto loadThemePreset = [&](const char* label, const char* filename)
+                {
+                    if (ImGui::MenuItem(label))
+                    {
+                        // Try multiple paths in priority order
+                        juce::File presetFile;
+
+                        // 1) exe-local themes folder (preferred at runtime): <exe>/themes/<file>
+                        {
+                            auto appFile = juce::File::getSpecialLocation(juce::File::currentApplicationFile);
+                            auto exeDir = appFile.getParentDirectory();
+                            auto exeThemeDir = exeDir.getChildFile("themes");
+                            auto candidate = exeThemeDir.getChildFile(filename);
+                            if (candidate.existsAsFile())
+                                presetFile = candidate;
+                        }
+
+                        // 2) development source tree (while running from IDE)
+                        if (!presetFile.existsAsFile())
+                        {
+                            auto sourceDir = juce::File(__FILE__).getParentDirectory().getParentDirectory().getParentDirectory();
+                            auto candidate = sourceDir.getChildFile("Source/preset_creator/theme/presets/").getChildFile(filename);
+                            if (candidate.existsAsFile())
+                                presetFile = candidate;
+                        }
+
+                        // 3) workspace absolute path (fallback)
+                        if (!presetFile.existsAsFile())
+                        {
+                            auto candidate = juce::File("H:/0000_CODE/01_collider_pyo/juce/Source/preset_creator/theme/presets/").getChildFile(filename);
+                            if (candidate.existsAsFile())
+                                presetFile = candidate;
+                        }
+
+                        if (presetFile.existsAsFile())
+                        {
+                            if (ThemeManager::getInstance().loadTheme(presetFile))
+                            {
+                                juce::Logger::writeToLog("[Theme] Loaded: " + juce::String(label) + " from " + presetFile.getFullPathName());
+                            }
+                            else
+                            {
+                                juce::Logger::writeToLog("[Theme] Failed to load: " + presetFile.getFullPathName());
+                            }
+                        }
+                        else
+                        {
+                            juce::Logger::writeToLog("[Theme] Preset not found (checked exe/themes and source paths): " + juce::String(filename));
+                        }
+                    }
+                };
+
+                loadThemePreset("Moofy Dark (Default)", "MoofyDark.json");
+                loadThemePreset("Classic",            "ClassicTheme.json");
+                loadThemePreset("Light",              "LightTheme.json");
+                loadThemePreset("Electric Grey",      "ElectricGrey.json");
+
+                ImGui::EndMenu();
+            }
+            
+            ImGui::Separator();
             
             #if WITH_CUDA_SUPPORT
                 bool gpuEnabled = getGlobalGpuEnabled();
@@ -1062,9 +1128,7 @@ void ImGuiNodeEditorComponent::renderImGui()
 
     ImGui::Columns (2, nullptr, true);
     ImGui::SetColumnWidth (0, 260.0f);
-
     // Zoom removed
-
     // ADD THIS BLOCK:
     ImGui::Text("Browser");
     
@@ -1144,7 +1208,6 @@ void ImGuiNodeEditorComponent::renderImGui()
     ImGui::PushStyleColor(ImGuiCol_HeaderActive, IM_COL32(255, 205, 72, 255));
     bool presetsExpanded = ImGui::CollapsingHeader("Presets");
     ImGui::PopStyleColor(3);
-    
     if (presetsExpanded)
     {
         // 1. Path Display (read-only)
@@ -1852,11 +1915,9 @@ void ImGuiNodeEditorComponent::renderImGui()
     // Position at bottom-left: canvas_p1.y is bottom edge, subtract text height plus padding
     ImGui::GetForegroundDrawList()->AddText(ImVec2(canvas_p0.x + 10, canvas_p1.y - 25), IM_COL32(200, 200, 200, 150), posStr);
     // --- END OF BACKGROUND GRID AND COORDINATE DISPLAY ---
-
     // Node canvas bound to the underlying model if available
     ImNodes::BeginNodeEditor();
     // Begin the editor
-
     // +++ ADD THIS LINE AT THE START OF THE RENDER LOOP +++
     attrPositions.clear(); // Clear the cache at the beginning of each frame.
     // Rebuild mod attribute mapping from currently drawn nodes only
@@ -3391,14 +3452,10 @@ if (auto* mp = synth->getModuleForLogical (lid))
             // --- END OF NEW LOGIC ---
         }
     }
-
     // --- Handle Auto-Connect Requests using new intelligent system ---
     handleAutoConnectionRequests();
-
     ImNodes::MiniMap (0.2f, ImNodesMiniMapLocation_BottomRight);
-
     ImNodes::EndNodeEditor();
-    
     // ================== MIDI PLAYER QUICK CONNECT LOGIC ==================
     // Poll all MIDI Player modules for connection requests
     if (synth != nullptr)
@@ -6245,7 +6302,6 @@ void ImGuiNodeEditorComponent::handleMidiPlayerAutoConnect(MIDIPlayerModuleProce
     graphNeedsRebuild = true;
     juce::Logger::writeToLog("--- [AutoConnect to Samplers] Routine complete. ---");
 }
-
 void ImGuiNodeEditorComponent::handleMidiPlayerAutoConnectVCO(MIDIPlayerModuleProcessor* midiPlayer, juce::uint32 midiPlayerLid)
 {
     if (!synth || !midiPlayer || midiPlayerLid == 0 || !midiPlayer->hasMIDIFileLoaded())
@@ -7011,7 +7067,6 @@ void ImGuiNodeEditorComponent::connectToPolyphonicTarget(
         }
     }
 }
-
 void ImGuiNodeEditorComponent::handleAutoConnectionRequests()
 {
     if (!synth) return;
@@ -7773,7 +7828,6 @@ juce::File ImGuiNodeEditorComponent::findPresetsDirectory()
     // Fallback to an empty file (system default) if not found
     return {};
 }
-
 // Helper function implementations
 PinDataType ImGuiNodeEditorComponent::getPinDataTypeForPin(const PinID& pin)
 {

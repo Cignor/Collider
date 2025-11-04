@@ -873,6 +873,11 @@ target_sources(PresetCreatorApp PRIVATE
     Source/preset_creator/PresetCreatorComponent.cpp
     Source/preset_creator/ControllerPresetManager.h
     Source/preset_creator/ControllerPresetManager.cpp
+    
+    # Theme system
+    Source/preset_creator/theme/Theme.h
+    Source/preset_creator/theme/ThemeManager.h
+    Source/preset_creator/theme/ThemeManager.cpp
 
     # Add ImGui, imnodes, and the backend DIRECTLY as source files
     ${imgui_fc_SOURCE_DIR}/imgui.cpp
@@ -1284,5 +1289,25 @@ if(WIN32)
                 "${opencv_SOURCE_DIR}/data/haarcascades/haarcascade_frontalface_default.xml"
                 "$<TARGET_FILE_DIR:PresetCreatorApp>"
         COMMENT "Copying Piper TTS, OpenPose, FFmpeg, and other runtime assets to PresetCreatorApp output directory"
+    )
+
+    add_custom_command(
+        TARGET PresetCreatorApp POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E make_directory
+                "$<TARGET_FILE_DIR:PresetCreatorApp>/themes"
+        COMMAND ${CMAKE_COMMAND} -E copy_directory
+                "${CMAKE_SOURCE_DIR}/Source/preset_creator/theme/presets"
+                "$<TARGET_FILE_DIR:PresetCreatorApp>/themes"
+        COMMENT "Copying theme presets to PresetCreatorApp/themes"
+    )
+
+    add_custom_command(
+        TARGET ColliderApp POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E make_directory
+                "$<TARGET_FILE_DIR:ColliderApp>/themes"
+        COMMAND ${CMAKE_COMMAND} -E copy_directory
+                "${CMAKE_SOURCE_DIR}/Source/preset_creator/theme/presets"
+                "$<TARGET_FILE_DIR:ColliderApp>/themes"
+        COMMENT "Copying theme presets to ColliderApp/themes"
     )
 endif()
