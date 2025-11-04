@@ -64,12 +64,62 @@ private:
     void applyBlur(cv::Mat& ioFrame, float blur);
     void applySharpen(cv::Mat& ioFrame, float sharpen);
     void applyKaleidoscope(cv::Mat& ioFrame, int mode);
+
+#if defined(WITH_CUDA_SUPPORT)
+    // --- Reusable GPU Buffers ---
+    cv::cuda::GpuMat gpuTemp;       // 8-bit, 3-channel
+    cv::cuda::GpuMat gpuGray;       // 8-bit, 1-channel
+    std::vector<cv::cuda::GpuMat> gpuChannels; // 8-bit, 1-channel (x3)
+    
+    // --- NEW BUFFERS FOR PHASE 2C ---
+    
+    // Buffers for Sharpen (16-bit signed)
+    cv::cuda::GpuMat gpuTemp16S;
+    cv::cuda::GpuMat gpuBlurred16S;
+    
+    // Buffers for Sat/Hue (32-bit float)
+    cv::cuda::GpuMat gpuTempF1;
+    cv::cuda::GpuMat gpuTempF2;
+    cv::cuda::GpuMat gpuMask;       // Mask for comparisons
+    
+    // Buffers for Kaleidoscope (8-bit, 3-channel)
+    cv::cuda::GpuMat gpuQuadrant;
+    cv::cuda::GpuMat gpuFlipH;
+    cv::cuda::GpuMat gpuFlipV;
+    cv::cuda::GpuMat gpuFlipHV;
+    
+    // Buffers for Vignette (caching)
+    cv::Mat cpuVignetteMask;        // 32-bit, 1-channel (CPU cache)
+    cv::cuda::GpuMat gpuVignetteMask; // 32-bit, 1-channel (GPU cache)
+    int lastVignetteW = 0, lastVignetteH = 0;
+    float lastVignetteAmount = -1.f, lastVignetteSize = -1.f;
+    
+    // --- End of new buffers ---
+
+    void applyBrightnessContrast_gpu(cv::cuda::GpuMat& ioFrame, float brightness, float contrast);
+    void applyTemperature_gpu(cv::cuda::GpuMat& ioFrame, float temperature);
+    void applySepia_gpu(cv::cuda::GpuMat& ioFrame, bool sepia);
+    void applySaturationHue_gpu(cv::cuda::GpuMat& ioFrame, float saturation, float hueShift);
+    void applyRgbGain_gpu(cv::cuda::GpuMat& ioFrame, float gainR, float gainG, float gainB);
+    void applyPosterize_gpu(cv::cuda::GpuMat& ioFrame, int levels);
+    void applyGrayscale_gpu(cv::cuda::GpuMat& ioFrame, bool grayscale);
+    void applyCanny_gpu(cv::cuda::GpuMat& ioFrame, float thresh1, float thresh2);
+    void applyThreshold_gpu(cv::cuda::GpuMat& ioFrame, float level);
+    void applyInvert_gpu(cv::cuda::GpuMat& ioFrame, bool invert);
+    void applyFlip_gpu(cv::cuda::GpuMat& ioFrame, bool flipH, bool flipV);
+    void applyVignette_gpu(cv::cuda::GpuMat& ioFrame, float amount, float size);
+    void applyPixelate_gpu(cv::cuda::GpuMat& ioFrame, int pixelSize);
+    void applyBlur_gpu(cv::cuda::GpuMat& ioFrame, float blur);
+    void applySharpen_gpu(cv::cuda::GpuMat& ioFrame, float sharpen);
+    void applyKaleidoscope_gpu(cv::cuda::GpuMat& ioFrame, int mode);
+#endif
     
     static juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout();
     juce::AudioProcessorValueTreeState apvts;
     
     // Parameters
     std::atomic<float>* zoomLevelParam = nullptr;
+    juce::AudioParameterBool* useGpuParam = nullptr;
     
     // Color Adjustments
     std::atomic<float>* brightnessParam = nullptr; // -100 to 100

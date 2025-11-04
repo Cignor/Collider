@@ -845,12 +845,6 @@ void ImGuiNodeEditorComponent::renderImGui()
             
             ImGui::EndMenu();
         }
-        if (ImGui::BeginMenu("Inspector"))
-        {
-            ImGui::SliderFloat("Window (s)", &inspectorWindowSeconds, 0.5f, 20.0f, "%.1f s");
-            ImGui::EndMenu();
-        }
-        
         // === DEBUG MENU ===
         if (ImGui::BeginMenu("Debug"))
         {
