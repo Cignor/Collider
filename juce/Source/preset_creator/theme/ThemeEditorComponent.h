@@ -16,6 +16,9 @@ public:
     ThemeEditorComponent();
     ~ThemeEditorComponent() = default;
 
+    // Connects the eyedropper from host component
+    void setStartPicker(std::function<void(std::function<void(ImU32)>)> fn) { m_startPicker = std::move(fn); }
+
     // Render the theme editor window
     void render();
 
@@ -99,5 +102,8 @@ private:
     };
     
     static constexpr int s_numTabs = 16;
+
+    // Injection from host: start a framebuffer-based picker
+    std::function<void(std::function<void(ImU32)>)> m_startPicker;
 };
 

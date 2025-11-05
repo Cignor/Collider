@@ -113,9 +113,13 @@ void PresetCreatorApplication::shutdown()
             }
         }
         
-        // Save application properties
+        // Save window state and application properties
         if (appProperties)
+        {
+            if (mainWindow != nullptr && ! mainWindow->isFullScreen())
+                appProperties->setValue ("presetCreatorWindowState", mainWindow->getWindowStateAsString());
             appProperties->saveIfNeeded();
+        }
         
         RtLogger::shutdown(); 
         mainWindow = nullptr; 
@@ -140,10 +144,77 @@ PresetCreatorApplication::MainWindow::MainWindow(juce::String name,
     juce::Logger::writeToLog("Attempting to create PresetCreatorComponent...");
     setContentOwned(new PresetCreatorComponent(deviceManager, pluginFormatManager, knownPluginList), true);
     juce::Logger::writeToLog("PresetCreatorComponent created and set.");
-    centreWithSize(2600, 1080);
+    setResizable (true, true);
+    setResizeLimits (900, 600, 8192, 8192);
+
+    // Try to restore previous window state from properties
+    if (auto* props = PresetCreatorApplication::getApp().getProperties())
+    {
+        auto state = props->getValue ("presetCreatorWindowState");
+        if (state.isNotEmpty())
+        {
+            if (! restoreWindowStateFromString (state))
+                centreWithSize (2600, 1080);
+        }
+        else
+        {
+            centreWithSize (2600, 1080);
+        }
+    }
+    else
+    {
+        centreWithSize (2600, 1080);
+    }
     setVisible(true);
     toFront(true);
+    
+    // Clamp to work area
+    auto& displays = juce::Desktop::getInstance().getDisplays();
+    auto* display = displays.getDisplayForRect (getBounds());
+    if (display == nullptr) display = displays.getPrimaryDisplay();
+    if (display != nullptr) setBounds (getBounds().constrainedWithin (display->userArea));
     juce::Logger::writeToLog("MainWindow setup complete");
+}
+
+bool PresetCreatorApplication::MainWindow::keyPressed (const juce::KeyPress& key)
+{
+    if (key.getKeyCode() == juce::KeyPress::F11Key)
+    {
+        setFullScreen (! isFullScreen());
+        return true;
+    }
+    if (key.getKeyCode() == juce::KeyPress::returnKey && key.getModifiers().isAltDown())
+    {
+        if (isFullScreen())
+            setFullScreen (false);
+        else if (! isMaximizedLike)
+            applyMaximizeLike();
+        else
+            restoreFromMaximizeLike();
+        return true;
+    }
+    return DocumentWindow::keyPressed (key);
+}
+
+void PresetCreatorApplication::MainWindow::applyMaximizeLike()
+{
+    if (! isMaximizedLike)
+    {
+        lastNormalBounds = getBounds();
+        auto& displays = juce::Desktop::getInstance().getDisplays();
+        if (auto* d = displays.getDisplayForRect (getBounds())) setBounds (d->userArea);
+        else if (auto* p = displays.getPrimaryDisplay()) setBounds (p->userArea);
+        isMaximizedLike = true;
+    }
+}
+
+void PresetCreatorApplication::MainWindow::restoreFromMaximizeLike()
+{
+    if (isMaximizedLike)
+    {
+        if (! lastNormalBounds.isEmpty()) setBounds (lastNormalBounds);
+        isMaximizedLike = false;
+    }
 }
 
 START_JUCE_APPLICATION (PresetCreatorApplication)

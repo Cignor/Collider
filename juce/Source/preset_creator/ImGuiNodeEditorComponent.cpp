@@ -189,6 +189,9 @@ ImGuiNodeEditorComponent::ImGuiNodeEditorComponent(juce::AudioDeviceManager& dm)
     glContext.attachTo (*this);
     setWantsKeyboardFocus (true);
     
+    // Wire Theme Editor to use framebuffer-based eyedropper
+    themeEditor.setStartPicker([this](std::function<void(ImU32)> onPicked){ this->startColorPicking(std::move(onPicked)); });
+    
     // Initialize browser paths (load from saved settings or use defaults)
     if (auto* props = PresetCreatorApplication::getApp().getProperties())
     {

@@ -34,11 +34,18 @@ public:
                    juce::AudioPluginFormatManager& fm,
                    juce::KnownPluginList& kl);
         void closeButtonPressed() override { juce::JUCEApplication::getInstance()->systemRequestedQuit(); }
+        bool keyPressed (const juce::KeyPress& key) override;
         
     private:
         juce::AudioDeviceManager& deviceManager;
         juce::AudioPluginFormatManager& pluginFormatManager;
         juce::KnownPluginList& knownPluginList;
+
+        bool isMaximizedLike = false;
+        juce::Rectangle<int> lastNormalBounds;
+
+        void applyMaximizeLike();
+        void restoreFromMaximizeLike();
     };
 
 private:

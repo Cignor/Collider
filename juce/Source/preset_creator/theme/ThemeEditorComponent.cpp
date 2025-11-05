@@ -179,6 +179,14 @@ bool ThemeEditorComponent::colorEdit4(const char* label, ImVec4& color, ImGuiCol
     bool changed = ImGui::ColorEdit4(label, &color.x, flags | ImGuiColorEditFlags_NoSidePreview);
     ImGui::SameLine();
     ImGui::PushID(label);
+    if (ImGui::SmallButton("Pick \xF0\x9F\x8E\xA8"))
+    {
+        if (m_startPicker)
+        {
+            m_startPicker([this, &color](ImU32 picked){ color = ImGui::ColorConvertU32ToFloat4(picked); m_hasChanges = true; });
+        }
+    }
+    ImGui::SameLine();
     if (ImGui::SmallButton("From UI"))
         ImGui::OpenPopup("pick_ui");
     if (ImGui::BeginPopup("pick_ui"))
@@ -218,6 +226,14 @@ bool ThemeEditorComponent::colorEditU32(const char* label, ImU32& color, ImGuiCo
     bool changed = ImGui::ColorEdit4(label, &col.x, flags | ImGuiColorEditFlags_NoSidePreview);
     ImGui::SameLine();
     ImGui::PushID(label);
+    if (ImGui::SmallButton("Pick \xF0\x9F\x8E\xA8"))
+    {
+        if (m_startPicker)
+        {
+            m_startPicker([this, &col, &color](ImU32 picked){ col = ImGui::ColorConvertU32ToFloat4(picked); color = picked; m_hasChanges = true; });
+        }
+    }
+    ImGui::SameLine();
     if (ImGui::SmallButton("From UI"))
         ImGui::OpenPopup("pick_ui");
     if (ImGui::BeginPopup("pick_ui"))

@@ -24,8 +24,6 @@ MainComponent::MainComponent()
 
     // Open default audio device on this MainComponent (the AudioAppComponent)
     setAudioChannels (2, 2); // Request 2 input channels, 2 output channels
-
-    setSize(1600, 900); // Set a default size for the main window
 }
 
 MainComponent::~MainComponent()
