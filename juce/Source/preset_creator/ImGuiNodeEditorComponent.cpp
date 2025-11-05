@@ -455,6 +455,21 @@ void ImGuiNodeEditorComponent::renderImGui()
         showShortcutsWindow = !showShortcutsWindow;
     }
 
+    // --- ZOOM CONTROL HANDLER (requires imnodes zoom-enabled build) ---
+    if (ImNodes::GetCurrentContext())
+    {
+        const ImGuiIO& io = ImGui::GetIO();
+        const float currentZoom = ImNodes::EditorContextGetZoom();
+        if (io.KeyCtrl && io.MouseWheel != 0.0f)
+        {
+            const float zoomFactor = 1.0f + (io.MouseWheel * 0.1f);
+            const float newZoom = currentZoom * zoomFactor;
+            ImNodes::EditorContextSetZoom(newZoom, ImGui::GetMousePos());
+            juce::Logger::writeToLog("[Zoom] New Zoom: " + juce::String(newZoom, 2) + "x");
+        }
+    }
+    // --- END ZOOM CONTROL HANDLER ---
+
     // Basic docking-like two-panels layout
     ImGui::SetNextWindowPos (ImVec2 (0, 0), ImGuiCond_Always);
     ImGui::SetNextWindowSize (ImVec2 ((float) getWidth(), (float) getHeight()), ImGuiCond_Always);
@@ -1140,7 +1155,17 @@ void ImGuiNodeEditorComponent::renderImGui()
             ImGui::PopStyleColor();
         }
         // === END OF MULTI-MIDI INDICATOR ===
-        
+
+        // --- ZOOM DISPLAY (menu bar, right side) ---
+        if (ImNodes::GetCurrentContext())
+        {
+            ImGui::SameLine();
+            ImGui::Separator();
+            ImGui::SameLine();
+            ImGui::Text("Zoom: %.2fx", ImNodes::EditorContextGetZoom());
+        }
+        // --- END ZOOM DISPLAY ---
+
         ImGui::EndMainMenuBar();
     }
 
@@ -3404,8 +3429,13 @@ if (auto* mp = synth->getModuleForLogical (lid))
                 colorVec.w = juce::jlimit(0.5f, 1.0f, 0.5f + glowIntensity * 0.5f);
                 linkColor = ImGui::ColorConvertFloat4ToU32(colorVec);
 
-                // Make active cables slightly thicker
-                ImNodes::PushStyleVar(ImNodesStyleVar_LinkThickness, 3.0f);
+                // Make active cables slightly thicker (keep constant in screen space under zoom)
+                {
+                    float currentZoom = 1.0f;
+                    if (ImNodes::GetCurrentContext())
+                        currentZoom = ImNodes::EditorContextGetZoom();
+                    ImNodes::PushStyleVar(ImNodesStyleVar_LinkThickness, 3.0f / currentZoom);
+                }
                 hasThicknessModification = true;
             }
 

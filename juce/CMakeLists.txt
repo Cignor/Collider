@@ -43,6 +43,16 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 include(FetchContent)
 
+# ------------------------------------------------------------------------------
+# ImNodes Zoom Integration Toggle (fork-based)
+# ------------------------------------------------------------------------------
+# If PRESET_CREATOR_IMNODES_ZOOM is ON and both IMNODES_FORK_URL and IMNODES_FORK_TAG
+# are provided, we'll fetch imnodes from the fork at the specified commit/tag.
+# Otherwise, we fall back to upstream imnodes at the pinned upstream tag.
+option(PRESET_CREATOR_IMNODES_ZOOM "Use fork of imnodes with zoom feature" OFF)
+set(IMNODES_FORK_URL "" CACHE STRING "Fork URL for imnodes (with zoom commit)")
+set(IMNODES_FORK_TAG "" CACHE STRING "Fork commit/tag for imnodes (with zoom)")
+
 # ==============================================================================
 # Third-Party Dependencies (Fetch Only)
 # ==============================================================================
@@ -57,15 +67,25 @@ FetchContent_MakeAvailable(JUCE)
 
 FetchContent_Declare(imgui_fc
     GIT_REPOSITORY https://github.com/ocornut/imgui.git
-    GIT_TAG v1.92.0
+    # Use docking branch to ensure PlatformIO/viewport APIs are present
+    GIT_TAG docking
 )
 FetchContent_MakeAvailable(imgui_fc)
 
 # imnodes uses find_package(imgui) in its CMake; build as sources instead
-FetchContent_Declare(imnodes_fc
-    GIT_REPOSITORY https://github.com/Nelarius/imnodes.git
-    GIT_TAG b2ec254ce576ac3d42dfb7aef61deadbff8e7211
-)
+if(PRESET_CREATOR_IMNODES_ZOOM AND IMNODES_FORK_URL AND IMNODES_FORK_TAG)
+    message(STATUS "Using forked imnodes for zoom: ${IMNODES_FORK_URL} @ ${IMNODES_FORK_TAG}")
+    FetchContent_Declare(imnodes_fc
+        GIT_REPOSITORY ${IMNODES_FORK_URL}
+        GIT_TAG ${IMNODES_FORK_TAG}
+    )
+else()
+    message(STATUS "Using upstream imnodes (no zoom fork)")
+    FetchContent_Declare(imnodes_fc
+        GIT_REPOSITORY https://github.com/Nelarius/imnodes.git
+        GIT_TAG b2ec254ce576ac3d42dfb7aef61deadbff8e7211
+    )
+endif()
 FetchContent_GetProperties(imnodes_fc)
 if(NOT imnodes_fc_POPULATED)
   FetchContent_Populate(imnodes_fc)
@@ -1148,6 +1168,7 @@ target_compile_definitions(PresetCreatorApp PRIVATE
     JUCE_WEB_BROWSER=0 JUCE_USE_CURL=0
     JUCE_PLUGINHOST_VST3=1
     IMGUI_IMPL_JUCE_BEZEL=0
+    IMGUI_ENABLE_VIEWPORTS
     IMGUI_DEFINE_MATH_OPERATORS
     IMNODES_NAMESPACE=ImNodes
     IMNODES_STATIC_DEFINE
@@ -1192,6 +1213,11 @@ endif()
 # Link Windows libraries for native camera enumeration (DirectShow)
 if(WIN32)
     target_link_libraries(PresetCreatorApp PRIVATE ole32 strmiids)
+endif()
+
+# Add compile definition to signal zoom mode for app code if enabled
+if(PRESET_CREATOR_IMNODES_ZOOM)
+    target_compile_definitions(PresetCreatorApp PRIVATE IMNODES_ZOOM_ENABLED=1)
 endif()
 
 if(WIN32)

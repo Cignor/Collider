@@ -11119,6 +11119,14 @@ private:
                     const StartupPolicy& policy);
         void closeButtonPressed() override;
         bool keyPressed (const juce::KeyPress& key) override;
+
+    private:
+        // Track a manual "maximized-like" state (covers work area) and last normal bounds
+        bool isMaximizedLike = false;
+        juce::Rectangle<int> lastNormalBounds;
+
+        void applyMaximizeLike();
+        void restoreFromMaximizeLike();
     };
 
     std::unique_ptr<MainWindow> mainWindow;
@@ -11300,7 +11308,7 @@ MainApplication::MainWindow::MainWindow (juce::String name,
     if (! restored)
     {
         if (policy.mode == StartupPolicy::Mode::Maximized)
-            setMaximised (true);
+            applyMaximizeLike();
         else if (policy.mode == StartupPolicy::Mode::Fullscreen)
             setFullScreen (true);
     }
@@ -11310,7 +11318,7 @@ MainApplication::MainWindow::MainWindow (juce::String name,
     if (display == nullptr)
         display = displays.getPrimaryDisplay();
     if (display != nullptr)
-        setBounds (getBounds().getConstrainedWithin (display->userArea));
+        setBounds (getBounds().constrainedWithin (display->userArea));
 }
 
 void MainApplication::MainWindow::closeButtonPressed()
@@ -11327,17 +11335,43 @@ bool MainApplication::MainWindow::keyPressed (const juce::KeyPress& key)
         return true;
     }
 
-    // Alt+Enter toggles maximized state (avoid interfering when in fullscreen)
+    // Alt+Enter toggles maximized-like state (avoid interfering when in fullscreen)
     if (key.getKeyCode() == juce::KeyPress::returnKey && key.getModifiers().isAltDown())
     {
         if (isFullScreen())
             setFullScreen (false);
+        else if (! isMaximizedLike)
+            applyMaximizeLike();
         else
-            setMaximised (! isMaximised());
+            restoreFromMaximizeLike();
         return true;
     }
 
     return DocumentWindow::keyPressed (key);
+}
+
+void MainApplication::MainWindow::applyMaximizeLike()
+{
+    if (! isMaximizedLike)
+    {
+        lastNormalBounds = getBounds();
+        auto& displays = juce::Desktop::getInstance().getDisplays();
+        if (auto* display = displays.getDisplayForRect (getBounds()))
+            setBounds (display->userArea);
+        else if (auto* primary = displays.getPrimaryDisplay())
+            setBounds (primary->userArea);
+        isMaximizedLike = true;
+    }
+}
+
+void MainApplication::MainWindow::restoreFromMaximizeLike()
+{
+    if (isMaximizedLike)
+    {
+        if (! lastNormalBounds.isEmpty())
+            setBounds (lastNormalBounds);
+        isMaximizedLike = false;
+    }
 }
 
 

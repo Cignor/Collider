@@ -1858,13 +1858,23 @@ void ThemeEditorComponent::saveTheme()
     
     themeName = themeName.replaceCharacter(' ', '_');
     
-    auto themeFile = juce::File::getSpecialLocation(juce::File::userDocumentsDirectory)
-                        .getChildFile("Preset Creator Themes")
-                        .getChildFile(themeName + ".json");
-    themeFile.getParentDirectory().createDirectory();
+    // Save to exe/themes folder
+    auto exeDir = juce::File::getSpecialLocation(juce::File::currentExecutableFile).getParentDirectory();
+    auto themesDir = exeDir.getChildFile("themes");
+    themesDir.createDirectory();
+    auto themeFile = themesDir.getChildFile(themeName + ".json");
     
     ThemeManager::getInstance().getEditableTheme() = m_workingCopy;
-    ThemeManager::getInstance().saveTheme(themeFile);
+    if (ThemeManager::getInstance().saveTheme(themeFile))
+    {
+        juce::Logger::writeToLog("[ThemeEditor] Saved theme to: " + themeFile.getFullPathName());
+        // Persist as last-used
+        ThemeManager::getInstance().saveUserThemePreference(themeFile.getFileName());
+    }
+    else
+    {
+        juce::Logger::writeToLog("[ThemeEditor] ERROR saving theme: " + themeFile.getFullPathName());
+    }
     m_hasChanges = false;
 }
 
