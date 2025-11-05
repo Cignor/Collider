@@ -1,6 +1,19 @@
 #include "ThemeEditorComponent.h"
 #include <juce_core/juce_core.h>
 #include <imgui.h>
+#include <juce_opengl/juce_opengl.h>
+#if defined(_WIN32)
+  #include <windows.h>
+  #include <GL/gl.h>
+#else
+  #include <GL/gl.h>
+#endif
+#ifndef GL_RGBA
+  #define GL_RGBA 0x1908
+#endif
+#ifndef GL_UNSIGNED_BYTE
+  #define GL_UNSIGNED_BYTE 0x1401
+#endif
 
 ThemeEditorComponent::ThemeEditorComponent()
 {
@@ -76,12 +89,43 @@ void ThemeEditorComponent::render()
         {
             renderSaveDialog();
         }
+
+        // Eyedropper overlay if active
+        renderPickerOverlay();
     }
     ImGui::End();
 
     // Close if window X clicked (m_isOpen was set to false by ImGui::Begin)
     if (!m_isOpen)
         close();
+}
+
+// ---- Eyedropper utilities ----
+void ThemeEditorComponent::beginPickColor(ImU32* target)
+{
+    m_pickerActive = true;
+    m_pickTargetU32 = target;
+    m_pickTargetVec4 = nullptr;
+}
+
+void ThemeEditorComponent::beginPickColor(ImVec4* target)
+{
+    m_pickerActive = true;
+    m_pickTargetU32 = nullptr;
+    m_pickTargetVec4 = target;
+}
+
+bool ThemeEditorComponent::sampleScreenPixel(int, int, unsigned char outRGBA[4])
+{
+    // Disabled: pixel picking handled by ImGuiNodeEditorComponent.
+    outRGBA[0]=outRGBA[1]=outRGBA[2]=0; outRGBA[3]=255;
+    return false;
+}
+
+void ThemeEditorComponent::renderPickerOverlay()
+{
+    // Disabled: handled by node editor (we keep function for compatibility)
+    juce::ignoreUnused(m_pickerActive);
 }
 
 void ThemeEditorComponent::renderTabs()
@@ -132,7 +176,37 @@ void ThemeEditorComponent::renderTabs()
 // Helper implementations
 bool ThemeEditorComponent::colorEdit4(const char* label, ImVec4& color, ImGuiColorEditFlags flags)
 {
-    bool changed = ImGui::ColorEdit4(label, &color.x, flags);
+    bool changed = ImGui::ColorEdit4(label, &color.x, flags | ImGuiColorEditFlags_NoSidePreview);
+    ImGui::SameLine();
+    ImGui::PushID(label);
+    if (ImGui::SmallButton("From UI"))
+        ImGui::OpenPopup("pick_ui");
+    if (ImGui::BeginPopup("pick_ui"))
+    {
+        ImGuiStyle& st = ImGui::GetStyle();
+        struct Entry { const char* name; ImGuiCol idx; } entries[] = {
+            {"Text", ImGuiCol_Text}, {"WindowBg", ImGuiCol_WindowBg}, {"ChildBg", ImGuiCol_ChildBg},
+            {"FrameBg", ImGuiCol_FrameBg}, {"FrameHovered", ImGuiCol_FrameBgHovered}, {"FrameActive", ImGuiCol_FrameBgActive},
+            {"Button", ImGuiCol_Button}, {"ButtonHovered", ImGuiCol_ButtonHovered}, {"ButtonActive", ImGuiCol_ButtonActive},
+            {"Header", ImGuiCol_Header}, {"HeaderHovered", ImGuiCol_HeaderHovered}, {"HeaderActive", ImGuiCol_HeaderActive},
+            {"Separator", ImGuiCol_Separator}, {"Tab", ImGuiCol_Tab}, {"TabActive", ImGuiCol_TabActive}
+        };
+        for (const auto& e : entries)
+        {
+            ImGui::PushID((int)e.idx);
+            if (ImGui::ColorButton("##sw", st.Colors[e.idx], ImGuiColorEditFlags_NoTooltip, ImVec2(20, 20)))
+            {
+                color = st.Colors[e.idx];
+                m_hasChanges = true;
+                ImGui::CloseCurrentPopup();
+            }
+            ImGui::SameLine();
+            ImGui::TextUnformatted(e.name);
+            ImGui::PopID();
+        }
+        ImGui::EndPopup();
+    }
+    ImGui::PopID();
     if (changed)
         m_hasChanges = true;
     return changed;
@@ -141,7 +215,38 @@ bool ThemeEditorComponent::colorEdit4(const char* label, ImVec4& color, ImGuiCol
 bool ThemeEditorComponent::colorEditU32(const char* label, ImU32& color, ImGuiColorEditFlags flags)
 {
     ImVec4 col = ImGui::ColorConvertU32ToFloat4(color);
-    bool changed = colorEdit4(label, col, flags);
+    bool changed = ImGui::ColorEdit4(label, &col.x, flags | ImGuiColorEditFlags_NoSidePreview);
+    ImGui::SameLine();
+    ImGui::PushID(label);
+    if (ImGui::SmallButton("From UI"))
+        ImGui::OpenPopup("pick_ui");
+    if (ImGui::BeginPopup("pick_ui"))
+    {
+        ImGuiStyle& st = ImGui::GetStyle();
+        struct Entry { const char* name; ImGuiCol idx; } entries[] = {
+            {"Text", ImGuiCol_Text}, {"WindowBg", ImGuiCol_WindowBg}, {"ChildBg", ImGuiCol_ChildBg},
+            {"FrameBg", ImGuiCol_FrameBg}, {"FrameHovered", ImGuiCol_FrameBgHovered}, {"FrameActive", ImGuiCol_FrameBgActive},
+            {"Button", ImGuiCol_Button}, {"ButtonHovered", ImGuiCol_ButtonHovered}, {"ButtonActive", ImGuiCol_ButtonActive},
+            {"Header", ImGuiCol_Header}, {"HeaderHovered", ImGuiCol_HeaderHovered}, {"HeaderActive", ImGuiCol_HeaderActive},
+            {"Separator", ImGuiCol_Separator}, {"Tab", ImGuiCol_Tab}, {"TabActive", ImGuiCol_TabActive}
+        };
+        for (const auto& e : entries)
+        {
+            ImGui::PushID((int)e.idx);
+            if (ImGui::ColorButton("##sw", st.Colors[e.idx], ImGuiColorEditFlags_NoTooltip, ImVec2(20, 20)))
+            {
+                col = st.Colors[e.idx];
+                color = ImGui::ColorConvertFloat4ToU32(col);
+                m_hasChanges = true;
+                ImGui::CloseCurrentPopup();
+            }
+            ImGui::SameLine();
+            ImGui::TextUnformatted(e.name);
+            ImGui::PopID();
+        }
+        ImGui::EndPopup();
+    }
+    ImGui::PopID();
     if (changed)
         color = ImGui::ColorConvertFloat4ToU32(col);
     return changed;
@@ -997,6 +1102,11 @@ void ThemeEditorComponent::renderCanvasTab()
     ImGui::Columns(2, "CanvasColumns", true);
     
     // Left: Controls
+    if (ImGui::CollapsingHeader("Canvas Background"))
+    {
+        colorEditU32("Canvas Background", m_workingCopy.canvas.canvas_background);
+    }
+    
     if (ImGui::CollapsingHeader("Grid Settings"))
     {
         colorEditU32("Grid Color", m_workingCopy.canvas.grid_color);
@@ -1012,6 +1122,16 @@ void ThemeEditorComponent::renderCanvasTab()
         colorEditU32("Mouse Position Text", m_workingCopy.canvas.mouse_position_text);
     }
     
+    if (ImGui::CollapsingHeader("Node Styling"))
+    {
+        colorEditU32("Node Background", m_workingCopy.canvas.node_background);
+        colorEditU32("Node Frame", m_workingCopy.canvas.node_frame);
+        colorEditU32("Node Frame Hovered", m_workingCopy.canvas.node_frame_hovered);
+        colorEditU32("Node Frame Selected", m_workingCopy.canvas.node_frame_selected);
+        dragFloat("Node Rounding", m_workingCopy.canvas.node_rounding, 0.1f, 0.0f, 20.0f);
+        dragFloat("Node Border Width", m_workingCopy.canvas.node_border_width, 0.1f, 0.0f, 10.0f);
+    }
+    
     ImGui::NextColumn();
     
     // Right: Live Preview
@@ -1021,6 +1141,10 @@ void ThemeEditorComponent::renderCanvasTab()
     ImDrawList* drawList = ImGui::GetWindowDrawList();
     ImVec2 canvasPos = ImGui::GetCursorScreenPos();
     ImVec2 canvasSize = ImVec2(ImGui::GetContentRegionAvail().x, 300);
+    
+    // Draw canvas background
+    drawList->AddRectFilled(canvasPos, ImVec2(canvasPos.x + canvasSize.x, canvasPos.y + canvasSize.y), 
+                           m_workingCopy.canvas.canvas_background);
     
     // Draw grid preview
     float gridSize = m_workingCopy.canvas.grid_size;
@@ -1069,6 +1193,48 @@ void ThemeEditorComponent::renderCanvasTab()
     ImGui::PushStyleColor(ImGuiCol_Text, ImGui::ColorConvertU32ToFloat4(m_workingCopy.canvas.mouse_position_text));
     ImGui::Text("Mouse: 1234, 567");
     ImGui::PopStyleColor();
+    
+    ImGui::Spacing();
+    ImGui::Separator();
+    ImGui::Spacing();
+    
+    // Node preview
+    ImGui::Text("Node Preview");
+    ImVec2 nodePreviewPos = ImGui::GetCursorScreenPos();
+    ImVec2 nodeSize = ImVec2(150, 80);
+    ImVec2 nodeMin = ImVec2(nodePreviewPos.x + 20, nodePreviewPos.y + 20);
+    ImVec2 nodeMax = ImVec2(nodeMin.x + nodeSize.x, nodeMin.y + nodeSize.y);
+    
+    // Draw node background
+    drawList->AddRectFilled(nodeMin, nodeMax, m_workingCopy.canvas.node_background, m_workingCopy.canvas.node_rounding);
+    
+    // Draw node frame (normal state)
+    drawList->AddRect(nodeMin, nodeMax, m_workingCopy.canvas.node_frame, m_workingCopy.canvas.node_rounding, 0, m_workingCopy.canvas.node_border_width);
+    
+    // Draw node title bar
+    ImVec2 titleBarMin = nodeMin;
+    ImVec2 titleBarMax = ImVec2(nodeMax.x, nodeMin.y + 25);
+    drawList->AddRectFilled(titleBarMin, titleBarMax, m_workingCopy.canvas.node_frame, m_workingCopy.canvas.node_rounding);
+    
+    drawList->AddText(ImVec2(nodeMin.x + 8, nodeMin.y + 5), IM_COL32(255, 255, 255, 255), "Example Node");
+    
+    // Draw hovered state preview (second node)
+    ImVec2 node2Min = ImVec2(nodePreviewPos.x + 200, nodePreviewPos.y + 20);
+    ImVec2 node2Max = ImVec2(node2Min.x + nodeSize.x, node2Min.y + nodeSize.y);
+    drawList->AddRectFilled(node2Min, node2Max, m_workingCopy.canvas.node_background, m_workingCopy.canvas.node_rounding);
+    drawList->AddRect(node2Min, node2Max, m_workingCopy.canvas.node_frame_hovered, m_workingCopy.canvas.node_rounding, 0, m_workingCopy.canvas.node_border_width);
+    drawList->AddRectFilled(node2Min, ImVec2(node2Max.x, node2Min.y + 25), m_workingCopy.canvas.node_frame_hovered, m_workingCopy.canvas.node_rounding);
+    drawList->AddText(ImVec2(node2Min.x + 8, node2Min.y + 5), IM_COL32(255, 255, 255, 255), "Hovered");
+    
+    // Draw selected state preview (third node)
+    ImVec2 node3Min = ImVec2(nodePreviewPos.x + 380, nodePreviewPos.y + 20);
+    ImVec2 node3Max = ImVec2(node3Min.x + nodeSize.x, node3Min.y + nodeSize.y);
+    drawList->AddRectFilled(node3Min, node3Max, m_workingCopy.canvas.node_background, m_workingCopy.canvas.node_rounding);
+    drawList->AddRect(node3Min, node3Max, m_workingCopy.canvas.node_frame_selected, m_workingCopy.canvas.node_rounding, 0, m_workingCopy.canvas.node_border_width);
+    drawList->AddRectFilled(node3Min, ImVec2(node3Max.x, node3Min.y + 25), m_workingCopy.canvas.node_frame_selected, m_workingCopy.canvas.node_rounding);
+    drawList->AddText(ImVec2(node3Min.x + 8, node3Min.y + 5), IM_COL32(255, 255, 255, 255), "Selected");
+    
+    ImGui::SetCursorScreenPos(ImVec2(nodePreviewPos.x, nodePreviewPos.y + nodeSize.y + 40));
     
     ImGui::Columns(1);
 }

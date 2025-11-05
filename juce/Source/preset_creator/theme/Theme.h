@@ -74,6 +74,8 @@ struct Theme
 
 	struct CanvasColors
 	{
+		// Canvas background (drawn behind grid)
+		ImU32 canvas_background { 0 };
 		// Grid settings (custom drawn)
 		ImU32 grid_color { 0 };
 		ImU32 grid_origin_color { 0 };
@@ -82,6 +84,13 @@ struct Theme
 		float scale_interval { 400.0f };
 		ImU32 drop_target_overlay { 0 };
 		ImU32 mouse_position_text { 0 };
+		// Node styling (ImNodes)
+		ImU32 node_background { 0 };
+		ImU32 node_frame { 0 };
+		ImU32 node_frame_hovered { 0 };
+		ImU32 node_frame_selected { 0 };
+		float node_rounding { 0.0f };
+		float node_border_width { 0.0f };
 	} canvas;
 
 	struct LayoutSettings

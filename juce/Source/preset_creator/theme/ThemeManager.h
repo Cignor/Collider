@@ -32,6 +32,7 @@ public:
 	float getWindowPadding() const;
 	
 	// Canvas
+	ImU32 getCanvasBackground() const;
 	ImU32 getGridColor() const;
 	ImU32 getGridOriginColor() const;
 	float getGridSize() const;
@@ -39,6 +40,14 @@ public:
 	float getScaleInterval() const;
 	ImU32 getDropTargetOverlay() const;
 	ImU32 getMousePositionText() const;
+	
+	// Node styling
+	ImU32 getNodeBackground() const;
+	ImU32 getNodeFrame() const;
+	ImU32 getNodeFrameHovered() const;
+	ImU32 getNodeFrameSelected() const;
+	float getNodeRounding() const;
+	float getNodeBorderWidth() const;
 
 private:
 	ThemeManager();

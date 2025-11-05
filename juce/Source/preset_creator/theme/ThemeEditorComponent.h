@@ -51,6 +51,12 @@ private:
     bool dragFloat2(const char* label, ImVec2& value, float speed = 0.1f, float min = 0.0f, float max = 0.0f, const char* format = "%.2f");
     bool triStateColorEdit(const char* label, TriStateColor& tsc);
     
+    // Eyedropper support
+    void renderPickerOverlay();
+    void beginPickColor(ImU32* target);
+    void beginPickColor(ImVec4* target);
+    static bool sampleScreenPixel(int x, int y, unsigned char outRGBA[4]);
+    
     // Save/Load
     void renderSaveDialog();
     void saveTheme();
@@ -66,6 +72,11 @@ private:
     // Save dialog state
     bool m_showSaveDialog = false;
     char m_saveThemeName[256] = {0};
+    
+    // Eyedropper state
+    bool m_pickerActive = false;
+    ImU32* m_pickTargetU32 = nullptr;
+    ImVec4* m_pickTargetVec4 = nullptr;
     
     // Tab names
     static constexpr const char* s_tabNames[] = {

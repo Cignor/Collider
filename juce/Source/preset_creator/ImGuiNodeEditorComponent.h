@@ -440,6 +440,18 @@ public:
     static bool getGlobalGpuEnabled() { return s_globalGpuEnabled; }
     static void setGlobalGpuEnabled(bool enabled) { s_globalGpuEnabled = enabled; }
     
+    // --- Eyedropper API ---
+public:
+    void startColorPicking(std::function<void(ImU32)> onPicked)
+    {
+        m_isPickingColor = true;
+        m_onColorPicked = std::move(onPicked);
+    }
+
 private:
     static bool s_globalGpuEnabled; // Global preference for GPU acceleration
+
+    // Eyedropper state
+    bool m_isPickingColor { false };
+    std::function<void(ImU32)> m_onColorPicked;
 };

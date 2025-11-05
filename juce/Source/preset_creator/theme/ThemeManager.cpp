@@ -31,10 +31,8 @@ void ThemeManager::applyTheme()
 	st.Colors[ImGuiCol_TabHovered] = ImVec4(acc.x, acc.y, acc.z, 0.8f);
 	st.Colors[ImGuiCol_ButtonHovered] = ImVec4(acc.x, acc.y, acc.z, 1.0f);
 	
-	// Apply ImNodes style properties
-	ImNodesStyle& nodesStyle = ImNodes::GetStyle();
-	nodesStyle.GridSpacing = currentTheme.canvas.grid_size;
-	// Note: ImNodes colors (canvas background, node colors, etc.) are applied per-draw via PushColorStyle
+	// Note: ImNodes style properties are set in newOpenGLContextCreated() after ImNodes context is created
+	// ImNodes colors are applied per-draw via PushColorStyle
 }
 
 void ThemeManager::resetToDefault()
@@ -105,6 +103,11 @@ float ThemeManager::getWindowPadding() const
 }
 
 // Canvas getters
+ImU32 ThemeManager::getCanvasBackground() const
+{
+	return currentTheme.canvas.canvas_background;
+}
+
 ImU32 ThemeManager::getGridColor() const
 {
 	return currentTheme.canvas.grid_color;
@@ -138,6 +141,37 @@ ImU32 ThemeManager::getDropTargetOverlay() const
 ImU32 ThemeManager::getMousePositionText() const
 {
 	return currentTheme.canvas.mouse_position_text;
+}
+
+// Node styling getters
+ImU32 ThemeManager::getNodeBackground() const
+{
+	return currentTheme.canvas.node_background;
+}
+
+ImU32 ThemeManager::getNodeFrame() const
+{
+	return currentTheme.canvas.node_frame;
+}
+
+ImU32 ThemeManager::getNodeFrameHovered() const
+{
+	return currentTheme.canvas.node_frame_hovered;
+}
+
+ImU32 ThemeManager::getNodeFrameSelected() const
+{
+	return currentTheme.canvas.node_frame_selected;
+}
+
+float ThemeManager::getNodeRounding() const
+{
+	return currentTheme.canvas.node_rounding;
+}
+
+float ThemeManager::getNodeBorderWidth() const
+{
+	return currentTheme.canvas.node_border_width;
 }
 
 // JSON save/load (Phase 5)
@@ -343,6 +377,7 @@ bool ThemeManager::loadTheme(const juce::File& themeFile)
 	if (auto v = root->getProperty("canvas"); v.isObject())
 	{
 		auto* o = v.getDynamicObject();
+		t.canvas.canvas_background = varToColor(o->getProperty("canvas_background"), t.canvas.canvas_background);
 		t.canvas.grid_color = varToColor(o->getProperty("grid_color"), t.canvas.grid_color);
 		t.canvas.grid_origin_color = varToColor(o->getProperty("grid_origin_color"), t.canvas.grid_origin_color);
 		t.canvas.grid_size = o->hasProperty("grid_size") ? (float) o->getProperty("grid_size") : t.canvas.grid_size;
@@ -350,6 +385,12 @@ bool ThemeManager::loadTheme(const juce::File& themeFile)
 		t.canvas.scale_interval = o->hasProperty("scale_interval") ? (float) o->getProperty("scale_interval") : t.canvas.scale_interval;
 		t.canvas.drop_target_overlay = varToColor(o->getProperty("drop_target_overlay"), t.canvas.drop_target_overlay);
 		t.canvas.mouse_position_text = varToColor(o->getProperty("mouse_position_text"), t.canvas.mouse_position_text);
+		t.canvas.node_background = varToColor(o->getProperty("node_background"), t.canvas.node_background);
+		t.canvas.node_frame = varToColor(o->getProperty("node_frame"), t.canvas.node_frame);
+		t.canvas.node_frame_hovered = varToColor(o->getProperty("node_frame_hovered"), t.canvas.node_frame_hovered);
+		t.canvas.node_frame_selected = varToColor(o->getProperty("node_frame_selected"), t.canvas.node_frame_selected);
+		t.canvas.node_rounding = o->hasProperty("node_rounding") ? (float) o->getProperty("node_rounding") : t.canvas.node_rounding;
+		t.canvas.node_border_width = o->hasProperty("node_border_width") ? (float) o->getProperty("node_border_width") : t.canvas.node_border_width;
 	}
 
 	// layout
@@ -598,6 +639,7 @@ bool ThemeManager::saveTheme(const juce::File& themeFile)
 	// canvas
 	{
 		juce::DynamicObject::Ptr o = new juce::DynamicObject();
+		o->setProperty("canvas_background", colorToVar(currentTheme.canvas.canvas_background));
 		o->setProperty("grid_color", colorToVar(currentTheme.canvas.grid_color));
 		o->setProperty("grid_origin_color", colorToVar(currentTheme.canvas.grid_origin_color));
 		o->setProperty("grid_size", currentTheme.canvas.grid_size);
@@ -605,6 +647,12 @@ bool ThemeManager::saveTheme(const juce::File& themeFile)
 		o->setProperty("scale_interval", currentTheme.canvas.scale_interval);
 		o->setProperty("drop_target_overlay", colorToVar(currentTheme.canvas.drop_target_overlay));
 		o->setProperty("mouse_position_text", colorToVar(currentTheme.canvas.mouse_position_text));
+		o->setProperty("node_background", colorToVar(currentTheme.canvas.node_background));
+		o->setProperty("node_frame", colorToVar(currentTheme.canvas.node_frame));
+		o->setProperty("node_frame_hovered", colorToVar(currentTheme.canvas.node_frame_hovered));
+		o->setProperty("node_frame_selected", colorToVar(currentTheme.canvas.node_frame_selected));
+		o->setProperty("node_rounding", currentTheme.canvas.node_rounding);
+		o->setProperty("node_border_width", currentTheme.canvas.node_border_width);
 		root->setProperty("canvas", juce::var(o.get()));
 	}
 
@@ -863,6 +911,7 @@ void ThemeManager::loadDefaultTheme()
 	defaultTheme.links.label_text = IM_COL32(255, 255, 100, 255);
 
 	// Canvas
+	defaultTheme.canvas.canvas_background = IM_COL32(25, 25, 25, 255); // Dark background
 	defaultTheme.canvas.grid_color = IM_COL32(50, 50, 50, 255);
 	defaultTheme.canvas.grid_origin_color = IM_COL32(80, 80, 80, 255);
 	defaultTheme.canvas.grid_size = 64.0f;
@@ -870,6 +919,14 @@ void ThemeManager::loadDefaultTheme()
 	defaultTheme.canvas.scale_interval = 400.0f;
 	defaultTheme.canvas.drop_target_overlay = IM_COL32(218, 165, 32, 80);
 	defaultTheme.canvas.mouse_position_text = IM_COL32(200, 200, 200, 150);
+	
+	// Node styling (ImNodes defaults)
+	defaultTheme.canvas.node_background = IM_COL32(40, 40, 40, 255);
+	defaultTheme.canvas.node_frame = IM_COL32(100, 100, 100, 255);
+	defaultTheme.canvas.node_frame_hovered = IM_COL32(150, 150, 150, 255);
+	defaultTheme.canvas.node_frame_selected = IM_COL32(255, 200, 0, 255);
+	defaultTheme.canvas.node_rounding = 4.0f;
+	defaultTheme.canvas.node_border_width = 1.0f;
 
 	// Windows
 	defaultTheme.windows.status_overlay_alpha = 0.5f;

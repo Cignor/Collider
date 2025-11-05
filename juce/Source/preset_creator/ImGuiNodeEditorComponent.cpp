@@ -246,8 +246,14 @@ void ImGuiNodeEditorComponent::newOpenGLContextCreated()
     // Create ImGui context
     imguiContext = ImGui::CreateContext();
     imguiIO = &ImGui::GetIO();
-    // Apply theme (replaces ImGui::StyleColorsDark())
-    ImGui::StyleColorsDark();
+    
+    // Try to load user's saved theme preference, otherwise use default
+    if (!ThemeManager::getInstance().loadUserThemePreference())
+    {
+        // No preference found or failed to load, apply default theme
+        ThemeManager::getInstance().applyTheme();
+    }
+    // If preference was loaded successfully, loadUserThemePreference() already called applyTheme()
 
     // --- FONT LOADING FOR CHINESE CHARACTERS ---
     ImGuiIO& io = ImGui::GetIO();
@@ -355,6 +361,43 @@ void ImGuiNodeEditorComponent::renderOpenGL()
     auto* dd = ImGui::GetDrawData();
     // Render via OpenGL2 backend
     ImGui_ImplOpenGL2_RenderDrawData (dd);
+
+    // --- Eyedropper sampling after rendering (framebuffer has ImGui drawn) ---
+    if (m_isPickingColor)
+    {
+        ImGuiIO& io = ImGui::GetIO();
+        ImVec2 mousePos = ImGui::GetMousePos();
+
+        // Convert to framebuffer Y
+        const int fbH = (int) io.DisplaySize.y;
+        const int px = juce::jlimit(0, (int)io.DisplaySize.x - 1, (int)mousePos.x);
+        const int py = juce::jlimit(0, fbH - 1, fbH - (int)mousePos.y - 1);
+
+        unsigned char rgba[4] { 0, 0, 0, 255 };
+        juce::gl::glReadPixels(px, py, 1, 1, juce::gl::GL_RGBA, juce::gl::GL_UNSIGNED_BYTE, rgba);
+        ImU32 picked = IM_COL32(rgba[0], rgba[1], rgba[2], 255);
+
+        // Draw cursor overlay
+        ImDrawList* fg = ImGui::GetForegroundDrawList();
+        const float s = 16.0f;
+        ImVec2 tl(mousePos.x + 12, mousePos.y + 12);
+        ImVec2 br(tl.x + s, tl.y + s);
+        fg->AddRectFilled(tl, br, picked, 3.0f);
+        fg->AddRect(tl, br, IM_COL32(0,0,0,255), 3.0f, 0, 1.0f);
+        ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
+
+        if (ImGui::IsMouseClicked(ImGuiMouseButton_Left))
+        {
+            if (m_onColorPicked) m_onColorPicked(picked);
+            m_isPickingColor = false;
+            m_onColorPicked = nullptr;
+        }
+        else if (ImGui::IsKeyPressed(ImGuiKey_Escape) || ImGui::IsMouseClicked(ImGuiMouseButton_Right))
+        {
+            m_isPickingColor = false;
+            m_onColorPicked = nullptr;
+        }
+    }
 }
 void ImGuiNodeEditorComponent::renderImGui()
 {
@@ -699,6 +742,8 @@ void ImGuiNodeEditorComponent::renderImGui()
                             {
                                 if (ThemeManager::getInstance().loadTheme(candidate))
                                 {
+                                    // Save user preference
+                                    ThemeManager::getInstance().saveUserThemePreference(filename);
                                     juce::Logger::writeToLog("[Theme] Loaded: " + juce::String(label));
                                     s_themeToastText = "Theme Loaded: " + juce::String(label);
                                     s_themeToastEndTime = ImGui::GetTime() + 2.0;
@@ -1838,11 +1883,15 @@ void ImGuiNodeEditorComponent::renderImGui()
 
     // --- BACKGROUND GRID AND COORDINATE DISPLAY ---
     // (Canvas dimensions already defined above in the drop target code)
-    ImDrawList* draw_list = ImGui::GetBackgroundDrawList();
+    // Draw into the window draw list so colors aren't obscured by window bg
+    ImDrawList* draw_list = ImGui::GetWindowDrawList();
     // Note: EditorContextGetPanning() can only be called AFTER BeginNodeEditor()
     // Since we draw the grid before BeginNodeEditor, we use zero panning here
     // The grid will be drawn correctly after BeginNodeEditor is called
     ImVec2 panning(0.0f, 0.0f);
+
+    // Draw canvas background (behind everything)
+    draw_list->AddRectFilled(canvas_p0, canvas_p1, themeMgr.getCanvasBackground());
 
     // Draw grid lines
     for (float x = fmodf(panning.x, GRID_SIZE); x < canvas_sz.x; x += GRID_SIZE)
