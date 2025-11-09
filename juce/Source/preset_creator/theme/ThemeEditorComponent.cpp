@@ -43,6 +43,13 @@ void ThemeEditorComponent::close()
     m_showSaveDialog = false;
 }
 
+void ThemeEditorComponent::refreshThemeFromManager()
+{
+    m_workingCopy = ThemeManager::getInstance().getCurrentTheme();
+    m_hasChanges = false;
+    juce::Logger::writeToLog("[ThemeEditor] Refreshed working copy from ThemeManager");
+}
+
 void ThemeEditorComponent::render()
 {
     if (!m_isOpen)
@@ -176,96 +183,85 @@ void ThemeEditorComponent::renderTabs()
 // Helper implementations
 bool ThemeEditorComponent::colorEdit4(const char* label, ImVec4& color, ImGuiColorEditFlags flags)
 {
-    bool changed = ImGui::ColorEdit4(label, &color.x, flags | ImGuiColorEditFlags_NoSidePreview);
-    ImGui::SameLine();
-    ImGui::PushID(label);
-    if (ImGui::SmallButton("Pick \xF0\x9F\x8E\xA8"))
+    if (!label)
+        return false;
+
+    juce::Logger::writeToLog(juce::String("[ThemeColorPicker] Drawing (ImVec4) picker for: ") + label);
+
+    bool valueChanged = false;
+    try
     {
-        if (m_startPicker)
-        {
-            m_startPicker([this, &color](ImU32 picked){ color = ImGui::ColorConvertU32ToFloat4(picked); m_hasChanges = true; });
-        }
+        ImGui::PushID(label);
+        valueChanged = ImGui::ColorEdit4("##picker", (float*)&color,
+                                         ImGuiColorEditFlags_NoInputs | ImGuiColorEditFlags_AlphaBar);
+
+        ImGui::SameLine();
+        ImGui::TextUnformatted(label);
+        ImGui::PopID();
+
+        if (valueChanged)
+            m_hasChanges = true;
     }
-    ImGui::SameLine();
-    if (ImGui::SmallButton("From UI"))
-        ImGui::OpenPopup("pick_ui");
-    if (ImGui::BeginPopup("pick_ui"))
+    catch (const std::exception& e)
     {
-        ImGuiStyle& st = ImGui::GetStyle();
-        struct Entry { const char* name; ImGuiCol idx; } entries[] = {
-            {"Text", ImGuiCol_Text}, {"WindowBg", ImGuiCol_WindowBg}, {"ChildBg", ImGuiCol_ChildBg},
-            {"FrameBg", ImGuiCol_FrameBg}, {"FrameHovered", ImGuiCol_FrameBgHovered}, {"FrameActive", ImGuiCol_FrameBgActive},
-            {"Button", ImGuiCol_Button}, {"ButtonHovered", ImGuiCol_ButtonHovered}, {"ButtonActive", ImGuiCol_ButtonActive},
-            {"Header", ImGuiCol_Header}, {"HeaderHovered", ImGuiCol_HeaderHovered}, {"HeaderActive", ImGuiCol_HeaderActive},
-            {"Separator", ImGuiCol_Separator}, {"Tab", ImGuiCol_Tab}, {"TabActive", ImGuiCol_TabActive}
-        };
-        for (const auto& e : entries)
-        {
-            ImGui::PushID((int)e.idx);
-            if (ImGui::ColorButton("##sw", st.Colors[e.idx], ImGuiColorEditFlags_NoTooltip, ImVec2(20, 20)))
-            {
-                color = st.Colors[e.idx];
-                m_hasChanges = true;
-                ImGui::CloseCurrentPopup();
-            }
-            ImGui::SameLine();
-            ImGui::TextUnformatted(e.name);
-            ImGui::PopID();
-        }
-        ImGui::EndPopup();
+        juce::Logger::writeToLog(juce::String("[ThemeColorPicker] EXCEPTION (ImVec4) for label '") + label + "': " + e.what());
+        ImGui::PopID();
+        return false;
     }
-    ImGui::PopID();
-    if (changed)
-        m_hasChanges = true;
-    return changed;
+    catch (...)
+    {
+        juce::Logger::writeToLog(juce::String("[ThemeColorPicker] UNKNOWN EXCEPTION (ImVec4) for label '") + label + "'");
+        ImGui::PopID();
+        return false;
+    }
+
+    return valueChanged;
 }
 
 bool ThemeEditorComponent::colorEditU32(const char* label, ImU32& color, ImGuiColorEditFlags flags)
 {
-    ImVec4 col = ImGui::ColorConvertU32ToFloat4(color);
-    bool changed = ImGui::ColorEdit4(label, &col.x, flags | ImGuiColorEditFlags_NoSidePreview);
-    ImGui::SameLine();
-    ImGui::PushID(label);
-    if (ImGui::SmallButton("Pick \xF0\x9F\x8E\xA8"))
+    if (!label)
+        return false;
+
+    juce::Logger::writeToLog(juce::String("[ThemeColorPicker] Drawing (ImU32) picker for: ") + label);
+
+    ImVec4 floatColor;
+    bool valueChanged = false;
+
+    try
     {
-        if (m_startPicker)
+        ImGui::PushID(label);
+
+        floatColor = ImGui::ColorConvertU32ToFloat4(color);
+
+        valueChanged = ImGui::ColorEdit4("##picker", (float*)&floatColor,
+                                         ImGuiColorEditFlags_NoInputs | ImGuiColorEditFlags_AlphaBar);
+
+        if (valueChanged)
         {
-            m_startPicker([this, &col, &color](ImU32 picked){ col = ImGui::ColorConvertU32ToFloat4(picked); color = picked; m_hasChanges = true; });
+            color = ImGui::ColorConvertFloat4ToU32(floatColor);
+            m_hasChanges = true;
         }
+
+        ImGui::SameLine();
+        ImGui::TextUnformatted(label);
+
+        ImGui::PopID();
     }
-    ImGui::SameLine();
-    if (ImGui::SmallButton("From UI"))
-        ImGui::OpenPopup("pick_ui");
-    if (ImGui::BeginPopup("pick_ui"))
+    catch (const std::exception& e)
     {
-        ImGuiStyle& st = ImGui::GetStyle();
-        struct Entry { const char* name; ImGuiCol idx; } entries[] = {
-            {"Text", ImGuiCol_Text}, {"WindowBg", ImGuiCol_WindowBg}, {"ChildBg", ImGuiCol_ChildBg},
-            {"FrameBg", ImGuiCol_FrameBg}, {"FrameHovered", ImGuiCol_FrameBgHovered}, {"FrameActive", ImGuiCol_FrameBgActive},
-            {"Button", ImGuiCol_Button}, {"ButtonHovered", ImGuiCol_ButtonHovered}, {"ButtonActive", ImGuiCol_ButtonActive},
-            {"Header", ImGuiCol_Header}, {"HeaderHovered", ImGuiCol_HeaderHovered}, {"HeaderActive", ImGuiCol_HeaderActive},
-            {"Separator", ImGuiCol_Separator}, {"Tab", ImGuiCol_Tab}, {"TabActive", ImGuiCol_TabActive}
-        };
-        for (const auto& e : entries)
-        {
-            ImGui::PushID((int)e.idx);
-            if (ImGui::ColorButton("##sw", st.Colors[e.idx], ImGuiColorEditFlags_NoTooltip, ImVec2(20, 20)))
-            {
-                col = st.Colors[e.idx];
-                color = ImGui::ColorConvertFloat4ToU32(col);
-                m_hasChanges = true;
-                ImGui::CloseCurrentPopup();
-            }
-            ImGui::SameLine();
-            ImGui::TextUnformatted(e.name);
-            ImGui::PopID();
-        }
-        ImGui::EndPopup();
+        juce::Logger::writeToLog(juce::String("[ThemeColorPicker] EXCEPTION (ImU32) for label '") + label + "': " + e.what());
+        ImGui::PopID();
+        return false;
     }
-    ImGui::PopID();
-    if (changed)
-        color = ImGui::ColorConvertFloat4ToU32(col);
-    return changed;
+    catch (...)
+    {
+        juce::Logger::writeToLog(juce::String("[ThemeColorPicker] UNKNOWN EXCEPTION (ImU32) for label '") + label + "'");
+        ImGui::PopID();
+        return false;
+    }
+
+    return valueChanged;
 }
 
 bool ThemeEditorComponent::dragFloat(const char* label, float& value, float speed, float min, float max, const char* format)
@@ -448,7 +444,9 @@ void ThemeEditorComponent::renderImGuiColorsTab()
         ImVec4& titleBgCollapsed = m_workingCopy.style.Colors[ImGuiCol_TitleBgCollapsed];
         
         colorEdit4("Window Background", windowBg);
-        colorEdit4("Child Background", childBg);
+        colorEdit4("Node Background (ChildBg)", childBg);
+        if (ImGui::IsItemHovered())
+            ImGui::SetTooltip("Controls the background color used for node editors and child regions.");
         colorEdit4("Popup Background", popupBg);
         colorEdit4("Title Background", titleBg);
         colorEdit4("Title Active", titleBgActive);
@@ -722,6 +720,19 @@ void ThemeEditorComponent::renderTextColorsTab()
     {
         dragFloat("Tooltip Wrap (Standard)", m_workingCopy.text.tooltip_wrap_standard, 1.0f, 10.0f, 100.0f);
         dragFloat("Tooltip Wrap (Compact)", m_workingCopy.text.tooltip_wrap_compact, 1.0f, 10.0f, 100.0f);
+    }
+    
+    if (ImGui::CollapsingHeader("Text Rendering"))
+    {
+        // Add the master toggle checkbox
+        if (ImGui::Checkbox("Enable Text Glow / Shadow", &m_workingCopy.text.enable_text_glow))
+        {
+            m_hasChanges = true;
+        }
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip("Enable a soft shadow/glow effect for all themed text");
+        
+        // Add the color picker for the glow
+        colorEdit4("Glow / Shadow Color", m_workingCopy.text.text_glow_color);
     }
     
     ImGui::NextColumn();
@@ -1380,12 +1391,42 @@ void ThemeEditorComponent::renderWindowsTab()
     ImGui::Columns(2, "WindowsColumns", true);
     
     // Left: Controls
-    dragFloat("Status Overlay Alpha", m_workingCopy.windows.status_overlay_alpha, 0.01f, 0.0f, 1.0f);
-    dragFloat("Probe Scope Alpha", m_workingCopy.windows.probe_scope_alpha, 0.01f, 0.0f, 1.0f);
-    dragFloat("Preset Status Alpha", m_workingCopy.windows.preset_status_alpha, 0.01f, 0.0f, 1.0f);
-    dragFloat("Notifications Alpha", m_workingCopy.windows.notifications_alpha, 0.01f, 0.0f, 1.0f);
-    dragFloat("Probe Scope Width", m_workingCopy.windows.probe_scope_width, 1.0f, 100.0f, 500.0f);
-    dragFloat("Probe Scope Height", m_workingCopy.windows.probe_scope_height, 1.0f, 50.0f, 500.0f);
+    if (ImGui::CollapsingHeader("Window Transparency"))
+    {
+        // Slider for the main Status Overlay
+        if (ImGui::SliderFloat("Status Overlay", &m_workingCopy.windows.status_overlay_alpha, 0.0f, 1.0f, "%.2f"))
+        {
+            m_hasChanges = true;
+        }
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip("Transparency for the 'Status: EDITED' overlay");
+        
+        // Slider for the Probe Scope
+        if (ImGui::SliderFloat("Probe Scope", &m_workingCopy.windows.probe_scope_alpha, 0.0f, 1.0f, "%.2f"))
+        {
+            m_hasChanges = true;
+        }
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip("Transparency for the 🔬 Probe Scope window");
+        
+        // Slider for Notifications
+        if (ImGui::SliderFloat("Notifications", &m_workingCopy.windows.notifications_alpha, 0.0f, 1.0f, "%.2f"))
+        {
+            m_hasChanges = true;
+        }
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip("Transparency for pop-up notifications (Success, Error, etc.)");
+        
+        // Slider for Preset Status (kept for backward compatibility)
+        if (ImGui::SliderFloat("Preset Status", &m_workingCopy.windows.preset_status_alpha, 0.0f, 1.0f, "%.2f"))
+        {
+            m_hasChanges = true;
+        }
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip("Transparency for the Preset Status overlay");
+    }
+    
+    if (ImGui::CollapsingHeader("Probe Scope Size"))
+    {
+        dragFloat("Probe Scope Width", m_workingCopy.windows.probe_scope_width, 1.0f, 100.0f, 500.0f);
+        dragFloat("Probe Scope Height", m_workingCopy.windows.probe_scope_height, 1.0f, 50.0f, 500.0f);
+    }
     
     ImGui::NextColumn();
     
@@ -1891,6 +1932,7 @@ void ThemeEditorComponent::applyChanges()
     // Apply working copy to ThemeManager
     ThemeManager::getInstance().getEditableTheme() = m_workingCopy;
     ThemeManager::getInstance().applyTheme();
+	ThemeManager::getInstance().requestFontReload();
     m_hasChanges = false;
     juce::Logger::writeToLog("[ThemeEditor] Applied theme changes");
     

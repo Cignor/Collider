@@ -2,6 +2,7 @@
 
 #include <imgui.h>
 #include <imnodes.h>
+#include <backends/imgui_impl_opengl2.h>
 #include <map>
 
 // Singleton
@@ -20,6 +21,7 @@ ThemeManager::ThemeManager()
 void ThemeManager::applyTheme()
 {
 	applyImGuiStyle();
+
 	// Apply accent to common ImGui colors
 	ImVec4 acc = currentTheme.accent;
 	ImGuiStyle& st = ImGui::GetStyle();
@@ -30,9 +32,26 @@ void ThemeManager::applyTheme()
 	st.Colors[ImGuiCol_SeparatorHovered] = ImVec4(acc.x, acc.y, acc.z, 0.9f);
 	st.Colors[ImGuiCol_TabHovered] = ImVec4(acc.x, acc.y, acc.z, 0.8f);
 	st.Colors[ImGuiCol_ButtonHovered] = ImVec4(acc.x, acc.y, acc.z, 1.0f);
+
+	requestFontReload();
 	
 	// Note: ImNodes style properties are set in newOpenGLContextCreated() after ImNodes context is created
 	// ImNodes colors are applied per-draw via PushColorStyle
+}
+
+void ThemeManager::requestFontReload()
+{
+	fontReloadPending.store(true, std::memory_order_relaxed);
+}
+
+bool ThemeManager::consumeFontReloadRequest()
+{
+	return fontReloadPending.exchange(false, std::memory_order_acq_rel);
+}
+
+void ThemeManager::rebuildFontsNow()
+{
+	applyFonts();
 }
 
 void ThemeManager::resetToDefault()
@@ -286,6 +305,9 @@ bool ThemeManager::loadTheme(const juce::File& themeFile)
 		// Floats with default fallbacks
 		if (o->hasProperty("tooltip_wrap_standard")) t.text.tooltip_wrap_standard = (float) o->getProperty("tooltip_wrap_standard");
 		if (o->hasProperty("tooltip_wrap_compact"))  t.text.tooltip_wrap_compact  = (float) o->getProperty("tooltip_wrap_compact");
+		// Text glow settings
+		if (o->hasProperty("enable_text_glow")) t.text.enable_text_glow = (bool) o->getProperty("enable_text_glow");
+		t.text.text_glow_color = varToVec4(o->getProperty("text_glow_color"), t.text.text_glow_color);
 	}
 
 	// status
@@ -588,6 +610,8 @@ bool ThemeManager::saveTheme(const juce::File& themeFile)
 		o->setProperty("active", vec4ToVar(currentTheme.text.active));
 		o->setProperty("tooltip_wrap_standard", currentTheme.text.tooltip_wrap_standard);
 		o->setProperty("tooltip_wrap_compact", currentTheme.text.tooltip_wrap_compact);
+		o->setProperty("enable_text_glow", currentTheme.text.enable_text_glow);
+		o->setProperty("text_glow_color", vec4ToVar(currentTheme.text.text_glow_color));
 		root->setProperty("text", juce::var(o.get()));
 	}
 
@@ -753,7 +777,95 @@ bool ThemeManager::saveTheme(const juce::File& themeFile)
 
 void ThemeManager::applyImGuiStyle()
 {
-	ImGui::GetStyle() = currentTheme.style;
+	ImGuiStyle& style = ImGui::GetStyle();
+	style = currentTheme.style;
+
+	for (int i = 0; i < ImGuiCol_COUNT; ++i)
+	{
+		style.Colors[i] = currentTheme.style.Colors[i];
+	}
+}
+
+void ThemeManager::applyFonts()
+{
+	if (ImGui::GetCurrentContext() == nullptr)
+		return;
+
+	ImGuiIO& io = ImGui::GetIO();
+
+	io.Fonts->Clear();
+
+	const auto& fontSettings = currentTheme.fonts;
+
+	auto resolveFontPath = [](const juce::String& path) -> juce::File
+	{
+		juce::File file(path);
+		if (path.isNotEmpty() && !juce::File::isAbsolutePath(path))
+		{
+			auto baseDir = juce::File::getSpecialLocation(juce::File::currentApplicationFile).getParentDirectory();
+			file = baseDir.getChildFile(path);
+		}
+		return file;
+	};
+
+	auto addFallbackFont = [&]()
+	{
+		ImFontConfig cfg;
+		cfg.SizePixels = fontSettings.default_size > 0.0f ? fontSettings.default_size : 16.0f;
+		io.Fonts->AddFontDefault(&cfg);
+	};
+
+	bool defaultFontAdded = false;
+	{
+		ImFontConfig cfg;
+		cfg.SizePixels = fontSettings.default_size > 0.0f ? fontSettings.default_size : 16.0f;
+
+		if (fontSettings.default_path.isNotEmpty())
+		{
+			auto fontFile = resolveFontPath(fontSettings.default_path);
+			if (fontFile.existsAsFile())
+			{
+				defaultFontAdded = io.Fonts->AddFontFromFileTTF(fontFile.getFullPathName().toRawUTF8(), cfg.SizePixels, &cfg) != nullptr;
+				if (!defaultFontAdded)
+				{
+					juce::Logger::writeToLog("[ThemeManager] Failed to load default font: " + fontFile.getFullPathName());
+				}
+			}
+			else
+			{
+				juce::Logger::writeToLog("[ThemeManager] Default font file not found: " + fontFile.getFullPathName());
+			}
+		}
+
+		if (!defaultFontAdded)
+		{
+			addFallbackFont();
+			defaultFontAdded = true;
+		}
+	}
+
+	if (fontSettings.chinese_path.isNotEmpty())
+	{
+		auto fontFile = resolveFontPath(fontSettings.chinese_path);
+		if (fontFile.existsAsFile())
+		{
+			ImFontConfig cfg;
+			cfg.MergeMode = true;
+			cfg.PixelSnapH = true;
+			cfg.SizePixels = fontSettings.chinese_size > 0.0f ? fontSettings.chinese_size : fontSettings.default_size;
+
+			const ImWchar* ranges = io.Fonts->GetGlyphRangesChineseFull();
+			if (io.Fonts->AddFontFromFileTTF(fontFile.getFullPathName().toRawUTF8(), cfg.SizePixels, &cfg, ranges) == nullptr)
+			{
+				juce::Logger::writeToLog("[ThemeManager] Failed to merge Chinese font: " + fontFile.getFullPathName());
+			}
+		}
+		else
+		{
+			juce::Logger::writeToLog("[ThemeManager] Chinese font file not found: " + fontFile.getFullPathName());
+		}
+	}
+	// Backend will recreate the texture automatically on next frame
 }
 
 // Helpers

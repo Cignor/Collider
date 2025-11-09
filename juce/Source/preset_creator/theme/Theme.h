@@ -34,6 +34,8 @@ struct Theme
 		ImVec4 active { 100/255.f, 255/255.f, 100/255.f, 1.0f };
 		float tooltip_wrap_standard { 35.0f };
 		float tooltip_wrap_compact { 25.0f };
+		bool enable_text_glow { false };
+		ImVec4 text_glow_color { 0.0f, 0.0f, 0.0f, 0.5f };
 	} text;
 
 	struct StatusColors

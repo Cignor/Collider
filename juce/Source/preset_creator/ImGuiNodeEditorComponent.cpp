@@ -8,6 +8,7 @@
 #include <imgui.h>
 #include <imnodes.h>
 #include <juce_audio_utils/juce_audio_utils.h>
+#include <juce_core/juce_core.h>
 #include <unordered_map>
 #include <unordered_set>
 #include <cstdint>
@@ -258,41 +259,12 @@ void ImGuiNodeEditorComponent::newOpenGLContextCreated()
     }
     // If preference was loaded successfully, loadUserThemePreference() already called applyTheme()
 
-    // --- FONT LOADING FOR CHINESE CHARACTERS ---
-    ImGuiIO& io = ImGui::GetIO();
-    io.Fonts->AddFontDefault(); // Load default English font
-
-    // Define the path to your new font file
-    auto appFile = juce::File::getSpecialLocation(juce::File::currentApplicationFile);
-    auto fontFile = appFile.getParentDirectory().getChildFile("../../Source/assets/NotoSansSC-VariableFont_wght.ttf");
-
-    if (fontFile.existsAsFile())
-    {
-        ImFontConfig config;
-        config.MergeMode = true; // IMPORTANT: This merges the new font into the default one
-        config.PixelSnapH = true;
-
-        // Define the character ranges to load for Chinese
-        static const ImWchar ranges[] = { 0x4e00, 0x9fbf, 0, }; // Basic CJK Unified Ideographs
-
-        io.Fonts->AddFontFromFileTTF(fontFile.getFullPathName().toRawUTF8(), 16.0f, &config, ranges);
-        juce::Logger::writeToLog("ImGuiNodeEditor: Chinese font loaded successfully");
-    }
-    else
-    {
-        juce::Logger::writeToLog("ImGuiNodeEditor: WARNING - Chinese font not found at: " + fontFile.getFullPathName());
-    }
-    
-    // --- END OF FONT LOADING ---
-
     // imgui_juce backend handles key mapping internally (new IO API)
 
     // Setup JUCE platform backend and OpenGL2 renderer backend
     ImGui_ImplJuce_Init (*this, glContext);
     ImGui_ImplOpenGL2_Init();
     
-    // Build fonts after renderer is initialized
-    io.Fonts->Build();
 
     // Setup imnodes
     ImNodes::SetImGuiContext(ImGui::GetCurrentContext());
@@ -331,6 +303,15 @@ void ImGuiNodeEditorComponent::renderOpenGL()
 
     // Clear background
     juce::OpenGLHelpers::clear (juce::Colours::darkgrey);
+
+    // ======================================================
+    // === 💡 FONT REBUILD DEFERRED EXECUTION ===============
+    // ======================================================
+    if (fontAtlasNeedsRebuild.exchange(false, std::memory_order_acq_rel)
+        || ThemeManager::getInstance().consumeFontReloadRequest())
+    {
+        rebuildFontAtlas();
+    }
 
     // Ensure IO is valid and configured each frame (size, delta time, DPI scale, fonts)
     ImGuiIO& io = ImGui::GetIO();
@@ -456,6 +437,7 @@ void ImGuiNodeEditorComponent::renderImGui()
     }
 
     // --- ZOOM CONTROL HANDLER (requires imnodes zoom-enabled build) ---
+#if defined(IMNODES_ZOOM_ENABLED)
     if (ImNodes::GetCurrentContext())
     {
         const ImGuiIO& io = ImGui::GetIO();
@@ -468,7 +450,15 @@ void ImGuiNodeEditorComponent::renderImGui()
             juce::Logger::writeToLog("[Zoom] New Zoom: " + juce::String(newZoom, 2) + "x");
         }
     }
+#endif
     // --- END ZOOM CONTROL HANDLER ---
+
+    // === FIX DOUBLE CANVAS RENDERING ===
+    // Make the parent window's background transparent.
+    // This ensures that only the ImNodes canvas background (which
+    // your theme controls) is the only one visible.
+    ImGui::PushStyleColor(ImGuiCol_WindowBg, IM_COL32(0, 0, 0, 0));
+    // === END OF FIX ===
 
     // Basic docking-like two-panels layout
     ImGui::SetNextWindowPos (ImVec2 (0, 0), ImGuiCond_Always);
@@ -476,34 +466,10 @@ void ImGuiNodeEditorComponent::renderImGui()
     ImGui::Begin ("Preset Creator", nullptr,
                   ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoBringToFrontOnFocus | ImGuiWindowFlags_MenuBar);
 
-    // --- DEFINITIVE STATUS OVERLAY ---
-    // This code creates the small, semi-transparent window for the preset status.
     const float sidebarWidth = 260.0f;
     const float menuBarHeight = ImGui::GetFrameHeight();
     const float padding = 10.0f;
 
-    ImGui::SetNextWindowPos(ImVec2(sidebarWidth + padding, menuBarHeight + padding));
-    ImGui::SetNextWindowBgAlpha(0.5f);
-    ImGui::Begin("Preset Status Overlay", nullptr, ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoFocusOnAppearing | ImGuiWindowFlags_NoNav | ImGuiWindowFlags_AlwaysAutoResize);
-
-    // Display the preset name or "Unsaved Patch"
-    if (currentPresetFile.getFullPathName().isNotEmpty()) { // Check if the file path is valid
-        ImGui::Text("Preset: %s", currentPresetFile.getFileName().toRawUTF8()); // Display just the filename
-    } else {
-        ImGui::Text("Preset: Unsaved Patch");
-    }
-
-    // Display the "Saved" or "Edited" status
-    if (isPatchDirty) {
-        ImGui::TextColored(ImVec4(1.0f, 1.0f, 0.0f, 1.0f), "Status: EDITED");
-    } else {
-        ImGui::TextColored(ImVec4(0.0f, 1.0f, 0.0f, 1.0f), "Status: SAVED");
-    }
-
-    ImGui::End();
-    // --- END OF OVERLAY ---
-
-    
     // === PROBE SCOPE OVERLAY ===
     if (synth != nullptr && showProbeScope)
     {
@@ -511,7 +477,7 @@ void ImGuiNodeEditorComponent::renderImGui()
         {
             ImGui::SetNextWindowPos(ImVec2((float)getWidth() - 270.0f, menuBarHeight + padding), ImGuiCond_FirstUseEver);
             ImGui::SetNextWindowSize(ImVec2(260, 180), ImGuiCond_FirstUseEver);
-            ImGui::SetNextWindowBgAlpha(0.85f);
+            ImGui::SetNextWindowBgAlpha(ThemeManager::getInstance().getCurrentTheme().windows.probe_scope_alpha);
             
             if (ImGui::Begin("🔬 Probe Scope", &showProbeScope, ImGuiWindowFlags_NoFocusOnAppearing))
             {
@@ -762,6 +728,7 @@ void ImGuiNodeEditorComponent::renderImGui()
                                 {
                                     // Save user preference
                                     ThemeManager::getInstance().saveUserThemePreference(filename);
+                                    themeEditor.refreshThemeFromManager();
                                     juce::Logger::writeToLog("[Theme] Loaded: " + juce::String(label));
                                     s_themeToastText = "Theme Loaded: " + juce::String(label);
                                     s_themeToastEndTime = ImGui::GetTime() + 2.0;
@@ -787,6 +754,18 @@ void ImGuiNodeEditorComponent::renderImGui()
                     loadThemePreset("Retro Terminal Amber", "RetroTerminalAmber.json");
                     loadThemePreset("Paper White", "PaperWhite.json");
                     loadThemePreset("Cyberpunk", "Cyberpunk.json");
+                    loadThemePreset("Night Owl Neo", "NightOwl.json");
+                    loadThemePreset("Shades of Purple", "ShadesOfPurple.json");
+                    loadThemePreset("Dracula Midnight", "DraculaMidnight.json");
+                    loadThemePreset("Cobalt2", "Cobalt2.json");
+                    loadThemePreset("Noctis Azure", "NoctisAzure.json");
+                    loadThemePreset("Rosé Pine Moon", "RosePine.json");
+                    loadThemePreset("Atom One Light", "AtomOneLight.json");
+                    loadThemePreset("Quiet Light", "QuietLight.json");
+                    loadThemePreset("Horizon Sunset", "HorizonSunset.json");
+                    loadThemePreset("Solar Flare", "SolarFlare.json");
+                    loadThemePreset("Synthwave '84", "Synthwave84.json");
+                    loadThemePreset("Everforest Night", "Everforest.json");
 
                     ImGui::EndMenu();
                 }
@@ -1157,6 +1136,7 @@ void ImGuiNodeEditorComponent::renderImGui()
         // === END OF MULTI-MIDI INDICATOR ===
 
         // --- ZOOM DISPLAY (menu bar, right side) ---
+#if defined(IMNODES_ZOOM_ENABLED)
         if (ImNodes::GetCurrentContext())
         {
             ImGui::SameLine();
@@ -1164,6 +1144,7 @@ void ImGuiNodeEditorComponent::renderImGui()
             ImGui::SameLine();
             ImGui::Text("Zoom: %.2fx", ImNodes::EditorContextGetZoom());
         }
+#endif
         // --- END ZOOM DISPLAY ---
 
         ImGui::EndMainMenuBar();
@@ -1171,7 +1152,7 @@ void ImGuiNodeEditorComponent::renderImGui()
 
     // --- PRESET STATUS OVERLAY ---
     ImGui::SetNextWindowPos(ImVec2(sidebarWidth + padding, menuBarHeight + padding));
-    ImGui::SetNextWindowBgAlpha(0.7f);
+    ImGui::SetNextWindowBgAlpha(ThemeManager::getInstance().getCurrentTheme().windows.preset_status_alpha);
     ImGui::Begin("Preset Status", nullptr, 
                  ImGuiWindowFlags_NoDecoration | 
                  ImGuiWindowFlags_NoMove | 
@@ -1185,10 +1166,13 @@ void ImGuiNodeEditorComponent::renderImGui()
         ImGui::Text("Preset: Unsaved Patch");
     }
 
+    // Get the theme colors
+    const auto& theme = ThemeManager::getInstance().getCurrentTheme();
+    
     if (isPatchDirty) {
-        ImGui::TextColored(ImVec4(1.0f, 1.0f, 0.0f, 1.0f), "Status: EDITED");
+        ThemeText("Status: EDITED", theme.status.edited);
     } else {
-        ImGui::TextColored(ImVec4(0.0f, 1.0f, 0.0f, 1.0f), "Status: SAVED");
+        ThemeText("Status: SAVED", theme.status.saved);
     }
     ImGui::End();
     // --- END OF PRESET STATUS OVERLAY ---
@@ -1854,9 +1838,21 @@ void ImGuiNodeEditorComponent::renderImGui()
     ImVec2 canvas_sz = ImGui::GetContentRegionAvail();
     ImVec2 canvas_p1 = ImVec2(canvas_p0.x + canvas_sz.x, canvas_p0.y + canvas_sz.y);
 
+    // Cache canvas dimensions for modal pan logic later
+    lastCanvasP0 = canvas_p0;
+    lastCanvasSize = canvas_sz;
+
     // Step 2: Create a full-canvas invisible button to act as our drop area
     ImGui::SetCursorScreenPos(canvas_p0);
     ImGui::InvisibleButton("##canvas_drop_target", canvas_sz);
+
+    const auto& canvasTheme = ThemeManager::getInstance().getCurrentTheme().canvas;
+    ImNodes::GetStyle().NodeCornerRounding = canvasTheme.node_rounding;
+    ImNodes::GetStyle().NodeBorderThickness = canvasTheme.node_border_width;
+    ImNodes::PushColorStyle(ImNodesCol_NodeBackground, canvasTheme.node_background);
+    ImNodes::PushColorStyle(ImNodesCol_NodeBackgroundHovered, canvasTheme.node_frame_hovered);
+    ImNodes::PushColorStyle(ImNodesCol_NodeBackgroundSelected, canvasTheme.node_frame_selected);
+    ImNodes::PushColorStyle(ImNodesCol_NodeOutline, canvasTheme.node_frame);
 
     // Step 3: Make this area a drop target with visual feedback
     if (ImGui::BeginDragDropTarget())
@@ -1988,6 +1984,14 @@ void ImGuiNodeEditorComponent::renderImGui()
     ImGui::GetForegroundDrawList()->AddText(ImVec2(canvas_p0.x + 10, canvas_p1.y - 25), themeMgr.getMousePositionText(), posStr);
     // --- END OF BACKGROUND GRID AND COORDINATE DISPLAY ---
     // Node canvas bound to the underlying model if available
+    // === FIX DOUBLE CANVAS: Make ImNodes grid background transparent ===
+    // We're already drawing our own canvas background above (line 1912),
+    // so we need to make ImNodes' background transparent to avoid double rendering
+    ImNodes::PushColorStyle(ImNodesCol_GridBackground, IM_COL32(0, 0, 0, 0));
+    // Hide the default grid lines so they don't draw over our manual grid
+    ImNodes::PushColorStyle(ImNodesCol_GridLine, IM_COL32(0, 0, 0, 0));
+    ImNodes::PushColorStyle(ImNodesCol_GridLinePrimary, IM_COL32(0, 0, 0, 0));
+    // === END OF FIX ===
     ImNodes::BeginNodeEditor();
     // Now we can safely get the actual panning for any future use
     // (Grid is already drawn with zero panning above, which is fine for background)
@@ -3432,8 +3436,10 @@ if (auto* mp = synth->getModuleForLogical (lid))
                 // Make active cables slightly thicker (keep constant in screen space under zoom)
                 {
                     float currentZoom = 1.0f;
+#if defined(IMNODES_ZOOM_ENABLED)
                     if (ImNodes::GetCurrentContext())
                         currentZoom = ImNodes::EditorContextGetZoom();
+#endif
                     ImNodes::PushStyleVar(ImNodesStyleVar_LinkThickness, 3.0f / currentZoom);
                 }
                 hasThicknessModification = true;
@@ -3532,8 +3538,39 @@ if (auto* mp = synth->getModuleForLogical (lid))
     }
     // --- Handle Auto-Connect Requests using new intelligent system ---
     handleAutoConnectionRequests();
-    ImNodes::MiniMap (0.2f, ImNodesMiniMapLocation_BottomRight);
+
+    // ======================================================
+    // === 💡 BEGIN MODAL MINIMAP (v7 - Enlarge) ===
+    // ======================================================
+    {
+        bool isEditorHovered = ImGui::IsWindowHovered(ImGuiHoveredFlags_ChildWindows |
+                                                     ImGuiHoveredFlags_AllowWhenBlockedByPopup);
+
+        if (isEditorHovered && ImGui::IsKeyDown(ImGuiKey_Comma))
+        {
+            ImNodes::MiniMap(0.5f, ImNodesMiniMapLocation_BottomRight);
+        }
+        else
+        {
+            ImNodes::MiniMap(0.2f, ImNodesMiniMapLocation_BottomRight);
+        }
+    }
+    // ======================================================
+    // === 💡 END MODAL MINIMAP ===========================
+    // ======================================================
+
     ImNodes::EndNodeEditor();
+    // === POP THE TRANSPARENT GRID BACKGROUND STYLE ===
+    ImNodes::PopColorStyle(); // Pop GridLinePrimary
+    ImNodes::PopColorStyle(); // Pop GridLine
+    ImNodes::PopColorStyle(); // Pop GridBackground
+    ImNodes::PopColorStyle(); // Pop NodeOutline
+    ImNodes::PopColorStyle(); // Pop NodeBackgroundSelected
+    ImNodes::PopColorStyle(); // Pop NodeBackgroundHovered
+    ImNodes::PopColorStyle(); // Pop NodeBackground
+    // === END OF FIX ===
+    hasRenderedAtLeastOnce = true;
+    
     // ================== MIDI PLAYER QUICK CONNECT LOGIC ==================
     // Poll all MIDI Player modules for connection requests
     if (synth != nullptr)
@@ -5043,6 +5080,11 @@ if (auto* mp = synth->getModuleForLogical (lid))
     }
 
     ImGui::End();
+    
+    // === POP THE TRANSPARENT BACKGROUND STYLE ===
+    ImGui::PopStyleColor();
+    // === END OF FIX ===
+    
     // drawPendingModPopup(); // TODO: Remove when fully migrated
 
     // Render notification system (must be called at the end to appear on top)
@@ -5072,6 +5114,11 @@ if (auto* mp = synth->getModuleForLogical (lid))
     }
 
     // No deferred snapshots; unified pre-state strategy
+}
+
+void ImGuiNodeEditorComponent::rebuildFontAtlas()
+{
+    ThemeManager::getInstance().rebuildFontsNow();
 }
 
 void ImGuiNodeEditorComponent::pushSnapshot()
@@ -5159,15 +5206,17 @@ juce::ValueTree ImGuiNodeEditorComponent::getUiValueTree() const
         {
             pos = lastKnownNodePositions.at(nid);
         }
-        else if (graphNeedsRebuild.load())
+        else if (auto it = pendingNodePositions.find(nid); it != pendingNodePositions.end())
         {
-            // Fallback to any pending position queued for this node
-            auto it = pendingNodePositions.find(nid);
-            pos = (it != pendingNodePositions.end()) ? it->second : ImVec2(0.0f, 0.0f);
+            pos = it->second;
+        }
+        else if (!graphNeedsRebuild.load() && hasRenderedAtLeastOnce)
+        {
+            pos = ImNodes::GetNodeGridSpacePos(nid);
         }
         else
         {
-            pos = ImNodes::GetNodeGridSpacePos(nid);
+            pos = ImVec2(0.0f, 0.0f);
         }
         
         juce::ValueTree n ("node");
@@ -5191,14 +5240,21 @@ juce::ValueTree ImGuiNodeEditorComponent::getUiValueTree() const
     // Prefer cached output position; avoid ImNodes when rebuilding
     ImVec2 outputPos;
     if (lastKnownNodePositions.count(0) > 0)
-        outputPos = lastKnownNodePositions.at(0);
-    else if (graphNeedsRebuild.load())
     {
-        auto it0 = pendingNodePositions.find(0);
-        outputPos = (it0 != pendingNodePositions.end()) ? it0->second : ImVec2(0.0f, 0.0f);
+        outputPos = lastKnownNodePositions.at(0);
+    }
+    else if (auto it0 = pendingNodePositions.find(0); it0 != pendingNodePositions.end())
+    {
+        outputPos = it0->second;
+    }
+    else if (!graphNeedsRebuild.load() && hasRenderedAtLeastOnce)
+    {
+        outputPos = ImNodes::GetNodeGridSpacePos(0);
     }
     else
-        outputPos = ImNodes::GetNodeGridSpacePos(0);
+    {
+        outputPos = ImVec2(0.0f, 0.0f);
+    }
     
     juce::ValueTree outputNode("node");
     outputNode.setProperty("id", 0, nullptr);

@@ -1,6 +1,8 @@
 #pragma once
 
 #include <juce_core/juce_core.h>
+#include <imgui.h>
+#include <atomic>
 #include "Theme.h"
 
 class ThemeManager
@@ -12,6 +14,9 @@ public:
 	bool saveTheme(const juce::File& themeFile);
 	void applyTheme();
 	void resetToDefault();
+	void requestFontReload();
+	bool consumeFontReloadRequest();
+	void rebuildFontsNow();
 	
 	// Persistence
 	void saveUserThemePreference(const juce::String& themeFilename);
@@ -59,6 +64,7 @@ private:
 
 	void loadDefaultTheme();
 	void applyImGuiStyle();
+	void applyFonts();
 
 	// JSON helpers
 	static juce::var colorToVar(ImU32 c);
@@ -73,6 +79,58 @@ private:
 
 	Theme currentTheme;
 	Theme defaultTheme;
+
+	std::atomic<bool> fontReloadPending { false };
 };
+
+/**
+ * A theme-aware replacement for ImGui::TextColored.
+ * It automatically applies a text glow/shadow if enabled in the theme.
+ */
+inline void ThemeText(const char* text, ImVec4 color)
+{
+	const auto& theme = ThemeManager::getInstance().getCurrentTheme();
+
+	if (theme.text.enable_text_glow)
+	{
+		// --- DRAW GLOW/SHADOW ---
+		// Get the current cursor, draw the shadows offset,
+		// then reset the cursor to draw the main text on top.
+		
+		ImVec2 pos = ImGui::GetCursorPos();
+		ImVec4 glowColor = theme.text.text_glow_color;
+
+		ImGui::PushStyleColor(ImGuiCol_Text, glowColor);
+		
+		// Draw 4 shadow layers for a soft "glow" effect.
+		// We must use ImGui::TextUnformatted and handle newlines
+		// manually to prevent formatting issues with ImGui::Text.
+		ImGui::SetCursorPos(ImVec2(pos.x - 1, pos.y)); ImGui::TextUnformatted(text);
+		ImGui::SetCursorPos(ImVec2(pos.x + 1, pos.y)); ImGui::TextUnformatted(text);
+		ImGui::SetCursorPos(ImVec2(pos.x, pos.y - 1)); ImGui::TextUnformatted(text);
+		ImGui::SetCursorPos(ImVec2(pos.x, pos.y + 1)); ImGui::TextUnformatted(text);
+
+		ImGui::PopStyleColor();
+
+		// Reset cursor to the original position
+		ImGui::SetCursorPos(pos);
+	}
+	
+	// --- DRAW MAIN TEXT ---
+	// This draws the main text and advances the cursor normally.
+	ImGui::PushStyleColor(ImGuiCol_Text, color);
+	ImGui::TextUnformatted(text); // Use TextUnformatted for consistency
+	ImGui::PopStyleColor();
+}
+
+/**
+ * Overload for non-colored text (uses default theme text color)
+ */
+inline void ThemeText(const char* text)
+{
+	// Get the default text color from ImGui style settings
+	ImVec4 defaultColor = ImGui::GetStyle().Colors[ImGuiCol_Text];
+	ThemeText(text, defaultColor);
+}
 
 

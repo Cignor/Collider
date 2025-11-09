@@ -1,4 +1,5 @@
 #include "NotificationManager.h"
+#include "theme/ThemeManager.h"
 
 #include <juce_core/juce_core.h>
 #include <imgui.h>
@@ -104,7 +105,7 @@ void NotificationManager::renderImpl()
         // Ensure window is in the visible work area
         ImGui::SetNextWindowPos(windowPos, ImGuiCond_Always);
         ImGui::SetNextWindowSize(ImVec2(windowWidth, windowHeight));
-        ImGui::SetNextWindowBgAlpha(0.92f);
+        ImGui::SetNextWindowBgAlpha(ThemeManager::getInstance().getCurrentTheme().windows.notifications_alpha);
 
         char windowName[32];
         snprintf(windowName, 32, "Notification##%u", notif.id);

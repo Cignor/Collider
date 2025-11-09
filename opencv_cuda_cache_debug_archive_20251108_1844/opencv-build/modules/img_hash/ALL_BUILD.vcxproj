@@ -1,0 +1,185 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project DefaultTargets="Build" ToolsVersion="17.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup>
+    <PreferredToolArchitecture>x64</PreferredToolArchitecture>
+  </PropertyGroup>
+  <PropertyGroup>
+    <ResolveNugetPackages>false</ResolveNugetPackages>
+  </PropertyGroup>
+  <ItemGroup Label="ProjectConfigurations">
+    <ProjectConfiguration Include="Debug|x64">
+      <Configuration>Debug</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|x64">
+      <Configuration>Release</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="MinSizeRel|x64">
+      <Configuration>MinSizeRel</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="RelWithDebInfo|x64">
+      <Configuration>RelWithDebInfo</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+  </ItemGroup>
+  <PropertyGroup Label="Globals">
+    <ProjectGuid>{2BD45755-5FCD-3BC1-8B30-054FDAAAD79C}</ProjectGuid>
+    <Keyword>Win32Proj</Keyword>
+    <WindowsTargetPlatformVersion>10.0.26100.0</WindowsTargetPlatformVersion>
+    <Platform>x64</Platform>
+    <ProjectName>ALL_BUILD</ProjectName>
+    <VCProjectUpgraderObjectName>NoUpgrade</VCProjectUpgraderObjectName>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">
+    <ConfigurationType>Utility</ConfigurationType>
+    <CharacterSet>MultiByte</CharacterSet>
+    <PlatformToolset>v143</PlatformToolset>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="Configuration">
+    <ConfigurationType>Utility</ConfigurationType>
+    <CharacterSet>MultiByte</CharacterSet>
+    <PlatformToolset>v143</PlatformToolset>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='MinSizeRel|x64'" Label="Configuration">
+    <ConfigurationType>Utility</ConfigurationType>
+    <CharacterSet>MultiByte</CharacterSet>
+    <PlatformToolset>v143</PlatformToolset>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='RelWithDebInfo|x64'" Label="Configuration">
+    <ConfigurationType>Utility</ConfigurationType>
+    <CharacterSet>MultiByte</CharacterSet>
+    <PlatformToolset>v143</PlatformToolset>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
+  <ImportGroup Label="ExtensionSettings">
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <PropertyGroup Label="UserMacros" />
+  <PropertyGroup>
+    <_ProjectFileVersion>10.0.20506.1</_ProjectFileVersion>
+    <IntDir Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">$(Platform)\$(Configuration)\$(ProjectName)\</IntDir>
+    <IntDir Condition="'$(Configuration)|$(Platform)'=='Release|x64'">$(Platform)\$(Configuration)\$(ProjectName)\</IntDir>
+    <IntDir Condition="'$(Configuration)|$(Platform)'=='MinSizeRel|x64'">$(Platform)\$(Configuration)\$(ProjectName)\</IntDir>
+    <IntDir Condition="'$(Configuration)|$(Platform)'=='RelWithDebInfo|x64'">$(Platform)\$(Configuration)\$(ProjectName)\</IntDir>
+  </PropertyGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <Midl>
+      <AdditionalIncludeDirectories>H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv-src\3rdparty\dlpack\include;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv_contrib-src\modules\img_hash\include;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv-build\modules\img_hash;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv_contrib-src\modules\cudev\include;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv-src\modules\core\include;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv_contrib-src\modules\cudaarithm\include;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv-src\modules\flann\include;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv-src\modules\imgproc\include;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv_contrib-src\modules\intensity_transform\include;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv-src\modules\ml\include;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv_contrib-src\modules\phase_unwrapping\include;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv_contrib-src\modules\plot\include;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv_contrib-src\modules\quality\include;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv_contrib-src\modules\reg\include;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv_contrib-src\modules\signal\include;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv_contrib-src\modules\surface_matching\include;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv_contrib-src\modules\cudafilters\include;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv_contrib-src\modules\cudaimgproc\include;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv_contrib-src\modules\cudawarping\include;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv-src\modules\dnn\include;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv_contrib-src\modules\dnn_superres\include;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv-src\modules\features2d\include;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv_contrib-src\modules\fuzzy\include;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv_contrib-src\modules\hfs\include;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv-src\modules\imgcodecs\include;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv_contrib-src\modules\line_descriptor\include;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv-src\modules\photo\include;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv_contrib-src\modules\saliency\include;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv_contrib-src\modules\text\include;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv-src\modules\videoio\include;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv_contrib-src\modules\xphoto\include;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv-src\modules\calib3d\include;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv_contrib-src\modules\cudacodec\include;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv_contrib-src\modules\cudafeatures2d\include;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv_contrib-src\modules\cudastereo\include;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv_contrib-src\modules\datasets\include;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv-src\modules\highgui\include;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv_contrib-src\modules\mcc\include;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv-src\modules\objdetect\include;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv_contrib-src\modules\rapid\include;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv_contrib-src\modules\rgbd\include;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv_contrib-src\modules\shape\include;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv_contrib-src\modules\structured_light\include;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv-src\modules\video\include;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv_contrib-src\modules\wechat_qrcode\include;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv_contrib-src\modules\xfeatures2d\include;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv_contrib-src\modules\ximgproc\include;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv_contrib-src\modules\xobjdetect\include;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv_contrib-src\modules\aruco\include;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv_contrib-src\modules\bgsegm\include;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv_contrib-src\modules\bioinspired\include;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv_contrib-src\modules\ccalib\include;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv_contrib-src\modules\cudabgsegm\include;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv_contrib-src\modules\cudalegacy\include;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv_contrib-src\modules\cudaobjdetect\include;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv_contrib-src\modules\dnn_objdetect\include;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv_contrib-src\modules\dpm\include;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv_contrib-src\modules\face\include;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv-src\modules\gapi\include;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv_contrib-src\modules\optflow\include;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv-src\modules\stitching\include;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv_contrib-src\modules\tracking\include;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv_contrib-src\modules\cudaoptflow\include;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv_contrib-src\modules\stereo\include;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv_contrib-src\modules\superres\include;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv_contrib-src\modules\videostab\include;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv-src\modules\world\include;C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v13.0\include;C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v13.0\include\cccl;H:\0000_CODE\01_collider_pyo\juce\build;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <OutputDirectory>$(ProjectDir)/$(IntDir)</OutputDirectory>
+      <HeaderFileName>%(Filename).h</HeaderFileName>
+      <TypeLibraryName>%(Filename).tlb</TypeLibraryName>
+      <InterfaceIdentifierFileName>%(Filename)_i.c</InterfaceIdentifierFileName>
+      <ProxyFileName>%(Filename)_p.c</ProxyFileName>
+    </Midl>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <Midl>
+      <AdditionalIncludeDirectories>H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv-src\3rdparty\dlpack\include;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv_contrib-src\modules\img_hash\include;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv-build\modules\img_hash;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv_contrib-src\modules\cudev\include;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv-src\modules\core\include;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv_contrib-src\modules\cudaarithm\include;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv-src\modules\flann\include;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv-src\modules\imgproc\include;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv_contrib-src\modules\intensity_transform\include;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv-src\modules\ml\include;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv_contrib-src\modules\phase_unwrapping\include;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv_contrib-src\modules\plot\include;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv_contrib-src\modules\quality\include;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv_contrib-src\modules\reg\include;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv_contrib-src\modules\signal\include;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv_contrib-src\modules\surface_matching\include;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv_contrib-src\modules\cudafilters\include;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv_contrib-src\modules\cudaimgproc\include;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv_contrib-src\modules\cudawarping\include;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv-src\modules\dnn\include;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv_contrib-src\modules\dnn_superres\include;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv-src\modules\features2d\include;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv_contrib-src\modules\fuzzy\include;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv_contrib-src\modules\hfs\include;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv-src\modules\imgcodecs\include;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv_contrib-src\modules\line_descriptor\include;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv-src\modules\photo\include;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv_contrib-src\modules\saliency\include;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv_contrib-src\modules\text\include;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv-src\modules\videoio\include;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv_contrib-src\modules\xphoto\include;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv-src\modules\calib3d\include;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv_contrib-src\modules\cudacodec\include;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv_contrib-src\modules\cudafeatures2d\include;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv_contrib-src\modules\cudastereo\include;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv_contrib-src\modules\datasets\include;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv-src\modules\highgui\include;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv_contrib-src\modules\mcc\include;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv-src\modules\objdetect\include;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv_contrib-src\modules\rapid\include;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv_contrib-src\modules\rgbd\include;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv_contrib-src\modules\shape\include;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv_contrib-src\modules\structured_light\include;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv-src\modules\video\include;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv_contrib-src\modules\wechat_qrcode\include;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv_contrib-src\modules\xfeatures2d\include;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv_contrib-src\modules\ximgproc\include;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv_contrib-src\modules\xobjdetect\include;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv_contrib-src\modules\aruco\include;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv_contrib-src\modules\bgsegm\include;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv_contrib-src\modules\bioinspired\include;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv_contrib-src\modules\ccalib\include;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv_contrib-src\modules\cudabgsegm\include;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv_contrib-src\modules\cudalegacy\include;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv_contrib-src\modules\cudaobjdetect\include;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv_contrib-src\modules\dnn_objdetect\include;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv_contrib-src\modules\dpm\include;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv_contrib-src\modules\face\include;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv-src\modules\gapi\include;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv_contrib-src\modules\optflow\include;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv-src\modules\stitching\include;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv_contrib-src\modules\tracking\include;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv_contrib-src\modules\cudaoptflow\include;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv_contrib-src\modules\stereo\include;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv_contrib-src\modules\superres\include;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv_contrib-src\modules\videostab\include;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv-src\modules\world\include;C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v13.0\include;C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v13.0\include\cccl;H:\0000_CODE\01_collider_pyo\juce\build;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <OutputDirectory>$(ProjectDir)/$(IntDir)</OutputDirectory>
+      <HeaderFileName>%(Filename).h</HeaderFileName>
+      <TypeLibraryName>%(Filename).tlb</TypeLibraryName>
+      <InterfaceIdentifierFileName>%(Filename)_i.c</InterfaceIdentifierFileName>
+      <ProxyFileName>%(Filename)_p.c</ProxyFileName>
+    </Midl>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='MinSizeRel|x64'">
+    <Midl>
+      <AdditionalIncludeDirectories>H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv-src\3rdparty\dlpack\include;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv_contrib-src\modules\img_hash\include;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv-build\modules\img_hash;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv_contrib-src\modules\cudev\include;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv-src\modules\core\include;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv_contrib-src\modules\cudaarithm\include;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv-src\modules\flann\include;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv-src\modules\imgproc\include;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv_contrib-src\modules\intensity_transform\include;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv-src\modules\ml\include;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv_contrib-src\modules\phase_unwrapping\include;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv_contrib-src\modules\plot\include;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv_contrib-src\modules\quality\include;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv_contrib-src\modules\reg\include;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv_contrib-src\modules\signal\include;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv_contrib-src\modules\surface_matching\include;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv_contrib-src\modules\cudafilters\include;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv_contrib-src\modules\cudaimgproc\include;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv_contrib-src\modules\cudawarping\include;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv-src\modules\dnn\include;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv_contrib-src\modules\dnn_superres\include;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv-src\modules\features2d\include;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv_contrib-src\modules\fuzzy\include;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv_contrib-src\modules\hfs\include;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv-src\modules\imgcodecs\include;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv_contrib-src\modules\line_descriptor\include;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv-src\modules\photo\include;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv_contrib-src\modules\saliency\include;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv_contrib-src\modules\text\include;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv-src\modules\videoio\include;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv_contrib-src\modules\xphoto\include;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv-src\modules\calib3d\include;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv_contrib-src\modules\cudacodec\include;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv_contrib-src\modules\cudafeatures2d\include;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv_contrib-src\modules\cudastereo\include;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv_contrib-src\modules\datasets\include;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv-src\modules\highgui\include;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv_contrib-src\modules\mcc\include;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv-src\modules\objdetect\include;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv_contrib-src\modules\rapid\include;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv_contrib-src\modules\rgbd\include;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv_contrib-src\modules\shape\include;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv_contrib-src\modules\structured_light\include;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv-src\modules\video\include;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv_contrib-src\modules\wechat_qrcode\include;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv_contrib-src\modules\xfeatures2d\include;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv_contrib-src\modules\ximgproc\include;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv_contrib-src\modules\xobjdetect\include;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv_contrib-src\modules\aruco\include;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv_contrib-src\modules\bgsegm\include;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv_contrib-src\modules\bioinspired\include;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv_contrib-src\modules\ccalib\include;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv_contrib-src\modules\cudabgsegm\include;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv_contrib-src\modules\cudalegacy\include;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv_contrib-src\modules\cudaobjdetect\include;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv_contrib-src\modules\dnn_objdetect\include;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv_contrib-src\modules\dpm\include;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv_contrib-src\modules\face\include;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv-src\modules\gapi\include;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv_contrib-src\modules\optflow\include;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv-src\modules\stitching\include;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv_contrib-src\modules\tracking\include;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv_contrib-src\modules\cudaoptflow\include;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv_contrib-src\modules\stereo\include;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv_contrib-src\modules\superres\include;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv_contrib-src\modules\videostab\include;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv-src\modules\world\include;C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v13.0\include;C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v13.0\include\cccl;H:\0000_CODE\01_collider_pyo\juce\build;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <OutputDirectory>$(ProjectDir)/$(IntDir)</OutputDirectory>
+      <HeaderFileName>%(Filename).h</HeaderFileName>
+      <TypeLibraryName>%(Filename).tlb</TypeLibraryName>
+      <InterfaceIdentifierFileName>%(Filename)_i.c</InterfaceIdentifierFileName>
+      <ProxyFileName>%(Filename)_p.c</ProxyFileName>
+    </Midl>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='RelWithDebInfo|x64'">
+    <Midl>
+      <AdditionalIncludeDirectories>H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv-src\3rdparty\dlpack\include;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv_contrib-src\modules\img_hash\include;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv-build\modules\img_hash;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv_contrib-src\modules\cudev\include;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv-src\modules\core\include;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv_contrib-src\modules\cudaarithm\include;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv-src\modules\flann\include;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv-src\modules\imgproc\include;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv_contrib-src\modules\intensity_transform\include;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv-src\modules\ml\include;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv_contrib-src\modules\phase_unwrapping\include;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv_contrib-src\modules\plot\include;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv_contrib-src\modules\quality\include;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv_contrib-src\modules\reg\include;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv_contrib-src\modules\signal\include;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv_contrib-src\modules\surface_matching\include;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv_contrib-src\modules\cudafilters\include;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv_contrib-src\modules\cudaimgproc\include;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv_contrib-src\modules\cudawarping\include;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv-src\modules\dnn\include;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv_contrib-src\modules\dnn_superres\include;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv-src\modules\features2d\include;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv_contrib-src\modules\fuzzy\include;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv_contrib-src\modules\hfs\include;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv-src\modules\imgcodecs\include;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv_contrib-src\modules\line_descriptor\include;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv-src\modules\photo\include;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv_contrib-src\modules\saliency\include;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv_contrib-src\modules\text\include;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv-src\modules\videoio\include;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv_contrib-src\modules\xphoto\include;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv-src\modules\calib3d\include;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv_contrib-src\modules\cudacodec\include;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv_contrib-src\modules\cudafeatures2d\include;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv_contrib-src\modules\cudastereo\include;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv_contrib-src\modules\datasets\include;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv-src\modules\highgui\include;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv_contrib-src\modules\mcc\include;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv-src\modules\objdetect\include;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv_contrib-src\modules\rapid\include;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv_contrib-src\modules\rgbd\include;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv_contrib-src\modules\shape\include;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv_contrib-src\modules\structured_light\include;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv-src\modules\video\include;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv_contrib-src\modules\wechat_qrcode\include;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv_contrib-src\modules\xfeatures2d\include;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv_contrib-src\modules\ximgproc\include;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv_contrib-src\modules\xobjdetect\include;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv_contrib-src\modules\aruco\include;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv_contrib-src\modules\bgsegm\include;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv_contrib-src\modules\bioinspired\include;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv_contrib-src\modules\ccalib\include;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv_contrib-src\modules\cudabgsegm\include;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv_contrib-src\modules\cudalegacy\include;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv_contrib-src\modules\cudaobjdetect\include;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv_contrib-src\modules\dnn_objdetect\include;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv_contrib-src\modules\dpm\include;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv_contrib-src\modules\face\include;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv-src\modules\gapi\include;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv_contrib-src\modules\optflow\include;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv-src\modules\stitching\include;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv_contrib-src\modules\tracking\include;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv_contrib-src\modules\cudaoptflow\include;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv_contrib-src\modules\stereo\include;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv_contrib-src\modules\superres\include;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv_contrib-src\modules\videostab\include;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv-src\modules\world\include;C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v13.0\include;C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v13.0\include\cccl;H:\0000_CODE\01_collider_pyo\juce\build;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <OutputDirectory>$(ProjectDir)/$(IntDir)</OutputDirectory>
+      <HeaderFileName>%(Filename).h</HeaderFileName>
+      <TypeLibraryName>%(Filename).tlb</TypeLibraryName>
+      <InterfaceIdentifierFileName>%(Filename)_i.c</InterfaceIdentifierFileName>
+      <ProxyFileName>%(Filename)_p.c</ProxyFileName>
+    </Midl>
+  </ItemDefinitionGroup>
+  <ItemGroup>
+    <CustomBuild Include="H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv_contrib-src\modules\img_hash\CMakeLists.txt">
+      <UseUtf8Encoding>Always</UseUtf8Encoding>
+      <Message Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Building Custom Rule H:/0000_CODE/01_collider_pyo/juce/build/_deps/opencv_contrib-src/modules/img_hash/CMakeLists.txt</Message>
+      <Command Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">setlocal
+"C:\Program Files\CMake\bin\cmake.exe" -SH:/0000_CODE/01_collider_pyo/juce -BH:/0000_CODE/01_collider_pyo/juce/build --check-stamp-file H:/0000_CODE/01_collider_pyo/juce/build/_deps/opencv-build/modules/img_hash/CMakeFiles/generate.stamp
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal &amp; call :cmErrorLevel %errorlevel% &amp; goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd</Command>
+      <AdditionalInputs Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">H:\0000_CODE\01_collider_pyo\juce\build\CMakeFiles\cmake.verify_globs;%(AdditionalInputs)</AdditionalInputs>
+      <Outputs Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv-build\modules\img_hash\CMakeFiles\generate.stamp</Outputs>
+      <LinkObjects Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">false</LinkObjects>
+      <Message Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Building Custom Rule H:/0000_CODE/01_collider_pyo/juce/build/_deps/opencv_contrib-src/modules/img_hash/CMakeLists.txt</Message>
+      <Command Condition="'$(Configuration)|$(Platform)'=='Release|x64'">setlocal
+"C:\Program Files\CMake\bin\cmake.exe" -SH:/0000_CODE/01_collider_pyo/juce -BH:/0000_CODE/01_collider_pyo/juce/build --check-stamp-file H:/0000_CODE/01_collider_pyo/juce/build/_deps/opencv-build/modules/img_hash/CMakeFiles/generate.stamp
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal &amp; call :cmErrorLevel %errorlevel% &amp; goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd</Command>
+      <AdditionalInputs Condition="'$(Configuration)|$(Platform)'=='Release|x64'">H:\0000_CODE\01_collider_pyo\juce\build\CMakeFiles\cmake.verify_globs;%(AdditionalInputs)</AdditionalInputs>
+      <Outputs Condition="'$(Configuration)|$(Platform)'=='Release|x64'">H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv-build\modules\img_hash\CMakeFiles\generate.stamp</Outputs>
+      <LinkObjects Condition="'$(Configuration)|$(Platform)'=='Release|x64'">false</LinkObjects>
+      <Message Condition="'$(Configuration)|$(Platform)'=='MinSizeRel|x64'">Building Custom Rule H:/0000_CODE/01_collider_pyo/juce/build/_deps/opencv_contrib-src/modules/img_hash/CMakeLists.txt</Message>
+      <Command Condition="'$(Configuration)|$(Platform)'=='MinSizeRel|x64'">setlocal
+"C:\Program Files\CMake\bin\cmake.exe" -SH:/0000_CODE/01_collider_pyo/juce -BH:/0000_CODE/01_collider_pyo/juce/build --check-stamp-file H:/0000_CODE/01_collider_pyo/juce/build/_deps/opencv-build/modules/img_hash/CMakeFiles/generate.stamp
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal &amp; call :cmErrorLevel %errorlevel% &amp; goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd</Command>
+      <AdditionalInputs Condition="'$(Configuration)|$(Platform)'=='MinSizeRel|x64'">H:\0000_CODE\01_collider_pyo\juce\build\CMakeFiles\cmake.verify_globs;%(AdditionalInputs)</AdditionalInputs>
+      <Outputs Condition="'$(Configuration)|$(Platform)'=='MinSizeRel|x64'">H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv-build\modules\img_hash\CMakeFiles\generate.stamp</Outputs>
+      <LinkObjects Condition="'$(Configuration)|$(Platform)'=='MinSizeRel|x64'">false</LinkObjects>
+      <Message Condition="'$(Configuration)|$(Platform)'=='RelWithDebInfo|x64'">Building Custom Rule H:/0000_CODE/01_collider_pyo/juce/build/_deps/opencv_contrib-src/modules/img_hash/CMakeLists.txt</Message>
+      <Command Condition="'$(Configuration)|$(Platform)'=='RelWithDebInfo|x64'">setlocal
+"C:\Program Files\CMake\bin\cmake.exe" -SH:/0000_CODE/01_collider_pyo/juce -BH:/0000_CODE/01_collider_pyo/juce/build --check-stamp-file H:/0000_CODE/01_collider_pyo/juce/build/_deps/opencv-build/modules/img_hash/CMakeFiles/generate.stamp
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal &amp; call :cmErrorLevel %errorlevel% &amp; goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd</Command>
+      <AdditionalInputs Condition="'$(Configuration)|$(Platform)'=='RelWithDebInfo|x64'">H:\0000_CODE\01_collider_pyo\juce\build\CMakeFiles\cmake.verify_globs;%(AdditionalInputs)</AdditionalInputs>
+      <Outputs Condition="'$(Configuration)|$(Platform)'=='RelWithDebInfo|x64'">H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv-build\modules\img_hash\CMakeFiles\generate.stamp</Outputs>
+      <LinkObjects Condition="'$(Configuration)|$(Platform)'=='RelWithDebInfo|x64'">false</LinkObjects>
+    </CustomBuild>
+  </ItemGroup>
+  <ItemGroup>
+  </ItemGroup>
+  <ItemGroup />
+  <ItemGroup>
+    <ProjectReference Include="H:\0000_CODE\01_collider_pyo\juce\build\ZERO_CHECK.vcxproj">
+      <Project>{0209B52D-BA6B-3216-8B67-09A88550E824}</Project>
+      <Name>ZERO_CHECK</Name>
+      <ReferenceOutputAssembly>false</ReferenceOutputAssembly>
+      <CopyToOutputDirectory>Never</CopyToOutputDirectory>
+    </ProjectReference>
+    <ProjectReference Include="H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv-build\modules\img_hash\opencv_img_hash.vcxproj">
+      <Project>{7C6EAC0A-697E-35D5-9B7D-07CB7459D78E}</Project>
+      <Name>opencv_img_hash</Name>
+    </ProjectReference>
+  </ItemGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+  <ImportGroup Label="ExtensionTargets">
+  </ImportGroup>
+</Project>

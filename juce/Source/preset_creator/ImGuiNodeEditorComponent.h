@@ -93,6 +93,11 @@ public:
     // Thread-safe: queues UI state to be applied on next render frame
     void applyUiValueTree (const juce::ValueTree& uiState);
     void applyUiValueTreeNow (const juce::ValueTree& uiState);
+    void rebuildFontAtlas();
+    void requestFontAtlasRebuild()
+    {
+        fontAtlasNeedsRebuild.store(true, std::memory_order_relaxed);
+    }
 
     // --- Helper structs ---
     struct Range { float min; float max; };
@@ -295,6 +300,7 @@ public:
     std::unordered_map<int, ImVec2> pendingNodeScreenPositions;
     // Sizes to apply for specific node IDs on the next render (for Comment nodes)
     std::unordered_map<int, ImVec2> pendingNodeSizes;
+    std::atomic<bool> fontAtlasNeedsRebuild { false };
 
     // Cable inspector rolling stats (last N seconds) for quick visual validation
     struct ChannelHistory 
@@ -321,6 +327,8 @@ public:
     bool isDraggingNode { false };
     bool snapshotAfterEditor { false }; // arm when action requires node to exist (add/duplicate)
     // zoom/pan disabled
+    
+    // --- Modal Minimap Pan State ---
 
     // --- Undo/Redo (module ops) ---
     struct Snapshot
@@ -450,6 +458,11 @@ public:
 
 private:
     static bool s_globalGpuEnabled; // Global preference for GPU acceleration
+
+    // Cached canvas dimensions for modal pan logic
+    ImVec2 lastCanvasP0;      // Cached top-left corner of the canvas
+    ImVec2 lastCanvasSize;    // Cached size of the canvas
+    bool hasRenderedAtLeastOnce { false }; // Tracks whether the node editor has completed a full frame
 
     // Eyedropper state
     bool m_isPickingColor { false };

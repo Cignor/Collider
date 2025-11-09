@@ -27,6 +27,9 @@ public:
     void close();
     bool isOpen() const { return m_isOpen; }
 
+    /** Refresh internal working copy from ThemeManager after external theme load */
+    void refreshThemeFromManager();
+
 private:
     // Tab rendering functions
     void renderTabs();
