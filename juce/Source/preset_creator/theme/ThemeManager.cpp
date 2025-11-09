@@ -538,6 +538,48 @@ bool ThemeManager::loadTheme(const juce::File& themeFile)
 		t.modules.stroke_seq_frame_bg = varToVec4(o->getProperty("stroke_seq_frame_bg"), t.modules.stroke_seq_frame_bg);
 		t.modules.stroke_seq_frame_bg_hovered = varToVec4(o->getProperty("stroke_seq_frame_bg_hovered"), t.modules.stroke_seq_frame_bg_hovered);
 		t.modules.stroke_seq_frame_bg_active = varToVec4(o->getProperty("stroke_seq_frame_bg_active"), t.modules.stroke_seq_frame_bg_active);
+		if (auto physVar = o->getProperty("physics"); physVar.isObject())
+		{
+			auto* physObj = physVar.getDynamicObject();
+			t.modules.physics.sandbox_title = varToVec4(physObj->getProperty("sandbox_title"), t.modules.physics.sandbox_title);
+			t.modules.physics.stroke_label = varToVec4(physObj->getProperty("stroke_label"), t.modules.physics.stroke_label);
+			t.modules.physics.physics_section = varToVec4(physObj->getProperty("physics_section"), t.modules.physics.physics_section);
+			t.modules.physics.spawn_section = varToVec4(physObj->getProperty("spawn_section"), t.modules.physics.spawn_section);
+			t.modules.physics.count_ok = varToVec4(physObj->getProperty("count_ok"), t.modules.physics.count_ok);
+			t.modules.physics.count_warn = varToVec4(physObj->getProperty("count_warn"), t.modules.physics.count_warn);
+			t.modules.physics.count_alert = varToVec4(physObj->getProperty("count_alert"), t.modules.physics.count_alert);
+			t.modules.physics.stroke_metal = varToVec4(physObj->getProperty("stroke_metal"), t.modules.physics.stroke_metal);
+			t.modules.physics.stroke_wood = varToVec4(physObj->getProperty("stroke_wood"), t.modules.physics.stroke_wood);
+			t.modules.physics.stroke_soil = varToVec4(physObj->getProperty("stroke_soil"), t.modules.physics.stroke_soil);
+			t.modules.physics.stroke_conveyor = varToVec4(physObj->getProperty("stroke_conveyor"), t.modules.physics.stroke_conveyor);
+			t.modules.physics.stroke_bouncy = varToVec4(physObj->getProperty("stroke_bouncy"), t.modules.physics.stroke_bouncy);
+			t.modules.physics.stroke_sticky = varToVec4(physObj->getProperty("stroke_sticky"), t.modules.physics.stroke_sticky);
+			t.modules.physics.stroke_emitter = varToVec4(physObj->getProperty("stroke_emitter"), t.modules.physics.stroke_emitter);
+			t.modules.physics.spawn_ball = varToVec4(physObj->getProperty("spawn_ball"), t.modules.physics.spawn_ball);
+			t.modules.physics.spawn_square = varToVec4(physObj->getProperty("spawn_square"), t.modules.physics.spawn_square);
+			t.modules.physics.spawn_triangle = varToVec4(physObj->getProperty("spawn_triangle"), t.modules.physics.spawn_triangle);
+			t.modules.physics.spawn_vortex = varToVec4(physObj->getProperty("spawn_vortex"), t.modules.physics.spawn_vortex);
+			t.modules.physics.spawn_clear = varToVec4(physObj->getProperty("spawn_clear"), t.modules.physics.spawn_clear);
+			t.modules.physics.spawn_clear_hover = varToVec4(physObj->getProperty("spawn_clear_hover"), t.modules.physics.spawn_clear_hover);
+			t.modules.physics.spawn_clear_active = varToVec4(physObj->getProperty("spawn_clear_active"), t.modules.physics.spawn_clear_active);
+			t.modules.physics.canvas_background = varToVec4(physObj->getProperty("canvas_background"), t.modules.physics.canvas_background);
+			t.modules.physics.canvas_border = varToVec4(physObj->getProperty("canvas_border"), t.modules.physics.canvas_border);
+			t.modules.physics.drag_indicator_fill = varToVec4(physObj->getProperty("drag_indicator_fill"), t.modules.physics.drag_indicator_fill);
+			t.modules.physics.drag_indicator_outline = varToVec4(physObj->getProperty("drag_indicator_outline"), t.modules.physics.drag_indicator_outline);
+			t.modules.physics.eraser_fill = varToVec4(physObj->getProperty("eraser_fill"), t.modules.physics.eraser_fill);
+			t.modules.physics.eraser_outline = varToVec4(physObj->getProperty("eraser_outline"), t.modules.physics.eraser_outline);
+			t.modules.physics.crosshair_idle = varToVec4(physObj->getProperty("crosshair_idle"), t.modules.physics.crosshair_idle);
+			t.modules.physics.crosshair_active = varToVec4(physObj->getProperty("crosshair_active"), t.modules.physics.crosshair_active);
+			t.modules.physics.magnet_north = varToVec4(physObj->getProperty("magnet_north"), t.modules.physics.magnet_north);
+			t.modules.physics.magnet_south = varToVec4(physObj->getProperty("magnet_south"), t.modules.physics.magnet_south);
+			t.modules.physics.magnet_link = varToVec4(physObj->getProperty("magnet_link"), t.modules.physics.magnet_link);
+			t.modules.physics.vector_outline = varToVec4(physObj->getProperty("vector_outline"), t.modules.physics.vector_outline);
+			t.modules.physics.vector_fill = varToVec4(physObj->getProperty("vector_fill"), t.modules.physics.vector_fill);
+			t.modules.physics.soil_detail = varToVec4(physObj->getProperty("soil_detail"), t.modules.physics.soil_detail);
+			t.modules.physics.overlay_text = varToVec4(physObj->getProperty("overlay_text"), t.modules.physics.overlay_text);
+			t.modules.physics.overlay_line = varToVec4(physObj->getProperty("overlay_line"), t.modules.physics.overlay_line);
+			t.modules.physics.separator_line = varToVec4(physObj->getProperty("separator_line"), t.modules.physics.separator_line);
+		}
 	}
 
 	currentTheme = t;

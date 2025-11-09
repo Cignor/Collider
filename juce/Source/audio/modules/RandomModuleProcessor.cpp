@@ -1,4 +1,8 @@
 #include "RandomModuleProcessor.h"
+
+#if defined(PRESET_CREATOR_UI)
+#include "../../preset_creator/theme/ThemeManager.h"
+#endif
 #include "../graph/ModularSynthProcessor.h"
 #include <cmath>
 
@@ -200,6 +204,7 @@ void RandomModuleProcessor::drawParametersInNode(float itemWidth, const std::fun
     juce::ignoreUnused(isParamModulated);
     
     auto& ap = getAPVTS();
+    const auto& theme = ThemeManager::getInstance().getCurrentTheme();
     float cvMin = cvMinParam->load();
     float cvMax = cvMaxParam->load();
     float normMin = normMinParam->load();
@@ -213,7 +218,7 @@ void RandomModuleProcessor::drawParametersInNode(float itemWidth, const std::fun
     ImGui::PushItemWidth(itemWidth);
 
     // === SECTION: Timing ===
-    ImGui::TextColored(ImVec4(0.6f, 0.9f, 1.0f, 1.0f), "TIMING");
+    ThemeText("TIMING", theme.text.section_header);
     
     bool sync = apvts.getRawParameterValue("sync")->load() > 0.5f;
     if (ImGui::Checkbox("Sync to Transport", &sync))
@@ -252,7 +257,7 @@ void RandomModuleProcessor::drawParametersInNode(float itemWidth, const std::fun
             {
                 ImGui::BeginTooltip();
                 ImGui::PushTextWrapPos(ImGui::GetFontSize() * 25.0f);
-                ImGui::TextColored(ImVec4(1.0f, 0.8f, 0.0f, 1.0f), "Tempo Clock Division Override Active");
+                ThemeText("Tempo Clock Division Override Active", theme.text.warning);
                 ImGui::TextUnformatted("A Tempo Clock node with 'Division Override' enabled is controlling the global division.");
                 ImGui::PopTextWrapPos();
                 ImGui::EndTooltip();
@@ -286,7 +291,7 @@ void RandomModuleProcessor::drawParametersInNode(float itemWidth, const std::fun
     ImGui::Spacing();
     
     // === SECTION: Range Controls ===
-    ImGui::TextColored(ImVec4(0.6f, 0.9f, 1.0f, 1.0f), "RANGE CONTROLS");
+    ThemeText("RANGE CONTROLS", theme.text.section_header);
     
     if (ImGui::SliderFloat("Min", &minVal, -100.0f, 100.0f, "%.2f"))
     {
@@ -348,7 +353,7 @@ void RandomModuleProcessor::drawParametersInNode(float itemWidth, const std::fun
     ImGui::Spacing();
     
     // === SECTION: Live Output ===
-    ImGui::TextColored(ImVec4(0.6f, 0.9f, 1.0f, 1.0f), "LIVE OUTPUT");
+    ThemeText("LIVE OUTPUT", theme.text.section_header);
     
     const float rawOut = getLastOutputValue();
     const float normOut = getLastNormalizedOutputValue();
@@ -365,33 +370,39 @@ void RandomModuleProcessor::drawParametersInNode(float itemWidth, const std::fun
     // Raw output with bar
     ImGui::Text("Raw");
     ImGui::SameLine();
+    ImGui::PushStyleColor(ImGuiCol_PlotHistogram, theme.accent);
     ImGui::ProgressBar((rawOut - minVal) / (maxVal - minVal + 0.0001f), ImVec2(barWidth, 0), "");
+    ImGui::PopStyleColor();
     ImGui::SameLine();
     ImGui::Text("%.2f", rawOut);
     
     // Normalized output with bar
     ImGui::Text("Norm");
     ImGui::SameLine();
+    ImGui::PushStyleColor(ImGuiCol_PlotHistogram, theme.accent);
     ImGui::ProgressBar(normOut, ImVec2(barWidth, 0), "");
+    ImGui::PopStyleColor();
     ImGui::SameLine();
     ImGui::Text("%.2f", normOut);
     
     // CV output with bar
     ImGui::Text("CV");
     ImGui::SameLine();
+    ImGui::PushStyleColor(ImGuiCol_PlotHistogram, theme.accent);
     ImGui::ProgressBar(cvOut, ImVec2(barWidth, 0), "");
+    ImGui::PopStyleColor();
     ImGui::SameLine();
     ImGui::Text("%.2f", cvOut);
     
     // Bool indicator (LED style)
     ImGui::Text("Bool:");
     ImGui::SameLine();
-    ImGui::TextColored(boolOut ? ImVec4(0.0f, 1.0f, 0.0f, 1.0f) : ImVec4(0.3f, 0.3f, 0.3f, 1.0f), boolOut ? "ON" : "OFF");
+    ThemeText(boolOut ? "ON" : "OFF", boolOut ? theme.text.success : theme.text.disabled);
     
     // Trig indicator (LED style)
     ImGui::Text("Trig:");
     ImGui::SameLine();
-    ImGui::TextColored(trigOut ? ImVec4(1.0f, 1.0f, 0.0f, 1.0f) : ImVec4(0.3f, 0.3f, 0.3f, 1.0f), trigOut ? "TRIG" : "---");
+    ThemeText(trigOut ? "TRIG" : "---", trigOut ? theme.text.warning : theme.text.disabled);
 
     ImGui::PopItemWidth();
 }

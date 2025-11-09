@@ -236,6 +236,7 @@ static void HelpMarkerLFO(const char* desc)
 void LFOModuleProcessor::drawParametersInNode(float itemWidth, const std::function<bool(const juce::String& paramId)>& isParamModulated, const std::function<void()>& onModificationEnded)
 {
     auto& ap = getAPVTS();
+    const auto& theme = ThemeManager::getInstance().getCurrentTheme();
     
     bool isRateModulated = isParamInputConnected(paramIdRateMod);
     bool isDepthModulated = isParamInputConnected(paramIdDepthMod);
@@ -249,7 +250,7 @@ void LFOModuleProcessor::drawParametersInNode(float itemWidth, const std::functi
     ImGui::PushItemWidth(itemWidth);
 
     // === LFO PARAMETERS SECTION ===
-    ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1.0f), "LFO Parameters");
+    ThemeText("LFO Parameters", theme.text.section_header);
     ImGui::Spacing();
 
     // Rate slider with tooltip
@@ -286,7 +287,7 @@ void LFOModuleProcessor::drawParametersInNode(float itemWidth, const std::functi
     ImGui::Spacing();
 
     // === MODULATION MODE SECTION ===
-    ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1.0f), "Modulation Mode");
+    ThemeText("Modulation Mode", theme.text.section_header);
     ImGui::Spacing();
 
     // Relative Mode checkbox
@@ -304,7 +305,7 @@ void LFOModuleProcessor::drawParametersInNode(float itemWidth, const std::functi
     ImGui::Spacing();
 
     // === TRANSPORT SYNC SECTION ===
-    ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1.0f), "Transport Sync");
+    ThemeText("Transport Sync", theme.text.section_header);
     ImGui::Spacing();
 
     // Sync checkbox
@@ -339,7 +340,7 @@ void LFOModuleProcessor::drawParametersInNode(float itemWidth, const std::functi
             {
                 ImGui::BeginTooltip();
                 ImGui::PushTextWrapPos(ImGui::GetFontSize() * 25.0f);
-                ImGui::TextColored(ImVec4(1.0f, 0.8f, 0.0f, 1.0f), "Tempo Clock Division Override Active");
+                ThemeText("Tempo Clock Division Override Active", theme.text.warning);
                 ImGui::TextUnformatted("A Tempo Clock node with 'Division Override' enabled is controlling the global division.");
                 ImGui::PopTextWrapPos();
                 ImGui::EndTooltip();
@@ -356,7 +357,7 @@ void LFOModuleProcessor::drawParametersInNode(float itemWidth, const std::functi
     ImGui::Spacing();
 
     // === LIVE OUTPUT SECTION ===
-    ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1.0f), "Live Output");
+    ThemeText("Live Output", theme.text.section_header);
     ImGui::Spacing();
 
     // Visual LFO output indicator
@@ -365,7 +366,7 @@ void LFOModuleProcessor::drawParametersInNode(float itemWidth, const std::functi
 
     // Progress bar showing current LFO position
     float normalizedValue = bipolar ? (currentValue + 1.0f) / 2.0f : currentValue;
-    ImGui::PushStyleColor(ImGuiCol_PlotHistogram, ImColor::HSV(0.55f, 0.7f, 0.8f).Value);
+    ImGui::PushStyleColor(ImGuiCol_PlotHistogram, theme.accent);
     ImGui::ProgressBar(normalizedValue, ImVec2(itemWidth, 0), "");
     ImGui::PopStyleColor();
 

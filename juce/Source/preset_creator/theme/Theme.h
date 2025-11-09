@@ -175,6 +175,48 @@ struct Theme
 		ImVec4 stroke_seq_frame_bg { 0.3f, 0.28f, 0.1f, 0.7f };
 		ImVec4 stroke_seq_frame_bg_hovered { 0.4f, 0.38f, 0.15f, 0.8f };
 		ImVec4 stroke_seq_frame_bg_active { 0.5f, 0.48f, 0.2f, 0.9f };
+		
+		struct PhysicsColors
+		{
+			ImVec4 sandbox_title { 0.3f, 0.9f, 1.0f, 1.0f };
+			ImVec4 stroke_label { 0.9f, 0.9f, 0.5f, 1.0f };
+			ImVec4 physics_section { 0.7f, 0.9f, 0.7f, 1.0f };
+			ImVec4 spawn_section { 0.5f, 0.9f, 1.0f, 1.0f };
+			ImVec4 count_ok { 0.6f, 0.9f, 0.6f, 1.0f };
+			ImVec4 count_warn { 1.0f, 0.9f, 0.4f, 1.0f };
+			ImVec4 count_alert { 1.0f, 0.4f, 0.4f, 1.0f };
+			ImVec4 stroke_metal { 0.53f, 0.81f, 0.92f, 1.0f };
+			ImVec4 stroke_wood { 0.96f, 0.64f, 0.38f, 1.0f };
+			ImVec4 stroke_soil { 0.0f, 0.39f, 0.0f, 1.0f };
+			ImVec4 stroke_conveyor { 0.58f, 0.44f, 0.86f, 1.0f };
+			ImVec4 stroke_bouncy { 0.0f, 0.98f, 0.6f, 1.0f };
+			ImVec4 stroke_sticky { 0.54f, 0.27f, 0.07f, 1.0f };
+			ImVec4 stroke_emitter { 1.0f, 0.84f, 0.0f, 1.0f };
+			ImVec4 spawn_ball { 1.0f, 0.4f, 0.4f, 1.0f };
+			ImVec4 spawn_square { 0.4f, 1.0f, 0.4f, 1.0f };
+			ImVec4 spawn_triangle { 0.4f, 0.4f, 1.0f, 1.0f };
+			ImVec4 spawn_vortex { 0.7f, 0.4f, 1.0f, 1.0f };
+			ImVec4 spawn_clear { 0.6f, 0.2f, 0.2f, 0.8f };
+			ImVec4 spawn_clear_hover { 0.8f, 0.3f, 0.3f, 1.0f };
+			ImVec4 spawn_clear_active { 1.0f, 0.4f, 0.4f, 1.0f };
+			ImVec4 canvas_background { 0.12f, 0.12f, 0.12f, 1.0f };
+			ImVec4 canvas_border { 0.39f, 0.39f, 0.39f, 1.0f };
+			ImVec4 drag_indicator_fill { 1.0f, 1.0f, 0.0f, 0.4f };
+			ImVec4 drag_indicator_outline { 1.0f, 1.0f, 0.0f, 0.8f };
+			ImVec4 eraser_fill { 1.0f, 0.39f, 0.39f, 0.24f };
+			ImVec4 eraser_outline { 0.86f, 0.08f, 0.08f, 0.7f };
+			ImVec4 crosshair_idle { 1.0f, 1.0f, 1.0f, 0.5f };
+			ImVec4 crosshair_active { 1.0f, 1.0f, 0.0f, 1.0f };
+			ImVec4 magnet_north { 1.0f, 0.39f, 0.39f, 0.78f };
+			ImVec4 magnet_south { 0.39f, 0.39f, 1.0f, 0.78f };
+			ImVec4 magnet_link { 1.0f, 1.0f, 0.0f, 0.78f };
+			ImVec4 vector_outline { 1.0f, 1.0f, 1.0f, 0.78f };
+			ImVec4 vector_fill { 1.0f, 1.0f, 1.0f, 0.6f };
+			ImVec4 soil_detail { 0.55f, 0.27f, 0.07f, 0.7f };
+			ImVec4 overlay_text { 0.0f, 0.0f, 0.0f, 0.78f };
+			ImVec4 overlay_line { 1.0f, 1.0f, 1.0f, 0.5f };
+			ImVec4 separator_line { 1.0f, 0.84f, 0.0f, 0.78f };
+		} physics;
 	} modules;
 };
 

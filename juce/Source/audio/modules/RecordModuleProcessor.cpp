@@ -1,4 +1,8 @@
 #include "RecordModuleProcessor.h"
+
+#if defined(PRESET_CREATOR_UI)
+#include "../../preset_creator/theme/ThemeManager.h"
+#endif
 #include "../graph/ModularSynthProcessor.h"
 
 // --- WriterThread with Corrected File Logic ---
@@ -292,11 +296,12 @@ void RecordModuleProcessor::drawParametersInNode(float /*itemWidth*/, const std:
     // Use a wider, fixed width for this node to ensure everything fits
     const float nodeWidth = 350.0f;
     ImGui::PushItemWidth(nodeWidth);
+    const auto& theme = ThemeManager::getInstance().getCurrentTheme();
     
     if (isRecording.load() || !currentFileRecording.isEmpty())
     {
         if (isPaused.load())
-            ImGui::TextColored(ImVec4(1.0f, 1.0f, 0.0f, 1.0f), "Status: Paused");
+            ThemeText("Status: Paused", theme.text.warning);
         else
             ImGui::Text("Status: Recording...");
 
@@ -322,7 +327,8 @@ void RecordModuleProcessor::drawParametersInNode(float /*itemWidth*/, const std:
         ImVec2 canvas_p0 = ImGui::GetCursorScreenPos();
         ImVec2 canvas_sz = ImVec2(nodeWidth, 60.0f);
         ImDrawList* draw_list = ImGui::GetWindowDrawList();
-        draw_list->AddRectFilled(canvas_p0, ImVec2(canvas_p0.x + canvas_sz.x, canvas_p0.y + canvas_sz.y), IM_COL32(30, 30, 30, 255));
+        ImU32 bgCol = theme.canvas.canvas_background == 0 ? IM_COL32(30, 30, 30, 255) : theme.canvas.canvas_background;
+        draw_list->AddRectFilled(canvas_p0, ImVec2(canvas_p0.x + canvas_sz.x, canvas_p0.y + canvas_sz.y), bgCol);
         if (!waveformData.empty())
         {
             float max_val = 1.0f;
@@ -337,14 +343,14 @@ void RecordModuleProcessor::drawParametersInNode(float /*itemWidth*/, const std:
                                    canvas_p0.y + (1.0f - (waveformData[i] / max_val)) * canvas_sz.y);
                 ImVec2 p2 = ImVec2(canvas_p0.x + ((float)(i + 1) / waveformData.size()) * canvas_sz.x,
                                    canvas_p0.y + (1.0f - (waveformData[i + 1] / max_val)) * canvas_sz.y);
-                draw_list->AddLine(p1, p2, IM_COL32(120, 255, 120, 255));
+                draw_list->AddLine(p1, p2, theme.modules.scope_plot_fg != 0 ? theme.modules.scope_plot_fg : IM_COL32(120, 255, 120, 255));
             }
             if (max_val > 1.0f)
             {
                 float clip_y = canvas_p0.y + (1.0f - (1.0f / max_val)) * canvas_sz.y;
                 draw_list->AddLine(ImVec2(canvas_p0.x, clip_y),
                                    ImVec2(canvas_p0.x + canvas_sz.x, clip_y),
-                                   IM_COL32(255, 100, 100, 200), 1.5f);
+                                   ImGui::ColorConvertFloat4ToU32(theme.text.error), 1.5f);
             }
         }
         ImGui::Dummy(canvas_sz);

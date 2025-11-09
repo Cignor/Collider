@@ -1,6 +1,10 @@
 #include "FunctionGeneratorModuleProcessor.h"
 
 #if defined(PRESET_CREATOR_UI)
+#include "../../preset_creator/theme/ThemeManager.h"
+#endif
+
+#if defined(PRESET_CREATOR_UI)
 #include "../../preset_creator/ImGuiNodeEditorComponent.h"
 #endif
 
@@ -321,10 +325,11 @@ void FunctionGeneratorModuleProcessor::generateOutputs(float selectedValue, floa
 void FunctionGeneratorModuleProcessor::drawParametersInNode(float itemWidth, const std::function<bool(const juce::String&)>& isParamModulated, const std::function<void()>& onModificationEnded)
 {
     auto& ap = getAPVTS();
+    const auto& theme = ThemeManager::getInstance().getCurrentTheme();
     ImGui::PushItemWidth(itemWidth);
 
     // === SECTION: Timing ===
-    ImGui::TextColored(ImVec4(0.6f, 0.9f, 1.0f, 1.0f), "TIMING");
+    ThemeText("TIMING", theme.text.section_header);
     
     bool sync = apvts.getRawParameterValue(paramIdMode)->load() > 0.5f;
     if (ImGui::Checkbox("Sync to Transport", &sync))
@@ -351,7 +356,7 @@ void FunctionGeneratorModuleProcessor::drawParametersInNode(float itemWidth, con
         }
         if (!rateIsMod) adjustParamOnWheel(ap.getParameter(paramIdRate), "rate", rate);
         if (ImGui::IsItemDeactivatedAfterEdit() && !rateIsMod) onModificationEnded();
-        if (rateIsMod) { ImGui::EndDisabled(); ImGui::SameLine(); ImGui::TextUnformatted("(mod)"); }
+        if (rateIsMod) { ImGui::EndDisabled(); ImGui::SameLine(); ThemeText("(mod)", theme.text.active); }
         if (ImGui::IsItemHovered()) ImGui::SetTooltip("Function generation rate");
     }
     
@@ -370,14 +375,14 @@ void FunctionGeneratorModuleProcessor::drawParametersInNode(float itemWidth, con
     }
     if (!slewIsMod) adjustParamOnWheel(ap.getParameter(paramIdSlew), "slew", slew);
     if (ImGui::IsItemDeactivatedAfterEdit() && !slewIsMod) onModificationEnded();
-    if (slewIsMod) { ImGui::EndDisabled(); ImGui::SameLine(); ImGui::TextUnformatted("(mod)"); }
+    if (slewIsMod) { ImGui::EndDisabled(); ImGui::SameLine(); ThemeText("(mod)", theme.text.active); }
     if (ImGui::IsItemHovered()) ImGui::SetTooltip("Smoothness of output transitions");
     
     ImGui::Spacing();
     ImGui::Spacing();
     
     // === SECTION: Function Parameters ===
-    ImGui::TextColored(ImVec4(0.6f, 0.9f, 1.0f, 1.0f), "FUNCTION PARAMETERS");
+    ThemeText("FUNCTION PARAMETERS", theme.text.section_header);
 
     const bool gateThreshIsMod = isParamModulated(paramIdGateThreshMod);
     float gateThresh = gateThreshIsMod ? getLiveParamValueFor(paramIdGateThreshMod, "gateThresh_live", gateThreshParam->load()) : gateThreshParam->load();
@@ -387,7 +392,7 @@ void FunctionGeneratorModuleProcessor::drawParametersInNode(float itemWidth, con
     }
     if (!gateThreshIsMod) adjustParamOnWheel(ap.getParameter(paramIdGateThresh), "gateThresh", gateThresh);
     if (ImGui::IsItemDeactivatedAfterEdit() && !gateThreshIsMod) onModificationEnded();
-    if (gateThreshIsMod) { ImGui::EndDisabled(); ImGui::SameLine(); ImGui::TextUnformatted("(mod)"); }
+    if (gateThreshIsMod) { ImGui::EndDisabled(); ImGui::SameLine(); ThemeText("(mod)", theme.text.active); }
     if (ImGui::IsItemHovered()) ImGui::SetTooltip("Threshold for gate output generation");
 
     const bool trigThreshIsMod = isParamModulated(paramIdTrigThreshMod);
@@ -398,7 +403,7 @@ void FunctionGeneratorModuleProcessor::drawParametersInNode(float itemWidth, con
     }
     if (!trigThreshIsMod) adjustParamOnWheel(ap.getParameter(paramIdTrigThresh), "trigThresh", trigThresh);
     if (ImGui::IsItemDeactivatedAfterEdit() && !trigThreshIsMod) onModificationEnded();
-    if (trigThreshIsMod) { ImGui::EndDisabled(); ImGui::SameLine(); ImGui::TextUnformatted("(mod)"); }
+    if (trigThreshIsMod) { ImGui::EndDisabled(); ImGui::SameLine(); ThemeText("(mod)", theme.text.active); }
     if (ImGui::IsItemHovered()) ImGui::SetTooltip("Threshold for trigger output generation");
 
     const bool pitchBaseIsMod = isParamModulated(paramIdPitchBaseMod);
@@ -409,7 +414,7 @@ void FunctionGeneratorModuleProcessor::drawParametersInNode(float itemWidth, con
     }
     if (!pitchBaseIsMod) adjustParamOnWheel(ap.getParameter(paramIdPitchBase), "pitchBase", pitchBase);
     if (ImGui::IsItemDeactivatedAfterEdit() && !pitchBaseIsMod) onModificationEnded();
-    if (pitchBaseIsMod) { ImGui::EndDisabled(); ImGui::SameLine(); ImGui::TextUnformatted("(mod)"); }
+    if (pitchBaseIsMod) { ImGui::EndDisabled(); ImGui::SameLine(); ThemeText("(mod)", theme.text.active); }
     if (ImGui::IsItemHovered()) ImGui::SetTooltip("Base pitch offset in semitones");
 
     const bool valueMultIsMod = isParamModulated(paramIdValueMultMod);
@@ -420,14 +425,14 @@ void FunctionGeneratorModuleProcessor::drawParametersInNode(float itemWidth, con
     }
     if (!valueMultIsMod) adjustParamOnWheel(ap.getParameter(paramIdValueMult), "valueMult", valueMult);
     if (ImGui::IsItemDeactivatedAfterEdit() && !valueMultIsMod) onModificationEnded();
-    if (valueMultIsMod) { ImGui::EndDisabled(); ImGui::SameLine(); ImGui::TextUnformatted("(mod)"); }
+    if (valueMultIsMod) { ImGui::EndDisabled(); ImGui::SameLine(); ThemeText("(mod)", theme.text.active); }
     if (ImGui::IsItemHovered()) ImGui::SetTooltip("Multiplier for output value range");
 
     ImGui::Spacing();
     ImGui::Spacing();
 
     // === SECTION: Curve Editor ===
-    ImGui::TextColored(ImVec4(0.6f, 0.9f, 1.0f, 1.0f), "CURVE EDITOR");
+    ThemeText("CURVE EDITOR", theme.text.section_header);
 
     int activeEditorCurve = static_cast<int>(curveSelectParam->load());
     if (isParamInputConnected(paramIdCurveSelectMod)) {
@@ -445,8 +450,8 @@ void FunctionGeneratorModuleProcessor::drawParametersInNode(float itemWidth, con
     ImVec2 canvas_sz = ImVec2(itemWidth, 150.0f);
     ImVec2 canvas_p1 = ImVec2(canvas_p0.x + canvas_sz.x, canvas_p0.y + canvas_sz.y);
     ImDrawList* draw_list = ImGui::GetWindowDrawList();
-    draw_list->AddRectFilled(canvas_p0, canvas_p1, IM_COL32(30, 30, 30, 255));
-    draw_list->AddRect(canvas_p0, canvas_p1, IM_COL32(150, 150, 150, 255));
+    draw_list->AddRectFilled(canvas_p0, canvas_p1, theme.canvas.canvas_background == 0 ? IM_COL32(30, 30, 30, 255) : theme.canvas.canvas_background);
+    draw_list->AddRect(canvas_p0, canvas_p1, theme.canvas.node_frame == 0 ? IM_COL32(150, 150, 150, 255) : theme.canvas.node_frame);
     
     // Mouse interaction for drawing on the canvas
     ImGui::InvisibleButton("canvas", canvas_sz, ImGuiButtonFlags_MouseButtonLeft);

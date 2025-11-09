@@ -2,6 +2,7 @@
 
 #if defined(PRESET_CREATOR_UI)
 #include "../../preset_creator/ImGuiNodeEditorComponent.h" // For ImGui calls
+#include "../../preset_creator/theme/ThemeManager.h"
 #endif
 
 // ==============================================================================

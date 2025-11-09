@@ -1,5 +1,9 @@
 #include "ADSRModuleProcessor.h"
 
+#if defined(PRESET_CREATOR_UI)
+#include "../../preset_creator/theme/ThemeManager.h"
+#endif
+
 ADSRModuleProcessor::ADSRModuleProcessor()
     : ModuleProcessor (BusesProperties()
                         .withInput ("Inputs", juce::AudioChannelSet::discreteChannels(6), true) // ch0 Gate, ch1 Trigger, ch2-5 mods
@@ -251,6 +255,7 @@ void ADSRModuleProcessor::HelpMarkerADSR(const char* desc)
 void ADSRModuleProcessor::drawParametersInNode(float itemWidth, const std::function<bool(const juce::String& paramId)>& isParamModulated, const std::function<void()>& onModificationEnded)
 {
     auto& ap = getAPVTS();
+    const auto& theme = ThemeManager::getInstance().getCurrentTheme();
     
     // Get live modulated values for display
     bool isAttackModulated = isParamModulated(paramIdAttackMod);
@@ -266,7 +271,7 @@ void ADSRModuleProcessor::drawParametersInNode(float itemWidth, const std::funct
     ImGui::PushItemWidth(itemWidth);
     
     // === ENVELOPE PARAMETERS SECTION ===
-    ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1.0f), "Envelope Shape");
+    ThemeText("Envelope Shape", theme.text.section_header);
     ImGui::Spacing();
     
     // Attack
@@ -309,7 +314,7 @@ void ADSRModuleProcessor::drawParametersInNode(float itemWidth, const std::funct
     ImGui::Spacing();
 
     // === MODULATION MODE SECTION ===
-    ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1.0f), "Modulation Mode");
+    ThemeText("Modulation Mode", theme.text.section_header);
     ImGui::Spacing();
     
     bool relativeAttackMod = relativeAttackModParam ? (relativeAttackModParam->load() > 0.5f) : true;
@@ -368,7 +373,7 @@ void ADSRModuleProcessor::drawParametersInNode(float itemWidth, const std::funct
     ImGui::Spacing();
 
     // === VISUAL ENVELOPE PREVIEW SECTION ===
-    ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1.0f), "Envelope Preview");
+    ThemeText("Envelope Preview", theme.text.section_header);
     ImGui::Spacing();
 
     // Generate ADSR curve for visualization
@@ -404,7 +409,9 @@ void ADSRModuleProcessor::drawParametersInNode(float itemWidth, const std::funct
         adsrCurve[i] = juce::jlimit(0.0f, 1.0f, adsrCurve[i]);
     }
 
+    ImGui::PushStyleColor(ImGuiCol_PlotLines, theme.accent);
     ImGui::PlotLines("##envelope", adsrCurve, 100, 0, nullptr, 0.0f, 1.0f, ImVec2(itemWidth, 60));
+    ImGui::PopStyleColor();
 
     // Show current envelope value and stage
     float currentEnvValue = lastOutputValues.size() > 0 ? lastOutputValues[0]->load() : 0.0f;

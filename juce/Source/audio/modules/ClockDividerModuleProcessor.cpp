@@ -1,5 +1,9 @@
 #include "ClockDividerModuleProcessor.h"
 
+#if defined(PRESET_CREATOR_UI)
+#include "../../preset_creator/theme/ThemeManager.h"
+#endif
+
 juce::AudioProcessorValueTreeState::ParameterLayout ClockDividerModuleProcessor::createParameterLayout()
 {
     std::vector<std::unique_ptr<juce::RangedAudioParameter>> params;
@@ -144,10 +148,11 @@ void ClockDividerModuleProcessor::drawParametersInNode(float itemWidth, const st
 {
     juce::ignoreUnused(isParamModulated);
     auto& ap = getAPVTS();
+    const auto& theme = ThemeManager::getInstance().getCurrentTheme();
     ImGui::PushItemWidth(itemWidth);
     
     // === SECTION: Clock Settings ===
-    ImGui::TextColored(ImVec4(0.6f, 0.9f, 1.0f, 1.0f), "CLOCK SETTINGS");
+    ThemeText("CLOCK SETTINGS", theme.text.section_header);
     
     float gateThresh = gateThresholdParam != nullptr ? gateThresholdParam->load() : 0.5f;
     if (ImGui::SliderFloat("Gate Thresh", &gateThresh, 0.0f, 1.0f, "%.3f")) { 
@@ -174,7 +179,7 @@ void ClockDividerModuleProcessor::drawParametersInNode(float itemWidth, const st
     ImGui::Spacing();
     
     // === SECTION: Clock Monitor ===
-    ImGui::TextColored(ImVec4(0.6f, 0.9f, 1.0f, 1.0f), "CLOCK MONITOR");
+    ThemeText("CLOCK MONITOR", theme.text.section_header);
     
     double bpm = (currentClockInterval > 0.0) ? (60.0 * sampleRate / currentClockInterval) : 0.0;
     ImGui::Text("Clock Rate: %.1f BPM", bpm);

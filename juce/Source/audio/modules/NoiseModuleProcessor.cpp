@@ -1,5 +1,9 @@
 #include "NoiseModuleProcessor.h"
 
+#if defined(PRESET_CREATOR_UI)
+#include "../../preset_creator/theme/ThemeManager.h"
+#endif
+
 // --- Parameter Layout Definition ---
 juce::AudioProcessorValueTreeState::ParameterLayout NoiseModuleProcessor::createParameterLayout()
 {
@@ -129,6 +133,7 @@ bool NoiseModuleProcessor::getParamRouting(const juce::String& paramId, int& out
 void NoiseModuleProcessor::drawParametersInNode(float itemWidth, const std::function<bool(const juce::String& paramId)>& isParamModulated, const std::function<void()>& onModificationEnded)
 {
     auto& ap = getAPVTS();
+    const auto& theme = ThemeManager::getInstance().getCurrentTheme();
 
     bool levelIsModulated = isParamModulated(paramIdLevelMod);
     float levelDb = levelIsModulated ? getLiveParamValueFor(paramIdLevelMod, "level_live", levelDbParam->load()) : levelDbParam->load();
@@ -139,7 +144,7 @@ void NoiseModuleProcessor::drawParametersInNode(float itemWidth, const std::func
     ImGui::PushItemWidth(itemWidth);
 
     // === SECTION: Noise Type ===
-    ImGui::TextColored(ImVec4(0.6f, 0.9f, 1.0f, 1.0f), "NOISE TYPE");
+    ThemeText("NOISE TYPE", theme.text.section_header);
 
     if (colourIsModulated) ImGui::BeginDisabled();
     if (ImGui::Combo("Colour", &colourIndex, "White\0Pink\0Brown\0\0"))
@@ -147,14 +152,14 @@ void NoiseModuleProcessor::drawParametersInNode(float itemWidth, const std::func
         if (!colourIsModulated) *colourParam = colourIndex;
     }
     if (ImGui::IsItemDeactivatedAfterEdit() && !colourIsModulated) { onModificationEnded(); }
-    if (colourIsModulated) { ImGui::EndDisabled(); ImGui::SameLine(); ImGui::TextUnformatted("(mod)"); }
+    if (colourIsModulated) { ImGui::EndDisabled(); ImGui::SameLine(); ThemeText("(mod)", theme.text.active); }
     if (ImGui::IsItemHovered()) ImGui::SetTooltip("White=flat spectrum, Pink=-3dB/oct, Brown=-6dB/oct");
 
     ImGui::Spacing();
     ImGui::Spacing();
 
     // === SECTION: Output Level ===
-    ImGui::TextColored(ImVec4(0.6f, 0.9f, 1.0f, 1.0f), "OUTPUT LEVEL");
+    ThemeText("OUTPUT LEVEL", theme.text.section_header);
 
     if (levelIsModulated) ImGui::BeginDisabled();
     if (ImGui::SliderFloat("Level", &levelDb, -60.0f, 6.0f, "%.1f dB"))
@@ -163,14 +168,14 @@ void NoiseModuleProcessor::drawParametersInNode(float itemWidth, const std::func
     }
     if (ImGui::IsItemDeactivatedAfterEdit() && !levelIsModulated) { onModificationEnded(); }
     if (!levelIsModulated) adjustParamOnWheel(ap.getParameter(paramIdLevel), "level", levelDb);
-    if (levelIsModulated) { ImGui::EndDisabled(); ImGui::SameLine(); ImGui::TextUnformatted("(mod)"); }
+    if (levelIsModulated) { ImGui::EndDisabled(); ImGui::SameLine(); ThemeText("(mod)", theme.text.active); }
     if (ImGui::IsItemHovered()) ImGui::SetTooltip("Output amplitude in decibels");
 
     ImGui::Spacing();
     ImGui::Spacing();
 
     // === SECTION: Live Output ===
-    ImGui::TextColored(ImVec4(0.6f, 0.9f, 1.0f, 1.0f), "LIVE OUTPUT");
+    ThemeText("LIVE OUTPUT", theme.text.section_header);
 
     float currentOut = 0.0f;
     if (lastOutputValues.size() >= 1 && lastOutputValues[0]) {
@@ -185,7 +190,9 @@ void NoiseModuleProcessor::drawParametersInNode(float itemWidth, const std::func
 
     ImGui::Text("Level:");
     ImGui::SameLine();
+    ImGui::PushStyleColor(ImGuiCol_PlotHistogram, theme.accent);
     ImGui::ProgressBar((currentOut + 1.0f) / 2.0f, ImVec2(barWidth, 0), "");
+    ImGui::PopStyleColor();
     ImGui::SameLine();
     ImGui::Text("%.3f", currentOut);
 

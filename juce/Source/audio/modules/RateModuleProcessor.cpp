@@ -1,5 +1,9 @@
 #include "RateModuleProcessor.h"
 
+#if defined(PRESET_CREATOR_UI)
+#include "../../preset_creator/theme/ThemeManager.h"
+#endif
+
 RateModuleProcessor::RateModuleProcessor()
     : ModuleProcessor(BusesProperties()
                         .withInput("Rate Mod", juce::AudioChannelSet::mono(), true)
@@ -82,11 +86,12 @@ void RateModuleProcessor::drawParametersInNode(float itemWidth, const std::funct
     auto& ap = getAPVTS();
     float baseRate = baseRateParam->load();
     float multiplier = multiplierParam->load();
+    const auto& theme = ThemeManager::getInstance().getCurrentTheme();
 
     ImGui::PushItemWidth(itemWidth);
     
     // === SECTION: Rate Control ===
-    ImGui::TextColored(ImVec4(0.6f, 0.9f, 1.0f, 1.0f), "RATE CONTROL");
+    ThemeText("RATE CONTROL", theme.text.section_header);
     
     bool isBaseRateModulated = isParamModulated("baseRate");
     if (isBaseRateModulated) {
@@ -100,7 +105,7 @@ void RateModuleProcessor::drawParametersInNode(float itemWidth, const std::funct
     }
     if (!isBaseRateModulated) adjustParamOnWheel(ap.getParameter("baseRate"), "baseRate", baseRate);
     if (ImGui::IsItemDeactivatedAfterEdit()) onModificationEnded();
-    if (isBaseRateModulated) { ImGui::EndDisabled(); ImGui::SameLine(); ImGui::TextUnformatted("(mod)"); }
+    if (isBaseRateModulated) { ImGui::EndDisabled(); ImGui::SameLine(); ThemeText("(mod)", theme.text.active); }
     if (ImGui::IsItemHovered()) ImGui::SetTooltip("Base frequency in Hz");
 
     bool isMultiplierModulated = isParamModulated("multiplier");
@@ -115,14 +120,14 @@ void RateModuleProcessor::drawParametersInNode(float itemWidth, const std::funct
     }
     if (!isMultiplierModulated) adjustParamOnWheel(ap.getParameter("multiplier"), "multiplier", multiplier);
     if (ImGui::IsItemDeactivatedAfterEdit()) onModificationEnded();
-    if (isMultiplierModulated) { ImGui::EndDisabled(); ImGui::SameLine(); ImGui::TextUnformatted("(mod)"); }
+    if (isMultiplierModulated) { ImGui::EndDisabled(); ImGui::SameLine(); ThemeText("(mod)", theme.text.active); }
     if (ImGui::IsItemHovered()) ImGui::SetTooltip("Rate multiplier");
 
     ImGui::Spacing();
     ImGui::Spacing();
     
     // === SECTION: Output ===
-    ImGui::TextColored(ImVec4(0.6f, 0.9f, 1.0f, 1.0f), "OUTPUT");
+    ThemeText("OUTPUT", theme.text.section_header);
     
     float outputHz = getLastOutputValue();
     ImGui::Text("Frequency: %.2f Hz", outputHz);

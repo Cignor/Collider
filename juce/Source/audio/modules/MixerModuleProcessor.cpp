@@ -1,5 +1,9 @@
 #include "MixerModuleProcessor.h"
 
+#if defined(PRESET_CREATOR_UI)
+#include "../../preset_creator/theme/ThemeManager.h"
+#endif
+
 // Corrected constructor with two separate stereo inputs
 MixerModuleProcessor::MixerModuleProcessor()
     : ModuleProcessor (BusesProperties()
@@ -157,6 +161,7 @@ void MixerModuleProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce:
 void MixerModuleProcessor::drawParametersInNode (float itemWidth, const std::function<bool(const juce::String& paramId)>& isParamModulated, const std::function<void()>& onModificationEnded)
 {
     auto& ap = getAPVTS();
+    const auto& theme = ThemeManager::getInstance().getCurrentTheme();
     
     // Helper for tooltips
     auto HelpMarkerMixer = [](const char* desc) {
@@ -176,7 +181,7 @@ void MixerModuleProcessor::drawParametersInNode (float itemWidth, const std::fun
     ImGui::PushItemWidth(itemWidth);
 
     // === CROSSFADE SECTION ===
-    ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1.0f), "Crossfade");
+    ThemeText("Crossfade", theme.text.section_header);
     ImGui::Spacing();
 
     // Crossfade Slider
@@ -188,7 +193,7 @@ void MixerModuleProcessor::drawParametersInNode (float itemWidth, const std::fun
     if (ImGui::SliderFloat("A <-> B", &crossfade, -1.0f, 1.0f)) if (!isXfModulated) if (auto* p = dynamic_cast<juce::AudioParameterFloat*>(ap.getParameter("crossfade"))) *p = crossfade;
     if (!isXfModulated) adjustParamOnWheel(ap.getParameter("crossfade"), "crossfade", crossfade);
     if (ImGui::IsItemDeactivatedAfterEdit()) { onModificationEnded(); }
-    if (isXfModulated) { ImGui::EndDisabled(); ImGui::SameLine(); ImGui::TextUnformatted("(mod)"); }
+    if (isXfModulated) { ImGui::EndDisabled(); ImGui::SameLine(); ThemeText("(mod)", theme.text.active); }
     ImGui::SameLine();
     HelpMarkerMixer("Crossfade between inputs A and B\n-1 = A only, 0 = equal mix, +1 = B only");
 
@@ -203,7 +208,7 @@ void MixerModuleProcessor::drawParametersInNode (float itemWidth, const std::fun
     ImGui::Spacing();
 
     // === MASTER CONTROLS SECTION ===
-    ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1.0f), "Master Controls");
+    ThemeText("Master Controls", theme.text.section_header);
     ImGui::Spacing();
 
     // Gain Slider
@@ -215,7 +220,7 @@ void MixerModuleProcessor::drawParametersInNode (float itemWidth, const std::fun
     if (ImGui::SliderFloat("Gain dB", &gainDb, -60.0f, 6.0f)) if (!isGainModulated) if (auto* p = dynamic_cast<juce::AudioParameterFloat*>(ap.getParameter("gain"))) *p = gainDb;
     if (!isGainModulated) adjustParamOnWheel(ap.getParameter("gain"), "gainDb", gainDb);
     if (ImGui::IsItemDeactivatedAfterEdit()) { onModificationEnded(); }
-    if (isGainModulated) { ImGui::EndDisabled(); ImGui::SameLine(); ImGui::TextUnformatted("(mod)"); }
+    if (isGainModulated) { ImGui::EndDisabled(); ImGui::SameLine(); ThemeText("(mod)", theme.text.active); }
     ImGui::SameLine();
     HelpMarkerMixer("Master output gain (-60 to +6 dB)");
 
@@ -228,7 +233,7 @@ void MixerModuleProcessor::drawParametersInNode (float itemWidth, const std::fun
     if (ImGui::SliderFloat("Pan", &pan, -1.0f, 1.0f)) if (!isPanModulated) if (auto* p = dynamic_cast<juce::AudioParameterFloat*>(ap.getParameter("pan"))) *p = pan;
     if (!isPanModulated) adjustParamOnWheel(ap.getParameter("pan"), "pan", pan);
     if (ImGui::IsItemDeactivatedAfterEdit()) { onModificationEnded(); }
-    if (isPanModulated) { ImGui::EndDisabled(); ImGui::SameLine(); ImGui::TextUnformatted("(mod)"); }
+    if (isPanModulated) { ImGui::EndDisabled(); ImGui::SameLine(); ThemeText("(mod)", theme.text.active); }
     ImGui::SameLine();
     HelpMarkerMixer("Stereo panning\n-1 = full left, 0 = center, +1 = full right");
 
