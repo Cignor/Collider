@@ -8,6 +8,7 @@
 #if defined(PRESET_CREATOR_UI)
 #include <imgui.h>
 #include "../../preset_creator/ImGuiNodeEditorComponent.h"
+#include "../../preset_creator/theme/ThemeManager.h"
 #endif
 
 // YOLOv3 default input size
@@ -492,6 +493,7 @@ void ObjectDetectorModule::drawParametersInNode(float itemWidth,
                                                 const std::function<void()>& onModificationEnded)
 {
     juce::ignoreUnused(isParamModulated);
+    const auto& theme = ThemeManager::getInstance().getCurrentTheme();
     ImGui::PushItemWidth(itemWidth);
     
     // GPU ACCELERATION TOGGLE
@@ -599,12 +601,12 @@ void ObjectDetectorModule::drawParametersInNode(float itemWidth,
     
     if (modelLoaded)
     {
-        ImGui::TextColored(ImVec4(0.0f, 1.0f, 0.0f, 1.0f), "Model: Loaded");
+        ThemeText("Model: Loaded", theme.text.success);
         ImGui::Text("Classes: %d", (int)classNames.size());
     }
     else
     {
-        ImGui::TextColored(ImVec4(1.0f, 0.0f, 0.0f, 1.0f), "Model: NOT LOADED");
+        ThemeText("Model: NOT LOADED", theme.text.error);
         ImGui::TextWrapped("Place files in assets/: yolov3.cfg, yolov3.weights, coco.names");
     }
     

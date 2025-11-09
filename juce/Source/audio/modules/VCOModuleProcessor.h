@@ -3,6 +3,10 @@
 #include "ModuleProcessor.h"
 #include <juce_dsp/juce_dsp.h>
 
+#if defined(PRESET_CREATOR_UI)
+#include "../../preset_creator/theme/ThemeManager.h"
+#endif
+
 class VCOModuleProcessor : public ModuleProcessor
 {
 public:
@@ -33,6 +37,7 @@ public:
                                const std::function<void()>& onModificationEnded) override
     {
         auto& ap = getAPVTS();
+        const auto& theme = ThemeManager::getInstance().getCurrentTheme();
         float freq = frequencyParam != nullptr ? getLiveParamValueFor(paramIdFrequency, paramIdFrequency, frequencyParam->load()) : 440.0f;
         int wave = 0; if (auto* p = dynamic_cast<juce::AudioParameterChoice*>(ap.getParameter(paramIdWaveform))) wave = (int) getLiveParamValueFor(paramIdWaveformMod, paramIdWaveform, (float) p->getIndex());
 
@@ -53,7 +58,7 @@ public:
         ImGui::PushItemWidth (itemWidth);
 
         // === FREQUENCY SECTION ===
-        ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1.0f), "Oscillator Control");
+        ThemeText("Oscillator Control", theme.text.section_header);
         ImGui::Spacing();
         
         const bool freqMod = isParamModulated(paramIdFrequency);
@@ -78,7 +83,7 @@ public:
         ImGui::SameLine();
         if (freqMod)
         {
-            ImGui::TextColored(ImVec4(0.4f, 0.8f, 1.0f, 1.0f), "Frequency (CV)");
+            ThemeText("Frequency (CV)", theme.text.active);
             ImGui::PopStyleColor(3);
         }
         else
@@ -146,7 +151,7 @@ public:
         ImGui::Spacing();
 
         // === MODULATION MODE SECTION ===
-        ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1.0f), "Frequency Modulation");
+        ThemeText("Frequency Modulation", theme.text.section_header);
         ImGui::Spacing();
         
         bool relativeFreqMod = true;
@@ -168,7 +173,7 @@ public:
         ImGui::Spacing();
 
         // === PORTAMENTO SECTION ===
-        ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1.0f), "Glide");
+        ThemeText("Glide", theme.text.section_header);
         ImGui::Spacing();
         
         float portamentoTime = 0.0f;
@@ -240,7 +245,7 @@ public:
         ImGui::Spacing();
 
         // === WAVEFORM SECTION ===
-        ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1.0f), "Waveform");
+        ThemeText("Waveform", theme.text.section_header);
         ImGui::Spacing();
         
         const bool waveMod = isParamModulated(paramIdWaveformMod);
@@ -263,7 +268,7 @@ public:
         ImGui::SameLine();
         if (waveMod)
         {
-            ImGui::TextColored(ImVec4(1.0f, 0.8f, 0.4f, 1.0f), "Shape (CV)");
+            ThemeText("Shape (CV)", theme.text.warning);
             ImGui::PopStyleColor(2);
         }
         else
@@ -291,7 +296,7 @@ public:
         ImGui::Spacing();
 
         // === OUTPUT SECTION ===
-        ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1.0f), "Output");
+        ThemeText("Output", theme.text.section_header);
         ImGui::Spacing();
         
         // Real-time output level meter

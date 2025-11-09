@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 
-<ModularSynthPreset version="1" bpm="225.5940856933594">
+<ModularSynthPreset version="1" bpm="20.0">
   <modules>
     <module logicalId="1" type="animation">
       <params>
@@ -9,11 +9,12 @@
       <extra>
         <AnimationModuleState animationFilePath="H:\0000_CODE\01_collider_pyo\animation_gltf\walking_new.fbx"
                               zoom="0.97394198179245" panX="0.1199558973312378" panY="0.8850991129875183"
-                              viewRotationX="0.0" viewRotationY="0.0" viewRotationZ="0.0" selectedBoneName="None">
+                              viewRotationX="0.0" viewRotationY="0.0" viewRotationZ="0.0" animationClipName="Armature|Armature|mixamo.com|Layer0.001"
+                              selectedBoneName="None">
           <GroundPlanes>
-            <Plane y="179.0"/>
-            <Plane y="77.0"/>
-            <Plane y="120.0"/>
+            <Plane y="0.1099999994039536" depth="0.1899999976158142"/>
+            <Plane y="1.120000004768372" depth="0.2599999904632568"/>
+            <Plane y="0.3600000143051147" depth="0.0"/>
           </GroundPlanes>
           <TrackedBones>
             <Bone name="LeftFoot"/>
@@ -245,10 +246,10 @@
     </module>
   </modules>
   <connections>
-    <connection srcId="1" srcChan="3" dstId="30" dstChan="3"/>
-    <connection srcId="1" srcChan="6" dstId="31" dstChan="3"/>
+    <connection srcId="1" srcChan="5" dstId="30" dstChan="3"/>
+    <connection srcId="1" srcChan="8" dstId="31" dstChan="3"/>
     <connection srcId="1" srcChan="9" dstId="32" dstChan="3"/>
-    <connection srcId="1" srcChan="0" dstId="41" dstChan="0"/>
+    <connection srcId="1" srcChan="2" dstId="41" dstChan="0"/>
     <connection srcId="30" srcChan="0" dstId="33" dstChan="0"/>
     <connection srcId="30" srcChan="1" dstId="33" dstChan="1"/>
     <connection srcId="31" srcChan="0" dstId="33" dstChan="2"/>
@@ -260,7 +261,7 @@
     <connection srcId="34" srcChan="0" dstId="33" dstChan="64"/>
   </connections>
   <NodeEditorUI>
-    <node id="1" x="-1183.0" y="568.0"/>
+    <node id="1" x="-1304.0" y="482.0"/>
     <node id="30" x="-565.6322021484375" y="270.589111328125"/>
     <node id="31" x="-531.0" y="821.0"/>
     <node id="32" x="-504.0" y="1483.0"/>

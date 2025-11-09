@@ -1,5 +1,9 @@
 #include "ShapingOscillatorModuleProcessor.h"
 
+#if defined(PRESET_CREATOR_UI)
+#include "../../preset_creator/theme/ThemeManager.h"
+#endif
+
 juce::AudioProcessorValueTreeState::ParameterLayout ShapingOscillatorModuleProcessor::createParameterLayout()
 {
     std::vector<std::unique_ptr<juce::RangedAudioParameter>> params;
@@ -163,6 +167,7 @@ void ShapingOscillatorModuleProcessor::drawParametersInNode (float itemWidth,
                                                       const std::function<void()>& onModificationEnded)
 {
     auto& ap = getAPVTS();
+    const auto& theme = ThemeManager::getInstance().getCurrentTheme();
 
     const bool freqIsMod = isParamModulated(paramIdFrequencyMod);
     float freq = freqIsMod ? getLiveParamValueFor(paramIdFrequencyMod, "frequency_live", frequencyParam ? frequencyParam->load() : 440.0f)
@@ -179,7 +184,7 @@ void ShapingOscillatorModuleProcessor::drawParametersInNode (float itemWidth,
     ImGui::PushItemWidth(itemWidth);
 
     // === SECTION: Oscillator ===
-    ImGui::TextColored(ImVec4(0.6f, 0.9f, 1.0f, 1.0f), "OSCILLATOR");
+    ThemeText("OSCILLATOR", theme.text.section_header);
 
     if (freqIsMod) ImGui::BeginDisabled();
     if (ImGui::SliderFloat("Frequency", &freq, 20.0f, 20000.0f, "%.1f Hz", ImGuiSliderFlags_Logarithmic))
@@ -205,7 +210,7 @@ void ShapingOscillatorModuleProcessor::drawParametersInNode (float itemWidth,
     ImGui::Spacing();
 
     // === SECTION: Modulation Mode ===
-    ImGui::TextColored(ImVec4(0.6f, 0.9f, 1.0f, 1.0f), "MODULATION MODE");
+    ThemeText("MODULATION MODE", theme.text.section_header);
     
     bool relativeFreqMod = relativeFreqModParam ? (relativeFreqModParam->load() > 0.5f) : true;
     if (ImGui::Checkbox("Relative Frequency Mod", &relativeFreqMod))
@@ -235,7 +240,7 @@ void ShapingOscillatorModuleProcessor::drawParametersInNode (float itemWidth,
     ImGui::Spacing();
 
     // === SECTION: Waveshaping ===
-    ImGui::TextColored(ImVec4(0.6f, 0.9f, 1.0f, 1.0f), "WAVESHAPING");
+    ThemeText("WAVESHAPING", theme.text.section_header);
 
     if (driveIsMod) ImGui::BeginDisabled();
     if (ImGui::SliderFloat("Drive", &drive, 1.0f, 50.0f, "%.2f", ImGuiSliderFlags_Logarithmic))
@@ -251,7 +256,7 @@ void ShapingOscillatorModuleProcessor::drawParametersInNode (float itemWidth,
     ImGui::Spacing();
 
     // === SECTION: Output ===
-    ImGui::TextColored(ImVec4(0.6f, 0.9f, 1.0f, 1.0f), "OUTPUT");
+    ThemeText("OUTPUT", theme.text.section_header);
 
     float currentOut = 0.0f;
     if (lastOutputValues.size() >= 1 && lastOutputValues[0]) {

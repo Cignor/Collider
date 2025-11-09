@@ -522,7 +522,19 @@
             1.0
         ],
         "node_rounding": 14.0,
-        "node_border_width": 2.0
+        "node_border_width": 2.0,
+        "selection_rect": [
+            0.98,
+            0.769,
+            0.408,
+            0.2
+        ],
+        "selection_rect_outline": [
+            0.98,
+            0.769,
+            0.408,
+            0.85
+        ]
     },
     "layout": {
         "sidebar_width": 260.0,
@@ -540,8 +552,8 @@
         ]
     },
     "fonts": {
-        "default_size": 16.0,
-        "default_path": ""
+        "default_size": 18.0,
+        "default_path": "fonts/Audiowide-Regular.ttf"
     },
     "windows": {
         "status_overlay_alpha": 0.68,

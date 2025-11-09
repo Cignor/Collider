@@ -91,18 +91,38 @@ private:
 
     static juce::String fourccToString(int fourcc)
     {
-        if (fourcc == 0) return "unknown";
-        char c[5];
-        c[0] = (char)(fourcc & 0xFF);
-        c[1] = (char)((fourcc >> 8) & 0xFF);
-        c[2] = (char)((fourcc >> 16) & 0xFF);
-        c[3] = (char)((fourcc >> 24) & 0xFF);
-        c[4] = '\0';
-        return juce::String(c);
+        if (fourcc == 0)
+            return "unknown";
+
+        char chars[5];
+        chars[0] = (char)(fourcc & 0xFF);
+        chars[1] = (char)((fourcc >> 8) & 0xFF);
+        chars[2] = (char)((fourcc >> 16) & 0xFF);
+        chars[3] = (char)((fourcc >> 24) & 0xFF);
+        chars[4] = '\0';
+
+        bool printable = true;
+        for (int i = 0; i < 4; ++i)
+        {
+            const unsigned char ch = (unsigned char)chars[i];
+            if (ch == 0 || ch < 32 || ch > 126)
+            {
+                printable = false;
+                break;
+            }
+        }
+
+        if (printable)
+            return juce::String(chars);
+
+        return juce::String::formatted("0x%08X", (unsigned int)fourcc);
     }
 
     static juce::String fourccFriendlyName(const juce::String& code)
     {
+        if (code == "unknown" || code.startsWithIgnoreCase("0x"))
+            return "unknown";
+
         const juce::String c = code.toLowerCase();
         if (c == "avc1" || c == "h264") return "H.264";
         if (c == "hvc1" || c == "hevc" || c == "hev1") return "H.265/HEVC";

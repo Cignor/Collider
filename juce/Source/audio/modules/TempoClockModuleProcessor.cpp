@@ -1,6 +1,10 @@
 #include "TempoClockModuleProcessor.h"
 #include "../graph/ModularSynthProcessor.h"
 
+#if defined(PRESET_CREATOR_UI)
+#include "../../preset_creator/theme/ThemeManager.h"
+#endif
+
 TempoClockModuleProcessor::TempoClockModuleProcessor()
     : ModuleProcessor(BusesProperties()
           .withInput("Mods", juce::AudioChannelSet::discreteChannels(8), true)    // bpm,tap,nudge+,nudge-,play,stop,reset,swing
@@ -269,6 +273,12 @@ bool TempoClockModuleProcessor::getParamRouting(const juce::String& paramId, int
 #if defined(PRESET_CREATOR_UI)
 void TempoClockModuleProcessor::drawParametersInNode(float itemWidth, const std::function<bool(const juce::String& paramId)>& isParamModulated, const std::function<void()>& onModificationEnded)
 {
+    const auto& theme = ThemeManager::getInstance().getCurrentTheme();
+    const ImGuiStyle& style = ImGui::GetStyle();
+    const ImVec4& sectionHeader = theme.modules.sequencer_section_header;
+    const ImVec4& activeBeatColor = theme.modules.sequencer_step_active_frame;
+    const ImVec4 inactiveBeatColor = style.Colors[ImGuiCol_Button];
+
     ImGui::PushItemWidth(itemWidth);
     
     // Helper for tooltips
@@ -283,7 +293,7 @@ void TempoClockModuleProcessor::drawParametersInNode(float itemWidth, const std:
     };
 
     // === TEMPO CONTROLS SECTION ===
-    ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1.0f), "Tempo");
+    ThemeText("Tempo", sectionHeader);
     ImGui::Spacing();
 
     // BPM slider with live display
@@ -303,7 +313,7 @@ void TempoClockModuleProcessor::drawParametersInNode(float itemWidth, const std:
     }
     if (!bpmMod && !syncToHost) adjustParamOnWheel(apvts.getParameter(paramIdBpm), paramIdBpm, bpm);
     if (bpmMod) { ImGui::SameLine(); ImGui::TextUnformatted("(mod)"); }
-    if (syncToHost) { ImGui::SameLine(); ImGui::TextColored(ImVec4(0.2f, 1.0f, 0.8f, 1.0f), "(synced)"); }
+    if (syncToHost) { ImGui::SameLine(); ThemeText("(synced)", theme.text.success); }
     if (bpmMod || syncToHost) { ImGui::EndDisabled(); }
     ImGui::SameLine();
     HelpMarkerClock("Beats per minute (20-300 BPM)\nDisabled when synced to host");
@@ -340,7 +350,7 @@ void TempoClockModuleProcessor::drawParametersInNode(float itemWidth, const std:
     ImGui::Spacing();
 
     // === CLOCK OUTPUT SECTION ===
-    ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1.0f), "Clock Output");
+    ThemeText("Clock Output", sectionHeader);
     ImGui::Spacing();
 
     // Division + Gate width in-line
@@ -369,7 +379,7 @@ void TempoClockModuleProcessor::drawParametersInNode(float itemWidth, const std:
     ImGui::Spacing();
 
     // === LIVE CLOCK DISPLAY SECTION ===
-    ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1.0f), "Clock Status");
+    ThemeText("Clock Status", sectionHeader);
     ImGui::Spacing();
 
     // Animated beat indicator (4 boxes for 4/4 time)
@@ -381,17 +391,20 @@ void TempoClockModuleProcessor::drawParametersInNode(float itemWidth, const std:
         if (i > 0) ImGui::SameLine();
         
         bool isCurrentBeat = (currentBeat == i);
-        ImVec4 color = isCurrentBeat ? ImVec4(1.0f, 0.3f, 0.3f, 1.0f) : ImVec4(0.3f, 0.3f, 0.3f, 1.0f);
+        const ImVec4& beatColor = isCurrentBeat ? activeBeatColor : inactiveBeatColor;
         
-        ImGui::PushStyleColor(ImGuiCol_Button, color);
+        ImGui::PushStyleColor(ImGuiCol_Button, beatColor);
+        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, beatColor);
+        ImGui::PushStyleColor(ImGuiCol_ButtonActive, beatColor);
         ImGui::Button(juce::String(i + 1).toRawUTF8(), ImVec2(itemWidth * 0.23f, 30));
-        ImGui::PopStyleColor();
+        ImGui::PopStyleColor(3);
     }
 
     // Current BPM display (large, colored)
-    ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.5f, 1.0f, 0.7f, 1.0f));
-    ImGui::Text("♩ = %.1f BPM", getLiveParamValue("bpm_live", bpm));
-    ImGui::PopStyleColor();
+    {
+        juce::String bpmLabel = juce::String::formatted("♩ = %.1f BPM", getLiveParamValue("bpm_live", bpm));
+        ThemeText(bpmLabel.toRawUTF8(), theme.text.active);
+    }
 
     // Bar:Beat display
     int bar = (int)(phase / 4.0f) + 1;
@@ -402,7 +415,7 @@ void TempoClockModuleProcessor::drawParametersInNode(float itemWidth, const std:
     ImGui::Spacing();
 
     // === TRANSPORT SYNC SECTION ===
-    ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1.0f), "Transport Sync");
+    ThemeText("Transport Sync", sectionHeader);
     ImGui::Spacing();
 
     // Sync to Host checkbox
@@ -417,9 +430,7 @@ void TempoClockModuleProcessor::drawParametersInNode(float itemWidth, const std:
     
     if (sync)
     {
-        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.2f, 1.0f, 0.8f, 1.0f));
-        ImGui::Text("⚡ SYNCED TO HOST TRANSPORT");
-        ImGui::PopStyleColor();
+        ThemeText("⚡ SYNCED TO HOST TRANSPORT", theme.text.success);
     }
     
     ImGui::Spacing();
@@ -436,9 +447,7 @@ void TempoClockModuleProcessor::drawParametersInNode(float itemWidth, const std:
     
     if (divOverride)
     {
-        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.8f, 0.2f, 1.0f));
-        ImGui::Text("⚡ MASTER DIVISION SOURCE");
-        ImGui::PopStyleColor();
+        ThemeText("⚡ MASTER DIVISION SOURCE", theme.text.warning);
     }
 
     ImGui::PopItemWidth();

@@ -5,6 +5,7 @@
 
 #if defined(PRESET_CREATOR_UI)
 #include <imgui.h>
+#include "../../preset_creator/theme/ThemeManager.h"
 #endif
 
 juce::AudioProcessorValueTreeState::ParameterLayout VideoFileLoaderModule::createParameterLayout()
@@ -711,6 +712,7 @@ void VideoFileLoaderModule::drawParametersInNode(float itemWidth,
                                                  const std::function<bool(const juce::String& paramId)>& isParamModulated,
                                                  const std::function<void()>& onModificationEnded)
 {
+    const auto& theme = ThemeManager::getInstance().getCurrentTheme();
     ImGui::PushItemWidth(itemWidth);
     
     if (ImGui::Button("Load Video File...", ImVec2(itemWidth, 0)))
@@ -720,11 +722,12 @@ void VideoFileLoaderModule::drawParametersInNode(float itemWidth,
     
     if (currentVideoFile.existsAsFile())
     {
-        ImGui::TextColored(ImVec4(0.5f, 1.0f, 0.5f, 1.0f), "%s", currentVideoFile.getFileName().toRawUTF8());
+        const juce::String fileName = currentVideoFile.getFileName();
+        ThemeText(fileName.toRawUTF8(), theme.text.success);
     }
     else
     {
-        ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1.0f), "No file loaded");
+        ThemeText("No file loaded", theme.text.disabled);
     }
     
     bool loop = loopParam->load() > 0.5f;
@@ -793,17 +796,21 @@ void VideoFileLoaderModule::drawParametersInNode(float itemWidth,
     }
     if (atMax) ImGui::EndDisabled();
     
-    ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1.0f), "Source ID: %d", (int)getLogicalId());
+    const juce::String sourceIdText = juce::String::formatted("Source ID: %d", (int)getLogicalId());
+    ThemeText(sourceIdText.toRawUTF8(), theme.text.section_header);
     {
         int fcc = lastFourcc.load();
         juce::String codec = fourccToString(fcc);
         juce::String friendly = fourccFriendlyName(codec);
         juce::String ext = currentVideoFile.getFileExtension();
         if (ext.startsWithChar('.')) ext = ext.substring(1);
-        ImGui::TextColored(ImVec4(0.5f, 0.8f, 0.5f, 1.0f), "Codec: %s (%s)   Container: %s",
-                           codec.toRawUTF8(), friendly.toRawUTF8(), (ext.isEmpty() ? "unknown" : ext.toRawUTF8()));
+        if (ext.isEmpty())
+            ext = "unknown";
+
+        juce::String codecLine = "Codec: " + codec + " (" + friendly + ")   Container: " + ext;
+        ThemeText(codecLine.toRawUTF8(), theme.text.active);
         if (totalFrames.load() <= 1)
-            ImGui::TextColored(ImVec4(0.9f, 0.7f, 0.2f, 1.0f), "Length unknown yet (ratio seeks)");
+            ThemeText("Length unknown yet (ratio seeks)", theme.text.warning);
     }
 
     // ADD ENGINE SELECTION COMBO BOX

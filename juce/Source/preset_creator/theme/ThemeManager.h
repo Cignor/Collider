@@ -31,6 +31,7 @@ public:
 	ImU32 getPinColor(PinDataType type);
 	ImU32 getPinConnectedColor();
 	ImU32 getPinDisconnectedColor();
+	ImU32 getCategoryColor(ModuleCategory category) const;
 
 	// Layout
 	float getSidebarWidth() const;
@@ -46,6 +47,8 @@ public:
 	float getScaleInterval() const;
 	ImU32 getDropTargetOverlay() const;
 	ImU32 getMousePositionText() const;
+	ImU32 getSelectionRect() const;
+	ImU32 getSelectionRectOutline() const;
 	
 	// Node styling
 	ImU32 getNodeBackground() const;

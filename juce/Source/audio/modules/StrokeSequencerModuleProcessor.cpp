@@ -472,13 +472,14 @@ void StrokeSequencerModuleProcessor::drawParametersInNode(float itemWidth, const
         }
     };
 
+    const auto& theme = ThemeManager::getInstance().getCurrentTheme();
+
     // --- 80s DIGITAL WATCH AESTHETIC ---
-    // Bold retro title with LCD-style yellow-green color
-    ImGui::TextColored(ImVec4(0.9f, 0.95f, 0.2f, 1.0f), "STROKE SEQUENCER");
+    ThemeText("STROKE SEQUENCER", theme.modules.stroke_seq_title);
     ImGui::Spacing();
     
     // --- TIMING SECTION ---
-    ImGui::TextColored(ImVec4(0.85f, 0.9f, 0.3f, 1.0f), "TIMING");
+    ThemeText("TIMING", theme.modules.stroke_seq_section);
     ImGui::Spacing();
     
     bool sync = apvts.getRawParameterValue(paramIdSync)->load() > 0.5f;
@@ -516,7 +517,7 @@ void StrokeSequencerModuleProcessor::drawParametersInNode(float itemWidth, const
             {
                 ImGui::BeginTooltip();
                 ImGui::PushTextWrapPos(ImGui::GetFontSize() * 25.0f);
-                ImGui::TextColored(ImVec4(1.0f, 0.8f, 0.0f, 1.0f), "Tempo Clock Division Override Active");
+            ThemeText("Tempo Clock Division Override Active", theme.text.warning);
                 ImGui::TextUnformatted("A Tempo Clock node with 'Division Override' enabled is controlling the global division.");
                 ImGui::PopTextWrapPos();
                 ImGui::EndTooltip();
@@ -542,7 +543,7 @@ void StrokeSequencerModuleProcessor::drawParametersInNode(float itemWidth, const
     ImGui::Spacing();
     
     // --- DRAWING CANVAS SECTION ---
-    ImGui::TextColored(ImVec4(0.85f, 0.9f, 0.3f, 1.0f), "DISPLAY");
+    ThemeText("DISPLAY", theme.modules.stroke_seq_section);
     ImGui::Spacing();
     
     ImGui::BeginGroup(); // Group canvas and sliders together
@@ -553,9 +554,12 @@ void StrokeSequencerModuleProcessor::drawParametersInNode(float itemWidth, const
     ImVec2 canvas_p1 = ImVec2(canvas_p0.x + canvas_size.x, canvas_p0.y + canvas_size.y);
     auto* draw_list = ImGui::GetWindowDrawList();
 
-    // 80s LCD Yellow background with dark border
-    draw_list->AddRectFilled(canvas_p0, canvas_p1, IM_COL32(180, 196, 91, 255)); // Retro yellow LCD
-    draw_list->AddRect(canvas_p0, canvas_p1, IM_COL32(60, 55, 20, 255), 0.0f, 0, 3.0f); // Dark brownish border
+    ImU32 canvasFill = theme.modules.stroke_seq_canvas_bg != 0 ? theme.modules.stroke_seq_canvas_bg
+                                                               : IM_COL32(180, 196, 91, 255);
+    ImU32 canvasBorder = theme.modules.stroke_seq_border != 0 ? theme.modules.stroke_seq_border
+                                                              : IM_COL32(60, 55, 20, 255);
+    draw_list->AddRectFilled(canvas_p0, canvas_p1, canvasFill);
+    draw_list->AddRect(canvas_p0, canvas_p1, canvasBorder, 0.0f, 0, 3.0f);
     
     ImGui::InvisibleButton("##canvas", canvas_size);
     const bool is_hovered = ImGui::IsItemHovered();
@@ -660,8 +664,8 @@ void StrokeSequencerModuleProcessor::drawParametersInNode(float itemWidth, const
         {
             // Check if the current stroke's index is in our set of active strokes
             ImU32 color = activeStrokeIndices.count(i)
-                            ? IM_COL32(255, 80, 0, 255)    // Bright orange-red (active LCD segment)
-                            : IM_COL32(80, 75, 25, 220);   // Dark olive-brown (inactive LCD)
+                            ? (theme.modules.stroke_seq_line_active != 0 ? theme.modules.stroke_seq_line_active : IM_COL32(255, 80, 0, 255))
+                            : (theme.modules.stroke_seq_line_inactive != 0 ? theme.modules.stroke_seq_line_inactive : IM_COL32(80, 75, 25, 220));
             
             float thickness = activeStrokeIndices.count(i) ? 4.0f : 2.8f;  // Thicker for active
             
@@ -686,16 +690,21 @@ void StrokeSequencerModuleProcessor::drawParametersInNode(float itemWidth, const
     };
     
     // Draw fading gradient zones under each threshold line
+    const ImU32 thresholdDefault[3] = {
+        theme.modules.stroke_seq_thresh_floor != 0 ? theme.modules.stroke_seq_thresh_floor : IM_COL32(160, 50, 30, 100),
+        theme.modules.stroke_seq_thresh_mid   != 0 ? theme.modules.stroke_seq_thresh_mid   : IM_COL32(50, 120, 40, 100),
+        theme.modules.stroke_seq_thresh_ceil  != 0 ? theme.modules.stroke_seq_thresh_ceil  : IM_COL32(40, 70, 140, 100)
+    };
     for (int t = 0; t < 3; ++t) {
         float y = canvas_p0.y + (1.0f - liveThresholds[t]) * canvas_size.y;
         
         // Gradient below the line (fades downward)
         float gradientHeight = 40.0f;
-        ImU32 colorTop = colors[t];
+        ImU32 colorTop = thresholdDefault[t];
         ImU32 colorBottom = IM_COL32(
-            (colors[t] >> IM_COL32_R_SHIFT) & 0xFF,
-            (colors[t] >> IM_COL32_G_SHIFT) & 0xFF,
-            (colors[t] >> IM_COL32_B_SHIFT) & 0xFF,
+            (colorTop >> IM_COL32_R_SHIFT) & 0xFF,
+            (colorTop >> IM_COL32_G_SHIFT) & 0xFF,
+            (colorTop >> IM_COL32_B_SHIFT) & 0xFF,
             0  // Fully transparent
         );
         
@@ -706,20 +715,21 @@ void StrokeSequencerModuleProcessor::drawParametersInNode(float itemWidth, const
         );
         
         // Draw the threshold line on top of gradient
-        draw_list->AddLine({canvas_p0.x, y}, {canvas_p1.x, y}, colors[t], 2.0f);
+        draw_list->AddLine({canvas_p0.x, y}, {canvas_p1.x, y}, colorTop, 2.0f);
     }
 
     // Draw Playhead with bright 80s style
     float playheadX = canvas_p0.x + (float)playheadPosition * canvas_size.x;
-    draw_list->AddLine({playheadX, canvas_p0.y}, {playheadX, canvas_p1.y}, IM_COL32(255, 0, 100, 255), 3.0f); // Hot pink!
+    ImU32 playheadCol = theme.modules.stroke_seq_playhead != 0 ? theme.modules.stroke_seq_playhead : IM_COL32(255, 0, 100, 255);
+    draw_list->AddLine({playheadX, canvas_p0.y}, {playheadX, canvas_p1.y}, playheadCol, 3.0f);
 
     // Eraser Visual Feedback (Right Mouse Button) - 80s neon style
     if (is_hovered && ImGui::IsMouseDown(ImGuiMouseButton_Right))
     {
         const float eraseRadius = 15.0f;
         ImVec2 center = ImVec2(canvas_p0.x + mouse_pos_in_canvas.x, canvas_p0.y + mouse_pos_in_canvas.y);
-        draw_list->AddCircleFilled(center, eraseRadius, IM_COL32(255, 0, 100, 80)); // Hot pink fill
-        draw_list->AddCircle(center, eraseRadius, IM_COL32(255, 0, 150, 220), 0, 2.5f); // Magenta outline
+        draw_list->AddCircleFilled(center, eraseRadius, playheadCol & IM_COL32(255, 255, 255, 80));
+        draw_list->AddCircle(center, eraseRadius, playheadCol, 0, 2.5f);
     }
 
     draw_list->PopClipRect();
@@ -731,9 +741,9 @@ void StrokeSequencerModuleProcessor::drawParametersInNode(float itemWidth, const
     float displayValue = (float)livePlayheadPosition.load();
 
     // Apply 80s retro styling to the playhead slider
-    ImGui::PushStyleColor(ImGuiCol_FrameBg, ImVec4(0.3f, 0.28f, 0.1f, 0.7f)); // Dark yellow-brown
-    ImGui::PushStyleColor(ImGuiCol_FrameBgHovered, ImVec4(0.4f, 0.38f, 0.15f, 0.8f));
-    ImGui::PushStyleColor(ImGuiCol_FrameBgActive, ImVec4(0.5f, 0.48f, 0.2f, 0.9f));
+    ImGui::PushStyleColor(ImGuiCol_FrameBg, theme.modules.stroke_seq_frame_bg);
+    ImGui::PushStyleColor(ImGuiCol_FrameBgHovered, theme.modules.stroke_seq_frame_bg_hovered);
+    ImGui::PushStyleColor(ImGuiCol_FrameBgActive, theme.modules.stroke_seq_frame_bg_active);
     ImGui::PushStyleColor(ImGuiCol_SliderGrab, ImVec4(1.0f, 0.0f, 0.4f, 1.0f)); // Hot pink grab
     ImGui::PushStyleColor(ImGuiCol_SliderGrabActive, ImVec4(1.0f, 0.3f, 0.6f, 1.0f));
 
@@ -805,7 +815,7 @@ void StrokeSequencerModuleProcessor::drawParametersInNode(float itemWidth, const
     // --- CANVAS CONTROLS ---
     ImGui::Spacing();
     ImGui::Spacing();
-    ImGui::TextColored(ImVec4(0.85f, 0.9f, 0.3f, 1.0f), "CONTROLS");
+    ThemeText("CONTROLS", theme.modules.stroke_seq_section);
     ImGui::Spacing();
     
     // 80s style Clear button - bright orange/red
@@ -838,7 +848,7 @@ void StrokeSequencerModuleProcessor::drawParametersInNode(float itemWidth, const
     ImGui::Spacing();
     
     // === STROKE PRESET MANAGEMENT ===
-    ImGui::TextColored(ImVec4(0.9f, 0.95f, 0.2f, 1.0f), "STROKE PRESETS");
+    ThemeText("STROKE PRESETS", theme.modules.stroke_seq_title);
     
     auto& presetManager = ControllerPresetManager::get();
     const auto& presetNames = presetManager.getPresetNamesFor(ControllerPresetManager::ModuleType::StrokeSequencer);
@@ -924,7 +934,7 @@ void StrokeSequencerModuleProcessor::drawParametersInNode(float itemWidth, const
     }
     
     ImGui::Spacing();
-    ImGui::TextColored(ImVec4(0.85f, 0.85f, 0.3f, 1.0f), "L-CLICK: DRAW  |  R-CLICK: ERASE");
+    ThemeText("L-CLICK: DRAW  |  R-CLICK: ERASE", theme.modules.stroke_seq_section);
 }
 #endif
 

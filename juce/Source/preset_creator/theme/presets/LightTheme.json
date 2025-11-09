@@ -713,6 +713,18 @@
             0.3,
             0.3,
             0.7
+        ],
+        "selection_rect": [
+            0.25,
+            0.5,
+            1.0,
+            0.2
+        ],
+        "selection_rect_outline": [
+            0.25,
+            0.5,
+            1.0,
+            0.85
         ]
     },
     "layout": {
@@ -732,7 +744,7 @@
     },
     "fonts": {
         "default_size": 16.0,
-        "default_path": ""
+        "default_path": "fonts/Karla-Regular.ttf"
     },
     "windows": {
         "status_overlay_alpha": 0.8,

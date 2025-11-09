@@ -109,6 +109,15 @@ ImU32 ThemeManager::getPinDisconnectedColor()
 	return currentTheme.imnodes.pin_disconnected;
 }
 
+ImU32 ThemeManager::getCategoryColor(ModuleCategory category) const
+{
+	if (auto it = currentTheme.imnodes.category_colors.find(category); it != currentTheme.imnodes.category_colors.end())
+		return it->second;
+	if (auto fallback = currentTheme.imnodes.category_colors.find(ModuleCategory::Default); fallback != currentTheme.imnodes.category_colors.end())
+		return fallback->second;
+	return IM_COL32(70, 70, 70, 255);
+}
+
 float ThemeManager::getSidebarWidth() const
 {
 	return currentTheme.layout.sidebar_width;
@@ -163,6 +172,16 @@ ImU32 ThemeManager::getDropTargetOverlay() const
 ImU32 ThemeManager::getMousePositionText() const
 {
 	return currentTheme.canvas.mouse_position_text;
+}
+
+ImU32 ThemeManager::getSelectionRect() const
+{
+	return currentTheme.canvas.selection_rect;
+}
+
+ImU32 ThemeManager::getSelectionRectOutline() const
+{
+	return currentTheme.canvas.selection_rect_outline;
 }
 
 // Node styling getters
@@ -416,6 +435,8 @@ bool ThemeManager::loadTheme(const juce::File& themeFile)
 		t.canvas.node_frame_selected = varToColor(o->getProperty("node_frame_selected"), t.canvas.node_frame_selected);
 		t.canvas.node_rounding = o->hasProperty("node_rounding") ? (float) o->getProperty("node_rounding") : t.canvas.node_rounding;
 		t.canvas.node_border_width = o->hasProperty("node_border_width") ? (float) o->getProperty("node_border_width") : t.canvas.node_border_width;
+		t.canvas.selection_rect = varToColor(o->getProperty("selection_rect"), t.canvas.selection_rect);
+		t.canvas.selection_rect_outline = varToColor(o->getProperty("selection_rect_outline"), t.canvas.selection_rect_outline);
 	}
 
 	// layout
@@ -495,6 +516,11 @@ bool ThemeManager::loadTheme(const juce::File& themeFile)
 		t.modules.videofx_section_header = varToVec4(o->getProperty("videofx_section_header"), t.modules.videofx_section_header);
 		t.modules.videofx_section_subheader = varToVec4(o->getProperty("videofx_section_subheader"), t.modules.videofx_section_subheader);
 		t.modules.scope_section_header = varToVec4(o->getProperty("scope_section_header"), t.modules.scope_section_header);
+		t.modules.sequencer_section_header = varToVec4(o->getProperty("sequencer_section_header"), t.modules.sequencer_section_header);
+		t.modules.sequencer_step_active_frame = varToVec4(o->getProperty("sequencer_step_active_frame"), t.modules.sequencer_step_active_frame);
+		t.modules.sequencer_step_active_grab = varToVec4(o->getProperty("sequencer_step_active_grab"), t.modules.sequencer_step_active_grab);
+		t.modules.sequencer_gate_active_frame = varToVec4(o->getProperty("sequencer_gate_active_frame"), t.modules.sequencer_gate_active_frame);
+		t.modules.sequencer_threshold_line = varToColor(o->getProperty("sequencer_threshold_line"), t.modules.sequencer_threshold_line);
 		t.modules.scope_plot_bg = varToColor(o->getProperty("scope_plot_bg"), t.modules.scope_plot_bg);
 		t.modules.scope_plot_fg = varToColor(o->getProperty("scope_plot_fg"), t.modules.scope_plot_fg);
 		t.modules.scope_plot_max = varToColor(o->getProperty("scope_plot_max"), t.modules.scope_plot_max);
@@ -678,6 +704,8 @@ bool ThemeManager::saveTheme(const juce::File& themeFile)
 		o->setProperty("node_frame_selected", colorToVar(currentTheme.canvas.node_frame_selected));
 		o->setProperty("node_rounding", currentTheme.canvas.node_rounding);
 		o->setProperty("node_border_width", currentTheme.canvas.node_border_width);
+		o->setProperty("selection_rect", colorToVar(currentTheme.canvas.selection_rect));
+		o->setProperty("selection_rect_outline", colorToVar(currentTheme.canvas.selection_rect_outline));
 		root->setProperty("canvas", juce::var(o.get()));
 	}
 
@@ -750,6 +778,11 @@ bool ThemeManager::saveTheme(const juce::File& themeFile)
 		o->setProperty("videofx_section_header", vec4ToVar(currentTheme.modules.videofx_section_header));
 		o->setProperty("videofx_section_subheader", vec4ToVar(currentTheme.modules.videofx_section_subheader));
 		o->setProperty("scope_section_header", vec4ToVar(currentTheme.modules.scope_section_header));
+		o->setProperty("sequencer_section_header", vec4ToVar(currentTheme.modules.sequencer_section_header));
+		o->setProperty("sequencer_step_active_frame", vec4ToVar(currentTheme.modules.sequencer_step_active_frame));
+		o->setProperty("sequencer_step_active_grab", vec4ToVar(currentTheme.modules.sequencer_step_active_grab));
+		o->setProperty("sequencer_gate_active_frame", vec4ToVar(currentTheme.modules.sequencer_gate_active_frame));
+		o->setProperty("sequencer_threshold_line", colorToVar(currentTheme.modules.sequencer_threshold_line));
 		o->setProperty("scope_plot_bg", colorToVar(currentTheme.modules.scope_plot_bg));
 		o->setProperty("scope_plot_fg", colorToVar(currentTheme.modules.scope_plot_fg));
 		o->setProperty("scope_plot_max", colorToVar(currentTheme.modules.scope_plot_max));
@@ -800,7 +833,7 @@ void ThemeManager::applyFonts(ImGuiIO& io)
 		juce::File file(path);
 		if (path.isNotEmpty() && !juce::File::isAbsolutePath(path))
 		{
-			auto baseDir = juce::File::getSpecialLocation(juce::File::currentApplicationFile).getParentDirectory();
+			auto baseDir = juce::File::getSpecialLocation(juce::File::currentExecutableFile).getParentDirectory();
 			file = baseDir.getChildFile(path);
 		}
 		return file;
@@ -1019,6 +1052,8 @@ void ThemeManager::loadDefaultTheme()
 	defaultTheme.canvas.node_frame_selected = IM_COL32(255, 200, 0, 255);
 	defaultTheme.canvas.node_rounding = 4.0f;
 	defaultTheme.canvas.node_border_width = 1.0f;
+	defaultTheme.canvas.selection_rect = IM_COL32(80, 140, 255, 64);
+	defaultTheme.canvas.selection_rect_outline = IM_COL32(80, 140, 255, 200);
 
 	// Windows
 	defaultTheme.windows.status_overlay_alpha = 0.5f;
@@ -1027,6 +1062,13 @@ void ThemeManager::loadDefaultTheme()
 	defaultTheme.windows.notifications_alpha = 0.92f;
 	defaultTheme.windows.probe_scope_width = 260.0f;
 	defaultTheme.windows.probe_scope_height = 180.0f;
+
+	// Module defaults
+	defaultTheme.modules.sequencer_section_header = ImVec4(0.5f, 1.0f, 0.7f, 1.0f);
+	defaultTheme.modules.sequencer_step_active_frame = ImVec4(0.3f, 0.7f, 1.0f, 1.0f);
+	defaultTheme.modules.sequencer_step_active_grab = ImVec4(0.9f, 0.9f, 0.9f, 1.0f);
+	defaultTheme.modules.sequencer_gate_active_frame = ImVec4(1.0f, 0.7f, 0.3f, 1.0f);
+	defaultTheme.modules.sequencer_threshold_line = IM_COL32(255, 255, 0, 200);
 }
 
 void ThemeManager::saveUserThemePreference(const juce::String& themeFilename)

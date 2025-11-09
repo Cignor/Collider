@@ -1,4 +1,8 @@
 #include "LFOModuleProcessor.h"
+
+#if defined(PRESET_CREATOR_UI)
+#include "../../preset_creator/theme/ThemeManager.h"
+#endif
 #include "../graph/ModularSynthProcessor.h"
 
 LFOModuleProcessor::LFOModuleProcessor()

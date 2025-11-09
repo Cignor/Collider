@@ -3,6 +3,10 @@
 #include <glm/gtc/matrix_transform.hpp>
 #include <algorithm>
 
+#if defined(PRESET_CREATOR_UI)
+#include "../../preset_creator/theme/ThemeManager.h"
+#endif
+
 // Helper function to recursively build edge list from skeleton hierarchy
 void buildEdgeListRecursive(
     const NodeData& node,
@@ -564,6 +568,7 @@ void AnimationModuleProcessor::drawParametersInNode(float itemWidth,
                                                      const std::function<void()>& onModificationEnded)
 {
     ImGui::PushItemWidth(itemWidth);
+    const auto& theme = ThemeManager::getInstance().getCurrentTheme();
     
     // File loading section
     ImGui::TextWrapped("glTF File:");
@@ -575,7 +580,7 @@ void AnimationModuleProcessor::drawParametersInNode(float itemWidth,
     if (isCurrentlyLoading())
     {
         // Show a loading indicator while file is being loaded in the background
-        ImGui::TextColored(ImVec4(1.0f, 1.0f, 0.0f, 1.0f), "Loading...");
+        ThemeText("Loading...", theme.text.warning);
         ImGui::SameLine();
         // Simple animated spinner
         static float spinnerAngle = 0.0f;
@@ -585,13 +590,13 @@ void AnimationModuleProcessor::drawParametersInNode(float itemWidth,
     else if (currentAnimator != nullptr && currentAnimator->GetAnimationData() != nullptr)
     {
         auto* animData = currentAnimator->GetAnimationData();
-        ImGui::TextColored(ImVec4(0.4f, 1.0f, 0.4f, 1.0f), "Loaded");
+        ThemeText("Loaded", theme.text.success);
         ImGui::Text("Bones: %zu", animData->boneInfoMap.size());
         ImGui::Text("Clips: %zu", animData->animationClips.size());
     }
     else
     {
-        ImGui::TextColored(ImVec4(1.0f, 0.4f, 0.4f, 1.0f), "No file loaded");
+        ThemeText("No file loaded", theme.text.error);
     }
     
     // Disable button while loading

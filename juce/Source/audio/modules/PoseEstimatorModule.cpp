@@ -7,6 +7,7 @@
 #if defined(PRESET_CREATOR_UI)
 #include <imgui.h>
 #include "../../preset_creator/ImGuiNodeEditorComponent.h"
+#include "../../preset_creator/theme/ThemeManager.h"
 #endif
 
 void PoseEstimatorModule::loadModel(int modelIndex)
@@ -575,6 +576,7 @@ void PoseEstimatorModule::drawParametersInNode(float itemWidth,
                                               const std::function<bool(const juce::String& paramId)>& isParamModulated,
                                               const std::function<void()>& onModificationEnded)
 {
+    const auto& theme = ThemeManager::getInstance().getCurrentTheme();
     ImGui::PushItemWidth(itemWidth);
     
     // GPU ACCELERATION TOGGLE
@@ -674,13 +676,15 @@ void PoseEstimatorModule::drawParametersInNode(float itemWidth,
     // Status display
     if (modelLoaded)
     {
-        ImGui::TextColored(ImVec4(0.0f, 1.0f, 0.0f, 1.0f), "Model: Loaded");
-        ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1.0f), "Keypoints: %d/%d", 
-                          lastResultForAudio.detectedPoints, MPI_NUM_KEYPOINTS);
+        ThemeText("Model: Loaded", theme.text.success);
+        ThemeText(juce::String::formatted("Keypoints: %d/%d",
+                                          lastResultForAudio.detectedPoints,
+                                          MPI_NUM_KEYPOINTS).toRawUTF8(),
+                  theme.text.section_header);
     }
     else
     {
-        ImGui::TextColored(ImVec4(1.0f, 0.0f, 0.0f, 1.0f), "Model: NOT LOADED");
+        ThemeText("Model: NOT LOADED", theme.text.error);
         ImGui::TextWrapped("Place model files in: assets/openpose_models/pose/mpi/");
     }
     

@@ -1,6 +1,10 @@
 #include "BPMMonitorModuleProcessor.h"
 #include "../graph/ModularSynthProcessor.h"
 
+#if defined(PRESET_CREATOR_UI)
+#include "../../preset_creator/theme/ThemeManager.h"
+#endif
+
 juce::AudioProcessorValueTreeState::ParameterLayout BPMMonitorModuleProcessor::createParameterLayout()
 {
     std::vector<std::unique_ptr<juce::RangedAudioParameter>> params;
@@ -283,10 +287,11 @@ void BPMMonitorModuleProcessor::drawParametersInNode(float itemWidth,
                                                       const std::function<void()>& onModificationEnded)
 {
     juce::ignoreUnused(isParamModulated);
+    const auto& theme = ThemeManager::getInstance().getCurrentTheme();
     
     ImGui::PushItemWidth(itemWidth);
     
-    ImGui::TextColored(ImVec4(0.3f, 0.8f, 1.0f, 1.0f), "BPM MONITOR");
+    ThemeText("BPM MONITOR", theme.modules.sequencer_section_header);
     
     // Mode selector
     int mode = apvts.getRawParameterValue("mode")->load();
@@ -370,7 +375,7 @@ void BPMMonitorModuleProcessor::drawParametersInNode(float itemWidth,
             // Introspected sources
             if (!m_introspectedSources.empty())
             {
-                ImGui::TextColored(ImVec4(0.5f, 1.0f, 0.5f, 1.0f), "Introspected:");
+                ThemeText("Introspected:", theme.text.success);
                 for (const auto& source : m_introspectedSources)
                 {
                     ImGui::BulletText("%s: %.1f BPM %s", 
@@ -383,7 +388,7 @@ void BPMMonitorModuleProcessor::drawParametersInNode(float itemWidth,
             // Detected sources
             if (!m_detectedSources.empty())
             {
-                ImGui::TextColored(ImVec4(1.0f, 0.8f, 0.3f, 1.0f), "Detected:");
+                ThemeText("Detected:", theme.text.warning);
                 for (const auto& source : m_detectedSources)
                 {
                     ImGui::BulletText("%s: %.1f BPM (%.0f%% conf)", 

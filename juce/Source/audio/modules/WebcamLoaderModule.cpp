@@ -6,6 +6,7 @@
 
 #if defined(PRESET_CREATOR_UI)
 #include <imgui.h>
+#include "../../preset_creator/theme/ThemeManager.h"
 #endif
 
 juce::AudioProcessorValueTreeState::ParameterLayout WebcamLoaderModule::createParameterLayout()
@@ -192,6 +193,7 @@ void WebcamLoaderModule::drawParametersInNode(float itemWidth,
                                               const std::function<bool(const juce::String& paramId)>& isParamModulated,
                                               const std::function<void()>& onModificationEnded)
 {
+    const auto& theme = ThemeManager::getInstance().getCurrentTheme();
     ImGui::PushItemWidth(itemWidth);
     
     // Get the latest list from the fast, cached singleton
@@ -284,7 +286,8 @@ void WebcamLoaderModule::drawParametersInNode(float itemWidth,
     }
     if (atMax) ImGui::EndDisabled();
     
-    ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1.0f), "Source ID: %d", (int)getLogicalId());
+    const juce::String sourceText = juce::String::formatted("Source ID: %d", (int)getLogicalId());
+    ThemeText(sourceText.toRawUTF8(), theme.text.section_header);
     
     ImGui::PopItemWidth();
 }

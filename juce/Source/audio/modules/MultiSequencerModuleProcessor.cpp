@@ -5,6 +5,7 @@
 
 #if defined(PRESET_CREATOR_UI)
 #include "../../preset_creator/ImGuiNodeEditorComponent.h"
+#include "../../preset_creator/theme/ThemeManager.h"
 #endif
 
 using APVTS = juce::AudioProcessorValueTreeState;
@@ -419,6 +420,11 @@ void MultiSequencerModuleProcessor::processBlock (juce::AudioBuffer<float>& buff
 void MultiSequencerModuleProcessor::drawParametersInNode (float itemWidth, const std::function<bool(const juce::String& paramId)>& isParamModulated, const std::function<void()>& onModificationEnded)
 {
     auto& ap = getAPVTS();
+    const auto& theme = ThemeManager::getInstance().getCurrentTheme();
+    const ImVec4& stepActiveFrame = theme.modules.sequencer_step_active_frame;
+    const ImVec4& stepActiveGrab = theme.modules.sequencer_step_active_grab;
+    const ImVec4& gateActiveFrame = theme.modules.sequencer_gate_active_frame;
+    const ImU32 thresholdColor = theme.modules.sequencer_threshold_line != 0 ? theme.modules.sequencer_threshold_line : IM_COL32(255, 255, 0, 200);
     int activeSteps = numStepsParam ? (int)numStepsParam->load() : 8;
     const int boundMaxUi = stepsModMaxParam ? juce::jlimit(1, MAX_STEPS, (int)stepsModMaxParam->load()) : MAX_STEPS;
     const bool stepsAreModulated = isParamInputConnected("numSteps_mod");
@@ -456,8 +462,9 @@ void MultiSequencerModuleProcessor::drawParametersInNode (float itemWidth, const
         float sliderValue = modConnected ? liveValue : baseValue;
         const bool isActive = (i == currentStep.load());
         if (isActive) {
-            ImGui::PushStyleColor(ImGuiCol_FrameBg, ImVec4(0.3f, 0.7f, 1.0f, 1.0f));
-            ImGui::PushStyleColor(ImGuiCol_SliderGrab, ImVec4(0.9f, 0.9f, 0.9f, 1.0f));
+            ImGui::PushStyleColor(ImGuiCol_FrameBg, stepActiveFrame);
+            ImGui::PushStyleColor(ImGuiCol_SliderGrab, stepActiveGrab);
+            ImGui::PushStyleColor(ImGuiCol_SliderGrabActive, stepActiveGrab);
         }
         ImGui::PushID(i);
         if (modConnected) ImGui::BeginDisabled();
@@ -474,7 +481,7 @@ void MultiSequencerModuleProcessor::drawParametersInNode (float itemWidth, const
             }
         }
         if (modConnected) ImGui::EndDisabled();
-        if (isActive) ImGui::PopStyleColor(2);
+        if (isActive) ImGui::PopStyleColor(3);
         ImGui::PopID();
     }
     ImGui::EndGroup();  // End pitch sliders group
@@ -495,7 +502,7 @@ void MultiSequencerModuleProcessor::drawParametersInNode (float itemWidth, const
         const bool modConnected = isParamInputConnected(modPid);
         float sliderValue = modConnected ? getLiveParamValueFor(modPid, "gate_live_" + juce::String(i + 1), baseGateValue) : baseGateValue;
         const bool isActive = (i == currentStep.load());
-        if (isActive) ImGui::PushStyleColor(ImGuiCol_FrameBg, ImVec4(1.0f, 0.7f, 0.3f, 1.0f));
+        if (isActive) ImGui::PushStyleColor(ImGuiCol_FrameBg, gateActiveFrame);
         if (modConnected) ImGui::BeginDisabled();
         if (ImGui::VSliderFloat("##g", ImVec2(sliderW, 60.0f), &sliderValue, 0.0f, 1.0f, "")) {
             if (!modConnected && stepGateParams[i]) if (auto* p = dynamic_cast<juce::AudioParameterFloat*>(ap.getParameter("step" + juce::String(i + 1) + "_gate"))) *p = sliderValue;
@@ -521,7 +528,7 @@ void MultiSequencerModuleProcessor::drawParametersInNode (float itemWidth, const
     const float slider_height = 60.0f;
     const float row_width = (sliderW * shown) + (spacing * (shown - 1));
     const float line_y = gate_sliders_p0.y + (1.0f - threshold_value) * slider_height;
-    ImGui::GetWindowDrawList()->AddLine(ImVec2(gate_sliders_p0.x, line_y), ImVec2(gate_sliders_p0.x + row_width, line_y), IM_COL32(255, 255, 0, 200), 2.0f);
+    ImGui::GetWindowDrawList()->AddLine(ImVec2(gate_sliders_p0.x, line_y), ImVec2(gate_sliders_p0.x + row_width, line_y), thresholdColor, 2.0f);
     
     // Apply spacing for trigger checkbox grid (MOVED HERE - directly after gate sliders!)
     ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(spacing, spacing));
@@ -583,7 +590,7 @@ void MultiSequencerModuleProcessor::drawParametersInNode (float itemWidth, const
             {
                 ImGui::BeginTooltip();
                 ImGui::PushTextWrapPos(ImGui::GetFontSize() * 25.0f);
-                ImGui::TextColored(ImVec4(1.0f, 0.8f, 0.0f, 1.0f), "Tempo Clock Division Override Active");
+                ThemeText("Tempo Clock Division Override Active", theme.text.warning);
                 ImGui::TextUnformatted("A Tempo Clock node with 'Division Override' enabled is controlling the global division.");
                 ImGui::PopTextWrapPos();
                 ImGui::EndTooltip();

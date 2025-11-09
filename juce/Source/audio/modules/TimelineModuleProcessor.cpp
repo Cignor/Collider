@@ -4,6 +4,7 @@
 
 #if defined(PRESET_CREATOR_UI)
 #include <imgui.h>
+#include "../../preset_creator/theme/ThemeManager.h"
 #endif
 
 juce::AudioProcessorValueTreeState::ParameterLayout TimelineModuleProcessor::createParameterLayout()
@@ -367,8 +368,10 @@ void TimelineModuleProcessor::drawParametersInNode(float itemWidth,
     juce::ignoreUnused(isParamModulated, onModificationEnded);
     
     ImGui::PushItemWidth(itemWidth);
+    const auto& theme = ThemeManager::getInstance().getCurrentTheme();
+    const ImGuiStyle& style = ImGui::GetStyle();
     
-    ImGui::TextColored(ImVec4(0.3f, 0.8f, 1.0f, 1.0f), "TIMELINE");
+    ThemeText("TIMELINE", theme.text.section_header);
     ImGui::Separator();
     
     // Record and Play buttons (mutually exclusive)
@@ -376,10 +379,10 @@ void TimelineModuleProcessor::drawParametersInNode(float itemWidth,
     bool isPlayingBack = playParam && playParam->get();
     
     // Record button
-    if (isRecording)
-        ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(1.0f, 0.2f, 0.2f, 1.0f));
-    else
-        ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.3f, 0.3f, 0.3f, 1.0f));
+    const ImVec4 recordActive = theme.text.error;
+    ImGui::PushStyleColor(ImGuiCol_Button, isRecording ? recordActive : style.Colors[ImGuiCol_Button]);
+    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, isRecording ? recordActive : style.Colors[ImGuiCol_ButtonHovered]);
+    ImGui::PushStyleColor(ImGuiCol_ButtonActive, isRecording ? recordActive : style.Colors[ImGuiCol_ButtonActive]);
     
     if (ImGui::Button(isRecording ? "● REC" : "REC", ImVec2(itemWidth * 0.48f, 40)))
     {
@@ -392,15 +395,15 @@ void TimelineModuleProcessor::drawParametersInNode(float itemWidth,
         }
         onModificationEnded();
     }
-    ImGui::PopStyleColor();
+    ImGui::PopStyleColor(3);
     
     ImGui::SameLine();
     
     // Play button
-    if (isPlayingBack)
-        ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.2f, 1.0f, 0.2f, 1.0f));
-    else
-        ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.3f, 0.3f, 0.3f, 1.0f));
+    const ImVec4 playActive = theme.text.success;
+    ImGui::PushStyleColor(ImGuiCol_Button, isPlayingBack ? playActive : style.Colors[ImGuiCol_Button]);
+    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, isPlayingBack ? playActive : style.Colors[ImGuiCol_ButtonHovered]);
+    ImGui::PushStyleColor(ImGuiCol_ButtonActive, isPlayingBack ? playActive : style.Colors[ImGuiCol_ButtonActive]);
     
     if (ImGui::Button(isPlayingBack ? "▶ PLAY" : "PLAY", ImVec2(itemWidth * 0.48f, 40)))
     {
@@ -413,13 +416,13 @@ void TimelineModuleProcessor::drawParametersInNode(float itemWidth,
         }
         onModificationEnded();
     }
-    ImGui::PopStyleColor();
+    ImGui::PopStyleColor(3);
     
     ImGui::Spacing();
     ImGui::Separator();
     
     // Channel management
-    ImGui::TextColored(ImVec4(0.5f, 1.0f, 0.7f, 1.0f), "Channels");
+    ThemeText("Channels", theme.text.section_header);
     
     // Add/Remove buttons
     if (ImGui::Button("+ Add", ImVec2(itemWidth * 0.48f, 25)))
@@ -497,7 +500,7 @@ void TimelineModuleProcessor::drawParametersInNode(float itemWidth,
     ImGui::Spacing();
     ImGui::Separator();
     
-    ImGui::TextColored(ImVec4(0.5f, 1.0f, 0.7f, 1.0f), "Transport Status");
+    ThemeText("Transport Status", theme.text.section_header);
     ImGui::Spacing();
     
     float currentPos = getLiveParamValue("song_position_beats_live", 0.0f);

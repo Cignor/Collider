@@ -7,6 +7,7 @@
 #if defined(PRESET_CREATOR_UI)
 #include <imgui.h>
 #include "../../preset_creator/ImGuiNodeEditorComponent.h"
+#include "../../preset_creator/theme/ThemeManager.h"
 #endif
 
 juce::AudioProcessorValueTreeState::ParameterLayout HumanDetectorModule::createParameterLayout()
@@ -513,6 +514,7 @@ void HumanDetectorModule::drawParametersInNode(float itemWidth,
                                                const std::function<bool(const juce::String& paramId)>& isParamModulated,
                                                const std::function<void()>& onModificationEnded)
 {
+    const auto& theme = ThemeManager::getInstance().getCurrentTheme();
     ImGui::PushItemWidth(itemWidth);
     
     // GPU ACCELERATION TOGGLE
@@ -620,11 +622,12 @@ void HumanDetectorModule::drawParametersInNode(float itemWidth,
     juce::uint32 sourceId = currentSourceId.load();
     if (sourceId > 0)
     {
-        ImGui::TextColored(ImVec4(0.5f, 1.0f, 0.5f, 1.0f), "Connected to Source: %d", (int)sourceId);
+        const juce::String text = juce::String::formatted("Connected to Source: %d", (int)sourceId);
+        ThemeText(text.toRawUTF8(), theme.text.active);
     }
     else
     {
-        ImGui::TextColored(ImVec4(1.0f, 0.5f, 0.5f, 1.0f), "No source connected");
+        ThemeText("No source connected", theme.text.error);
     }
     
     ImGui::PopItemWidth();

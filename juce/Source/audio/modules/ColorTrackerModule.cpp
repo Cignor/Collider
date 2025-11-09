@@ -6,6 +6,7 @@
 #if defined(PRESET_CREATOR_UI)
 #include <imgui.h>
 #include "../../preset_creator/ImGuiNodeEditorComponent.h"
+#include "../../preset_creator/theme/ThemeManager.h"
 #endif
 
 juce::AudioProcessorValueTreeState::ParameterLayout ColorTrackerModule::createParameterLayout()
@@ -536,6 +537,7 @@ void ColorTrackerModule::drawParametersInNode(float itemWidth,
                                               const std::function<void()>& onModificationEnded)
 {
     juce::ignoreUnused(isParamModulated);
+    const auto& theme = ThemeManager::getInstance().getCurrentTheme();
     ImGui::PushItemWidth(itemWidth);
     
     // GPU ACCELERATION TOGGLE
@@ -601,7 +603,7 @@ void ColorTrackerModule::drawParametersInNode(float itemWidth,
 
     if (isColorPickerActive.load())
     {
-        ImGui::TextColored(ImVec4(1.f,1.f,0.f,1.f), "Click on the video preview to pick a color");
+        ThemeText("Click on the video preview to pick a color", theme.text.warning);
     }
 
     // Auto-Connect Buttons

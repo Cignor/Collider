@@ -17,6 +17,20 @@
   #define GL_UNSIGNED_BYTE 0x1401
 #endif
 
+namespace
+{
+static juce::File resolveFontPath(const juce::String& path)
+{
+    juce::File file(path);
+    if (path.isNotEmpty() && !juce::File::isAbsolutePath(path))
+    {
+        auto exeDir = juce::File::getSpecialLocation(juce::File::currentExecutableFile).getParentDirectory();
+        file = exeDir.getChildFile(path);
+    }
+    return file;
+}
+}
+
 ThemeEditorComponent::ThemeEditorComponent(ImGuiNodeEditorComponent* parent)
     : parentEditor(parent)
 {
@@ -2040,6 +2054,7 @@ void ThemeEditorComponent::syncFontBuffersFromWorkingCopy()
 {
     const std::string defaultPath = m_workingCopy.fonts.default_path.toStdString();
     std::snprintf(m_defaultFontPathBuffer.data(), m_defaultFontPathBuffer.size(), "%s", defaultPath.c_str());
+    m_selectedFontIndex = findScannedFontIndex(m_workingCopy.fonts.default_path);
 }
 
 void ThemeEditorComponent::previewFontChanges()
@@ -2048,6 +2063,7 @@ void ThemeEditorComponent::previewFontChanges()
     liveFonts.default_path = m_workingCopy.fonts.default_path;
     liveFonts.default_size = m_workingCopy.fonts.default_size;
     ThemeManager::getInstance().requestFontReload();
+    m_selectedFontIndex = findScannedFontIndex(m_workingCopy.fonts.default_path);
 }
 
 void ThemeEditorComponent::scanFontFolder()
@@ -2061,15 +2077,15 @@ void ThemeEditorComponent::scanFontFolder()
 
     if (fontsDir.isDirectory())
     {
-        auto addFontsForPattern = [this, &fontsDir](const juce::String& pattern)
+        auto addFontsForPattern = [this, &fontsDir, &exeDir](const juce::String& pattern)
         {
             juce::Array<juce::File> files;
             fontsDir.findChildFiles(files, juce::File::findFiles, false, pattern);
             for (const auto& file : files)
             {
-                const juce::String fullPath = file.getFullPathName();
-                if (!m_scannedFontFiles.contains(fullPath))
-                    m_scannedFontFiles.add(fullPath);
+                const juce::String relativePath = file.getRelativePathFrom(exeDir);
+                if (!m_scannedFontFiles.contains(relativePath))
+                    m_scannedFontFiles.add(relativePath);
             }
         };
 
@@ -2078,6 +2094,7 @@ void ThemeEditorComponent::scanFontFolder()
         addFontsForPattern("*.ttc");
     }
 
+    m_scannedFontFiles.sort(true);
     juce::Logger::writeToLog("[ThemeEditor] Found " + juce::String(m_scannedFontFiles.size()) + " font files.");
 }
 
@@ -2086,12 +2103,11 @@ int ThemeEditorComponent::findScannedFontIndex(const juce::String& path) const
     if (path.isEmpty())
         return -1;
 
-    juce::File target(path);
-    const juce::String normalised = target.getFullPathName();
+    const juce::String normalised = resolveFontPath(path).getFullPathName();
 
     for (int i = 0; i < m_scannedFontFiles.size(); ++i)
     {
-        if (juce::File(m_scannedFontFiles[i]).getFullPathName() == normalised)
+        if (resolveFontPath(m_scannedFontFiles[i]).getFullPathName() == normalised)
             return i;
     }
     return -1;

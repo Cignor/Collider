@@ -93,6 +93,8 @@ struct Theme
 		ImU32 node_frame_selected { 0 };
 		float node_rounding { 0.0f };
 		float node_border_width { 0.0f };
+		ImU32 selection_rect { 0 };
+		ImU32 selection_rect_outline { 0 };
 	} canvas;
 
 	struct LayoutSettings
@@ -149,6 +151,13 @@ struct Theme
 		ImVec4 videofx_section_header { 0.7f, 0.7f, 0.7f, 1.0f };
 		ImVec4 videofx_section_subheader { 0.9f, 0.9f, 0.5f, 1.0f };
 		ImVec4 scope_section_header { 0.7f, 0.7f, 0.7f, 1.0f };
+		ImVec4 sequencer_section_header { 0.5f, 1.0f, 0.7f, 1.0f };
+		ImVec4 sequencer_step_active_frame { 0.3f, 0.7f, 1.0f, 1.0f };
+		ImVec4 sequencer_step_active_grab { 0.9f, 0.9f, 0.9f, 1.0f };
+		ImVec4 sequencer_gate_active_frame { 1.0f, 0.7f, 0.3f, 1.0f };
+		ImU32 sequencer_threshold_line { IM_COL32(255, 255, 0, 200) };
+		ImVec4 stroke_seq_title { 0.9f, 0.95f, 0.2f, 1.0f };
+		ImVec4 stroke_seq_section { 0.85f, 0.9f, 0.3f, 1.0f };
 		ImU32 scope_plot_bg { 0 };
 		ImU32 scope_plot_fg { 0 };
 		ImU32 scope_plot_max { 0 };

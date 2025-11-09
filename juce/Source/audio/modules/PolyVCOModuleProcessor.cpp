@@ -1,5 +1,9 @@
 #include "PolyVCOModuleProcessor.h"
 
+#if defined(PRESET_CREATOR_UI)
+#include "../../preset_creator/theme/ThemeManager.h"
+#endif
+
 juce::AudioProcessorValueTreeState::ParameterLayout PolyVCOModuleProcessor::createParameterLayout()
 {
     std::vector<std::unique_ptr<juce::RangedAudioParameter>> p;
@@ -318,6 +322,7 @@ void PolyVCOModuleProcessor::drawParametersInNode(float itemWidth, const std::fu
                                                  const std::function<void()>& onModificationEnded)
 {
     auto& ap = getAPVTS();
+    const auto& theme = ThemeManager::getInstance().getCurrentTheme();
 
     // Helper for tooltips
     auto HelpMarkerPoly = [](const char* desc) {
@@ -331,7 +336,7 @@ void PolyVCOModuleProcessor::drawParametersInNode(float itemWidth, const std::fu
     };
 
     // === MASTER CONTROLS SECTION ===
-    ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1.0f), "Master Controls");
+    ThemeText("Master Controls", theme.text.section_header);
     ImGui::Spacing();
 
     // Master Voice Count Control with Live Feedback
@@ -365,7 +370,7 @@ void PolyVCOModuleProcessor::drawParametersInNode(float itemWidth, const std::fu
     ImGui::Spacing();
 
     // === FREQUENCY MODULATION MODE SECTION ===
-    ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1.0f), "Frequency Modulation");
+    ThemeText("Frequency Modulation", theme.text.section_header);
     ImGui::Spacing();
     
     bool relativeFreqMod = relativeFreqModParam ? relativeFreqModParam->get() : true;
@@ -385,7 +390,7 @@ void PolyVCOModuleProcessor::drawParametersInNode(float itemWidth, const std::fu
     ImGui::Spacing();
 
     // === PORTAMENTO SECTION ===
-    ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1.0f), "Glide");
+    ThemeText("Glide", theme.text.section_header);
     ImGui::Spacing();
     
     float portamentoTime = portamentoParam ? portamentoParam->get() : 0.0f;
@@ -457,7 +462,7 @@ void PolyVCOModuleProcessor::drawParametersInNode(float itemWidth, const std::fu
     ImGui::Spacing();
 
     // === PER-VOICE CONTROLS SECTION (TABLE SYSTEM) ===
-    ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1.0f), "Voice Parameters");
+    ThemeText("Voice Parameters", theme.text.section_header);
     ImGui::TextDisabled("Clean table view - inputs on left, outputs on right");
     ImGui::Spacing();
 

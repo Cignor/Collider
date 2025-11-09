@@ -2,6 +2,7 @@
 
 #if defined(PRESET_CREATOR_UI)
 #include <imgui.h>
+#include "../../preset_creator/theme/ThemeManager.h"
 #endif
 
 SnapshotSequencerModuleProcessor::SnapshotSequencerModuleProcessor()
@@ -207,6 +208,7 @@ void SnapshotSequencerModuleProcessor::setExtraStateTree(const juce::ValueTree& 
 void SnapshotSequencerModuleProcessor::drawParametersInNode (float itemWidth, const std::function<bool(const juce::String& paramId)>& isParamModulated, const std::function<void()>& onModificationEnded)
 {
     juce::ignoreUnused(isParamModulated, onModificationEnded);
+    const auto& theme = ThemeManager::getInstance().getCurrentTheme();
     
     ImGui::PushItemWidth(itemWidth);
     
@@ -224,7 +226,7 @@ void SnapshotSequencerModuleProcessor::drawParametersInNode (float itemWidth, co
     
     ImGui::PopItemWidth();
     
-    ImGui::Text("Snapshots:");
+    ThemeText("Snapshots:", theme.modules.sequencer_section_header);
     
     // Display current step
     int currentStepIndex = currentStep.load();
@@ -238,19 +240,12 @@ void SnapshotSequencerModuleProcessor::drawParametersInNode (float itemWidth, co
     {
         ImGui::PushID(i);
         
-        // Highlight current step
+        const juce::String label = "Step " + juce::String(i + 1) + ":";
         if (i == currentStepIndex)
-        {
-            ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 1.0f, 0.0f, 1.0f));
-        }
-        
-        ImGui::Text("Step %d:", i + 1);
-        
-        if (i == currentStepIndex)
-        {
-            ImGui::PopStyleColor();
-        }
-        
+            ThemeText(label.toRawUTF8(), theme.text.section_header);
+        else
+            ThemeText(label.toRawUTF8());
+
         ImGui::SameLine();
         
         bool stored = isSnapshotStored(i);
@@ -258,11 +253,11 @@ void SnapshotSequencerModuleProcessor::drawParametersInNode (float itemWidth, co
         // Status indicator
         if (stored)
         {
-            ImGui::TextColored(ImVec4(0.0f, 1.0f, 0.0f, 1.0f), "[STORED]");
+            ThemeText("[STORED]", theme.text.success);
         }
         else
         {
-            ImGui::TextColored(ImVec4(0.5f, 0.5f, 0.5f, 1.0f), "[EMPTY]");
+            ThemeText("[EMPTY]", theme.text.disabled);
         }
         
         // Note: Capture and Clear buttons are handled by the ImGuiNodeEditorComponent

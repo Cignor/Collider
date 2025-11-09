@@ -11,6 +11,7 @@
 
 #if defined(PRESET_CREATOR_UI)
 #include <imgui.h>
+#include "../../preset_creator/theme/ThemeManager.h"
 #endif
 
 juce::AudioProcessorValueTreeState::ParameterLayout VideoFXModule::createParameterLayout()
@@ -621,6 +622,11 @@ void VideoFXModule::drawParametersInNode(float itemWidth,
                                          const std::function<void()>& onModificationEnded)
 {
     juce::ignoreUnused(isParamModulated);
+    const auto& theme = ThemeManager::getInstance().getCurrentTheme();
+    auto themeText = [](const juce::String& text, const ImVec4& colour)
+    {
+        ThemeText(text.toRawUTF8(), colour);
+    };
     
     ImGui::PushItemWidth(itemWidth);
     
@@ -696,10 +702,10 @@ void VideoFXModule::drawParametersInNode(float itemWidth,
     }
     if (atMax) ImGui::EndDisabled();
     
-    ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1.0f), "Source ID In: %d", (int)currentSourceId.load());
-    ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1.0f), "Output ID: %d", (int)getLogicalId());
+    themeText(juce::String::formatted("Source ID In: %d", (int)currentSourceId.load()), theme.modules.videofx_section_header);
+    themeText(juce::String::formatted("Output ID: %d", (int)getLogicalId()), theme.modules.videofx_section_header);
     
-    ImGui::TextColored(ImVec4(0.9f, 0.9f, 0.5f, 1.0f), "Color Adjustments");
+    themeText("Color Adjustments", theme.modules.videofx_section_subheader);
     
     // Color sliders
     float brightness = brightnessParam ? brightnessParam->load() : 0.0f;
@@ -765,7 +771,7 @@ void VideoFXModule::drawParametersInNode(float itemWidth,
         onModificationEnded();
     }
     
-    ImGui::TextColored(ImVec4(0.9f, 0.9f, 0.5f, 1.0f), "Filters & Effects");
+    themeText("Filters & Effects", theme.modules.videofx_section_subheader);
     
     // Filter sliders
     float sharpen = sharpenParam ? sharpenParam->load() : 0.0f;
@@ -811,7 +817,7 @@ void VideoFXModule::drawParametersInNode(float itemWidth,
         onModificationEnded();
     }
     
-    ImGui::TextColored(ImVec4(0.9f, 0.9f, 0.5f, 1.0f), "More Filters");
+    themeText("More Filters", theme.modules.videofx_section_subheader);
 
     // Threshold Effect
     bool threshEnable = thresholdEnableParam ? thresholdEnableParam->get() : false;
@@ -875,7 +881,7 @@ void VideoFXModule::drawParametersInNode(float itemWidth,
         }
     }
     
-    ImGui::TextColored(ImVec4(0.9f, 0.9f, 0.5f, 1.0f), "Advanced Effects");
+    themeText("Advanced Effects", theme.modules.videofx_section_subheader);
     
     // Vignette
     float vignetteAmount = vignetteAmountParam ? vignetteAmountParam->load() : 0.0f;

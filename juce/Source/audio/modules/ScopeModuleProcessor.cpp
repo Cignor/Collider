@@ -1,4 +1,5 @@
 #include "ScopeModuleProcessor.h"
+#include "../../preset_creator/theme/ThemeManager.h"
 
 ScopeModuleProcessor::ScopeModuleProcessor()
     : ModuleProcessor (BusesProperties()
@@ -96,8 +97,20 @@ void ScopeModuleProcessor::drawParametersInNode (float itemWidth, const std::fun
     float seconds = monitorSecondsParam ? monitorSecondsParam->load() : 5.0f;
     ImGui::PushItemWidth (itemWidth);
     
+    const auto& theme = ThemeManager::getInstance().getCurrentTheme();
+
+    auto themeText = [](const juce::String& text, const ImVec4& colour)
+    {
+        ThemeText(text.toRawUTF8(), colour);
+    };
+
+    auto pickColor = [](ImU32 candidate, ImU32 fallback)
+    {
+        return candidate != 0 ? candidate : fallback;
+    };
+
     // === SCOPE SETTINGS SECTION ===
-    ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1.0f), "Scope Settings");
+    themeText("Scope Settings", theme.modules.scope_section_header);
     ImGui::Spacing();
     
     if (ImGui::SliderFloat ("Seconds", &seconds, 0.5f, 20.0f, "%.1f s"))
@@ -116,17 +129,17 @@ void ScopeModuleProcessor::drawParametersInNode (float itemWidth, const std::fun
     ImGui::Spacing();
 
     // === LIVE WAVEFORM SECTION ===
-    ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1.0f), "Live Waveform");
+    themeText("Live Waveform", theme.modules.scope_section_header);
     ImGui::Spacing();
 
     // Draw waveform using ImGui draw list
     auto* dl = ImGui::GetWindowDrawList();
     const ImVec2 origin = ImGui::GetCursorScreenPos();
     const float width = 240.0f; const float height = 80.0f;
-    const ImU32 bg = IM_COL32(30,30,30,255);
-    const ImU32 fg = IM_COL32(100,200,255,255);
-    const ImU32 colMax = IM_COL32(255,80,80,255);
-    const ImU32 colMin = IM_COL32(255,220,80,255);
+    const ImU32 bg     = pickColor(theme.modules.scope_plot_bg, IM_COL32(30,30,30,255));
+    const ImU32 fg     = pickColor(theme.modules.scope_plot_fg, IM_COL32(100,200,255,255));
+    const ImU32 colMax = pickColor(theme.modules.scope_plot_max, IM_COL32(255,80,80,255));
+    const ImU32 colMin = pickColor(theme.modules.scope_plot_min, IM_COL32(255,220,80,255));
     const ImVec2 rectMax = ImVec2(origin.x + width, origin.y + height);
     dl->AddRectFilled (origin, rectMax, bg, 4.0f);
     ImGui::PushClipRect(origin, rectMax, true);
@@ -180,17 +193,12 @@ void ScopeModuleProcessor::drawParametersInNode (float itemWidth, const std::fun
     ImGui::Spacing();
 
     // === SIGNAL STATISTICS SECTION ===
-    ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1.0f), "Signal Statistics");
+    themeText("Signal Statistics", theme.modules.scope_section_header);
     ImGui::Spacing();
 
     // Display min/max values with color coding
-    ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.3f, 0.3f, 1.0f));
-    ImGui::Text("Peak Max: %.3f", rollMax);
-    ImGui::PopStyleColor();
-    
-    ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.86f, 0.31f, 1.0f));
-    ImGui::Text("Peak Min: %.3f", rollMin);
-    ImGui::PopStyleColor();
+    themeText(juce::String::formatted("Peak Max: %.3f", rollMax), theme.modules.scope_text_max);
+    themeText(juce::String::formatted("Peak Min: %.3f", rollMin), theme.modules.scope_text_min);
     
     // Peak-to-peak
     float peakToPeak = rollMax - rollMin;

@@ -13,6 +13,7 @@
 #include <juce_core/juce_core.h>
 #include <unordered_map>
 #include <unordered_set>
+#include <vector>
 #include <cstdint>
 #include <algorithm>
 #include <limits>
@@ -468,18 +469,22 @@ void ImGuiNodeEditorComponent::renderImGui()
     ImGui::Begin ("Preset Creator", nullptr,
                   ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoBringToFrontOnFocus | ImGuiWindowFlags_MenuBar);
 
-    const float sidebarWidth = 260.0f;
+    const auto& theme = ThemeManager::getInstance().getCurrentTheme();
+    const float sidebarWidth = theme.layout.sidebar_width;
     const float menuBarHeight = ImGui::GetFrameHeight();
-    const float padding = 10.0f;
+    const float padding = theme.layout.window_padding;
 
     // === PROBE SCOPE OVERLAY ===
     if (synth != nullptr && showProbeScope)
     {
         if (auto* scope = synth->getProbeScopeProcessor())
         {
-            ImGui::SetNextWindowPos(ImVec2((float)getWidth() - 270.0f, menuBarHeight + padding), ImGuiCond_FirstUseEver);
-            ImGui::SetNextWindowSize(ImVec2(260, 180), ImGuiCond_FirstUseEver);
-            ImGui::SetNextWindowBgAlpha(ThemeManager::getInstance().getCurrentTheme().windows.probe_scope_alpha);
+            const float scopeWidth = theme.windows.probe_scope_width;
+            const float scopeHeight = theme.windows.probe_scope_height;
+            const float scopePosX = (float)getWidth() - (scopeWidth + padding);
+            ImGui::SetNextWindowPos(ImVec2(scopePosX, menuBarHeight + padding), ImGuiCond_FirstUseEver);
+            ImGui::SetNextWindowSize(ImVec2(scopeWidth, scopeHeight), ImGuiCond_FirstUseEver);
+            ImGui::SetNextWindowBgAlpha(theme.windows.probe_scope_alpha);
             
             if (ImGui::Begin("🔬 Probe Scope", &showProbeScope, ImGuiWindowFlags_NoFocusOnAppearing))
             {
@@ -516,7 +521,7 @@ void ImGuiNodeEditorComponent::renderImGui()
                 }
                 else
                 {
-                    ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1.0f), "No signal probed");
+                    ThemeText("No signal probed", theme.text.disabled);
                     ImGui::Text("Right-click > Probe Signal");
                     ImGui::Text("Then click any output pin");
                 }
@@ -740,34 +745,47 @@ void ImGuiNodeEditorComponent::renderImGui()
                     };
                     
                     loadThemePreset("Moofy Dark (Default)", "MoofyDark.json");
-                    loadThemePreset("Classic", "ClassicTheme.json");
-                    loadThemePreset("Light", "LightTheme.json");
-                    loadThemePreset("Electric Grey", "ElectricGrey.json");
-                    loadThemePreset("Solarized Light", "SolarizedLight.json");
-                    loadThemePreset("Solarized Dark", "SolarizedDark.json");
-                    loadThemePreset("Dracula", "Dracula.json");
-                    loadThemePreset("Nord", "Nord.json");
-                    loadThemePreset("Monokai Pro", "MonokaiPro.json");
-                    loadThemePreset("One Dark Pro", "OneDarkPro.json");
-                    loadThemePreset("Gruvbox Dark", "GruvboxDark.json");
-                    loadThemePreset("Tokyo Night", "TokyoNight.json");
-                    loadThemePreset("High Contrast Neon", "HighContrastNeon.json");
-                    loadThemePreset("Retro Terminal Green", "RetroTerminalGreen.json");
-                    loadThemePreset("Retro Terminal Amber", "RetroTerminalAmber.json");
-                    loadThemePreset("Paper White", "PaperWhite.json");
-                    loadThemePreset("Cyberpunk", "Cyberpunk.json");
-                    loadThemePreset("Night Owl Neo", "NightOwl.json");
-                    loadThemePreset("Shades of Purple", "ShadesOfPurple.json");
-                    loadThemePreset("Dracula Midnight", "DraculaMidnight.json");
-                    loadThemePreset("Cobalt2", "Cobalt2.json");
-                    loadThemePreset("Noctis Azure", "NoctisAzure.json");
-                    loadThemePreset("Rosé Pine Moon", "RosePine.json");
-                    loadThemePreset("Atom One Light", "AtomOneLight.json");
-                    loadThemePreset("Quiet Light", "QuietLight.json");
-                    loadThemePreset("Horizon Sunset", "HorizonSunset.json");
-                    loadThemePreset("Solar Flare", "SolarFlare.json");
-                    loadThemePreset("Synthwave '84", "Synthwave84.json");
-                    loadThemePreset("Everforest Night", "Everforest.json");
+
+                    std::vector<std::pair<juce::String, juce::String>> presetList = {
+                        { "Atom One Light", "AtomOneLight.json" },
+                        { "Classic", "ClassicTheme.json" },
+                        { "Cobalt2", "Cobalt2.json" },
+                        { "Cyberpunk", "Cyberpunk.json" },
+                        { "Dracula", "Dracula.json" },
+                        { "Dracula Midnight", "DraculaMidnight.json" },
+                        { "Electric Grey", "ElectricGrey.json" },
+                        { "Everforest Night", "Everforest.json" },
+                        { "Gruvbox Dark", "GruvboxDark.json" },
+                        { "High Contrast Neon", "HighContrastNeon.json" },
+                        { "Horizon Sunset", "HorizonSunset.json" },
+                        { "Light", "LightTheme.json" },
+                        { "Monokai Pro", "MonokaiPro.json" },
+                        { "Night Owl Neo", "NightOwl.json" },
+                        { "Noctis Azure", "NoctisAzure.json" },
+                        { "Nord", "Nord.json" },
+                        { "One Dark Pro", "OneDarkPro.json" },
+                        { "Paper White", "PaperWhite.json" },
+                        { "Quiet Light", "QuietLight.json" },
+                        { "Retro Terminal Amber", "RetroTerminalAmber.json" },
+                        { "Retro Terminal Green", "RetroTerminalGreen.json" },
+                        { "Ros\u00E9 Pine Moon", "RosePine.json" },
+                        { "Shades of Purple", "ShadesOfPurple.json" },
+                        { "Solar Flare", "SolarFlare.json" },
+                        { "Solarized Dark", "SolarizedDark.json" },
+                        { "Solarized Light", "SolarizedLight.json" },
+                        { "Synthwave '84", "Synthwave84.json" },
+                        { "Tokyo Night", "TokyoNight.json" }
+                    };
+
+                    std::sort(presetList.begin(), presetList.end(), [] (const auto& a, const auto& b)
+                    {
+                        return a.first.compareIgnoreCase(b.first) < 0;
+                    });
+
+                    for (const auto& preset : presetList)
+                    {
+                        loadThemePreset(preset.first.toRawUTF8(), preset.second.toRawUTF8());
+                    }
 
                     ImGui::EndMenu();
                 }
@@ -800,12 +818,12 @@ void ImGuiNodeEditorComponent::renderImGui()
                     int deviceCount = cv::cuda::getCudaEnabledDeviceCount();
                     if (deviceCount > 0)
                     {
-                        ImGui::TextColored(ImVec4(0.0f, 1.0f, 0.0f, 1.0f), "CUDA Available");
+                        ThemeText("CUDA Available", theme.text.success);
                         ImGui::Text("GPU Devices: %d", deviceCount);
                     }
                     else
                     {
-                        ImGui::TextColored(ImVec4(1.0f, 0.5f, 0.0f, 1.0f), "CUDA compiled but no devices found");
+                        ThemeText("CUDA compiled but no devices found", theme.text.warning);
                     }
                 #endif
             #else
@@ -1031,7 +1049,7 @@ void ImGuiNodeEditorComponent::renderImGui()
                 {
                     ImGui::BeginTooltip();
                     ImGui::PushTextWrapPos(ImGui::GetFontSize() * 25.0f);
-                    ImGui::TextColored(ImVec4(1.0f, 0.8f, 0.0f, 1.0f), "Tempo Clock Module Active");
+                    ThemeText("Tempo Clock Module Active", theme.text.warning);
                     ImGui::TextUnformatted("A Tempo Clock node with 'Sync to Host' disabled is controlling the global BPM.");
                     ImGui::PopTextWrapPos();
                     ImGui::EndTooltip();
@@ -1056,7 +1074,7 @@ void ImGuiNodeEditorComponent::renderImGui()
             if (activityState.deviceNames.empty())
             {
                 // No MIDI devices connected
-                ImGui::PushStyleColor(ImGuiCol_Text, IM_COL32(100, 100, 100, 255));
+                ImGui::PushStyleColor(ImGuiCol_Text, theme.text.disabled);
                 ImGui::Text("MIDI: No Devices");
                 ImGui::PopStyleColor();
             }
@@ -1091,9 +1109,9 @@ void ImGuiNodeEditorComponent::renderImGui()
                     
                     // Color: bright green if active, dim gray if inactive
                     if (hasActivity)
-                        ImGui::PushStyleColor(ImGuiCol_Text, IM_COL32(100, 255, 100, 255));
+                        ImGui::PushStyleColor(ImGuiCol_Text, theme.text.active);
                     else
-                        ImGui::PushStyleColor(ImGuiCol_Text, IM_COL32(100, 100, 100, 255));
+                        ImGui::PushStyleColor(ImGuiCol_Text, theme.text.disabled);
                     
                     ImGui::Text("[%s]", abbrevName.toRawUTF8());
                     ImGui::PopStyleColor();
@@ -1131,7 +1149,7 @@ void ImGuiNodeEditorComponent::renderImGui()
         }
         else
         {
-            ImGui::PushStyleColor(ImGuiCol_Text, IM_COL32(100, 100, 100, 255));
+            ImGui::PushStyleColor(ImGuiCol_Text, theme.text.disabled);
             ImGui::Text("MIDI: ---");
             ImGui::PopStyleColor();
         }
@@ -1169,8 +1187,6 @@ void ImGuiNodeEditorComponent::renderImGui()
     }
 
     // Get the theme colors
-    const auto& theme = ThemeManager::getInstance().getCurrentTheme();
-    
     if (isPatchDirty) {
         ThemeText("Status: EDITED", theme.status.edited);
     } else {
@@ -1179,7 +1195,7 @@ void ImGuiNodeEditorComponent::renderImGui()
     ImGui::End();
     // --- END OF PRESET STATUS OVERLAY ---
     ImGui::Columns (2, nullptr, true);
-    ImGui::SetColumnWidth (0, 260.0f);
+    ImGui::SetColumnWidth (0, sidebarWidth);
     // Zoom removed
     // ADD THIS BLOCK:
     ImGui::Text("Browser");
@@ -1252,10 +1268,21 @@ void ImGuiNodeEditorComponent::renderImGui()
         ImGui::PushStyleColor(ImGuiCol_HeaderHovered, ImGui::ColorConvertFloat4ToU32(ImVec4(c.x*1.2f, c.y*1.2f, c.z*1.2f, 1.0f)));
         ImGui::PushStyleColor(ImGuiCol_HeaderActive, ImGui::ColorConvertFloat4ToU32(ImVec4(c.x*1.4f, c.y*1.4f, c.z*1.4f, 1.0f)));
     };
+    auto pushHeaderColors = [&](const TriStateColor& tri)
+    {
+        const ImGuiStyle& styleRef = ImGui::GetStyle();
+        auto toVec4 = [&](ImU32 value, ImGuiCol fallback) -> ImVec4
+        {
+            if (value != 0)
+                return ImGui::ColorConvertU32ToFloat4(value);
+            return styleRef.Colors[fallback];
+        };
+        ImGui::PushStyleColor(ImGuiCol_Header, toVec4(tri.base, ImGuiCol_Header));
+        ImGui::PushStyleColor(ImGuiCol_HeaderHovered, toVec4(tri.hovered, ImGuiCol_HeaderHovered));
+        ImGui::PushStyleColor(ImGuiCol_HeaderActive, toVec4(tri.active, ImGuiCol_HeaderActive));
+    };
     // === PRESET BROWSER ===
-    ImGui::PushStyleColor(ImGuiCol_Header, IM_COL32(218, 165, 32, 255)); // Gold
-    ImGui::PushStyleColor(ImGuiCol_HeaderHovered, IM_COL32(238, 185, 52, 255));
-    ImGui::PushStyleColor(ImGuiCol_HeaderActive, IM_COL32(255, 205, 72, 255));
+    pushHeaderColors(theme.headers.presets);
     bool presetsExpanded = ImGui::CollapsingHeader("Presets");
     ImGui::PopStyleColor(3);
     if (presetsExpanded)
@@ -1376,9 +1403,7 @@ void ImGuiNodeEditorComponent::renderImGui()
     };
 
     // === SAMPLE BROWSER ===
-    ImGui::PushStyleColor(ImGuiCol_Header, IM_COL32(0, 180, 180, 255)); // Cyan
-    ImGui::PushStyleColor(ImGuiCol_HeaderHovered, IM_COL32(20, 200, 200, 255));
-    ImGui::PushStyleColor(ImGuiCol_HeaderActive, IM_COL32(40, 220, 220, 255));
+    pushHeaderColors(theme.headers.samples);
     bool samplesExpanded = ImGui::CollapsingHeader("Samples");
     ImGui::PopStyleColor(3);
     
@@ -1432,9 +1457,7 @@ void ImGuiNodeEditorComponent::renderImGui()
     ImGui::Separator();
     
     // === MIDI BROWSER ===
-    ImGui::PushStyleColor(ImGuiCol_Header, IM_COL32(180, 120, 255, 255)); // Purple
-    ImGui::PushStyleColor(ImGuiCol_HeaderHovered, IM_COL32(200, 140, 255, 255));
-    ImGui::PushStyleColor(ImGuiCol_HeaderActive, IM_COL32(220, 160, 255, 255));
+    pushHeaderColors(theme.headers.recent);
     bool midiExpanded = ImGui::CollapsingHeader("MIDI Files");
     ImGui::PopStyleColor(3);
     
@@ -1555,9 +1578,7 @@ void ImGuiNodeEditorComponent::renderImGui()
     ImGui::Separator();
     
     // === MODULE BROWSER ===
-    ImGui::PushStyleColor(ImGuiCol_Header, IM_COL32(80, 80, 80, 255)); // Neutral Grey
-    ImGui::PushStyleColor(ImGuiCol_HeaderHovered, IM_COL32(100, 100, 100, 255));
-    ImGui::PushStyleColor(ImGuiCol_HeaderActive, IM_COL32(120, 120, 120, 255));
+    pushHeaderColors(theme.headers.system);
     bool modulesExpanded = ImGui::CollapsingHeader("Modules", ImGuiTreeNodeFlags_DefaultOpen);
     ImGui::PopStyleColor(3);
     
@@ -1778,11 +1799,11 @@ void ImGuiNodeEditorComponent::renderImGui()
     bool openCVExpanded = ImGui::CollapsingHeader("Computer Vision", ImGuiTreeNodeFlags_DefaultOpen);
     ImGui::PopStyleColor(3);
     if (openCVExpanded) {
-        ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1.0f), "Sources:");
+        ThemeText("Sources:", theme.text.section_header);
         addModuleButton("Webcam Loader", "webcam_loader");
         addModuleButton("Video File Loader", "video_file_loader");
         ImGui::Spacing();
-        ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1.0f), "Processors:");
+        ThemeText("Processors:", theme.text.section_header);
         addModuleButton("Video FX", "video_fx");
         addModuleButton("Movement Detector", "movement_detector");
         addModuleButton("Human Detector", "human_detector");
@@ -1907,8 +1928,8 @@ void ImGuiNodeEditorComponent::renderImGui()
     // <<< END OF BLOCK >>>
 
     // <<< ADD THIS BLOCK TO DEFINE COLORS >>>
-    const ImU32 colPin = IM_COL32(150, 150, 150, 255); // Grey for disconnected
-    const ImU32 colPinConnected = IM_COL32(120, 255, 120, 255); // Green for connected
+    const ImU32 colPin = themeMgr.getPinDisconnectedColor();
+    const ImU32 colPinConnected = themeMgr.getPinConnectedColor();
     // <<< END OF BLOCK >>>
 
     // Pre-register is no longer needed - stateless encoding generates IDs on-the-fly
@@ -1999,6 +2020,8 @@ void ImGuiNodeEditorComponent::renderImGui()
     // Hide the default grid lines so they don't draw over our manual grid
     ImNodes::PushColorStyle(ImNodesCol_GridLine, IM_COL32(0, 0, 0, 0));
     ImNodes::PushColorStyle(ImNodesCol_GridLinePrimary, IM_COL32(0, 0, 0, 0));
+    ImNodes::PushColorStyle(ImNodesCol_BoxSelector, themeMgr.getSelectionRect());
+    ImNodes::PushColorStyle(ImNodesCol_BoxSelectorOutline, themeMgr.getSelectionRectOutline());
     // === END OF FIX ===
     ImNodes::BeginNodeEditor();
     // Now we can safely get the actual panning for any future use
@@ -2794,7 +2817,7 @@ if (auto* mp = synth->getModuleForLogical (lid))
                 {
                     ImGui::BeginTooltip();
                     if (isConnected) {
-                        ImGui::TextColored(ImVec4(0.5f, 1.0f, 0.5f, 1.0f), "Connected");
+                        ThemeText("Connected", theme.text.active);
                         // Find which output this input is connected to and show source info
                         for (const auto& c : synth->getConnectionsInfo())
                         {
@@ -2828,7 +2851,7 @@ if (auto* mp = synth->getModuleForLogical (lid))
                             }
                         }
                     } else {
-                        ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1.0f), "Not Connected");
+                        ThemeText("Not Connected", theme.text.disabled);
                     }
                     // Show pin data type
                     ImGui::Text("Type: %s", this->pinDataTypeToString(pinType));
@@ -2872,10 +2895,10 @@ if (auto* mp = synth->getModuleForLogical (lid))
                     if (ImGui::IsItemHovered())
                     {
                         ImGui::BeginTooltip();
-                        if (isConnected) {
-                            ImGui::TextColored(ImVec4(0.5f, 1.0f, 0.5f, 1.0f), "Connected");
-                        } else {
-                            ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1.0f), "Not Connected");
+                    if (isConnected) {
+                        ThemeText("Connected", theme.text.active);
+                    } else {
+                        ThemeText("Not Connected", theme.text.disabled);
                         }
                         ImGui::Text("Type: %s", this->pinDataTypeToString(pinType));
                         if (auto* mp = synth->getModuleForLogical(lid))
@@ -3564,6 +3587,8 @@ if (auto* mp = synth->getModuleForLogical (lid))
 
     ImNodes::EndNodeEditor();
     // === POP THE TRANSPARENT GRID BACKGROUND STYLE ===
+    ImNodes::PopColorStyle(); // Pop BoxSelectorOutline
+    ImNodes::PopColorStyle(); // Pop BoxSelector
     ImNodes::PopColorStyle(); // Pop GridLinePrimary
     ImNodes::PopColorStyle(); // Pop GridLine
     ImNodes::PopColorStyle(); // Pop GridBackground
@@ -4903,7 +4928,7 @@ if (auto* mp = synth->getModuleForLogical (lid))
     {
         if (ImGui::Begin("MIDI Device Manager", &showMidiDeviceManager, ImGuiWindowFlags_AlwaysAutoResize))
         {
-            ImGui::TextColored(ImVec4(0.6f, 0.8f, 1.0f, 1.0f), "MIDI Input Devices");
+            ThemeText("MIDI Input Devices", theme.text.section_header);
             ImGui::Separator();
             
             // Access MidiDeviceManager from PresetCreatorComponent
@@ -4950,13 +4975,13 @@ if (auto* mp = synth->getModuleForLogical (lid))
                             float timeSinceMessage = (juce::Time::getMillisecondCounter() - activity.lastMessageTime) / 1000.0f;
                             if (timeSinceMessage < 1.0f)
                             {
-                                ImGui::PushStyleColor(ImGuiCol_Text, IM_COL32(100, 255, 100, 255));
+                                ImGui::PushStyleColor(ImGuiCol_Text, theme.text.active);
                                 ImGui::Text("ACTIVE");
                                 ImGui::PopStyleColor();
                             }
                             else
                             {
-                                ImGui::PushStyleColor(ImGuiCol_Text, IM_COL32(100, 100, 100, 255));
+                                ImGui::PushStyleColor(ImGuiCol_Text, theme.text.disabled);
                                 ImGui::Text("idle");
                                 ImGui::PopStyleColor();
                             }
@@ -7630,6 +7655,7 @@ void ImGuiNodeEditorComponent::drawInsertNodeOnLinkPopup()
 void ImGuiNodeEditorComponent::drawLinkInspectorTooltip(const LinkInfo& link)
 {
     if (synth == nullptr) return;
+    const auto& theme = ThemeManager::getInstance().getCurrentTheme();
     
     // Get the probe scope processor
     auto* scope = synth->getProbeScopeProcessor();
@@ -7649,8 +7675,10 @@ void ImGuiNodeEditorComponent::drawLinkInspectorTooltip(const LinkInfo& link)
     
     ImGui::Separator();
     
-    ImGui::TextColored(ImVec4(1.0f, 0.3f, 0.3f, 1.0f), "Peak Max: %.3f", maxVal);
-    ImGui::TextColored(ImVec4(1.0f, 0.86f, 0.31f, 1.0f), "Peak Min: %.3f", minVal);
+    juce::String peakMaxText = juce::String::formatted("Peak Max: %.3f", maxVal);
+    juce::String peakMinText = juce::String::formatted("Peak Min: %.3f", minVal);
+    ThemeText(peakMaxText.toRawUTF8(), theme.modules.scope_text_max);
+    ThemeText(peakMinText.toRawUTF8(), theme.modules.scope_text_min);
     
     float peakToPeak = maxVal - minVal;
     ImGui::Text("P-P: %.3f", peakToPeak);
@@ -8106,15 +8134,19 @@ PinDataType ImGuiNodeEditorComponent::getPinDataTypeForPin(const PinID& pin)
 
 unsigned int ImGuiNodeEditorComponent::getImU32ForType(PinDataType type)
 {
-    switch (type)
-    {
-        case PinDataType::CV:    return IM_COL32(100, 150, 255, 255); // Blue
-        case PinDataType::Audio: return IM_COL32(100, 255, 150, 255); // Green
-        case PinDataType::Gate:  return IM_COL32(255, 220, 100, 255); // Yellow
-        case PinDataType::Raw:   return IM_COL32(255, 100, 100, 255); // Red
-        case PinDataType::Video: return IM_COL32(0, 200, 255, 255);   // Cyan
-        default:                 return IM_COL32(150, 150, 150, 255); // Grey
-    }
+	const ImU32 themedColor = ThemeManager::getInstance().getPinColor(type);
+	if (themedColor != 0)
+		return themedColor;
+
+	switch (type)
+	{
+		case PinDataType::CV:    return IM_COL32(100, 150, 255, 255); // Blue
+		case PinDataType::Audio: return IM_COL32(100, 255, 150, 255); // Green
+		case PinDataType::Gate:  return IM_COL32(255, 220, 100, 255); // Yellow
+		case PinDataType::Raw:   return IM_COL32(255, 100, 100, 255); // Red
+		case PinDataType::Video: return IM_COL32(0, 200, 255, 255);   // Cyan
+		default:                 return IM_COL32(150, 150, 150, 255); // Grey
+	}
 }
 
 const char* ImGuiNodeEditorComponent::pinDataTypeToString(PinDataType type)
@@ -8524,30 +8556,15 @@ ImGuiNodeEditorComponent::ModuleCategory ImGuiNodeEditorComponent::getModuleCate
 
 unsigned int ImGuiNodeEditorComponent::getImU32ForCategory(ModuleCategory category, bool hovered)
 {
-    ImU32 color;
-    switch (category)
-    {
-        case ModuleCategory::Source:      color = IM_COL32(50, 120, 50, 255); break;     // Green
-        case ModuleCategory::Effect:      color = IM_COL32(130, 60, 60, 255); break;     // Red
-        case ModuleCategory::Modulator:   color = IM_COL32(50, 50, 130, 255); break;     // Blue
-        case ModuleCategory::Utility:     color = IM_COL32(110, 80, 50, 255); break;     // Orange
-        case ModuleCategory::Seq:         color = IM_COL32(90, 140, 90, 255); break;     // Light Green
-        case ModuleCategory::MIDI:        color = IM_COL32(180, 120, 255, 255); break;   // Vibrant Purple
-        case ModuleCategory::Analysis:    color = IM_COL32(100, 50, 110, 255); break;    // Purple
-        case ModuleCategory::TTS_Voice:   color = IM_COL32(255, 180, 100, 255); break;   // Peach/Coral
-        case ModuleCategory::Special_Exp: color = IM_COL32(50, 200, 200, 255); break;    // Cyan
-        case ModuleCategory::OpenCV:      color = IM_COL32(255, 140, 0, 255); break;     // Bright Orange
-        case ModuleCategory::Sys:         color = IM_COL32(120, 100, 140, 255); break;   // Lavender
-        case ModuleCategory::Comment:     color = IM_COL32(80, 80, 80, 255); break;      // Grey
-        case ModuleCategory::Plugin:      color = IM_COL32(50, 110, 110, 255); break;    // Teal
-        default:                         color = IM_COL32(70, 70, 70, 255); break;
-    }
+    ImU32 color = ThemeManager::getInstance().getCategoryColor(static_cast<::ModuleCategory>(category));
     
     if (hovered) 
     { 
         // Brighten on hover
         ImVec4 c = ImGui::ColorConvertU32ToFloat4(color);
-        c.x *= 1.3f; c.y *= 1.3f; c.z *= 1.3f;
+        c.x = juce::jmin(c.x * 1.3f, 1.0f);
+        c.y = juce::jmin(c.y * 1.3f, 1.0f);
+        c.z = juce::jmin(c.z * 1.3f, 1.0f);
         return ImGui::ColorConvertFloat4ToU32(c);
     }
     return color;

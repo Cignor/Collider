@@ -8,99 +8,95 @@ void populateModuleDescriptions()
     if (!descriptions.empty()) return; // Only run once
     
     // Sources
-    descriptions["audio_input"] = "Brings hardware audio into the patch.";
-    descriptions["VCO"] = "A standard Voltage-Controlled Oscillator.";
-    descriptions["polyvco"] = "A multi-voice oscillator bank for polyphony.";
-    descriptions["Noise"] = "Generates white, pink, or brown noise.";
-    descriptions["Sequencer"] = "A classic 16-step CV and Gate sequencer.";
-    descriptions["multi sequencer"] = "Advanced sequencer with parallel per-step outputs.";
-    descriptions["midi player"] = "Plays MIDI files and outputs CV/Gate for each track.";
-    descriptions["midi cv"] = "Converts MIDI Note/CC messages to CV signals. (Monophonic)";
-    descriptions["midi control center"] = "A powerful MIDI learn interface to map any MIDI CC to CV/Gate outputs.";
-    descriptions["midi faders"] = "1-16 MIDI-learnable faders with customizable output ranges.";
-    descriptions["midi knobs"] = "1-16 MIDI-learnable knobs with customizable output ranges.";
-    descriptions["midi buttons"] = "1-32 MIDI-learnable buttons with Gate/Toggle/Trigger modes.";
-    descriptions["midi jog wheel"] = "A single MIDI-learnable jog wheel control for expressive modulation.";
-    descriptions["Value"] = "Outputs a constant, adjustable numerical value.";
-    descriptions["sample_loader"] = "Loads and plays audio samples with pitch/time control.";
-    descriptions["best_practice"] = "A template and example node demonstrating best practices.";
+    descriptions["audio_input"]         = "Brings hardware audio into the patch.";
+    descriptions["vco"]                 = "A standard Voltage-Controlled Oscillator.";
+    descriptions["polyvco"]             = "A multi-voice oscillator bank for polyphony.";
+    descriptions["noise"]               = "Generates white, pink, or brown noise.";
+    descriptions["sequencer"]           = "A classic 16-step CV and Gate sequencer.";
+    descriptions["multi_sequencer"]     = "Advanced sequencer with parallel per-step outputs.";
+    descriptions["midi_player"]         = "Plays MIDI files and outputs CV/Gate for each track.";
+    descriptions["midi_cv"]             = "Converts MIDI Note/CC messages to CV signals. (Monophonic)";
+    descriptions["midi_control_center"] = "A powerful MIDI learn interface to map any MIDI CC to CV/Gate outputs.";
+    descriptions["midi_faders"]         = "1-16 MIDI-learnable faders with customizable output ranges.";
+    descriptions["midi_knobs"]          = "1-16 MIDI-learnable knobs with customizable output ranges.";
+    descriptions["midi_buttons"]        = "1-32 MIDI-learnable buttons with Gate/Toggle/Trigger modes.";
+    descriptions["midi_jog_wheel"]      = "A single MIDI-learnable jog wheel control for expressive modulation.";
+    descriptions["value"]               = "Outputs a constant, adjustable numerical value.";
+    descriptions["sample_loader"]       = "Loads and plays audio samples with pitch/time control.";
+    descriptions["best_practice"]       = "A template and example node demonstrating best practices.";
     // TTS Family
-    descriptions["TTS Performer"] = "Advanced Text-to-Speech engine with word-level sequencing.";
-    descriptions["Vocal Tract Filter"] = "A formant filter that simulates human vowel sounds.";
+    descriptions["tts_performer"]       = "Advanced Text-to-Speech engine with word-level sequencing.";
+    descriptions["vocal_tract_filter"]  = "A formant filter that simulates human vowel sounds.";
     // Effects
-    descriptions["VCF"] = "A Voltage-Controlled Filter (LP, HP, BP).";
-    descriptions["Delay"] = "A stereo delay effect with modulation.";
-    descriptions["Reverb"] = "A stereo reverb effect.";
-    descriptions["chorus"] = "A stereo chorus effect.";
-    descriptions["phaser"] = "A stereo phaser effect.";
-    descriptions["compressor"] = "Reduces the dynamic range of a signal.";
-    descriptions["limiter"] = "Prevents a signal from exceeding a set level.";
-    descriptions["gate"] = "A stereo noise gate to silence signals below a threshold.";
-    descriptions["drive"] = "A waveshaping distortion effect.";
-    descriptions["graphic_eq"] = "An 8-band graphic equalizer.";
-    descriptions["frequency_graph"] = "A high-resolution, real-time spectrum analyzer.";
-    descriptions["Waveshaper"] = "A distortion effect with multiple shaping algorithms.";
-    descriptions["8bandshaper"] = "A multi-band waveshaper for frequency-specific distortion.";
-    descriptions["Granulator"] = "A granular synthesizer/effect that plays small grains of a sample.";
-    descriptions["harmonic shaper"] = "Shapes the harmonic content of a signal.";
-    descriptions["timepitch"] = "Real-time pitch and time manipulation using RubberBand.";
-    descriptions["De-Crackle"] = "A utility to reduce clicks from discontinuous signals.";
-    descriptions["recorder"] = "Records incoming audio to a WAV, AIFF, or FLAC file.";
-    descriptions["tempo_clock"] = "Global clock generator with BPM control, transport, and clock outputs.";
-    descriptions["bpm_monitor"] = "Monitors and reports BPM from rhythm-producing modules (sequencers, animations). Always present and undeletable.";
-    descriptions["timeline"] = "Transport-synchronized automation recorder with sample-accurate timing for CV, Gate, Trigger, and Raw signals.";
+    descriptions["vcf"]                 = "A Voltage-Controlled Filter (LP, HP, BP).";
+    descriptions["delay"]               = "A stereo delay effect with modulation.";
+    descriptions["reverb"]              = "A stereo reverb effect.";
+    descriptions["chorus"]              = "A stereo chorus effect.";
+    descriptions["phaser"]              = "A stereo phaser effect.";
+    descriptions["compressor"]          = "Reduces the dynamic range of a signal.";
+    descriptions["limiter"]             = "Prevents a signal from exceeding a set level.";
+    descriptions["gate"]                = "A stereo noise gate to silence signals below a threshold.";
+    descriptions["drive"]               = "A waveshaping distortion effect.";
+    descriptions["graphic_eq"]          = "An 8-band graphic equalizer.";
+    descriptions["frequency_graph"]     = "A high-resolution, real-time spectrum analyzer.";
+    descriptions["waveshaper"]          = "A distortion effect with multiple shaping algorithms.";
+    descriptions["8bandshaper"]         = "A multi-band waveshaper for frequency-specific distortion.";
+    descriptions["granulator"]          = "A granular synthesizer/effect that plays small grains of a sample.";
+    descriptions["harmonic_shaper"]     = "Shapes the harmonic content of a signal.";
+    descriptions["timepitch"]           = "Real-time pitch and time manipulation using RubberBand.";
+    descriptions["de_crackle"]          = "A utility to reduce clicks from discontinuous signals.";
+    descriptions["recorder"]            = "Records incoming audio to a WAV, AIFF, or FLAC file.";
+    descriptions["tempo_clock"]         = "Global clock generator with BPM control, transport, and clock outputs.";
+    descriptions["bpm_monitor"]         = "Monitors and reports BPM from rhythm-producing modules (sequencers, animations). Always present and undeletable.";
+    descriptions["timeline"]            = "Transport-synchronized automation recorder with sample-accurate timing for CV, Gate, Trigger, and Raw signals.";
     // Modulators
-    descriptions["LFO"] = "A Low-Frequency Oscillator for modulation.";
-    descriptions["ADSR"] = "An Attack-Decay-Sustain-Release envelope generator.";
-    descriptions["Random"] = "A random value generator with internal sample & hold.";
-    descriptions["S&H"] = "A classic Sample and Hold module.";
-    descriptions["function_generator"] = "A complex, drawable envelope/LFO generator.";
-    descriptions["shaping_oscillator"] = "An oscillator with a built-in waveshaper.";
+    descriptions["lfo"]                 = "A Low-Frequency Oscillator for modulation.";
+    descriptions["adsr"]                = "An Attack-Decay-Sustain-Release envelope generator.";
+    descriptions["random"]              = "A random value generator with internal sample & hold.";
+    descriptions["s_and_h"]             = "A classic Sample and Hold module.";
+    descriptions["function_generator"]  = "A complex, drawable envelope/LFO generator.";
+    descriptions["shaping_oscillator"]  = "An oscillator with a built-in waveshaper.";
     // Utilities & Logic
-    descriptions["VCA"] = "A Voltage-Controlled Amplifier to control signal level.";
-    descriptions["Mixer"] = "A stereo audio mixer with crossfading and panning.";
-    descriptions["cv mixer"] = "A mixer specifically for control voltage signals.";
-    descriptions["trackmixer"] = "A multi-channel mixer for polyphonic sources.";
-    descriptions["Attenuverter"] = "Attenuates (reduces) and/or inverts signals.";
-    descriptions["Lag Processor"] = "Smooths out abrupt changes in a signal (slew limiter).";
-    descriptions["Math"] = "Performs mathematical operations on signals.";
-    descriptions["MapRange"] = "Remaps a signal from one numerical range to another.";
-    descriptions["Quantizer"] = "Snaps a continuous signal to a musical scale.";
-    descriptions["Rate"] = "Converts a control signal into a normalized rate value.";
-    descriptions["Comparator"] = "Outputs a high signal if an input is above a threshold.";
-    descriptions["Logic"] = "Performs boolean logic (AND, OR, XOR, NOT) on gate signals.";
-    descriptions["ClockDivider"] = "Divides and multiplies clock signals.";
-    descriptions["SequentialSwitch"] = "A signal router with multiple thresholds.";
+    descriptions["vca"]                 = "A Voltage-Controlled Amplifier to control signal level.";
+    descriptions["mixer"]               = "A stereo audio mixer with crossfading and panning.";
+    descriptions["cv_mixer"]            = "A mixer specifically for control voltage signals.";
+    descriptions["track_mixer"]         = "A multi-channel mixer for polyphonic sources.";
+    descriptions["attenuverter"]        = "Attenuates (reduces) and/or inverts signals.";
+    descriptions["lag_processor"]       = "Smooths out abrupt changes in a signal (slew limiter).";
+    descriptions["math"]                = "Performs mathematical operations on signals.";
+    descriptions["map_range"]           = "Remaps a signal from one numerical range to another.";
+    descriptions["quantizer"]           = "Snaps a continuous signal to a musical scale.";
+    descriptions["rate"]                = "Converts a control signal into a normalized rate value.";
+    descriptions["comparator"]          = "Outputs a high signal if an input is above a threshold.";
+    descriptions["logic"]               = "Performs boolean logic (AND, OR, XOR, NOT) on gate signals.";
+    descriptions["clock_divider"]       = "Divides and multiplies clock signals.";
+    descriptions["sequential_switch"]   = "A signal router with multiple thresholds.";
+    descriptions["comment"]             = "A plain text comment node for documentation.";
+    descriptions["snapshot_sequencer"]  = "A sequencer that stores and recalls complete patch states.";
     // Analysis
-    descriptions["Scope"] = "Visualizes an audio or CV signal.";
-    descriptions["debug"] = "A tool for logging signal value changes.";
-    descriptions["input_debug"] = "A passthrough version of the Debug node for inspecting signals on a cable.";
+    descriptions["scope"]               = "Visualizes an audio or CV signal.";
+    descriptions["debug"]               = "A tool for logging signal value changes.";
+    descriptions["input_debug"]         = "A passthrough version of the Debug node for inspecting signals on a cable.";
     
     // Physics
-    descriptions["physics"] = "A 2D physics simulation that outputs collision and contact data.";
-    descriptions["animation"] = "Loads and plays 3D animations, outputs joint positions and velocities.";
-    descriptions["stroke_sequencer"] = "Gesture-based sequencer that records and plays back drawn patterns.";
+    descriptions["physics"]             = "A 2D physics simulation that outputs collision and contact data.";
+    descriptions["animation"]           = "Loads and plays 3D animations, outputs joint positions and velocities.";
+    descriptions["stroke_sequencer"]    = "Gesture-based sequencer that records and plays back drawn patterns.";
     
     // OpenCV (Computer Vision)
-    descriptions["webcam_loader"] = "Captures video from a webcam and publishes it as a source for vision processing modules.";
-    descriptions["video_file_loader"] = "Loads and plays a video file, publishes it as a source for vision processing modules.";
-    descriptions["video_fx"] = "Applies real-time video effects (brightness, contrast, saturation, blur, sharpen, etc.) to video sources, chainable.";
-    descriptions["movement_detector"] = "Analyzes video source for motion via optical flow or background subtraction, outputs motion data as CV.";
-    descriptions["human_detector"] = "Detects faces or bodies in video source via Haar Cascades or HOG, outputs position and size as CV.";
-    descriptions["pose_estimator"] = "Uses OpenPose to detect 15 body keypoints (head, shoulders, elbows, wrists, hips, knees, ankles) and outputs their positions as CV signals.";
-    descriptions["hand_tracker"] = "Detects 21 hand keypoints and outputs their X/Y positions as CV (42 channels).";
-    descriptions["face_tracker"] = "Detects 70 facial landmarks and outputs X/Y positions as CV (140 channels).";
-    descriptions["object_detector"] = "Uses YOLOv3 to detect objects (person, car, etc.) and outputs bounding box position/size as CV.";
-    descriptions["color_tracker"] = "Tracks multiple colors in video and outputs their positions and sizes as CV.";
-    descriptions["contour_detector"] = "Detects shapes via background subtraction and outputs area, complexity, and aspect ratio as CV.";
-    descriptions["semantic_segmentation"] = "Uses deep learning to segment video into semantic regions and outputs detected areas as CV.";
-    descriptions["crop_video"] = "Crops a video stream based on CV signals (X, Y, Width, Height). Perfect for following detected objects or regions.";
-    
-    // Add aliases for underscore naming conventions
-    descriptions["clock_divider"] = descriptions["ClockDivider"];
-    descriptions["sequential_switch"] = descriptions["SequentialSwitch"];
-    descriptions["s_and_h"] = descriptions["S&H"];
-    descriptions["snapshot_sequencer"] = "A sequencer that stores and recalls complete patch states.";
+    descriptions["webcam_loader"]       = "Captures video from a webcam and publishes it as a source for vision processing modules.";
+    descriptions["video_file_loader"]   = "Loads and plays a video file, publishes it as a source for vision processing modules.";
+    descriptions["video_fx"]            = "Applies real-time video effects (brightness, contrast, saturation, blur, sharpen, etc.) to video sources, chainable.";
+    descriptions["movement_detector"]   = "Analyzes video source for motion via optical flow or background subtraction, outputs motion data as CV.";
+    descriptions["human_detector"]      = "Detects faces or bodies in video source via Haar Cascades or HOG, outputs position and size as CV.";
+    descriptions["pose_estimator"]      = "Uses OpenPose to detect 15 body keypoints and outputs their positions as CV signals.";
+    descriptions["hand_tracker"]        = "Detects 21 hand keypoints and outputs their X/Y positions as CV (42 channels).";
+    descriptions["face_tracker"]        = "Detects 70 facial landmarks and outputs X/Y positions as CV (140 channels).";
+    descriptions["object_detector"]     = "Uses YOLOv3 to detect objects and outputs bounding box position/size as CV.";
+    descriptions["color_tracker"]       = "Tracks multiple colors in video and outputs their positions and sizes as CV.";
+    descriptions["contour_detector"]    = "Detects shapes via background subtraction and outputs area, complexity, and aspect ratio as CV.";
+    descriptions["semantic_segmentation"]= "Uses deep learning to segment video into semantic regions and outputs detected areas as CV.";
+    descriptions["crop_video"]          = "Crops a video stream based on CV signals (X, Y, Width, Height). Perfect for following detected objects or regions.";
 }
 
 void populatePinDatabase()
@@ -277,7 +273,7 @@ void populatePinDatabase()
         { AudioPin("Out L", 0, PinDataType::Audio), AudioPin("Out R", 1, PinDataType::Audio) },
         {}
     );
-    db["Recorder"] = ModulePinInfo(
+    db["recorder"] = ModulePinInfo(
         NodeWidth::Medium,
         { AudioPin("In L", 0, PinDataType::Audio), AudioPin("In R", 1, PinDataType::Audio) },
         {}, // No outputs
@@ -449,7 +445,7 @@ db["random"] = ModulePinInfo(
             ModPin("Pitch", "pitch_mod", PinDataType::CV)
         }
     );
-    db["vocal tract filter"] = ModulePinInfo(
+    db["vocal_tract_filter"] = ModulePinInfo(
         NodeWidth::Medium,
         { AudioPin("Audio In", 0, PinDataType::Audio) },
         { AudioPin("Audio Out", 0, PinDataType::Audio) },
@@ -467,7 +463,7 @@ db["random"] = ModulePinInfo(
         { AudioPin("Out", 0, PinDataType::Audio) },
         { ModPin("Frequency", "frequency_mod", PinDataType::CV), ModPin("Waveform", "waveform_mod", PinDataType::CV), ModPin("Drive", "drive_mod", PinDataType::CV) }
     );
-    db["harmonic shaper"] = ModulePinInfo(
+    db["harmonic_shaper"] = ModulePinInfo(
         NodeWidth::Medium,
         { AudioPin("In L", 0, PinDataType::Audio), AudioPin("In R", 1, PinDataType::Audio), AudioPin("Freq Mod", 2, PinDataType::CV), AudioPin("Drive Mod", 3, PinDataType::CV) },
         { AudioPin("Out L", 0, PinDataType::Audio), AudioPin("Out R", 1, PinDataType::Audio) },
@@ -514,7 +510,7 @@ db["random"] = ModulePinInfo(
         }
     );
 
-    db["multi sequencer"] = ModulePinInfo(
+    ModulePinInfo multiSequencerPins(
         NodeWidth::ExtraWide,
         { // Inputs: Mod In L, Mod In R, Rate Mod, Gate Mod, Steps Mod, Gate Thr Mod, plus per-step mods and triggers
             AudioPin("Mod In L", 0, PinDataType::Audio), AudioPin("Mod In R", 1, PinDataType::Audio),
@@ -565,6 +561,7 @@ db["random"] = ModulePinInfo(
         },
         {}
     );
+    db["multi_sequencer"] = multiSequencerPins;
     db["comparator"] = ModulePinInfo(
         NodeWidth::Small,
         { AudioPin("In", 0, PinDataType::CV) },
@@ -708,14 +705,14 @@ db["random"] = ModulePinInfo(
     );
     
     // Add missing modules
-    db["Quantizer"] = ModulePinInfo(
+    db["quantizer"] = ModulePinInfo(
         NodeWidth::Small,
         { AudioPin("CV In", 0, PinDataType::CV), AudioPin("Scale Mod", 1, PinDataType::CV), AudioPin("Root Mod", 2, PinDataType::CV) },
         { AudioPin("Out", 0, PinDataType::CV) },
         {}
     );
     
-    db["TimePitch"] = ModulePinInfo(
+    db["timepitch"] = ModulePinInfo(
         NodeWidth::Medium,
         { AudioPin("Audio In", 0, PinDataType::Audio), AudioPin("Speed Mod", 1, PinDataType::CV), AudioPin("Pitch Mod", 2, PinDataType::CV) },
         { AudioPin("Out", 0, PinDataType::Audio) },
@@ -730,7 +727,7 @@ db["random"] = ModulePinInfo(
     
     
     // Add MIDI Player module
-    db["midiplayer"] = ModulePinInfo(
+    db["midi_player"] = ModulePinInfo(
         NodeWidth::ExtraWide,
         {},
         {},
@@ -738,7 +735,7 @@ db["random"] = ModulePinInfo(
     );
     
     // Add converter modules
-    db["Attenuverter"] = ModulePinInfo(
+    db["attenuverter"] = ModulePinInfo(
         NodeWidth::Small,
         { AudioPin("In L", 0, PinDataType::Audio), AudioPin("In R", 1, PinDataType::Audio), AudioPin("Amount Mod", 2, PinDataType::CV) },
         { AudioPin("Out L", 0, PinDataType::Audio), AudioPin("Out R", 1, PinDataType::Audio) },
@@ -746,10 +743,8 @@ db["random"] = ModulePinInfo(
     );
     
     // Add lowercase alias for Attenuverter
-    db["attenuverter"] = db["Attenuverter"];
-    
     // Add Sample & Hold module
-    db["s&h"] = ModulePinInfo(
+    db["s_and_h"] = ModulePinInfo(
         NodeWidth::Small,
         { 
             AudioPin("Signal In L", 0, PinDataType::Audio),
@@ -767,21 +762,21 @@ db["random"] = ModulePinInfo(
         {}
     );
     
-    db["MapRange"] = ModulePinInfo(
+    db["map_range"] = ModulePinInfo(
         NodeWidth::Small,
         { AudioPin("Raw In", 0, PinDataType::Raw) },
         { AudioPin("CV Out", 0, PinDataType::CV), AudioPin("Audio Out", 1, PinDataType::Audio) },
         { ModPin("Min In", "minIn", PinDataType::Raw), ModPin("Max In", "maxIn", PinDataType::Raw), ModPin("Min Out", "minOut", PinDataType::Raw), ModPin("Max Out", "maxOut", PinDataType::Raw) }
     );
     
-    db["Lag Processor"] = ModulePinInfo(
+    db["lag_processor"] = ModulePinInfo(
         NodeWidth::Small,
         { AudioPin("Signal In", 0, PinDataType::CV), AudioPin("Rise Mod", 1, PinDataType::CV), AudioPin("Fall Mod", 2, PinDataType::CV) },
         { AudioPin("Smoothed Out", 0, PinDataType::CV) },
         {}
     );
     
-    db["De-Crackle"] = ModulePinInfo(
+    db["de_crackle"] = ModulePinInfo(
         NodeWidth::Small,
         { AudioPin("In L", 0, PinDataType::Audio), AudioPin("In R", 1, PinDataType::Audio) },
         { AudioPin("Out L", 0, PinDataType::Audio), AudioPin("Out R", 1, PinDataType::Audio) },
@@ -790,14 +785,14 @@ db["random"] = ModulePinInfo(
 
     // ADD MISSING MODULES FOR COLOR-CODED CHAINING
 
-    db["Scope"] = ModulePinInfo(
+    db["scope"] = ModulePinInfo(
         NodeWidth::Medium,
         { AudioPin("In", 0, PinDataType::Audio) },
         { AudioPin("Out", 0, PinDataType::Audio) },
         {}
     );
 
-    db["Logic"] = ModulePinInfo(
+    db["logic"] = ModulePinInfo(
         NodeWidth::Small,
         { AudioPin("In A", 0, PinDataType::Gate), AudioPin("In B", 1, PinDataType::Gate) },
         {
@@ -809,7 +804,7 @@ db["random"] = ModulePinInfo(
         {}
     );
 
-    db["ClockDivider"] = ModulePinInfo(
+    db["clock_divider"] = ModulePinInfo(
         NodeWidth::Small,
         { AudioPin("Clock In", 0, PinDataType::Gate), AudioPin("Reset", 1, PinDataType::Gate) },
         {
@@ -820,7 +815,7 @@ db["random"] = ModulePinInfo(
         {}
     );
 
-    db["Rate"] = ModulePinInfo(
+    db["rate"] = ModulePinInfo(
         NodeWidth::Small,
         { AudioPin("Rate Mod", 0, PinDataType::CV) },
         { AudioPin("Out", 0, PinDataType::CV) },
@@ -829,7 +824,7 @@ db["random"] = ModulePinInfo(
 
     // ADD REMAINING MISSING MODULES FROM CMAKE LISTS
 
-    db["Math"] = ModulePinInfo(
+    db["math"] = ModulePinInfo(
         NodeWidth::Small,
         { AudioPin("In A", 0, PinDataType::CV), AudioPin("In B", 1, PinDataType::CV) },
         { AudioPin("Add", 0, PinDataType::CV), AudioPin("Subtract", 1, PinDataType::CV),
@@ -837,7 +832,7 @@ db["random"] = ModulePinInfo(
         {}
     );
 
-    db["SequentialSwitch"] = ModulePinInfo(
+    db["sequential_switch"] = ModulePinInfo(
         NodeWidth::Small,
         { 
             AudioPin("Gate In", 0, PinDataType::Audio),
@@ -862,7 +857,7 @@ db["random"] = ModulePinInfo(
         {}
     );
 
-    db["midi cv"] = ModulePinInfo(
+    db["midi_cv"] = ModulePinInfo(
         NodeWidth::Medium,
         {}, // No inputs - receives MIDI messages
         {
@@ -879,25 +874,25 @@ db["random"] = ModulePinInfo(
     // MIDI Family - New Modules with Correct Pin Types
     {
         // MIDI Faders: All outputs are CV (blue)
-        db["midi faders"] = ModulePinInfo();
-        db["midi faders"].defaultWidth = NodeWidth::Big;
+        db["midi_faders"] = ModulePinInfo();
+        db["midi_faders"].defaultWidth = NodeWidth::Big;
         for (int i = 0; i < 16; ++i)
-            db["midi faders"].audioOuts.emplace_back("Fader " + juce::String(i+1), i, PinDataType::CV);
+            db["midi_faders"].audioOuts.emplace_back("Fader " + juce::String(i+1), i, PinDataType::CV);
 
         // MIDI Knobs: All outputs are CV (blue)
-        db["midi knobs"] = ModulePinInfo();
-        db["midi knobs"].defaultWidth = NodeWidth::Big;
+        db["midi_knobs"] = ModulePinInfo();
+        db["midi_knobs"].defaultWidth = NodeWidth::Big;
         for (int i = 0; i < 16; ++i)
-            db["midi knobs"].audioOuts.emplace_back("Knob " + juce::String(i+1), i, PinDataType::CV);
+            db["midi_knobs"].audioOuts.emplace_back("Knob " + juce::String(i+1), i, PinDataType::CV);
 
         // MIDI Buttons: All outputs are Gate/Trigger (yellow)
-        db["midi buttons"] = ModulePinInfo();
-        db["midi buttons"].defaultWidth = NodeWidth::Big;
+        db["midi_buttons"] = ModulePinInfo();
+        db["midi_buttons"].defaultWidth = NodeWidth::Big;
         for (int i = 0; i < 32; ++i)
-            db["midi buttons"].audioOuts.emplace_back("Button " + juce::String(i+1), i, PinDataType::Gate);
+            db["midi_buttons"].audioOuts.emplace_back("Button " + juce::String(i+1), i, PinDataType::Gate);
 
         // MIDI Jog Wheel: Output is CV (blue)
-        db["midi jog wheel"] = ModulePinInfo(
+        db["midi_jog_wheel"] = ModulePinInfo(
             NodeWidth::Small,
             {},
             { AudioPin("Value", 0, PinDataType::CV) },
@@ -1098,11 +1093,6 @@ db["random"] = ModulePinInfo(
     // Add Video Out and Cropped Out pins (bus 1 and 2)
     db["face_tracker"].audioOuts.emplace_back("Video Out", 0, PinDataType::Video);
     db["face_tracker"].audioOuts.emplace_back("Cropped Out", 1, PinDataType::Video);
-
-    // Add aliases for nodes with underscore naming convention
-    db["clock_divider"] = db["ClockDivider"];
-    db["sequential_switch"] = db["SequentialSwitch"];
-    db["s_and_h"] = db["s&h"];
 
     // Contour Detector: 1 input, 3 CV outputs + Video Out
     db["contour_detector"] = ModulePinInfo(
