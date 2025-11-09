@@ -367,7 +367,7 @@ public:
     bool showInsertNodePopup { false };
     bool showDebugMenu { false };
     bool showMidiDeviceManager { false };
-    ThemeEditorComponent themeEditor;
+    ThemeEditorComponent themeEditor { this };
     int pendingInsertLinkId { -1 };
     
     // Probe tool state

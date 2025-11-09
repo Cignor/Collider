@@ -5,6 +5,9 @@
 #include <imgui.h>
 #include <array>
 #include <memory>
+#include <juce_core/juce_core.h>
+
+class ImGuiNodeEditorComponent;
 
 /**
  * Theme Editor Component
@@ -15,7 +18,7 @@
 class ThemeEditorComponent
 {
 public:
-    ThemeEditorComponent();
+    ThemeEditorComponent(ImGuiNodeEditorComponent* parent);
     ~ThemeEditorComponent() = default;
 
     // Connects the eyedropper from host component
@@ -72,6 +75,8 @@ private:
     void applyChanges();
     void syncFontBuffersFromWorkingCopy();
     void previewFontChanges();
+    void scanFontFolder();
+    int findScannedFontIndex(const juce::String& path) const;
 
     // State
     bool m_isOpen = false;
@@ -116,5 +121,8 @@ private:
     // Font editor helpers
     std::array<char, 512> m_defaultFontPathBuffer {};
     std::unique_ptr<juce::FileChooser> m_fontChooser;
+    juce::StringArray m_scannedFontFiles;
+    int m_selectedFontIndex = -1;
+    ImGuiNodeEditorComponent* parentEditor = nullptr;
 };
 

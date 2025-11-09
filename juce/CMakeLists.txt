@@ -1330,6 +1330,14 @@ if(WIN32)
     )
 
     add_custom_command(
+        TARGET PresetCreatorApp POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_directory
+                "${CMAKE_SOURCE_DIR}/assets/fonts"
+                "$<TARGET_FILE_DIR:PresetCreatorApp>/fonts"
+        COMMENT "Copying fonts to PresetCreatorApp/fonts"
+    )
+
+    add_custom_command(
         TARGET ColliderApp POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E make_directory
                 "$<TARGET_FILE_DIR:ColliderApp>/themes"

@@ -17,11 +17,14 @@
   #define GL_UNSIGNED_BYTE 0x1401
 #endif
 
-ThemeEditorComponent::ThemeEditorComponent()
+ThemeEditorComponent::ThemeEditorComponent(ImGuiNodeEditorComponent* parent)
+    : parentEditor(parent)
 {
     // Initialize working copy with current theme
     m_workingCopy = ThemeManager::getInstance().getCurrentTheme();
     syncFontBuffersFromWorkingCopy();
+    scanFontFolder();
+    m_selectedFontIndex = findScannedFontIndex(m_workingCopy.fonts.default_path);
 }
 
 void ThemeEditorComponent::open()
@@ -34,6 +37,8 @@ void ThemeEditorComponent::open()
     m_showSaveDialog = false;
     memset(m_saveThemeName, 0, sizeof(m_saveThemeName));
     syncFontBuffersFromWorkingCopy();
+    scanFontFolder();
+    m_selectedFontIndex = findScannedFontIndex(m_workingCopy.fonts.default_path);
 }
 
 void ThemeEditorComponent::close()
@@ -53,6 +58,8 @@ void ThemeEditorComponent::refreshThemeFromManager()
     m_hasChanges = false;
     juce::Logger::writeToLog("[ThemeEditor] Refreshed working copy from ThemeManager");
     syncFontBuffersFromWorkingCopy();
+    scanFontFolder();
+    m_selectedFontIndex = findScannedFontIndex(m_workingCopy.fonts.default_path);
 }
 
 void ThemeEditorComponent::render()
@@ -1356,80 +1363,99 @@ void ThemeEditorComponent::renderFontsTab()
 {
     ImGui::Text("Font Settings");
     ImGui::Separator();
-    ImGui::TextWrapped("Select the default font file and size for the editor. Click 'Apply Changes' to rebuild the font atlas.");
+    ImGui::TextWrapped("Select a font from the bundled 'fonts' folder or browse for a custom font. Click 'Apply Changes' to rebuild the font atlas.");
 
     ImGui::Spacing();
 
     if (ImGui::CollapsingHeader("Default Font", ImGuiTreeNodeFlags_DefaultOpen))
     {
-        ImGui::Text("Font File");
-        if (ImGui::InputText("##DefaultFontPath", m_defaultFontPathBuffer.data(), m_defaultFontPathBuffer.size()))
+        ImGui::Text("Scanned Fonts (from 'fonts' folder')");
+
+        juce::String selectionLabel = "<None (ImGui Default)>";
+        const juce::String currentPath = m_workingCopy.fonts.default_path;
+
+        if (m_selectedFontIndex >= 0 && m_selectedFontIndex < m_scannedFontFiles.size())
         {
-            m_workingCopy.fonts.default_path = juce::String(m_defaultFontPathBuffer.data());
-            m_hasChanges = true;
+            selectionLabel = juce::File(m_scannedFontFiles[m_selectedFontIndex]).getFileName();
         }
-        if (ImGui::IsItemDeactivatedAfterEdit())
+        else if (currentPath.isNotEmpty())
         {
-            previewFontChanges();
+            selectionLabel = juce::File(currentPath).getFileName();
         }
-        ImGui::SameLine();
-        if (ImGui::Button("Browse##DefaultFont"))
+
+        float availableWidth = ImGui::GetContentRegionAvail().x;
+        float comboWidth = availableWidth - 70.0f;
+        if (comboWidth < 150.0f)
+            comboWidth = availableWidth;
+
+        ImGui::SetNextItemWidth(comboWidth);
+        if (ImGui::BeginCombo("##DefaultFontCombo", selectionLabel.toRawUTF8()))
         {
-            juce::File initial = m_workingCopy.fonts.default_path.isNotEmpty()
-                ? juce::File(m_workingCopy.fonts.default_path)
-                : juce::File();
-
-            auto chooserFlags = juce::FileBrowserComponent::openMode | juce::FileBrowserComponent::canSelectFiles;
-
-            m_fontChooser = std::make_unique<juce::FileChooser>("Select default font",
-                                                                initial,
-                                                                "*.ttf;*.otf;*.ttc");
-
-#if JUCE_MODAL_LOOPS_PERMITTED
-            if (m_fontChooser->browseForFileToOpen())
+            const bool defaultSelected = (m_selectedFontIndex == -1 && currentPath.isEmpty());
+            if (ImGui::Selectable("<None (ImGui Default)>", defaultSelected))
             {
-                auto file = m_fontChooser->getResult();
-                if (file.existsAsFile())
+                m_selectedFontIndex = -1;
+                m_workingCopy.fonts.default_path.clear();
+                m_hasChanges = true;
+                previewFontChanges();
+            }
+            if (defaultSelected)
+                ImGui::SetItemDefaultFocus();
+
+            for (int i = 0; i < m_scannedFontFiles.size(); ++i)
+            {
+                const bool isSelected = (m_selectedFontIndex == i);
+                juce::String filename = juce::File(m_scannedFontFiles[i]).getFileName();
+
+                if (ImGui::Selectable(filename.toRawUTF8(), isSelected))
                 {
-                    const std::string path = file.getFullPathName().toStdString();
-                    std::snprintf(m_defaultFontPathBuffer.data(), m_defaultFontPathBuffer.size(), "%s", path.c_str());
-                    m_workingCopy.fonts.default_path = file.getFullPathName();
+                    m_selectedFontIndex = i;
+                    m_workingCopy.fonts.default_path = m_scannedFontFiles[i];
                     m_hasChanges = true;
                     previewFontChanges();
                 }
+
+                if (isSelected)
+                    ImGui::SetItemDefaultFocus();
             }
-#else
+
+            ImGui::EndCombo();
+        }
+
+        ImGui::SameLine();
+        if (ImGui::Button("Scan"))
+        {
+            scanFontFolder();
+            m_selectedFontIndex = findScannedFontIndex(m_workingCopy.fonts.default_path);
+        }
+
+        ImGui::Spacing();
+        if (ImGui::Button("Browse for other font..."))
+        {
+            auto fontsFolder = juce::File::getSpecialLocation(juce::File::currentExecutableFile).getParentDirectory().getChildFile("fonts");
+            juce::File initialDir = fontsFolder.exists() ? fontsFolder : juce::File();
+            m_fontChooser = std::make_unique<juce::FileChooser>("Select custom font", initialDir, "*.ttf;*.otf;*.ttc");
+
+            auto chooserFlags = juce::FileBrowserComponent::openMode | juce::FileBrowserComponent::canSelectFiles;
             m_fontChooser->launchAsync(chooserFlags,
                                        [this](const juce::FileChooser& fc)
                                        {
                                            auto file = fc.getResult();
                                            if (file.existsAsFile())
                                            {
-                                               const std::string path = file.getFullPathName().toStdString();
-                                               std::snprintf(m_defaultFontPathBuffer.data(), m_defaultFontPathBuffer.size(), "%s", path.c_str());
                                                m_workingCopy.fonts.default_path = file.getFullPathName();
                                                m_hasChanges = true;
+                                               m_selectedFontIndex = findScannedFontIndex(m_workingCopy.fonts.default_path);
                                                previewFontChanges();
                                            }
                                        });
-#endif
-        }
-        ImGui::SameLine();
-        if (ImGui::Button("Clear##DefaultFont"))
-        {
-            m_defaultFontPathBuffer[0] = '\0';
-            m_workingCopy.fonts.default_path.clear();
-            m_hasChanges = true;
-            previewFontChanges();
         }
 
         ImGui::Spacing();
         if (dragFloat("Default Font Size", m_workingCopy.fonts.default_size, 0.5f, 8.0f, 72.0f))
         {
             if (ImGui::IsItemDeactivatedAfterEdit())
-            {
                 previewFontChanges();
-            }
         }
     }
 
@@ -2022,5 +2048,52 @@ void ThemeEditorComponent::previewFontChanges()
     liveFonts.default_path = m_workingCopy.fonts.default_path;
     liveFonts.default_size = m_workingCopy.fonts.default_size;
     ThemeManager::getInstance().requestFontReload();
+}
+
+void ThemeEditorComponent::scanFontFolder()
+{
+    m_scannedFontFiles.clear();
+
+    auto exeDir = juce::File::getSpecialLocation(juce::File::currentExecutableFile).getParentDirectory();
+    auto fontsDir = exeDir.getChildFile("fonts");
+
+    juce::Logger::writeToLog("[ThemeEditor] Scanning for fonts in: " + fontsDir.getFullPathName());
+
+    if (fontsDir.isDirectory())
+    {
+        auto addFontsForPattern = [this, &fontsDir](const juce::String& pattern)
+        {
+            juce::Array<juce::File> files;
+            fontsDir.findChildFiles(files, juce::File::findFiles, false, pattern);
+            for (const auto& file : files)
+            {
+                const juce::String fullPath = file.getFullPathName();
+                if (!m_scannedFontFiles.contains(fullPath))
+                    m_scannedFontFiles.add(fullPath);
+            }
+        };
+
+        addFontsForPattern("*.ttf");
+        addFontsForPattern("*.otf");
+        addFontsForPattern("*.ttc");
+    }
+
+    juce::Logger::writeToLog("[ThemeEditor] Found " + juce::String(m_scannedFontFiles.size()) + " font files.");
+}
+
+int ThemeEditorComponent::findScannedFontIndex(const juce::String& path) const
+{
+    if (path.isEmpty())
+        return -1;
+
+    juce::File target(path);
+    const juce::String normalised = target.getFullPathName();
+
+    for (int i = 0; i < m_scannedFontFiles.size(); ++i)
+    {
+        if (juce::File(m_scannedFontFiles[i]).getFullPathName() == normalised)
+            return i;
+    }
+    return -1;
 }
 
