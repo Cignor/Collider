@@ -32,8 +32,6 @@ void ThemeManager::applyTheme()
 	st.Colors[ImGuiCol_SeparatorHovered] = ImVec4(acc.x, acc.y, acc.z, 0.9f);
 	st.Colors[ImGuiCol_TabHovered] = ImVec4(acc.x, acc.y, acc.z, 0.8f);
 	st.Colors[ImGuiCol_ButtonHovered] = ImVec4(acc.x, acc.y, acc.z, 1.0f);
-
-	requestFontReload();
 	
 	// Note: ImNodes style properties are set in newOpenGLContextCreated() after ImNodes context is created
 	// ImNodes colors are applied per-draw via PushColorStyle
@@ -51,13 +49,18 @@ bool ThemeManager::consumeFontReloadRequest()
 
 void ThemeManager::rebuildFontsNow()
 {
-	applyFonts();
+	if (ImGui::GetCurrentContext() == nullptr)
+		return;
+
+	ImGuiIO& io = ImGui::GetIO();
+	applyFonts(io);
 }
 
 void ThemeManager::resetToDefault()
 {
 	currentTheme = defaultTheme;
 	applyTheme();
+	requestFontReload();
 }
 
 const Theme& ThemeManager::getCurrentTheme() const
@@ -443,8 +446,6 @@ bool ThemeManager::loadTheme(const juce::File& themeFile)
 		auto* o = v.getDynamicObject();
 		if (o->hasProperty("default_size"))  t.fonts.default_size = (float) o->getProperty("default_size");
 		if (o->hasProperty("default_path"))  t.fonts.default_path = o->getProperty("default_path");
-		if (o->hasProperty("chinese_size"))  t.fonts.chinese_size = (float) o->getProperty("chinese_size");
-		if (o->hasProperty("chinese_path"))  t.fonts.chinese_path = o->getProperty("chinese_path");
 	}
 
 	// windows
@@ -700,8 +701,6 @@ bool ThemeManager::saveTheme(const juce::File& themeFile)
 		juce::DynamicObject::Ptr o = new juce::DynamicObject();
 		o->setProperty("default_size", currentTheme.fonts.default_size);
 		o->setProperty("default_path", currentTheme.fonts.default_path);
-		o->setProperty("chinese_size", currentTheme.fonts.chinese_size);
-		o->setProperty("chinese_path", currentTheme.fonts.chinese_path);
 		root->setProperty("fonts", juce::var(o.get()));
 	}
 
@@ -786,18 +785,17 @@ void ThemeManager::applyImGuiStyle()
 	}
 }
 
-void ThemeManager::applyFonts()
+void ThemeManager::applyFonts(ImGuiIO& io)
 {
-	if (ImGui::GetCurrentContext() == nullptr)
-		return;
-
-	ImGuiIO& io = ImGui::GetIO();
+	juce::Logger::writeToLog("[ThemeManager] Rebuilding font atlas...");
 
 	io.Fonts->Clear();
 
 	const auto& fontSettings = currentTheme.fonts;
+	const float baseSize = 16.0f;
+	const float desiredSize = fontSettings.default_size > 0.0f ? fontSettings.default_size : baseSize;
 
-	auto resolveFontPath = [](const juce::String& path) -> juce::File
+	auto resolveFontPath = [] (const juce::String& path) -> juce::File
 	{
 		juce::File file(path);
 		if (path.isNotEmpty() && !juce::File::isAbsolutePath(path))
@@ -808,64 +806,46 @@ void ThemeManager::applyFonts()
 		return file;
 	};
 
-	auto addFallbackFont = [&]()
+	bool fontLoaded = false;
+	juce::File fontFile;
+	if (fontSettings.default_path.isNotEmpty())
 	{
-		ImFontConfig cfg;
-		cfg.SizePixels = fontSettings.default_size > 0.0f ? fontSettings.default_size : 16.0f;
-		io.Fonts->AddFontDefault(&cfg);
-	};
-
-	bool defaultFontAdded = false;
-	{
-		ImFontConfig cfg;
-		cfg.SizePixels = fontSettings.default_size > 0.0f ? fontSettings.default_size : 16.0f;
-
-		if (fontSettings.default_path.isNotEmpty())
-		{
-			auto fontFile = resolveFontPath(fontSettings.default_path);
-			if (fontFile.existsAsFile())
-			{
-				defaultFontAdded = io.Fonts->AddFontFromFileTTF(fontFile.getFullPathName().toRawUTF8(), cfg.SizePixels, &cfg) != nullptr;
-				if (!defaultFontAdded)
-				{
-					juce::Logger::writeToLog("[ThemeManager] Failed to load default font: " + fontFile.getFullPathName());
-				}
-			}
-			else
-			{
-				juce::Logger::writeToLog("[ThemeManager] Default font file not found: " + fontFile.getFullPathName());
-			}
-		}
-
-		if (!defaultFontAdded)
-		{
-			addFallbackFont();
-			defaultFontAdded = true;
-		}
-	}
-
-	if (fontSettings.chinese_path.isNotEmpty())
-	{
-		auto fontFile = resolveFontPath(fontSettings.chinese_path);
+		fontFile = resolveFontPath(fontSettings.default_path);
 		if (fontFile.existsAsFile())
 		{
 			ImFontConfig cfg;
-			cfg.MergeMode = true;
-			cfg.PixelSnapH = true;
-			cfg.SizePixels = fontSettings.chinese_size > 0.0f ? fontSettings.chinese_size : fontSettings.default_size;
-
-			const ImWchar* ranges = io.Fonts->GetGlyphRangesChineseFull();
-			if (io.Fonts->AddFontFromFileTTF(fontFile.getFullPathName().toRawUTF8(), cfg.SizePixels, &cfg, ranges) == nullptr)
-			{
-				juce::Logger::writeToLog("[ThemeManager] Failed to merge Chinese font: " + fontFile.getFullPathName());
-			}
+			cfg.SizePixels = baseSize;
+			fontLoaded = io.Fonts->AddFontFromFileTTF(fontFile.getFullPathName().toRawUTF8(), baseSize, &cfg) != nullptr;
+			if (fontLoaded)
+				juce::Logger::writeToLog("[ThemeManager] Added font: " + fontFile.getFileName());
+			else
+				juce::Logger::writeToLog("[ThemeManager] Failed to load font: " + fontFile.getFullPathName());
 		}
 		else
 		{
-			juce::Logger::writeToLog("[ThemeManager] Chinese font file not found: " + fontFile.getFullPathName());
+			juce::Logger::writeToLog("[ThemeManager] Font file not found: " + fontFile.getFullPathName());
 		}
 	}
-	// Backend will recreate the texture automatically on next frame
+	else
+	{
+		fontFile = juce::File();
+	}
+
+	if (!fontLoaded)
+	{
+		io.Fonts->AddFontDefault();
+		juce::Logger::writeToLog("[ThemeManager] WARNING: Using ImGui default font.");
+	}
+
+	if (desiredSize > 0.0f && baseSize > 0.0f)
+	{
+		io.FontGlobalScale = desiredSize / baseSize;
+		juce::Logger::writeToLog("[ThemeManager] FontGlobalScale = " + juce::String(io.FontGlobalScale, 2));
+	}
+	else
+	{
+		io.FontGlobalScale = 1.0f;
+	}
 }
 
 // Helpers

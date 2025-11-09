@@ -301,6 +301,8 @@ public:
     // Sizes to apply for specific node IDs on the next render (for Comment nodes)
     std::unordered_map<int, ImVec2> pendingNodeSizes;
     std::atomic<bool> fontAtlasNeedsRebuild { false };
+    std::atomic<bool> isMinimapEnlarged { false };
+    float modalMinimapScale = 0.2f;
 
     // Cable inspector rolling stats (last N seconds) for quick visual validation
     struct ChannelHistory 

@@ -3,6 +3,8 @@
 #include "Theme.h"
 #include "ThemeManager.h"
 #include <imgui.h>
+#include <array>
+#include <memory>
 
 /**
  * Theme Editor Component
@@ -68,6 +70,8 @@ private:
     void saveTheme();
     void resetCurrentTab();
     void applyChanges();
+    void syncFontBuffersFromWorkingCopy();
+    void previewFontChanges();
 
     // State
     bool m_isOpen = false;
@@ -108,5 +112,9 @@ private:
 
     // Injection from host: start a framebuffer-based picker
     std::function<void(std::function<void(ImU32)>)> m_startPicker;
+
+    // Font editor helpers
+    std::array<char, 512> m_defaultFontPathBuffer {};
+    std::unique_ptr<juce::FileChooser> m_fontChooser;
 };
 

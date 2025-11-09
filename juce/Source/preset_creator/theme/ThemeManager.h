@@ -14,6 +14,7 @@ public:
 	bool saveTheme(const juce::File& themeFile);
 	void applyTheme();
 	void resetToDefault();
+	void applyFonts(ImGuiIO& io);
 	void requestFontReload();
 	bool consumeFontReloadRequest();
 	void rebuildFontsNow();
@@ -64,7 +65,6 @@ private:
 
 	void loadDefaultTheme();
 	void applyImGuiStyle();
-	void applyFonts();
 
 	// JSON helpers
 	static juce::var colorToVar(ImU32 c);

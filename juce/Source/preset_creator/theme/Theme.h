@@ -110,8 +110,6 @@ struct Theme
 	{
 		float default_size { 16.0f };
 		juce::String default_path; // empty = ImGui default
-		float chinese_size { 16.0f };
-		juce::String chinese_path { "../../Source/assets/NotoSansSC-VariableFont_wght.ttf" };
 	} fonts;
 
 	struct WindowSettings

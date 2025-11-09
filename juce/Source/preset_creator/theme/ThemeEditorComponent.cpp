@@ -1,7 +1,9 @@
 #include "ThemeEditorComponent.h"
 #include <juce_core/juce_core.h>
+#include <juce_gui_basics/juce_gui_basics.h>
 #include <imgui.h>
 #include <juce_opengl/juce_opengl.h>
+#include <cstring>
 #if defined(_WIN32)
   #include <windows.h>
   #include <GL/gl.h>
@@ -19,6 +21,7 @@ ThemeEditorComponent::ThemeEditorComponent()
 {
     // Initialize working copy with current theme
     m_workingCopy = ThemeManager::getInstance().getCurrentTheme();
+    syncFontBuffersFromWorkingCopy();
 }
 
 void ThemeEditorComponent::open()
@@ -30,6 +33,7 @@ void ThemeEditorComponent::open()
     m_currentTab = 0;
     m_showSaveDialog = false;
     memset(m_saveThemeName, 0, sizeof(m_saveThemeName));
+    syncFontBuffersFromWorkingCopy();
 }
 
 void ThemeEditorComponent::close()
@@ -48,6 +52,7 @@ void ThemeEditorComponent::refreshThemeFromManager()
     m_workingCopy = ThemeManager::getInstance().getCurrentTheme();
     m_hasChanges = false;
     juce::Logger::writeToLog("[ThemeEditor] Refreshed working copy from ThemeManager");
+    syncFontBuffersFromWorkingCopy();
 }
 
 void ThemeEditorComponent::render()
@@ -1351,35 +1356,100 @@ void ThemeEditorComponent::renderFontsTab()
 {
     ImGui::Text("Font Settings");
     ImGui::Separator();
-    ImGui::TextWrapped("Font settings are managed through the application's font loading system. "
-                       "Currently, font paths are configured in the application initialization code.");
-    
+    ImGui::TextWrapped("Select the default font file and size for the editor. Click 'Apply Changes' to rebuild the font atlas.");
+
+    ImGui::Spacing();
+
+    if (ImGui::CollapsingHeader("Default Font", ImGuiTreeNodeFlags_DefaultOpen))
+    {
+        ImGui::Text("Font File");
+        if (ImGui::InputText("##DefaultFontPath", m_defaultFontPathBuffer.data(), m_defaultFontPathBuffer.size()))
+        {
+            m_workingCopy.fonts.default_path = juce::String(m_defaultFontPathBuffer.data());
+            m_hasChanges = true;
+        }
+        if (ImGui::IsItemDeactivatedAfterEdit())
+        {
+            previewFontChanges();
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("Browse##DefaultFont"))
+        {
+            juce::File initial = m_workingCopy.fonts.default_path.isNotEmpty()
+                ? juce::File(m_workingCopy.fonts.default_path)
+                : juce::File();
+
+            auto chooserFlags = juce::FileBrowserComponent::openMode | juce::FileBrowserComponent::canSelectFiles;
+
+            m_fontChooser = std::make_unique<juce::FileChooser>("Select default font",
+                                                                initial,
+                                                                "*.ttf;*.otf;*.ttc");
+
+#if JUCE_MODAL_LOOPS_PERMITTED
+            if (m_fontChooser->browseForFileToOpen())
+            {
+                auto file = m_fontChooser->getResult();
+                if (file.existsAsFile())
+                {
+                    const std::string path = file.getFullPathName().toStdString();
+                    std::snprintf(m_defaultFontPathBuffer.data(), m_defaultFontPathBuffer.size(), "%s", path.c_str());
+                    m_workingCopy.fonts.default_path = file.getFullPathName();
+                    m_hasChanges = true;
+                    previewFontChanges();
+                }
+            }
+#else
+            m_fontChooser->launchAsync(chooserFlags,
+                                       [this](const juce::FileChooser& fc)
+                                       {
+                                           auto file = fc.getResult();
+                                           if (file.existsAsFile())
+                                           {
+                                               const std::string path = file.getFullPathName().toStdString();
+                                               std::snprintf(m_defaultFontPathBuffer.data(), m_defaultFontPathBuffer.size(), "%s", path.c_str());
+                                               m_workingCopy.fonts.default_path = file.getFullPathName();
+                                               m_hasChanges = true;
+                                               previewFontChanges();
+                                           }
+                                       });
+#endif
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("Clear##DefaultFont"))
+        {
+            m_defaultFontPathBuffer[0] = '\0';
+            m_workingCopy.fonts.default_path.clear();
+            m_hasChanges = true;
+            previewFontChanges();
+        }
+
+        ImGui::Spacing();
+        if (dragFloat("Default Font Size", m_workingCopy.fonts.default_size, 0.5f, 8.0f, 72.0f))
+        {
+            if (ImGui::IsItemDeactivatedAfterEdit())
+            {
+                previewFontChanges();
+            }
+        }
+    }
+
     ImGui::Spacing();
     ImGui::Separator();
     ImGui::Spacing();
-    
-    ImGui::Text("Font Size Settings:");
-    dragFloat("Default Font Size", m_workingCopy.fonts.default_size, 0.5f, 8.0f, 72.0f);
-    
-    ImGui::Spacing();
-    ImGui::Separator();
-    ImGui::Spacing();
-    
-    ImGui::Text("Note:");
-    ImGui::BulletText("Font file paths are configured in the application initialization.");
-    ImGui::BulletText("To change fonts, modify the font loading code in ImGuiNodeEditorComponent.");
-    ImGui::BulletText("Font size can be adjusted here and will affect text rendering.");
-    
-    ImGui::Spacing();
-    
-    // Preview font sizes
-    ImGui::Text("Font Size Preview:");
+
+    ImGui::Text("Preview");
     ImGui::BeginChild("FontPreview", ImVec2(0, 200), true);
-    
+
+    const float baseSize = ImGui::GetFontSize();
+    const float desiredSize = m_workingCopy.fonts.default_size;
+    const float scale = (baseSize > 0.0f) ? (desiredSize / baseSize) : 1.0f;
+    ImGui::SetWindowFontScale(scale);
+
     ImGui::Text("Default Font Size (%.1f):", m_workingCopy.fonts.default_size);
     ImGui::Text("The quick brown fox jumps over the lazy dog.");
     ImGui::Text("0123456789 !@#$%%^&*()");
-    
+
+    ImGui::SetWindowFontScale(1.0f);
     ImGui::EndChild();
 }
 
@@ -1938,5 +2008,19 @@ void ThemeEditorComponent::applyChanges()
     
     // Also save user preference if they want persistence
     // (Theme preference is saved when selecting from menu, not when editing)
+}
+
+void ThemeEditorComponent::syncFontBuffersFromWorkingCopy()
+{
+    const std::string defaultPath = m_workingCopy.fonts.default_path.toStdString();
+    std::snprintf(m_defaultFontPathBuffer.data(), m_defaultFontPathBuffer.size(), "%s", defaultPath.c_str());
+}
+
+void ThemeEditorComponent::previewFontChanges()
+{
+    auto& liveFonts = ThemeManager::getInstance().getEditableTheme().fonts;
+    liveFonts.default_path = m_workingCopy.fonts.default_path;
+    liveFonts.default_size = m_workingCopy.fonts.default_size;
+    ThemeManager::getInstance().requestFontReload();
 }
 

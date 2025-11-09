@@ -1,219 +1,781 @@
 {
-  "style": {
-    "WindowPadding": [ 8.0, 8.0, 0.0, 0.0 ],
-    "FramePadding": [ 4.0, 3.0, 0.0, 0.0 ],
-    "ItemSpacing": [ 8.0, 4.0, 0.0, 0.0 ],
-    "ItemInnerSpacing": [ 4.0, 4.0, 0.0, 0.0 ],
-    "WindowRounding": 4.0,
-    "ChildRounding": 2.0,
-    "FrameRounding": 2.0,
-    "PopupRounding": 2.0,
-    "ScrollbarRounding": 9.0,
-    "GrabRounding": 2.0,
-    "TabRounding": 4.0,
-    "WindowBorderSize": 1.0,
-    "FrameBorderSize": 0.0,
-    "PopupBorderSize": 1.0,
-    "Colors": {
-      "Text": [ 1.0, 1.0, 1.0, 1.0 ],
-      "TextDisabled": [ 0.5, 0.5, 0.5, 1.0 ],
-      "WindowBg": [ 0.06, 0.06, 0.06, 0.94 ],
-      "ChildBg": [ 0.08, 0.08, 0.08, 0.98 ],
-      "PopupBg": [ 0.08, 0.08, 0.08, 0.94 ],
-      "Border": [ 0.43, 0.43, 0.5, 0.5 ],
-      "BorderShadow": [ 0.0, 0.0, 0.0, 0.0 ],
-      "FrameBg": [ 0.16, 0.29, 0.48, 0.54 ],
-      "FrameBgHovered": [ 0.26, 0.59, 0.98, 0.4 ],
-      "FrameBgActive": [ 0.26, 0.59, 0.98, 0.67 ],
-      "TitleBg": [ 0.04, 0.04, 0.04, 1.0 ],
-      "TitleBgActive": [ 0.16, 0.29, 0.48, 1.0 ],
-      "TitleBgCollapsed": [ 0.0, 0.0, 0.0, 0.51 ],
-      "MenuBarBg": [ 0.14, 0.14, 0.14, 1.0 ],
-      "ScrollbarBg": [ 0.02, 0.02, 0.02, 0.53 ],
-      "ScrollbarGrab": [ 0.31, 0.31, 0.31, 1.0 ],
-      "ScrollbarGrabHovered": [ 0.41, 0.41, 0.41, 1.0 ],
-      "ScrollbarGrabActive": [ 0.51, 0.51, 0.51, 1.0 ],
-      "CheckMark": [ 0.26, 0.59, 0.98, 1.0 ],
-      "SliderGrab": [ 0.24, 0.52, 0.88, 1.0 ],
-      "SliderGrabActive": [ 0.26, 0.59, 0.98, 1.0 ],
-      "Button": [ 0.26, 0.59, 0.98, 0.4 ],
-      "ButtonHovered": [ 0.26, 0.59, 0.98, 1.0 ],
-      "ButtonActive": [ 0.06, 0.53, 0.98, 1.0 ],
-      "Header": [ 0.26, 0.59, 0.98, 0.31 ],
-      "HeaderHovered": [ 0.26, 0.59, 0.98, 0.8 ],
-      "HeaderActive": [ 0.26, 0.59, 0.98, 1.0 ],
-      "Separator": [ 0.43, 0.43, 0.5, 0.5 ],
-      "SeparatorHovered": [ 0.1, 0.4, 0.75, 0.78 ],
-      "SeparatorActive": [ 0.1, 0.4, 0.75, 1.0 ],
-      "ResizeGrip": [ 0.26, 0.59, 0.98, 0.25 ],
-      "ResizeGripHovered": [ 0.26, 0.59, 0.98, 0.67 ],
-      "ResizeGripActive": [ 0.26, 0.59, 0.98, 0.95 ],
-      "Tab": [ 0.18, 0.35, 0.58, 0.86 ],
-      "TabHovered": [ 0.26, 0.59, 0.98, 0.8 ],
-      "TabActive": [ 0.2, 0.41, 0.68, 1.0 ],
-      "TabUnfocused": [ 0.07, 0.1, 0.15, 0.97 ],
-      "TabUnfocusedActive": [ 0.14, 0.26, 0.42, 1.0 ],
-      "PlotLines": [ 0.61, 0.61, 0.61, 1.0 ],
-      "PlotLinesHovered": [ 1.0, 0.43, 0.35, 1.0 ],
-      "PlotHistogram": [ 0.9, 0.7, 0.0, 1.0 ],
-      "PlotHistogramHovered": [ 1.0, 0.6, 0.0, 1.0 ],
-      "TableHeaderBg": [ 0.19, 0.19, 0.2, 1.0 ],
-      "TableBorderStrong": [ 0.31, 0.31, 0.35, 1.0 ],
-      "TableBorderLight": [ 0.23, 0.23, 0.25, 1.0 ],
-      "TableRowBg": [ 0.0, 0.0, 0.0, 0.0 ],
-      "TableRowBgAlt": [ 1.0, 1.0, 1.0, 0.06 ],
-      "TextSelectedBg": [ 0.26, 0.59, 0.98, 0.35 ],
-      "DragDropTarget": [ 1.0, 1.0, 0.0, 0.9 ],
-      "NavHighlight": [ 0.26, 0.59, 0.98, 1.0 ],
-      "NavWindowingHighlight": [ 1.0, 1.0, 1.0, 0.7 ],
-      "NavWindowingDimBg": [ 0.8, 0.8, 0.8, 0.2 ],
-      "ModalWindowDimBg": [ 0.8, 0.8, 0.8, 0.35 ]
+    "style": {
+        "WindowPadding": [
+            8.0,
+            8.0
+        ],
+        "FramePadding": [
+            4.0,
+            3.0
+        ],
+        "ItemSpacing": [
+            8.0,
+            4.0
+        ],
+        "ItemInnerSpacing": [
+            4.0,
+            4.0
+        ],
+        "WindowRounding": 4.0,
+        "ChildRounding": 3.0,
+        "FrameRounding": 3.0,
+        "TabRounding": 4.0,
+        "WindowBorderSize": 1.0,
+        "FrameBorderSize": 0.0,
+        "PopupBorderSize": 1.0,
+        "Colors": {
+            "Text": [
+                1.0,
+                1.0,
+                1.0,
+                1.0
+            ],
+            "TextDisabled": [
+                0.5,
+                0.5,
+                0.5,
+                1.0
+            ],
+            "WindowBg": [
+                0.06,
+                0.06,
+                0.06,
+                0.94
+            ],
+            "ChildBg": [
+                0.08,
+                0.08,
+                0.08,
+                0.98
+            ],
+            "PopupBg": [
+                0.08,
+                0.08,
+                0.08,
+                0.94
+            ],
+            "Border": [
+                0.43,
+                0.43,
+                0.5,
+                0.55
+            ],
+            "FrameBg": [
+                0.16,
+                0.29,
+                0.48,
+                0.6
+            ],
+            "FrameBgHovered": [
+                0.26,
+                0.59,
+                0.98,
+                0.7
+            ],
+            "FrameBgActive": [
+                0.26,
+                0.59,
+                0.98,
+                0.9
+            ],
+            "TitleBg": [
+                0.04,
+                0.04,
+                0.04,
+                1.0
+            ],
+            "TitleBgActive": [
+                0.16,
+                0.29,
+                0.48,
+                1.0
+            ],
+            "MenuBarBg": [
+                0.14,
+                0.14,
+                0.14,
+                1.0
+            ],
+            "Button": [
+                0.22,
+                0.43,
+                0.65,
+                0.7
+            ],
+            "ButtonHovered": [
+                0.26,
+                0.59,
+                0.98,
+                0.95
+            ],
+            "ButtonActive": [
+                0.06,
+                0.53,
+                0.98,
+                1.0
+            ],
+            "Header": [
+                0.22,
+                0.43,
+                0.65,
+                0.65
+            ],
+            "HeaderHovered": [
+                0.26,
+                0.59,
+                0.98,
+                0.85
+            ],
+            "HeaderActive": [
+                0.26,
+                0.59,
+                0.98,
+                1.0
+            ],
+            "Separator": [
+                0.43,
+                0.43,
+                0.5,
+                0.55
+            ],
+            "Tab": [
+                0.18,
+                0.35,
+                0.58,
+                0.9
+            ],
+            "TabHovered": [
+                0.26,
+                0.59,
+                0.98,
+                0.95
+            ],
+            "TabActive": [
+                0.2,
+                0.41,
+                0.68,
+                0.95
+            ],
+            "TextSelectedBg": [
+                0.26,
+                0.59,
+                0.98,
+                0.35
+            ],
+            "DragDropTarget": [
+                1.0,
+                1.0,
+                0.0,
+                0.9
+            ]
+        }
+    },
+    "accent": [
+        0.26,
+        0.59,
+        0.98,
+        1.0
+    ],
+    "text": {
+        "section_header": [
+            0.26,
+            0.59,
+            0.98,
+            1.0
+        ],
+        "warning": [
+            0.98,
+            0.76,
+            0.22,
+            1.0
+        ],
+        "success": [
+            0.2,
+            0.8,
+            0.35,
+            1.0
+        ],
+        "error": [
+            0.98,
+            0.36,
+            0.18,
+            1.0
+        ],
+        "disabled": [
+            0.43,
+            0.43,
+            0.5,
+            1.0
+        ],
+        "active": [
+            0.39,
+            1.0,
+            0.39,
+            1.0
+        ],
+        "tooltip_wrap_standard": 35.0,
+        "tooltip_wrap_compact": 25.0,
+        "enable_text_glow": true,
+        "text_glow_color": [
+            0.12,
+            0.19,
+            0.32,
+            0.8
+        ]
+    },
+    "status": {
+        "edited": [
+            0.98,
+            0.76,
+            0.22,
+            1.0
+        ],
+        "saved": [
+            0.2,
+            0.8,
+            0.35,
+            1.0
+        ]
+    },
+    "headers": {
+        "recent": {
+            "base": [
+                0.98,
+                0.76,
+                0.22,
+                1.0
+            ],
+            "hovered": [
+                0.99,
+                0.81,
+                0.31,
+                1.0
+            ],
+            "active": [
+                1.0,
+                0.86,
+                0.4,
+                1.0
+            ]
+        },
+        "samples": {
+            "base": [
+                0.2,
+                0.8,
+                0.35,
+                1.0
+            ],
+            "hovered": [
+                0.26,
+                0.86,
+                0.41,
+                1.0
+            ],
+            "active": [
+                0.32,
+                0.91,
+                0.47,
+                1.0
+            ]
+        },
+        "presets": {
+            "base": [
+                0.71,
+                0.47,
+                1.0,
+                1.0
+            ],
+            "hovered": [
+                0.78,
+                0.55,
+                1.0,
+                1.0
+            ],
+            "active": [
+                0.86,
+                0.63,
+                1.0,
+                1.0
+            ]
+        },
+        "system": {
+            "base": [
+                0.32,
+                0.32,
+                0.32,
+                1.0
+            ],
+            "hovered": [
+                0.41,
+                0.41,
+                0.41,
+                1.0
+            ],
+            "active": [
+                0.5,
+                0.5,
+                0.5,
+                1.0
+            ]
+        }
+    },
+    "imnodes": {
+        "category_colors": {
+            "Source": [
+                0.2,
+                0.47,
+                0.2,
+                1.0
+            ],
+            "Effect": [
+                0.51,
+                0.24,
+                0.24,
+                1.0
+            ],
+            "Modulator": [
+                0.2,
+                0.2,
+                0.51,
+                1.0
+            ],
+            "Utility": [
+                0.43,
+                0.31,
+                0.2,
+                1.0
+            ],
+            "Seq": [
+                0.35,
+                0.55,
+                0.35,
+                1.0
+            ],
+            "MIDI": [
+                0.71,
+                0.47,
+                1.0,
+                1.0
+            ],
+            "Analysis": [
+                0.39,
+                0.2,
+                0.43,
+                1.0
+            ],
+            "TTS_Voice": [
+                1.0,
+                0.71,
+                0.39,
+                1.0
+            ],
+            "Special_Exp": [
+                0.2,
+                0.78,
+                0.78,
+                1.0
+            ],
+            "OpenCV": [
+                1.0,
+                0.55,
+                0.0,
+                1.0
+            ],
+            "Sys": [
+                0.47,
+                0.39,
+                0.55,
+                1.0
+            ],
+            "Comment": [
+                0.22,
+                0.22,
+                0.22,
+                1.0
+            ],
+            "Plugin": [
+                0.2,
+                0.43,
+                0.43,
+                1.0
+            ],
+            "Default": [
+                0.27,
+                0.27,
+                0.27,
+                1.0
+            ]
+        },
+        "pin_colors": {
+            "CV": [
+                0.39,
+                0.59,
+                1.0,
+                1.0
+            ],
+            "Audio": [
+                0.39,
+                1.0,
+                0.59,
+                1.0
+            ],
+            "Gate": [
+                1.0,
+                0.86,
+                0.39,
+                1.0
+            ],
+            "Raw": [
+                1.0,
+                0.39,
+                0.39,
+                1.0
+            ],
+            "Video": [
+                0.0,
+                0.78,
+                1.0,
+                1.0
+            ]
+        },
+        "pin_connected": [
+            0.39,
+            1.0,
+            0.59,
+            1.0
+        ],
+        "pin_disconnected": [
+            0.59,
+            0.59,
+            0.59,
+            1.0
+        ],
+        "node_muted": [
+            0.24,
+            0.24,
+            0.26,
+            1.0
+        ],
+        "node_muted_alpha": 0.55,
+        "node_hovered_link_highlight": [
+            1.0,
+            0.86,
+            0.0,
+            1.0
+        ]
+    },
+    "links": {
+        "link_hovered": [
+            1.0,
+            0.86,
+            0.0,
+            1.0
+        ],
+        "link_selected": [
+            1.0,
+            0.86,
+            0.0,
+            1.0
+        ],
+        "link_highlighted": [
+            1.0,
+            1.0,
+            0.2,
+            1.0
+        ],
+        "preview_color": [
+            1.0,
+            0.86,
+            0.0,
+            0.85
+        ],
+        "preview_width": 3.0,
+        "label_background": [
+            0.16,
+            0.16,
+            0.16,
+            0.85
+        ],
+        "label_text": [
+            1.0,
+            1.0,
+            0.48,
+            1.0
+        ]
+    },
+    "canvas": {
+        "grid_color": [
+            0.22,
+            0.22,
+            0.22,
+            0.7
+        ],
+        "grid_origin_color": [
+            0.32,
+            0.32,
+            0.32,
+            0.85
+        ],
+        "grid_size": 64.0,
+        "scale_text_color": [
+            0.59,
+            0.59,
+            0.59,
+            0.4
+        ],
+        "scale_interval": 400.0,
+        "drop_target_overlay": [
+            0.98,
+            0.76,
+            0.22,
+            0.35
+        ],
+        "mouse_position_text": [
+            0.85,
+            0.85,
+            0.85,
+            0.7
+        ],
+        "node_background": [
+            0.1,
+            0.1,
+            0.12,
+            0.98
+        ],
+        "node_frame": [
+            0.26,
+            0.32,
+            0.4,
+            0.85
+        ],
+        "node_frame_hovered": [
+            0.26,
+            0.59,
+            0.98,
+            0.95
+        ],
+        "node_frame_selected": [
+            0.26,
+            0.43,
+            0.65,
+            1.0
+        ],
+        "node_rounding": 10.0,
+        "node_border_width": 2.0
+    },
+    "layout": {
+        "sidebar_width": 260.0,
+        "window_padding": 10.0,
+        "node_vertical_padding": 48.0,
+        "preset_vertical_padding": 100.0,
+        "node_default_width": 240.0,
+        "node_default_padding": [
+            10.0,
+            8.0
+        ],
+        "node_muted_padding": [
+            8.0,
+            8.0
+        ]
+    },
+    "fonts": {
+        "default_size": 16.0,
+        "default_path": ""
+    },
+    "windows": {
+        "status_overlay_alpha": 0.55,
+        "probe_scope_alpha": 0.85,
+        "preset_status_alpha": 0.72,
+        "notifications_alpha": 0.92,
+        "probe_scope_width": 260.0,
+        "probe_scope_height": 180.0
+    },
+    "modulation": {
+        "frequency": [
+            0.39,
+            0.78,
+            1.0,
+            1.0
+        ],
+        "timbre": [
+            0.98,
+            0.76,
+            0.22,
+            1.0
+        ],
+        "amplitude": [
+            1.0,
+            0.39,
+            1.0,
+            1.0
+        ],
+        "filter": [
+            0.39,
+            1.0,
+            0.59,
+            1.0
+        ]
+    },
+    "meters": {
+        "safe": [
+            0.2,
+            0.8,
+            0.2,
+            1.0
+        ],
+        "warning": [
+            0.9,
+            0.7,
+            0.0,
+            1.0
+        ],
+        "clipping": [
+            0.9,
+            0.2,
+            0.2,
+            1.0
+        ]
+    },
+    "timeline": {
+        "marker_start_end": [
+            1.0,
+            0.86,
+            0.0,
+            1.0
+        ],
+        "marker_gate": [
+            0.26,
+            0.59,
+            0.98,
+            0.85
+        ],
+        "marker_trigger": [
+            0.39,
+            1.0,
+            0.59,
+            0.85
+        ]
+    },
+    "modules": {
+        "videofx_section_header": [
+            0.26,
+            0.59,
+            0.98,
+            1.0
+        ],
+        "videofx_section_subheader": [
+            0.39,
+            0.78,
+            1.0,
+            1.0
+        ],
+        "scope_section_header": [
+            0.26,
+            0.59,
+            0.98,
+            1.0
+        ],
+        "scope_plot_bg": [
+            0.12,
+            0.12,
+            0.12,
+            1.0
+        ],
+        "scope_plot_fg": [
+            0.39,
+            0.78,
+            1.0,
+            1.0
+        ],
+        "scope_plot_max": [
+            1.0,
+            0.31,
+            0.31,
+            1.0
+        ],
+        "scope_plot_min": [
+            0.98,
+            0.76,
+            0.22,
+            1.0
+        ],
+        "scope_text_max": [
+            1.0,
+            0.31,
+            0.31,
+            1.0
+        ],
+        "scope_text_min": [
+            0.98,
+            0.76,
+            0.22,
+            1.0
+        ],
+        "stroke_seq_border": [
+            0.26,
+            0.59,
+            0.98,
+            1.0
+        ],
+        "stroke_seq_frame_bg": [
+            0.18,
+            0.18,
+            0.18,
+            0.85
+        ],
+        "stroke_seq_frame_bg_hovered": [
+            0.26,
+            0.26,
+            0.3,
+            0.85
+        ],
+        "stroke_seq_frame_bg_active": [
+            0.26,
+            0.59,
+            0.98,
+            0.95
+        ],
+        "stroke_seq_canvas_bg": [
+            0.71,
+            0.77,
+            0.36,
+            1.0
+        ],
+        "stroke_seq_line_inactive": [
+            0.31,
+            0.29,
+            0.1,
+            0.86
+        ],
+        "stroke_seq_line_active": [
+            1.0,
+            0.31,
+            0.0,
+            1.0
+        ],
+        "stroke_seq_playhead": [
+            1.0,
+            0.0,
+            0.39,
+            1.0
+        ],
+        "stroke_seq_thresh_floor": [
+            0.63,
+            0.2,
+            0.12,
+            0.4
+        ],
+        "stroke_seq_thresh_mid": [
+            0.2,
+            0.47,
+            0.16,
+            0.4
+        ],
+        "stroke_seq_thresh_ceil": [
+            0.16,
+            0.27,
+            0.55,
+            0.4
+        ]
     }
-  },
-  "text": {
-    "section_header": [ 0.7, 0.7, 0.7, 1.0 ],
-    "warning": [ 1.0, 0.8, 0.0, 1.0 ],
-    "success": [ 0.0, 1.0, 0.0, 1.0 ],
-    "error": [ 1.0, 0.5, 0.0, 1.0 ],
-    "disabled": [ 0.39, 0.39, 0.39, 1.0 ],
-    "active": [ 0.39, 1.0, 0.39, 1.0 ],
-    "tooltip_wrap_standard": 35.0,
-    "tooltip_wrap_compact": 25.0
-  },
-  "status": {
-    "edited": [ 1.0, 1.0, 0.0, 1.0 ],
-    "saved": [ 0.0, 1.0, 0.0, 1.0 ]
-  },
-  "headers": {
-    "recent": {
-      "base": [ 0.85, 0.65, 0.13, 1.0 ],
-      "hovered": [ 0.93, 0.73, 0.2, 1.0 ],
-      "active": [ 1.0, 0.8, 0.28, 1.0 ]
-    },
-    "samples": {
-      "base": [ 0.0, 0.71, 0.71, 1.0 ],
-      "hovered": [ 0.08, 0.78, 0.78, 1.0 ],
-      "active": [ 0.16, 0.86, 0.86, 1.0 ]
-    },
-    "presets": {
-      "base": [ 0.71, 0.47, 1.0, 1.0 ],
-      "hovered": [ 0.78, 0.55, 1.0, 1.0 ],
-      "active": [ 0.86, 0.63, 1.0, 1.0 ]
-    },
-    "system": {
-      "base": [ 0.31, 0.31, 0.31, 1.0 ],
-      "hovered": [ 0.39, 0.39, 0.39, 1.0 ],
-      "active": [ 0.47, 0.47, 0.47, 1.0 ]
-    }
-  },
-  "imnodes": {
-    "node_muted": [ 0.31, 0.31, 0.31, 1.0 ],
-    "node_muted_alpha": 0.5,
-    "node_hovered_link_highlight": [ 1.0, 0.86, 0.0, 1.0 ],
-    "pin_connected": [ 0.47, 1.0, 0.47, 1.0 ],
-    "pin_disconnected": [ 0.59, 0.59, 0.59, 1.0 ],
-    "category_colors": {
-      "Source": [ 0.2, 0.47, 0.2, 1.0 ],
-      "Effect": [ 0.51, 0.24, 0.24, 1.0 ],
-      "Modulator": [ 0.2, 0.2, 0.51, 1.0 ],
-      "Utility": [ 0.43, 0.31, 0.2, 1.0 ],
-      "Seq": [ 0.35, 0.55, 0.35, 1.0 ],
-      "MIDI": [ 0.71, 0.47, 1.0, 1.0 ],
-      "Analysis": [ 0.39, 0.2, 0.43, 1.0 ],
-      "TTS_Voice": [ 1.0, 0.71, 0.39, 1.0 ],
-      "Special_Exp": [ 0.2, 0.78, 0.78, 1.0 ],
-      "OpenCV": [ 1.0, 0.55, 0.0, 1.0 ],
-      "Sys": [ 0.47, 0.39, 0.55, 1.0 ],
-      "Comment": [ 0.31, 0.31, 0.31, 1.0 ],
-      "Plugin": [ 0.2, 0.43, 0.43, 1.0 ],
-      "Default": [ 0.27, 0.27, 0.27, 1.0 ]
-    },
-    "pin_colors": {
-      "CV": [ 0.39, 0.59, 1.0, 1.0 ],
-      "Audio": [ 0.39, 1.0, 0.59, 1.0 ],
-      "Gate": [ 1.0, 0.86, 0.39, 1.0 ],
-      "Raw": [ 1.0, 0.39, 0.39, 1.0 ],
-      "Video": [ 0.0, 0.78, 1.0, 1.0 ],
-      "Default": [ 0.59, 0.59, 0.59, 1.0 ]
-    }
-  },
-  "links": {
-    "link_hovered": [ 1.0, 1.0, 0.0, 1.0 ],
-    "link_selected": [ 1.0, 1.0, 0.0, 1.0 ],
-    "link_highlighted": [ 1.0, 1.0, 0.0, 1.0 ],
-    "preview_color": [ 1.0, 1.0, 0.0, 0.78 ],
-    "preview_width": 3.0,
-    "label_background": [ 0.2, 0.2, 0.2, 0.78 ],
-    "label_text": [ 1.0, 1.0, 0.39, 1.0 ]
-  },
-  "canvas": {
-    "grid_color": [ 0.2, 0.2, 0.2, 1.0 ],
-    "grid_origin_color": [ 0.31, 0.31, 0.31, 1.0 ],
-    "grid_size": 64.0,
-    "scale_text_color": [ 0.59, 0.59, 0.59, 0.31 ],
-    "scale_interval": 400.0,
-    "drop_target_overlay": [ 0.85, 0.65, 0.13, 0.31 ],
-    "mouse_position_text": [ 0.78, 0.78, 0.78, 0.59 ]
-  },
-  "layout": {
-    "sidebar_width": 260.0,
-    "window_padding": 10.0,
-    "node_vertical_padding": 50.0,
-    "preset_vertical_padding": 100.0,
-    "node_default_width": 240.0,
-    "node_default_padding": [ 8.0, 8.0, 0.0, 0.0 ],
-    "node_muted_padding": [ 8.0, 8.0, 0.0, 0.0 ]
-  },
-  "fonts": {
-    "default_size": 16.0,
-    "default_path": "",
-    "chinese_size": 16.0,
-    "chinese_path": "../../Source/assets/NotoSansSC-VariableFont_wght.ttf"
-  },
-  "windows": {
-    "status_overlay_alpha": 0.5,
-    "probe_scope_alpha": 0.85,
-    "preset_status_alpha": 0.7,
-    "notifications_alpha": 0.92,
-    "probe_scope_width": 260.0,
-    "probe_scope_height": 180.0
-  },
-  "modulation": {
-    "frequency": [ 0.4, 0.8, 1.0, 1.0 ],
-    "timbre": [ 1.0, 0.8, 0.4, 1.0 ],
-    "amplitude": [ 1.0, 0.4, 1.0, 1.0 ],
-    "filter": [ 0.4, 1.0, 0.4, 1.0 ]
-  },
-  "meters": {
-    "safe": [ 0.2, 0.8, 0.2, 1.0 ],
-    "warning": [ 0.9, 0.7, 0.0, 1.0 ],
-    "clipping": [ 0.9, 0.2, 0.2, 1.0 ]
-  },
-  "timeline": {
-    "marker_start_end": [ 1.0, 1.0, 0.0, 1.0 ],
-    "marker_gate": [ 1.0, 1.0, 0.0, 0.78 ],
-    "marker_trigger": [ 1.0, 0.65, 0.0, 0.78 ]
-  },
-  "modules": {
-    "videofx_section_header": [ 0.7, 0.7, 0.7, 1.0 ],
-    "videofx_section_subheader": [ 0.9, 0.9, 0.5, 1.0 ],
-    "scope_section_header": [ 0.7, 0.7, 0.7, 1.0 ],
-    "scope_plot_bg": [ 0.12, 0.12, 0.12, 1.0 ],
-    "scope_plot_fg": [ 0.39, 0.78, 1.0, 1.0 ],
-    "scope_plot_max": [ 1.0, 0.31, 0.31, 1.0 ],
-    "scope_plot_min": [ 1.0, 0.86, 0.31, 1.0 ],
-    "scope_text_max": [ 1.0, 0.3, 0.3, 1.0 ],
-    "scope_text_min": [ 1.0, 0.86, 0.31, 1.0 ],
-    "stroke_seq_canvas_bg": [ 0.71, 0.77, 0.36, 1.0 ],
-    "stroke_seq_border": [ 0.24, 0.22, 0.08, 1.0 ],
-    "stroke_seq_line_inactive": [ 0.31, 0.29, 0.1, 0.86 ],
-    "stroke_seq_line_active": [ 1.0, 0.31, 0.0, 1.0 ],
-    "stroke_seq_playhead": [ 1.0, 0.0, 0.39, 1.0 ],
-    "stroke_seq_thresh_floor": [ 0.63, 0.2, 0.12, 0.39 ],
-    "stroke_seq_thresh_mid": [ 0.2, 0.47, 0.16, 0.39 ],
-    "stroke_seq_thresh_ceil": [ 0.16, 0.27, 0.55, 0.39 ],
-    "stroke_seq_frame_bg": [ 0.3, 0.28, 0.1, 0.7 ],
-    "stroke_seq_frame_bg_hovered": [ 0.4, 0.38, 0.15, 0.8 ],
-    "stroke_seq_frame_bg_active": [ 0.5, 0.48, 0.2, 0.9 ]
-  }
 }

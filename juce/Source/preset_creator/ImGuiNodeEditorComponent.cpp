@@ -8,6 +8,8 @@
 #include <imgui.h>
 #include <imnodes.h>
 #include <juce_audio_utils/juce_audio_utils.h>
+#include <backends/imgui_impl_opengl2.h>
+#include <cmath>
 #include <juce_core/juce_core.h>
 #include <unordered_map>
 #include <unordered_set>
@@ -1846,13 +1848,20 @@ void ImGuiNodeEditorComponent::renderImGui()
     ImGui::SetCursorScreenPos(canvas_p0);
     ImGui::InvisibleButton("##canvas_drop_target", canvas_sz);
 
-    const auto& canvasTheme = ThemeManager::getInstance().getCurrentTheme().canvas;
-    ImNodes::GetStyle().NodeCornerRounding = canvasTheme.node_rounding;
-    ImNodes::GetStyle().NodeBorderThickness = canvasTheme.node_border_width;
-    ImNodes::PushColorStyle(ImNodesCol_NodeBackground, canvasTheme.node_background);
-    ImNodes::PushColorStyle(ImNodesCol_NodeBackgroundHovered, canvasTheme.node_frame_hovered);
-    ImNodes::PushColorStyle(ImNodesCol_NodeBackgroundSelected, canvasTheme.node_frame_selected);
-    ImNodes::PushColorStyle(ImNodesCol_NodeOutline, canvasTheme.node_frame);
+    const ImGuiStyle& style = ImGui::GetStyle();
+    const ImU32 nodeBackground      = ImGui::ColorConvertFloat4ToU32(style.Colors[ImGuiCol_ChildBg]);
+    const ImU32 nodeBackgroundHover = ImGui::ColorConvertFloat4ToU32(style.Colors[ImGuiCol_FrameBgHovered]);
+    const ImU32 nodeBackgroundSel   = ImGui::ColorConvertFloat4ToU32(style.Colors[ImGuiCol_FrameBgActive]);
+    const ImU32 nodeOutline         = ImGui::ColorConvertFloat4ToU32(style.Colors[ImGuiCol_Border]);
+
+    auto& imnodesStyle = ImNodes::GetStyle();
+    imnodesStyle.NodeCornerRounding = style.ChildRounding;
+    imnodesStyle.NodeBorderThickness = style.FrameBorderSize;
+
+    ImNodes::PushColorStyle(ImNodesCol_NodeBackground, nodeBackground);
+    ImNodes::PushColorStyle(ImNodesCol_NodeBackgroundHovered, nodeBackgroundHover);
+    ImNodes::PushColorStyle(ImNodesCol_NodeBackgroundSelected, nodeBackgroundSel);
+    ImNodes::PushColorStyle(ImNodesCol_NodeOutline, nodeOutline);
 
     // Step 3: Make this area a drop target with visual feedback
     if (ImGui::BeginDragDropTarget())
@@ -1932,7 +1941,6 @@ void ImGuiNodeEditorComponent::renderImGui()
     const float SCALE_INTERVAL = themeMgr.getScaleInterval();
     const ImU32 SCALE_TEXT_COLOR = themeMgr.getScaleTextColor();
     ImDrawList* fg_draw_list = ImGui::GetForegroundDrawList();
-    
     // X-axis scale markers - always at the bottom edge
     float gridLeft = -panning.x;
     float gridRight = canvas_sz.x - panning.x;
@@ -3540,23 +3548,18 @@ if (auto* mp = synth->getModuleForLogical (lid))
     handleAutoConnectionRequests();
 
     // ======================================================
-    // === 💡 BEGIN MODAL MINIMAP (v7 - Enlarge) ===
+    // === 💡 MODAL MINIMAP (v13 - Scale-on-Press) ==========
     // ======================================================
+    if (isMinimapEnlarged.load())
     {
-        bool isEditorHovered = ImGui::IsWindowHovered(ImGuiHoveredFlags_ChildWindows |
-                                                     ImGuiHoveredFlags_AllowWhenBlockedByPopup);
-
-        if (isEditorHovered && ImGui::IsKeyDown(ImGuiKey_Comma))
-        {
-            ImNodes::MiniMap(0.5f, ImNodesMiniMapLocation_BottomRight);
-        }
-        else
-        {
-            ImNodes::MiniMap(0.2f, ImNodesMiniMapLocation_BottomRight);
-        }
+        ImNodes::MiniMap(modalMinimapScale, ImNodesMiniMapLocation_BottomRight);
+    }
+    else
+    {
+        ImNodes::MiniMap(0.2f, ImNodesMiniMapLocation_BottomRight);
     }
     // ======================================================
-    // === 💡 END MODAL MINIMAP ===========================
+    // === 💡 END MODAL MINIMAP =============================
     // ======================================================
 
     ImNodes::EndNodeEditor();
@@ -3570,6 +3573,48 @@ if (auto* mp = synth->getModuleForLogical (lid))
     ImNodes::PopColorStyle(); // Pop NodeBackground
     // === END OF FIX ===
     hasRenderedAtLeastOnce = true;
+    
+    // ======================================================
+    // === 💡 MODAL MINIMAP LOGIC (v13 - Scale-on-Press) ====
+    // ======================================================
+    ImGuiIO& io = ImGui::GetIO();
+    bool isEditorHovered = ImGui::IsWindowHovered(ImGuiHoveredFlags_ChildWindows |
+                                                 ImGuiHoveredFlags_AllowWhenBlockedByPopup);
+
+    if (ImGui::IsKeyPressed(ImGuiKey_Comma, false) && !isMinimapEnlarged.load() && isEditorHovered)
+    {
+        isMinimapEnlarged.store(true);
+
+        ImVec2 minimapCorner = ImVec2(lastCanvasP0.x + lastCanvasSize.x,
+                                      lastCanvasP0.y + lastCanvasSize.y);
+        ImVec2 mousePos = io.MousePos;
+        float dist_x = minimapCorner.x - mousePos.x;
+        float dist_y = minimapCorner.y - mousePos.y;
+        float distance = std::sqrt(dist_x * dist_x + dist_y * dist_y);
+        float max_dist = std::sqrt(lastCanvasSize.x * lastCanvasSize.x +
+                                   lastCanvasSize.y * lastCanvasSize.y);
+
+        float norm_dist = 0.0f;
+        if (max_dist > 0.0f)
+            norm_dist = juce::jlimit(0.0f, 1.0f, distance / max_dist);
+
+        modalMinimapScale = 0.2f + (norm_dist * 0.6f);
+    }
+
+    if (ImGui::IsKeyReleased(ImGuiKey_Comma))
+    {
+        isMinimapEnlarged.store(false);
+        modalMinimapScale = 0.2f;
+    }
+
+    if (isMinimapEnlarged.load() && !ImGui::IsWindowFocused(ImGuiHoveredFlags_RootAndChildWindows))
+    {
+        isMinimapEnlarged.store(false);
+        modalMinimapScale = 0.2f;
+    }
+    // ======================================================
+    // === 💡 END MODAL MINIMAP LOGIC =======================
+    // ======================================================
     
     // ================== MIDI PLAYER QUICK CONNECT LOGIC ==================
     // Poll all MIDI Player modules for connection requests
@@ -5118,7 +5163,10 @@ if (auto* mp = synth->getModuleForLogical (lid))
 
 void ImGuiNodeEditorComponent::rebuildFontAtlas()
 {
-    ThemeManager::getInstance().rebuildFontsNow();
+    ImGuiIO& io = ImGui::GetIO();
+    ThemeManager::getInstance().applyFonts(io);
+    ImGui_ImplOpenGL2_DestroyDeviceObjects();
+    ImGui_ImplOpenGL2_CreateDeviceObjects();
 }
 
 void ImGuiNodeEditorComponent::pushSnapshot()
@@ -5633,7 +5681,6 @@ void ImGuiNodeEditorComponent::unmuteNode(juce::uint32 logicalId)
     mutedNodeStates.erase(logicalId);
     juce::Logger::writeToLog("[Mute] Node " + juce::String(logicalId) + " unmuted.");
 }
-
 void ImGuiNodeEditorComponent::handleMuteToggle()
 {
     const int numSelected = ImNodes::NumSelectedNodes();
@@ -6351,7 +6398,6 @@ void ImGuiNodeEditorComponent::handleConnectSelectedToTrackMixer()
     graphNeedsRebuild = true;
     juce::Logger::writeToLog("--- [Connect to Mixer] Routine complete. ---");
 }
-
 void ImGuiNodeEditorComponent::handleMidiPlayerAutoConnect(MIDIPlayerModuleProcessor* midiPlayer, juce::uint32 midiPlayerLid)
 {
     if (!synth || !midiPlayer || midiPlayerLid == 0 || !midiPlayer->hasMIDIFileLoaded())
@@ -7141,7 +7187,6 @@ void ImGuiNodeEditorComponent::connectToMonophonicTargets(
         currentTargetIndex++;
     }
 }
-
 template<typename TargetProcessorType>
 void ImGuiNodeEditorComponent::connectToPolyphonicTarget(
     ModuleProcessor* sourceNode,
@@ -7940,7 +7985,6 @@ void ImGuiNodeEditorComponent::handleInsertNodeOnSelectedLinks(const juce::Strin
     graphNeedsRebuild = true;
     // The single pushSnapshot at the beginning handles the undo state.
 }
-
 juce::File ImGuiNodeEditorComponent::findPresetsDirectory()
 {
     // Search upwards from the executable's location for a sibling directory
