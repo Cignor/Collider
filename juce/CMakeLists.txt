@@ -887,6 +887,8 @@ target_sources(PresetCreatorApp PRIVATE
     Source/preset_creator/PresetAutoHealer.cpp
     Source/preset_creator/SavePresetJob.h
     Source/preset_creator/SavePresetJob.cpp
+    Source/preset_creator/ShortcutManager.h
+    Source/preset_creator/ShortcutManager.cpp
     Source/preset_creator/ImGuiNodeEditorComponent.h
     Source/preset_creator/ImGuiNodeEditorComponent.cpp
     Source/preset_creator/PresetCreatorComponent.h

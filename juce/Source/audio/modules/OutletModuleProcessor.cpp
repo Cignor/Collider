@@ -40,6 +40,10 @@ juce::ValueTree OutletModuleProcessor::getExtraStateTree() const
     juce::ValueTree vt("OutletState");
     vt.setProperty("customLabel", customLabel, nullptr);
     vt.setProperty("pinIndex", pinIndex, nullptr);
+    vt.setProperty("version", 1, nullptr);
+    vt.setProperty("externalLogicalId", (int)externalLogicalId, nullptr);
+    vt.setProperty("externalChannel", externalChannel, nullptr);
+    vt.setProperty("externalIsOutput", externalIsOutput ? 1 : 0, nullptr);
     return vt;
 }
 
@@ -49,6 +53,9 @@ void OutletModuleProcessor::setExtraStateTree(const juce::ValueTree& vt)
     {
         customLabel = vt.getProperty("customLabel", "Outlet").toString();
         pinIndex = (int)vt.getProperty("pinIndex", pinIndex);
+        externalLogicalId = (juce::uint32)(int)vt.getProperty("externalLogicalId", (int)externalLogicalId);
+        externalChannel = (int)vt.getProperty("externalChannel", externalChannel);
+        externalIsOutput = (bool)(int)vt.getProperty("externalIsOutput", externalIsOutput ? 1 : 0);
     }
 }
 

@@ -65,6 +65,9 @@ juce::ValueTree InletModuleProcessor::getExtraStateTree() const
     juce::ValueTree vt("InletState");
     vt.setProperty("customLabel", customLabel, nullptr);
     vt.setProperty("pinIndex", pinIndex, nullptr);
+    vt.setProperty("version", 1, nullptr);
+    vt.setProperty("externalLogicalId", (int)externalLogicalId, nullptr);
+    vt.setProperty("externalChannel", externalChannel, nullptr);
     return vt;
 }
 
@@ -74,6 +77,8 @@ void InletModuleProcessor::setExtraStateTree(const juce::ValueTree& vt)
     {
         customLabel = vt.getProperty("customLabel", "Inlet").toString();
         pinIndex = (int)vt.getProperty("pinIndex", pinIndex);
+        externalLogicalId = (juce::uint32)(int)vt.getProperty("externalLogicalId", (int)externalLogicalId);
+        externalChannel = (int)vt.getProperty("externalChannel", externalChannel);
     }
 }
 

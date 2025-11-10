@@ -1,196 +1,111 @@
 # 🧩 Meta Module / Inlet / Outlet Status Guide
 
-**Version**: 0.1  
-**Last Updated**: 2025-11-09  
-**Based on**: `ImGuiNodeEditorComponent`, `ModularSynthProcessor`, `MetaModuleProcessor`, `Inlet/OutletModuleProcessor`
+**Version**: 0.2  
+**Last Updated**: 2025-11-10  
+**Relevant Code**: `ModularSynthProcessor`, `MetaModuleProcessor`, `InletModuleProcessor`, `OutletModuleProcessor`, `ImGuiNodeEditorComponent`, `PinDatabase`
 
 ---
 
 ## 🎯 Purpose
-
-Document the intended behaviour, current implementation, and recovery plan for Meta modules and their Inlet/Outlet companions. Use this as the canonical reference while bringing sub-patching back online.
-
----
-
-## 🧠 Expected Behaviour (Spec Recap)
-
-- A **Meta** node should appear in the module browser, instantiate cleanly, and expose N audio inputs/outputs that mirror the number of `Inlet`/`Outlet` nodes inside its internal graph.
-- `Inlet` nodes (inside the meta patch) act as audio entry points. They should be labelled, configurable (channel count), and automatically mapped to the parent Meta node inputs.
-- `Outlet` nodes serve as exits from the internal graph back to the parent. Their channel counts and labels should determine the Meta node’s outputs.
-- Collapsing a set of nodes should:
-  - Generate a Meta module that contains a self-contained `ModularSynthProcessor` clone of the selected sub-graph.
-  - Create `Inlet`/`Outlet` modules for every boundary cable and preserve all connections when rewired through the Meta shell.
-  - Persist the internal patch and metadata so presets survive reload.
+Provide a single source of truth on what currently works, what is still missing, and how we intend to finish the Meta module pipeline. This guide exists so that anyone touching sub-patching knows the exact behaviour and the remaining gaps before the feature becomes production-ready.
 
 ---
 
-## 🔍 Current Implementation
+## ✅ Current Implementation Snapshot
 
-### 3.1 UI + Factory Wiring
+### 1. Factory & UI Wiring
+- `getModuleFactory()` now registers `"meta"` alongside the existing aliases (`ModularSynthProcessor.cpp` `reg("meta", …)`), so the palette button successfully instantiates a Meta module.
+- `PinDatabase.cpp` defines entries for `"meta"`, `"inlet"`, and `"outlet"`, exposing up to 16 audio pins per node so they are selectable and connectable in the editor.
 
-The module browser calls `addModule("meta")`, but the factory only recognises `"meta module"` and `"metamodule"`, so the button silently fails.
+### 2. MetaModuleProcessor Runtime Behaviour
+- Maintains an internal `ModularSynthProcessor` and serialises its state via `getExtraStateTree` / `setExtraStateTree`, using base64 for persistence (lines 282-358).
+- `getStateInformation` / `setStateInformation` now delegate to the ValueTree helpers, so preset loading, undo/redo, and the collapse workflow share the same path (lines 330-358).
+- `prepareToPlay` pushes sample-rate/block-size into the internal graph, caches inlet/outlet channel counts, and allocates side buffers (`prepareToPlay`, `updateInletOutletCache`).
+- `processBlock` copies the host buffer into per-inlet caches, triggers the internal graph, and mixes outlet buffers back to the parent output (lines 63-167). Labels coming from internal inlets/outlets are surfaced on the outer pins (`drawIoPins`, `getAudioInputLabel`, `getAudioOutputLabel`).
+- `rebuildBusLayout` sums the cached channel counts and calls `setPlayConfigDetails` to match the meta node’s IO width (lines 361-378).
 
-```1588:1601:juce/Source/preset_creator/ImGuiNodeEditorComponent.cpp
-auto addModuleButton = [this](const char* label, const char* type)
-{
-    if (ImGui::Selectable(label, false))
-    {
-        if (synth != nullptr)
-        {
-            auto nodeId = synth->addModule(type);
-            const ImVec2 mouse = ImGui::GetMousePos();
-            const int logicalId = (int) synth->getLogicalIdForNode (nodeId);
-            pendingNodeScreenPositions[logicalId] = mouse;
-            snapshotAfterEditor = true;
-        }
-    }
-    ...
-```
+### 3. Inlet / Outlet Modules
+- Each module exposes a channel-count parameter (1–16) and stores `customLabel` + `pinIndex` in `extra` state.
+- `InletModuleProcessor::processBlock` copies audio from the parent buffer provided via `setIncomingBuffer`; `OutletModuleProcessor::processBlock` caches the most recent block for the parent to read.
+- UI panels allow renaming pins and adjusting channel counts; pin rendering shows one plug per channel.
 
-```1832:1843:juce/Source/preset_creator/ImGuiNodeEditorComponent.cpp
-pushCategoryColor(ModuleCategory::Sys);
-bool systemExpanded = ImGui::CollapsingHeader("System", ImGuiTreeNodeFlags_DefaultOpen);
-ImGui::PopStyleColor(3);
-if (systemExpanded) {
-    addModuleButton("Meta", "meta");
-    addModuleButton("Inlet", "inlet");
-    addModuleButton("Outlet", "outlet");
-    ...
-```
+### 4. Collapse Workflow (`ImGuiNodeEditorComponent::handleCollapseToMetaModule`)
+- Scans selected nodes, records boundary connections, and seeds `Inlet`/`Outlet` metadata (including `externalLogicalId`, `externalChannel`, `pinIndex`).
+- Serialises the internal sub-graph into a ValueTree (`MetaModuleState`) and injects it into the newly created Meta module via `setExtraStateTree`.
+- After instantiation, gathers the generated inlets/outlets, computes cumulative channel offsets, and rewires all external audio connections back through the meta shell.
 
-```845:848:juce/Source/audio/graph/ModularSynthProcessor.cpp
-reg("meta module", []{ return std::make_unique<MetaModuleProcessor>(); });
-reg("metamodule", []{ return std::make_unique<MetaModuleProcessor>(); });
-reg("inlet", []{ return std::make_unique<InletModuleProcessor>(); });
-reg("outlet", []{ return std::make_unique<OutletModuleProcessor>(); });
-```
+### 5. Expand Workflow (`expandMetaModule`)
+- Reads the stored meta state, recreates modules in the parent graph, restores parameters/extra state, and replays internal + boundary connections.
+- Removes the meta shell and repositions reinstated nodes near the original meta node.
 
-### 3.2 MetaModuleProcessor Runtime
-
-- Internal graph bootstraps correctly and `getExtraStateTree()` persists the embedded patch.
-- Audio bridging assumes **exactly two channels per inlet/outlet** and packs them sequentially (stereo-per-node). This ignores the `channelCount` parameter exposed by Inlet/Outlet modules and cannot represent mono/multi-channel patches.
-
-```91:143:juce/Source/audio/modules/MetaModuleProcessor.cpp
-auto inlets = getInletNodes();
-for (size_t i = 0; i < inlets.size() && i < inletBuffers.size(); ++i)
-{
-    const int startChannel = (int)i * 2; // Each inlet gets 2 channels
-    const int numChannels = juce::jmin(2, buffer.getNumChannels() - startChannel);
-    ...
-}
-...
-const int startChannel = (int)i * 2; // Each outlet provides 2 channels
-const int numChannels = juce::jmin(outletBuffer.getNumChannels(), buffer.getNumChannels() - startChannel);
-```
-
-- `rebuildBusLayout()` is still a stub, so the outer AudioProcessor always exposes a fixed stereo IO regardless of how many inlet/outlet channels exist.
-- When collapsing a patch, we load the generated blob via `setStateInformation`, but `MetaModuleProcessor` never overrides that function—the call is effectively a no-op.
-
-```534:546:juce/Source/audio/modules/ModuleProcessor.h
-void getStateInformation (juce::MemoryBlock&) override {}
-void setStateInformation (const void*, int) override {}
-```
-
-### 3.3 InletModuleProcessor
-
-- Exposes `channelCount` (1–16) and a user label, but the parent Meta module neither reads the count nor surfaces the label on its pins.
-- The process loop simply copies from an incoming buffer supplied by Meta; without a working parent, standalone inlets output silence.
-
-```87:107:juce/Source/audio/modules/InletModuleProcessor.cpp
-if (auto* p = dynamic_cast<juce::AudioParameterInt*>(ap.getParameter(paramIdChannelCount)))
-    channelCount = p->get();
-
-if (ImGui::SliderInt("Channels", &channelCount, 1, 16))
-{
-    if (auto* p = dynamic_cast<juce::AudioParameterInt*>(ap.getParameter(paramIdChannelCount)))
-        *p = channelCount;
-}
-```
-
-### 3.4 OutletModuleProcessor
-
-- Mirrors the inlet design (label + channel count) and only caches its incoming buffer for the parent to read. No additional issues beyond the missing parent wiring.
-
-### 3.5 Collapse Workflow
-
-- Boundary detection and internal graph serialization run, but rewiring the new Meta node ignores inlet/outlet indices—every cable is remapped to channel 0.
-- Because `metaModule->setStateInformation(...)` is a stub, the generated internal patch never loads, so newly collapsed meta nodes end up empty even if they were created.
-
-```9044:9065:juce/Source/preset_creator/ImGuiNodeEditorComponent.cpp
-for (const auto& bc : boundaries)
-{
-    if (bc.isInput)
-    {
-        auto extNodeId = synth->getNodeIdForLogical(bc.externalLogicalId);
-        synth->connect(extNodeId, bc.externalChannel, metaNodeId, 0);
-    }
-    else if (bc.externalLogicalId != 0)
-    {
-        auto extNodeId = synth->getNodeIdForLogical(bc.externalLogicalId);
-        synth->connect(metaNodeId, 0, extNodeId, bc.externalChannel);
-    }
-    else
-    {
-        auto outputNodeId = synth->getOutputNodeID();
-        synth->connect(metaNodeId, 0, outputNodeId, bc.externalChannel);
-    }
-}
-```
+### 6. UI Plumbing
+- The Meta node renders an “Edit Internal Patch” button that raises a modal. The modal currently displays a placeholder list of internal modules; the recursive ImGui/ImNodes editor has **not** been implemented yet.
 
 ---
 
-## 🚨 Failure Summary
+## ⚠️ Outstanding Gaps & Risks
 
-- **UI button dead**: `addModule("meta")` does nothing because `"meta"` is not registered in the factory.
-- **Collapsed meta shells are empty**: `setStateInformation` does not load the generated internal graph, so no inlets/outlets appear and the module produces silence.
-- **Channel layout mismatch**: Meta hardcodes stereo-per-inlet/outlet, ignoring the channel counts configured inside the patch; bus layout never expands.
-- **Rewire logic incomplete**: Collapse reconnects every cable to channel 0, so even after we load the internal graph the outer pins would be wrong.
-- **Labels dropped**: Inlet/Outlet labels and counts are not reflected on the parent Meta node pins, reducing usability once basic wiring works.
-
----
-
-## 🛠️ Strategy to Make Meta Modules Work
-
-1. **Unblock creation**  
-   - Register `"meta"` (and optionally `"meta_module"`) as aliases in `getModuleFactory()`.
-
-2. **Implement state plumbing**  
-   - Override `MetaModuleProcessor::getStateInformation`/`setStateInformation` to serialise `MetaModuleState` or call through to `getExtraStateTree()`/`setExtraStateTree()` so the collapse workflow and preset loading share the same code path.
-
-3. **Channel mapping overhaul**  
-   - Read `channelCount` from each `Inlet`/`Outlet` when building caches.  
-   - Resize `inletBuffers`, `outletBuffers`, `lastOutputValues`, and bus layouts to match summed channel counts.  
-   - Update `drawIoPins` to emit one pin per channel (or annotate multi-channel pins) and surface custom labels.
-
-4. **Collapse rewire fix**  
-   - While generating boundary metadata, capture both the inlet index and channel indices.  
-   - Reconnect using cumulative channel offsets so meta inputs/outputs align with internal nodes.  
-   - Persist that ordering so manual meta creation matches the collapse results.
-
-5. **Polish & validation**  
-   - Expose Meta node labels in the UI (pin names, node title).  
-   - Add undo/redo coverage for collapse.  
-   - Create smoke tests: simple oscillator → filter sub-patch collapsed into meta, mono & stereo variants, preset save/load.
+| Area | Issue | Impact |
+|------|-------|--------|
+| Internal Editor | Modal is a placeholder; we cannot add/remove nodes, wires, or inlets/outlets after collapse. | Meta nodes are effectively read-only; users cannot iterate on sub-patches. |
+| Pin Type Coverage | Pin database and draw code only handle audio pins. CV/Gate/Raw connections collapse into audio-only inlets/outlets. | Non-audio patches lose semantic colour/type information; future data-type routing blocks us. |
+| Channel Layout Updates | `Inlet`/`Outlet` constructors hard-code stereo buses; channel-count changes do not resize buses, cached buffers, or telemetry vectors. | Multi-channel inlets/outlets beyond stereo either down-mix incorrectly or read garbage. |
+| Live Channel Changes | Changing the channel-count parameter after collapse does not notify the parent; `rebuildBusLayout` only runs during `prepareToPlay`/state load. | UI sliders appear to work but external pins never update without removing/re-adding the meta node. |
+| Metadata Persistence | Collapse writes `externalLogicalId`/`externalChannel` into the Inlet/Outlet `extra` state, but `getExtraStateTree()` does not persist those properties. | Re-opening or re-saving a meta graph loses the mapping needed by `expandMetaModule`, so expansion after reload is broken. |
+| Modulation / MIDI Routing | Collapse/Expand only consult `getConnectionsInfo()` (audio graph). Modulation routes created via `addModulationRoute` and MIDI bindings are ignored. | Collapsing a sub-patch drops all modulation and MIDI plumbing, breaking complex patches. |
+| Bus Layout API | `rebuildBusLayout()` calls `setPlayConfigDetails(...)`. For correctness we should build explicit `BusesLayout` objects and call `setBusesLayout` to avoid transport defects in certain hosts. | Potential host integration issues once this becomes a plugin (variable bus layouts). |
+| Performance | `processBlock` allocates `internalBuffer` every call and copies full buffers even when channels are idle. | Extra CPU/memory churn; acceptable today but should be addressed before release. |
+| Parameter Exposure | No mechanism to map internal parameters to the Meta node’s APVTS; the UI label is the only configurable field. | Users cannot automate or tweak key parameters without drilling into the internal graph (which is currently impossible). |
+| Testing | No regression coverage for collapse/expand, channel reconfiguration, or nested undo/redo. | Every change risks reintroducing blank meta modules or broken rewiring. |
 
 ---
 
-## ✅ Testing & Verification Plan
+## 🗺️ Recovery Plan (Implementation Roadmap)
 
-- Instantiate a Meta node from the browser, confirm pins appear and respond to `channelCount` edits.  
-- Collapse a three-node chain with one external input and two outputs; validate the internal graph loads, outer pins map correctly, and audio flows.  
-- Save & reload a preset containing nested meta nodes. No connections should be lost, and labels must survive.  
-- Regression test standalone Inlet/Outlet nodes to ensure they fail gracefully (silence) when not inside a Meta module.
+1. **Ship a Real Internal Editor**
+   - Embed an ImGui/ImNodes canvas inside the meta modal that operates on `metaModule->getInternalGraph()`.
+   - Provide palette, node moving, connections, undo/redo, and a close/apply workflow that triggers `updateInletOutletCache()` and `rebuildBusLayout()`.
+
+2. **Dynamic Pin Management**
+   - Allow users to add/remove `Inlet`/`Outlet` modules from within the internal editor.
+   - Watch their APVTS state and refresh the parent meta pins (graph rebuild + external rewiring).
+
+3. **Persist Boundary Metadata**
+   - Extend `InletModuleProcessor::getExtraStateTree()` / `setExtraStateTree()` and their Outlet counterparts to include `externalLogicalId`, `externalChannel`, and `externalIsOutput` so expansion works after reload.
+
+4. **Correct Bus Handling**
+   - Replace `setPlayConfigDetails` with explicit `BusesProperties` per channel count.
+   - Resize `inletBuffers`, `outletBuffers`, telemetry vectors, and cached buffers whenever counts change.
+
+5. **Support CV / Gate / Raw**
+   - Introduce pin-type metadata for inlets/outlets (either via dedicated module variants or by tagging channels).
+   - Update collapse/expand to preserve pin data types and route them correctly when rewiring.
+
+6. **Modulation & MIDI Bridging**
+   - Capture modulation routes (`addModulationRoute*`) and MIDI bindings during collapse, recreate them on expand, and provide equivalent inlet/outlet nodes for those signal types.
+
+7. **Parameter Surfacing**
+   - Implement parameter forwarding so selected internal parameters appear on the Meta node’s APVTS (for automation and quick tweaks).
+
+8. **Performance & Telemetry Polish**
+   - Cache `internalBuffer` per block, only copy active channels, and update telemetry vectors based on actual channel counts.
+
+9. **Regression Safeguards**
+   - Add scripted tests (or a Moofy bundle) covering collapse/expand, save/load, undo/redo, channel adjustments, and nested meta modules.
 
 ---
 
-## 📎 Reference Notes
-
-- `MetaModuleProcessor::getExtraStateTree()` already stores the internal graph base64 payload, so the preferred fix is to reuse that infrastructure rather than invent a new format.
-- Once wiring works, consider limiting standalone Inlet/Outlet availability in the global module list—they are only meaningful inside Meta graphs.
-- Future extensions: expose parameter forwarding (the TODO in `MetaModuleProcessor::createParameterLayout`) and UI affordances for editing the internal patch in-place.
+## ✅ Verification Checklist (When Feature Is Complete)
+- Instantiate a blank Meta module, open the internal editor, add inlets/outlets, and confirm pins appear/vanish dynamically.
+- Collapse a multi-node patch with CV, gate, and audio connections; ensure the meta shell exposes correctly typed pins and audio flows.
+- Undo/redo the collapse, then expand the meta module after saving/reloading the preset.
+- Adjust inlet/outlet channel counts inside the meta editor; confirm the parent pins update and wiring follows cumulative channel offsets.
+- Verify modulation and MIDI routes survive collapse/expand and remain functional.
+- Confirm parameter mappings on the Meta node respond in real time and serialize with presets.
+- Run performance profiling: meta modules must not allocate per block or spike CPU usage compared to the uncollapsed patch.
 
 ---
 
-**End of Guide** | Version 0.1 | 2025-11-09
+**End of Guide** | Version 0.2 | 2025-11-10
 
 

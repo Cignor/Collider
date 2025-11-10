@@ -41,15 +41,7 @@ void MetaModuleProcessor::prepareToPlay(double sampleRate, int samplesPerBlock)
     
     updateInletOutletCache();
     rebuildBusLayout();
-    
-    inletBuffers.clear();
-    outletBuffers.clear();
-    
-    for (const auto& info : inletChannelLayouts)
-        inletBuffers.emplace_back(info.channelCount, samplesPerBlock);
-    
-    for (const auto& info : outletChannelLayouts)
-        outletBuffers.emplace_back(info.channelCount, samplesPerBlock);
+    resizeIOBuffers(samplesPerBlock);
 }
 
 void MetaModuleProcessor::releaseResources()
@@ -66,6 +58,13 @@ void MetaModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::M
     {
         buffer.clear();
         return;
+    }
+
+    if (layoutDirty.exchange(false))
+    {
+        updateInletOutletCache();
+        rebuildBusLayout();
+        resizeIOBuffers(buffer.getNumSamples());
     }
     
     // Logging example (throttled to avoid spam)
@@ -375,6 +374,40 @@ void MetaModuleProcessor::rebuildBusLayout()
     lastOutputValues.clear();
     for (int i = 0; i < totalOutputChannels; ++i)
         lastOutputValues.push_back(std::make_unique<std::atomic<float>>(0.0f));
+}
+
+void MetaModuleProcessor::requestLayoutRebuild()
+{
+    layoutDirty.store(true, std::memory_order_release);
+}
+
+void MetaModuleProcessor::refreshCachedLayout()
+{
+    updateInletOutletCache();
+    requestLayoutRebuild();
+}
+
+void MetaModuleProcessor::resizeIOBuffers(int samplesPerBlock)
+{
+    const int effectiveBlockSize = juce::jmax(1, samplesPerBlock);
+
+    inletBuffers.clear();
+    inletBuffers.reserve(inletChannelLayouts.size());
+    for (const auto& layout : inletChannelLayouts)
+    {
+        juce::AudioBuffer<float> temp;
+        temp.setSize(juce::jmax(1, layout.channelCount), effectiveBlockSize, false, false, true);
+        inletBuffers.push_back(std::move(temp));
+    }
+
+    outletBuffers.clear();
+    outletBuffers.reserve(outletChannelLayouts.size());
+    for (const auto& layout : outletChannelLayouts)
+    {
+        juce::AudioBuffer<float> temp;
+        temp.setSize(juce::jmax(1, layout.channelCount), effectiveBlockSize, false, false, true);
+        outletBuffers.push_back(std::move(temp));
+    }
 }
 
 #if defined(PRESET_CREATOR_UI)

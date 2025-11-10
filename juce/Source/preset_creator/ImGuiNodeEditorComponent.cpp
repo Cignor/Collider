@@ -13,6 +13,7 @@
 #include <juce_audio_utils/juce_audio_utils.h>
 #include <backends/imgui_impl_opengl2.h>
 #include <cmath>
+#include <cstring>
 #include <juce_core/juce_core.h>
 #include <unordered_map>
 #include <unordered_set>
@@ -283,7 +284,8 @@ ImGuiNodeEditorComponent::ImGuiNodeEditorComponent(juce::AudioDeviceManager& dm)
     glContext.setComponentPaintingEnabled (false);
     glContext.attachTo (*this);
     setWantsKeyboardFocus (true);
-    
+    shortcutManager.setContext(nodeEditorContextId);
+
     // Wire Theme Editor to use framebuffer-based eyedropper
     themeEditor.setStartPicker([this](std::function<void(ImU32)> onPicked){ this->startColorPicking(std::move(onPicked)); });
     
@@ -521,6 +523,9 @@ void ImGuiNodeEditorComponent::renderImGui()
     linkIdToAttrs.clear();
     linkToId.clear();
     nextLinkId = 1000;
+
+    if (imguiIO != nullptr)
+        shortcutManager.processImGuiIO(*imguiIO);
 
     // Handle F1 key for shortcuts window
     if (ImGui::IsKeyPressed(ImGuiKey_F1, false))
@@ -3964,47 +3969,54 @@ if (auto* mp = synth->getModuleForLogical (lid))
         ImGui::SetNextWindowSize(ImVec2(1200, 800), ImGuiCond_FirstUseEver);
         if (ImGui::BeginPopupModal("Edit Meta Module", nullptr, ImGuiWindowFlags_MenuBar))
         {
-            // Get the internal synth processor from the meta module
+            ImGui::PushID((int)metaModuleToEditLid);
             auto* metaModule = dynamic_cast<MetaModuleProcessor*>(synth->getModuleForLogical(metaModuleToEditLid));
             if (metaModule && metaModule->getInternalGraph())
             {
-                // Display a placeholder for now
-                // TODO: Full recursive editor implementation would go here
-                ImGui::Text("Editing internal graph of Meta Module %d", (int)metaModuleToEditLid);
+                if (!metaEditorSession || metaEditorSession->metaLogicalId != metaModuleToEditLid)
+                    openMetaModuleEditor(metaModule, metaModuleToEditLid);
+
+                if (metaEditorSession)
+                    renderMetaModuleEditor(*metaEditorSession);
+
                 ImGui::Separator();
-                
-                auto* internalGraph = metaModule->getInternalGraph();
-                auto modules = internalGraph->getModulesInfo();
-                
-                ImGui::Text("Internal modules: %d", (int)modules.size());
-                if (ImGui::BeginChild("ModuleList", ImVec2(0, -30), true))
+                if (ImGui::Button("Apply Changes"))
                 {
-                    for (const auto& [lid, type] : modules)
+                    if (metaEditorSession && metaEditorSession->dirty)
                     {
-                        ImGui::Text("  [%d] %s", (int)lid, type.toRawUTF8());
+                        metaModule->refreshCachedLayout();
+                        graphNeedsRebuild = true;
+                        snapshotAfterEditor = true;
                     }
+                    closeMetaModuleEditor();
+                    metaModuleToEditLid = 0;
+                    ImGui::CloseCurrentPopup();
                 }
-                ImGui::EndChild();
-                
-                ImGui::Text("NOTE: Full nested editor UI is a TODO");
-                ImGui::Text("For now, you can inspect the internal graph structure above.");
+                ImGui::SameLine();
+                if (ImGui::Button("Close"))
+                {
+                    closeMetaModuleEditor();
+                    metaModuleToEditLid = 0;
+                    ImGui::CloseCurrentPopup();
+                }
             }
-            
-            if (ImGui::Button("Close"))
+            else
             {
-                ImGui::CloseCurrentPopup();
-                metaModuleToEditLid = 0;
-                // When closing, the meta module might have new/removed inlets/outlets,
-                // so we need to rebuild the main graph to update its pins
-                graphNeedsRebuild = true;
+                ImGui::Text("Meta module %d has no internal graph to edit.", (int)metaModuleToEditLid);
+                if (ImGui::Button("Close"))
+                {
+                    closeMetaModuleEditor();
+                    metaModuleToEditLid = 0;
+                    ImGui::CloseCurrentPopup();
+                }
             }
+            ImGui::PopID();
             ImGui::EndPopup();
         }
         else
         {
-            // If the popup was closed by the user (e.g., pressing ESC)
+            closeMetaModuleEditor();
             metaModuleToEditLid = 0;
-            graphNeedsRebuild = true;
         }
     }
     // ======================= END OF META MODULE LOGIC =======================
@@ -7151,6 +7163,368 @@ void ImGuiNodeEditorComponent::handleMultiSequencerAutoConnectVCO(MultiSequencer
 
     graphNeedsRebuild = true;
 }
+
+void ImGuiNodeEditorComponent::openMetaModuleEditor(MetaModuleProcessor* metaModule, juce::uint32 metaLogicalId)
+{
+    closeMetaModuleEditor();
+
+    if (metaModule == nullptr)
+        return;
+
+    auto session = std::make_unique<MetaModuleEditorSession>();
+    session->context.reset(ImNodes::CreateContext());
+    if (session->context == nullptr)
+        return;
+
+    ImNodes::SetCurrentContext(session->context.get());
+    ImNodes::StyleColorsDark();
+    ImNodesIO& io = ImNodes::GetIO();
+    io.LinkDetachWithModifierClick.Modifier = &ImGui::GetIO().KeyAlt;
+
+    session->meta = metaModule;
+    session->metaLogicalId = metaLogicalId;
+    session->graph = metaModule->getInternalGraph();
+
+    if (session->graph != nullptr)
+    {
+        auto modules = session->graph->getModulesInfo();
+        int index = 0;
+        for (const auto& mod : modules)
+        {
+            const int logicalId = (int)mod.first;
+            const int row = index / 5;
+            const int col = index % 5;
+            session->nodePositions.emplace(logicalId, ImVec2(220.0f * col, 140.0f * row));
+            ++index;
+        }
+    }
+
+    ImNodes::SetCurrentContext(editorContext);
+    metaEditorSession = std::move(session);
+}
+
+void ImGuiNodeEditorComponent::closeMetaModuleEditor()
+{
+    if (metaEditorSession)
+    {
+        if (metaEditorSession->context)
+        {
+            ImNodes::SetCurrentContext(metaEditorSession->context.get());
+            ImNodes::DestroyContext(metaEditorSession->context.release());
+        }
+        metaEditorSession.reset();
+    }
+    if (editorContext != nullptr)
+        ImNodes::SetCurrentContext(editorContext);
+}
+
+void ImGuiNodeEditorComponent::renderMetaModuleEditor(MetaModuleEditorSession& session)
+{
+    if (session.context == nullptr || session.meta == nullptr || session.graph == nullptr)
+    {
+        ImGui::TextUnformatted("Internal graph is unavailable.");
+        return;
+    }
+
+    ImNodes::SetCurrentContext(session.context.get());
+
+    auto modules = session.graph->getModulesInfo();
+
+    if (session.nodePositions.empty())
+    {
+        int index = 0;
+        for (const auto& mod : modules)
+        {
+            const int logicalId = (int)mod.first;
+            const int row = index / 5;
+            const int col = index % 5;
+            session.nodePositions.emplace(logicalId, ImVec2(220.0f * col, 140.0f * row));
+            ++index;
+        }
+    }
+
+    ImVec2 canvasSize = ImGui::GetContentRegionAvail();
+    canvasSize.x = juce::jmax(canvasSize.x, 640.0f);
+    canvasSize.y = juce::jmax(canvasSize.y, 360.0f);
+
+    ImGui::BeginChild("MetaEditorCanvas", canvasSize, true, ImGuiWindowFlags_NoScrollWithMouse);
+    ImNodes::BeginNodeEditor();
+
+    const auto& pinDb = getModulePinDatabase();
+
+    auto drawPinsForModule = [&](ModuleProcessor* module, const ModulePinInfo* info)
+    {
+        std::vector<AudioPin> audioIns;
+        std::vector<AudioPin> audioOuts;
+        std::vector<ModPin> modIns;
+
+        if (info != nullptr)
+        {
+            audioIns.assign(info->audioIns.begin(), info->audioIns.end());
+            audioOuts.assign(info->audioOuts.begin(), info->audioOuts.end());
+            modIns.assign(info->modIns.begin(), info->modIns.end());
+        }
+
+        if (module != nullptr)
+        {
+            auto dynamicInputs = module->getDynamicInputPins();
+            auto dynamicOutputs = module->getDynamicOutputPins();
+
+            for (const auto& dyn : dynamicInputs)
+                audioIns.emplace_back(dyn.name, dyn.channel, dyn.type);
+            for (const auto& dyn : dynamicOutputs)
+                audioOuts.emplace_back(dyn.name, dyn.channel, dyn.type);
+        }
+
+        for (const auto& pin : audioIns)
+        {
+            PinID pinId;
+            pinId.logicalId = module != nullptr ? module->getLogicalId() : 0;
+            pinId.channel = pin.channel;
+            pinId.isInput = true;
+            pinId.isMod = (pin.type != PinDataType::Audio);
+
+            ImNodes::BeginInputAttribute(encodePinId(pinId));
+            ImGui::Text("%s", pin.name.toRawUTF8());
+            ImNodes::EndInputAttribute();
+        }
+
+        for (const auto& pin : modIns)
+        {
+            PinID pinId;
+            pinId.logicalId = module != nullptr ? module->getLogicalId() : 0;
+            pinId.channel = (int)pin.paramId.hashCode();
+            pinId.isInput = true;
+            pinId.isMod = true;
+
+            ImNodes::BeginInputAttribute(encodePinId(pinId));
+            ImGui::Text("%s", pin.name.toRawUTF8());
+            ImNodes::EndInputAttribute();
+        }
+
+        for (const auto& pin : audioOuts)
+        {
+            PinID pinId;
+            pinId.logicalId = module != nullptr ? module->getLogicalId() : 0;
+            pinId.channel = pin.channel;
+            pinId.isInput = false;
+            pinId.isMod = (pin.type != PinDataType::Audio);
+
+            ImNodes::BeginOutputAttribute(encodePinId(pinId));
+            ImGui::Text("%s", pin.name.toRawUTF8());
+            ImNodes::EndOutputAttribute();
+        }
+    };
+
+    for (const auto& mod : modules)
+    {
+        const int logicalId = (int)mod.first;
+        const juce::String type = mod.second;
+        ModuleProcessor* module = session.graph->getModuleForLogical(mod.first);
+
+        ImNodes::BeginNode(logicalId);
+        ImGui::Text("%s", type.toRawUTF8());
+
+        const ModulePinInfo* info = nullptr;
+        auto it = pinDb.find(type);
+        if (it != pinDb.end())
+            info = &it->second;
+
+        drawPinsForModule(module, info);
+
+        ImNodes::EndNode();
+
+        const auto posIt = session.nodePositions.find(logicalId);
+        if (posIt != session.nodePositions.end())
+            ImNodes::SetNodeGridSpacePos(logicalId, posIt->second);
+    }
+
+    session.linkIdToAttrs.clear();
+    const auto connections = session.graph->getConnectionsInfo();
+    for (const auto& conn : connections)
+    {
+        PinID srcPin;
+        srcPin.logicalId = conn.srcLogicalId;
+        srcPin.channel = conn.srcChan;
+        srcPin.isInput = false;
+        srcPin.isMod = false;
+
+        PinID dstPin;
+        if (conn.dstIsOutput)
+        {
+            dstPin.logicalId = 0;
+        }
+        else
+        {
+            dstPin.logicalId = conn.dstLogicalId;
+        }
+        dstPin.channel = conn.dstChan;
+        dstPin.isInput = true;
+        dstPin.isMod = false;
+
+        const int srcAttr = encodePinId(srcPin);
+        const int dstAttr = encodePinId(dstPin);
+
+        const int linkId = (int)(((conn.srcLogicalId & 0xFFFF) << 16)
+                            ^ ((conn.dstLogicalId & 0xFFFF) << 1)
+                            ^ ((conn.srcChan & 0xFF) << 8)
+                            ^ (conn.dstChan & 0xFF)
+                            ^ (conn.dstIsOutput ? 0x4000 : 0x0));
+
+        session.linkIdToAttrs[linkId] = { srcAttr, dstAttr };
+        ImNodes::Link(linkId, srcAttr, dstAttr);
+    }
+
+    if (ImGui::BeginPopupContextWindow("MetaNodeEditorContext", ImGuiPopupFlags_MouseButtonRight))
+    {
+        if (ImGui::MenuItem("Delete Selected"))
+        {
+            const int numSelected = ImNodes::NumSelectedNodes();
+            if (numSelected > 0)
+            {
+                std::vector<int> selected(numSelected);
+                ImNodes::GetSelectedNodes(selected.data());
+                for (int nodeId : selected)
+                {
+                    auto node = session.graph->getNodeIdForLogical((juce::uint32)nodeId);
+                    if (node.uid != 0)
+                        session.graph->removeModule(node);
+                }
+                session.graph->commitChanges();
+                session.meta->refreshCachedLayout();
+                session.dirty = true;
+                ImNodes::ClearNodeSelection();
+            }
+        }
+        ImGui::EndPopup();
+    }
+
+    ImNodes::MiniMap(0.2f);
+    ImNodes::EndNodeEditor();
+
+    int startAttr = 0;
+    int endAttr = 0;
+    if (ImNodes::IsLinkCreated(&startAttr, &endAttr))
+    {
+        PinID a = decodePinId(startAttr);
+        PinID b = decodePinId(endAttr);
+
+        PinID src = a;
+        PinID dst = b;
+        if (src.isInput && !dst.isInput)
+            std::swap(src, dst);
+
+        if (!src.isInput && dst.isInput)
+        {
+            auto srcNodeId = session.graph->getNodeIdForLogical(src.logicalId);
+            juce::AudioProcessorGraph::NodeID dstNodeId;
+            if (dst.logicalId == 0)
+                dstNodeId = session.graph->getOutputNodeID();
+            else
+                dstNodeId = session.graph->getNodeIdForLogical(dst.logicalId);
+
+            if (srcNodeId.uid != 0 && dstNodeId.uid != 0)
+            {
+                if (session.graph->connect(srcNodeId, src.channel, dstNodeId, dst.channel))
+                {
+                    session.graph->commitChanges();
+                    session.meta->refreshCachedLayout();
+                    session.dirty = true;
+                }
+            }
+        }
+    }
+
+    int destroyedLink = 0;
+    if (ImNodes::IsLinkDestroyed(&destroyedLink))
+    {
+        auto linkIt = session.linkIdToAttrs.find(destroyedLink);
+        if (linkIt != session.linkIdToAttrs.end())
+        {
+            PinID src = decodePinId(linkIt->second.first);
+            PinID dst = decodePinId(linkIt->second.second);
+
+            auto srcNodeId = session.graph->getNodeIdForLogical(src.logicalId);
+            juce::AudioProcessorGraph::NodeID dstNodeId;
+            if (dst.logicalId == 0)
+                dstNodeId = session.graph->getOutputNodeID();
+            else
+                dstNodeId = session.graph->getNodeIdForLogical(dst.logicalId);
+
+            if (srcNodeId.uid != 0 && dstNodeId.uid != 0)
+            {
+                if (session.graph->disconnect(srcNodeId, src.channel, dstNodeId, dst.channel))
+                {
+                    session.graph->commitChanges();
+                    session.meta->refreshCachedLayout();
+                    session.dirty = true;
+                }
+            }
+        }
+    }
+
+    for (const auto& mod : modules)
+    {
+        const int logicalId = (int)mod.first;
+        session.nodePositions[logicalId] = ImNodes::GetNodeGridSpacePos(logicalId);
+    }
+
+    ImGui::EndChild();
+
+    char searchBuffer[128];
+    std::memset(searchBuffer, 0, sizeof(searchBuffer));
+    std::strncpy(searchBuffer, session.moduleSearchTerm.toRawUTF8(), sizeof(searchBuffer) - 1);
+    if (ImGui::InputTextWithHint("##MetaModuleSearch", "Module type (e.g. vco)", searchBuffer, sizeof(searchBuffer)))
+    {
+        session.moduleSearchTerm = juce::String(searchBuffer);
+    }
+
+    if (ImGui::Button("Create Module"))
+    {
+        juce::String moduleType = session.moduleSearchTerm.trim();
+        if (moduleType.isNotEmpty())
+        {
+            auto nodeId = session.graph->addModule(moduleType);
+            if (nodeId.uid != 0)
+            {
+                auto logicalId = session.graph->getLogicalIdForNode(nodeId);
+                session.nodePositions[(int)logicalId] = ImVec2(40.0f * (float)session.nodePositions.size(), 40.0f);
+                session.graph->commitChanges();
+                session.meta->refreshCachedLayout();
+                session.dirty = true;
+            }
+        }
+    }
+    ImGui::SameLine();
+    if (ImGui::Button("Add Inlet"))
+    {
+        auto nodeId = session.graph->addModule("inlet");
+        if (nodeId.uid != 0)
+        {
+            auto logicalId = session.graph->getLogicalIdForNode(nodeId);
+            session.nodePositions[(int)logicalId] = ImVec2(40.0f * (float)session.nodePositions.size(), 40.0f);
+            session.graph->commitChanges();
+            session.meta->refreshCachedLayout();
+            session.dirty = true;
+        }
+    }
+    ImGui::SameLine();
+    if (ImGui::Button("Add Outlet"))
+    {
+        auto nodeId = session.graph->addModule("outlet");
+        if (nodeId.uid != 0)
+        {
+            auto logicalId = session.graph->getLogicalIdForNode(nodeId);
+            session.nodePositions[(int)logicalId] = ImVec2(40.0f * (float)session.nodePositions.size(), 40.0f);
+            session.graph->commitChanges();
+            session.meta->refreshCachedLayout();
+            session.dirty = true;
+        }
+    }
+
+    ImNodes::SetCurrentContext(editorContext);
+}
+
 void ImGuiNodeEditorComponent::handleColorTrackerAutoConnectPolyVCO(ColorTrackerModule* colorTracker, juce::uint32 colorTrackerLid)
 {
     if (!synth || !colorTracker) return;
@@ -9273,10 +9647,12 @@ void ImGuiNodeEditorComponent::handleCollapseToMetaModule()
     std::vector<BoundaryConnection> boundaries;
     using InletKey = std::pair<juce::uint32, int>;
     using OutletKey = std::pair<juce::uint32, int>;
-    struct InletInfo { juce::uint32 logicalId; int pinIndex; int channelCount; };
-    struct OutletInfo { juce::uint32 logicalId; int pinIndex; int channelCount; };
+    struct InletInfo { juce::uint32 logicalId; int pinIndex; int channelCount; juce::uint32 externalLogicalId; int externalChannel; };
+    struct OutletInfo { juce::uint32 logicalId; int pinIndex; int channelCount; juce::uint32 externalLogicalId; int externalChannel; bool externalIsOutput; };
     std::map<InletKey, InletInfo> inletInfoMap;
     std::map<OutletKey, OutletInfo> outletInfoMap;
+    std::unordered_map<juce::uint32, InletInfo> inletInfoByLogical;
+    std::unordered_map<juce::uint32, OutletInfo> outletInfoByLogical;
     int inletPinIndexCounter = 0;
     int outletPinIndexCounter = 0;
     auto allConnections = synth->getConnectionsInfo();
@@ -9405,8 +9781,9 @@ void ImGuiNodeEditorComponent::handleCollapseToMetaModule()
             const int pinIndex = inletPinIndexCounter++;
             const int channelCount = 1;
             
-            InletInfo info { inletId, pinIndex, channelCount };
+            InletInfo info { inletId, pinIndex, channelCount, bc.externalLogicalId, bc.externalChannel };
             inletInfoMap[key] = info;
+            inletInfoByLogical.emplace(inletId, info);
             
             juce::ValueTree mv("module");
             mv.setProperty("logicalId", (int)inletId, nullptr);
@@ -9457,8 +9834,9 @@ void ImGuiNodeEditorComponent::handleCollapseToMetaModule()
             const int pinIndex = outletPinIndexCounter++;
             const int channelCount = 1;
             
-            OutletInfo info { outletId, pinIndex, channelCount };
+            OutletInfo info { outletId, pinIndex, channelCount, bc.externalLogicalId, bc.externalChannel, bc.externalLogicalId == 0 };
             outletInfoMap[key] = info;
+            outletInfoByLogical.emplace(outletId, info);
             
             juce::ValueTree mv("module");
             mv.setProperty("logicalId", (int)outletId, nullptr);
@@ -9639,6 +10017,10 @@ void ImGuiNodeEditorComponent::handleCollapseToMetaModule()
         {
             channelCount = juce::jmax(1, param->get());
         }
+        if (auto logicalIt = inletInfoByLogical.find(inlet->getLogicalId()); logicalIt != inletInfoByLogical.end())
+        {
+            inlet->setExternalMapping(logicalIt->second.externalLogicalId, logicalIt->second.externalChannel);
+        }
         inletBaseChannels[pinIndex] = runningInputChannel;
         inletChannelCounts[pinIndex] = channelCount;
         runningInputChannel += channelCount;
@@ -9663,6 +10045,12 @@ void ImGuiNodeEditorComponent::handleCollapseToMetaModule()
                 outlet->getAPVTS().getParameter(OutletModuleProcessor::paramIdChannelCount)))
         {
             channelCount = juce::jmax(1, param->get());
+        }
+        if (auto logicalIt = outletInfoByLogical.find(outlet->getLogicalId()); logicalIt != outletInfoByLogical.end())
+        {
+            outlet->setExternalMapping(logicalIt->second.externalLogicalId,
+                                       logicalIt->second.externalChannel,
+                                       logicalIt->second.externalIsOutput);
         }
         outletBaseChannels[pinIndex] = runningOutputChannel;
         outletChannelCounts[pinIndex] = channelCount;

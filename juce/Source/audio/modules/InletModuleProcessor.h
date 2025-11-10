@@ -35,6 +35,14 @@ public:
     // Store the buffer passed from the parent MetaModule
     void setIncomingBuffer(const juce::AudioBuffer<float>* buffer) { incomingBuffer = buffer; }
 
+    juce::uint32 getExternalLogicalId() const noexcept { return externalLogicalId; }
+    int getExternalChannel() const noexcept { return externalChannel; }
+    void setExternalMapping(juce::uint32 logicalId, int channel) noexcept
+    {
+        externalLogicalId = logicalId;
+        externalChannel = channel;
+    }
+
 #if defined(PRESET_CREATOR_UI)
     void drawParametersInNode(float itemWidth,
                               const std::function<bool(const juce::String& paramId)>& isParamModulated,
@@ -69,6 +77,8 @@ private:
     const juce::AudioBuffer<float>* incomingBuffer { nullptr };
     juce::String customLabel;
     int pinIndex { 0 };
+    juce::uint32 externalLogicalId { 0 };
+    int externalChannel { 0 };
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(InletModuleProcessor)
 };

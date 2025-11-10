@@ -39,6 +39,10 @@ public:
     // State management for the internal graph
     juce::ValueTree getExtraStateTree() const override;
     void setExtraStateTree(const juce::ValueTree& vt) override;
+
+    // Request that the cached inlet/outlet layout is rebuilt on the next audio callback
+    void requestLayoutRebuild();
+    void refreshCachedLayout();
     
     void getStateInformation(juce::MemoryBlock& destData) override;
     void setStateInformation(const void* data, int sizeInBytes) override;
@@ -84,12 +88,15 @@ private:
     
     // Label for this meta module
     juce::String metaModuleLabel;
+
+    std::atomic<bool> layoutDirty { false };
     
     // Rebuild bus layout based on inlets/outlets
     void rebuildBusLayout();
     
     // Update cached inlet/outlet information
     void updateInletOutletCache();
+    void resizeIOBuffers(int samplesPerBlock);
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(MetaModuleProcessor)
 };

@@ -8,6 +8,7 @@
 #include <deque>
 #include <atomic>
 #include <imgui.h>
+#include <imnodes.h>
 #include "../audio/modules/ModuleProcessor.h"
 #include "../audio/graph/ModularSynthProcessor.h"
 #include "PresetManager.h"
@@ -15,6 +16,7 @@
 #include "MidiManager.h"
 #include "ControllerPresetManager.h"
 #include "NotificationManager.h"
+#include "ShortcutManager.h"
 #include "theme/ThemeEditorComponent.h"
 
 // Forward declarations from Dear ImGui / imnodes
@@ -24,6 +26,7 @@ class MultiSequencerModuleProcessor;
 class StrokeSequencerModuleProcessor;
 class AnimationModuleProcessor;
 class ColorTrackerModule;
+class MetaModuleProcessor;
 
 // Forward declaration (SavePresetJob is now in its own file to avoid circular dependencies)
 class SavePresetJob;
@@ -182,6 +185,31 @@ public:
     std::vector<juce::uint32> getMutedNodeIds() const;
     juce::String getTypeForLogical (juce::uint32 logicalId) const;
 
+    struct MetaModuleEditorSession
+    {
+        struct ContextDeleter
+        {
+            void operator()(ImNodesContext* ctx) const noexcept
+            {
+                if (ctx != nullptr)
+                    ImNodes::DestroyContext(ctx);
+            }
+        };
+
+        std::unique_ptr<ImNodesContext, ContextDeleter> context;
+        juce::uint32 metaLogicalId { 0 };
+        MetaModuleProcessor* meta { nullptr };
+        ModularSynthProcessor* graph { nullptr };
+        std::unordered_map<int, ImVec2> nodePositions;
+        std::unordered_map<int, std::pair<int, int>> linkIdToAttrs;
+        bool dirty { false };
+        juce::String moduleSearchTerm;
+    };
+
+    void openMetaModuleEditor(MetaModuleProcessor* metaModule, juce::uint32 metaLogicalId);
+    void closeMetaModuleEditor();
+    void renderMetaModuleEditor(MetaModuleEditorSession& session);
+
     // --- Collision-Proof Pin ID System ---
     // 32-bit ID with guaranteed separation from node IDs:
     // Bit 31: PIN_ID_FLAG (always 1 for pins, 0 for nodes)
@@ -237,6 +265,7 @@ public:
     double lastTime { 0.0 };
 
     juce::AudioDeviceManager& deviceManager;
+    collider::ShortcutManager& shortcutManager { collider::ShortcutManager::getInstance() };
     ModularSynthProcessor* synth { nullptr };
     juce::ValueTree uiPending; // applied at next render before drawing nodes
     std::atomic<bool> graphNeedsRebuild { false };
@@ -260,6 +289,7 @@ public:
     
     // Meta module editing state
     juce::uint32 metaModuleToEditLid = 0;
+    std::unique_ptr<MetaModuleEditorSession> metaEditorSession;
     
     // Cache of last-known valid node positions (used when graphNeedsRebuild prevents rendering)
     std::unordered_map<int, ImVec2> lastKnownNodePositions;
@@ -293,6 +323,7 @@ public:
     juce::uint32 hoveredLinkDstId { 0 };
     static constexpr juce::uint32 kOutputHighlightId = 0xFFFFFFFFu; // sentinel for main output node highlight
     int lastHoveredLinkId { -1 }; // cache inside-editor hovered link id for post-editor use
+    static inline const juce::Identifier nodeEditorContextId { "NodeEditor" };
 
     // Positions to apply for specific node IDs on the next render (grid space)
     std::unordered_map<int, ImVec2> pendingNodePositions;

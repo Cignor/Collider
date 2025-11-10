@@ -140,9 +140,9 @@ void ImGuiNodeEditorComponent::populateDragInsertSuggestions()
             }
 ```
 
-- **Auto-wiring** – After spawning a module, we position it, connect the originating pin to the first compatible socket, and (audio only) attempt to connect the neighbouring channel for simple stereo cases.
+- **Auto-wiring** – After spawning a module, we now inspect the originating pin’s data type, locate matching sockets on both participants, and wire strictly like-to-like (Audio→Audio, CV→CV, Gate→Gate, Raw→Raw). Stereo audio still receives paired wiring when adjacent channels exist on both nodes.
 
-```9655:9740:juce/Source/preset_creator/ImGuiNodeEditorComponent.cpp
+```9805:9893:juce/Source/preset_creator/ImGuiNodeEditorComponent.cpp
 void ImGuiNodeEditorComponent::insertNodeFromDragSelection(const juce::String& moduleType)
 {
     if (synth == nullptr || dragInsertStartAttrId == -1)
@@ -153,6 +153,51 @@ void ImGuiNodeEditorComponent::insertNodeFromDragSelection(const juce::String& m
 
     pendingNodeScreenPositions[(int)newLogicalId] = dragInsertDropPos;
 
+    const PinDataType primaryType = dragInsertStartPin.isMod
+        ? PinDataType::CV
+        : getPinDataTypeForPin(dragInsertStartPin);
+
+    auto getSortedPinsForType = [&](juce::uint32 logicalId, bool isInput) -> std::vector<AudioPin>
+    {
+        std::vector<AudioPin> pins;
+
+        if (logicalId == 0)
+        {
+            if (primaryType == PinDataType::Audio)
+            {
+                pins.emplace_back("Main L", 0, PinDataType::Audio);
+                pins.emplace_back("Main R", 1, PinDataType::Audio);
+            }
+            return pins;
+        }
+
+        pins = getPinsOfType(logicalId, isInput, primaryType);
+        std::sort(pins.begin(), pins.end(),
+                  [](const AudioPin& a, const AudioPin& b)
+                  {
+                      return a.channel < b.channel;
+                  });
+        return pins;
+    };
+
+    auto findChannelIndex = [](const std::vector<AudioPin>& pins, int channel) -> int
+    {
+        for (int i = 0; i < (int)pins.size(); ++i)
+        {
+            if (pins[(size_t)i].channel == channel)
+                return i;
+        }
+        return -1;
+    };
+
+    auto logNoCompatiblePins = [&](const char* role)
+    {
+        juce::Logger::writeToLog("[DragInsert] No compatible "
+                                 + juce::String(toString(primaryType))
+                                 + " " + juce::String(role)
+                                 + " found for '" + moduleType + "', skipping auto-wire.");
+    };
+
     bool connected = false;
     if (!dragInsertStartPin.isMod)
     {
@@ -161,9 +206,42 @@ void ImGuiNodeEditorComponent::insertNodeFromDragSelection(const juce::String& m
             auto srcNodeId = synth->getNodeIdForLogical(dragInsertStartPin.logicalId);
             if (srcNodeId.uid != 0)
             {
-                synth->connect(srcNodeId, dragInsertStartPin.channel, newNodeId, 0);
-                connected = true;
-                // second-channel audio wiring omitted for brevity
+                const auto sourcePins = getSortedPinsForType(dragInsertStartPin.logicalId, false);
+                const auto targetPins = getSortedPinsForType((juce::uint32)newLogicalId, true);
+
+                if (!sourcePins.empty() && !targetPins.empty())
+                {
+                    const int sourceIndex = findChannelIndex(sourcePins, dragInsertStartPin.channel);
+                    if (sourceIndex >= 0)
+                    {
+                        const int targetIndex = juce::jlimit(0, (int)targetPins.size() - 1, sourceIndex);
+
+                        synth->connect(srcNodeId,
+                                       sourcePins[(size_t)sourceIndex].channel,
+                                       newNodeId,
+                                       targetPins[(size_t)targetIndex].channel);
+                        connected = true;
+
+                        if (primaryType == PinDataType::Audio)
+                        {
+                            const int stereoSourceIndex = sourceIndex + 1;
+                            const int stereoTargetIndex = targetIndex + 1;
+
+                            if (stereoSourceIndex < (int)sourcePins.size() &&
+                                stereoTargetIndex < (int)targetPins.size())
+                            {
+                                synth->connect(srcNodeId,
+                                               sourcePins[(size_t)stereoSourceIndex].channel,
+                                               newNodeId,
+                                               targetPins[(size_t)stereoTargetIndex].channel);
+                            }
+                        }
+                    }
+                }
+                else
+                {
+                    logNoCompatiblePins("input");
+                }
             }
         }
         else
@@ -173,9 +251,42 @@ void ImGuiNodeEditorComponent::insertNodeFromDragSelection(const juce::String& m
                              : synth->getNodeIdForLogical(dragInsertStartPin.logicalId);
             if (dstNodeId.uid != 0)
             {
-                synth->connect(newNodeId, 0, dstNodeId, dragInsertStartPin.channel);
-                connected = true;
-                // mirror logic for stereo inputs
+                const auto sourcePins = getSortedPinsForType((juce::uint32)newLogicalId, false);
+                const auto destinationPins = getSortedPinsForType(dragInsertStartPin.logicalId, true);
+
+                if (!sourcePins.empty() && !destinationPins.empty())
+                {
+                    const int destinationIndex = findChannelIndex(destinationPins, dragInsertStartPin.channel);
+                    if (destinationIndex >= 0)
+                    {
+                        const int sourceIndex = juce::jlimit(0, (int)sourcePins.size() - 1, destinationIndex);
+
+                        synth->connect(newNodeId,
+                                       sourcePins[(size_t)sourceIndex].channel,
+                                       dstNodeId,
+                                       destinationPins[(size_t)destinationIndex].channel);
+                        connected = true;
+
+                        if (primaryType == PinDataType::Audio)
+                        {
+                            const int stereoSourceIndex = sourceIndex + 1;
+                            const int stereoDestinationIndex = destinationIndex + 1;
+
+                            if (stereoSourceIndex < (int)sourcePins.size() &&
+                                stereoDestinationIndex < (int)destinationPins.size())
+                            {
+                                synth->connect(newNodeId,
+                                               sourcePins[(size_t)stereoSourceIndex].channel,
+                                               dstNodeId,
+                                               destinationPins[(size_t)stereoDestinationIndex].channel);
+                            }
+                        }
+                    }
+                }
+                else
+                {
+                    logNoCompatiblePins("output");
+                }
             }
         }
     }
@@ -244,7 +355,7 @@ void ImGuiNodeEditorComponent::insertNodeFromDragSelection(const juce::String& m
 - **Pinned to static metadata** – Suggestion lists come entirely from `PinDatabase`. Dynamic pins added at runtime (e.g., sampler channels, meta-modules) and VST descriptors are invisible.
 - **Flat suggestion ranking** – Apart from the hard-coded “seed” entries, all compatible modules are alphabetised. There is no weighting for popularity, existing connections, or converter utility, so long lists become unwieldy.
 - **UI is mouse-first** – The popup is a plain ImGui menu. Keyboard focus lands on the first item, but there is no incremental search, arrow navigation feedback, or quick-close on Escape for the popup itself (only for the drag).
-- **Audio stereo special-case** – After our latest tweak, dragging from a stereo audio pin attempts to wire channels 0/1 on both source and destination. Other multi-channel cases (CV buses, quad audio) fall back to single-channel wiring.
+- **Typed auto-wiring** – Like-to-like pin wiring now prevents CV/Gate/Raw from auto-connecting to Audio, with paired stereo wiring when dual audio channels exist. Wider buses (e.g., quad audio, multi-lane CV) still fall back to single-pair matching.
 - **No “continue drag”** – Once the new node is spawned, the gesture ends. Users must start a fresh drag from the new node to keep patching.
 - **Undo/redo relies on frame flag** – `snapshotAfterEditor` defers `pushSnapshot()` to the end of `renderImGui()`. If multiple drag inserts happen in one frame (unlikely but possible when scripting), they may share a single snapshot.
 
@@ -279,8 +390,8 @@ void ImGuiNodeEditorComponent::insertNodeFromDragSelection(const juce::String& m
    - Add optional hotkeys (e.g., number keys) to select from the top N suggestions without moving the mouse.
 
 4. **Generalise auto-wiring**
-   - Extract the stereo logic into a helper that can map arbitrary bus layouts (e.g., iterate until either endpoint runs out of pins).
-   - Support CV/gate pairing by querying `PinDatabase` pin groups (or introducing explicit pairing metadata).
+   - Extend the new typed helper so it can map arbitrary bus layouts beyond stereo (iterate until either endpoint runs out of compatible pins).
+   - Support richer CV/gate grouping by querying `PinDatabase` pin clusters (or introducing explicit pairing metadata).
    - Honour modules that expose dedicated converters (e.g., auto insert `map_range` when CV→audio) by offering bridge modules first.
 
 5. **Support “continue drag”**
