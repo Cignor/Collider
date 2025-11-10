@@ -50,6 +50,7 @@ public:
     void clearOutputConnections(); // <<< ADD THIS LINE
     void clearConnectionsForNode(const NodeID& nodeID); // <<< ADD THIS LINE
     bool connect(const NodeID& sourceNodeID, int sourceChannel, const NodeID& destNodeID, int destChannel);
+    bool isGraphMutationPending() const { return graphMutationDepth.load(std::memory_order_acquire) > 0; }
     
     // Set the hardware input channel mapping for an Audio Input module
     void setAudioInputChannelMapping(const NodeID& audioInputNodeId, const std::vector<int>& channelMap);
@@ -203,6 +204,7 @@ private:
 
     // Thread-safe module access for audio thread
     mutable juce::CriticalSection moduleLock;
+    std::atomic<int> graphMutationDepth { 0 };
     std::atomic<std::shared_ptr<const std::vector<std::shared_ptr<ModuleProcessor>>>> activeAudioProcessors;
 
     // Manage module nodes (legacy map by NodeID.uid)

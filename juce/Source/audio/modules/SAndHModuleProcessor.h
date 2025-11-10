@@ -1,6 +1,9 @@
 #pragma once
 
 #include "ModuleProcessor.h"
+#if defined(PRESET_CREATOR_UI)
+#include "../../preset_creator/theme/ThemeManager.h"
+#endif
 
 class SAndHModuleProcessor : public ModuleProcessor
 {
@@ -22,6 +25,7 @@ public:
     void drawParametersInNode (float itemWidth, const std::function<bool(const juce::String& paramId)>& isParamModulated, const std::function<void()>& onModificationEnded) override
     {
         auto& ap = getAPVTS();
+        const auto& theme = ThemeManager::getInstance().getCurrentTheme();
         float thr=0.5f, slew=0.0f; int edge=0;
         if (auto* p = dynamic_cast<juce::AudioParameterFloat*>(ap.getParameter("threshold"))) thr = *p;
         if (auto* p = dynamic_cast<juce::AudioParameterChoice*>(ap.getParameter("edge"))) edge = p->getIndex();
@@ -30,7 +34,7 @@ public:
         ImGui::PushItemWidth (itemWidth);
 
         // === SECTION: Sample Settings ===
-        ImGui::TextColored(ImVec4(0.6f, 0.9f, 1.0f, 1.0f), "SAMPLE SETTINGS");
+        ThemeText("SAMPLE SETTINGS", theme.modulation.frequency);
 
         // Threshold
         bool isThreshModulated = isParamModulated("threshold_mod");
@@ -72,7 +76,7 @@ public:
         ImGui::Spacing();
 
         // === SECTION: Held Values ===
-        ImGui::TextColored(ImVec4(0.6f, 0.9f, 1.0f, 1.0f), "HELD VALUES");
+        ThemeText("HELD VALUES", theme.modulation.frequency);
         
         // Get current held values from output tracking
         float heldL = 0.0f, heldR = 0.0f;

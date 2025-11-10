@@ -1,4 +1,7 @@
 #include "HarmonicShaperModuleProcessor.h"
+#if defined(PRESET_CREATOR_UI)
+#include "../../preset_creator/theme/ThemeManager.h"
+#endif
 
 juce::AudioProcessorValueTreeState::ParameterLayout HarmonicShaperModuleProcessor::createParameterLayout()
 {
@@ -180,6 +183,7 @@ void HarmonicShaperModuleProcessor::processBlock(juce::AudioBuffer<float>& buffe
 
 void HarmonicShaperModuleProcessor::drawParametersInNode(float itemWidth, const std::function<bool(const juce::String&)>& isParamModulated, const std::function<void()>& onModificationEnded)
 {
+    const auto& theme = ThemeManager::getInstance().getCurrentTheme();
     auto& ap = getAPVTS();
     
     auto HelpMarker = [](const char* desc) {
@@ -188,7 +192,7 @@ void HarmonicShaperModuleProcessor::drawParametersInNode(float itemWidth, const 
     };
 
     // === MASTER CONTROLS SECTION ===
-    ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1.0f), "Master Controls");
+    ThemeText("Master Controls", theme.text.section_header);
     ImGui::Spacing();
 
     const bool freqIsMod = isParamModulated(paramIdMasterFreqMod);
@@ -231,7 +235,7 @@ void HarmonicShaperModuleProcessor::drawParametersInNode(float itemWidth, const 
     ImGui::Spacing();
 
     // === PER-OSCILLATOR CONTROLS SECTION ===
-    ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1.0f), "Oscillators");
+    ThemeText("Oscillators", theme.text.section_header);
     ImGui::Spacing();
     
     for (int i = 0; i < NUM_OSCILLATORS; ++i)
@@ -293,7 +297,7 @@ void HarmonicShaperModuleProcessor::drawParametersInNode(float itemWidth, const 
     ImGui::Spacing();
 
     // === RELATIVE MODULATION SECTION ===
-    ImGui::TextColored(ImVec4(0.6f, 0.8f, 1.0f, 1.0f), "CV Input Modes");
+    ThemeText("CV Input Modes", theme.modulation.frequency);
     ImGui::Spacing();
     
     // Relative Freq Mod checkbox

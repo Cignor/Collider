@@ -1,4 +1,7 @@
 #include "MultiBandShaperModuleProcessor.h"
+#if defined(PRESET_CREATOR_UI)
+#include "../../preset_creator/theme/ThemeManager.h"
+#endif
 #include <cmath>
 
 #if defined(PRESET_CREATOR_UI)
@@ -238,6 +241,7 @@ void MultiBandShaperModuleProcessor::drawParametersInNode(
     const std::function<bool(const juce::String&)>& isParamModulated,
     const std::function<void()>& onModificationEnded)
 {
+    const auto& theme = ThemeManager::getInstance().getCurrentTheme();
     auto& ap = getAPVTS();
     
     auto HelpMarker = [](const char* desc) {
@@ -248,7 +252,7 @@ void MultiBandShaperModuleProcessor::drawParametersInNode(
     const float centerFreqs[NUM_BANDS] = { 60.0f, 150.0f, 400.0f, 1000.0f, 2400.0f, 5000.0f, 10000.0f, 16000.0f };
 
     // === FREQUENCY BANDS SECTION ===
-    ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1.0f), "Frequency Bands");
+    ThemeText("Frequency Bands", theme.text.section_header);
     ImGui::Spacing();
 
     // Vertical Slider Bank Layout
@@ -294,7 +298,7 @@ void MultiBandShaperModuleProcessor::drawParametersInNode(
     ImGui::Spacing();
 
     // === OUTPUT SECTION ===
-    ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1.0f), "Output");
+    ThemeText("Output", theme.text.section_header);
     ImGui::Spacing();
 
     // Output Gain Slider (horizontal)
@@ -320,7 +324,7 @@ void MultiBandShaperModuleProcessor::drawParametersInNode(
     ImGui::Spacing();
 
     // === RELATIVE MODULATION SECTION ===
-    ImGui::TextColored(ImVec4(0.6f, 0.8f, 1.0f, 1.0f), "CV Input Modes (Per Band)");
+    ThemeText("CV Input Modes (Per Band)", theme.modulation.frequency);
     ImGui::Spacing();
     
     // Show relative modulation checkboxes for each band in a compact two-column layout

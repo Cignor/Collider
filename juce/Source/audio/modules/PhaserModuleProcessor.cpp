@@ -1,4 +1,7 @@
 #include "PhaserModuleProcessor.h"
+#if defined(PRESET_CREATOR_UI)
+#include "../../preset_creator/theme/ThemeManager.h"
+#endif
 
 juce::AudioProcessorValueTreeState::ParameterLayout PhaserModuleProcessor::createParameterLayout()
 {
@@ -259,6 +262,7 @@ juce::String PhaserModuleProcessor::getAudioOutputLabel(int channel) const
 #if defined(PRESET_CREATOR_UI)
 void PhaserModuleProcessor::drawParametersInNode(float itemWidth, const std::function<bool(const juce::String&)>& isParamModulated, const std::function<void()>& onModificationEnded)
 {
+    const auto& theme = ThemeManager::getInstance().getCurrentTheme();
     auto& ap = getAPVTS();
     ImGui::PushItemWidth(itemWidth);
 
@@ -282,7 +286,7 @@ void PhaserModuleProcessor::drawParametersInNode(float itemWidth, const std::fun
         if (tooltip) { ImGui::SameLine(); HelpMarker(tooltip); }
     };
 
-    ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1.0f), "Phaser Parameters");
+    ThemeText("Phaser Parameters", theme.text.section_header);
     ImGui::Spacing();
 
     drawSlider("Rate", paramIdRate, paramIdRateMod, 0.01f, 10.0f, "%.2f Hz", "LFO sweep rate (0.01-10 Hz)", 0);
@@ -296,7 +300,7 @@ void PhaserModuleProcessor::drawParametersInNode(float itemWidth, const std::fun
     ImGui::Spacing();
 
     // === RELATIVE MODULATION SECTION ===
-    ImGui::TextColored(ImVec4(0.6f, 0.8f, 1.0f, 1.0f), "CV Input Modes");
+    ThemeText("CV Input Modes", theme.modulation.frequency);
     ImGui::Spacing();
     
     // Relative Rate Mod checkbox

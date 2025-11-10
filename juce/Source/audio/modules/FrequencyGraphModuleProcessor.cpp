@@ -1,5 +1,7 @@
 #include "FrequencyGraphModuleProcessor.h"
 
+#include "../../preset_creator/theme/ThemeManager.h"
+
 #if defined(PRESET_CREATOR_UI)
 #include <imgui.h>
 #endif
@@ -212,6 +214,17 @@ void FrequencyGraphModuleProcessor::processBlock(juce::AudioBuffer<float>& buffe
 void FrequencyGraphModuleProcessor::drawParametersInNode(float itemWidth, const std::function<bool(const juce::String&)>&, const std::function<void()>& onModificationEnded)
 {
     ImGui::PushItemWidth(itemWidth);
+
+    const auto& theme = ThemeManager::getInstance().getCurrentTheme();
+    const auto& freqColors = theme.modules.frequency_graph;
+    auto resolveColor = [](ImU32 value, ImU32 fallback) { return value != 0 ? value : fallback; };
+    const ImU32 backgroundColor = resolveColor(freqColors.background, IM_COL32(20, 22, 24, 255));
+    const ImU32 gridColor = resolveColor(freqColors.grid, IM_COL32(50, 55, 60, 255));
+    const ImU32 labelColor = resolveColor(freqColors.label, IM_COL32(150, 150, 150, 255));
+    const ImU32 peakColor = resolveColor(freqColors.peak_line, IM_COL32(255, 150, 80, 150));
+    const ImU32 liveColor = resolveColor(freqColors.live_line, IM_COL32(120, 170, 255, 220));
+    const ImU32 borderColor = resolveColor(freqColors.border, IM_COL32(80, 80, 80, 255));
+    const ImU32 thresholdColor = resolveColor(freqColors.threshold, IM_COL32(255, 100, 100, 150));
     
     if (!isFrozen && abstractFifo.getNumReady() > 0)
     {
@@ -252,23 +265,23 @@ void FrequencyGraphModuleProcessor::drawParametersInNode(float itemWidth, const 
     drawList->PushClipRect(p0, p1, false);
 
     // Draw background and grid lines
-    drawList->AddRectFilled(p0, p1, IM_COL32(20, 22, 24, 255));
+    drawList->AddRectFilled(p0, p1, backgroundColor);
     
     // --- Adjust grid lines for the new range ---
     for (int db = 12; db >= (int)minDb; db -= 12)
     {
         float y = juce::jmap((float)db, minDb, maxDb, p1.y, p0.y);
-        drawList->AddLine(ImVec2(p0.x, y), ImVec2(p1.x, y), IM_COL32(50, 55, 60, 255));
+        drawList->AddLine(ImVec2(p0.x, y), ImVec2(p1.x, y), gridColor);
         if (db <= 12) // Only draw labels within the old visible range to avoid clutter
         {
-            drawList->AddText(ImGui::GetFont(), ImGui::GetFontSize() * 0.8f, ImVec2(p0.x + 4, y - 14), IM_COL32(150, 150, 150, 255), juce::String(db).toRawUTF8());
+            drawList->AddText(ImGui::GetFont(), ImGui::GetFontSize() * 0.8f, ImVec2(p0.x + 4, y - 14), labelColor, juce::String(db).toRawUTF8());
         }
     }
     const float freqs[] = { 30, 100, 300, 1000, 3000, 10000, 20000 };
     for (float freq : freqs)
     {
         float x = juce::jmap(std::log10(freq), std::log10(20.0f), std::log10(22000.0f), p0.x, p1.x);
-        drawList->AddLine(ImVec2(x, p0.y), ImVec2(x, p1.y), IM_COL32(50, 55, 60, 255));
+        drawList->AddLine(ImVec2(x, p0.y), ImVec2(x, p1.y), gridColor);
     }
     
     // --- FIX 2: Draw two separate lines instead of a filled polygon ---
@@ -295,13 +308,13 @@ void FrequencyGraphModuleProcessor::drawParametersInNode(float itemWidth, const 
     };
 
     // Draw the peak-hold line (dimmer, in the background)
-    drawLineGraph(peakHoldData, IM_COL32(255, 150, 80, 150), 1.5f);
+    drawLineGraph(peakHoldData, peakColor, 1.5f);
 
     // Draw the live FFT data line (brighter, on top)
-    drawLineGraph(latestFftData, IM_COL32(120, 170, 255, 220), 2.0f);
+    drawLineGraph(latestFftData, liveColor, 2.0f);
     
     // Border and clip cleanup
-    drawList->AddRect(p0, p1, IM_COL32(80, 80, 80, 255));
+    drawList->AddRect(p0, p1, borderColor);
     drawList->PopClipRect(); // Pop the clipping rectangle
 
     ImGui::Checkbox("Freeze", &isFrozen);
@@ -327,7 +340,7 @@ void FrequencyGraphModuleProcessor::drawParametersInNode(float itemWidth, const 
         if (ImGui::IsItemDeactivatedAfterEdit()) onModificationEnded();
         // Use new dB range for threshold line plotting
         float y = juce::jmap(val, minDb, maxDb, p1.y, p0.y);
-        drawList->AddLine(ImVec2(p0.x, y), ImVec2(p1.x, y), IM_COL32(255, 100, 100, 150), 1.5f);
+        drawList->AddLine(ImVec2(p0.x, y), ImVec2(p1.x, y), thresholdColor, 1.5f);
     };
 
     drawThresholdSlider("Sub Thr", subThresholdParam, FrequencyGraphModuleProcessor::paramIdSubThreshold);

@@ -1,0 +1,396 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project DefaultTargets="Build" ToolsVersion="17.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup>
+    <PreferredToolArchitecture>x64</PreferredToolArchitecture>
+  </PropertyGroup>
+  <ItemGroup Label="ProjectConfigurations">
+    <ProjectConfiguration Include="Debug|x64">
+      <Configuration>Debug</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|x64">
+      <Configuration>Release</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="MinSizeRel|x64">
+      <Configuration>MinSizeRel</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="RelWithDebInfo|x64">
+      <Configuration>RelWithDebInfo</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+  </ItemGroup>
+  <PropertyGroup Label="Globals">
+    <ProjectGuid>{CFD3D870-4BB5-3304-8143-9CD46BA519CC}</ProjectGuid>
+    <Keyword>Win32Proj</Keyword>
+    <WindowsTargetPlatformVersion>10.0.26100.0</WindowsTargetPlatformVersion>
+    <Platform>x64</Platform>
+    <ProjectName>libtiff</ProjectName>
+    <VCProjectUpgraderObjectName>NoUpgrade</VCProjectUpgraderObjectName>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">
+    <ConfigurationType>StaticLibrary</ConfigurationType>
+    <CharacterSet>MultiByte</CharacterSet>
+    <PlatformToolset>v143</PlatformToolset>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="Configuration">
+    <ConfigurationType>StaticLibrary</ConfigurationType>
+    <CharacterSet>MultiByte</CharacterSet>
+    <PlatformToolset>v143</PlatformToolset>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='MinSizeRel|x64'" Label="Configuration">
+    <ConfigurationType>StaticLibrary</ConfigurationType>
+    <CharacterSet>MultiByte</CharacterSet>
+    <PlatformToolset>v143</PlatformToolset>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='RelWithDebInfo|x64'" Label="Configuration">
+    <ConfigurationType>StaticLibrary</ConfigurationType>
+    <CharacterSet>MultiByte</CharacterSet>
+    <PlatformToolset>v143</PlatformToolset>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
+  <ImportGroup Label="ExtensionSettings">
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <PropertyGroup Label="UserMacros" />
+  <PropertyGroup>
+    <_ProjectFileVersion>10.0.20506.1</_ProjectFileVersion>
+    <OutDir Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv-build\3rdparty\lib\Debug\</OutDir>
+    <IntDir Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">libtiff.dir\Debug\</IntDir>
+    <TargetName Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">libtiffd</TargetName>
+    <TargetExt Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">.lib</TargetExt>
+    <OutDir Condition="'$(Configuration)|$(Platform)'=='Release|x64'">H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv-build\3rdparty\lib\Release\</OutDir>
+    <IntDir Condition="'$(Configuration)|$(Platform)'=='Release|x64'">libtiff.dir\Release\</IntDir>
+    <TargetName Condition="'$(Configuration)|$(Platform)'=='Release|x64'">libtiff</TargetName>
+    <TargetExt Condition="'$(Configuration)|$(Platform)'=='Release|x64'">.lib</TargetExt>
+    <OutDir Condition="'$(Configuration)|$(Platform)'=='MinSizeRel|x64'">H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv-build\3rdparty\lib\MinSizeRel\</OutDir>
+    <IntDir Condition="'$(Configuration)|$(Platform)'=='MinSizeRel|x64'">libtiff.dir\MinSizeRel\</IntDir>
+    <TargetName Condition="'$(Configuration)|$(Platform)'=='MinSizeRel|x64'">libtiff</TargetName>
+    <TargetExt Condition="'$(Configuration)|$(Platform)'=='MinSizeRel|x64'">.lib</TargetExt>
+    <OutDir Condition="'$(Configuration)|$(Platform)'=='RelWithDebInfo|x64'">H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv-build\3rdparty\lib\RelWithDebInfo\</OutDir>
+    <IntDir Condition="'$(Configuration)|$(Platform)'=='RelWithDebInfo|x64'">libtiff.dir\RelWithDebInfo\</IntDir>
+    <TargetName Condition="'$(Configuration)|$(Platform)'=='RelWithDebInfo|x64'">libtiff</TargetName>
+    <TargetExt Condition="'$(Configuration)|$(Platform)'=='RelWithDebInfo|x64'">.lib</TargetExt>
+  </PropertyGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <ClCompile>
+      <AdditionalIncludeDirectories>H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv-build\3rdparty\zlib;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv-src\3rdparty\zlib;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv-build\3rdparty\libtiff;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv-src\3rdparty\libtiff;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv-src\3rdparty\dlpack\include;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv-build\3rdparty\libjpeg-turbo;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv-src\3rdparty\libjpeg-turbo\src;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalOptions>%(AdditionalOptions) /external:I "C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.0/include" /external:I "C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.0/include/cccl" /external:I "H:/0000_CODE/01_collider_pyo/juce/build" /FS /bigobj</AdditionalOptions>
+      <AssemblerListingLocation>$(IntDir)</AssemblerListingLocation>
+      <BasicRuntimeChecks>EnableFastChecks</BasicRuntimeChecks>
+      <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
+      <DisableSpecificWarnings>4127;4251;4324;4275;4512;4589;4819;4018;4100;4127;4311;4701;4706;4244;4267;4305;4306;4703;4456;4457;4312</DisableSpecificWarnings>
+      <ExceptionHandling>Async</ExceptionHandling>
+      <ExternalWarningLevel>TurnOffAllWarnings</ExternalWarningLevel>
+      <FloatingPointModel>Precise</FloatingPointModel>
+      <ForceConformanceInForLoopScope></ForceConformanceInForLoopScope>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
+      <InlineFunctionExpansion>Disabled</InlineFunctionExpansion>
+      <IntrinsicFunctions>true</IntrinsicFunctions>
+      <LanguageStandard>stdcpp20</LanguageStandard>
+      <MinimalRebuild></MinimalRebuild>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
+      <Optimization>Disabled</Optimization>
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+      <RemoveUnreferencedCodeData></RemoveUnreferencedCodeData>
+      <RuntimeLibrary>MultiThreadedDebugDLL</RuntimeLibrary>
+      <SupportJustMyCode></SupportJustMyCode>
+      <TreatWChar_tAsBuiltInType></TreatWChar_tAsBuiltInType>
+      <UseFullPaths>false</UseFullPaths>
+      <PreprocessorDefinitions>%(PreprocessorDefinitions);WIN32;_WINDOWS;_CRT_SECURE_NO_DEPRECATE;_CRT_NONSTDC_NO_DEPRECATE;_SCL_SECURE_NO_WARNINGS;_VARIADIC_MAX=10;_WIN32_WINNT=0x0601;CMAKE_INTDIR="Debug"</PreprocessorDefinitions>
+      <ObjectFileName>$(IntDir)</ObjectFileName>
+      <ProgramDataBaseFileName>H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv-build\3rdparty\lib\Debug\libtiffd.pdb</ProgramDataBaseFileName>
+      <ScanSourceForModuleDependencies>false</ScanSourceForModuleDependencies>
+    </ClCompile>
+    <ResourceCompile>
+      <PreprocessorDefinitions>%(PreprocessorDefinitions);WIN32;_DEBUG;_WINDOWS;_CRT_SECURE_NO_DEPRECATE;_CRT_NONSTDC_NO_DEPRECATE;_SCL_SECURE_NO_WARNINGS;_VARIADIC_MAX=10;_WIN32_WINNT=0x0601;CMAKE_INTDIR=\"Debug\"</PreprocessorDefinitions>
+      <AdditionalIncludeDirectories>H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv-build\3rdparty\zlib;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv-src\3rdparty\zlib;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv-build\3rdparty\libtiff;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv-src\3rdparty\libtiff;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv-src\3rdparty\dlpack\include;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv-build\3rdparty\libjpeg-turbo;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv-src\3rdparty\libjpeg-turbo\src;C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v13.0\include;C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v13.0\include\cccl;H:\0000_CODE\01_collider_pyo\juce\build;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ResourceCompile>
+    <Midl>
+      <AdditionalIncludeDirectories>H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv-build\3rdparty\zlib;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv-src\3rdparty\zlib;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv-build\3rdparty\libtiff;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv-src\3rdparty\libtiff;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv-src\3rdparty\dlpack\include;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv-build\3rdparty\libjpeg-turbo;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv-src\3rdparty\libjpeg-turbo\src;C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v13.0\include;C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v13.0\include\cccl;H:\0000_CODE\01_collider_pyo\juce\build;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <OutputDirectory>$(ProjectDir)/$(IntDir)</OutputDirectory>
+      <HeaderFileName>%(Filename).h</HeaderFileName>
+      <TypeLibraryName>%(Filename).tlb</TypeLibraryName>
+      <InterfaceIdentifierFileName>%(Filename)_i.c</InterfaceIdentifierFileName>
+      <ProxyFileName>%(Filename)_p.c</ProxyFileName>
+    </Midl>
+    <Lib>
+      <AdditionalOptions>%(AdditionalOptions) /machine:x64 /IGNORE:4221</AdditionalOptions>
+    </Lib>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <ClCompile>
+      <AdditionalIncludeDirectories>H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv-build\3rdparty\zlib;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv-src\3rdparty\zlib;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv-build\3rdparty\libtiff;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv-src\3rdparty\libtiff;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv-src\3rdparty\dlpack\include;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv-build\3rdparty\libjpeg-turbo;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv-src\3rdparty\libjpeg-turbo\src;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalOptions>%(AdditionalOptions) /external:I "C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.0/include" /external:I "C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.0/include/cccl" /external:I "H:/0000_CODE/01_collider_pyo/juce/build" /FS /bigobj</AdditionalOptions>
+      <AssemblerListingLocation>$(IntDir)</AssemblerListingLocation>
+      <BasicRuntimeChecks>Default</BasicRuntimeChecks>
+      <DisableSpecificWarnings>4127;4251;4324;4275;4512;4589;4819;4018;4100;4127;4311;4701;4706;4244;4267;4305;4306;4703;4456;4457;4312</DisableSpecificWarnings>
+      <ExceptionHandling>Async</ExceptionHandling>
+      <ExternalWarningLevel>TurnOffAllWarnings</ExternalWarningLevel>
+      <FloatingPointModel>Precise</FloatingPointModel>
+      <ForceConformanceInForLoopScope></ForceConformanceInForLoopScope>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
+      <InlineFunctionExpansion>AnySuitable</InlineFunctionExpansion>
+      <IntrinsicFunctions>true</IntrinsicFunctions>
+      <LanguageStandard>stdcpp20</LanguageStandard>
+      <MinimalRebuild></MinimalRebuild>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
+      <Optimization>MaxSpeed</Optimization>
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+      <RemoveUnreferencedCodeData></RemoveUnreferencedCodeData>
+      <RuntimeLibrary>MultiThreadedDLL</RuntimeLibrary>
+      <SupportJustMyCode></SupportJustMyCode>
+      <TreatWChar_tAsBuiltInType></TreatWChar_tAsBuiltInType>
+      <UseFullPaths>false</UseFullPaths>
+      <PreprocessorDefinitions>%(PreprocessorDefinitions);WIN32;_WINDOWS;_CRT_SECURE_NO_DEPRECATE;_CRT_NONSTDC_NO_DEPRECATE;_SCL_SECURE_NO_WARNINGS;NDEBUG;_VARIADIC_MAX=10;_WIN32_WINNT=0x0601;CMAKE_INTDIR="Release"</PreprocessorDefinitions>
+      <ObjectFileName>$(IntDir)</ObjectFileName>
+      <DebugInformationFormat>
+      </DebugInformationFormat>
+      <ProgramDataBaseFileName>H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv-build\3rdparty\lib\Release\libtiff.pdb</ProgramDataBaseFileName>
+      <ScanSourceForModuleDependencies>false</ScanSourceForModuleDependencies>
+    </ClCompile>
+    <ResourceCompile>
+      <PreprocessorDefinitions>%(PreprocessorDefinitions);WIN32;_WINDOWS;_CRT_SECURE_NO_DEPRECATE;_CRT_NONSTDC_NO_DEPRECATE;_SCL_SECURE_NO_WARNINGS;NDEBUG;_VARIADIC_MAX=10;_WIN32_WINNT=0x0601;CMAKE_INTDIR=\"Release\"</PreprocessorDefinitions>
+      <AdditionalIncludeDirectories>H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv-build\3rdparty\zlib;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv-src\3rdparty\zlib;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv-build\3rdparty\libtiff;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv-src\3rdparty\libtiff;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv-src\3rdparty\dlpack\include;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv-build\3rdparty\libjpeg-turbo;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv-src\3rdparty\libjpeg-turbo\src;C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v13.0\include;C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v13.0\include\cccl;H:\0000_CODE\01_collider_pyo\juce\build;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ResourceCompile>
+    <Midl>
+      <AdditionalIncludeDirectories>H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv-build\3rdparty\zlib;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv-src\3rdparty\zlib;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv-build\3rdparty\libtiff;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv-src\3rdparty\libtiff;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv-src\3rdparty\dlpack\include;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv-build\3rdparty\libjpeg-turbo;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv-src\3rdparty\libjpeg-turbo\src;C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v13.0\include;C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v13.0\include\cccl;H:\0000_CODE\01_collider_pyo\juce\build;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <OutputDirectory>$(ProjectDir)/$(IntDir)</OutputDirectory>
+      <HeaderFileName>%(Filename).h</HeaderFileName>
+      <TypeLibraryName>%(Filename).tlb</TypeLibraryName>
+      <InterfaceIdentifierFileName>%(Filename)_i.c</InterfaceIdentifierFileName>
+      <ProxyFileName>%(Filename)_p.c</ProxyFileName>
+    </Midl>
+    <Lib>
+      <AdditionalOptions>%(AdditionalOptions) /machine:x64 /IGNORE:4221</AdditionalOptions>
+    </Lib>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='MinSizeRel|x64'">
+    <ClCompile>
+      <AdditionalIncludeDirectories>H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv-build\3rdparty\zlib;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv-src\3rdparty\zlib;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv-build\3rdparty\libtiff;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv-src\3rdparty\libtiff;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv-src\3rdparty\dlpack\include;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv-build\3rdparty\libjpeg-turbo;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv-src\3rdparty\libjpeg-turbo\src;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalOptions>%(AdditionalOptions) /external:I "C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.0/include" /external:I "C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.0/include/cccl" /external:I "H:/0000_CODE/01_collider_pyo/juce/build" /FS /bigobj</AdditionalOptions>
+      <AssemblerListingLocation>$(IntDir)</AssemblerListingLocation>
+      <BasicRuntimeChecks>Default</BasicRuntimeChecks>
+      <DisableSpecificWarnings>4127;4251;4324;4275;4512;4589;4819;4018;4100;4127;4311;4701;4706;4244;4267;4305;4306;4703;4456;4457;4312</DisableSpecificWarnings>
+      <ExceptionHandling>Async</ExceptionHandling>
+      <ExternalWarningLevel>TurnOffAllWarnings</ExternalWarningLevel>
+      <FloatingPointModel>Precise</FloatingPointModel>
+      <ForceConformanceInForLoopScope></ForceConformanceInForLoopScope>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
+      <InlineFunctionExpansion>OnlyExplicitInline</InlineFunctionExpansion>
+      <IntrinsicFunctions>true</IntrinsicFunctions>
+      <LanguageStandard>stdcpp20</LanguageStandard>
+      <MinimalRebuild></MinimalRebuild>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
+      <Optimization>MinSpace</Optimization>
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+      <RemoveUnreferencedCodeData></RemoveUnreferencedCodeData>
+      <RuntimeLibrary>MultiThreadedDLL</RuntimeLibrary>
+      <SupportJustMyCode></SupportJustMyCode>
+      <TreatWChar_tAsBuiltInType></TreatWChar_tAsBuiltInType>
+      <UseFullPaths>false</UseFullPaths>
+      <PreprocessorDefinitions>%(PreprocessorDefinitions);WIN32;_WINDOWS;_CRT_SECURE_NO_DEPRECATE;_CRT_NONSTDC_NO_DEPRECATE;_SCL_SECURE_NO_WARNINGS;NDEBUG;_VARIADIC_MAX=10;_WIN32_WINNT=0x0601;CMAKE_INTDIR="MinSizeRel"</PreprocessorDefinitions>
+      <ObjectFileName>$(IntDir)</ObjectFileName>
+      <DebugInformationFormat>
+      </DebugInformationFormat>
+      <ProgramDataBaseFileName>H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv-build\3rdparty\lib\MinSizeRel\libtiff.pdb</ProgramDataBaseFileName>
+      <ScanSourceForModuleDependencies>false</ScanSourceForModuleDependencies>
+    </ClCompile>
+    <ResourceCompile>
+      <PreprocessorDefinitions>%(PreprocessorDefinitions);WIN32;_WINDOWS;_CRT_SECURE_NO_DEPRECATE;_CRT_NONSTDC_NO_DEPRECATE;_SCL_SECURE_NO_WARNINGS;NDEBUG;_VARIADIC_MAX=10;_WIN32_WINNT=0x0601;CMAKE_INTDIR=\"MinSizeRel\"</PreprocessorDefinitions>
+      <AdditionalIncludeDirectories>H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv-build\3rdparty\zlib;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv-src\3rdparty\zlib;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv-build\3rdparty\libtiff;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv-src\3rdparty\libtiff;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv-src\3rdparty\dlpack\include;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv-build\3rdparty\libjpeg-turbo;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv-src\3rdparty\libjpeg-turbo\src;C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v13.0\include;C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v13.0\include\cccl;H:\0000_CODE\01_collider_pyo\juce\build;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ResourceCompile>
+    <Midl>
+      <AdditionalIncludeDirectories>H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv-build\3rdparty\zlib;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv-src\3rdparty\zlib;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv-build\3rdparty\libtiff;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv-src\3rdparty\libtiff;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv-src\3rdparty\dlpack\include;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv-build\3rdparty\libjpeg-turbo;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv-src\3rdparty\libjpeg-turbo\src;C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v13.0\include;C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v13.0\include\cccl;H:\0000_CODE\01_collider_pyo\juce\build;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <OutputDirectory>$(ProjectDir)/$(IntDir)</OutputDirectory>
+      <HeaderFileName>%(Filename).h</HeaderFileName>
+      <TypeLibraryName>%(Filename).tlb</TypeLibraryName>
+      <InterfaceIdentifierFileName>%(Filename)_i.c</InterfaceIdentifierFileName>
+      <ProxyFileName>%(Filename)_p.c</ProxyFileName>
+    </Midl>
+    <Lib>
+      <AdditionalOptions>%(AdditionalOptions) /machine:x64 /IGNORE:4221</AdditionalOptions>
+    </Lib>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='RelWithDebInfo|x64'">
+    <ClCompile>
+      <AdditionalIncludeDirectories>H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv-build\3rdparty\zlib;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv-src\3rdparty\zlib;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv-build\3rdparty\libtiff;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv-src\3rdparty\libtiff;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv-src\3rdparty\dlpack\include;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv-build\3rdparty\libjpeg-turbo;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv-src\3rdparty\libjpeg-turbo\src;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalOptions>%(AdditionalOptions) /external:I "C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.0/include" /external:I "C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.0/include/cccl" /external:I "H:/0000_CODE/01_collider_pyo/juce/build" /FS /bigobj</AdditionalOptions>
+      <AssemblerListingLocation>$(IntDir)</AssemblerListingLocation>
+      <BasicRuntimeChecks>Default</BasicRuntimeChecks>
+      <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
+      <DisableSpecificWarnings>4127;4251;4324;4275;4512;4589;4819;4018;4100;4127;4311;4701;4706;4244;4267;4305;4306;4703;4456;4457;4312</DisableSpecificWarnings>
+      <ExceptionHandling>Async</ExceptionHandling>
+      <ExternalWarningLevel>TurnOffAllWarnings</ExternalWarningLevel>
+      <FloatingPointModel>Precise</FloatingPointModel>
+      <ForceConformanceInForLoopScope></ForceConformanceInForLoopScope>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
+      <InlineFunctionExpansion>OnlyExplicitInline</InlineFunctionExpansion>
+      <IntrinsicFunctions>true</IntrinsicFunctions>
+      <LanguageStandard>stdcpp20</LanguageStandard>
+      <MinimalRebuild></MinimalRebuild>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
+      <Optimization>MaxSpeed</Optimization>
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+      <RemoveUnreferencedCodeData></RemoveUnreferencedCodeData>
+      <RuntimeLibrary>MultiThreadedDLL</RuntimeLibrary>
+      <SupportJustMyCode></SupportJustMyCode>
+      <TreatWChar_tAsBuiltInType></TreatWChar_tAsBuiltInType>
+      <UseFullPaths>false</UseFullPaths>
+      <PreprocessorDefinitions>%(PreprocessorDefinitions);WIN32;_WINDOWS;_CRT_SECURE_NO_DEPRECATE;_CRT_NONSTDC_NO_DEPRECATE;_SCL_SECURE_NO_WARNINGS;NDEBUG;_VARIADIC_MAX=10;_WIN32_WINNT=0x0601;CMAKE_INTDIR="RelWithDebInfo"</PreprocessorDefinitions>
+      <ObjectFileName>$(IntDir)</ObjectFileName>
+      <ProgramDataBaseFileName>H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv-build\3rdparty\lib\RelWithDebInfo\libtiff.pdb</ProgramDataBaseFileName>
+      <ScanSourceForModuleDependencies>false</ScanSourceForModuleDependencies>
+    </ClCompile>
+    <ResourceCompile>
+      <PreprocessorDefinitions>%(PreprocessorDefinitions);WIN32;_WINDOWS;_CRT_SECURE_NO_DEPRECATE;_CRT_NONSTDC_NO_DEPRECATE;_SCL_SECURE_NO_WARNINGS;NDEBUG;_VARIADIC_MAX=10;_WIN32_WINNT=0x0601;CMAKE_INTDIR=\"RelWithDebInfo\"</PreprocessorDefinitions>
+      <AdditionalIncludeDirectories>H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv-build\3rdparty\zlib;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv-src\3rdparty\zlib;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv-build\3rdparty\libtiff;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv-src\3rdparty\libtiff;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv-src\3rdparty\dlpack\include;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv-build\3rdparty\libjpeg-turbo;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv-src\3rdparty\libjpeg-turbo\src;C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v13.0\include;C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v13.0\include\cccl;H:\0000_CODE\01_collider_pyo\juce\build;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ResourceCompile>
+    <Midl>
+      <AdditionalIncludeDirectories>H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv-build\3rdparty\zlib;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv-src\3rdparty\zlib;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv-build\3rdparty\libtiff;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv-src\3rdparty\libtiff;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv-src\3rdparty\dlpack\include;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv-build\3rdparty\libjpeg-turbo;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv-src\3rdparty\libjpeg-turbo\src;C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v13.0\include;C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v13.0\include\cccl;H:\0000_CODE\01_collider_pyo\juce\build;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <OutputDirectory>$(ProjectDir)/$(IntDir)</OutputDirectory>
+      <HeaderFileName>%(Filename).h</HeaderFileName>
+      <TypeLibraryName>%(Filename).tlb</TypeLibraryName>
+      <InterfaceIdentifierFileName>%(Filename)_i.c</InterfaceIdentifierFileName>
+      <ProxyFileName>%(Filename)_p.c</ProxyFileName>
+    </Midl>
+    <Lib>
+      <AdditionalOptions>%(AdditionalOptions) /machine:x64 /IGNORE:4221</AdditionalOptions>
+    </Lib>
+  </ItemDefinitionGroup>
+  <ItemGroup>
+    <CustomBuild Include="H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv-src\3rdparty\libtiff\CMakeLists.txt">
+      <UseUtf8Encoding>Always</UseUtf8Encoding>
+      <Message Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Building Custom Rule H:/0000_CODE/01_collider_pyo/juce/build/_deps/opencv-src/3rdparty/libtiff/CMakeLists.txt</Message>
+      <Command Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">setlocal
+"C:\Program Files\CMake\bin\cmake.exe" -SH:/0000_CODE/01_collider_pyo/juce -BH:/0000_CODE/01_collider_pyo/juce/build --check-stamp-file H:/0000_CODE/01_collider_pyo/juce/build/_deps/opencv-build/3rdparty/libtiff/CMakeFiles/generate.stamp
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal &amp; call :cmErrorLevel %errorlevel% &amp; goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd</Command>
+      <AdditionalInputs Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">C:\Program Files\CMake\share\cmake-4.1\Modules\CheckCSourceCompiles.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\CheckFunctionExists.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\CheckIncludeFile.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\CheckIncludeFileCXX.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\CheckTypeSize.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\TestBigEndian.cmake;H:\0000_CODE\01_collider_pyo\juce\build\CMakeFiles\cmake.verify_globs;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv-src\3rdparty\libtiff\tif_config.h.cmake.in;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv-src\3rdparty\libtiff\tiffconf.h.cmake.in;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv-src\3rdparty\libtiff\tiffvers.h.cmake.in;%(AdditionalInputs)</AdditionalInputs>
+      <Outputs Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv-build\3rdparty\libtiff\CMakeFiles\generate.stamp</Outputs>
+      <LinkObjects Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">false</LinkObjects>
+      <Message Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Building Custom Rule H:/0000_CODE/01_collider_pyo/juce/build/_deps/opencv-src/3rdparty/libtiff/CMakeLists.txt</Message>
+      <Command Condition="'$(Configuration)|$(Platform)'=='Release|x64'">setlocal
+"C:\Program Files\CMake\bin\cmake.exe" -SH:/0000_CODE/01_collider_pyo/juce -BH:/0000_CODE/01_collider_pyo/juce/build --check-stamp-file H:/0000_CODE/01_collider_pyo/juce/build/_deps/opencv-build/3rdparty/libtiff/CMakeFiles/generate.stamp
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal &amp; call :cmErrorLevel %errorlevel% &amp; goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd</Command>
+      <AdditionalInputs Condition="'$(Configuration)|$(Platform)'=='Release|x64'">C:\Program Files\CMake\share\cmake-4.1\Modules\CheckCSourceCompiles.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\CheckFunctionExists.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\CheckIncludeFile.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\CheckIncludeFileCXX.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\CheckTypeSize.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\TestBigEndian.cmake;H:\0000_CODE\01_collider_pyo\juce\build\CMakeFiles\cmake.verify_globs;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv-src\3rdparty\libtiff\tif_config.h.cmake.in;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv-src\3rdparty\libtiff\tiffconf.h.cmake.in;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv-src\3rdparty\libtiff\tiffvers.h.cmake.in;%(AdditionalInputs)</AdditionalInputs>
+      <Outputs Condition="'$(Configuration)|$(Platform)'=='Release|x64'">H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv-build\3rdparty\libtiff\CMakeFiles\generate.stamp</Outputs>
+      <LinkObjects Condition="'$(Configuration)|$(Platform)'=='Release|x64'">false</LinkObjects>
+      <Message Condition="'$(Configuration)|$(Platform)'=='MinSizeRel|x64'">Building Custom Rule H:/0000_CODE/01_collider_pyo/juce/build/_deps/opencv-src/3rdparty/libtiff/CMakeLists.txt</Message>
+      <Command Condition="'$(Configuration)|$(Platform)'=='MinSizeRel|x64'">setlocal
+"C:\Program Files\CMake\bin\cmake.exe" -SH:/0000_CODE/01_collider_pyo/juce -BH:/0000_CODE/01_collider_pyo/juce/build --check-stamp-file H:/0000_CODE/01_collider_pyo/juce/build/_deps/opencv-build/3rdparty/libtiff/CMakeFiles/generate.stamp
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal &amp; call :cmErrorLevel %errorlevel% &amp; goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd</Command>
+      <AdditionalInputs Condition="'$(Configuration)|$(Platform)'=='MinSizeRel|x64'">C:\Program Files\CMake\share\cmake-4.1\Modules\CheckCSourceCompiles.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\CheckFunctionExists.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\CheckIncludeFile.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\CheckIncludeFileCXX.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\CheckTypeSize.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\TestBigEndian.cmake;H:\0000_CODE\01_collider_pyo\juce\build\CMakeFiles\cmake.verify_globs;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv-src\3rdparty\libtiff\tif_config.h.cmake.in;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv-src\3rdparty\libtiff\tiffconf.h.cmake.in;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv-src\3rdparty\libtiff\tiffvers.h.cmake.in;%(AdditionalInputs)</AdditionalInputs>
+      <Outputs Condition="'$(Configuration)|$(Platform)'=='MinSizeRel|x64'">H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv-build\3rdparty\libtiff\CMakeFiles\generate.stamp</Outputs>
+      <LinkObjects Condition="'$(Configuration)|$(Platform)'=='MinSizeRel|x64'">false</LinkObjects>
+      <Message Condition="'$(Configuration)|$(Platform)'=='RelWithDebInfo|x64'">Building Custom Rule H:/0000_CODE/01_collider_pyo/juce/build/_deps/opencv-src/3rdparty/libtiff/CMakeLists.txt</Message>
+      <Command Condition="'$(Configuration)|$(Platform)'=='RelWithDebInfo|x64'">setlocal
+"C:\Program Files\CMake\bin\cmake.exe" -SH:/0000_CODE/01_collider_pyo/juce -BH:/0000_CODE/01_collider_pyo/juce/build --check-stamp-file H:/0000_CODE/01_collider_pyo/juce/build/_deps/opencv-build/3rdparty/libtiff/CMakeFiles/generate.stamp
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal &amp; call :cmErrorLevel %errorlevel% &amp; goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd</Command>
+      <AdditionalInputs Condition="'$(Configuration)|$(Platform)'=='RelWithDebInfo|x64'">C:\Program Files\CMake\share\cmake-4.1\Modules\CheckCSourceCompiles.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\CheckFunctionExists.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\CheckIncludeFile.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\CheckIncludeFileCXX.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\CheckTypeSize.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\TestBigEndian.cmake;H:\0000_CODE\01_collider_pyo\juce\build\CMakeFiles\cmake.verify_globs;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv-src\3rdparty\libtiff\tif_config.h.cmake.in;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv-src\3rdparty\libtiff\tiffconf.h.cmake.in;H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv-src\3rdparty\libtiff\tiffvers.h.cmake.in;%(AdditionalInputs)</AdditionalInputs>
+      <Outputs Condition="'$(Configuration)|$(Platform)'=='RelWithDebInfo|x64'">H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv-build\3rdparty\libtiff\CMakeFiles\generate.stamp</Outputs>
+      <LinkObjects Condition="'$(Configuration)|$(Platform)'=='RelWithDebInfo|x64'">false</LinkObjects>
+    </CustomBuild>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv-src\3rdparty\libtiff\tif_aux.c" />
+    <ClCompile Include="H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv-src\3rdparty\libtiff\tif_close.c" />
+    <ClCompile Include="H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv-src\3rdparty\libtiff\tif_codec.c" />
+    <ClCompile Include="H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv-src\3rdparty\libtiff\tif_color.c" />
+    <ClCompile Include="H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv-src\3rdparty\libtiff\tif_compress.c" />
+    <ClCompile Include="H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv-src\3rdparty\libtiff\tif_dir.c" />
+    <ClCompile Include="H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv-src\3rdparty\libtiff\tif_dirinfo.c" />
+    <ClCompile Include="H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv-src\3rdparty\libtiff\tif_dirread.c" />
+    <ClCompile Include="H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv-src\3rdparty\libtiff\tif_dirwrite.c" />
+    <ClCompile Include="H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv-src\3rdparty\libtiff\tif_dumpmode.c" />
+    <ClCompile Include="H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv-src\3rdparty\libtiff\tif_error.c" />
+    <ClCompile Include="H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv-src\3rdparty\libtiff\tif_extension.c" />
+    <ClCompile Include="H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv-src\3rdparty\libtiff\tif_fax3.c" />
+    <ClCompile Include="H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv-src\3rdparty\libtiff\tif_fax3sm.c" />
+    <ClCompile Include="H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv-src\3rdparty\libtiff\tif_flush.c" />
+    <ClCompile Include="H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv-src\3rdparty\libtiff\tif_getimage.c" />
+    <ClCompile Include="H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv-src\3rdparty\libtiff\tif_hash_set.c" />
+    <ClCompile Include="H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv-src\3rdparty\libtiff\tif_jbig.c" />
+    <ClCompile Include="H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv-src\3rdparty\libtiff\tif_jpeg_12.c" />
+    <ClCompile Include="H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv-src\3rdparty\libtiff\tif_jpeg.c" />
+    <ClCompile Include="H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv-src\3rdparty\libtiff\tif_luv.c" />
+    <ClCompile Include="H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv-src\3rdparty\libtiff\tif_lzma.c" />
+    <ClCompile Include="H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv-src\3rdparty\libtiff\tif_lzw.c" />
+    <ClCompile Include="H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv-src\3rdparty\libtiff\tif_next.c" />
+    <ClCompile Include="H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv-src\3rdparty\libtiff\tif_ojpeg.c" />
+    <ClCompile Include="H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv-src\3rdparty\libtiff\tif_open.c" />
+    <ClCompile Include="H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv-src\3rdparty\libtiff\tif_packbits.c" />
+    <ClCompile Include="H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv-src\3rdparty\libtiff\tif_pixarlog.c" />
+    <ClCompile Include="H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv-src\3rdparty\libtiff\tif_predict.c" />
+    <ClCompile Include="H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv-src\3rdparty\libtiff\tif_print.c" />
+    <ClCompile Include="H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv-src\3rdparty\libtiff\tif_read.c" />
+    <ClCompile Include="H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv-src\3rdparty\libtiff\tif_strip.c" />
+    <ClCompile Include="H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv-src\3rdparty\libtiff\tif_swab.c" />
+    <ClCompile Include="H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv-src\3rdparty\libtiff\tif_thunder.c" />
+    <ClCompile Include="H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv-src\3rdparty\libtiff\tif_tile.c" />
+    <ClCompile Include="H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv-src\3rdparty\libtiff\tif_version.c" />
+    <ClCompile Include="H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv-src\3rdparty\libtiff\tif_warning.c" />
+    <ClCompile Include="H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv-src\3rdparty\libtiff\tif_webp.c" />
+    <ClCompile Include="H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv-src\3rdparty\libtiff\tif_write.c" />
+    <ClCompile Include="H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv-src\3rdparty\libtiff\tif_zip.c" />
+    <ClCompile Include="H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv-src\3rdparty\libtiff\tif_zstd.c" />
+    <ClCompile Include="H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv-src\3rdparty\libtiff\tif_stream.cxx" />
+    <ClInclude Include="H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv-src\3rdparty\libtiff\t4.h" />
+    <ClInclude Include="H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv-src\3rdparty\libtiff\tif_dir.h" />
+    <ClInclude Include="H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv-src\3rdparty\libtiff\tif_fax3.h" />
+    <ClInclude Include="H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv-src\3rdparty\libtiff\tif_hash_set.h" />
+    <ClInclude Include="H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv-src\3rdparty\libtiff\tif_predict.h" />
+    <ClInclude Include="H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv-src\3rdparty\libtiff\tiff.h" />
+    <ClInclude Include="H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv-src\3rdparty\libtiff\tiffio.h" />
+    <ClInclude Include="H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv-src\3rdparty\libtiff\tiffiop.h" />
+    <ClInclude Include="H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv-build\3rdparty\libtiff\tiffvers.h" />
+    <ClInclude Include="H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv-src\3rdparty\libtiff\uvcode.h" />
+    <ClInclude Include="H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv-src\3rdparty\libtiff\tiffio.hxx" />
+    <ClInclude Include="H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv-build\3rdparty\libtiff\tif_config.h" />
+    <ClInclude Include="H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv-build\3rdparty\libtiff\tiffconf.h" />
+    <ClCompile Include="H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv-src\3rdparty\libtiff\tif_win32.c" />
+  </ItemGroup>
+  <ItemGroup />
+  <ItemGroup>
+    <ProjectReference Include="H:\0000_CODE\01_collider_pyo\juce\build\ZERO_CHECK.vcxproj">
+      <Project>{0209B52D-BA6B-3216-8B67-09A88550E824}</Project>
+      <Name>ZERO_CHECK</Name>
+      <ReferenceOutputAssembly>false</ReferenceOutputAssembly>
+      <CopyToOutputDirectory>Never</CopyToOutputDirectory>
+    </ProjectReference>
+    <ProjectReference Include="H:\0000_CODE\01_collider_pyo\juce\build\_deps\opencv-build\3rdparty\zlib\zlib.vcxproj">
+      <Project>{9E57434C-955F-3547-B744-48BDA3F3CE98}</Project>
+      <Name>zlib</Name>
+    </ProjectReference>
+  </ItemGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+  <ImportGroup Label="ExtensionTargets">
+  </ImportGroup>
+</Project>

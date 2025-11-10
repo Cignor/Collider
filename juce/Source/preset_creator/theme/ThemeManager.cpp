@@ -538,6 +538,17 @@ bool ThemeManager::loadTheme(const juce::File& themeFile)
 		t.modules.stroke_seq_frame_bg = varToVec4(o->getProperty("stroke_seq_frame_bg"), t.modules.stroke_seq_frame_bg);
 		t.modules.stroke_seq_frame_bg_hovered = varToVec4(o->getProperty("stroke_seq_frame_bg_hovered"), t.modules.stroke_seq_frame_bg_hovered);
 		t.modules.stroke_seq_frame_bg_active = varToVec4(o->getProperty("stroke_seq_frame_bg_active"), t.modules.stroke_seq_frame_bg_active);
+		if (auto freqVar = o->getProperty("frequency_graph"); freqVar.isObject())
+		{
+			auto* freqObj = freqVar.getDynamicObject();
+			t.modules.frequency_graph.background = varToColor(freqObj->getProperty("background"), t.modules.frequency_graph.background);
+			t.modules.frequency_graph.grid = varToColor(freqObj->getProperty("grid"), t.modules.frequency_graph.grid);
+			t.modules.frequency_graph.label = varToColor(freqObj->getProperty("label"), t.modules.frequency_graph.label);
+			t.modules.frequency_graph.peak_line = varToColor(freqObj->getProperty("peak_line"), t.modules.frequency_graph.peak_line);
+			t.modules.frequency_graph.live_line = varToColor(freqObj->getProperty("live_line"), t.modules.frequency_graph.live_line);
+			t.modules.frequency_graph.border = varToColor(freqObj->getProperty("border"), t.modules.frequency_graph.border);
+			t.modules.frequency_graph.threshold = varToColor(freqObj->getProperty("threshold"), t.modules.frequency_graph.threshold);
+		}
 		if (auto physVar = o->getProperty("physics"); physVar.isObject())
 		{
 			auto* physObj = physVar.getDynamicObject();
@@ -842,6 +853,59 @@ bool ThemeManager::saveTheme(const juce::File& themeFile)
 		o->setProperty("stroke_seq_frame_bg", vec4ToVar(currentTheme.modules.stroke_seq_frame_bg));
 		o->setProperty("stroke_seq_frame_bg_hovered", vec4ToVar(currentTheme.modules.stroke_seq_frame_bg_hovered));
 		o->setProperty("stroke_seq_frame_bg_active", vec4ToVar(currentTheme.modules.stroke_seq_frame_bg_active));
+		{
+			juce::DynamicObject::Ptr freqObj = new juce::DynamicObject();
+			freqObj->setProperty("background", colorToVar(currentTheme.modules.frequency_graph.background));
+			freqObj->setProperty("grid", colorToVar(currentTheme.modules.frequency_graph.grid));
+			freqObj->setProperty("label", colorToVar(currentTheme.modules.frequency_graph.label));
+			freqObj->setProperty("peak_line", colorToVar(currentTheme.modules.frequency_graph.peak_line));
+			freqObj->setProperty("live_line", colorToVar(currentTheme.modules.frequency_graph.live_line));
+			freqObj->setProperty("border", colorToVar(currentTheme.modules.frequency_graph.border));
+			freqObj->setProperty("threshold", colorToVar(currentTheme.modules.frequency_graph.threshold));
+			o->setProperty("frequency_graph", juce::var(freqObj.get()));
+		}
+		{
+			juce::DynamicObject::Ptr physObj = new juce::DynamicObject();
+			physObj->setProperty("sandbox_title", vec4ToVar(currentTheme.modules.physics.sandbox_title));
+			physObj->setProperty("stroke_label", vec4ToVar(currentTheme.modules.physics.stroke_label));
+			physObj->setProperty("physics_section", vec4ToVar(currentTheme.modules.physics.physics_section));
+			physObj->setProperty("spawn_section", vec4ToVar(currentTheme.modules.physics.spawn_section));
+			physObj->setProperty("count_ok", vec4ToVar(currentTheme.modules.physics.count_ok));
+			physObj->setProperty("count_warn", vec4ToVar(currentTheme.modules.physics.count_warn));
+			physObj->setProperty("count_alert", vec4ToVar(currentTheme.modules.physics.count_alert));
+			physObj->setProperty("stroke_metal", vec4ToVar(currentTheme.modules.physics.stroke_metal));
+			physObj->setProperty("stroke_wood", vec4ToVar(currentTheme.modules.physics.stroke_wood));
+			physObj->setProperty("stroke_soil", vec4ToVar(currentTheme.modules.physics.stroke_soil));
+			physObj->setProperty("stroke_conveyor", vec4ToVar(currentTheme.modules.physics.stroke_conveyor));
+			physObj->setProperty("stroke_bouncy", vec4ToVar(currentTheme.modules.physics.stroke_bouncy));
+			physObj->setProperty("stroke_sticky", vec4ToVar(currentTheme.modules.physics.stroke_sticky));
+			physObj->setProperty("stroke_emitter", vec4ToVar(currentTheme.modules.physics.stroke_emitter));
+			physObj->setProperty("spawn_ball", vec4ToVar(currentTheme.modules.physics.spawn_ball));
+			physObj->setProperty("spawn_square", vec4ToVar(currentTheme.modules.physics.spawn_square));
+			physObj->setProperty("spawn_triangle", vec4ToVar(currentTheme.modules.physics.spawn_triangle));
+			physObj->setProperty("spawn_vortex", vec4ToVar(currentTheme.modules.physics.spawn_vortex));
+			physObj->setProperty("spawn_clear", vec4ToVar(currentTheme.modules.physics.spawn_clear));
+			physObj->setProperty("spawn_clear_hover", vec4ToVar(currentTheme.modules.physics.spawn_clear_hover));
+			physObj->setProperty("spawn_clear_active", vec4ToVar(currentTheme.modules.physics.spawn_clear_active));
+			physObj->setProperty("canvas_background", vec4ToVar(currentTheme.modules.physics.canvas_background));
+			physObj->setProperty("canvas_border", vec4ToVar(currentTheme.modules.physics.canvas_border));
+			physObj->setProperty("drag_indicator_fill", vec4ToVar(currentTheme.modules.physics.drag_indicator_fill));
+			physObj->setProperty("drag_indicator_outline", vec4ToVar(currentTheme.modules.physics.drag_indicator_outline));
+			physObj->setProperty("eraser_fill", vec4ToVar(currentTheme.modules.physics.eraser_fill));
+			physObj->setProperty("eraser_outline", vec4ToVar(currentTheme.modules.physics.eraser_outline));
+			physObj->setProperty("crosshair_idle", vec4ToVar(currentTheme.modules.physics.crosshair_idle));
+			physObj->setProperty("crosshair_active", vec4ToVar(currentTheme.modules.physics.crosshair_active));
+			physObj->setProperty("magnet_north", vec4ToVar(currentTheme.modules.physics.magnet_north));
+			physObj->setProperty("magnet_south", vec4ToVar(currentTheme.modules.physics.magnet_south));
+			physObj->setProperty("magnet_link", vec4ToVar(currentTheme.modules.physics.magnet_link));
+			physObj->setProperty("vector_outline", vec4ToVar(currentTheme.modules.physics.vector_outline));
+			physObj->setProperty("vector_fill", vec4ToVar(currentTheme.modules.physics.vector_fill));
+			physObj->setProperty("soil_detail", vec4ToVar(currentTheme.modules.physics.soil_detail));
+			physObj->setProperty("overlay_text", vec4ToVar(currentTheme.modules.physics.overlay_text));
+			physObj->setProperty("overlay_line", vec4ToVar(currentTheme.modules.physics.overlay_line));
+			physObj->setProperty("separator_line", vec4ToVar(currentTheme.modules.physics.separator_line));
+			o->setProperty("physics", juce::var(physObj.get()));
+		}
 		root->setProperty("modules", juce::var(o.get()));
 	}
 
@@ -1111,6 +1175,51 @@ void ThemeManager::loadDefaultTheme()
 	defaultTheme.modules.sequencer_step_active_grab = ImVec4(0.9f, 0.9f, 0.9f, 1.0f);
 	defaultTheme.modules.sequencer_gate_active_frame = ImVec4(1.0f, 0.7f, 0.3f, 1.0f);
 	defaultTheme.modules.sequencer_threshold_line = IM_COL32(255, 255, 0, 200);
+	defaultTheme.modules.frequency_graph.background = IM_COL32(20, 22, 24, 255);
+	defaultTheme.modules.frequency_graph.grid = IM_COL32(50, 55, 60, 255);
+	defaultTheme.modules.frequency_graph.label = IM_COL32(150, 150, 150, 255);
+	defaultTheme.modules.frequency_graph.peak_line = IM_COL32(255, 150, 80, 150);
+	defaultTheme.modules.frequency_graph.live_line = IM_COL32(120, 170, 255, 220);
+	defaultTheme.modules.frequency_graph.border = IM_COL32(80, 80, 80, 255);
+	defaultTheme.modules.frequency_graph.threshold = IM_COL32(255, 100, 100, 150);
+	defaultTheme.modules.physics.sandbox_title = ImVec4(0.3f, 0.9f, 1.0f, 1.0f);
+	defaultTheme.modules.physics.stroke_label = ImVec4(0.9f, 0.9f, 0.5f, 1.0f);
+	defaultTheme.modules.physics.physics_section = ImVec4(0.7f, 0.9f, 0.7f, 1.0f);
+	defaultTheme.modules.physics.spawn_section = ImVec4(0.5f, 0.9f, 1.0f, 1.0f);
+	defaultTheme.modules.physics.count_ok = ImVec4(0.6f, 0.9f, 0.6f, 1.0f);
+	defaultTheme.modules.physics.count_warn = ImVec4(1.0f, 0.9f, 0.4f, 1.0f);
+	defaultTheme.modules.physics.count_alert = ImVec4(1.0f, 0.4f, 0.4f, 1.0f);
+	defaultTheme.modules.physics.stroke_metal = ImVec4(0.53f, 0.81f, 0.92f, 1.0f);
+	defaultTheme.modules.physics.stroke_wood = ImVec4(0.96f, 0.64f, 0.38f, 1.0f);
+	defaultTheme.modules.physics.stroke_soil = ImVec4(0.0f, 0.39f, 0.0f, 1.0f);
+	defaultTheme.modules.physics.stroke_conveyor = ImVec4(0.58f, 0.44f, 0.86f, 1.0f);
+	defaultTheme.modules.physics.stroke_bouncy = ImVec4(0.0f, 0.98f, 0.6f, 1.0f);
+	defaultTheme.modules.physics.stroke_sticky = ImVec4(0.54f, 0.27f, 0.07f, 1.0f);
+	defaultTheme.modules.physics.stroke_emitter = ImVec4(1.0f, 0.84f, 0.0f, 1.0f);
+	defaultTheme.modules.physics.spawn_ball = ImVec4(1.0f, 0.4f, 0.4f, 1.0f);
+	defaultTheme.modules.physics.spawn_square = ImVec4(0.4f, 1.0f, 0.4f, 1.0f);
+	defaultTheme.modules.physics.spawn_triangle = ImVec4(0.4f, 0.4f, 1.0f, 1.0f);
+	defaultTheme.modules.physics.spawn_vortex = ImVec4(0.7f, 0.4f, 1.0f, 1.0f);
+	defaultTheme.modules.physics.spawn_clear = ImVec4(0.6f, 0.2f, 0.2f, 0.8f);
+	defaultTheme.modules.physics.spawn_clear_hover = ImVec4(0.8f, 0.3f, 0.3f, 1.0f);
+	defaultTheme.modules.physics.spawn_clear_active = ImVec4(1.0f, 0.4f, 0.4f, 1.0f);
+	defaultTheme.modules.physics.canvas_background = ImVec4(0.12f, 0.12f, 0.12f, 1.0f);
+	defaultTheme.modules.physics.canvas_border = ImVec4(0.39f, 0.39f, 0.39f, 1.0f);
+	defaultTheme.modules.physics.drag_indicator_fill = ImVec4(1.0f, 1.0f, 0.0f, 0.4f);
+	defaultTheme.modules.physics.drag_indicator_outline = ImVec4(1.0f, 1.0f, 0.0f, 0.8f);
+	defaultTheme.modules.physics.eraser_fill = ImVec4(1.0f, 0.39f, 0.39f, 0.24f);
+	defaultTheme.modules.physics.eraser_outline = ImVec4(0.86f, 0.08f, 0.08f, 0.7f);
+	defaultTheme.modules.physics.crosshair_idle = ImVec4(1.0f, 1.0f, 1.0f, 0.5f);
+	defaultTheme.modules.physics.crosshair_active = ImVec4(1.0f, 1.0f, 0.0f, 1.0f);
+	defaultTheme.modules.physics.magnet_north = ImVec4(1.0f, 0.39f, 0.39f, 0.78f);
+	defaultTheme.modules.physics.magnet_south = ImVec4(0.39f, 0.39f, 1.0f, 0.78f);
+	defaultTheme.modules.physics.magnet_link = ImVec4(1.0f, 1.0f, 0.0f, 0.78f);
+	defaultTheme.modules.physics.vector_outline = ImVec4(1.0f, 1.0f, 1.0f, 0.78f);
+	defaultTheme.modules.physics.vector_fill = ImVec4(1.0f, 1.0f, 1.0f, 0.6f);
+	defaultTheme.modules.physics.soil_detail = ImVec4(0.55f, 0.27f, 0.07f, 0.7f);
+	defaultTheme.modules.physics.overlay_text = ImVec4(0.0f, 0.0f, 0.0f, 0.78f);
+	defaultTheme.modules.physics.overlay_line = ImVec4(1.0f, 1.0f, 1.0f, 0.5f);
+	defaultTheme.modules.physics.separator_line = ImVec4(1.0f, 0.84f, 0.0f, 0.78f);
 }
 
 void ThemeManager::saveUserThemePreference(const juce::String& themeFilename)

@@ -2,6 +2,10 @@
 
 > Use `MOOFYS\moofy_drag_node_suggestions.ps1` to export all context into `moofy_DragNodeSuggestions.txt` before sharing with external experts.
 
+# Assertion Crash Context
+- For the current ImNodes scope assertion issue, run `MOOFYS\moofy_drag_node_assert.ps1` to generate `moofy_DragInsertAssertion.txt`.
+- Summary doc: `MOOFYS/moofys_drag_assertion.md`.
+
 ## Mission Summary
 - We want to enhance the ImGui node editor so that **dragging a cable onto empty canvas** opens a context-aware popup with modules compatible with the dragged signal.
 - The system must reuse existing right-click “Insert Node” infrastructure but add **real-time compatibility filtering**, **auto-wiring**, and **optional drag continuation**.

@@ -318,6 +318,16 @@ public:
     // -1 means no split operation is active.
     int splittingFromAttrId = -1;
 
+    // Drag-to-empty detection state
+    bool dragInsertActive { false };
+    int dragInsertStartAttrId { -1 };
+    PinID dragInsertStartPin {};
+    ImVec2 dragInsertDropPos { 0.0f, 0.0f };
+    bool shouldOpenDragInsertPopup { false };
+
+    // Module suggestion cache
+    std::map<PinDataType, std::vector<juce::String>> dragInsertSuggestions;
+
     // A map to cache the screen position of every pin attribute ID each frame.
     // This is a necessary workaround as ImNodes doesn't provide a public API
     // to get a pin's position by its ID.
@@ -416,6 +426,7 @@ public:
     void insertNodeOnLink(const juce::String& nodeType, const LinkInfo& linkInfo, const ImVec2& position);
     void insertNodeOnLinkStereo(const juce::String& nodeType, const LinkInfo& linkLeft, const LinkInfo& linkRight, const ImVec2& position);
     juce::File findPresetsDirectory();
+    void populateDragInsertSuggestions();
 
     // --- NEW: Handler for node chaining shortcut ---
     void handleNodeChaining();
@@ -430,6 +441,8 @@ public:
     // --- Unified Preset Loading ---
     void loadPresetFromFile(const juce::File& file);
     void mergePresetFromFile(const juce::File& file, ImVec2 dropPosition);
+    const std::vector<juce::String>& getDragInsertSuggestionsFor(const PinID& pin) const;
+    void insertNodeFromDragSelection(const juce::String& moduleType);
     
     // --- Meta Module (Sub-Patching) Support ---
     void handleCollapseToMetaModule();

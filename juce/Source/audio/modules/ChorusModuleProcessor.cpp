@@ -1,4 +1,7 @@
 #include "ChorusModuleProcessor.h"
+#if defined(PRESET_CREATOR_UI)
+#include "../../preset_creator/theme/ThemeManager.h"
+#endif
 
 juce::AudioProcessorValueTreeState::ParameterLayout ChorusModuleProcessor::createParameterLayout()
 {
@@ -225,6 +228,7 @@ juce::String ChorusModuleProcessor::getAudioOutputLabel(int channel) const
 #if defined(PRESET_CREATOR_UI)
 void ChorusModuleProcessor::drawParametersInNode(float itemWidth, const std::function<bool(const juce::String&)>& isParamModulated, const std::function<void()>& onModificationEnded)
 {
+    const auto& theme = ThemeManager::getInstance().getCurrentTheme();
     auto& ap = getAPVTS();
     ImGui::PushItemWidth(itemWidth);
 
@@ -240,7 +244,7 @@ void ChorusModuleProcessor::drawParametersInNode(float itemWidth, const std::fun
     };
 
     // === CHORUS PARAMETERS SECTION ===
-    ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1.0f), "Chorus Parameters");
+    ThemeText("Chorus Parameters", theme.text.section_header);
     ImGui::Spacing();
 
     // Rate Slider
@@ -284,7 +288,7 @@ void ChorusModuleProcessor::drawParametersInNode(float itemWidth, const std::fun
     ImGui::Spacing();
 
     // === RELATIVE MODULATION SECTION ===
-    ImGui::TextColored(ImVec4(0.6f, 0.8f, 1.0f, 1.0f), "CV Input Modes");
+    ThemeText("CV Input Modes", theme.modulation.frequency);
     ImGui::Spacing();
     
     // Relative Rate Mod checkbox

@@ -2,6 +2,9 @@
 
 #include "ModuleProcessor.h"
 #include <juce_dsp/juce_dsp.h>
+#if defined(PRESET_CREATOR_UI)
+#include "../../preset_creator/theme/ThemeManager.h"
+#endif
 
 class ReverbModuleProcessor : public ModuleProcessor
 {
@@ -27,6 +30,7 @@ public:
     void drawParametersInNode (float itemWidth, const std::function<bool(const juce::String& paramId)>& isParamModulated, const std::function<void()>& onModificationEnded) override
     {
         auto& ap = getAPVTS();
+        const auto& theme = ThemeManager::getInstance().getCurrentTheme();
         
         // Helper for tooltips
         auto HelpMarkerReverb = [](const char* desc) {
@@ -51,7 +55,7 @@ public:
         ImGui::PushItemWidth(itemWidth);
 
         // === REVERB PARAMETERS SECTION ===
-        ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1.0f), "Reverb Parameters");
+        ThemeText("Reverb Parameters", theme.text.section_header);
         ImGui::Spacing();
 
         // Size
@@ -86,7 +90,7 @@ public:
         ImGui::Spacing();
 
         // === RELATIVE MODULATION SECTION ===
-        ImGui::TextColored(ImVec4(0.6f, 0.8f, 1.0f, 1.0f), "CV Input Modes");
+        ThemeText("CV Input Modes", theme.modulation.frequency);
         ImGui::Spacing();
         
         // Relative Size Mod checkbox
@@ -132,7 +136,7 @@ public:
         ImGui::Spacing();
 
         // === REVERB VISUALIZATION SECTION ===
-        ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1.0f), "Decay Envelope");
+        ThemeText("Decay Envelope", theme.text.section_header);
         ImGui::Spacing();
 
         // Visual decay curve based on size and damp
@@ -147,7 +151,7 @@ public:
             decayCurve[i] = juce::jlimit(0.0f, 1.0f, decayCurve[i]);
         }
 
-        ImGui::PushStyleColor(ImGuiCol_PlotLines, ImColor::HSV(0.55f, 0.6f, 0.9f).Value);
+        ImGui::PushStyleColor(ImGuiCol_PlotLines, theme.modulation.frequency);
         ImGui::PlotLines("##decay", decayCurve, 50, 0, nullptr, 0.0f, 1.0f, ImVec2(itemWidth, 50));
         ImGui::PopStyleColor();
 

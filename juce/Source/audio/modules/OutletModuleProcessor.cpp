@@ -39,6 +39,7 @@ juce::ValueTree OutletModuleProcessor::getExtraStateTree() const
 {
     juce::ValueTree vt("OutletState");
     vt.setProperty("customLabel", customLabel, nullptr);
+    vt.setProperty("pinIndex", pinIndex, nullptr);
     return vt;
 }
 
@@ -47,6 +48,7 @@ void OutletModuleProcessor::setExtraStateTree(const juce::ValueTree& vt)
     if (vt.hasType("OutletState"))
     {
         customLabel = vt.getProperty("customLabel", "Outlet").toString();
+        pinIndex = (int)vt.getProperty("pinIndex", pinIndex);
     }
 }
 

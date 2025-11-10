@@ -14,6 +14,14 @@ bool ModuleProcessor::isParamInputConnected(const juce::String& paramId) const
     if (synth == nullptr)
         return false;
 
+#if JUCE_DEBUG
+    if (synth->isGraphMutationPending())
+    {
+        juce::Logger::writeToLog("[Graph][WARN] isParamInputConnected invoked during graph mutation for param '"
+                                 + paramId + "' on module LID " + juce::String((int)storedLogicalId));
+    }
+#endif
+
     juce::uint32 myLogicalId = storedLogicalId;
     if (myLogicalId == 0)
     {

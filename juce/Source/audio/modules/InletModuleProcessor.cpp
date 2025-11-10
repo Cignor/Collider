@@ -64,6 +64,7 @@ juce::ValueTree InletModuleProcessor::getExtraStateTree() const
 {
     juce::ValueTree vt("InletState");
     vt.setProperty("customLabel", customLabel, nullptr);
+    vt.setProperty("pinIndex", pinIndex, nullptr);
     return vt;
 }
 
@@ -72,6 +73,7 @@ void InletModuleProcessor::setExtraStateTree(const juce::ValueTree& vt)
     if (vt.hasType("InletState"))
     {
         customLabel = vt.getProperty("customLabel", "Inlet").toString();
+        pinIndex = (int)vt.getProperty("pinIndex", pinIndex);
     }
 }
 

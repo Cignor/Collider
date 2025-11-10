@@ -1,4 +1,7 @@
 #include "LimiterModuleProcessor.h"
+#if defined(PRESET_CREATOR_UI)
+#include "../../preset_creator/theme/ThemeManager.h"
+#endif
 
 juce::AudioProcessorValueTreeState::ParameterLayout LimiterModuleProcessor::createParameterLayout()
 {
@@ -158,6 +161,7 @@ juce::String LimiterModuleProcessor::getAudioOutputLabel(int channel) const
 #if defined(PRESET_CREATOR_UI)
 void LimiterModuleProcessor::drawParametersInNode(float itemWidth, const std::function<bool(const juce::String&)>& isParamModulated, const std::function<void()>& onModificationEnded)
 {
+    const auto& theme = ThemeManager::getInstance().getCurrentTheme();
     auto& ap = getAPVTS();
     ImGui::PushItemWidth(itemWidth);
 
@@ -180,7 +184,7 @@ void LimiterModuleProcessor::drawParametersInNode(float itemWidth, const std::fu
         if (tooltip) { ImGui::SameLine(); HelpMarker(tooltip); }
     };
 
-    ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1.0f), "Limiter Parameters");
+    ThemeText("Limiter Parameters", theme.text.section_header);
     ImGui::Spacing();
 
     drawSlider("Threshold", paramIdThreshold, paramIdThresholdMod, -20.0f, 0.0f, "%.1f dB", "Maximum output level (-20 to 0 dB)\nSignal peaks above this are limited");
@@ -191,7 +195,7 @@ void LimiterModuleProcessor::drawParametersInNode(float itemWidth, const std::fu
     ImGui::Spacing();
 
     // === RELATIVE MODULATION SECTION ===
-    ImGui::TextColored(ImVec4(0.6f, 0.8f, 1.0f, 1.0f), "CV Input Modes");
+    ThemeText("CV Input Modes", theme.modulation.frequency);
     ImGui::Spacing();
     
     // Relative Threshold Mod checkbox

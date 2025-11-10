@@ -89,6 +89,24 @@
 #include "../modules/OutletModuleProcessor.h"
 #include "../modules/MetaModuleProcessor.h"
 
+#if JUCE_DEBUG
+namespace
+{
+struct ScopedGraphMutation
+{
+    std::atomic<int>& depth;
+    explicit ScopedGraphMutation(std::atomic<int>& d) : depth(d)
+    {
+        depth.fetch_add(1, std::memory_order_acq_rel);
+    }
+    ~ScopedGraphMutation()
+    {
+        depth.fetch_sub(1, std::memory_order_acq_rel);
+    }
+};
+}
+#endif
+
 ModularSynthProcessor::ModularSynthProcessor()
     : juce::AudioProcessor(BusesProperties()
                             .withInput("Input", juce::AudioChannelSet::stereo(), true)
@@ -844,6 +862,7 @@ namespace {
             
             reg("meta module", []{ return std::make_unique<MetaModuleProcessor>(); });
             reg("metamodule", []{ return std::make_unique<MetaModuleProcessor>(); });
+            reg("meta", []{ return std::make_unique<MetaModuleProcessor>(); });
             reg("inlet", []{ return std::make_unique<InletModuleProcessor>(); });
             reg("outlet", []{ return std::make_unique<OutletModuleProcessor>(); });
 
@@ -874,22 +893,31 @@ namespace {
 
 ModularSynthProcessor::NodeID ModularSynthProcessor::addModule(const juce::String& moduleType, bool commit)
 {
-    const juce::ScopedLock lock (moduleLock);
-    auto& factory = getModuleFactory();
-    const juce::String key = moduleType.toLowerCase();
-    std::unique_ptr<juce::AudioProcessor> processor;
-
-    if (auto it = factory.find(key); it != factory.end())
-        processor = it->second();
-
-    if (! processor)
+    NodeID createdNodeId;
     {
-        for (const auto& kv : factory)
-            if (moduleType.equalsIgnoreCase(kv.first)) { processor = kv.second(); break; }
-    }
+        const juce::ScopedLock lock (moduleLock);
+#if JUCE_DEBUG
+        ScopedGraphMutation mutation(graphMutationDepth);
+#endif
+        auto& factory = getModuleFactory();
+        const juce::String key = moduleType.toLowerCase();
+        std::unique_ptr<juce::AudioProcessor> processor;
 
-    if (processor)
-    {
+        if (auto it = factory.find(key); it != factory.end())
+            processor = it->second();
+
+        if (! processor)
+        {
+            for (const auto& kv : factory)
+                if (moduleType.equalsIgnoreCase(kv.first)) { processor = kv.second(); break; }
+        }
+
+        if (! processor)
+        {
+            juce::Logger::writeToLog("[ModSynth][WARN] Unknown module type: " + moduleType);
+            return {};
+        }
+
         auto node = internalGraph->addNode(std::move(processor), {}, juce::AudioProcessorGraph::UpdateKind::none);
         if (auto* mp = dynamic_cast<ModuleProcessor*>(node->getProcessor()))
             mp->setParent(this);
@@ -901,37 +929,32 @@ ModularSynthProcessor::NodeID ModularSynthProcessor::addModule(const juce::Strin
             mp->setLogicalId(logicalId);
             mp->setSecondaryLogicalId(nextLogicalId++); // Assign secondary ID for extra outputs (e.g., cropped video)
         }
-        
+
         if (moduleType.equalsIgnoreCase("audio_input"))
         {
             std::vector<int> defaultMapping = {0, 1};
-            setAudioInputChannelMapping(node->nodeID, defaultMapping);
+            internalGraph->addConnection({ { audioInputNode->nodeID, 0 }, { node->nodeID, 0 } }, juce::AudioProcessorGraph::UpdateKind::none);
+            internalGraph->addConnection({ { audioInputNode->nodeID, 1 }, { node->nodeID, 1 } }, juce::AudioProcessorGraph::UpdateKind::none);
         }
-        
-        if (commit)
-        {
-            // Ensure the new module is immediately active
-            commitChanges();
-        }
-        
-        // Notify UI if hooked; otherwise fallback to direct post when UI build is present
-        juce::Logger::writeToLog("[Toast] addModule created: " + moduleType + ", invoking notification");
-        if (onModuleCreated)
-        {
-            onModuleCreated(toPrettyModuleName(moduleType));
-        }
-#if defined(PRESET_CREATOR_UI)
-        else
-        {
-            NotificationManager::post(NotificationManager::Type::Info, "Created " + toPrettyModuleName(moduleType) + " node");
-        }
-#endif
-        
-        return node->nodeID;
+
+        createdNodeId = node->nodeID;
     }
 
-    juce::Logger::writeToLog("[ModSynth][WARN] Unknown module type: " + moduleType);
-    return {};
+    if (createdNodeId.uid != 0 && commit)
+        commitChanges();
+
+    if (createdNodeId.uid != 0)
+    {
+        juce::Logger::writeToLog("[Toast] addModule created: " + moduleType + ", invoking notification");
+        if (onModuleCreated)
+            onModuleCreated(toPrettyModuleName(moduleType));
+#if defined(PRESET_CREATOR_UI)
+        else
+            NotificationManager::post(NotificationManager::Type::Info, "Created " + toPrettyModuleName(moduleType) + " node");
+#endif
+    }
+
+    return createdNodeId;
 }
 
 ModularSynthProcessor::NodeID ModularSynthProcessor::addVstModule(
@@ -939,6 +962,10 @@ ModularSynthProcessor::NodeID ModularSynthProcessor::addVstModule(
     const juce::PluginDescription& vstDesc,
     juce::uint32 logicalIdToAssign)
 {
+    const juce::ScopedLock lock (moduleLock);
+#if JUCE_DEBUG
+    ScopedGraphMutation mutation(graphMutationDepth);
+#endif
     juce::String errorMessage;
     std::unique_ptr<juce::AudioPluginInstance> instance = 
         formatManager.createPluginInstance(vstDesc, getSampleRate(), getBlockSize(), errorMessage);
@@ -991,6 +1018,9 @@ void ModularSynthProcessor::removeModule(const NodeID& nodeID)
 {
     if (nodeID.uid == 0) return;
     const juce::ScopedLock lock(moduleLock); // Ensure thread-safe access
+#if JUCE_DEBUG
+    ScopedGraphMutation mutation(graphMutationDepth);
+#endif
 
     // --- LOGGING ---
     if (auto* node = internalGraph->getNodeForId(nodeID))
@@ -1016,6 +1046,10 @@ void ModularSynthProcessor::removeModule(const NodeID& nodeID)
 
 bool ModularSynthProcessor::connect(const NodeID& sourceNodeID, int sourceChannel, const NodeID& destNodeID, int destChannel)
 {
+    const juce::ScopedLock lock (moduleLock);
+#if JUCE_DEBUG
+    ScopedGraphMutation mutation(graphMutationDepth);
+#endif
     juce::AudioProcessorGraph::Connection connection {
         { sourceNodeID, sourceChannel },
         { destNodeID, destChannel }
@@ -1045,6 +1079,10 @@ bool ModularSynthProcessor::connect(const NodeID& sourceNodeID, int sourceChanne
 
 void ModularSynthProcessor::commitChanges()
 {
+    const juce::ScopedLock lock (moduleLock);
+#if JUCE_DEBUG
+    ScopedGraphMutation mutation(graphMutationDepth);
+#endif
     internalGraph->rebuild();
     
     if (getSampleRate() > 0 && getBlockSize() > 0)
@@ -1111,34 +1149,33 @@ void ModularSynthProcessor::commitChanges()
 
 void ModularSynthProcessor::clearAll()
 {
-    const juce::ScopedLock lock (moduleLock);
-    
-    // --- LOGGING ---
-    juce::Logger::writeToLog("[GraphSync] clearAll() initiated - removing " + juce::String(logicalIdToModule.size()) + " modules");
-    // --- END LOGGING ---
-    
-    for (const auto& kv : logicalIdToModule)
     {
-        internalGraph->removeNode(kv.second.nodeID, juce::AudioProcessorGraph::UpdateKind::none);
+        const juce::ScopedLock lock (moduleLock);
+#if JUCE_DEBUG
+        ScopedGraphMutation mutation(graphMutationDepth);
+#endif
+        juce::Logger::writeToLog("[GraphSync] clearAll() initiated - removing " + juce::String(logicalIdToModule.size()) + " modules");
+        for (const auto& kv : logicalIdToModule)
+            internalGraph->removeNode(kv.second.nodeID, juce::AudioProcessorGraph::UpdateKind::none);
+        modules.clear();
+        logicalIdToModule.clear();
+        nextLogicalId = 1;
     }
-
-    modules.clear();
-    logicalIdToModule.clear();
-    nextLogicalId = 1;
-
     commitChanges();
 }
 
 void ModularSynthProcessor::clearAllConnections()
 {
-    auto connections = internalGraph->getConnections();
-    for (const auto& conn : connections)
     {
-        if (conn.source.channelIndex != juce::AudioProcessorGraph::midiChannelIndex && 
-            conn.destination.channelIndex != juce::AudioProcessorGraph::midiChannelIndex)
-        {
-            internalGraph->removeConnection(conn, juce::AudioProcessorGraph::UpdateKind::none);
-        }
+        const juce::ScopedLock lock (moduleLock);
+#if JUCE_DEBUG
+        ScopedGraphMutation mutation(graphMutationDepth);
+#endif
+        auto connections = internalGraph->getConnections();
+        for (const auto& conn : connections)
+            if (conn.source.channelIndex != juce::AudioProcessorGraph::midiChannelIndex &&
+                conn.destination.channelIndex != juce::AudioProcessorGraph::midiChannelIndex)
+                internalGraph->removeConnection(conn, juce::AudioProcessorGraph::UpdateKind::none);
     }
     commitChanges();
 }
@@ -1148,13 +1185,15 @@ void ModularSynthProcessor::clearOutputConnections()
     if (audioOutputNode == nullptr)
         return;
 
-    auto connections = internalGraph->getConnections();
-    for (const auto& conn : connections)
     {
-        if (conn.destination.nodeID == audioOutputNode->nodeID)
-        {
-            internalGraph->removeConnection(conn, juce::AudioProcessorGraph::UpdateKind::none);
-        }
+        const juce::ScopedLock lock (moduleLock);
+#if JUCE_DEBUG
+        ScopedGraphMutation mutation(graphMutationDepth);
+#endif
+        auto connections = internalGraph->getConnections();
+        for (const auto& conn : connections)
+            if (conn.destination.nodeID == audioOutputNode->nodeID)
+                internalGraph->removeConnection(conn, juce::AudioProcessorGraph::UpdateKind::none);
     }
     commitChanges();
 }
@@ -1163,20 +1202,17 @@ void ModularSynthProcessor::clearConnectionsForNode(const NodeID& nodeID)
 {
     if (nodeID.uid == 0) return;
 
-    auto connections = internalGraph->getConnections();
-    for (const auto& conn : connections)
     {
-        if (conn.source.nodeID == nodeID || conn.destination.nodeID == nodeID)
-        {
-            if (conn.source.channelIndex != juce::AudioProcessorGraph::midiChannelIndex)
-            {
-                internalGraph->removeConnection(conn, juce::AudioProcessorGraph::UpdateKind::none);
-            }
-        }
+        const juce::ScopedLock lock (moduleLock);
+#if JUCE_DEBUG
+        ScopedGraphMutation mutation(graphMutationDepth);
+#endif
+        auto connections = internalGraph->getConnections();
+        for (const auto& conn : connections)
+            if (conn.source.nodeID == nodeID || conn.destination.nodeID == nodeID)
+                if (conn.source.channelIndex != juce::AudioProcessorGraph::midiChannelIndex)
+                    internalGraph->removeConnection(conn, juce::AudioProcessorGraph::UpdateKind::none);
     }
-
-    const juce::uint32 logicalId = getLogicalIdForNode(nodeID);
-
     commitChanges();
 }
 
@@ -1197,20 +1233,22 @@ void ModularSynthProcessor::setAudioInputChannelMapping(const NodeID& audioInput
     juce::Logger::writeToLog("[ModSynth] Remapping Audio Input Module " + juce::String(audioInputNodeId.uid) +
                              " to channels: [" + mapStr + "]");
 
-    auto connections = internalGraph->getConnections();
-    for (const auto& conn : connections)
     {
-        if (conn.source.nodeID == audioInputNode->nodeID && conn.destination.nodeID == audioInputNodeId)
-        {
-            internalGraph->removeConnection(conn, juce::AudioProcessorGraph::UpdateKind::none);
-        }
-    }
+        const juce::ScopedLock lock(moduleLock);
+#if JUCE_DEBUG
+        ScopedGraphMutation mutation(graphMutationDepth);
+#endif
+        auto connections = internalGraph->getConnections();
+        for (const auto& conn : connections)
+            if (conn.source.nodeID == audioInputNode->nodeID && conn.destination.nodeID == audioInputNodeId)
+                internalGraph->removeConnection(conn, juce::AudioProcessorGraph::UpdateKind::none);
 
-    for (int moduleChannel = 0; moduleChannel < (int)channelMap.size(); ++moduleChannel)
-    {
-        int hardwareChannel = channelMap[moduleChannel];
-        internalGraph->addConnection({ { audioInputNode->nodeID, hardwareChannel }, { audioInputNodeId, moduleChannel } }, 
-                                     juce::AudioProcessorGraph::UpdateKind::none);
+        for (int moduleChannel = 0; moduleChannel < (int)channelMap.size(); ++moduleChannel)
+        {
+            int hardwareChannel = channelMap[moduleChannel];
+            internalGraph->addConnection({ { audioInputNode->nodeID, hardwareChannel }, { audioInputNodeId, moduleChannel } },
+                                         juce::AudioProcessorGraph::UpdateKind::none);
+        }
     }
 
     commitChanges();
@@ -1245,6 +1283,10 @@ juce::uint32 ModularSynthProcessor::getLogicalIdForNode (const NodeID& nodeId) c
 
 bool ModularSynthProcessor::disconnect (const NodeID& sourceNodeID, int sourceChannel, const NodeID& destNodeID, int destChannel)
 {
+    const juce::ScopedLock lock (moduleLock);
+#if JUCE_DEBUG
+    ScopedGraphMutation mutation(graphMutationDepth);
+#endif
     juce::AudioProcessorGraph::Connection connection {
         { sourceNodeID, sourceChannel },
         { destNodeID, destChannel }
@@ -1254,6 +1296,7 @@ bool ModularSynthProcessor::disconnect (const NodeID& sourceNodeID, int sourceCh
 
 std::vector<ModularSynthProcessor::ConnectionInfo> ModularSynthProcessor::getConnectionsInfo() const
 {
+    const juce::ScopedLock lock (moduleLock);
     std::vector<ConnectionInfo> out;
     for (const auto& c : internalGraph->getConnections())
     {

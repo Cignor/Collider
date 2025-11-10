@@ -1,4 +1,5 @@
 #include "MetaModuleProcessor.h"
+#include <algorithm>
 
 MetaModuleProcessor::MetaModuleProcessor()
     : ModuleProcessor(BusesProperties()
@@ -38,21 +39,17 @@ void MetaModuleProcessor::prepareToPlay(double sampleRate, int samplesPerBlock)
         internalGraph->prepareToPlay(sampleRate, samplesPerBlock);
     }
     
-    // Prepare inlet/outlet buffers
     updateInletOutletCache();
+    rebuildBusLayout();
     
     inletBuffers.clear();
     outletBuffers.clear();
     
-    for (int i = 0; i < cachedInletCount; ++i)
-    {
-        inletBuffers.emplace_back(2, samplesPerBlock);
-    }
+    for (const auto& info : inletChannelLayouts)
+        inletBuffers.emplace_back(info.channelCount, samplesPerBlock);
     
-    for (int i = 0; i < cachedOutletCount; ++i)
-    {
-        outletBuffers.emplace_back(2, samplesPerBlock);
-    }
+    for (const auto& info : outletChannelLayouts)
+        outletBuffers.emplace_back(info.channelCount, samplesPerBlock);
 }
 
 void MetaModuleProcessor::releaseResources()
@@ -88,28 +85,36 @@ void MetaModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::M
         }
     }
     
-    // 1. Get all inlet nodes and feed them with our input buffer
     auto inlets = getInletNodes();
+    std::sort(inlets.begin(), inlets.end(), [](auto* a, auto* b)
+    {
+        const int aIdx = a->getPinIndex();
+        const int bIdx = b->getPinIndex();
+        if (aIdx != bIdx)
+            return aIdx < bIdx;
+        return a->getLogicalId() < b->getLogicalId();
+    });
+    
+    int bufferChannelOffset = 0;
     for (size_t i = 0; i < inlets.size() && i < inletBuffers.size(); ++i)
     {
-        if (inlets[i])
+        auto* inlet = inlets[i];
+        const int inletChannels = (i < inletChannelLayouts.size())
+            ? inletChannelLayouts[i].channelCount
+            : 1;
+        const int available = juce::jmin(inletChannels, buffer.getNumChannels() - bufferChannelOffset);
+        
+        if (available > 0)
         {
-            // Copy relevant channels from main input to this inlet's buffer
-            const int startChannel = (int)i * 2; // Each inlet gets 2 channels
-            const int numChannels = juce::jmin(2, buffer.getNumChannels() - startChannel);
-            
-            if (numChannels > 0 && startChannel < buffer.getNumChannels())
+            inletBuffers[i].setSize(inletChannels, buffer.getNumSamples(), false, false, true);
+            for (int ch = 0; ch < available; ++ch)
             {
-                inletBuffers[i].setSize(numChannels, buffer.getNumSamples(), false, false, true);
-                
-                for (int ch = 0; ch < numChannels; ++ch)
-                {
-                    inletBuffers[i].copyFrom(ch, 0, buffer, startChannel + ch, 0, buffer.getNumSamples());
-                }
-                
-                inlets[i]->setIncomingBuffer(&inletBuffers[i]);
+                inletBuffers[i].copyFrom(ch, 0, buffer, bufferChannelOffset + ch, 0, buffer.getNumSamples());
             }
+            inlet->setIncomingBuffer(&inletBuffers[i]);
         }
+        
+        bufferChannelOffset += inletChannels;
     }
     
     // 2. Process the internal graph
@@ -122,54 +127,106 @@ void MetaModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::M
         juce::Logger::writeToLog("  - Copying audio from internal outlets to main output buffer.");
     }
     
-    // 3. Collect outputs from outlet nodes
     auto outlets = getOutletNodes();
-    buffer.clear(); // Clear before accumulating
-    
-    for (size_t i = 0; i < outlets.size(); ++i)
+    std::sort(outlets.begin(), outlets.end(), [](auto* a, auto* b)
     {
-        if (outlets[i])
+        const int aIdx = a->getPinIndex();
+        const int bIdx = b->getPinIndex();
+        if (aIdx != bIdx)
+            return aIdx < bIdx;
+        return a->getLogicalId() < b->getLogicalId();
+    });
+    
+    buffer.clear();
+    bufferChannelOffset = 0;
+    
+    for (size_t i = 0; i < outlets.size() && i < outletBuffers.size(); ++i)
+    {
+        auto* outlet = outlets[i];
+        const auto& outletBuffer = outlet->getOutputBuffer();
+        const int outletChannels = (i < outletChannelLayouts.size())
+            ? outletChannelLayouts[i].channelCount
+            : outletBuffer.getNumChannels();
+        const int available = juce::jmin(outletChannels, buffer.getNumChannels() - bufferChannelOffset);
+        if (available > 0)
         {
-            const auto& outletBuffer = outlets[i]->getOutputBuffer();
-            const int startChannel = (int)i * 2; // Each outlet provides 2 channels
-            const int numChannels = juce::jmin(outletBuffer.getNumChannels(), buffer.getNumChannels() - startChannel);
-            
-            if (numChannels > 0 && startChannel < buffer.getNumChannels())
+            for (int ch = 0; ch < available; ++ch)
             {
-                for (int ch = 0; ch < numChannels; ++ch)
-                {
-                    buffer.addFrom(startChannel + ch, 0, outletBuffer, ch, 0, 
-                                  juce::jmin(buffer.getNumSamples(), outletBuffer.getNumSamples()));
-                }
+                buffer.addFrom(bufferChannelOffset + ch, 0,
+                               outletBuffer, ch, 0,
+                               juce::jmin(buffer.getNumSamples(), outletBuffer.getNumSamples()));
             }
         }
+        bufferChannelOffset += outletChannels;
     }
     
     // 4. Update output telemetry
-    if (lastOutputValues.size() >= 2)
-    {
-        lastOutputValues[0]->store(buffer.getMagnitude(0, 0, buffer.getNumSamples()));
-        if (buffer.getNumChannels() > 1)
-            lastOutputValues[1]->store(buffer.getMagnitude(1, 0, buffer.getNumSamples()));
-    }
+    const int telemetryChannels = juce::jmin((int)lastOutputValues.size(), buffer.getNumChannels());
+    for (int ch = 0; ch < telemetryChannels; ++ch)
+        lastOutputValues[ch]->store(buffer.getMagnitude(ch, 0, buffer.getNumSamples()));
 }
 
 void MetaModuleProcessor::updateInletOutletCache()
 {
     cachedInletCount = 0;
     cachedOutletCount = 0;
+    inletChannelLayouts.clear();
+    outletChannelLayouts.clear();
     
-    if (internalGraph)
+    if (!internalGraph)
+        return;
+    
+    auto inlets = getInletNodes();
+    std::sort(inlets.begin(), inlets.end(), [](auto* a, auto* b)
     {
-        auto modules = internalGraph->getModulesInfo();
-        for (const auto& [logicalId, typeName] : modules)
+        const int aIdx = a->getPinIndex();
+        const int bIdx = b->getPinIndex();
+        if (aIdx != bIdx)
+            return aIdx < bIdx;
+        return a->getLogicalId() < b->getLogicalId();
+    });
+    
+    for (auto* inlet : inlets)
+    {
+        int channelCount = 0;
+        if (inlet != nullptr)
         {
-            if (typeName.equalsIgnoreCase("inlet"))
-                cachedInletCount++;
-            else if (typeName.equalsIgnoreCase("outlet"))
-                cachedOutletCount++;
+            if (auto* param = dynamic_cast<juce::AudioParameterInt*>(
+                    inlet->getAPVTS().getParameter(InletModuleProcessor::paramIdChannelCount)))
+            {
+                channelCount = param->get();
+            }
         }
+        channelCount = juce::jmax(1, channelCount);
+        inletChannelLayouts.push_back({ channelCount });
     }
+    cachedInletCount = (int) inletChannelLayouts.size();
+    
+    auto outlets = getOutletNodes();
+    std::sort(outlets.begin(), outlets.end(), [](auto* a, auto* b)
+    {
+        const int aIdx = a->getPinIndex();
+        const int bIdx = b->getPinIndex();
+        if (aIdx != bIdx)
+            return aIdx < bIdx;
+        return a->getLogicalId() < b->getLogicalId();
+    });
+    
+    for (auto* outlet : outlets)
+    {
+        int channelCount = 0;
+        if (outlet != nullptr)
+        {
+            if (auto* param = dynamic_cast<juce::AudioParameterInt*>(
+                    outlet->getAPVTS().getParameter(OutletModuleProcessor::paramIdChannelCount)))
+            {
+                channelCount = param->get();
+            }
+        }
+        channelCount = juce::jmax(1, channelCount);
+        outletChannelLayouts.push_back({ channelCount });
+    }
+    cachedOutletCount = (int) outletChannelLayouts.size();
 }
 
 std::vector<InletModuleProcessor*> MetaModuleProcessor::getInletNodes() const
@@ -270,11 +327,54 @@ void MetaModuleProcessor::setExtraStateTree(const juce::ValueTree& vt)
     }
 }
 
+void MetaModuleProcessor::getStateInformation(juce::MemoryBlock& destData)
+{
+    if (auto stateTree = getExtraStateTree(); stateTree.isValid())
+    {
+        if (auto xml = stateTree.createXml())
+        {
+            juce::MemoryOutputStream mos(destData, false);
+            xml->writeTo(mos);
+        }
+    }
+}
+
+void MetaModuleProcessor::setStateInformation(const void* data, int sizeInBytes)
+{
+    if (data == nullptr || sizeInBytes <= 0)
+        return;
+
+    juce::String xmlString = juce::String::fromUTF8(static_cast<const char*>(data),
+                                                    (size_t)sizeInBytes);
+
+    if (xmlString.isEmpty())
+        return;
+
+    if (auto xml = juce::XmlDocument::parse(xmlString))
+    {
+        auto vt = juce::ValueTree::fromXml(*xml);
+        if (vt.isValid())
+            setExtraStateTree(vt);
+    }
+}
+
 void MetaModuleProcessor::rebuildBusLayout()
 {
-    // This is a simplified version - in a full implementation, you would
-    // dynamically rebuild the AudioProcessor's bus layout based on inlet/outlet counts
-    // For now, we use a fixed stereo bus layout
+    int totalInputChannels = 0;
+    for (const auto& layout : inletChannelLayouts)
+        totalInputChannels += layout.channelCount;
+    
+    int totalOutputChannels = 0;
+    for (const auto& layout : outletChannelLayouts)
+        totalOutputChannels += layout.channelCount;
+    
+    const double sr = juce::jmax(1.0, getSampleRate());
+    const int blockSize = juce::jmax(1, getBlockSize());
+    setPlayConfigDetails(totalInputChannels, totalOutputChannels, sr, blockSize);
+    
+    lastOutputValues.clear();
+    for (int i = 0; i < totalOutputChannels; ++i)
+        lastOutputValues.push_back(std::make_unique<std::atomic<float>>(0.0f));
 }
 
 #if defined(PRESET_CREATOR_UI)
@@ -345,24 +445,68 @@ void MetaModuleProcessor::drawIoPins(const NodePinHelpers& helpers)
 {
     // Draw input pins for each inlet
     auto inlets = getInletNodes();
-    int inChannel = 0;
-    for (size_t i = 0; i < inlets.size(); ++i)
+    std::sort(inlets.begin(), inlets.end(), [](auto* a, auto* b)
     {
-        if (inlets[i])
+        if (a->getPinIndex() != b->getPinIndex())
+            return a->getPinIndex() < b->getPinIndex();
+        return a->getLogicalId() < b->getLogicalId();
+    });
+    int inChannel = 0;
+    for (auto* inlet : inlets)
+    {
+        if (inlet == nullptr)
+            continue;
+
+        const juce::String baseLabel = inlet->getCustomLabel().isNotEmpty()
+            ? inlet->getCustomLabel()
+            : juce::String("In");
+
+        int channelCount = 1;
+        if (auto* param = dynamic_cast<juce::AudioParameterInt*>(
+                inlet->getAPVTS().getParameter(InletModuleProcessor::paramIdChannelCount)))
         {
-            juce::String label = "In " + juce::String(i + 1);
+            channelCount = juce::jmax(1, param->get());
+        }
+
+        for (int c = 0; c < channelCount; ++c)
+        {
+            juce::String label = channelCount > 1
+                ? baseLabel + " " + juce::String(c + 1)
+                : baseLabel;
             helpers.drawAudioInputPin(label.toRawUTF8(), inChannel++);
         }
     }
     
     // Draw output pins for each outlet
     auto outlets = getOutletNodes();
-    int outChannel = 0;
-    for (size_t i = 0; i < outlets.size(); ++i)
+    std::sort(outlets.begin(), outlets.end(), [](auto* a, auto* b)
     {
-        if (outlets[i])
+        if (a->getPinIndex() != b->getPinIndex())
+            return a->getPinIndex() < b->getPinIndex();
+        return a->getLogicalId() < b->getLogicalId();
+    });
+    int outChannel = 0;
+    for (auto* outlet : outlets)
+    {
+        if (outlet == nullptr)
+            continue;
+
+        const juce::String baseLabel = outlet->getCustomLabel().isNotEmpty()
+            ? outlet->getCustomLabel()
+            : juce::String("Out");
+
+        int channelCount = 1;
+        if (auto* param = dynamic_cast<juce::AudioParameterInt*>(
+                outlet->getAPVTS().getParameter(OutletModuleProcessor::paramIdChannelCount)))
         {
-            juce::String label = "Out " + juce::String(i + 1);
+            channelCount = juce::jmax(1, param->get());
+        }
+
+        for (int c = 0; c < channelCount; ++c)
+        {
+            juce::String label = channelCount > 1
+                ? baseLabel + " " + juce::String(c + 1)
+                : baseLabel;
             helpers.drawAudioOutputPin(label.toRawUTF8(), outChannel++);
         }
     }
@@ -371,22 +515,80 @@ void MetaModuleProcessor::drawIoPins(const NodePinHelpers& helpers)
 juce::String MetaModuleProcessor::getAudioInputLabel(int channel) const
 {
     auto inlets = getInletNodes();
-    if (juce::isPositiveAndBelow(channel, (int)inlets.size()) && inlets[channel])
+    std::sort(inlets.begin(), inlets.end(), [](auto* a, auto* b)
     {
-        // Use the inlet's custom label if available
-        return juce::String("In ") + juce::String(channel + 1);
+        if (a->getPinIndex() != b->getPinIndex())
+            return a->getPinIndex() < b->getPinIndex();
+        return a->getLogicalId() < b->getLogicalId();
+    });
+
+    int runningChannel = 0;
+    for (auto* inlet : inlets)
+    {
+        if (inlet == nullptr)
+            continue;
+
+        const juce::String baseLabel = inlet->getCustomLabel().isNotEmpty()
+            ? inlet->getCustomLabel()
+            : juce::String("In");
+
+        int channelCount = 1;
+        if (auto* param = dynamic_cast<juce::AudioParameterInt*>(
+                inlet->getAPVTS().getParameter(InletModuleProcessor::paramIdChannelCount)))
+        {
+            channelCount = juce::jmax(1, param->get());
+        }
+
+        if (channel >= runningChannel && channel < runningChannel + channelCount)
+        {
+            if (channelCount > 1)
+                return baseLabel + " " + juce::String(channel - runningChannel + 1);
+            return baseLabel;
+        }
+
+        runningChannel += channelCount;
     }
+
     return juce::String("In ") + juce::String(channel + 1);
 }
 
 juce::String MetaModuleProcessor::getAudioOutputLabel(int channel) const
 {
     auto outlets = getOutletNodes();
-    if (juce::isPositiveAndBelow(channel, (int)outlets.size()) && outlets[channel])
+    std::sort(outlets.begin(), outlets.end(), [](auto* a, auto* b)
     {
-        // Use the outlet's custom label if available
-        return juce::String("Out ") + juce::String(channel + 1);
+        if (a->getPinIndex() != b->getPinIndex())
+            return a->getPinIndex() < b->getPinIndex();
+        return a->getLogicalId() < b->getLogicalId();
+    });
+
+    int runningChannel = 0;
+    for (auto* outlet : outlets)
+    {
+        if (outlet == nullptr)
+            continue;
+
+        const juce::String baseLabel = outlet->getCustomLabel().isNotEmpty()
+            ? outlet->getCustomLabel()
+            : juce::String("Out");
+
+        int channelCount = 1;
+        if (auto* param = dynamic_cast<juce::AudioParameterInt*>(
+                outlet->getAPVTS().getParameter(OutletModuleProcessor::paramIdChannelCount)))
+        {
+            channelCount = juce::jmax(1, param->get());
+        }
+
+        if (channel >= runningChannel && channel < runningChannel + channelCount)
+        {
+            if (channelCount > 1)
+                return baseLabel + " " + juce::String(channel - runningChannel + 1);
+            return baseLabel;
+        }
+
+        runningChannel += channelCount;
     }
+
     return juce::String("Out ") + juce::String(channel + 1);
 }
 #endif

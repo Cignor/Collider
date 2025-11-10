@@ -26,6 +26,10 @@ public:
     void releaseResources() override {}
     void processBlock(juce::AudioBuffer<float>&, juce::MidiBuffer&) override;
 
+    int getPinIndex() const noexcept { return pinIndex; }
+    void setPinIndex(int index) noexcept { pinIndex = index; }
+    const juce::String& getCustomLabel() const noexcept { return customLabel; }
+
     juce::AudioProcessorValueTreeState& getAPVTS() override { return apvts; }
 
     // Store the buffer passed from the parent MetaModule
@@ -64,6 +68,7 @@ private:
     juce::AudioProcessorValueTreeState apvts;
     const juce::AudioBuffer<float>* incomingBuffer { nullptr };
     juce::String customLabel;
+    int pinIndex { 0 };
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(InletModuleProcessor)
 };

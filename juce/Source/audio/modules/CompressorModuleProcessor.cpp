@@ -1,4 +1,7 @@
 #include "CompressorModuleProcessor.h"
+#if defined(PRESET_CREATOR_UI)
+#include "../../preset_creator/theme/ThemeManager.h"
+#endif
 
 juce::AudioProcessorValueTreeState::ParameterLayout CompressorModuleProcessor::createParameterLayout()
 {
@@ -233,6 +236,7 @@ juce::String CompressorModuleProcessor::getAudioOutputLabel(int channel) const
 #if defined(PRESET_CREATOR_UI)
 void CompressorModuleProcessor::drawParametersInNode(float itemWidth, const std::function<bool(const juce::String&)>& isParamModulated, const std::function<void()>& onModificationEnded)
 {
+    const auto& theme = ThemeManager::getInstance().getCurrentTheme();
     auto& ap = getAPVTS();
     ImGui::PushItemWidth(itemWidth);
 
@@ -263,7 +267,7 @@ void CompressorModuleProcessor::drawParametersInNode(float itemWidth, const std:
     };
 
     // === DYNAMICS SECTION ===
-    ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1.0f), "Dynamics");
+    ThemeText("Dynamics", theme.text.section_header);
     ImGui::Spacing();
 
     drawSlider("Threshold", paramIdThreshold, paramIdThresholdMod, -60.0f, 0.0f, "%.1f dB", "Level above which compression starts (-60 to 0 dB)");
@@ -273,7 +277,7 @@ void CompressorModuleProcessor::drawParametersInNode(float itemWidth, const std:
     ImGui::Spacing();
 
     // === TIMING SECTION ===
-    ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1.0f), "Timing");
+    ThemeText("Timing", theme.text.section_header);
     ImGui::Spacing();
 
     drawSlider("Attack", paramIdAttack, paramIdAttackMod, 0.1f, 200.0f, "%.1f ms", "How fast compression engages (0.1-200 ms)\nFast = punchy, Slow = smooth");
@@ -283,7 +287,7 @@ void CompressorModuleProcessor::drawParametersInNode(float itemWidth, const std:
     ImGui::Spacing();
 
     // === OUTPUT SECTION ===
-    ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1.0f), "Output");
+    ThemeText("Output", theme.text.section_header);
     ImGui::Spacing();
 
     drawSlider("Makeup", paramIdMakeup, paramIdMakeupMod, -12.0f, 12.0f, "%.1f dB", "Output gain compensation (-12 to +12 dB)");
@@ -292,7 +296,7 @@ void CompressorModuleProcessor::drawParametersInNode(float itemWidth, const std:
     ImGui::Spacing();
 
     // === GAIN REDUCTION METER SECTION ===
-    ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1.0f), "Gain Reduction");
+    ThemeText("Gain Reduction", theme.text.section_header);
     ImGui::Spacing();
 
     // Simulated gain reduction meter (would need real GR value from DSP)
@@ -302,17 +306,17 @@ void CompressorModuleProcessor::drawParametersInNode(float itemWidth, const std:
     // Simulate GR based on threshold and ratio (placeholder)
     float simulatedGR = juce::jlimit(0.0f, 1.0f, (-threshold / 60.0f) * (ratio / 20.0f));
     
-    ImGui::PushStyleColor(ImGuiCol_PlotHistogram, ImVec4(1.0f, 0.3f, 0.3f, 1.0f));
+    ImGui::PushStyleColor(ImGuiCol_PlotHistogram, theme.meters.clipping);
     ImGui::ProgressBar(simulatedGR, ImVec2(itemWidth, 0), "");
     ImGui::PopStyleColor();
-    ImGui::Text("GR: ~%.1f dB", simulatedGR * -12.0f);
+    ThemeText(juce::String::formatted("GR: ~%.1f dB", simulatedGR * -12.0f).toRawUTF8(), theme.text.section_header);
 
     ImGui::Spacing();
     ImGui::Separator();
     ImGui::Spacing();
 
     // === RELATIVE MODULATION SECTION ===
-    ImGui::TextColored(ImVec4(0.6f, 0.8f, 1.0f, 1.0f), "CV Input Modes");
+    ThemeText("CV Input Modes", theme.modulation.frequency);
     ImGui::Spacing();
     
     // Relative Threshold Mod checkbox

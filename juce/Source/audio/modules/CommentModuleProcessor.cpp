@@ -71,11 +71,11 @@ void CommentModuleProcessor::drawParametersInNode(float, const std::function<boo
 
     // Draw resize handle in bottom-right corner
     const ImVec2 resizeHandleSize(16.0f, 16.0f);
-    ImVec2 crMax = ImGui::GetWindowContentRegionMax();
-    ImVec2 winPos = ImGui::GetWindowPos();
-    ImVec2 handleScreenPos = ImVec2(winPos.x + crMax.x - resizeHandleSize.x, winPos.y + crMax.y - resizeHandleSize.y);
-    
-    ImGui::SetCursorScreenPos(handleScreenPos); // <<< THIS IS THE PROBLEMATIC CALL
+    ImVec2 drawPos = ImGui::GetCursorScreenPos();
+    drawPos.x += ImGui::GetContentRegionAvail().x - resizeHandleSize.x;
+    drawPos.y += ImGui::GetContentRegionAvail().y - resizeHandleSize.y;
+
+    ImGui::SetCursorScreenPos(drawPos);
     ImGui::InvisibleButton("##resize", resizeHandleSize);
     const bool isResizing = ImGui::IsItemActive() && ImGui::IsMouseDragging(ImGuiMouseButton_Left);
 
@@ -95,12 +95,10 @@ void CommentModuleProcessor::drawParametersInNode(float, const std::function<boo
     }
 
     // Draw resize handle indicator
-    const ImVec2 handleStart(handleScreenPos.x + 4, handleScreenPos.y + 4);
-    const ImVec2 handleEnd(handleScreenPos.x + resizeHandleSize.x - 4, handleScreenPos.y + resizeHandleSize.y - 4);
     ImGui::GetWindowDrawList()->AddTriangleFilled(
-        ImVec2(handleStart.x, handleEnd.y),
-        ImVec2(handleEnd.x, handleEnd.y),
-        ImVec2(handleEnd.x, handleStart.y),
+        ImVec2(drawPos.x + 4.0f, drawPos.y + resizeHandleSize.y - 4.0f),
+        ImVec2(drawPos.x + resizeHandleSize.x - 4.0f, drawPos.y + resizeHandleSize.y - 4.0f),
+        ImVec2(drawPos.x + resizeHandleSize.x - 4.0f, drawPos.y + 4.0f),
         ImGui::GetColorU32(ImGuiCol_ResizeGrip));
 
     // <<< FIX 1: Satisfy the assertion by forcing ImGui to update its boundaries >>>
@@ -108,5 +106,6 @@ void CommentModuleProcessor::drawParametersInNode(float, const std::function<boo
 
     // <<< FIX 2: Correctly end the child window we started >>>
     ImGui::EndChild();
+
 }
 #endif

@@ -40,6 +40,9 @@ public:
     juce::ValueTree getExtraStateTree() const override;
     void setExtraStateTree(const juce::ValueTree& vt) override;
     
+    void getStateInformation(juce::MemoryBlock& destData) override;
+    void setStateInformation(const void* data, int sizeInBytes) override;
+    
     // UI interaction flag - set when user clicks "Edit Internal Patch" button
     std::atomic<bool> editRequested { false };
 
@@ -59,6 +62,11 @@ public:
     std::vector<OutletModuleProcessor*> getOutletNodes() const;
 
 private:
+    struct ChannelLayoutInfo
+    {
+        int channelCount = 0;
+    };
+
     static juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout();
 
     juce::AudioProcessorValueTreeState apvts;
@@ -67,6 +75,8 @@ private:
     // Temporary buffers for inlet/outlet communication
     std::vector<juce::AudioBuffer<float>> inletBuffers;
     std::vector<juce::AudioBuffer<float>> outletBuffers;
+    std::vector<ChannelLayoutInfo> inletChannelLayouts;
+    std::vector<ChannelLayoutInfo> outletChannelLayouts;
     
     // Cached inlet/outlet counts (updated when internal graph changes)
     int cachedInletCount { 0 };

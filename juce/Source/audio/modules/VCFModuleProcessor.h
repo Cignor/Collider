@@ -2,6 +2,9 @@
 
 #include "ModuleProcessor.h"
 #include <juce_dsp/juce_dsp.h>
+#if defined(PRESET_CREATOR_UI)
+#include "../../preset_creator/theme/ThemeManager.h"
+#endif
 
 class VCFModuleProcessor : public ModuleProcessor
 {
@@ -32,6 +35,7 @@ public:
     void drawParametersInNode (float itemWidth, const std::function<bool(const juce::String& paramId)>& isParamModulated, const std::function<void()>& onModificationEnded) override
     {
         auto& ap = getAPVTS();
+        const auto& theme = ThemeManager::getInstance().getCurrentTheme();
         
         // Helper for tooltips
         auto HelpMarkerVCF = [](const char* desc) {
@@ -51,7 +55,7 @@ public:
         ImGui::PushItemWidth(itemWidth);
 
         // === FILTER PARAMETERS SECTION ===
-        ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1.0f), "Filter Parameters");
+        ThemeText("Filter Parameters", theme.text.section_header);
         ImGui::Spacing();
 
         // Cutoff
@@ -108,7 +112,7 @@ public:
         ImGui::Spacing();
 
         // === MODULATION MODE SECTION ===
-        ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1.0f), "Modulation Mode");
+        ThemeText("Modulation Mode", theme.text.section_header);
         ImGui::Spacing();
         
         bool relativeCutoffMod = relativeCutoffModParam ? (relativeCutoffModParam->load() > 0.5f) : true;
@@ -141,7 +145,7 @@ public:
         ImGui::Spacing();
 
         // === FILTER RESPONSE SECTION ===
-        ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1.0f), "Filter Response");
+        ThemeText("Filter Response", theme.text.section_header);
         ImGui::Spacing();
 
         // Visual frequency response curve

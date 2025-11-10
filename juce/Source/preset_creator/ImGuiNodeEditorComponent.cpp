@@ -6,6 +6,9 @@
 #include "PresetAutoHealer.h"
 
 #include <imgui.h>
+#if JUCE_DEBUG && !defined(IMGUI_DISABLE_DEBUG_TOOLS)
+#include <imgui_internal.h>
+#endif
 #include <imnodes.h>
 #include <juce_audio_utils/juce_audio_utils.h>
 #include <backends/imgui_impl_opengl2.h>
@@ -18,6 +21,54 @@
 #include <algorithm>
 #include <limits>
 #include "theme/ThemeManager.h"
+
+#if JUCE_DEBUG
+namespace
+{
+struct ImGuiStackBalanceChecker
+{
+    ImGuiContext* ctx { ImGui::GetCurrentContext() };
+    ImGuiWindow* window { ctx ? ctx->CurrentWindow : nullptr };
+    float indent { window ? window->DC.Indent.x : 0.0f };
+    float groupOffset { window ? window->DC.GroupOffset.x : 0.0f };
+    float columnsOffset { window ? window->DC.ColumnsOffset.x : 0.0f };
+
+    void validate(const juce::String& label)
+    {
+        if (ctx == nullptr)
+            return;
+
+        if (window != nullptr)
+        {
+            constexpr float epsilon = 1.0e-4f;
+            auto approxEqual = [](float a, float b, float eps) noexcept
+            {
+                return std::abs(a - b) <= eps;
+            };
+
+            if (!approxEqual(window->DC.Indent.x, indent, epsilon)
+                || !approxEqual(window->DC.GroupOffset.x, groupOffset, epsilon)
+                || !approxEqual(window->DC.ColumnsOffset.x, columnsOffset, epsilon))
+            {
+                juce::Logger::writeToLog("[ImGui][IndentLeak] " + label
+                                         + " indent=" + juce::String(window->DC.Indent.x)
+                                         + " expected=" + juce::String(indent));
+                jassertfalse;
+                window->DC.Indent.x = indent;
+                window->DC.GroupOffset.x = groupOffset;
+                window->DC.ColumnsOffset.x = columnsOffset;
+            }
+        }
+    }
+};
+}
+#else
+struct ImGuiStackBalanceChecker
+{
+    ImGuiStackBalanceChecker() = default;
+    void validate(const juce::String&) const {}
+};
+#endif
 
 // Lightweight theme change toast state
 static double s_themeToastEndTime = 0.0;
@@ -84,7 +135,45 @@ bool ImGuiNodeEditorComponent::s_globalGpuEnabled = true;
 #include <backends/imgui_impl_opengl2.h>
 #include <juce_opengl/juce_opengl.h>
 
-#define NODE_DEBUG 1
+#if JUCE_DEBUG
+static int gImNodesNodeDepth = 0;
+static int gImNodesInputDepth = 0;
+static int gImNodesOutputDepth = 0;
+static juce::String gLastRenderedNodeLabel;
+
+struct ImNodesDepthSnapshot
+{
+    int node;
+    int input;
+    int output;
+    juce::String label;
+
+    ImNodesDepthSnapshot(const juce::String& lbl)
+        : node(gImNodesNodeDepth),
+          input(gImNodesInputDepth),
+          output(gImNodesOutputDepth),
+          label(lbl) {}
+
+    ~ImNodesDepthSnapshot()
+    {
+        if (gImNodesNodeDepth != node || gImNodesInputDepth != input || gImNodesOutputDepth != output)
+        {
+            juce::Logger::writeToLog("[ImNodes][DepthLeak] " + label
+                                     + " node=" + juce::String(gImNodesNodeDepth) + " (expected " + juce::String(node) + ")"
+                                     + " input=" + juce::String(gImNodesInputDepth) + " (expected " + juce::String(input) + ")"
+                                     + " output=" + juce::String(gImNodesOutputDepth) + " (expected " + juce::String(output) + ")");
+            jassertfalse;
+
+            // Reset to avoid cascading logs
+            gImNodesNodeDepth = node;
+            gImNodesInputDepth = input;
+            gImNodesOutputDepth = output;
+        }
+    }
+};
+#endif
+
+#define NODE_DEBUG 0
 
 // --- Module Descriptions for Tooltips ---
 static const char* toString(PinDataType t)
@@ -185,6 +274,7 @@ ImGuiNodeEditorComponent::ImGuiNodeEditorComponent(juce::AudioDeviceManager& dm)
     // --- THIS WILL BE THE SMOKING GUN ---
     juce::Logger::writeToLog("About to populate pin database...");
     populatePinDatabase(); // Initialize the pin database for color coding
+    populateDragInsertSuggestions();
     juce::Logger::writeToLog("Pin database populated.");
     
     glContext.setRenderer (this);
@@ -2029,6 +2119,13 @@ void ImGuiNodeEditorComponent::renderImGui()
     // Begin the editor
     // +++ ADD THIS LINE AT THE START OF THE RENDER LOOP +++
     attrPositions.clear(); // Clear the cache at the beginning of each frame.
+    auto cancelDragInsert = [this]()
+    {
+        dragInsertActive = false;
+        dragInsertStartAttrId = -1;
+        dragInsertStartPin = PinID{};
+        shouldOpenDragInsertPopup = false;
+    };
     // Rebuild mod attribute mapping from currently drawn nodes only
     // modAttrToParam.clear(); // TODO: Remove when fully migrated
     // Track which attribute IDs were actually registered this frame
@@ -2066,6 +2163,7 @@ const float y = (float) n.getProperty("y", 0.0f);
         {
             const juce::uint32 lid = mod.first;
 const juce::String& type = mod.second;
+            juce::String moduleLabel = type + " [lid=" + juce::String((int) lid) + "]";
 
             // Color-code modules by category (base colors)
             const auto moduleCategory = getModuleCategory(type);
@@ -2087,7 +2185,11 @@ const juce::String& type = mod.second;
                 ImNodes::PushColorStyle(ImNodesCol_TitleBar, IM_COL32(80, 80, 80, 255));
             }
 
+            gLastRenderedNodeLabel = moduleLabel;
             ImNodes::BeginNode ((int) lid);
+#if JUCE_DEBUG
+            ++gImNodesNodeDepth;
+#endif
             ImNodes::BeginNodeTitleBar();
             ImGui::TextUnformatted (type.toRawUTF8());
             ImNodes::EndNodeTitleBar();
@@ -2109,6 +2211,10 @@ const juce::String& type = mod.second;
 if (auto* mp = synth->getModuleForLogical (lid))
 {
     ImGui::PushID ((int) lid);
+#if JUCE_DEBUG
+    ImGuiStackBalanceChecker parameterStackGuard;
+    ImNodesDepthSnapshot depthSnapshot(moduleLabel + "::drawParametersInNode");
+#endif
 
     // This new lambda function checks if a parameter is being modulated
     auto isParamModulated = [&](const juce::String& paramId) -> bool {
@@ -2763,6 +2869,9 @@ if (auto* mp = synth->getModuleForLogical (lid))
     {
         mp->drawParametersInNode (nodeContentWidth, isParamModulated, onModificationEnded);
     }
+#if JUCE_DEBUG
+    parameterStackGuard.validate(moduleLabel + "::drawParametersInNode");
+#endif
     ImGui::Spacing();
     ImGui::PopID();
 }
@@ -2799,7 +2908,16 @@ if (auto* mp = synth->getModuleForLogical (lid))
                 bool isConnected = connectedInputAttrs.count(attr) > 0;
                 ImNodes::PushColorStyle(ImNodesCol_Pin, isConnected ? colPinConnected : pinColor);
 
-                ImNodes::BeginInputAttribute(attr); ImGui::TextUnformatted(label); ImNodes::EndInputAttribute();
+                ImNodes::BeginInputAttribute(attr);
+#if JUCE_DEBUG
+                ++gImNodesInputDepth;
+#endif
+                ImGui::TextUnformatted(label);
+                ImNodes::EndInputAttribute();
+#if JUCE_DEBUG
+                --gImNodesInputDepth;
+                jassert(gImNodesInputDepth >= 0);
+#endif
 
                 // --- THIS IS THE DEFINITIVE FIX ---
                 // Get the bounding box of the pin circle that was just drawn.
@@ -2875,11 +2993,18 @@ if (auto* mp = synth->getModuleForLogical (lid))
 
                     // EXACT OFFICIAL PATTERN: Text right-aligned, pin touches text edge
                     ImNodes::BeginOutputAttribute(attr);
+#if JUCE_DEBUG
+                    ++gImNodesOutputDepth;
+#endif
                     const float label_width = ImGui::CalcTextSize(label).x;
                     ImGui::Indent(nodeContentWidth - label_width);  // Right-align to content width
                     ImGui::TextUnformatted(label);
                     ImGui::Unindent(nodeContentWidth - label_width);
                     ImNodes::EndOutputAttribute();
+#if JUCE_DEBUG
+                    --gImNodesOutputDepth;
+                    jassert(gImNodesOutputDepth >= 0);
+#endif
 
                     // Cache pin center
                     {
@@ -2944,8 +3069,15 @@ if (auto* mp = synth->getModuleForLogical (lid))
                     bool isConnected = connectedInputAttrs.count(inAttr) > 0;
                     ImNodes::PushColorStyle(ImNodesCol_Pin, isConnected ? colPinConnected : pinColor);
                     ImNodes::BeginInputAttribute(inAttr);
+#if JUCE_DEBUG
+                    ++gImNodesInputDepth;
+#endif
                     ImGui::TextUnformatted(inLabel);
                     ImNodes::EndInputAttribute();
+#if JUCE_DEBUG
+                    --gImNodesInputDepth;
+                    jassert(gImNodesInputDepth >= 0);
+#endif
                     ImNodes::PopColorStyle();
                 }
 
@@ -2972,9 +3104,16 @@ if (auto* mp = synth->getModuleForLogical (lid))
                     unsigned int pinColor = this->getImU32ForType(pinType);
                     bool isConnected = connectedOutputAttrs.count(outAttr) > 0;
                     ImNodes::PushColorStyle(ImNodesCol_Pin, isConnected ? colPinConnected : pinColor);
+#if JUCE_DEBUG
+                    ++gImNodesOutputDepth;
+#endif
                     ImNodes::BeginOutputAttribute(outAttr);
                     ImGui::Dummy(ImVec2(1.0f, ImGui::GetTextLineHeight()));
                     ImNodes::EndOutputAttribute();
+#if JUCE_DEBUG
+                    --gImNodesOutputDepth;
+                    jassert(gImNodesOutputDepth >= 0);
+#endif
 
                     // Cache pin center
                     ImVec2 pinMin = ImGui::GetItemRectMin();
@@ -3055,7 +3194,16 @@ if (auto* mp = synth->getModuleForLogical (lid))
             // Delegate per-module IO pin drawing
             if (synth != nullptr)
                 if (auto* mp = synth->getModuleForLogical (lid))
+                {
+#if JUCE_DEBUG
+                    ImGuiStackBalanceChecker ioStackGuard;
+                    ImNodesDepthSnapshot ioDepthSnapshot(moduleLabel + "::drawIoPins");
+#endif
                     helpers.drawIoPins(mp);
+#if JUCE_DEBUG
+                    ioStackGuard.validate(type + " [lid=" + juce::String((int)lid) + "]::drawIoPins");
+#endif
+                }
 
             // Optional per-node right-click popup
             if (ImGui::IsItemHovered() && ImGui::IsMouseReleased(ImGuiMouseButton_Right))
@@ -3067,6 +3215,10 @@ if (auto* mp = synth->getModuleForLogical (lid))
             // Legacy per-type IO drawing removed; delegated to module implementations via helpers
 
             ImNodes::EndNode();
+#if JUCE_DEBUG
+            --gImNodesNodeDepth;
+            jassert(gImNodesNodeDepth >= 0);
+#endif
             
             // Cache position for snapshot safety
             // Graph is always in consistent state since we rebuild at frame start
@@ -3342,8 +3494,15 @@ if (auto* mp = synth->getModuleForLogical (lid))
             unsigned int pinColor = getImU32ForType(pinType);
             ImNodes::PushColorStyle(ImNodesCol_Pin, isConnected ? colPinConnected : pinColor);
             ImNodes::BeginInputAttribute (a);
+#if JUCE_DEBUG
+            ++gImNodesInputDepth;
+#endif
             ImGui::Text ("In L");
             ImNodes::EndInputAttribute();
+#if JUCE_DEBUG
+            --gImNodesInputDepth;
+            jassert(gImNodesInputDepth >= 0);
+#endif
             ImNodes::PopColorStyle();
         }
         
@@ -3358,8 +3517,15 @@ if (auto* mp = synth->getModuleForLogical (lid))
             unsigned int pinColor = getImU32ForType(pinType);
             ImNodes::PushColorStyle(ImNodesCol_Pin, isConnected ? colPinConnected : pinColor);
             ImNodes::BeginInputAttribute (a);
+#if JUCE_DEBUG
+            ++gImNodesInputDepth;
+#endif
             ImGui::Text ("In R");
             ImNodes::EndInputAttribute();
+#if JUCE_DEBUG
+            --gImNodesInputDepth;
+            jassert(gImNodesInputDepth >= 0);
+#endif
             ImNodes::PopColorStyle();
         }
         
@@ -3570,6 +3736,14 @@ if (auto* mp = synth->getModuleForLogical (lid))
     // --- Handle Auto-Connect Requests using new intelligent system ---
     handleAutoConnectionRequests();
 
+    // Capture hover state for drag/drop logic before we leave the node editor scope
+    int hoverPinIdForDrop = -1;
+    int hoverNodeIdForDrop = -1;
+    int hoverLinkIdForDrop = -1;
+    bool pinHoveredDuringEditor = false;
+    bool nodeHoveredDuringEditor = false;
+    bool linkHoveredDuringEditor = false;
+
     // ======================================================
     // === 💡 MODAL MINIMAP (v13 - Scale-on-Press) ==========
     // ======================================================
@@ -3586,6 +3760,67 @@ if (auto* mp = synth->getModuleForLogical (lid))
     // ======================================================
 
     ImNodes::EndNodeEditor();
+#if JUCE_DEBUG
+    if (gImNodesNodeDepth != 0 || gImNodesInputDepth != 0 || gImNodesOutputDepth != 0)
+    {
+        juce::Logger::writeToLog(
+            "[ImNodes][DepthLeak][Frame] nodeDepth=" + juce::String(gImNodesNodeDepth) +
+            " inputDepth=" + juce::String(gImNodesInputDepth) +
+            " outputDepth=" + juce::String(gImNodesOutputDepth) +
+            " lastNode=" + gLastRenderedNodeLabel);
+        jassertfalse;
+        gImNodesNodeDepth = 0;
+        gImNodesInputDepth = 0;
+        gImNodesOutputDepth = 0;
+    }
+#endif
+    pinHoveredDuringEditor = ImNodes::IsPinHovered(&hoverPinIdForDrop);
+    nodeHoveredDuringEditor = ImNodes::IsNodeHovered(&hoverNodeIdForDrop);
+    linkHoveredDuringEditor = ImNodes::IsLinkHovered(&hoverLinkIdForDrop);
+    juce::ignoreUnused(hoverPinIdForDrop, hoverNodeIdForDrop, hoverLinkIdForDrop);
+    int linkStartAttr = -1;
+    if (ImNodes::IsLinkStarted(&linkStartAttr))
+    {
+        dragInsertActive = true;
+        dragInsertStartAttrId = linkStartAttr;
+        dragInsertStartPin = decodePinId(linkStartAttr);
+        shouldOpenDragInsertPopup = false;
+        juce::Logger::writeToLog("[DragInsert] Started drag from attr " + juce::String(linkStartAttr));
+    }
+    if (dragInsertActive)
+    {
+        const bool cancelRequested = ImGui::IsKeyPressed(ImGuiKey_Escape, false) ||
+                                     ImGui::IsMouseReleased(ImGuiMouseButton_Right);
+        if (cancelRequested)
+        {
+            juce::Logger::writeToLog("[DragInsert] Drag cancelled.");
+            cancelDragInsert();
+        }
+        else if (ImGui::IsMouseReleased(ImGuiMouseButton_Left))
+        {
+            const bool editorHovered = ImGui::IsWindowHovered(ImGuiHoveredFlags_ChildWindows |
+                                                              ImGuiHoveredFlags_AllowWhenBlockedByPopup);
+            if (!pinHoveredDuringEditor && !nodeHoveredDuringEditor && !linkHoveredDuringEditor && editorHovered)
+            {
+                dragInsertDropPos = ImGui::GetMousePos();
+                shouldOpenDragInsertPopup = true;
+                juce::Logger::writeToLog("[DragInsert] Drop captured on canvas (logicalId="
+                                         + juce::String((int)dragInsertStartPin.logicalId)
+                                         + ", channel=" + juce::String(dragInsertStartPin.channel) + ").");
+            }
+            else
+            {
+                dragInsertStartAttrId = -1;
+                dragInsertStartPin = PinID{};
+                shouldOpenDragInsertPopup = false;
+            }
+            dragInsertActive = false;
+        }
+    }
+    else if (ImGui::IsMouseReleased(ImGuiMouseButton_Left))
+    {
+        shouldOpenDragInsertPopup = false;
+    }
     // === POP THE TRANSPARENT GRID BACKGROUND STYLE ===
     ImNodes::PopColorStyle(); // Pop BoxSelectorOutline
     ImNodes::PopColorStyle(); // Pop BoxSelector
@@ -3599,6 +3834,57 @@ if (auto* mp = synth->getModuleForLogical (lid))
     // === END OF FIX ===
     hasRenderedAtLeastOnce = true;
     
+    if (shouldOpenDragInsertPopup)
+    {
+        shouldOpenDragInsertPopup = false;
+        ImGui::SetNextWindowPos(dragInsertDropPos, ImGuiCond_Always, ImVec2(0.5f, 0.5f));
+        ImGui::OpenPopup("DragInsertPopup");
+    }
+
+    if (ImGui::BeginPopup("DragInsertPopup"))
+    {
+        const PinDataType displayType = dragInsertStartPin.isMod
+            ? PinDataType::CV
+            : getPinDataTypeForPin(dragInsertStartPin);
+        const auto& suggestions = getDragInsertSuggestionsFor(dragInsertStartPin);
+
+        if (suggestions.empty())
+        {
+            ImGui::TextDisabled("No compatible modules found.");
+            if (ImGui::MenuItem("Close"))
+            {
+                dragInsertStartAttrId = -1;
+                dragInsertStartPin = PinID{};
+                ImGui::CloseCurrentPopup();
+            }
+        }
+        else
+        {
+            ImGui::Text("Insert node for %s", pinDataTypeToString(displayType));
+            ImGui::Separator();
+
+            for (const auto& moduleType : suggestions)
+            {
+                if (ImGui::MenuItem(moduleType.toRawUTF8()))
+                {
+                    insertNodeFromDragSelection(moduleType);
+                    ImGui::CloseCurrentPopup();
+                    break;
+                }
+            }
+
+            ImGui::Separator();
+            if (ImGui::MenuItem("Cancel"))
+            {
+                dragInsertStartAttrId = -1;
+                dragInsertStartPin = PinID{};
+                ImGui::CloseCurrentPopup();
+            }
+        }
+
+        ImGui::EndPopup();
+    }
+
     // ======================================================
     // === 💡 MODAL MINIMAP LOGIC (v13 - Scale-on-Press) ====
     // ======================================================
@@ -4214,11 +4500,33 @@ if (auto* mp = synth->getModuleForLogical (lid))
             static int selectedIndex = 0;  // Track keyboard navigation
 
             // Auto-focus the search bar when the popup opens and clear any previous search
-            if (ImGui::IsWindowAppearing()) {
+            if (ImGui::IsWindowAppearing())
+            {
+                ImGui::SetWindowFocus();
+
+                if (dragInsertStartAttrId != -1)
+                {
+                    PinID displayPin = dragInsertStartPin;
+                    auto type = displayPin.isMod ? PinDataType::CV : getPinDataTypeForPin(displayPin);
+
+                    juce::String seed = ":" + juce::String(pinDataTypeToString(type));
+                    juce::String modules;
+                    const auto& suggestions = getDragInsertSuggestionsFor(displayPin);
+                    for (size_t i = 0; i < suggestions.size(); ++i)
+                        modules += ":" + suggestions[i];
+
+                    juce::String tokenized = seed + modules;
+                    auto truncated = tokenized.substring(0, juce::jmin((int)tokenized.length(), (int)sizeof(searchQuery) - 1));
+                    std::memset(searchQuery, 0, sizeof(searchQuery));
+                    std::memcpy(searchQuery, truncated.toRawUTF8(), (size_t)truncated.getNumBytesAsUTF8());
+                }
+                else
+                {
+                    searchQuery[0] = '\0';
+                }
+
                 ImGui::SetKeyboardFocusHere(0);
-                ImGui::SetWindowFocus();  // Ensure immediate keyboard input capture
-                searchQuery[0] = '\0';
-                selectedIndex = 0;  // Reset selection
+                selectedIndex = 0;
             }
             
             ImGui::Text("Add Module");
@@ -4429,41 +4737,112 @@ if (auto* mp = synth->getModuleForLogical (lid))
             else
             {
                 // --- SEARCH MODE (Text has been entered) ---
-                // Build list of matching modules first for keyboard navigation
                 struct MatchedModule {
                     juce::String displayName;
                     const char* internalType;
                     const char* description;
                 };
                 std::vector<MatchedModule> matches;
-                
-                for (const auto& entry : getModuleRegistry())
+
+                auto registry = getModuleRegistry();
+
+                auto addMatchByInternal = [&](const juce::String& internal)
                 {
-                    const juce::String& displayName = entry.first;
-                    const char* internalType = entry.second.first;
-                    const char* description = entry.second.second;
-                    
-                    if (displayName.containsIgnoreCase(filter))
+                    for (const auto& entry : registry)
                     {
-                        matches.push_back({displayName, internalType, description});
+                        if (juce::String(entry.second.first).equalsIgnoreCase(internal))
+                        {
+                            matches.push_back({entry.first, entry.second.first, entry.second.second});
+                            break;
+                        }
+                    }
+                };
+
+                bool usingTokenFilter = false;
+                juce::String tokenType;
+
+                if (filter.startsWithChar(':'))
+                {
+                    juce::StringArray tokens;
+                    tokens.addTokens(filter, ":", "");
+                    tokens.removeEmptyStrings();
+
+                    if (!tokens.isEmpty())
+                    {
+                        usingTokenFilter = true;
+                        tokenType = tokens[0];
+
+                        auto parsePinTypeToken = [](const juce::String& token, PinDataType& outType) -> bool
+                        {
+                            if (token.equalsIgnoreCase("audio")) { outType = PinDataType::Audio; return true; }
+                            if (token.equalsIgnoreCase("cv") || token.equalsIgnoreCase("mod")) { outType = PinDataType::CV; return true; }
+                            if (token.equalsIgnoreCase("gate") || token.equalsIgnoreCase("trigger")) { outType = PinDataType::Gate; return true; }
+                            if (token.equalsIgnoreCase("raw")) { outType = PinDataType::Raw; return true; }
+                            if (token.equalsIgnoreCase("video")) { outType = PinDataType::Video; return true; }
+                            return false;
+                        };
+
+                        PinDataType parsedType = PinDataType::Raw;
+                        const bool typeParsed = parsePinTypeToken(tokenType, parsedType);
+
+                        for (int i = 1; i < tokens.size(); ++i)
+                        {
+                            juce::String internal = tokens[i].trim();
+                            if (internal.isNotEmpty())
+                                addMatchByInternal(internal);
+                        }
+
+                        if (matches.empty() && typeParsed)
+                        {
+                            if (auto it = dragInsertSuggestions.find(parsedType); it != dragInsertSuggestions.end())
+                            {
+                                for (const auto& internal : it->second)
+                                    addMatchByInternal(internal);
+                            }
+                        }
+
+                        if (matches.empty())
+                        {
+                            usingTokenFilter = false;
+                        }
+                        else
+                        {
+                            juce::String label = tokenType.isNotEmpty() ? tokenType : "signal";
+                            ImGui::TextDisabled("Suggestions for %s", label.toRawUTF8());
+                            ImGui::Separator();
+                        }
                     }
                 }
-                
-                // Handle keyboard navigation (arrow keys)
-                if (ImGui::IsKeyPressed(ImGuiKey_DownArrow)) 
+
+                if (!usingTokenFilter)
+                {
+                    for (const auto& entry : registry)
+                    {
+                        const juce::String& displayName = entry.first;
+                        const char* internalType = entry.second.first;
+                        const char* description = entry.second.second;
+
+                        if (displayName.containsIgnoreCase(filter)
+                            || juce::String(internalType).containsIgnoreCase(filter))
+                        {
+                            matches.push_back({displayName, internalType, description});
+                        }
+                    }
+                }
+
+                if (ImGui::IsKeyPressed(ImGuiKey_DownArrow))
                 {
                     selectedIndex++;
-                    if (selectedIndex >= (int)matches.size()) 
+                    if (selectedIndex >= (int)matches.size())
                         selectedIndex = (int)matches.size() - 1;
                 }
-                if (ImGui::IsKeyPressed(ImGuiKey_UpArrow)) 
+                if (ImGui::IsKeyPressed(ImGuiKey_UpArrow))
                 {
                     selectedIndex--;
-                    if (selectedIndex < 0) 
+                    if (selectedIndex < 0)
                         selectedIndex = 0;
                 }
-                
-                // Handle Enter key to create selected module
+
                 if (enterPressed && !matches.empty())
                 {
                     if (selectedIndex >= 0 && selectedIndex < (int)matches.size())
@@ -4471,24 +4850,20 @@ if (auto* mp = synth->getModuleForLogical (lid))
                         addAtMouse(matches[selectedIndex].internalType);
                     }
                 }
-                
-                // Display the matching modules with selection highlight
+
                 for (int i = 0; i < (int)matches.size(); ++i)
                 {
                     const auto& match = matches[i];
                     bool isSelected = (i == selectedIndex);
-                    
+
                     if (ImGui::Selectable(match.displayName.toRawUTF8(), isSelected))
                     {
                         addAtMouse(match.internalType);
                     }
-                    
-                    // Auto-scroll to keep selected item visible
-                    if (isSelected && ImGui::IsItemVisible() == false)
-                    {
+
+                    if (isSelected && !ImGui::IsItemVisible())
                         ImGui::SetScrollHereY(0.5f);
-                    }
-                    
+
                     if (ImGui::IsItemHovered())
                     {
                         ImGui::BeginTooltip();
@@ -4496,11 +4871,10 @@ if (auto* mp = synth->getModuleForLogical (lid))
                         ImGui::EndTooltip();
                     }
                 }
-                
-                // Reset selection if out of bounds
+
                 if (selectedIndex >= (int)matches.size())
                     selectedIndex = (int)matches.size() - 1;
-                if (selectedIndex < 0)
+                if (selectedIndex < 0 && !matches.empty())
                     selectedIndex = 0;
             }
 
@@ -8788,6 +9162,14 @@ void ImGuiNodeEditorComponent::handleCollapseToMetaModule()
     };
     
     std::vector<BoundaryConnection> boundaries;
+    using InletKey = std::pair<juce::uint32, int>;
+    using OutletKey = std::pair<juce::uint32, int>;
+    struct InletInfo { juce::uint32 logicalId; int pinIndex; int channelCount; };
+    struct OutletInfo { juce::uint32 logicalId; int pinIndex; int channelCount; };
+    std::map<InletKey, InletInfo> inletInfoMap;
+    std::map<OutletKey, OutletInfo> outletInfoMap;
+    int inletPinIndexCounter = 0;
+    int outletPinIndexCounter = 0;
     auto allConnections = synth->getConnectionsInfo();
     
     for (const auto& conn : allConnections)
@@ -8891,48 +9273,86 @@ void ImGuiNodeEditorComponent::handleCollapseToMetaModule()
             modsVT.addChild(mv, -1, nullptr);
         }
         
-        // Add inlet modules for each unique input
-        std::map<std::pair<juce::uint32, int>, juce::uint32> inletMap; // (extId, extCh) -> inletLogicalId
-        for (const auto& bc : boundaries)
+        auto createParameterState = [](const juce::String& paramId, int value)
         {
-            if (bc.isInput)
-            {
-                auto key = std::make_pair(bc.externalLogicalId, bc.externalChannel);
-                if (inletMap.find(key) == inletMap.end())
-                {
-                    juce::uint32 inletId = newLogicalId++;
-                    inletMap[key] = inletId;
-                    
-                    juce::ValueTree mv("module");
-                    mv.setProperty("logicalId", (int)inletId, nullptr);
-                    mv.setProperty("type", "inlet", nullptr);
-                    modsVT.addChild(mv, -1, nullptr);
-                    
-                    juce::Logger::writeToLog("[Meta Module] Created inlet node ID=" + juce::String(inletId));
-                }
-            }
-        }
+            juce::ValueTree params("Parameters");
+            juce::ValueTree paramNode("Parameter");
+            paramNode.setProperty("id", paramId, nullptr);
+            paramNode.setProperty("value", (double)value, nullptr);
+            params.addChild(paramNode, -1, nullptr);
+            return params;
+        };
         
-        // Add outlet modules for each unique output
-        std::map<std::pair<juce::uint32, int>, juce::uint32> outletMap; // (intId, intCh) -> outletLogicalId
+        // Add inlet modules for each unique input
         for (const auto& bc : boundaries)
         {
             if (!bc.isInput)
-            {
-                auto key = std::make_pair(bc.internalLogicalId, bc.internalChannel);
-                if (outletMap.find(key) == outletMap.end())
-                {
-                    juce::uint32 outletId = newLogicalId++;
-                    outletMap[key] = outletId;
-                    
-                    juce::ValueTree mv("module");
-                    mv.setProperty("logicalId", (int)outletId, nullptr);
-                    mv.setProperty("type", "outlet", nullptr);
-                    modsVT.addChild(mv, -1, nullptr);
-                    
-                    juce::Logger::writeToLog("[Meta Module] Created outlet node ID=" + juce::String(outletId));
-                }
-            }
+                continue;
+            
+            InletKey key { bc.externalLogicalId, bc.externalChannel };
+            if (inletInfoMap.find(key) != inletInfoMap.end())
+                continue;
+            
+            const juce::uint32 inletId = newLogicalId++;
+            const int pinIndex = inletPinIndexCounter++;
+            const int channelCount = 1;
+            
+            InletInfo info { inletId, pinIndex, channelCount };
+            inletInfoMap[key] = info;
+            
+            juce::ValueTree mv("module");
+            mv.setProperty("logicalId", (int)inletId, nullptr);
+            mv.setProperty("type", "inlet", nullptr);
+            
+            juce::ValueTree paramsWrapper("params");
+            paramsWrapper.addChild(createParameterState(InletModuleProcessor::paramIdChannelCount, channelCount), -1, nullptr);
+            mv.addChild(paramsWrapper, -1, nullptr);
+            
+            juce::ValueTree extra("InletState");
+            extra.setProperty("customLabel", juce::String("In ") + juce::String(pinIndex + 1), nullptr);
+            extra.setProperty("pinIndex", pinIndex, nullptr);
+            juce::ValueTree extraWrapper("extra");
+            extraWrapper.addChild(extra, -1, nullptr);
+            mv.addChild(extraWrapper, -1, nullptr);
+            
+            modsVT.addChild(mv, -1, nullptr);
+            juce::Logger::writeToLog("[Meta Module] Created inlet node ID=" + juce::String(inletId));
+        }
+        
+        // Add outlet modules for each unique output
+        for (const auto& bc : boundaries)
+        {
+            if (bc.isInput)
+                continue;
+            
+            OutletKey key { bc.internalLogicalId, bc.internalChannel };
+            if (outletInfoMap.find(key) != outletInfoMap.end())
+                continue;
+            
+            const juce::uint32 outletId = newLogicalId++;
+            const int pinIndex = outletPinIndexCounter++;
+            const int channelCount = 1;
+            
+            OutletInfo info { outletId, pinIndex, channelCount };
+            outletInfoMap[key] = info;
+            
+            juce::ValueTree mv("module");
+            mv.setProperty("logicalId", (int)outletId, nullptr);
+            mv.setProperty("type", "outlet", nullptr);
+            
+            juce::ValueTree paramsWrapper("params");
+            paramsWrapper.addChild(createParameterState(OutletModuleProcessor::paramIdChannelCount, channelCount), -1, nullptr);
+            mv.addChild(paramsWrapper, -1, nullptr);
+            
+            juce::ValueTree extra("OutletState");
+            extra.setProperty("customLabel", juce::String("Out ") + juce::String(pinIndex + 1), nullptr);
+            extra.setProperty("pinIndex", pinIndex, nullptr);
+            juce::ValueTree extraWrapper("extra");
+            extraWrapper.addChild(extra, -1, nullptr);
+            mv.addChild(extraWrapper, -1, nullptr);
+            
+            modsVT.addChild(mv, -1, nullptr);
+            juce::Logger::writeToLog("[Meta Module] Created outlet node ID=" + juce::String(outletId));
         }
         
         // Add internal connections (between selected nodes)
@@ -8957,8 +9377,11 @@ void ImGuiNodeEditorComponent::handleCollapseToMetaModule()
         {
             if (bc.isInput)
             {
-                auto key = std::make_pair(bc.externalLogicalId, bc.externalChannel);
-                juce::uint32 inletId = inletMap[key];
+                InletKey key { bc.externalLogicalId, bc.externalChannel };
+                auto it = inletInfoMap.find(key);
+                if (it == inletInfoMap.end())
+                    continue;
+                juce::uint32 inletId = it->second.logicalId;
                 
                 juce::ValueTree cv("connection");
                 cv.setProperty("srcId", (int)inletId, nullptr);
@@ -8974,8 +9397,11 @@ void ImGuiNodeEditorComponent::handleCollapseToMetaModule()
         {
             if (!bc.isInput)
             {
-                auto key = std::make_pair(bc.internalLogicalId, bc.internalChannel);
-                juce::uint32 outletId = outletMap[key];
+                OutletKey key { bc.internalLogicalId, bc.internalChannel };
+                auto it = outletInfoMap.find(key);
+                if (it == outletInfoMap.end())
+                    continue;
+                juce::uint32 outletId = it->second.logicalId;
                 
                 juce::ValueTree cv("connection");
                 cv.setProperty("srcId", (int)oldToNewLogicalId[bc.internalLogicalId], nullptr);
@@ -9042,27 +9468,112 @@ void ImGuiNodeEditorComponent::handleCollapseToMetaModule()
     }
     
     // 7. Reconnect external connections
-    // Note: This is a simplified implementation - in production, you'd need to map
-    // inlet/outlet indices to meta module input/output channels properly
+    auto sortedInlets = metaModule->getInletNodes();
+    std::sort(sortedInlets.begin(), sortedInlets.end(), [](auto* a, auto* b)
+    {
+        if (a->getPinIndex() != b->getPinIndex())
+            return a->getPinIndex() < b->getPinIndex();
+        return a->getLogicalId() < b->getLogicalId();
+    });
+
+    std::unordered_map<int, int> inletBaseChannels;
+    std::unordered_map<int, int> inletChannelCounts;
+    int runningInputChannel = 0;
+    for (auto* inlet : sortedInlets)
+    {
+        const int pinIndex = inlet->getPinIndex();
+        int channelCount = 1;
+        if (auto* param = dynamic_cast<juce::AudioParameterInt*>(
+                inlet->getAPVTS().getParameter(InletModuleProcessor::paramIdChannelCount)))
+        {
+            channelCount = juce::jmax(1, param->get());
+        }
+        inletBaseChannels[pinIndex] = runningInputChannel;
+        inletChannelCounts[pinIndex] = channelCount;
+        runningInputChannel += channelCount;
+    }
+
+    auto sortedOutlets = metaModule->getOutletNodes();
+    std::sort(sortedOutlets.begin(), sortedOutlets.end(), [](auto* a, auto* b)
+    {
+        if (a->getPinIndex() != b->getPinIndex())
+            return a->getPinIndex() < b->getPinIndex();
+        return a->getLogicalId() < b->getLogicalId();
+    });
+
+    std::unordered_map<int, int> outletBaseChannels;
+    std::unordered_map<int, int> outletChannelCounts;
+    int runningOutputChannel = 0;
+    for (auto* outlet : sortedOutlets)
+    {
+        const int pinIndex = outlet->getPinIndex();
+        int channelCount = 1;
+        if (auto* param = dynamic_cast<juce::AudioParameterInt*>(
+                outlet->getAPVTS().getParameter(OutletModuleProcessor::paramIdChannelCount)))
+        {
+            channelCount = juce::jmax(1, param->get());
+        }
+        outletBaseChannels[pinIndex] = runningOutputChannel;
+        outletChannelCounts[pinIndex] = channelCount;
+        runningOutputChannel += channelCount;
+    }
+
+    // Connect unique external sources to meta inputs
+    for (const auto& entry : inletInfoMap)
+    {
+        const InletKey& key = entry.first;
+        const InletInfo& info = entry.second;
+
+        auto extNodeId = synth->getNodeIdForLogical(key.first);
+        if (extNodeId.uid == 0)
+            continue;
+
+        auto baseIt = inletBaseChannels.find(info.pinIndex);
+        auto countIt = inletChannelCounts.find(info.pinIndex);
+        if (baseIt == inletBaseChannels.end() || countIt == inletChannelCounts.end())
+            continue;
+
+        const int baseChannel = baseIt->second;
+        const int channelCount = countIt->second;
+
+        for (int ch = 0; ch < channelCount; ++ch)
+        {
+            synth->connect(extNodeId, key.second + ch, metaNodeId, baseChannel + ch);
+        }
+    }
+
+    const auto outputNodeId = synth->getOutputNodeID();
+
+    // Reconnect meta outputs to their original destinations
     for (const auto& bc : boundaries)
     {
         if (bc.isInput)
+            continue;
+
+        OutletKey key { bc.internalLogicalId, bc.internalChannel };
+        auto infoIt = outletInfoMap.find(key);
+        if (infoIt == outletInfoMap.end())
+            continue;
+
+        const OutletInfo& info = infoIt->second;
+        auto destNodeId = (bc.externalLogicalId == 0)
+            ? outputNodeId
+            : synth->getNodeIdForLogical(bc.externalLogicalId);
+
+        if (destNodeId.uid == 0)
+            continue;
+
+        auto baseIt = outletBaseChannels.find(info.pinIndex);
+        auto countIt = outletChannelCounts.find(info.pinIndex);
+        if (baseIt == outletBaseChannels.end() || countIt == outletChannelCounts.end())
+            continue;
+
+        const int baseChannel = baseIt->second;
+        const int channelCount = countIt->second;
+
+        for (int ch = 0; ch < channelCount; ++ch)
         {
-            // Connect external source to meta module input
-            auto extNodeId = synth->getNodeIdForLogical(bc.externalLogicalId);
-            synth->connect(extNodeId, bc.externalChannel, metaNodeId, 0);
-        }
-        else if (bc.externalLogicalId != 0)
-        {
-            // Connect meta module output to external destination
-            auto extNodeId = synth->getNodeIdForLogical(bc.externalLogicalId);
-            synth->connect(metaNodeId, 0, extNodeId, bc.externalChannel);
-        }
-        else
-        {
-            // Connect meta module output to main output
-            auto outputNodeId = synth->getOutputNodeID();
-            synth->connect(metaNodeId, 0, outputNodeId, bc.externalChannel);
+            synth->connect(metaNodeId, baseChannel + ch, destNodeId, bc.externalChannel + ch);
         }
     }
     
@@ -9071,6 +9582,123 @@ void ImGuiNodeEditorComponent::handleCollapseToMetaModule()
     
     juce::Logger::writeToLog("[META] Reconnected external cables. Collapse complete!");
     NotificationManager::post(NotificationManager::Type::Info, "Collapsed to Meta Module");
+}
+
+void ImGuiNodeEditorComponent::populateDragInsertSuggestions()
+{
+    dragInsertSuggestions.clear();
+
+    const auto& pinDb = getModulePinDatabase();
+
+    auto addModuleForType = [this](PinDataType type, const juce::String& moduleType)
+    {
+        auto& modules = this->dragInsertSuggestions[type];
+        if (std::find(modules.begin(), modules.end(), moduleType) == modules.end())
+            modules.push_back(moduleType);
+    };
+
+    // Seed with curated converter/utilities for top ranking.
+    addModuleForType(PinDataType::Audio, "attenuverter");
+    addModuleForType(PinDataType::Audio, "comparator");
+    addModuleForType(PinDataType::Audio, "mixer");
+
+    addModuleForType(PinDataType::CV, "attenuverter");
+    addModuleForType(PinDataType::CV, "lag_processor");
+    addModuleForType(PinDataType::CV, "math");
+
+    addModuleForType(PinDataType::Gate, "comparator");
+    addModuleForType(PinDataType::Gate, "logic");
+    addModuleForType(PinDataType::Gate, "sequential_switch");
+
+    addModuleForType(PinDataType::Raw, "map_range");
+    addModuleForType(PinDataType::Raw, "scope");
+
+    addModuleForType(PinDataType::Video, "video_fx");
+    addModuleForType(PinDataType::Video, "crop_video");
+
+    for (const auto& entry : pinDb)
+    {
+        const juce::String& moduleType = entry.first;
+        const auto& info = entry.second;
+
+        for (const auto& pin : info.audioIns)
+            addModuleForType(pin.type, moduleType);
+
+        for (const auto& pin : info.modIns)
+            addModuleForType(pin.type, moduleType);
+    }
+
+    for (auto& entry : dragInsertSuggestions)
+    {
+        auto& modules = entry.second;
+        std::sort(modules.begin(), modules.end(),
+                  [](const juce::String& a, const juce::String& b)
+                  {
+                      return a.compareIgnoreCase(b) < 0;
+                  });
+    }
+}
+
+const std::vector<juce::String>& ImGuiNodeEditorComponent::getDragInsertSuggestionsFor(const PinID& pin) const
+{
+    PinID localPin = pin;
+    PinDataType type = localPin.isMod ? PinDataType::CV
+                                      : const_cast<ImGuiNodeEditorComponent*>(this)->getPinDataTypeForPin(localPin);
+    auto it = dragInsertSuggestions.find(type);
+    if (it != dragInsertSuggestions.end())
+        return it->second;
+
+    static const std::vector<juce::String> empty;
+    return empty;
+}
+
+void ImGuiNodeEditorComponent::insertNodeFromDragSelection(const juce::String& moduleType)
+{
+    if (synth == nullptr || dragInsertStartAttrId == -1)
+        return;
+
+    auto newNodeId = synth->addModule(moduleType);
+    auto newLogicalId = synth->getLogicalIdForNode(newNodeId);
+
+    pendingNodeScreenPositions[(int)newLogicalId] = dragInsertDropPos;
+
+    bool connected = false;
+    if (!dragInsertStartPin.isMod)
+    {
+        if (!dragInsertStartPin.isInput)
+        {
+            auto srcNodeId = synth->getNodeIdForLogical(dragInsertStartPin.logicalId);
+            if (srcNodeId.uid != 0)
+            {
+                synth->connect(srcNodeId, dragInsertStartPin.channel, newNodeId, 0);
+                connected = true;
+            }
+        }
+        else
+        {
+            auto dstNodeId = dragInsertStartPin.logicalId == 0
+                             ? synth->getOutputNodeID()
+                             : synth->getNodeIdForLogical(dragInsertStartPin.logicalId);
+            if (dstNodeId.uid != 0)
+            {
+                synth->connect(newNodeId, 0, dstNodeId, dragInsertStartPin.channel);
+                connected = true;
+            }
+        }
+    }
+
+    synth->commitChanges();
+
+    graphNeedsRebuild = true;
+    snapshotAfterEditor = true;
+
+    juce::Logger::writeToLog("[DragInsert] Added '" + moduleType + "' (LID "
+                             + juce::String((int)newLogicalId) + ")"
+                             + (connected ? " and auto-wired input." : "."));
+
+    dragInsertStartAttrId = -1;
+    dragInsertStartPin = PinID{};
+    shouldOpenDragInsertPopup = false;
 }
 
 void ImGuiNodeEditorComponent::loadPresetFromFile(const juce::File& file)

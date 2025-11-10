@@ -1018,6 +1018,8 @@ void PhysicsModuleProcessor::drawParametersInNode(float itemWidth, const std::fu
     
     auto& ap = getAPVTS();
     auto* draw_list = ImGui::GetWindowDrawList();
+    const auto& theme = ThemeManager::getInstance().getCurrentTheme();
+    const auto& physicsColors = theme.modules.physics;
     
     // --- Inertia Calculation ---
     // Track node movement and calculate inertial force for physics objects
@@ -1046,9 +1048,7 @@ void PhysicsModuleProcessor::drawParametersInNode(float itemWidth, const std::fu
     previousNodePos = currentNodePos;
     
     // --- Basic UI controls ---
-    ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.3f, 0.9f, 1.0f, 1.0f));
-    ImGui::TextUnformatted("Physics Sandbox");
-    ImGui::PopStyleColor();
+    ThemeText("Physics Sandbox", physicsColors.sandbox_title);
     ImGui::Spacing();
     
     // Helper lambda for color-coded buttons
@@ -1070,21 +1070,21 @@ void PhysicsModuleProcessor::drawParametersInNode(float itemWidth, const std::fu
     };
     
     // Stroke type selection buttons with color coding
-    ImGui::TextColored(ImVec4(0.9f, 0.9f, 0.5f, 1.0f), "Stroke Type:");
+    ThemeText("Stroke Type:", physicsColors.stroke_label);
     ImGui::SameLine();
-    if (ColorButton("Metal", currentStrokeType == StrokeType::Metal, ImVec4(0.53f, 0.81f, 0.92f, 1.0f))) { currentStrokeType = StrokeType::Metal; }
+    if (ColorButton("Metal", currentStrokeType == StrokeType::Metal, physicsColors.stroke_metal)) { currentStrokeType = StrokeType::Metal; }
     ImGui::SameLine();
-    if (ColorButton("Wood", currentStrokeType == StrokeType::Wood, ImVec4(0.96f, 0.64f, 0.38f, 1.0f))) { currentStrokeType = StrokeType::Wood; }
+    if (ColorButton("Wood", currentStrokeType == StrokeType::Wood, physicsColors.stroke_wood)) { currentStrokeType = StrokeType::Wood; }
     ImGui::SameLine();
-    if (ColorButton("Soil", currentStrokeType == StrokeType::Soil, ImVec4(0.0f, 0.39f, 0.0f, 1.0f))) { currentStrokeType = StrokeType::Soil; }
+    if (ColorButton("Soil", currentStrokeType == StrokeType::Soil, physicsColors.stroke_soil)) { currentStrokeType = StrokeType::Soil; }
     ImGui::SameLine();
-    if (ColorButton("Conveyor", currentStrokeType == StrokeType::Conveyor, ImVec4(0.58f, 0.44f, 0.86f, 1.0f))) { currentStrokeType = StrokeType::Conveyor; }
+    if (ColorButton("Conveyor", currentStrokeType == StrokeType::Conveyor, physicsColors.stroke_conveyor)) { currentStrokeType = StrokeType::Conveyor; }
     ImGui::SameLine();
-    if (ColorButton("Bouncy", currentStrokeType == StrokeType::BouncyGoo, ImVec4(0.0f, 0.98f, 0.6f, 1.0f))) { currentStrokeType = StrokeType::BouncyGoo; }
+    if (ColorButton("Bouncy", currentStrokeType == StrokeType::BouncyGoo, physicsColors.stroke_bouncy)) { currentStrokeType = StrokeType::BouncyGoo; }
     ImGui::SameLine();
-    if (ColorButton("Sticky", currentStrokeType == StrokeType::StickyMud, ImVec4(0.54f, 0.27f, 0.07f, 1.0f))) { currentStrokeType = StrokeType::StickyMud; }
+    if (ColorButton("Sticky", currentStrokeType == StrokeType::StickyMud, physicsColors.stroke_sticky)) { currentStrokeType = StrokeType::StickyMud; }
     ImGui::SameLine();
-    if (ColorButton("Emitter", isPlacingEmitter, ImVec4(1.0f, 0.84f, 0.0f, 1.0f))) {
+    if (ColorButton("Emitter", isPlacingEmitter, physicsColors.stroke_emitter)) {
         currentForceTool.reset();
         isPlacingEmitter = true; // Activate emitter placement mode
     }
@@ -1118,19 +1118,19 @@ void PhysicsModuleProcessor::drawParametersInNode(float itemWidth, const std::fu
     
     // Show sliders based on the current stroke type (only for material types)
     if (currentStrokeType == StrokeType::Metal) {
-        createMaterialSlider("Friction", "metalFriction", ImVec4(0.53f, 0.81f, 0.92f, 1.0f));
-        createMaterialSlider("Bounciness", "metalRestitution", ImVec4(0.53f, 0.81f, 0.92f, 1.0f));
+        createMaterialSlider("Friction", "metalFriction", physicsColors.stroke_metal);
+        createMaterialSlider("Bounciness", "metalRestitution", physicsColors.stroke_metal);
     } else if (currentStrokeType == StrokeType::Wood) {
-        createMaterialSlider("Friction", "woodFriction", ImVec4(0.96f, 0.64f, 0.38f, 1.0f));
-        createMaterialSlider("Bounciness", "woodRestitution", ImVec4(0.96f, 0.64f, 0.38f, 1.0f));
+        createMaterialSlider("Friction", "woodFriction", physicsColors.stroke_wood);
+        createMaterialSlider("Bounciness", "woodRestitution", physicsColors.stroke_wood);
     } else if (currentStrokeType == StrokeType::Soil) {
-        createMaterialSlider("Friction", "soilFriction", ImVec4(0.4f, 0.8f, 0.4f, 1.0f));
-        createMaterialSlider("Bounciness", "soilRestitution", ImVec4(0.4f, 0.8f, 0.4f, 1.0f));
+        createMaterialSlider("Friction", "soilFriction", physicsColors.stroke_soil);
+        createMaterialSlider("Bounciness", "soilRestitution", physicsColors.stroke_soil);
     }
     
     
     ImGui::Spacing();
-    ImGui::TextColored(ImVec4(0.7f, 0.9f, 0.7f, 1.0f), "Physics Parameters");
+    ThemeText("Physics Parameters", physicsColors.physics_section);
     ImGui::Spacing();
     
     // Gravity slider with modulation indicator (styled in yellow/orange)
@@ -1146,7 +1146,7 @@ void PhysicsModuleProcessor::drawParametersInNode(float itemWidth, const std::fu
         ImGui::PushItemWidth(150.0f);
         
         // Style with gravity color (yellow/orange downward)
-        ImVec4 gravityColor = gravityIsMod ? ImVec4(0.4f, 0.8f, 1.0f, 1.0f) : ImVec4(1.0f, 0.8f, 0.2f, 1.0f);
+        ImVec4 gravityColor = gravityIsMod ? physicsColors.count_warn : physicsColors.stroke_emitter;
         ImGui::PushStyleColor(ImGuiCol_FrameBg, ImVec4(gravityColor.x * 0.3f, gravityColor.y * 0.3f, gravityColor.z * 0.3f, 0.5f));
         ImGui::PushStyleColor(ImGuiCol_FrameBgHovered, ImVec4(gravityColor.x * 0.4f, gravityColor.y * 0.4f, gravityColor.z * 0.4f, 0.7f));
         ImGui::PushStyleColor(ImGuiCol_SliderGrab, gravityColor);
@@ -1167,7 +1167,7 @@ void PhysicsModuleProcessor::drawParametersInNode(float itemWidth, const std::fu
         {
             ImGui::EndDisabled();
             ImGui::SameLine();
-            ImGui::TextColored(ImVec4(0.4f, 0.8f, 1.0f, 1.0f), "(mod)");
+            ThemeText("(mod)", theme.text.active);
         }
     }
 
@@ -1184,7 +1184,7 @@ void PhysicsModuleProcessor::drawParametersInNode(float itemWidth, const std::fu
         ImGui::PushItemWidth(150.0f);
         
         // Style with wind color (cyan/white horizontal)
-        ImVec4 windColor = windIsMod ? ImVec4(0.4f, 0.8f, 1.0f, 1.0f) : ImVec4(0.7f, 0.9f, 1.0f, 1.0f);
+        ImVec4 windColor = windIsMod ? physicsColors.count_warn : physicsColors.spawn_section;
         ImGui::PushStyleColor(ImGuiCol_FrameBg, ImVec4(windColor.x * 0.3f, windColor.y * 0.3f, windColor.z * 0.3f, 0.5f));
         ImGui::PushStyleColor(ImGuiCol_FrameBgHovered, ImVec4(windColor.x * 0.4f, windColor.y * 0.4f, windColor.z * 0.4f, 0.7f));
         ImGui::PushStyleColor(ImGuiCol_SliderGrab, windColor);
@@ -1205,7 +1205,7 @@ void PhysicsModuleProcessor::drawParametersInNode(float itemWidth, const std::fu
         {
             ImGui::EndDisabled();
             ImGui::SameLine();
-            ImGui::TextColored(ImVec4(0.4f, 0.8f, 1.0f, 1.0f), "(mod)");
+            ThemeText("(mod)", theme.text.active);
         }
     }
 
@@ -1222,7 +1222,7 @@ void PhysicsModuleProcessor::drawParametersInNode(float itemWidth, const std::fu
         ImGui::PushItemWidth(150.0f);
         
         // Style with vortex color (purple spiral)
-        ImVec4 vortexColor = vortexStrIsMod ? ImVec4(0.4f, 0.8f, 1.0f, 1.0f) : ImVec4(0.7f, 0.4f, 1.0f, 1.0f);
+        ImVec4 vortexColor = vortexStrIsMod ? physicsColors.count_warn : physicsColors.spawn_vortex;
         ImGui::PushStyleColor(ImGuiCol_FrameBg, ImVec4(vortexColor.x * 0.3f, vortexColor.y * 0.3f, vortexColor.z * 0.3f, 0.5f));
         ImGui::PushStyleColor(ImGuiCol_FrameBgHovered, ImVec4(vortexColor.x * 0.4f, vortexColor.y * 0.4f, vortexColor.z * 0.4f, 0.7f));
         ImGui::PushStyleColor(ImGuiCol_SliderGrab, vortexColor);
@@ -1243,7 +1243,7 @@ void PhysicsModuleProcessor::drawParametersInNode(float itemWidth, const std::fu
         {
             ImGui::EndDisabled();
             ImGui::SameLine();
-            ImGui::TextColored(ImVec4(0.4f, 0.8f, 1.0f, 1.0f), "(mod)");
+            ThemeText("(mod)", theme.text.active);
         }
     }
 
@@ -1260,7 +1260,7 @@ void PhysicsModuleProcessor::drawParametersInNode(float itemWidth, const std::fu
         ImGui::PushItemWidth(150.0f);
         
         // Style with spin color (magenta swirl)
-        ImVec4 spinColor = vortexSpinIsMod ? ImVec4(0.4f, 0.8f, 1.0f, 1.0f) : ImVec4(1.0f, 0.4f, 0.8f, 1.0f);
+        ImVec4 spinColor = vortexSpinIsMod ? physicsColors.count_warn : physicsColors.spawn_vortex;
         ImGui::PushStyleColor(ImGuiCol_FrameBg, ImVec4(spinColor.x * 0.3f, spinColor.y * 0.3f, spinColor.z * 0.3f, 0.5f));
         ImGui::PushStyleColor(ImGuiCol_FrameBgHovered, ImVec4(spinColor.x * 0.4f, spinColor.y * 0.4f, spinColor.z * 0.4f, 0.7f));
         ImGui::PushStyleColor(ImGuiCol_SliderGrab, spinColor);
@@ -1281,7 +1281,7 @@ void PhysicsModuleProcessor::drawParametersInNode(float itemWidth, const std::fu
         {
             ImGui::EndDisabled();
             ImGui::SameLine();
-            ImGui::TextColored(ImVec4(0.4f, 0.8f, 1.0f, 1.0f), "(mod)");
+            ThemeText("(mod)", theme.text.active);
         }
     }
 
@@ -1298,7 +1298,7 @@ void PhysicsModuleProcessor::drawParametersInNode(float itemWidth, const std::fu
         ImGui::PushItemWidth(150.0f);
         
         // Style with magnet color (red for positive, blue for negative)
-        ImVec4 magnetColor = magnetForceIsMod ? ImVec4(0.4f, 0.8f, 1.0f, 1.0f) : ImVec4(1.0f, 0.3f, 0.3f, 1.0f);
+        ImVec4 magnetColor = magnetForceIsMod ? physicsColors.count_warn : physicsColors.count_alert;
         ImGui::PushStyleColor(ImGuiCol_FrameBg, ImVec4(magnetColor.x * 0.3f, magnetColor.y * 0.3f, magnetColor.z * 0.3f, 0.5f));
         ImGui::PushStyleColor(ImGuiCol_FrameBgHovered, ImVec4(magnetColor.x * 0.4f, magnetColor.y * 0.4f, magnetColor.z * 0.4f, 0.7f));
         ImGui::PushStyleColor(ImGuiCol_SliderGrab, magnetColor);
@@ -1319,7 +1319,7 @@ void PhysicsModuleProcessor::drawParametersInNode(float itemWidth, const std::fu
         {
             ImGui::EndDisabled();
             ImGui::SameLine();
-            ImGui::TextColored(ImVec4(0.4f, 0.8f, 1.0f, 1.0f), "(mod)");
+            ThemeText("(mod)", theme.text.active);
         }
     }
 
@@ -1330,7 +1330,7 @@ void PhysicsModuleProcessor::drawParametersInNode(float itemWidth, const std::fu
         float strokeSizeValue = strokeSizeParam->load();
         ImGui::PushItemWidth(150.0f);
         
-        ImVec4 strokeSizeColor = ImVec4(0.8f, 0.8f, 0.8f, 1.0f);
+    ImVec4 strokeSizeColor = physicsColors.physics_section;
         ImGui::PushStyleColor(ImGuiCol_FrameBg, ImVec4(strokeSizeColor.x * 0.3f, strokeSizeColor.y * 0.3f, strokeSizeColor.z * 0.3f, 0.5f));
         ImGui::PushStyleColor(ImGuiCol_FrameBgHovered, ImVec4(strokeSizeColor.x * 0.4f, strokeSizeColor.y * 0.4f, strokeSizeColor.z * 0.4f, 0.7f));
         ImGui::PushStyleColor(ImGuiCol_SliderGrab, strokeSizeColor);
@@ -1348,7 +1348,7 @@ void PhysicsModuleProcessor::drawParametersInNode(float itemWidth, const std::fu
     }
     
     ImGui::Spacing();
-    ImGui::TextColored(ImVec4(0.9f, 0.7f, 0.9f, 1.0f), "Spawning Settings");
+    ThemeText("Spawning Settings", physicsColors.spawn_section);
     ImGui::Spacing();
     
     // Max Objects, Mass, and Polarity controls (grouped with consistent width)
@@ -1357,7 +1357,7 @@ void PhysicsModuleProcessor::drawParametersInNode(float itemWidth, const std::fu
     {
         int maxObjectsValue = maxObjectsParam->get();
         
-        ImVec4 maxObjColor = ImVec4(0.6f, 0.9f, 0.6f, 1.0f);
+        ImVec4 maxObjColor = physicsColors.count_ok;
         ImGui::PushStyleColor(ImGuiCol_FrameBg, ImVec4(maxObjColor.x * 0.3f, maxObjColor.y * 0.3f, maxObjColor.z * 0.3f, 0.5f));
         ImGui::PushStyleColor(ImGuiCol_FrameBgHovered, ImVec4(maxObjColor.x * 0.4f, maxObjColor.y * 0.4f, maxObjColor.z * 0.4f, 0.7f));
         ImGui::PushStyleColor(ImGuiCol_SliderGrab, maxObjColor);
@@ -1376,13 +1376,13 @@ void PhysicsModuleProcessor::drawParametersInNode(float itemWidth, const std::fu
         
         // Color code the count based on how close we are to the limit
         float ratio = (float)physicsObjects.size() / (float)maxObjectsValue;
-        ImVec4 countColor = ratio < 0.7f ? ImVec4(0.6f, 0.9f, 0.6f, 1.0f) : 
-                           ratio < 0.9f ? ImVec4(1.0f, 0.9f, 0.4f, 1.0f) : 
-                                          ImVec4(1.0f, 0.4f, 0.4f, 1.0f);
-        ImGui::TextColored(countColor, "(%d)", (int)physicsObjects.size());
+        const ImVec4& countColor = ratio < 0.7f ? physicsColors.count_ok :
+                                   ratio < 0.9f ? physicsColors.count_warn :
+                                                  physicsColors.count_alert;
+        ThemeText(juce::String::formatted("(%d)", (int)physicsObjects.size()).toRawUTF8(), countColor);
     }
 
-    ImVec4 massColor = ImVec4(0.9f, 0.9f, 0.6f, 1.0f);
+    ImVec4 massColor = physicsColors.spawn_section;
     ImGui::PushStyleColor(ImGuiCol_FrameBg, ImVec4(massColor.x * 0.3f, massColor.y * 0.3f, massColor.z * 0.3f, 0.5f));
     ImGui::PushStyleColor(ImGuiCol_FrameBgHovered, ImVec4(massColor.x * 0.4f, massColor.y * 0.4f, massColor.z * 0.4f, 0.7f));
     ImGui::PushStyleColor(ImGuiCol_SliderGrab, massColor);
@@ -1393,24 +1393,24 @@ void PhysicsModuleProcessor::drawParametersInNode(float itemWidth, const std::fu
     ImGui::PopStyleColor(4);
     ImGui::PopItemWidth();
 
-    ImGui::TextColored(ImVec4(0.9f, 0.9f, 0.5f, 1.0f), "Polarity:"); 
+    ThemeText("Polarity:", physicsColors.stroke_label); 
     ImGui::SameLine();
     
     // Style polarity radio buttons
-    ImGui::PushStyleColor(ImGuiCol_CheckMark, ImVec4(0.3f, 0.9f, 0.3f, 1.0f));
+    ImGui::PushStyleColor(ImGuiCol_CheckMark, physicsColors.count_ok);
     if (ImGui::RadioButton("None", currentPolarity == Polarity::None)) { currentPolarity = Polarity::None; } ImGui::SameLine();
     ImGui::PopStyleColor();
     
-    ImGui::PushStyleColor(ImGuiCol_CheckMark, ImVec4(1.0f, 0.3f, 0.3f, 1.0f));
+    ImGui::PushStyleColor(ImGuiCol_CheckMark, physicsColors.count_alert);
     if (ImGui::RadioButton("N", currentPolarity == Polarity::North)) { currentPolarity = Polarity::North; } ImGui::SameLine();
     ImGui::PopStyleColor();
     
-    ImGui::PushStyleColor(ImGuiCol_CheckMark, ImVec4(0.3f, 0.5f, 1.0f, 1.0f));
+    ImGui::PushStyleColor(ImGuiCol_CheckMark, physicsColors.magnet_south);
     if (ImGui::RadioButton("S", currentPolarity == Polarity::South)) { currentPolarity = Polarity::South; }
     ImGui::PopStyleColor();
 
     ImGui::Spacing();
-    ImGui::TextColored(ImVec4(0.5f, 0.9f, 1.0f, 1.0f), "Spawn:");
+    ThemeText("Spawn:", physicsColors.spawn_section);
     ImGui::SameLine();
     
     // Spawn shape buttons (Thread-Safe) with color coding
@@ -1423,14 +1423,14 @@ void PhysicsModuleProcessor::drawParametersInNode(float itemWidth, const std::fu
         }
     };
     
-    if (ColorButton("Ball", false, ImVec4(1.0f, 0.4f, 0.4f, 1.0f)))     { enqueueSpawn(ShapeType::Circle); }
+    if (ColorButton("Ball", false, physicsColors.spawn_ball))     { enqueueSpawn(ShapeType::Circle); }
     ImGui::SameLine();
-    if (ColorButton("Square", false, ImVec4(0.4f, 1.0f, 0.4f, 1.0f)))   { enqueueSpawn(ShapeType::Square); }
+    if (ColorButton("Square", false, physicsColors.spawn_square))   { enqueueSpawn(ShapeType::Square); }
     ImGui::SameLine();
-    if (ColorButton("Triangle", false, ImVec4(0.4f, 0.4f, 1.0f, 1.0f))) { enqueueSpawn(ShapeType::Triangle); }
+    if (ColorButton("Triangle", false, physicsColors.spawn_triangle)) { enqueueSpawn(ShapeType::Triangle); }
 
     ImGui::SameLine(); ImGui::TextDisabled("|"); ImGui::SameLine();
-    if (ColorButton("Vortex", currentForceTool.has_value() && *currentForceTool == ForceType::Vortex, ImVec4(0.7f, 0.4f, 1.0f, 1.0f))) {
+    if (ColorButton("Vortex", currentForceTool.has_value() && *currentForceTool == ForceType::Vortex, physicsColors.spawn_vortex)) {
         currentForceTool = ForceType::Vortex;
         isPlacingEmitter = false;
     }
@@ -1438,9 +1438,9 @@ void PhysicsModuleProcessor::drawParametersInNode(float itemWidth, const std::fu
     ImGui::SameLine();
     
     // Clear All button with warning color
-    ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.6f, 0.2f, 0.2f, 0.8f));
-    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.8f, 0.3f, 0.3f, 1.0f));
-    ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(1.0f, 0.4f, 0.4f, 1.0f));
+    ImGui::PushStyleColor(ImGuiCol_Button, physicsColors.spawn_clear);
+    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, physicsColors.spawn_clear_hover);
+    ImGui::PushStyleColor(ImGuiCol_ButtonActive, physicsColors.spawn_clear_active);
     
     if (ImGui::Button("Clear All"))
     {
@@ -1465,7 +1465,8 @@ void PhysicsModuleProcessor::drawParametersInNode(float itemWidth, const std::fu
     const bool is_hovered = ImGui::IsItemHovered(); // Hovered
     
     // Add a border to visualize the drawing area
-    draw_list->AddRect(canvas_p0, canvas_p1, IM_COL32(100, 100, 100, 255));
+    draw_list->AddRectFilled(canvas_p0, canvas_p1, ImGui::ColorConvertFloat4ToU32(physicsColors.canvas_background));
+    draw_list->AddRect(canvas_p0, canvas_p1, ImGui::ColorConvertFloat4ToU32(physicsColors.canvas_border));
     
     // --- Mouse Input Handling ---
     ImGuiIO& io = ImGui::GetIO();
@@ -1574,7 +1575,7 @@ void PhysicsModuleProcessor::drawParametersInNode(float itemWidth, const std::fu
             if (is_hovered)
             {
                 ImVec2 mousePos = ImGui::GetMousePos();
-                draw_list->AddCircleFilled(mousePos, 8.0f, IM_COL32(255, 255, 0, 100)); // Yellow drag indicator
+        draw_list->AddCircleFilled(mousePos, 8.0f, ImGui::ColorConvertFloat4ToU32(physicsColors.drag_indicator_fill)); // drag indicator
             }
         }
     }
@@ -1620,8 +1621,8 @@ void PhysicsModuleProcessor::drawParametersInNode(float itemWidth, const std::fu
         const float eraseRadius = 15.0f;
 
         // Draw a semi-transparent red circle around the mouse cursor to show eraser size
-        draw_list->AddCircleFilled(mousePos, eraseRadius, IM_COL32(255, 100, 100, 60)); // Subtle red fill
-        draw_list->AddCircle(mousePos, eraseRadius, IM_COL32(220, 20, 20, 180), 12, 2.0f); // Red outline
+        draw_list->AddCircleFilled(mousePos, eraseRadius, ImGui::ColorConvertFloat4ToU32(physicsColors.eraser_fill)); // Subtle red fill
+        draw_list->AddCircle(mousePos, eraseRadius, ImGui::ColorConvertFloat4ToU32(physicsColors.eraser_outline), 12, 2.0f); // Red outline
     }
 
     // --- Emitter Visual Feedback ---
@@ -1631,8 +1632,8 @@ void PhysicsModuleProcessor::drawParametersInNode(float itemWidth, const std::fu
         ImVec2 mousePos = ImGui::GetMousePos();
 
         // Draw a semi-transparent yellow square to show emitter placement
-        draw_list->AddRectFilled({mousePos.x - 5, mousePos.y - 5}, {mousePos.x + 5, mousePos.y + 5}, IM_COL32(255, 255, 0, 150));
-        draw_list->AddRect({mousePos.x - 5, mousePos.y - 5}, {mousePos.x + 5, mousePos.y + 5}, IM_COL32(255, 255, 255, 200));
+        draw_list->AddRectFilled({mousePos.x - 5, mousePos.y - 5}, {mousePos.x + 5, mousePos.y + 5}, ImGui::ColorConvertFloat4ToU32(physicsColors.drag_indicator_fill));
+        draw_list->AddRect({mousePos.x - 5, mousePos.y - 5}, {mousePos.x + 5, mousePos.y + 5}, ImGui::ColorConvertFloat4ToU32(physicsColors.vector_outline));
     }
     
     // --- Eraser Mode (Thread-Safe - Right Mouse Drag) ---
@@ -1717,15 +1718,17 @@ void PhysicsModuleProcessor::drawParametersInNode(float itemWidth, const std::fu
             float vtxX = canvas_p0.x + (force.position.x * forceScale);
             float vtxY = canvas_p0.y + (force.position.y * forceScale);
             float vtxStrength = *apvts.getRawParameterValue(paramIdVortexStrength);
-            ImU32 color = (vtxStrength >= 0) ? IM_COL32(100, 100, 255, 100) : IM_COL32(255, 100, 100, 100);
+            ImU32 color = (vtxStrength >= 0)
+                ? ImGui::ColorConvertFloat4ToU32(physicsColors.magnet_south)
+                : ImGui::ColorConvertFloat4ToU32(physicsColors.count_alert);
             draw_list->AddCircleFilled({vtxX, vtxY}, 10.0f, color);
-            draw_list->AddCircle({vtxX, vtxY}, 10.0f, IM_COL32(255,255,255,128));
+            draw_list->AddCircle({vtxX, vtxY}, 10.0f, ImGui::ColorConvertFloat4ToU32(physicsColors.vector_outline));
         }
     }
 
     // --- RENDER SPAWN POINT CROSSHAIR ---
     ImVec2 spawnPos = { canvas_p0.x + spawnPointPixels.x, canvas_p0.y + spawnPointPixels.y };
-    ImU32 crosshairColor = isDraggingSpawnPoint ? IM_COL32(255, 255, 0, 255) : IM_COL32(255, 255, 255, 128);
+    ImU32 crosshairColor = ImGui::ColorConvertFloat4ToU32(isDraggingSpawnPoint ? physicsColors.crosshair_active : physicsColors.crosshair_idle);
     float crosshairSize = 8.0f;
     draw_list->AddLine({spawnPos.x - crosshairSize, spawnPos.y}, {spawnPos.x + crosshairSize, spawnPos.y}, crosshairColor, 2.0f);
     draw_list->AddLine({spawnPos.x, spawnPos.y - crosshairSize}, {spawnPos.x, spawnPos.y + crosshairSize}, crosshairColor, 2.0f);
@@ -1740,21 +1743,23 @@ void PhysicsModuleProcessor::drawParametersInNode(float itemWidth, const std::fu
         float emitterY = canvas_p0.y + (emitter.position.y * emitterScale);
 
         // Highlight if selected
-        ImU32 borderColor = (i == selectedEmitterIndex) ? IM_COL32(255, 255, 0, 255) : IM_COL32(255, 255, 255, 200);
+        ImU32 borderColor = (i == selectedEmitterIndex)
+            ? ImGui::ColorConvertFloat4ToU32(physicsColors.stroke_emitter)
+            : ImGui::ColorConvertFloat4ToU32(physicsColors.vector_outline);
         float thickness = (i == selectedEmitterIndex) ? 2.0f : 1.0f;
 
         // Draw emitter as a yellow square with selection highlighting
-        draw_list->AddRectFilled({emitterX - 5, emitterY - 5}, {emitterX + 5, emitterY + 5}, IM_COL32(255, 255, 0, 150));
+        draw_list->AddRectFilled({emitterX - 5, emitterY - 5}, {emitterX + 5, emitterY + 5}, ImGui::ColorConvertFloat4ToU32(physicsColors.stroke_emitter));
         draw_list->AddRect({emitterX - 5, emitterY - 5}, {emitterX + 5, emitterY + 5}, borderColor, 0, 0, thickness);
 
         // Add a small indicator for the shape being spawned
         ImU32 shapeColor;
         switch (emitter.shapeToSpawn)
         {
-            case ShapeType::Circle:  shapeColor = IM_COL32(255, 100, 100, 200); break;
-            case ShapeType::Square:  shapeColor = IM_COL32(100, 255, 100, 200); break;
-            case ShapeType::Triangle: shapeColor = IM_COL32(100, 100, 255, 200); break;
-            default: shapeColor = IM_COL32(255, 255, 255, 200); break;
+            case ShapeType::Circle:  shapeColor = ImGui::ColorConvertFloat4ToU32(physicsColors.spawn_ball); break;
+            case ShapeType::Square:  shapeColor = ImGui::ColorConvertFloat4ToU32(physicsColors.spawn_square); break;
+            case ShapeType::Triangle: shapeColor = ImGui::ColorConvertFloat4ToU32(physicsColors.spawn_triangle); break;
+            default: shapeColor = ImGui::ColorConvertFloat4ToU32(physicsColors.vector_outline); break;
         }
         draw_list->AddCircleFilled({emitterX, emitterY - 8}, 2.0f, shapeColor);
 
@@ -1762,7 +1767,7 @@ void PhysicsModuleProcessor::drawParametersInNode(float itemWidth, const std::fu
         if (emitter.polarity != Polarity::None)
         {
             ImU32 polarityColor = (emitter.polarity == Polarity::North) ?
-                IM_COL32(255, 100, 100, 200) : IM_COL32(100, 100, 255, 200); // Red for North, Blue for South
+                ImGui::ColorConvertFloat4ToU32(physicsColors.count_alert) : ImGui::ColorConvertFloat4ToU32(physicsColors.magnet_south);
             draw_list->AddRectFilled({emitterX - 2, emitterY - 12}, {emitterX + 2, emitterY - 10}, polarityColor);
         }
 
@@ -1775,7 +1780,7 @@ void PhysicsModuleProcessor::drawParametersInNode(float itemWidth, const std::fu
                 emitterX + emitter.initialVelocity.x * velocityScale,
                 emitterY + emitter.initialVelocity.y * velocityScale
             };
-            draw_list->AddLine(startPos, endPos, IM_COL32(255, 255, 0, 200), 2.0f);
+            draw_list->AddLine(startPos, endPos, ImGui::ColorConvertFloat4ToU32(physicsColors.magnet_link), 2.0f);
         }
         // --- END OF VELOCITY ARROW ---
     }
@@ -1795,7 +1800,8 @@ void PhysicsModuleProcessor::drawParametersInNode(float itemWidth, const std::fu
             
             // Get the material color and convert it to an ImGui color
             auto juceColour = strokeColourMap[stroke.type];
-            ImU32 imColour = IM_COL32(juceColour.getRed(), juceColour.getGreen(), juceColour.getBlue(), 255);
+            ImVec4 strokeColor = ImVec4(juceColour.getFloatRed(), juceColour.getFloatGreen(), juceColour.getFloatBlue(), juceColour.getFloatAlpha());
+            ImU32 imColour = ImGui::ColorConvertFloat4ToU32(strokeColor);
             
             draw_list->AddPolyline(pointsForImGui.data(), (int)pointsForImGui.size(), imColour, 0, strokeThickness);
 
@@ -1837,7 +1843,7 @@ void PhysicsModuleProcessor::drawParametersInNode(float itemWidth, const std::fu
                             ImVec2 rightIm = { canvas_p0.x + right.x, canvas_p0.y + right.y };
 
                             // Draw arrow as triangle
-                            draw_list->AddTriangleFilled(tipIm, leftIm, rightIm, IM_COL32(255, 255, 255, 200));
+                            draw_list->AddTriangleFilled(tipIm, leftIm, rightIm, ImGui::ColorConvertFloat4ToU32(physicsColors.vector_fill));
                         }
                     }
                 }
@@ -1867,7 +1873,7 @@ void PhysicsModuleProcessor::drawParametersInNode(float itemWidth, const std::fu
                             juce::Point<float> circlePos = p1 + segment * t;
 
                             ImVec2 circleIm = { canvas_p0.x + circlePos.x, canvas_p0.y + circlePos.y };
-                            draw_list->AddCircleFilled(circleIm, circleSize, IM_COL32(255, 255, 255, 150));
+                            draw_list->AddCircleFilled(circleIm, circleSize, ImGui::ColorConvertFloat4ToU32(physicsColors.vector_fill));
                         }
                     }
                 }
@@ -1897,7 +1903,7 @@ void PhysicsModuleProcessor::drawParametersInNode(float itemWidth, const std::fu
                             juce::Point<float> dotPos = p1 + segment * t;
 
                             ImVec2 dotIm = { canvas_p0.x + dotPos.x, canvas_p0.y + dotPos.y };
-                            draw_list->AddCircleFilled(dotIm, dotSize, IM_COL32(139, 69, 19, 180)); // Dark brown dots
+                            draw_list->AddCircleFilled(dotIm, dotSize, ImGui::ColorConvertFloat4ToU32(physicsColors.soil_detail)); // Soil detail dots
                         }
                     }
                 }
@@ -1925,7 +1931,8 @@ void PhysicsModuleProcessor::drawParametersInNode(float itemWidth, const std::fu
             juce::Colour color = juce::Colours::lightblue.interpolatedWith(juce::Colours::red, normalizedMass);
 
             // Convert to ImGui color format
-            ImU32 imColour = IM_COL32(color.getRed(), color.getGreen(), color.getBlue(), 255);
+            ImVec4 overlayColour = ImVec4(color.getFloatRed(), color.getFloatGreen(), color.getFloatBlue(), color.getFloatAlpha());
+            ImU32 imColour = ImGui::ColorConvertFloat4ToU32(overlayColour);
             // --- END OF NEW LOGIC ---
 
             if (objPtr->type == ShapeType::Circle)
@@ -1961,7 +1968,7 @@ void PhysicsModuleProcessor::drawParametersInNode(float itemWidth, const std::fu
                 ImVec2 textSize = ImGui::CalcTextSize(symbol);
                 ImVec2 textPos = { center.x - textSize.x * 0.5f, center.y - textSize.y * 0.5f };
 
-                draw_list->AddText(textPos, IM_COL32(0, 0, 0, 200), symbol);
+                draw_list->AddText(textPos, ImGui::ColorConvertFloat4ToU32(physicsColors.overlay_text), symbol);
             }
             // --- END OF POLARITY SYMBOL ---
         }
@@ -1975,7 +1982,7 @@ void PhysicsModuleProcessor::drawParametersInNode(float itemWidth, const std::fu
         {
             pointsForImGui.emplace_back(canvas_p0.x + p.x, canvas_p0.y + p.y);
         }
-        draw_list->AddPolyline(pointsForImGui.data(), (int)pointsForImGui.size(), IM_COL32(255, 255, 255, 128), 0, 1.5f);
+        draw_list->AddPolyline(pointsForImGui.data(), (int)pointsForImGui.size(), ImGui::ColorConvertFloat4ToU32(physicsColors.overlay_line), 0, 1.5f);
     }
 
     // 4. Draw eraser cursor when right mouse button is down
@@ -1983,8 +1990,8 @@ void PhysicsModuleProcessor::drawParametersInNode(float itemWidth, const std::fu
     {
         ImVec2 eraserCenter(canvas_p0.x + mouse_pos_in_canvas.x, canvas_p0.y + mouse_pos_in_canvas.y);
         const float eraseRadius = 15.0f;
-        draw_list->AddCircleFilled(eraserCenter, eraseRadius, IM_COL32(255, 100, 100, 60)); // Subtle red fill
-        draw_list->AddCircle(eraserCenter, eraseRadius, IM_COL32(220, 20, 20, 180), 0, 2.0f); // Red outline
+        draw_list->AddCircleFilled(eraserCenter, eraseRadius, ImGui::ColorConvertFloat4ToU32(physicsColors.eraser_fill)); // Subtle fill
+        draw_list->AddCircle(eraserCenter, eraseRadius, ImGui::ColorConvertFloat4ToU32(physicsColors.eraser_outline), 0, 2.0f); // Outline
     }
 
     draw_list->PopClipRect();
@@ -1998,11 +2005,11 @@ void PhysicsModuleProcessor::drawParametersInNode(float itemWidth, const std::fu
         ImDrawList* separator_draw_list = ImGui::GetWindowDrawList();
         ImVec2 separator_pos = ImGui::GetCursorScreenPos();
         ImVec2 separator_end = ImVec2(separator_pos.x + 600.0f, separator_pos.y);
-        separator_draw_list->AddLine(separator_pos, separator_end, IM_COL32(255, 215, 0, 200), 2.0f);
+        separator_draw_list->AddLine(separator_pos, separator_end, ImGui::ColorConvertFloat4ToU32(physicsColors.separator_line), 2.0f);
         ImGui::Dummy(ImVec2(0, 2));
         
         ImGui::Spacing();
-        ImGui::TextColored(ImVec4(1.0f, 0.84f, 0.0f, 1.0f), "Emitter Settings");
+        ThemeText("Emitter Settings", physicsColors.stroke_emitter);
         ImGui::Spacing();
         
         auto& emitter = emitters[selectedEmitterIndex];
@@ -2011,7 +2018,7 @@ void PhysicsModuleProcessor::drawParametersInNode(float itemWidth, const std::fu
         ImGui::PushItemWidth(150.0f);
 
         // Spawn Rate Slider (styled in yellow)
-        ImVec4 rateColor = ImVec4(1.0f, 0.84f, 0.2f, 1.0f);
+        ImVec4 rateColor = physicsColors.stroke_emitter;
         ImGui::PushStyleColor(ImGuiCol_FrameBg, ImVec4(rateColor.x * 0.3f, rateColor.y * 0.3f, rateColor.z * 0.3f, 0.5f));
         ImGui::PushStyleColor(ImGuiCol_FrameBgHovered, ImVec4(rateColor.x * 0.4f, rateColor.y * 0.4f, rateColor.z * 0.4f, 0.7f));
         ImGui::PushStyleColor(ImGuiCol_SliderGrab, rateColor);
@@ -2039,7 +2046,7 @@ void PhysicsModuleProcessor::drawParametersInNode(float itemWidth, const std::fu
         ImGui::PopStyleColor(3);
 
         // Initial Velocity Sliders (styled in cyan)
-        ImVec4 velColor = ImVec4(0.5f, 0.9f, 1.0f, 1.0f);
+        ImVec4 velColor = physicsColors.spawn_section;
         ImGui::PushStyleColor(ImGuiCol_FrameBg, ImVec4(velColor.x * 0.3f, velColor.y * 0.3f, velColor.z * 0.3f, 0.5f));
         ImGui::PushStyleColor(ImGuiCol_FrameBgHovered, ImVec4(velColor.x * 0.4f, velColor.y * 0.4f, velColor.z * 0.4f, 0.7f));
         ImGui::PushStyleColor(ImGuiCol_SliderGrab, velColor);
@@ -2051,7 +2058,7 @@ void PhysicsModuleProcessor::drawParametersInNode(float itemWidth, const std::fu
         ImGui::PopStyleColor(4);
 
         // Mass Slider (styled in gold)
-        ImVec4 emitterMassColor = ImVec4(0.9f, 0.7f, 0.3f, 1.0f);
+        ImVec4 emitterMassColor = physicsColors.stroke_label;
         ImGui::PushStyleColor(ImGuiCol_FrameBg, ImVec4(emitterMassColor.x * 0.3f, emitterMassColor.y * 0.3f, emitterMassColor.z * 0.3f, 0.5f));
         ImGui::PushStyleColor(ImGuiCol_FrameBgHovered, ImVec4(emitterMassColor.x * 0.4f, emitterMassColor.y * 0.4f, emitterMassColor.z * 0.4f, 0.7f));
         ImGui::PushStyleColor(ImGuiCol_SliderGrab, emitterMassColor);
@@ -2062,21 +2069,21 @@ void PhysicsModuleProcessor::drawParametersInNode(float itemWidth, const std::fu
         ImGui::PopStyleColor(4);
 
         // Polarity Radio Buttons (styled)
-        ImGui::TextColored(ImVec4(0.9f, 0.9f, 0.5f, 1.0f), "Polarity:");
+        ThemeText("Polarity:", physicsColors.stroke_label);
         ImGui::SameLine();
         int polarityInt = static_cast<int>(emitter.polarity);
         
-        ImGui::PushStyleColor(ImGuiCol_CheckMark, ImVec4(0.3f, 0.9f, 0.3f, 1.0f));
+        ImGui::PushStyleColor(ImGuiCol_CheckMark, physicsColors.count_ok);
         if (ImGui::RadioButton("None##emitter", polarityInt == 0)) { emitter.polarity = Polarity::None; }
         ImGui::SameLine();
         ImGui::PopStyleColor();
         
-        ImGui::PushStyleColor(ImGuiCol_CheckMark, ImVec4(1.0f, 0.3f, 0.3f, 1.0f));
+        ImGui::PushStyleColor(ImGuiCol_CheckMark, physicsColors.count_alert);
         if (ImGui::RadioButton("N##emitter", polarityInt == 1)) { emitter.polarity = Polarity::North; }
         ImGui::SameLine();
         ImGui::PopStyleColor();
         
-        ImGui::PushStyleColor(ImGuiCol_CheckMark, ImVec4(0.3f, 0.5f, 1.0f, 1.0f));
+        ImGui::PushStyleColor(ImGuiCol_CheckMark, physicsColors.magnet_south);
         if (ImGui::RadioButton("S##emitter", polarityInt == 2)) { emitter.polarity = Polarity::South; }
         ImGui::PopStyleColor();
 

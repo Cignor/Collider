@@ -176,6 +176,17 @@ struct Theme
 		ImVec4 stroke_seq_frame_bg_hovered { 0.4f, 0.38f, 0.15f, 0.8f };
 		ImVec4 stroke_seq_frame_bg_active { 0.5f, 0.48f, 0.2f, 0.9f };
 		
+		struct FrequencyGraphColors
+		{
+			ImU32 background { IM_COL32(20, 22, 24, 255) };
+			ImU32 grid { IM_COL32(50, 55, 60, 255) };
+			ImU32 label { IM_COL32(150, 150, 150, 255) };
+			ImU32 peak_line { IM_COL32(255, 150, 80, 150) };
+			ImU32 live_line { IM_COL32(120, 170, 255, 220) };
+			ImU32 border { IM_COL32(80, 80, 80, 255) };
+			ImU32 threshold { IM_COL32(255, 100, 100, 150) };
+		} frequency_graph;
+		
 		struct PhysicsColors
 		{
 			ImVec4 sandbox_title { 0.3f, 0.9f, 1.0f, 1.0f };

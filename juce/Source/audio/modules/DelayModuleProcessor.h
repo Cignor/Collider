@@ -2,6 +2,9 @@
 
 #include "ModuleProcessor.h"
 #include <juce_dsp/juce_dsp.h>
+#if defined(PRESET_CREATOR_UI)
+#include "../../preset_creator/theme/ThemeManager.h"
+#endif
 
 class DelayModuleProcessor : public ModuleProcessor
 {
@@ -27,6 +30,7 @@ public:
     void drawParametersInNode (float itemWidth, const std::function<bool(const juce::String& paramId)>& isParamModulated, const std::function<void()>& onModificationEnded) override
     {
         auto& ap = getAPVTS();
+        const auto& theme = ThemeManager::getInstance().getCurrentTheme();
         
         // Helper for tooltips
         auto HelpMarkerDelay = [](const char* desc) {
@@ -51,7 +55,7 @@ public:
         ImGui::PushItemWidth(itemWidth);
 
         // === DELAY PARAMETERS SECTION ===
-        ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1.0f), "Delay Parameters");
+        ThemeText("Delay Parameters", theme.text.section_header);
         ImGui::Spacing();
 
         // Time
@@ -85,7 +89,7 @@ public:
         ImGui::Spacing();
 
         // === MODULATION MODE SECTION ===
-        ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1.0f), "Modulation Mode");
+        ThemeText("Modulation Mode", theme.text.section_header);
         ImGui::Spacing();
         
         bool relativeTimeMod = relativeTimeModParam ? (relativeTimeModParam->load() > 0.5f) : true;
@@ -131,7 +135,7 @@ public:
         ImGui::Spacing();
 
         // === VISUAL DELAY TAPS SECTION ===
-        ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1.0f), "Delay Taps");
+        ThemeText("Delay Taps", theme.text.section_header);
         ImGui::Spacing();
 
         // Show first 5 delay taps as dots

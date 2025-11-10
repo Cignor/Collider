@@ -1,4 +1,7 @@
 #include "DriveModuleProcessor.h"
+#if defined(PRESET_CREATOR_UI)
+#include "../../preset_creator/theme/ThemeManager.h"
+#endif
 #include <cmath> // For std::tanh
 
 juce::AudioProcessorValueTreeState::ParameterLayout DriveModuleProcessor::createParameterLayout()
@@ -145,6 +148,7 @@ juce::String DriveModuleProcessor::getAudioOutputLabel(int channel) const
 #if defined(PRESET_CREATOR_UI)
 void DriveModuleProcessor::drawParametersInNode(float itemWidth, const std::function<bool(const juce::String&)>&, const std::function<void()>& onModificationEnded)
 {
+    const auto& theme = ThemeManager::getInstance().getCurrentTheme();
     auto& ap = getAPVTS();
     ImGui::PushItemWidth(itemWidth);
 
@@ -162,7 +166,7 @@ void DriveModuleProcessor::drawParametersInNode(float itemWidth, const std::func
         if (tooltip) { ImGui::SameLine(); HelpMarker(tooltip); }
     };
 
-    ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1.0f), "Drive Parameters");
+    ThemeText("Drive Parameters", theme.text.section_header);
     ImGui::Spacing();
 
     drawSlider("Drive", paramIdDrive, 0.0f, 2.0f, "%.2f", "Saturation amount (0-2)\n0 = clean, 2 = heavy distortion");

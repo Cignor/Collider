@@ -1,4 +1,7 @@
 #include "WaveshaperModuleProcessor.h"
+#if defined(PRESET_CREATOR_UI)
+#include "../../preset_creator/theme/ThemeManager.h"
+#endif
 #include <cmath> // For std::tanh
 
 juce::AudioProcessorValueTreeState::ParameterLayout WaveshaperModuleProcessor::createParameterLayout()
@@ -127,6 +130,7 @@ void WaveshaperModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
 #if defined(PRESET_CREATOR_UI)
 void WaveshaperModuleProcessor::drawParametersInNode(float itemWidth, const std::function<bool(const juce::String& paramId)>& isParamModulated, const std::function<void()>& onModificationEnded)
 {
+    const auto& theme = ThemeManager::getInstance().getCurrentTheme();
     auto& ap = getAPVTS();
     
     auto HelpMarker = [](const char* desc) {
@@ -139,7 +143,7 @@ void WaveshaperModuleProcessor::drawParametersInNode(float itemWidth, const std:
 
     ImGui::PushItemWidth(itemWidth);
 
-    ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1.0f), "Waveshaper Parameters");
+    ThemeText("Waveshaper Parameters", theme.text.section_header);
     ImGui::Spacing();
 
     // Drive
@@ -172,7 +176,7 @@ void WaveshaperModuleProcessor::drawParametersInNode(float itemWidth, const std:
     ImGui::Spacing();
 
     // === RELATIVE MODULATION SECTION ===
-    ImGui::TextColored(ImVec4(0.6f, 0.8f, 1.0f, 1.0f), "CV Input Modes");
+    ThemeText("CV Input Modes", theme.modulation.frequency);
     ImGui::Spacing();
     
     // Relative Drive Mod checkbox
