@@ -73,6 +73,7 @@ public:
         bool dstIsOutput { false };
     };
     std::vector<ConnectionInfo> getConnectionsInfo() const;
+    std::shared_ptr<const std::vector<ConnectionInfo>> getConnectionSnapshot() const;
     // Access a module processor for UI parameter editing
     ModuleProcessor* getModuleForLogical (juce::uint32 logicalId) const;
     
@@ -206,6 +207,8 @@ private:
     mutable juce::CriticalSection moduleLock;
     std::atomic<int> graphMutationDepth { 0 };
     std::atomic<std::shared_ptr<const std::vector<std::shared_ptr<ModuleProcessor>>>> activeAudioProcessors;
+    mutable std::atomic<std::shared_ptr<const std::vector<ConnectionInfo>>> connectionSnapshot;
+    void updateConnectionSnapshot_Locked() const;
 
     // Manage module nodes (legacy map by NodeID.uid)
     std::map<juce::uint32, Node::Ptr> modules; // keyed by NodeID.uid

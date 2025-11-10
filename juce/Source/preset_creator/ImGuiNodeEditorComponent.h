@@ -131,7 +131,7 @@ public:
     void handleMidiPlayerAutoConnectHybrid(MIDIPlayerModuleProcessor* midiPlayer, juce::uint32 midiPlayerLid);
     void handleInsertNodeOnSelectedLinks(const juce::String& nodeType);
     void insertNodeBetween(const juce::String& nodeType);
-    void insertNodeBetween(const juce::String& nodeType, const PinID& srcPin, const PinID& dstPin);
+    void insertNodeBetween(const juce::String& nodeType, const PinID& srcPin, const PinID& dstPin, bool createUndoSnapshot = true);
     void drawInsertNodeOnLinkPopup();
     struct LinkInfo;
     void drawLinkInspectorTooltip(const LinkInfo& link);
@@ -446,6 +446,7 @@ public:
     
     // --- Meta Module (Sub-Patching) Support ---
     void handleCollapseToMetaModule();
+    void expandMetaModule(juce::uint32 metaLogicalId);
     
     // --- Module Category Color Coding ---
     enum class ModuleCategory { Source, Effect, Modulator, Utility, Seq, MIDI, Analysis, TTS_Voice, Special_Exp, OpenCV, Sys, Comment, Plugin };
@@ -477,6 +478,7 @@ private:
     // Cached canvas dimensions for modal pan logic
     ImVec2 lastCanvasP0;      // Cached top-left corner of the canvas
     ImVec2 lastCanvasSize;    // Cached size of the canvas
+    ImVec2 lastEditorPanning { 0.0f, 0.0f }; // Cached ImNodes panning for manual grid
     bool hasRenderedAtLeastOnce { false }; // Tracks whether the node editor has completed a full frame
 
     // Eyedropper state

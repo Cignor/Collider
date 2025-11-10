@@ -1,0 +1,193 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<ModularSynthPreset version="1" bpm="120.0">
+  <modules>
+    <module logicalId="1" type="midi_cv">
+      <params>
+        <MIDICVParams>
+          <PARAM id="midiChannel" value="0.0"/>
+          <PARAM id="midiDevice" value="0.0"/>
+        </MIDICVParams>
+      </params>
+    </module>
+    <module logicalId="3" type="vco">
+      <params>
+        <VCOParams>
+          <PARAM id="frequency" value="440.0"/>
+          <PARAM id="portamento" value="0.0"/>
+          <PARAM id="relative_freq_mod" value="1.0"/>
+          <PARAM id="waveform" value="1.0"/>
+        </VCOParams>
+      </params>
+    </module>
+    <module logicalId="5" type="reverb">
+      <params>
+        <ReverbParams>
+          <PARAM id="damp" value="0.300000011920929"/>
+          <PARAM id="mix" value="0.800000011920929"/>
+          <PARAM id="relativeDampMod" value="1.0"/>
+          <PARAM id="relativeMixMod" value="1.0"/>
+          <PARAM id="relativeSizeMod" value="1.0"/>
+          <PARAM id="size" value="0.5"/>
+        </ReverbParams>
+      </params>
+    </module>
+    <module logicalId="7" type="phaser">
+      <params>
+        <PhaserParams>
+          <PARAM id="centreHz" value="1000.0"/>
+          <PARAM id="depth" value="0.5"/>
+          <PARAM id="feedback" value="0.0"/>
+          <PARAM id="mix" value="0.5"/>
+          <PARAM id="rate" value="0.4999999701976776"/>
+          <PARAM id="relativeCentreMod" value="1.0"/>
+          <PARAM id="relativeDepthMod" value="1.0"/>
+          <PARAM id="relativeFeedbackMod" value="1.0"/>
+          <PARAM id="relativeMixMod" value="1.0"/>
+          <PARAM id="relativeRateMod" value="1.0"/>
+        </PhaserParams>
+      </params>
+    </module>
+    <module logicalId="9" type="chorus">
+      <params>
+        <ChorusParams>
+          <PARAM id="depth" value="0.3700000047683716"/>
+          <PARAM id="mix" value="0.6599999666213989"/>
+          <PARAM id="rate" value="0.6499999761581421"/>
+          <PARAM id="relativeDepthMod" value="1.0"/>
+          <PARAM id="relativeMixMod" value="1.0"/>
+          <PARAM id="relativeRateMod" value="1.0"/>
+        </ChorusParams>
+      </params>
+    </module>
+    <module logicalId="11" type="mixer">
+      <params>
+        <MixerParams>
+          <PARAM id="crossfade" value="0.2949999570846558"/>
+          <PARAM id="gain" value="5.599998474121094"/>
+          <PARAM id="pan" value="0.0"/>
+        </MixerParams>
+      </params>
+    </module>
+    <module logicalId="13" type="recorder">
+      <params>
+        <RecordParams>
+          <PARAM id="format" value="0.0"/>
+        </RecordParams>
+      </params>
+    </module>
+    <module logicalId="15" type="recorder">
+      <params>
+        <RecordParams>
+          <PARAM id="format" value="0.0"/>
+        </RecordParams>
+      </params>
+    </module>
+    <module logicalId="17" type="delay">
+      <params>
+        <DelayParams>
+          <PARAM id="feedback" value="0.496999979019165"/>
+          <PARAM id="mix" value="0.4239999949932098"/>
+          <PARAM id="relativeFeedbackMod" value="1.0"/>
+          <PARAM id="relativeMixMod" value="1.0"/>
+          <PARAM id="relativeTimeMod" value="1.0"/>
+          <PARAM id="timeMs" value="581.0999755859375"/>
+        </DelayParams>
+      </params>
+    </module>
+    <module logicalId="19" type="8bandshaper">
+      <params>
+        <MultiBandShaperParams>
+          <PARAM id="drive_1" value="0.01999999955296516"/>
+          <PARAM id="drive_2" value="46.48999786376953"/>
+          <PARAM id="drive_3" value="17.34000015258789"/>
+          <PARAM id="drive_4" value="0.5"/>
+          <PARAM id="drive_5" value="0.9300000071525574"/>
+          <PARAM id="drive_6" value="0.4199999868869781"/>
+          <PARAM id="drive_7" value="0.25"/>
+          <PARAM id="drive_8" value="0.04999999701976776"/>
+          <PARAM id="outputGain" value="8.400001525878906"/>
+          <PARAM id="relativeDriveMod_1" value="1.0"/>
+          <PARAM id="relativeDriveMod_2" value="1.0"/>
+          <PARAM id="relativeDriveMod_3" value="1.0"/>
+          <PARAM id="relativeDriveMod_4" value="1.0"/>
+          <PARAM id="relativeDriveMod_5" value="1.0"/>
+          <PARAM id="relativeDriveMod_6" value="1.0"/>
+          <PARAM id="relativeDriveMod_7" value="1.0"/>
+          <PARAM id="relativeDriveMod_8" value="1.0"/>
+          <PARAM id="relativeGainMod" value="1.0"/>
+        </MultiBandShaperParams>
+      </params>
+    </module>
+    <module logicalId="21" type="midi_knobs">
+      <params>
+        <MIDIKnobsParams>
+          <PARAM id="midiChannel" value="0.0"/>
+          <PARAM id="midiDevice" value="0.0"/>
+          <PARAM id="numKnobs" value="4.0"/>
+        </MIDIKnobsParams>
+      </params>
+      <extra>
+        <MIDIKnobsState controllerPreset="" deviceFilter="0" midiChannel="0">
+          <Mapping index="0" cc="74" min="0.0" max="1.0"/>
+          <Mapping index="1" cc="71" min="0.0" max="1.0"/>
+          <Mapping index="2" cc="-1" min="0.0" max="1.0"/>
+          <Mapping index="3" cc="-1" min="0.0" max="1.0"/>
+          <Mapping index="4" cc="-1" min="0.0" max="1.0"/>
+          <Mapping index="5" cc="-1" min="0.0" max="1.0"/>
+          <Mapping index="6" cc="-1" min="0.0" max="1.0"/>
+          <Mapping index="7" cc="-1" min="0.0" max="1.0"/>
+          <Mapping index="8" cc="-1" min="0.0" max="1.0"/>
+          <Mapping index="9" cc="-1" min="0.0" max="1.0"/>
+          <Mapping index="10" cc="-1" min="0.0" max="1.0"/>
+          <Mapping index="11" cc="-1" min="0.0" max="1.0"/>
+          <Mapping index="12" cc="-1" min="0.0" max="1.0"/>
+          <Mapping index="13" cc="-1" min="0.0" max="1.0"/>
+          <Mapping index="14" cc="-1" min="0.0" max="1.0"/>
+          <Mapping index="15" cc="-1" min="0.0" max="1.0"/>
+        </MIDIKnobsState>
+      </extra>
+    </module>
+    <module logicalId="999" type="bpm_monitor"/>
+  </modules>
+  <connections>
+    <connection srcId="1" srcChan="0" dstId="3" dstChan="0"/>
+    <connection srcId="3" srcChan="0" dstId="5" dstChan="0"/>
+    <connection srcId="3" srcChan="0" dstId="5" dstChan="1"/>
+    <connection srcId="5" srcChan="0" dstId="7" dstChan="0"/>
+    <connection srcId="5" srcChan="1" dstId="7" dstChan="1"/>
+    <connection srcId="7" srcChan="0" dstId="9" dstChan="0"/>
+    <connection srcId="7" srcChan="1" dstId="9" dstChan="1"/>
+    <connection srcId="7" srcChan="0" dstId="11" dstChan="2"/>
+    <connection srcId="7" srcChan="1" dstId="11" dstChan="3"/>
+    <connection srcId="9" srcChan="0" dstId="11" dstChan="0"/>
+    <connection srcId="9" srcChan="1" dstId="11" dstChan="1"/>
+    <connection srcId="11" srcChan="0" dstId="13" dstChan="0"/>
+    <connection srcId="11" srcChan="1" dstId="13" dstChan="1"/>
+    <connection srcId="11" srcChan="0" dstId="17" dstChan="0"/>
+    <connection srcId="11" srcChan="1" dstId="17" dstChan="1"/>
+    <connection srcId="17" srcChan="0" dstId="19" dstChan="0"/>
+    <connection srcId="17" srcChan="1" dstId="19" dstChan="1"/>
+    <connection srcId="19" srcChan="0" dstId="output" dstChan="0"/>
+    <connection srcId="19" srcChan="1" dstId="output" dstChan="1"/>
+    <connection srcId="19" srcChan="0" dstId="15" dstChan="0"/>
+    <connection srcId="19" srcChan="1" dstId="15" dstChan="1"/>
+    <connection srcId="21" srcChan="0" dstId="11" dstChan="4"/>
+    <connection srcId="21" srcChan="1" dstId="11" dstChan="6"/>
+  </connections>
+  <NodeEditorUI>
+    <node id="1" x="322.0" y="342.0"/>
+    <node id="3" x="924.0" y="440.9999694824219"/>
+    <node id="5" x="1483.0" y="503.0000305175781"/>
+    <node id="7" x="1827.999267578125" y="574.627685546875"/>
+    <node id="9" x="2249.999267578125" y="567.627685546875"/>
+    <node id="11" x="2633.999267578125" y="759.627685546875"/>
+    <node id="13" x="2849.0" y="312.0"/>
+    <node id="15" x="4313.0" y="603.0"/>
+    <node id="17" x="3077.999267578125" y="731.627685546875"/>
+    <node id="19" x="3535.999267578125" y="632.627685546875"/>
+    <node id="21" x="1910.999267578125" y="1120.627685546875"/>
+    <node id="999" x="-83.0" y="107.0"/>
+    <node id="0" x="4161.0" y="402.0"/>
+  </NodeEditorUI>
+</ModularSynthPreset>

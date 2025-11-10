@@ -52,7 +52,11 @@ bool ModuleProcessor::isParamInputConnected(const juce::String& paramId) const
         absoluteChannel = sum + chanInBus;
     }
 
-    for (const auto& c : synth->getConnectionsInfo())
+    auto connectionsSnapshot = synth->getConnectionSnapshot();
+    if (! connectionsSnapshot)
+        return false;
+
+    for (const auto& c : *connectionsSnapshot)
         if (c.dstLogicalId == myLogicalId && c.dstChan == absoluteChannel)
             return true;
 
@@ -69,7 +73,7 @@ bool ModuleProcessor::isParamInputConnected(const juce::String& paramId) const
         }
         if (ptrResolvedId != 0 && ptrResolvedId != myLogicalId)
         {
-            for (const auto& c : synth->getConnectionsInfo())
+            for (const auto& c : *connectionsSnapshot)
             {
                 if (c.dstLogicalId == ptrResolvedId && c.dstChan == absoluteChannel)
                 {

@@ -52,9 +52,10 @@ void TimePitchModuleProcessor::prepareToPlay (double sampleRate, int samplesPerB
     inputFifo.setSize (2, fifoSize);
     abstractFifo.setTotalSize (fifoSize);
 
-    interleavedCapacityFrames = 0;
-    ensureCapacity (interleavedInput, samplesPerBlock, 2, interleavedCapacityFrames);
-    ensureCapacity (interleavedOutput, samplesPerBlock * 2, 2, interleavedCapacityFrames); // some headroom
+    interleavedInputCapacityFrames = 0;
+    interleavedOutputCapacityFrames = 0;
+    ensureCapacity (interleavedInput, samplesPerBlock, 2, interleavedInputCapacityFrames);
+    ensureCapacity (interleavedOutput, samplesPerBlock * 2, 2, interleavedOutputCapacityFrames); // some headroom
     timePitch.reset();
 }
 
@@ -158,7 +159,7 @@ void TimePitchModuleProcessor::processBlock (juce::AudioBuffer<float>& buffer, j
     if (abstractFifo.getNumReady() >= framesToFeed)
     {
         // 4) Read from FIFO and interleave
-        ensureCapacity (interleavedInput, framesToFeed, 2, interleavedCapacityFrames);
+        ensureCapacity (interleavedInput, framesToFeed, 2, interleavedInputCapacityFrames);
         abstractFifo.prepareToRead (framesToFeed, start1, size1, start2, size2);
         auto* inL = inputFifo.getReadPointer (0);
         auto* inR = inputFifo.getReadPointer (1);
@@ -173,7 +174,7 @@ void TimePitchModuleProcessor::processBlock (juce::AudioBuffer<float>& buffer, j
         // Guard against engine internal errors with try/catch (non-RT critical path)
         try { timePitch.putInterleaved (inLR, framesToFeed); }
         catch (...) { /* swallow to avoid crash; output will be silence */ }
-        ensureCapacity (interleavedOutput, numSamples, 2, interleavedCapacityFrames);
+        ensureCapacity (interleavedOutput, numSamples, 2, interleavedOutputCapacityFrames);
         int produced = 0;
         try { produced = timePitch.receiveInterleaved (interleavedOutput.getData(), numSamples); }
         catch (...) { produced = 0; }

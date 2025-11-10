@@ -138,6 +138,7 @@ ModularSynthProcessor::ModularSynthProcessor()
     juce::Logger::writeToLog("[ModularSynth] Initialized BPM Monitor with logicalID: 999");
     
     activeAudioProcessors.store(std::make_shared<const std::vector<std::shared_ptr<ModuleProcessor>>>());
+    connectionSnapshot.store(std::make_shared<const std::vector<ConnectionInfo>>(), std::memory_order_relaxed);
     
     m_voices.resize(8);
     for (auto& voice : m_voices)
@@ -860,6 +861,7 @@ namespace {
             reg("crop_video", []{ return std::make_unique<CropVideoModule>(); });
             reg("stroke_sequencer", []{ return std::make_unique<StrokeSequencerModuleProcessor>(); });
             
+            reg("meta_module", []{ return std::make_unique<MetaModuleProcessor>(); });
             reg("meta module", []{ return std::make_unique<MetaModuleProcessor>(); });
             reg("metamodule", []{ return std::make_unique<MetaModuleProcessor>(); });
             reg("meta", []{ return std::make_unique<MetaModuleProcessor>(); });
@@ -894,6 +896,7 @@ namespace {
 ModularSynthProcessor::NodeID ModularSynthProcessor::addModule(const juce::String& moduleType, bool commit)
 {
     NodeID createdNodeId;
+    bool needsDefaultInputMapping = false;
     {
         const juce::ScopedLock lock (moduleLock);
 #if JUCE_DEBUG
@@ -931,17 +934,28 @@ ModularSynthProcessor::NodeID ModularSynthProcessor::addModule(const juce::Strin
         }
 
         if (moduleType.equalsIgnoreCase("audio_input"))
-        {
-            std::vector<int> defaultMapping = {0, 1};
-            internalGraph->addConnection({ { audioInputNode->nodeID, 0 }, { node->nodeID, 0 } }, juce::AudioProcessorGraph::UpdateKind::none);
-            internalGraph->addConnection({ { audioInputNode->nodeID, 1 }, { node->nodeID, 1 } }, juce::AudioProcessorGraph::UpdateKind::none);
-        }
+            needsDefaultInputMapping = true;
 
         createdNodeId = node->nodeID;
     }
 
-    if (createdNodeId.uid != 0 && commit)
-        commitChanges();
+    if (createdNodeId.uid != 0)
+    {
+        if (needsDefaultInputMapping)
+        {
+            std::vector<int> defaultMapping = { 0, 1 };
+            setAudioInputChannelMapping(createdNodeId, defaultMapping);
+        }
+        else if (commit)
+        {
+            commitChanges();
+        }
+        else
+        {
+            const juce::ScopedLock lock(moduleLock);
+            updateConnectionSnapshot_Locked();
+        }
+    }
 
     if (createdNodeId.uid != 0)
     {
@@ -1042,6 +1056,8 @@ void ModularSynthProcessor::removeModule(const NodeID& nodeID)
     {
         logicalIdToModule.erase(logicalId);
     }
+
+    updateConnectionSnapshot_Locked();
 }
 
 bool ModularSynthProcessor::connect(const NodeID& sourceNodeID, int sourceChannel, const NodeID& destNodeID, int destChannel)
@@ -1073,6 +1089,10 @@ bool ModularSynthProcessor::connect(const NodeID& sourceNodeID, int sourceChanne
     {
         juce::Logger::writeToLog("[ModSynth][WARN] Failed to connect [" + juce::String(sourceNodeID.uid) + ":" + juce::String(sourceChannel)
                                  + "] -> [" + juce::String(destNodeID.uid) + ":" + juce::String(destChannel) + "]");
+    }
+    else
+    {
+        updateConnectionSnapshot_Locked();
     }
     return ok;
 }
@@ -1145,6 +1165,8 @@ void ModularSynthProcessor::commitChanges()
     }
     activeAudioProcessors.store(newProcessors);
     juce::Logger::writeToLog("[GraphSync] Updated active processor list for audio thread with " + juce::String(newProcessors->size()) + " modules.");
+
+    updateConnectionSnapshot_Locked();
 }
 
 void ModularSynthProcessor::clearAll()
@@ -1291,13 +1313,23 @@ bool ModularSynthProcessor::disconnect (const NodeID& sourceNodeID, int sourceCh
         { sourceNodeID, sourceChannel },
         { destNodeID, destChannel }
     };
-    return internalGraph->removeConnection(connection, juce::AudioProcessorGraph::UpdateKind::none);
+    const bool removed = internalGraph->removeConnection(connection, juce::AudioProcessorGraph::UpdateKind::none);
+    if (removed)
+        updateConnectionSnapshot_Locked();
+    return removed;
 }
 
-std::vector<ModularSynthProcessor::ConnectionInfo> ModularSynthProcessor::getConnectionsInfo() const
+void ModularSynthProcessor::updateConnectionSnapshot_Locked() const
 {
-    const juce::ScopedLock lock (moduleLock);
-    std::vector<ConnectionInfo> out;
+    if (! audioOutputNode)
+    {
+        connectionSnapshot.store(std::make_shared<const std::vector<ConnectionInfo>>(), std::memory_order_release);
+        return;
+    }
+
+    auto snapshot = std::make_shared<std::vector<ConnectionInfo>>();
+    snapshot->reserve(internalGraph->getConnections().size());
+
     for (const auto& c : internalGraph->getConnections())
     {
         ConnectionInfo info;
@@ -1306,12 +1338,47 @@ std::vector<ModularSynthProcessor::ConnectionInfo> ModularSynthProcessor::getCon
         info.dstLogicalId = getLogicalIdForNode(c.destination.nodeID);
         info.dstChan = c.destination.channelIndex;
         info.dstIsOutput = (c.destination.nodeID == audioOutputNode->nodeID);
+
         if (info.srcLogicalId != 0 && (info.dstLogicalId != 0 || info.dstIsOutput))
-            out.push_back(info);
+            snapshot->push_back(info);
     }
-    return out;
+
+    connectionSnapshot.store(snapshot, std::memory_order_release);
 }
 
+std::vector<ModularSynthProcessor::ConnectionInfo> ModularSynthProcessor::getConnectionsInfo() const
+{
+    auto snapshot = connectionSnapshot.load(std::memory_order_acquire);
+    if (! snapshot)
+    {
+        const juce::ScopedLock lock(moduleLock);
+        if (! snapshot)
+        {
+            const_cast<ModularSynthProcessor*>(this)->updateConnectionSnapshot_Locked();
+            snapshot = connectionSnapshot.load(std::memory_order_acquire);
+        }
+    }
+
+    if (snapshot)
+        return *snapshot;
+    return {};
+}
+
+std::shared_ptr<const std::vector<ModularSynthProcessor::ConnectionInfo>> ModularSynthProcessor::getConnectionSnapshot() const
+{
+    auto snapshot = connectionSnapshot.load(std::memory_order_acquire);
+    if (snapshot)
+        return snapshot;
+
+    const juce::ScopedLock lock(moduleLock);
+    snapshot = connectionSnapshot.load(std::memory_order_relaxed);
+    if (! snapshot)
+    {
+        const_cast<ModularSynthProcessor*>(this)->updateConnectionSnapshot_Locked();
+        snapshot = connectionSnapshot.load(std::memory_order_acquire);
+    }
+    return snapshot;
+}
 
 ModuleProcessor* ModularSynthProcessor::getModuleForLogical (juce::uint32 logicalId) const
 {

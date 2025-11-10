@@ -850,6 +850,23 @@ db["random"] = ModulePinInfo(
         {}
     );
 
+    {
+        ModulePinInfo inletPins(NodeWidth::Small, {}, {}, {});
+        for (int ch = 0; ch < 16; ++ch)
+            inletPins.audioOuts.emplace_back(juce::String("Out ") + juce::String(ch + 1), ch, PinDataType::Audio);
+        db["inlet"] = inletPins;
+    }
+
+    {
+        ModulePinInfo outletPins(NodeWidth::Small, {}, {}, {});
+        for (int ch = 0; ch < 16; ++ch)
+            outletPins.audioIns.emplace_back(juce::String("In ") + juce::String(ch + 1), ch, PinDataType::Audio);
+        db["outlet"] = outletPins;
+    }
+
+    db["meta_module"] = ModulePinInfo(NodeWidth::Medium, {}, {}, {});
+    db["meta"] = ModulePinInfo(NodeWidth::Medium, {}, {}, {});
+
     db["snapshot_sequencer"] = ModulePinInfo(
         NodeWidth::ExtraWide,
         { AudioPin("Clock", 0, PinDataType::Gate), AudioPin("Reset", 1, PinDataType::Gate) },
@@ -870,6 +887,7 @@ db["random"] = ModulePinInfo(
         },
         {}
     );
+    // Alias to match registry type string ("MIDI CV")
 
     // MIDI Family - New Modules with Correct Pin Types
     {
@@ -900,14 +918,14 @@ db["random"] = ModulePinInfo(
         );
     }
 
-    db["Debug"] = ModulePinInfo(
+    db["debug"] = ModulePinInfo(
         NodeWidth::Small,
         { AudioPin("In", 0, PinDataType::Audio) },
         {}, // No outputs
         {}
     );
 
-    db["InputDebug"] = ModulePinInfo(
+    db["input_debug"] = ModulePinInfo(
         NodeWidth::Small,
         {}, // No inputs
         { AudioPin("Out", 0, PinDataType::Audio) },

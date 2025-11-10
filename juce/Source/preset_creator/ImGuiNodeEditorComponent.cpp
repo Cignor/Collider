@@ -16,6 +16,7 @@
 #include <juce_core/juce_core.h>
 #include <unordered_map>
 #include <unordered_set>
+#include <set>
 #include <vector>
 #include <cstdint>
 #include <algorithm>
@@ -334,9 +335,7 @@ void ImGuiNodeEditorComponent::resized()
 {
     juce::Logger::writeToLog ("resized: " + juce::String (getWidth()) + "x" + juce::String (getHeight()));
 }
-
 // Input handled by imgui_juce backend
-
 void ImGuiNodeEditorComponent::newOpenGLContextCreated()
 {
     juce::Logger::writeToLog("ImGuiNodeEditor: newOpenGLContextCreated()");
@@ -628,7 +627,7 @@ void ImGuiNodeEditorComponent::renderImGui()
         std::unordered_set<int> activeSampleLoaderIds;
         for (const auto& info : infos)
         {
-            if (info.second.equalsIgnoreCase("sample loader"))
+            if (info.second.equalsIgnoreCase("sample_loader"))
             {
                 activeSampleLoaderIds.insert((int)info.first);
             }
@@ -648,7 +647,6 @@ void ImGuiNodeEditorComponent::renderImGui()
             }
         }
     }
-
     // ADD THIS BLOCK:
     if (ImGui::BeginMainMenuBar())
     {
@@ -981,7 +979,6 @@ void ImGuiNodeEditorComponent::renderImGui()
             if (ImGui::MenuItem("Randomize Connections", "Ctrl+M")) { handleRandomizeConnections(); }
             ImGui::EndMenu();
         }
-
         if (ImGui::BeginMenu("Insert Node"))
         {
             bool isNodeSelected = (selectedLogicalId != 0);
@@ -1151,12 +1148,10 @@ void ImGuiNodeEditorComponent::renderImGui()
             // Position display
             ImGui::Text("%.2f beats", transportState.songPositionBeats);
         }
-        
         // === MULTI-MIDI DEVICE ACTIVITY INDICATOR ===
         ImGui::SameLine();
         ImGui::Separator();
         ImGui::SameLine();
-        
         if (synth != nullptr)
         {
             auto activityState = synth->getMidiActivityState();
@@ -1591,9 +1586,7 @@ void ImGuiNodeEditorComponent::renderImGui()
         strncpy(searchBuf, m_midiSearchTerm.toRawUTF8(), sizeof(searchBuf) - 1);
         if (ImGui::InputText("Search##midi", searchBuf, sizeof(searchBuf)))
             m_midiSearchTerm = juce::String(searchBuf);
-
         ImGui::Separator();
-        
         // 5. Display hierarchical MIDI tree
         std::function<void(const MidiManager::DirectoryNode*)> drawMidiTree = 
             [&](const MidiManager::DirectoryNode* node)
@@ -1789,7 +1782,6 @@ void ImGuiNodeEditorComponent::renderImGui()
         addModuleButton("Function Generator", "function_generator");
         addModuleButton("Shaping Oscillator", "shaping_oscillator");
     }
-    
     // ═══════════════════════════════════════════════════════════════════════════════
     // 4. UTILITIES & LOGIC - Signal processing and routing
     // ═══════════════════════════════════════════════════════════════════════════════
@@ -1937,9 +1929,7 @@ void ImGuiNodeEditorComponent::renderImGui()
 
     // End the scrolling region
     ImGui::EndChild();
-
     ImGui::NextColumn();
-
     // --- DEFINITIVE FIX FOR PRESET DRAG-AND-DROP WITH VISUAL FEEDBACK ---
     // Step 1: Define canvas dimensions first (needed for the drop target)
     // Get grid/canvas colors from theme
@@ -2032,7 +2022,13 @@ void ImGuiNodeEditorComponent::renderImGui()
     // Note: EditorContextGetPanning() can only be called AFTER BeginNodeEditor()
     // Since we draw the grid before BeginNodeEditor, we use zero panning here
     // The grid will be drawn correctly after BeginNodeEditor is called
-    ImVec2 panning(0.0f, 0.0f);
+    ImVec2 panning = lastEditorPanning;
+
+    // Node canvas bound to the underlying model if available
+    // Hide ImNodes' own grid so we only render the custom one above.
+    ImNodes::PushColorStyle(ImNodesCol_GridBackground, IM_COL32(0, 0, 0, 0));
+    ImNodes::PushColorStyle(ImNodesCol_GridLine, IM_COL32(0, 0, 0, 0));
+    ImNodes::PushColorStyle(ImNodesCol_GridLinePrimary, IM_COL32(0, 0, 0, 0));
 
     // Draw canvas background (behind everything)
     draw_list->AddRectFilled(canvas_p0, canvas_p1, themeMgr.getCanvasBackground());
@@ -2041,13 +2037,11 @@ void ImGuiNodeEditorComponent::renderImGui()
     for (float x = fmodf(panning.x, GRID_SIZE); x < canvas_sz.x; x += GRID_SIZE)
         draw_list->AddLine(ImVec2(canvas_p0.x + x, canvas_p0.y), ImVec2(canvas_p0.x + x, canvas_p0.y + canvas_sz.y), GRID_COLOR);
     for (float y = fmodf(panning.y, GRID_SIZE); y < canvas_sz.y; y += GRID_SIZE)
-        draw_list->AddLine(ImVec2(canvas_p0.x, canvas_p0.y + y), ImVec2(canvas_p0.x + canvas_sz.x, canvas_p0.y + y), GRID_COLOR);
-
+        draw_list->AddLine(ImVec2(canvas_p0.x, canvas_p0.y + y), ImVec2(canvas_p0.x + canvas_sz.x, canvas_p0.y + y), GRID_SIZE);
     // Draw thicker lines for the origin (0,0)
     ImVec2 origin_on_screen = ImVec2(canvas_p0.x + panning.x, canvas_p0.y + panning.y);
     draw_list->AddLine(ImVec2(origin_on_screen.x, canvas_p0.y), ImVec2(origin_on_screen.x, canvas_p1.y), GRID_ORIGIN_COLOR, 2.0f);
     draw_list->AddLine(ImVec2(canvas_p0.x, origin_on_screen.y), ImVec2(canvas_p1.x, origin_on_screen.y), GRID_ORIGIN_COLOR, 2.0f);
-
     // Draw scale markers every SCALE_INTERVAL grid units as a grid (not a cross)
     const float SCALE_INTERVAL = themeMgr.getScaleInterval();
     const ImU32 SCALE_TEXT_COLOR = themeMgr.getScaleTextColor();
@@ -2057,7 +2051,6 @@ void ImGuiNodeEditorComponent::renderImGui()
     float gridRight = canvas_sz.x - panning.x;
     int startX = (int)std::floor(gridLeft / SCALE_INTERVAL);
     int endX = (int)std::ceil(gridRight / SCALE_INTERVAL);
-    
     for (int i = startX; i <= endX; ++i)
     {
         float gridX = i * SCALE_INTERVAL;
@@ -2103,17 +2096,15 @@ void ImGuiNodeEditorComponent::renderImGui()
     ImGui::GetForegroundDrawList()->AddText(ImVec2(canvas_p0.x + 10, canvas_p1.y - 25), themeMgr.getMousePositionText(), posStr);
     // --- END OF BACKGROUND GRID AND COORDINATE DISPLAY ---
     // Node canvas bound to the underlying model if available
-    // === FIX DOUBLE CANVAS: Make ImNodes grid background transparent ===
-    // We're already drawing our own canvas background above (line 1912),
-    // so we need to make ImNodes' background transparent to avoid double rendering
-    ImNodes::PushColorStyle(ImNodesCol_GridBackground, IM_COL32(0, 0, 0, 0));
-    // Hide the default grid lines so they don't draw over our manual grid
-    ImNodes::PushColorStyle(ImNodesCol_GridLine, IM_COL32(0, 0, 0, 0));
-    ImNodes::PushColorStyle(ImNodesCol_GridLinePrimary, IM_COL32(0, 0, 0, 0));
+    // Keep ImNodes' background/panning grid visible, but colour-match to theme overrides.
+    ImNodes::PushColorStyle(ImNodesCol_GridBackground, themeMgr.getCanvasBackground());
+    ImNodes::PushColorStyle(ImNodesCol_GridLine, GRID_COLOR);
+    ImNodes::PushColorStyle(ImNodesCol_GridLinePrimary, GRID_ORIGIN_COLOR);
     ImNodes::PushColorStyle(ImNodesCol_BoxSelector, themeMgr.getSelectionRect());
     ImNodes::PushColorStyle(ImNodesCol_BoxSelectorOutline, themeMgr.getSelectionRectOutline());
     // === END OF FIX ===
     ImNodes::BeginNodeEditor();
+    lastEditorPanning = ImNodes::EditorContextGetPanning();
     // Now we can safely get the actual panning for any future use
     // (Grid is already drawn with zero panning above, which is fine for background)
     // Begin the editor
@@ -2248,10 +2239,8 @@ if (auto* mp = synth->getModuleForLogical (lid))
             return mp->getLiveParamValueFor(paramId + "_mod", paramId + "_live", fallback);
         return fallback;
     };
-
     // Create a new function that calls pushSnapshot
     auto onModificationEnded = [&](){ this->pushSnapshot(); };
-
     // --- SPECIAL RENDERING FOR SAMPLE LOADER ---
     if (auto* sampleLoader = dynamic_cast<SampleLoaderModuleProcessor*>(mp))
     {
@@ -2798,9 +2787,7 @@ if (auto* mp = synth->getModuleForLogical (lid))
         if (!frame.isNull())
         {
             if (visionModuleTextures.find((int)lid) == visionModuleTextures.end())
-            {
                 visionModuleTextures[(int)lid] = std::make_unique<juce::OpenGLTexture>();
-            }
             juce::OpenGLTexture* texture = visionModuleTextures[(int)lid].get();
             texture->loadImage(frame);
             if (texture->getTextureID() != 0)
@@ -3275,6 +3262,9 @@ if (auto* mp = synth->getModuleForLogical (lid))
         bool triggerInsertMixer = false;
         if (ImGui::BeginPopup("NodeActionPopup"))
         {
+            const juce::String selectedType = selectedLogicalId != 0 ? getTypeForLogical((juce::uint32)selectedLogicalId) : juce::String();
+            const bool selectedIsMeta = selectedType.equalsIgnoreCase("meta_module") || selectedType.equalsIgnoreCase("meta");
+
             if (ImGui::MenuItem("Delete") && selectedLogicalId != 0 && selectedLogicalId != 999)
             {
                 mutedNodeStates.erase((juce::uint32)selectedLogicalId); // Clean up muted state if exists
@@ -3298,6 +3288,10 @@ if (auto* mp = synth->getModuleForLogical (lid))
                     ImNodes::SetNodeGridSpacePos ((int) synth->getLogicalIdForNode(newNodeId), ImVec2 (pos.x + 40.0f, pos.y + 40.0f));
                     pushSnapshot();
                 }
+            }
+            if (ImGui::MenuItem("Expand Meta Module", nullptr, false, selectedIsMeta))
+            {
+                expandMetaModule((juce::uint32)selectedLogicalId);
             }
             if (ImGui::MenuItem("Insert Mixer", "Ctrl+T") && selectedLogicalId != 0) { triggerInsertMixer = true; }
             ImGui::EndPopup();
@@ -3447,27 +3441,27 @@ if (auto* mp = synth->getModuleForLogical (lid))
             ImGui::Text("Insert Node Between Connections");
             
             // Audio Path
-            if (ImGui::MenuItem("VCF")) { insertNodeBetween("VCF"); ImGui::CloseCurrentPopup(); }
-            if (ImGui::MenuItem("VCA")) { insertNodeBetween("VCA"); ImGui::CloseCurrentPopup(); }
-            if (ImGui::MenuItem("Delay")) { insertNodeBetween("Delay"); ImGui::CloseCurrentPopup(); }
-            if (ImGui::MenuItem("Reverb")) { insertNodeBetween("Reverb"); ImGui::CloseCurrentPopup(); }
-            if (ImGui::MenuItem("Mixer")) { insertNodeBetween("Mixer"); ImGui::CloseCurrentPopup(); }
+            if (ImGui::MenuItem("VCF")) { insertNodeBetween("vcf"); ImGui::CloseCurrentPopup(); }
+            if (ImGui::MenuItem("VCA")) { insertNodeBetween("vca"); ImGui::CloseCurrentPopup(); }
+            if (ImGui::MenuItem("Delay")) { insertNodeBetween("delay"); ImGui::CloseCurrentPopup(); }
+            if (ImGui::MenuItem("Reverb")) { insertNodeBetween("reverb"); ImGui::CloseCurrentPopup(); }
+            if (ImGui::MenuItem("Mixer")) { insertNodeBetween("mixer"); ImGui::CloseCurrentPopup(); }
             if (ImGui::MenuItem("Recorder")) { insertNodeBetween("recorder"); ImGui::CloseCurrentPopup(); }
-            if (ImGui::MenuItem("Shaping Oscillator")) { insertNodeBetween("shaping oscillator"); ImGui::CloseCurrentPopup(); }
+            if (ImGui::MenuItem("Shaping Oscillator")) { insertNodeBetween("shaping_oscillator"); ImGui::CloseCurrentPopup(); }
             if (ImGui::MenuItem("8-Band Shaper")) { insertNodeBetween("8bandshaper"); ImGui::CloseCurrentPopup(); }
-            if (ImGui::MenuItem("Granulator")) { insertNodeBetween("Granulator"); ImGui::CloseCurrentPopup(); }
-            if (ImGui::MenuItem("Harmonic Shaper")) { insertNodeBetween("harmonic shaper"); ImGui::CloseCurrentPopup(); }
-            if (ImGui::MenuItem("Vocal Tract Filter")) { insertNodeBetween("Vocal Tract Filter"); ImGui::CloseCurrentPopup(); }
-            if (ImGui::MenuItem("Scope")) { insertNodeBetween("Scope"); ImGui::CloseCurrentPopup(); }
+            if (ImGui::MenuItem("Granulator")) { insertNodeBetween("granulator"); ImGui::CloseCurrentPopup(); }
+            if (ImGui::MenuItem("Harmonic Shaper")) { insertNodeBetween("harmonic_shaper"); ImGui::CloseCurrentPopup(); }
+            if (ImGui::MenuItem("Vocal Tract Filter")) { insertNodeBetween("vocal_tract_filter"); ImGui::CloseCurrentPopup(); }
+            if (ImGui::MenuItem("Scope")) { insertNodeBetween("scope"); ImGui::CloseCurrentPopup(); }
             
             ImGui::Separator();
             
             // Modulation Path
-            if (ImGui::MenuItem("Attenuverter")) { insertNodeBetween("Attenuverter"); ImGui::CloseCurrentPopup(); }
-            if (ImGui::MenuItem("Math")) { insertNodeBetween("Math"); ImGui::CloseCurrentPopup(); }
-            if (ImGui::MenuItem("Comparator")) { insertNodeBetween("Comparator"); ImGui::CloseCurrentPopup(); }
-            if (ImGui::MenuItem("CV Mixer")) { insertNodeBetween("CV Mixer"); ImGui::CloseCurrentPopup(); }
-            if (ImGui::MenuItem("Sequential Switch")) { insertNodeBetween("Sequential Switch"); ImGui::CloseCurrentPopup(); }
+            if (ImGui::MenuItem("Attenuverter")) { insertNodeBetween("attenuverter"); ImGui::CloseCurrentPopup(); }
+            if (ImGui::MenuItem("Math")) { insertNodeBetween("math"); ImGui::CloseCurrentPopup(); }
+            if (ImGui::MenuItem("Comparator")) { insertNodeBetween("comparator"); ImGui::CloseCurrentPopup(); }
+            if (ImGui::MenuItem("CV Mixer")) { insertNodeBetween("cv_mixer"); ImGui::CloseCurrentPopup(); }
+            if (ImGui::MenuItem("Sequential Switch")) { insertNodeBetween("sequential_switch"); ImGui::CloseCurrentPopup(); }
             
             ImGui::EndPopup();
         }
@@ -3840,7 +3834,6 @@ if (auto* mp = synth->getModuleForLogical (lid))
         ImGui::SetNextWindowPos(dragInsertDropPos, ImGuiCond_Always, ImVec2(0.5f, 0.5f));
         ImGui::OpenPopup("DragInsertPopup");
     }
-
     if (ImGui::BeginPopup("DragInsertPopup"))
     {
         const PinDataType displayType = dragInsertStartPin.isMod
@@ -4083,118 +4076,8 @@ if (auto* mp = synth->getModuleForLogical (lid))
             juce::Logger::writeToLog("[PROBE_UI] Cancelled with ESC");
         }
     }
-
     // --- CONTEXTUAL RIGHT-CLICK HANDLER ---
     // A cable was right-clicked. Store its info and open the insert popup.
-    if (isLinkHovered && hoveredLinkId != -1 && ImGui::IsMouseClicked(ImGuiMouseButton_Right))
-    {
-        juce::Logger::writeToLog("[InsertNode][RC] Hovered link id=" + juce::String(hoveredLinkId));
-        // A cable was right-clicked. Store its info and open the insert popup.
-        linkToInsertOn = {}; // Reset previous info
-        linkToInsertOn.linkId = hoveredLinkId;
-
-        bool captured = false;
-        // TODO: Implement modulation link detection for new bus-based system
-        // if (modLinkIdToRoute.count(hoveredLinkId))
-        // {
-        //     linkToInsertOn.isMod = true;
-        //     auto& route = modLinkIdToRoute[hoveredLinkId];
-        //     linkToInsertOn.srcLogicalId = std::get<0>(route);
-        //     linkToInsertOn.srcChan = std::get<1>(route);
-        //     linkToInsertOn.dstLogicalId = std::get<2>(route);
-        //     linkToInsertOn.paramId = std::get<3>(route);
-        //     juce::Logger::writeToLog("[InsertNode][RC] Mod link captured: srcLID=" + juce::String((int)linkToInsertOn.srcLogicalId) +
-        //                               " srcChan=" + juce::String(linkToInsertOn.srcChan) +
-        //                               " dstLID=" + juce::String((int)linkToInsertOn.dstLogicalId) +
-        //                               " param='" + linkToInsertOn.paramId + "'");
-        //     captured = true;
-        // }
-        if (linkIdToAttrs.count(hoveredLinkId))
-        {
-            linkToInsertOn.isMod = false;
-            auto& attrs = linkIdToAttrs[hoveredLinkId];
-            juce::Logger::writeToLog("[InsertNode][RC] Audio link attrs: srcAttr=" + juce::String(attrs.first) +
-                                      " dstAttr=" + juce::String(attrs.second));
-            linkToInsertOn.srcPin = decodePinId(attrs.first);
-            linkToInsertOn.dstPin = decodePinId(attrs.second);
-            // Decide list based on pin data types
-            const PinDataType srcType = getPinDataTypeForPin(linkToInsertOn.srcPin);
-            const PinDataType dstType = getPinDataTypeForPin(linkToInsertOn.dstPin);
-            // Check if this is a Video cable (both src and dst are Video)
-            if (srcType == PinDataType::Video && dstType == PinDataType::Video)
-            {
-                linkToInsertOn.isMod = false; // Video cables get their own menu, not audio or mod
-            }
-            // Check if this is CV/Gate/Raw (but not Video - handled above)
-            else if (srcType == PinDataType::CV || dstType == PinDataType::CV ||
-                srcType == PinDataType::Gate || dstType == PinDataType::Gate ||
-                srcType == PinDataType::Raw || dstType == PinDataType::Raw)
-            {
-                linkToInsertOn.isMod = true;
-            }
-            juce::Logger::writeToLog("[InsertNode][RC] Audio pins: src(lid=" + juce::String((int)linkToInsertOn.srcPin.logicalId) +
-                                      ",ch=" + juce::String(linkToInsertOn.srcPin.channel) +
-                                      ",in=" + juce::String((int)linkToInsertOn.srcPin.isInput) + ") -> dst(lid=" +
-                                      juce::String((int)linkToInsertOn.dstPin.logicalId) + ",ch=" +
-                                      juce::String(linkToInsertOn.dstPin.channel) + ",in=" +
-                                      juce::String((int)linkToInsertOn.dstPin.isInput) + ")");
-            captured = true;
-        }
-        else
-        {
-            juce::Logger::writeToLog("[InsertNode][RC] Link id not found in maps");
-        }
-
-        if (captured)
-        {
-            showInsertNodePopup = true; // defer opening until after EndNodeEditor
-            pendingInsertLinkId = hoveredLinkId;
-            juce::Logger::writeToLog("[InsertNode][RC] Will open popup after EndNodeEditor");
-        }
-        else
-        {
-            linkToInsertOn.linkId = -1; // nothing recognized; do not open
-        }
-    }
-
-    // --- Keyboard Shortcuts for Node Chaining ---
-    // Check if multiple nodes are selected and no modifiers are held
-    if (ImNodes::NumSelectedNodes() > 1 && !ImGui::GetIO().KeyCtrl && !ImGui::GetIO().KeyShift && !ImGui::GetIO().KeyAlt)
-    {
-        // C: Standard stereo chaining (channels 0->0, 1->1)
-        if (ImGui::IsKeyPressed(ImGuiKey_C))
-        {
-            handleNodeChaining();
-        }
-        // G: Audio type chaining
-        else if (ImGui::IsKeyPressed(ImGuiKey_G))
-        {
-            handleColorCodedChaining(PinDataType::Audio);
-        }
-        // B: CV type chaining
-        else if (ImGui::IsKeyPressed(ImGuiKey_B))
-        {
-            handleColorCodedChaining(PinDataType::CV);
-        }
-        // R: Raw type chaining
-        else if (ImGui::IsKeyPressed(ImGuiKey_R))
-        {
-            handleColorCodedChaining(PinDataType::Raw);
-        }
-        // Y: Gate type chaining
-        else if (ImGui::IsKeyPressed(ImGuiKey_Y))
-        {
-            handleColorCodedChaining(PinDataType::Gate);
-        }
-        // V: Video type chaining
-        else if (ImGui::IsKeyPressed(ImGuiKey_V))
-        {
-            handleColorCodedChaining(PinDataType::Video);
-        }
-    }
-    // --- END OF KEYBOARD SHORTCUTS ---
-
-    // --- Cable Splitting (Ctrl+Middle-Click) ---
     if (isLinkHovered && hoveredLinkId != -1)
     {
         if (ImGui::GetIO().KeyCtrl && ImGui::IsMouseClicked(ImGuiMouseButton_Middle))
@@ -4281,7 +4164,6 @@ if (auto* mp = synth->getModuleForLogical (lid))
         }
         pendingInsertLinkId = -1;
     }
-
     // Fallback: If user right-clicked and a link was hovered this frame, open popup using cached hover
     if (ImGui::IsMouseClicked(ImGuiMouseButton_Right)
         && lastHoveredLinkId != -1
@@ -4405,17 +4287,12 @@ if (auto* mp = synth->getModuleForLogical (lid))
             synth->clearProbeConnection();
         }
     }
-    
-
     // Update hovered node/link id for next frame (must be called outside editor scope)
     // Graph is always in consistent state since we rebuild at frame start
     int hv = -1;
     if (ImNodes::IsNodeHovered(&hv)) lastHoveredNodeId = hv; else lastHoveredNodeId = -1;
-    
     int hl = -1;
     if (ImNodes::IsLinkHovered(&hl)) lastHoveredLinkId = hl; else lastHoveredLinkId = -1;
-    
-
     // Shortcut: press 'I' while hovering a link to open Insert-on-Link popup (bypasses mouse handling)
     if (ImGui::IsKeyPressed(ImGuiKey_I) && lastHoveredLinkId != -1 && !ImGui::IsPopupOpen("InsertNodeOnLinkPopup"))
     {
@@ -4492,7 +4369,6 @@ if (auto* mp = synth->getModuleForLogical (lid))
         {
                 ImGui::OpenPopup("AddModulePopup");
         }
-
         // --- REVISED AND IMPROVED "QUICK ADD" POPUP ---
         if (ImGui::BeginPopup("AddModulePopup"))
         {
@@ -4842,7 +4718,6 @@ if (auto* mp = synth->getModuleForLogical (lid))
                     if (selectedIndex < 0)
                         selectedIndex = 0;
                 }
-
                 if (enterPressed && !matches.empty())
                 {
                     if (selectedIndex >= 0 && selectedIndex < (int)matches.size())
@@ -4904,28 +4779,27 @@ if (auto* mp = synth->getModuleForLogical (lid))
                 // Determine if a converter is needed based on pin types
                 if (srcType == PinDataType::Audio && dstType == PinDataType::CV)
                 {
-                    insertNodeBetween("Attenuverter", srcPin, dstPin);
+                    insertNodeBetween("attenuverter", srcPin, dstPin);
                     conversionHandled = true;
                 }
                 else if (srcType == PinDataType::CV && dstType == PinDataType::Gate)
                 {
-                    insertNodeBetween("Comparator", srcPin, dstPin);
+                    insertNodeBetween("comparator", srcPin, dstPin);
                     conversionHandled = true;
                 }
                 else if (srcType == PinDataType::Audio && dstType == PinDataType::Gate)
                 {
-                    insertNodeBetween("Comparator", srcPin, dstPin);
+                    insertNodeBetween("comparator", srcPin, dstPin);
                     conversionHandled = true;
                 }
                 else if (srcType == PinDataType::Raw && dstType != PinDataType::Raw)
                 {
-                    insertNodeBetween("MapRange", srcPin, dstPin);
+                    insertNodeBetween("map_range", srcPin, dstPin);
                     conversionHandled = true;
                 }
 
                 if (conversionHandled)
                 {
-                    graphNeedsRebuild = true;
                     pushSnapshot();
                 }
                 else
@@ -5081,7 +4955,6 @@ if (auto* mp = synth->getModuleForLogical (lid))
                 }
             }
         }
-        
         // O: Connect selected to Output
         if (!ctrl && !alt && !shift && ImGui::IsKeyPressed(ImGuiKey_O, false) && ImNodes::NumSelectedNodes() == 1)
         {
@@ -5114,7 +4987,6 @@ if (auto* mp = synth->getModuleForLogical (lid))
                 pushSnapshot();
             }
         }
-        
         // --- REVISED 'F' and 'Home' KEY LOGIC ---
         auto frameNodes = [&](const std::vector<int>& nodeIds) {
             if (nodeIds.empty() || synth == nullptr) return;
@@ -5193,7 +5065,6 @@ if (auto* mp = synth->getModuleForLogical (lid))
         
         // Debug menu (Ctrl+Shift+D)
         if (ctrl && shift && ImGui::IsKeyPressed(ImGuiKey_D)) { showDebugMenu = !showDebugMenu; }
-
         // Undo / Redo (Ctrl+Z / Ctrl+Y)
     if (ctrl && ImGui::IsKeyPressed (ImGuiKey_Z))
         {
@@ -5529,15 +5400,11 @@ if (auto* mp = synth->getModuleForLogical (lid))
     ImGui::PopStyleColor();
     // === END OF FIX ===
     
-    // drawPendingModPopup(); // TODO: Remove when fully migrated
-
     // Render notification system (must be called at the end to appear on top)
     NotificationManager::render();
-
     // --- Phase 5: Periodic Stale History Cleanup ---
     static double lastCleanupTime = 0.0;
     const double currentTimeSec = juce::Time::getMillisecondCounterHiRes() / 1000.0;
-    
     if (currentTimeSec - lastCleanupTime > 10.0) // Run every 10 seconds
     {
         lastCleanupTime = currentTimeSec;
@@ -5712,7 +5579,6 @@ juce::ValueTree ImGuiNodeEditorComponent::getUiValueTree() const
     
     return ui;
 }
-
 void ImGuiNodeEditorComponent::applyUiValueTreeNow (const juce::ValueTree& uiState)
 {
     if (! uiState.isValid() || synth == nullptr) return;
@@ -5783,7 +5649,6 @@ void ImGuiNodeEditorComponent::applyUiValueTree (const juce::ValueTree& uiState)
     // Queue for next frame to avoid calling imnodes setters before editor is begun
     uiPending = uiState;
 }
-
 void ImGuiNodeEditorComponent::handleDeletion()
 {
     if (synth == nullptr)
@@ -5889,13 +5754,12 @@ void ImGuiNodeEditorComponent::handleDeletion()
     pushSnapshot();
     NotificationManager::post(NotificationManager::Type::Info, "Deleted " + juce::String(numSelNodes) + " node(s)");
 }
-
 void ImGuiNodeEditorComponent::bypassDeleteSelectedNodes()
 {
     const int numSelNodes = ImNodes::NumSelectedNodes();
-    if (numSelNodes <= 0 || synth == nullptr) return;
+    if (numSelNodes <= 0 || synth == nullptr)
+        return;
 
-    // Snapshot positions first if dragging
     if (isDraggingNode || ImGui::IsMouseDragging(ImGuiMouseButton_Left))
     {
         isDraggingNode = false;
@@ -5907,9 +5771,12 @@ void ImGuiNodeEditorComponent::bypassDeleteSelectedNodes()
 
     for (int nid : nodeIds)
     {
-        if (nid == 0) continue; // don't bypass-delete the output sink
+        if (nid == 0)
+            continue;
+
         bypassDeleteNode((juce::uint32) nid);
     }
+
     graphNeedsRebuild = true;
     pushSnapshot();
     NotificationManager::post(NotificationManager::Type::Info, "Deleted " + juce::String(numSelNodes) + " node(s)");
@@ -5988,7 +5855,6 @@ void ImGuiNodeEditorComponent::muteNodeSilent(juce::uint32 logicalId)
                             " incoming and " + juce::String(state.outgoingConnections.size()) + 
                             " outgoing connections.");
 }
-
 void ImGuiNodeEditorComponent::muteNode(juce::uint32 logicalId)
 {
     if (!synth) return;
@@ -6205,7 +6071,6 @@ void ImGuiNodeEditorComponent::savePresetToFile(const juce::File& file)
         delete job; // Clean up the job we created
     }
 }
-
 void ImGuiNodeEditorComponent::startSaveDialog()
 {
     juce::Logger::writeToLog("[SaveWorkflow] startSaveDialog() called. isSaveInProgress: " + juce::String(isSaveInProgress.load() ? "TRUE" : "FALSE"));
@@ -6333,7 +6198,6 @@ void ImGuiNodeEditorComponent::startLoadDialog()
         }
     });
 }
-
 void ImGuiNodeEditorComponent::handleRandomizePatch()
 {
     if (synth == nullptr) return;
@@ -6346,8 +6210,8 @@ void ImGuiNodeEditorComponent::handleRandomizePatch()
     
     // 2. --- ADD A "CLOUD" OF RANDOM MODULES ---
     std::vector<juce::String> modulePool = {
-        "VCO", "Noise", "Sequencer", "VCF", "Delay", "Reverb", "Waveshaper",
-        "LFO", "ADSR", "Random", "S&H", "Math", "MapRange", "Quantizer", "ClockDivider"
+        "vco", "noise", "sequencer", "vcf", "delay", "reverb", "waveshaper",
+        "lfo", "adsr", "random", "s_and_h", "math", "map_range", "quantizer", "clock_divider"
     };
     int numModules = 6 + rng.nextInt(7); // 6 to 12 modules
     std::vector<std::pair<juce::uint32, juce::String>> addedModules;
@@ -6361,9 +6225,9 @@ void ImGuiNodeEditorComponent::handleRandomizePatch()
     // 3. --- ESTABLISH AN OBSERVATION POINT ---
     // Always add a Mixer and Scope. This is our window into the chaos.
     auto mixerId = synth->getLogicalIdForNode(synth->addModule("mixer"));
-    addedModules.push_back({mixerId, "Mixer"});
+    addedModules.push_back({mixerId, "mixer"});
     auto scopeId = synth->getLogicalIdForNode(synth->addModule("scope"));
-    addedModules.push_back({scopeId, "Scope"});
+    addedModules.push_back({scopeId, "scope"});
     
     // Connect the observation path: Mixer -> Scope -> Output
     auto outputNodeId = synth->getOutputNodeID();
@@ -6429,8 +6293,8 @@ void ImGuiNodeEditorComponent::handleRandomizePatch()
 
     juce::uint32 finalMixerId = 0, finalScopeId = 0;
     for (const auto& mod : addedModules) {
-        if (mod.second == "Mixer") finalMixerId = mod.first;
-        if (mod.second == "Scope") finalScopeId = mod.first;
+        if (mod.second == "mixer") finalMixerId = mod.first;
+        if (mod.second == "scope") finalScopeId = mod.first;
     }
 
     for (const auto& mod : addedModules)
@@ -6471,8 +6335,8 @@ void ImGuiNodeEditorComponent::handleRandomizeConnections()
     // 2. --- ESTABLISH AN OBSERVATION POINT ---
     juce::uint32 mixerId = 0, scopeId = 0;
     for (const auto& mod : currentModules) {
-        if (mod.second == "Mixer") mixerId = mod.first;
-        if (mod.second == "Scope") scopeId = mod.first;
+        if (mod.second == "mixer") mixerId = mod.first;
+        if (mod.second == "scope") scopeId = mod.first;
     }
     // Add Mixer/Scope if they don't exist, as they are crucial for listening
     if (mixerId == 0) mixerId = synth->getLogicalIdForNode(synth->addModule("mixer"));
@@ -6531,7 +6395,6 @@ void ImGuiNodeEditorComponent::handleRandomizeConnections()
     synth->commitChanges();
     pushSnapshot();
 }
-
 void ImGuiNodeEditorComponent::handleBeautifyLayout()
 {
     if (synth == nullptr) return;
@@ -6720,7 +6583,6 @@ void ImGuiNodeEditorComponent::handleBeautifyLayout()
     juce::Logger::writeToLog("[Beautify] Applied positions to " + juce::String(modules.size()) + " nodes");
     juce::Logger::writeToLog("--- [Beautify Layout] Complete ---");
 }
-
 void ImGuiNodeEditorComponent::handleConnectSelectedToTrackMixer()
 {
     if (synth == nullptr || ImNodes::NumSelectedNodes() <= 0)
@@ -6931,7 +6793,8 @@ void ImGuiNodeEditorComponent::handleMidiPlayerAutoConnectVCO(MIDIPlayerModulePr
         synth->connect(midiPlayerNodeId, velChan,   polyVcoNodeId, 1 + PolyVCOModuleProcessor::MAX_VOICES * 2 + i); // Velocity -> Gate Mod
 
         // B. Connect the PolyVCO voice's audio output to the Track Mixer's input.
-        synth->connect(polyVcoNodeId, i, mixerNodeId, i);
+        synth->connect(polyVcoNodeId, i, mixerNodeId, i * 2);
+        synth->connect(polyVcoNodeId, i, mixerNodeId, i * 2 + 1);
     }
     
     // 5. Connect the Track Mixer to the main audio output.
@@ -6964,7 +6827,7 @@ void ImGuiNodeEditorComponent::handleMidiPlayerAutoConnectHybrid(MIDIPlayerModul
     // First, find a TrackMixer connected to the output.
     for (const auto& conn : synth->getConnectionsInfo())
     {
-        if (conn.dstIsOutput && synth->getModuleTypeForLogical(conn.srcLogicalId).equalsIgnoreCase("trackmixer"))
+        if (conn.dstIsOutput && synth->getModuleTypeForLogical(conn.srcLogicalId).equalsIgnoreCase("track_mixer"))
         {
             trackMixerLid = conn.srcLogicalId; // Found a TrackMixer to reuse!
             break;
@@ -7194,7 +7057,6 @@ void ImGuiNodeEditorComponent::handleAnimationBuildTriggersAudio(AnimationModule
     juce::Logger::writeToLog("🦶 BUILD TRIGGERS AUDIO complete! " + juce::String(numTrackedBones) + 
                              " samplers + mixer + wiring created.");
 }
-
 void ImGuiNodeEditorComponent::handleMultiSequencerAutoConnectSamplers(MultiSequencerModuleProcessor* sequencer, juce::uint32 sequencerLid)
 {
     if (!synth || !sequencer) return;
@@ -7289,7 +7151,6 @@ void ImGuiNodeEditorComponent::handleMultiSequencerAutoConnectVCO(MultiSequencer
 
     graphNeedsRebuild = true;
 }
-
 void ImGuiNodeEditorComponent::handleColorTrackerAutoConnectPolyVCO(ColorTrackerModule* colorTracker, juce::uint32 colorTrackerLid)
 {
     if (!synth || !colorTracker) return;
@@ -7502,7 +7363,6 @@ std::vector<PinInfo> ImGuiNodeEditorComponent::getDynamicOutputPins(ModuleProces
     }
     return pins;
 }
-
 // Template function implementations
 template<typename TargetProcessorType>
 void ImGuiNodeEditorComponent::connectToMonophonicTargets(
@@ -7563,7 +7423,7 @@ void ImGuiNodeEditorComponent::connectToMonophonicTargets(
             if (pinNameMapping.count(pinInfo.type))
             {
                 juce::String targetPinName = pinNameMapping.at(pinInfo.type);
-                auto* targetPin = findInputPin("sample loader", targetPinName);
+                auto* targetPin = findInputPin("sample_loader", targetPinName);
 
                 // If the target pin exists, create the connection.
                 if (targetPin)
@@ -7813,7 +7673,6 @@ void ImGuiNodeEditorComponent::handleMIDIPlayerConnectionRequest(juce::uint32 mi
         juce::Logger::writeToLog("[MIDI Player Quick Connect] Connected " + juce::String(trackIdx) + 
                                 " tracks: MIDI Player → PolyVCO → Track Mixer → Output");
     }
-    
     if (requestType == 2 || requestType == 3) // Samplers or Both
     {
         float samplerX = playerPos.x + 400.0f;
@@ -8071,7 +7930,6 @@ void ImGuiNodeEditorComponent::drawLinkInspectorTooltip(const LinkInfo& link)
         ImGui::PlotLines("##Waveform", samples, numSamples, 0, nullptr, -1.0f, 1.0f, plotSize);
     }
 }
-
 // --- NEW HELPER FUNCTION ---
 void ImGuiNodeEditorComponent::insertNodeOnLink(const juce::String& nodeType, const LinkInfo& linkInfo, const ImVec2& position)
 {
@@ -8135,7 +7993,7 @@ void ImGuiNodeEditorComponent::insertNodeOnLink(const juce::String& nodeType, co
 
     // 4. Configure newly inserted node if necessary (e.g., MapRange)
     int newNodeOutputChannel = 0;
-    if (nodeType == "MapRange")
+    if (nodeType == "map_range")
     {
         if (auto* mapRange = dynamic_cast<MapRangeModuleProcessor*>(synth->getModuleForLogical(newNodeLid)))
         {
@@ -8149,7 +8007,6 @@ void ImGuiNodeEditorComponent::insertNodeOnLink(const juce::String& nodeType, co
     synth->connect(originalSrcNodeId, linkInfo.srcPin.channel, newNodeId, 0);
     synth->connect(newNodeId, newNodeOutputChannel, originalDstNodeId, linkInfo.dstPin.channel);
 }
-
 void ImGuiNodeEditorComponent::insertNodeOnLinkStereo(const juce::String& nodeType, 
                                                        const LinkInfo& linkLeft, 
                                                        const LinkInfo& linkRight, 
@@ -8236,24 +8093,20 @@ void ImGuiNodeEditorComponent::insertNodeOnLinkStereo(const juce::String& nodeTy
 
     juce::Logger::writeToLog("[InsertStereo] Successfully inserted stereo node with separate sources/destinations");
 }
-
-// --- REFACTORED OLD FUNCTION ---
-void ImGuiNodeEditorComponent::insertNodeBetween(const juce::String& nodeType, const PinID& srcPin, const PinID& dstPin)
+void ImGuiNodeEditorComponent::insertNodeBetween(const juce::String& nodeType, const PinID& srcPin, const PinID& dstPin, bool createUndoSnapshot)
 {
-    if (synth == nullptr) return;
+    if (synth == nullptr)
+        return;
 
-    // 1. Get positions to place the new node between the source and destination
     ImVec2 srcPos = ImNodes::GetNodeGridSpacePos(srcPin.logicalId);
     ImVec2 dstPos = ImNodes::GetNodeGridSpacePos(dstPin.logicalId == 0 ? 0 : dstPin.logicalId);
     ImVec2 newNodePos = ImVec2((srcPos.x + dstPos.x) * 0.5f, (srcPos.y + dstPos.y) * 0.5f);
 
-    // 2. Create and position the new converter node
-    // Check if this is a VST plugin
     juce::AudioProcessorGraph::NodeID newNodeId;
     auto& app = PresetCreatorApplication::getApp();
     auto& knownPluginList = app.getKnownPluginList();
     bool isVst = false;
-    
+
     for (const auto& desc : knownPluginList.getTypes())
     {
         if (desc.name == nodeType)
@@ -8263,130 +8116,453 @@ void ImGuiNodeEditorComponent::insertNodeBetween(const juce::String& nodeType, c
             break;
         }
     }
-    
-    if (!isVst)
-    {
+
+    if (! isVst)
         newNodeId = synth->addModule(nodeType);
-    }
-    
+
     auto newNodeLid = synth->getLogicalIdForNode(newNodeId);
     pendingNodePositions[(int)newNodeLid] = newNodePos;
 
-    // 3. Get original node IDs
     auto originalSrcNodeId = synth->getNodeIdForLogical(srcPin.logicalId);
     auto originalDstNodeId = (dstPin.logicalId == 0)
         ? synth->getOutputNodeID()
         : synth->getNodeIdForLogical(dstPin.logicalId);
 
-    // 4. Configure the new node if it's a MapRange or Attenuverter
     int newNodeOutputChannel = 0;
-    if (nodeType == "MapRange") {
-        if (auto* mapRange = dynamic_cast<MapRangeModuleProcessor*>(synth->getModuleForLogical(newNodeLid))) {
+    if (nodeType == "map_range")
+    {
+        if (auto* mapRange = dynamic_cast<MapRangeModuleProcessor*>(synth->getModuleForLogical(newNodeLid)))
+        {
             PinDataType srcType = getPinDataTypeForPin(srcPin);
             PinDataType dstType = getPinDataTypeForPin(dstPin);
             Range inRange = getSourceRange(srcPin, synth);
             configureMapRangeFor(srcType, dstType, *mapRange, inRange);
-            newNodeOutputChannel = (dstType == PinDataType::Audio) ? 1 : 0; // Use Raw Out for Audio, Norm Out for CV
+            newNodeOutputChannel = (dstType == PinDataType::Audio) ? 1 : 0;
         }
-    } else if (nodeType == "Attenuverter") {
-        // You might want to pre-configure the Attenuverter here if needed
     }
 
-    // 5. Connect the signal chain: Original Source -> New Node -> Original Destination
-    synth->connect(originalSrcNodeId, srcPin.channel, newNodeId, 0); // Source -> New Node's first input
-    synth->connect(newNodeId, newNodeOutputChannel, originalDstNodeId, dstPin.channel); // New Node -> Destination
+    synth->connect(originalSrcNodeId, srcPin.channel, newNodeId, 0);
+    synth->connect(newNodeId, newNodeOutputChannel, originalDstNodeId, dstPin.channel);
 
-    juce::Logger::writeToLog("[AutoConvert] Inserted '" + nodeType + "' between " + juce::String(srcPin.logicalId) + " and " + juce::String(dstPin.logicalId));
+    juce::Logger::writeToLog("[AutoConvert] Inserted '" + nodeType + "' between "
+                             + juce::String(srcPin.logicalId) + " and " + juce::String(dstPin.logicalId));
+
+    if (createUndoSnapshot)
+    {
+        pushSnapshot();
+        graphNeedsRebuild = true;
+    }
 }
 
 void ImGuiNodeEditorComponent::insertNodeBetween(const juce::String& nodeType)
 {
-    // This function is now just a wrapper that calls the helper
-    // with the stored link info and the current mouse position.
     if (linkToInsertOn.linkId != -1)
     {
         insertNodeOnLink(nodeType, linkToInsertOn, ImGui::GetMousePos());
         graphNeedsRebuild = true;
         pushSnapshot();
-        linkToInsertOn.linkId = -1; // Reset state
+        linkToInsertOn.linkId = -1;
     }
 }
-
 void ImGuiNodeEditorComponent::handleInsertNodeOnSelectedLinks(const juce::String& nodeType)
 {
-    if (synth == nullptr || ImNodes::NumSelectedLinks() == 0) return;
+    if (synth == nullptr || ImNodes::NumSelectedLinks() == 0)
+        return;
 
-    pushSnapshot(); // Create one undo state for the entire batch operation.
+    pushSnapshot();
 
     const int numSelectedLinks = ImNodes::NumSelectedLinks();
     std::vector<int> selectedLinkIds(numSelectedLinks);
     ImNodes::GetSelectedLinks(selectedLinkIds.data());
 
     ImVec2 basePosition = ImGui::GetMousePos();
-    float x_offset = 0.0f;
+    float xOffset = 0.0f;
 
-    // === OPTION A: If exactly 2 audio cables are selected, insert ONE stereo node ===
     if (numSelectedLinks == 2)
     {
-        // Get info for both cables
         auto it0 = linkIdToAttrs.find(selectedLinkIds[0]);
         auto it1 = linkIdToAttrs.find(selectedLinkIds[1]);
-        
+
         if (it0 != linkIdToAttrs.end() && it1 != linkIdToAttrs.end())
         {
-            LinkInfo link0, link1;
-            link0.linkId = selectedLinkIds[0];
-            link0.srcPin = decodePinId(it0->second.first);
-            link0.dstPin = decodePinId(it0->second.second);
-            link0.isMod = link0.srcPin.isMod || link0.dstPin.isMod;
-            
-            link1.linkId = selectedLinkIds[1];
-            link1.srcPin = decodePinId(it1->second.first);
-            link1.dstPin = decodePinId(it1->second.second);
-            link1.isMod = link1.srcPin.isMod || link1.dstPin.isMod;
-            
-            // Check if BOTH are audio cables (not mod cables)
-            if (!link0.isMod && !link1.isMod)
+            LinkInfo firstLink;
+            firstLink.linkId = selectedLinkIds[0];
+            firstLink.srcPin = decodePinId(it0->second.first);
+            firstLink.dstPin = decodePinId(it0->second.second);
+            firstLink.isMod = firstLink.srcPin.isMod || firstLink.dstPin.isMod;
+
+            LinkInfo secondLink;
+            secondLink.linkId = selectedLinkIds[1];
+            secondLink.srcPin = decodePinId(it1->second.first);
+            secondLink.dstPin = decodePinId(it1->second.second);
+            secondLink.isMod = secondLink.srcPin.isMod || secondLink.dstPin.isMod;
+
+            if (!firstLink.isMod && !secondLink.isMod)
             {
-                // Create ONE stereo node with link0 -> Left (ch0), link1 -> Right (ch1)
-                insertNodeOnLinkStereo(nodeType, link0, link1, basePosition);
-                juce::Logger::writeToLog("[InsertNode] Inserted STEREO node for 2 selected audio cables");
-                graphNeedsRebuild = true;
-                return; // Done - we've handled both cables with one node
+                auto isStereoCandidate = [&]() -> bool
+                {
+                    if (firstLink.srcPin.logicalId != secondLink.srcPin.logicalId)
+                        return false;
+
+                    const bool bothToMainOutput = (firstLink.dstPin.logicalId == 0 && secondLink.dstPin.logicalId == 0);
+                    if (!bothToMainOutput && firstLink.dstPin.logicalId != secondLink.dstPin.logicalId)
+                        return false;
+
+                    const int srcDelta = std::abs(firstLink.srcPin.channel - secondLink.srcPin.channel);
+                    const int dstDelta = std::abs(firstLink.dstPin.channel - secondLink.dstPin.channel);
+                    if (srcDelta != 1 || dstDelta != 1)
+                        return false;
+
+                    const auto srcTypeA = getPinDataTypeForPin(firstLink.srcPin);
+                    const auto srcTypeB = getPinDataTypeForPin(secondLink.srcPin);
+                    const auto dstTypeA = getPinDataTypeForPin(firstLink.dstPin);
+                    const auto dstTypeB = getPinDataTypeForPin(secondLink.dstPin);
+                    const bool allAudio = srcTypeA == PinDataType::Audio && srcTypeB == PinDataType::Audio
+                                          && dstTypeA == PinDataType::Audio && dstTypeB == PinDataType::Audio;
+                    return allAudio;
+                };
+
+                if (isStereoCandidate())
+                {
+                    LinkInfo leftLink = firstLink;
+                    LinkInfo rightLink = secondLink;
+                    if (rightLink.srcPin.channel < leftLink.srcPin.channel)
+                        std::swap(leftLink, rightLink);
+
+                    insertNodeOnLinkStereo(nodeType, leftLink, rightLink, basePosition);
+                    juce::Logger::writeToLog("[InsertNode] Inserted STEREO node for 2 selected audio cables");
+                    graphNeedsRebuild = true;
+                    return;
+                }
             }
         }
     }
 
-    // === FALLBACK: Multiple cables or mixed mod/audio - insert separate nodes ===
-    std::set<int> processedLinks; // Track which links we've already handled
-    
-    for (size_t i = 0; i < selectedLinkIds.size(); ++i)
+    std::set<int> processedLinks;
+
+    for (int linkId : selectedLinkIds)
     {
-        int linkId = selectedLinkIds[i];
-        if (processedLinks.count(linkId)) continue;
+        if (processedLinks.count(linkId) != 0)
+            continue;
 
         auto it = linkIdToAttrs.find(linkId);
-        if (it == linkIdToAttrs.end()) continue;
+        if (it == linkIdToAttrs.end())
+            continue;
 
-        LinkInfo currentLink;
-        currentLink.linkId = linkId;
-        currentLink.srcPin = decodePinId(it->second.first);
-        currentLink.dstPin = decodePinId(it->second.second);
-        currentLink.isMod = currentLink.srcPin.isMod || currentLink.dstPin.isMod;
+        LinkInfo link;
+        link.linkId = linkId;
+        link.srcPin = decodePinId(it->second.first);
+        link.dstPin = decodePinId(it->second.second);
+        link.isMod = link.srcPin.isMod || link.dstPin.isMod;
 
-        ImVec2 newPosition = ImVec2(basePosition.x + x_offset, basePosition.y);
-        
-        // === MONO INSERT: Create separate node for each cable ===
-        insertNodeOnLink(nodeType, currentLink, newPosition);
+        ImVec2 newPosition(basePosition.x + xOffset, basePosition.y);
+        insertNodeOnLink(nodeType, link, newPosition);
         processedLinks.insert(linkId);
         juce::Logger::writeToLog("[InsertNode] Inserted MONO node for link " + juce::String(linkId));
 
-        x_offset += 40.0f;
+        xOffset += 40.0f;
     }
 
     graphNeedsRebuild = true;
-    // The single pushSnapshot at the beginning handles the undo state.
 }
+
+void ImGuiNodeEditorComponent::expandMetaModule(juce::uint32 metaLogicalId)
+{
+    if (!synth)
+        return;
+
+    const auto metaNodeId = synth->getNodeIdForLogical(metaLogicalId);
+    if (metaNodeId.uid == 0)
+        return;
+
+    auto* metaModule = dynamic_cast<MetaModuleProcessor*>(synth->getModuleForLogical(metaLogicalId));
+    if (metaModule == nullptr)
+        return;
+
+    const auto metaState = metaModule->getExtraStateTree();
+    const juce::String encoded = metaState.getProperty("internalGraphState").toString();
+    if (encoded.isEmpty())
+    {
+        NotificationManager::post(NotificationManager::Type::Warning, "Meta module has no internal patch to expand.");
+        return;
+    }
+
+    juce::MemoryOutputStream decoded;
+    if (!juce::Base64::convertFromBase64(decoded, encoded))
+    {
+        NotificationManager::post(NotificationManager::Type::Warning, "Failed to decode meta module state.");
+        return;
+    }
+
+    std::unique_ptr<juce::XmlElement> xml (juce::XmlDocument::parse(decoded.toString()));
+    if (xml == nullptr)
+        return;
+
+    juce::ValueTree internalRoot = juce::ValueTree::fromXml(*xml);
+    auto modulesVT = internalRoot.getChildWithName("modules");
+    auto connsVT = internalRoot.getChildWithName("connections");
+    if (!modulesVT.isValid() || !connsVT.isValid())
+        return;
+
+    pushSnapshot();
+
+    struct CollapsedInlet { int oldId{}; int pinIndex{}; int channelCount{1}; juce::uint32 externalLogicalId{}; int externalChannel{}; int metaChannel{}; };
+    struct CollapsedOutlet { int oldId{}; int pinIndex{}; int channelCount{1}; juce::uint32 externalLogicalId{}; int externalChannel{}; bool externalIsOutput{}; int metaChannel{}; };
+    struct InternalConnection { int srcId; int srcChan; int dstId; int dstChan; };
+    struct InboundConnection { int inletOldId; int dstId; int dstChan; };
+    struct OutboundConnection { int srcId; int srcChan; int outletOldId; };
+
+    std::vector<CollapsedInlet> collapsedInlets;
+    std::vector<CollapsedOutlet> collapsedOutlets;
+    std::vector<InternalConnection> internalConnections;
+    std::vector<InboundConnection> inboundConnections;
+    std::vector<OutboundConnection> outboundConnections;
+    std::map<int, juce::uint32> oldToNew;
+    std::vector<juce::uint32> createdLogicalIds;
+
+    auto readChannelCount = [](const juce::ValueTree& moduleVT, const juce::Identifier& paramId) -> int
+    {
+        if (auto paramsWrapper = moduleVT.getChildWithName("params"); paramsWrapper.isValid())
+        {
+            if (paramsWrapper.getNumChildren() > 0)
+            {
+                auto params = paramsWrapper.getChild(0);
+                for (int i = 0; i < params.getNumChildren(); ++i)
+                {
+                    auto paramNode = params.getChild(i);
+                    if (paramNode.getProperty("id").toString().equalsIgnoreCase(paramId.toString()))
+                        return (int)paramNode.getProperty("value", 1.0);
+                }
+            }
+        }
+        return 1;
+    };
+
+    std::unordered_set<int> inletIds;
+    std::unordered_set<int> outletIds;
+
+    for (int i = 0; i < modulesVT.getNumChildren(); ++i)
+    {
+        auto moduleVT = modulesVT.getChild(i);
+        if (!moduleVT.hasType("module"))
+            continue;
+
+        const int oldId = (int)moduleVT.getProperty("logicalId", 0);
+        const juce::String type = moduleVT.getProperty("type").toString();
+
+        auto extraWrapper = moduleVT.getChildWithName("extra");
+        auto extraState = (extraWrapper.isValid() && extraWrapper.getNumChildren() > 0) ? extraWrapper.getChild(0) : juce::ValueTree();
+
+        if (type.equalsIgnoreCase("inlet"))
+        {
+            CollapsedInlet inlet;
+            inlet.oldId = oldId;
+            inlet.pinIndex = (int)extraState.getProperty("pinIndex", (int)collapsedInlets.size());
+            inlet.channelCount = readChannelCount(moduleVT, InletModuleProcessor::paramIdChannelCount);
+            inlet.externalLogicalId = (juce::uint32)(int)extraState.getProperty("externalLogicalId", 0);
+            inlet.externalChannel = (int)extraState.getProperty("externalChannel", 0);
+            collapsedInlets.push_back(inlet);
+            inletIds.insert(oldId);
+            continue;
+        }
+
+        if (type.equalsIgnoreCase("outlet"))
+        {
+            CollapsedOutlet outlet;
+            outlet.oldId = oldId;
+            outlet.pinIndex = (int)extraState.getProperty("pinIndex", (int)collapsedOutlets.size());
+            outlet.channelCount = readChannelCount(moduleVT, OutletModuleProcessor::paramIdChannelCount);
+            outlet.externalLogicalId = (juce::uint32)(int)extraState.getProperty("externalLogicalId", 0);
+            outlet.externalChannel = (int)extraState.getProperty("externalChannel", 0);
+            outlet.externalIsOutput = (bool)(int)extraState.getProperty("externalIsOutput", outlet.externalLogicalId == 0 ? 1 : 0);
+            collapsedOutlets.push_back(outlet);
+            outletIds.insert(oldId);
+            continue;
+        }
+
+        const auto nodeId = synth->addModule(type);
+        const juce::uint32 newLogical = synth->getLogicalIdForNode(nodeId);
+        oldToNew[oldId] = newLogical;
+        createdLogicalIds.push_back(newLogical);
+
+        if (auto* module = synth->getModuleForLogical(newLogical))
+        {
+            if (auto paramsWrapper = moduleVT.getChildWithName("params"); paramsWrapper.isValid())
+                if (paramsWrapper.getNumChildren() > 0)
+                    module->getAPVTS().replaceState(paramsWrapper.getChild(0));
+            if (extraState.isValid())
+                module->setExtraStateTree(extraState);
+        }
+    }
+
+    for (int i = 0; i < connsVT.getNumChildren(); ++i)
+    {
+        auto cv = connsVT.getChild(i);
+        if (!cv.hasType("connection"))
+            continue;
+
+        const int srcId = (int)cv.getProperty("srcId", 0);
+        const int dstId = (int)cv.getProperty("dstId", 0);
+        const int srcChan = (int)cv.getProperty("srcChan", 0);
+        const int dstChan = (int)cv.getProperty("dstChan", 0);
+
+        const bool srcIsInlet = inletIds.count(srcId) > 0;
+        const bool dstIsOutlet = outletIds.count(dstId) > 0;
+
+        if (srcIsInlet && !dstIsOutlet)
+            inboundConnections.push_back({ srcId, dstId, dstChan });
+        else if (!srcIsInlet && dstIsOutlet)
+            outboundConnections.push_back({ srcId, srcChan, dstId });
+        else if (!srcIsInlet && !dstIsOutlet)
+            internalConnections.push_back({ srcId, srcChan, dstId, dstChan });
+    }
+
+    std::sort(collapsedInlets.begin(), collapsedInlets.end(), [](const CollapsedInlet& a, const CollapsedInlet& b)
+    {
+        if (a.pinIndex != b.pinIndex)
+            return a.pinIndex < b.pinIndex;
+        return a.oldId < b.oldId;
+    });
+
+    int runningChannel = 0;
+    for (auto& inlet : collapsedInlets)
+    {
+        inlet.metaChannel = runningChannel;
+        runningChannel += inlet.channelCount;
+    }
+
+    std::sort(collapsedOutlets.begin(), collapsedOutlets.end(), [](const CollapsedOutlet& a, const CollapsedOutlet& b)
+    {
+        if (a.pinIndex != b.pinIndex)
+            return a.pinIndex < b.pinIndex;
+        return a.oldId < b.oldId;
+    });
+
+    runningChannel = 0;
+    for (auto& outlet : collapsedOutlets)
+    {
+        outlet.metaChannel = runningChannel;
+        runningChannel += outlet.channelCount;
+    }
+
+    std::unordered_map<int, std::pair<juce::uint32, int>> metaInputs;
+    std::unordered_map<int, std::tuple<juce::uint32, int, bool>> metaOutputs;
+
+    for (const auto& c : synth->getConnectionsInfo())
+    {
+        if (c.dstLogicalId == metaLogicalId && !c.dstIsOutput)
+            metaInputs.emplace(c.dstChan, std::make_pair(c.srcLogicalId, c.srcChan));
+        if (c.srcLogicalId == metaLogicalId)
+            metaOutputs.emplace(c.srcChan, std::make_tuple(c.dstLogicalId, c.dstChan, c.dstIsOutput));
+    }
+
+    for (auto& inlet : collapsedInlets)
+    {
+        if (inlet.externalLogicalId == 0 && metaInputs.count(inlet.metaChannel) > 0)
+        {
+            auto external = metaInputs[inlet.metaChannel];
+            inlet.externalLogicalId = external.first;
+            inlet.externalChannel = external.second;
+        }
+    }
+
+    for (auto& outlet : collapsedOutlets)
+    {
+        if (metaOutputs.count(outlet.metaChannel) > 0)
+        {
+            auto external = metaOutputs[outlet.metaChannel];
+            if ((outlet.externalLogicalId == 0 || std::get<0>(external) != 0))
+                outlet.externalLogicalId = std::get<0>(external);
+            outlet.externalChannel = std::get<1>(external);
+            outlet.externalIsOutput = std::get<2>(external) || outlet.externalLogicalId == 0;
+        }
+    }
+
+    std::unordered_map<int, CollapsedInlet> inletLookup;
+    for (const auto& inlet : collapsedInlets)
+        inletLookup.emplace(inlet.oldId, inlet);
+
+    std::unordered_map<int, CollapsedOutlet> outletLookup;
+    for (const auto& outlet : collapsedOutlets)
+        outletLookup.emplace(outlet.oldId, outlet);
+
+    for (const auto& conn : internalConnections)
+    {
+        auto srcIt = oldToNew.find(conn.srcId);
+        auto dstIt = oldToNew.find(conn.dstId);
+        if (srcIt == oldToNew.end() || dstIt == oldToNew.end())
+            continue;
+
+        auto srcNode = synth->getNodeIdForLogical(srcIt->second);
+        auto dstNode = synth->getNodeIdForLogical(dstIt->second);
+        if (srcNode.uid == 0 || dstNode.uid == 0)
+            continue;
+
+        synth->connect(srcNode, conn.srcChan, dstNode, conn.dstChan);
+    }
+
+    for (const auto& inbound : inboundConnections)
+    {
+        auto inletIt = inletLookup.find(inbound.inletOldId);
+        auto dstIt = oldToNew.find(inbound.dstId);
+        if (inletIt == inletLookup.end() || dstIt == oldToNew.end())
+            continue;
+
+        const auto& inlet = inletIt->second;
+        if (inlet.externalLogicalId == 0)
+            continue;
+
+        auto srcNode = synth->getNodeIdForLogical(inlet.externalLogicalId);
+        auto dstNode = synth->getNodeIdForLogical(dstIt->second);
+        if (srcNode.uid == 0 || dstNode.uid == 0)
+            continue;
+
+        synth->connect(srcNode, inlet.externalChannel, dstNode, inbound.dstChan);
+    }
+
+    for (const auto& outbound : outboundConnections)
+    {
+        auto outletIt = outletLookup.find(outbound.outletOldId);
+        auto srcIt = oldToNew.find(outbound.srcId);
+        if (outletIt == outletLookup.end() || srcIt == oldToNew.end())
+            continue;
+
+        const auto& outlet = outletIt->second;
+        auto srcNode = synth->getNodeIdForLogical(srcIt->second);
+        if (srcNode.uid == 0)
+            continue;
+
+        juce::AudioProcessorGraph::NodeID dstNode;
+        if (outlet.externalIsOutput || outlet.externalLogicalId == 0)
+            dstNode = synth->getOutputNodeID();
+        else
+            dstNode = synth->getNodeIdForLogical(outlet.externalLogicalId);
+
+        if (dstNode.uid == 0)
+            continue;
+
+        synth->connect(srcNode, outbound.srcChan, dstNode, outlet.externalChannel);
+    }
+
+    const ImVec2 metaPos = ImNodes::GetNodeGridSpacePos((int)metaLogicalId);
+    synth->removeModule(metaNodeId);
+
+    const float spacing = 160.0f;
+    for (std::size_t idx = 0; idx < createdLogicalIds.size(); ++idx)
+    {
+        const auto lid = createdLogicalIds[idx];
+        const int ix = (int)(idx % 4);
+        const int iy = (int)(idx / 4);
+        pendingNodePositions[(int)lid] = ImVec2(metaPos.x + ix * spacing, metaPos.y + iy * spacing);
+    }
+
+    selectedLogicalId = 0;
+    graphNeedsRebuild = true;
+    synth->commitChanges();
+
+    NotificationManager::post(NotificationManager::Type::Info, "Expanded Meta Module");
+}
+
 juce::File ImGuiNodeEditorComponent::findPresetsDirectory()
 {
     // Search upwards from the executable's location for a sibling directory
@@ -8535,71 +8711,6 @@ const char* ImGuiNodeEditorComponent::pinDataTypeToString(PinDataType type)
         default:                 return "Unknown";
     }
 }
-void ImGuiNodeEditorComponent::handleNodeChaining()
-{
-    if (synth == nullptr) return;
-
-    const int numSelected = ImNodes::NumSelectedNodes();
-    if (numSelected <= 1) return;
-
-    juce::Logger::writeToLog("[Node Chaining] Initiated for " + juce::String(numSelected) + " nodes.");
-
-    // 1. Get all selected nodes and their horizontal positions.
-    std::vector<int> selectedNodeIds(numSelected);
-    ImNodes::GetSelectedNodes(selectedNodeIds.data());
-
-    std::vector<std::pair<float, int>> sortedNodes;
-    for (int nodeId : selectedNodeIds)
-    {
-        // Don't include the main output node in the chaining logic.
-        if (nodeId == 0) continue;
-        ImVec2 pos = ImNodes::GetNodeGridSpacePos(nodeId);
-        sortedNodes.push_back({pos.x, nodeId});
-    }
-
-    // 2. Sort the nodes from left to right based on their X position.
-    std::sort(sortedNodes.begin(), sortedNodes.end(), [](const auto& a, const auto& b) {
-        return a.first < b.first;
-    });
-
-    // Create a single undo action for the entire operation.
-    pushSnapshot();
-
-    // 3. Connect the nodes in sequence.
-    for (size_t i = 0; i < sortedNodes.size() - 1; ++i)
-    {
-        juce::uint32 sourceLid = sortedNodes[i].second;
-        juce::uint32 destLid   = sortedNodes[i + 1].second;
-
-        auto sourceNodeId = synth->getNodeIdForLogical(sourceLid);
-        auto destNodeId   = synth->getNodeIdForLogical(destLid);
-
-        if (sourceNodeId.uid != 0 && destNodeId.uid != 0)
-        {
-            // Standard stereo connection: Out L -> In L, Out R -> In R
-            synth->connect(sourceNodeId, 0, destNodeId, 0); // Connect channel 0
-            synth->connect(sourceNodeId, 1, destNodeId, 1); // Connect channel 1
-
-            juce::Logger::writeToLog("[Node Chaining] Connected " + getTypeForLogical(sourceLid) + " (" + juce::String(sourceLid) + ") to " + getTypeForLogical(destLid) + " (" + juce::String(destLid) + ")");
-            
-            // Check if the destination is a recorder and update its filename
-            if (auto* destModule = synth->getModuleForLogical(destLid))
-            {
-                if (auto* recorder = dynamic_cast<RecordModuleProcessor*>(destModule))
-                {
-                    if (auto* sourceModule = synth->getModuleForLogical(sourceLid))
-                    {
-                        recorder->updateSuggestedFilename(sourceModule->getName());
-                    }
-                }
-            }
-        }
-    }
-
-    // 4. Apply all the new connections to the audio graph.
-    graphNeedsRebuild = true;
-}
-
 std::vector<AudioPin> ImGuiNodeEditorComponent::getPinsOfType(juce::uint32 logicalId, bool isInput, PinDataType targetType)
 {
     std::vector<AudioPin> matchingPins;
@@ -8739,7 +8850,6 @@ void ImGuiNodeEditorComponent::handleRecordOutput()
     graphNeedsRebuild = true;
     juce::Logger::writeToLog("[Record Output] Recorder added and connected.");
 }
-
 void ImGuiNodeEditorComponent::handleColorCodedChaining(PinDataType targetType)
 {
     if (synth == nullptr)
@@ -9160,7 +9270,6 @@ void ImGuiNodeEditorComponent::handleCollapseToMetaModule()
         int internalChannel;
         bool isInput; // true = external -> internal, false = internal -> external
     };
-    
     std::vector<BoundaryConnection> boundaries;
     using InletKey = std::pair<juce::uint32, int>;
     using OutletKey = std::pair<juce::uint32, int>;
@@ -9171,7 +9280,6 @@ void ImGuiNodeEditorComponent::handleCollapseToMetaModule()
     int inletPinIndexCounter = 0;
     int outletPinIndexCounter = 0;
     auto allConnections = synth->getConnectionsInfo();
-    
     for (const auto& conn : allConnections)
     {
         bool srcIsSelected = selectedLogicalIds.count(conn.srcLogicalId) > 0;
@@ -9309,8 +9417,24 @@ void ImGuiNodeEditorComponent::handleCollapseToMetaModule()
             mv.addChild(paramsWrapper, -1, nullptr);
             
             juce::ValueTree extra("InletState");
-            extra.setProperty("customLabel", juce::String("In ") + juce::String(pinIndex + 1), nullptr);
+            juce::String inletLabel;
+            if (auto* srcModule = synth->getModuleForLogical(bc.externalLogicalId))
+            {
+                inletLabel = srcModule->getName();
+                const juce::String channelLabel = srcModule->getAudioOutputLabel(bc.externalChannel);
+                if (channelLabel.isNotEmpty())
+                    inletLabel += " :: " + channelLabel;
+                else
+                    inletLabel += " :: Out " + juce::String(bc.externalChannel + 1);
+            }
+            else
+            {
+                inletLabel = "In " + juce::String(pinIndex + 1);
+            }
+            extra.setProperty("customLabel", inletLabel, nullptr);
             extra.setProperty("pinIndex", pinIndex, nullptr);
+            extra.setProperty("externalLogicalId", (int)bc.externalLogicalId, nullptr);
+            extra.setProperty("externalChannel", bc.externalChannel, nullptr);
             juce::ValueTree extraWrapper("extra");
             extraWrapper.addChild(extra, -1, nullptr);
             mv.addChild(extraWrapper, -1, nullptr);
@@ -9345,8 +9469,29 @@ void ImGuiNodeEditorComponent::handleCollapseToMetaModule()
             mv.addChild(paramsWrapper, -1, nullptr);
             
             juce::ValueTree extra("OutletState");
-            extra.setProperty("customLabel", juce::String("Out ") + juce::String(pinIndex + 1), nullptr);
+            juce::String outletLabel;
+            if (bc.externalLogicalId == 0)
+            {
+                outletLabel = "Main Output :: Ch " + juce::String(bc.externalChannel + 1);
+            }
+            else if (auto* dstModule = synth->getModuleForLogical(bc.externalLogicalId))
+            {
+                outletLabel = dstModule->getName();
+                const juce::String channelLabel = dstModule->getAudioInputLabel(bc.externalChannel);
+                if (channelLabel.isNotEmpty())
+                    outletLabel += " :: " + channelLabel;
+                else
+                    outletLabel += " :: In " + juce::String(bc.externalChannel + 1);
+            }
+            else
+            {
+                outletLabel = "Out " + juce::String(pinIndex + 1);
+            }
+            extra.setProperty("customLabel", outletLabel, nullptr);
             extra.setProperty("pinIndex", pinIndex, nullptr);
+            extra.setProperty("externalLogicalId", (int)bc.externalLogicalId, nullptr);
+            extra.setProperty("externalChannel", bc.externalChannel, nullptr);
+            extra.setProperty("externalIsOutput", bc.externalLogicalId == 0, nullptr);
             juce::ValueTree extraWrapper("extra");
             extraWrapper.addChild(extra, -1, nullptr);
             mv.addChild(extraWrapper, -1, nullptr);
@@ -9448,17 +9593,25 @@ void ImGuiNodeEditorComponent::handleCollapseToMetaModule()
     }
     
     // 6. Create meta module
-    auto metaNodeId = synth->addModule("meta module");
+    auto metaNodeId = synth->addModule("meta_module");
     auto metaLogicalId = synth->getLogicalIdForNode(metaNodeId);
     pendingNodePositions[(int)metaLogicalId] = avgPos;
     
     juce::Logger::writeToLog("[META] Created new MetaModule with logical ID: " + juce::String((int)metaLogicalId));
-    
     auto* metaModule = dynamic_cast<MetaModuleProcessor*>(synth->getModuleForLogical(metaLogicalId));
     if (metaModule)
     {
-        // Load the internal state
-        metaModule->setStateInformation(internalState.getData(), (int)internalState.getSize());
+        juce::ValueTree metaState("MetaModuleState");
+        metaState.setProperty("label", "Meta Module", nullptr);
+
+        if (internalState.getSize() > 0)
+        {
+            juce::MemoryOutputStream base64Stream;
+            juce::Base64::convertToBase64(base64Stream, internalState.getData(), internalState.getSize());
+            metaState.setProperty("internalGraphState", base64Stream.toString(), nullptr);
+        }
+
+        metaModule->setExtraStateTree(metaState);
         juce::Logger::writeToLog("[META] Loaded internal state into meta module");
     }
     else
@@ -9466,7 +9619,6 @@ void ImGuiNodeEditorComponent::handleCollapseToMetaModule()
         juce::Logger::writeToLog("[META] ERROR: Failed to create meta module");
         return;
     }
-    
     // 7. Reconnect external connections
     auto sortedInlets = metaModule->getInletNodes();
     std::sort(sortedInlets.begin(), sortedInlets.end(), [](auto* a, auto* b)
@@ -9475,7 +9627,6 @@ void ImGuiNodeEditorComponent::handleCollapseToMetaModule()
             return a->getPinIndex() < b->getPinIndex();
         return a->getLogicalId() < b->getLogicalId();
     });
-
     std::unordered_map<int, int> inletBaseChannels;
     std::unordered_map<int, int> inletChannelCounts;
     int runningInputChannel = 0;
@@ -9651,7 +9802,6 @@ const std::vector<juce::String>& ImGuiNodeEditorComponent::getDragInsertSuggesti
     static const std::vector<juce::String> empty;
     return empty;
 }
-
 void ImGuiNodeEditorComponent::insertNodeFromDragSelection(const juce::String& moduleType)
 {
     if (synth == nullptr || dragInsertStartAttrId == -1)
@@ -9662,6 +9812,51 @@ void ImGuiNodeEditorComponent::insertNodeFromDragSelection(const juce::String& m
 
     pendingNodeScreenPositions[(int)newLogicalId] = dragInsertDropPos;
 
+    const PinDataType primaryType = dragInsertStartPin.isMod
+        ? PinDataType::CV
+        : getPinDataTypeForPin(dragInsertStartPin);
+
+    auto getSortedPinsForType = [&](juce::uint32 logicalId, bool isInput) -> std::vector<AudioPin>
+    {
+        std::vector<AudioPin> pins;
+
+        if (logicalId == 0)
+        {
+            if (primaryType == PinDataType::Audio)
+            {
+                pins.emplace_back("Main L", 0, PinDataType::Audio);
+                pins.emplace_back("Main R", 1, PinDataType::Audio);
+            }
+            return pins;
+        }
+
+        pins = getPinsOfType(logicalId, isInput, primaryType);
+        std::sort(pins.begin(), pins.end(),
+                  [](const AudioPin& a, const AudioPin& b)
+                  {
+                      return a.channel < b.channel;
+                  });
+        return pins;
+    };
+
+    auto findChannelIndex = [](const std::vector<AudioPin>& pins, int channel) -> int
+    {
+        for (int i = 0; i < (int)pins.size(); ++i)
+        {
+            if (pins[(size_t)i].channel == channel)
+                return i;
+        }
+        return -1;
+    };
+
+    auto logNoCompatiblePins = [&](const char* role)
+    {
+        juce::Logger::writeToLog("[DragInsert] No compatible "
+                                 + juce::String(toString(primaryType))
+                                 + " " + juce::String(role)
+                                 + " found for '" + moduleType + "', skipping auto-wire.");
+    };
+
     bool connected = false;
     if (!dragInsertStartPin.isMod)
     {
@@ -9670,8 +9865,42 @@ void ImGuiNodeEditorComponent::insertNodeFromDragSelection(const juce::String& m
             auto srcNodeId = synth->getNodeIdForLogical(dragInsertStartPin.logicalId);
             if (srcNodeId.uid != 0)
             {
-                synth->connect(srcNodeId, dragInsertStartPin.channel, newNodeId, 0);
-                connected = true;
+                const auto sourcePins = getSortedPinsForType(dragInsertStartPin.logicalId, false);
+                const auto targetPins = getSortedPinsForType((juce::uint32)newLogicalId, true);
+
+                if (!sourcePins.empty() && !targetPins.empty())
+                {
+                    const int sourceIndex = findChannelIndex(sourcePins, dragInsertStartPin.channel);
+                    if (sourceIndex >= 0)
+                    {
+                        const int targetIndex = juce::jlimit(0, (int)targetPins.size() - 1, sourceIndex);
+
+                        synth->connect(srcNodeId,
+                                       sourcePins[(size_t)sourceIndex].channel,
+                                       newNodeId,
+                                       targetPins[(size_t)targetIndex].channel);
+                        connected = true;
+
+                        if (primaryType == PinDataType::Audio)
+                        {
+                            const int stereoSourceIndex = sourceIndex + 1;
+                            const int stereoTargetIndex = targetIndex + 1;
+
+                            if (stereoSourceIndex < (int)sourcePins.size() &&
+                                stereoTargetIndex < (int)targetPins.size())
+                            {
+                                synth->connect(srcNodeId,
+                                               sourcePins[(size_t)stereoSourceIndex].channel,
+                                               newNodeId,
+                                               targetPins[(size_t)stereoTargetIndex].channel);
+                            }
+                        }
+                    }
+                }
+                else
+                {
+                    logNoCompatiblePins("input");
+                }
             }
         }
         else
@@ -9681,8 +9910,42 @@ void ImGuiNodeEditorComponent::insertNodeFromDragSelection(const juce::String& m
                              : synth->getNodeIdForLogical(dragInsertStartPin.logicalId);
             if (dstNodeId.uid != 0)
             {
-                synth->connect(newNodeId, 0, dstNodeId, dragInsertStartPin.channel);
-                connected = true;
+                const auto sourcePins = getSortedPinsForType((juce::uint32)newLogicalId, false);
+                const auto destinationPins = getSortedPinsForType(dragInsertStartPin.logicalId, true);
+
+                if (!sourcePins.empty() && !destinationPins.empty())
+                {
+                    const int destinationIndex = findChannelIndex(destinationPins, dragInsertStartPin.channel);
+                    if (destinationIndex >= 0)
+                    {
+                        const int sourceIndex = juce::jlimit(0, (int)sourcePins.size() - 1, destinationIndex);
+
+                        synth->connect(newNodeId,
+                                       sourcePins[(size_t)sourceIndex].channel,
+                                       dstNodeId,
+                                       destinationPins[(size_t)destinationIndex].channel);
+                        connected = true;
+
+                        if (primaryType == PinDataType::Audio)
+                        {
+                            const int stereoSourceIndex = sourceIndex + 1;
+                            const int stereoDestinationIndex = destinationIndex + 1;
+
+                            if (stereoSourceIndex < (int)sourcePins.size() &&
+                                stereoDestinationIndex < (int)destinationPins.size())
+                            {
+                                synth->connect(newNodeId,
+                                               sourcePins[(size_t)stereoSourceIndex].channel,
+                                               dstNodeId,
+                                               destinationPins[(size_t)stereoDestinationIndex].channel);
+                            }
+                        }
+                    }
+                }
+                else
+                {
+                    logNoCompatiblePins("output");
+                }
             }
         }
     }
@@ -9740,7 +10003,6 @@ void ImGuiNodeEditorComponent::loadPresetFromFile(const juce::File& file)
     
     // No notification here; the calling function will handle it.
 }
-
 void ImGuiNodeEditorComponent::mergePresetFromFile(const juce::File& file, ImVec2 dropPosition)
 {
     if (!file.existsAsFile() || synth == nullptr)

@@ -59,7 +59,8 @@ private:
     TimePitchProcessor timePitch;
     juce::HeapBlock<float> interleavedInput;
     juce::HeapBlock<float> interleavedOutput;
-    int interleavedCapacityFrames { 0 };
+    int interleavedInputCapacityFrames { 0 };
+    int interleavedOutputCapacityFrames { 0 };
 
     // Parameter pointers
     std::atomic<float>* speedParam { nullptr };

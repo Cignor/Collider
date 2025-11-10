@@ -10,109 +10,109 @@
 ### Quick Reference Index
 
 #### 1. SOURCE NODES
-- [VCO](#vco) - Voltage-Controlled Oscillator
-- [PolyVCO](#polyvco) - Multi-Voice Oscillator Bank
-- [Noise](#noise) - Noise Generator
-- [Audio Input](#audio-input) - Hardware Audio Input
-- [Sample Loader](#sample-loader) - Audio Sample Player
-- [Value](#value) - Constant Value Generator
+- [vco](#vco) - Voltage-Controlled Oscillator
+- [polyvco](#polyvco) - Multi-Voice Oscillator Bank
+- [noise](#noise) - Noise Generator
+- [audio_input](#audio_input) - Hardware Audio Input
+- [sample_loader](#sample_loader) - Audio Sample Player
+- [value](#value) - Constant Value Generator
 
 #### 2. EFFECT NODES
-- [VCF](#vcf) - Voltage-Controlled Filter
-- [Delay](#delay) - Stereo Delay Effect
-- [Reverb](#reverb) - Stereo Reverb Effect
-- [Chorus](#chorus) - Stereo Chorus Effect
-- [Phaser](#phaser) - Stereo Phaser Effect
-- [Compressor](#compressor) - Dynamic Range Compressor
-- [Limiter](#limiter) - Audio Limiter
-- [Gate](#gate) - Noise Gate
-- [Drive](#drive) - Waveshaping Distortion
-- [Graphic EQ](#graphic-eq) - 8-Band Graphic Equalizer
-- [Waveshaper](#waveshaper) - Multi-Algorithm Waveshaper
-- [8-Band Shaper](#8-band-shaper) - Multi-Band Waveshaper
-- [Granulator](#granulator) - Granular Synthesizer/Effect
-- [Harmonic Shaper](#harmonic-shaper) - Harmonic Content Shaper
-- [TimePitch](#timepitch) - Time/Pitch Manipulation
-- [De-Crackle](#de-crackle) - Click/Pop Reducer
-- [Vocal Tract Filter](#vocal-tract-filter) - Formant Filter
+- [vcf](#vcf) - Voltage-Controlled Filter
+- [delay](#delay) - Stereo Delay Effect
+- [reverb](#reverb) - Stereo Reverb Effect
+- [chorus](#chorus) - Stereo Chorus Effect
+- [phaser](#phaser) - Stereo Phaser Effect
+- [compressor](#compressor) - Dynamic Range Compressor
+- [limiter](#limiter) - Audio Limiter
+- [gate](#gate) - Noise Gate
+- [drive](#drive) - Waveshaping Distortion
+- [graphic_eq](#graphic_eq) - 8-Band Graphic Equalizer
+- [waveshaper](#waveshaper) - Multi-Algorithm Waveshaper
+- [8bandshaper](#8bandshaper) - Multi-Band Waveshaper
+- [granulator](#granulator) - Granular Synthesizer/Effect
+- [harmonic_shaper](#harmonic_shaper) - Harmonic Content Shaper
+- [timepitch](#timepitch) - Time/Pitch Manipulation
+- [de_crackle](#de_crackle) - Click/Pop Reducer
+- [vocal_tract_filter](#vocal_tract_filter) - Formant Filter
 
 #### 3. MODULATOR NODES
-- [LFO](#lfo) - Low-Frequency Oscillator
-- [ADSR](#adsr) - Envelope Generator
-- [Random](#random) - Random Value Generator
-- [S&H](#sh) - Sample & Hold
-- [Function Generator](#function-generator) - Drawable Envelope/LFO
-- [Shaping Oscillator](#shaping-oscillator) - Oscillator with Built-in Waveshaper
+- [lfo](#lfo) - Low-Frequency Oscillator
+- [adsr](#adsr) - Envelope Generator
+- [random](#random) - Random Value Generator
+- [s_and_h](#s_and_h) - Sample & Hold
+- [function_generator](#function_generator) - Drawable Envelope/LFO
+- [shaping_oscillator](#shaping_oscillator) - Oscillator with Built-in Waveshaper
 
 #### 4. UTILITY & LOGIC NODES
-- [VCA](#vca) - Voltage-Controlled Amplifier
-- [Mixer](#mixer) - Stereo Audio Mixer
-- [CV Mixer](#cv-mixer) - Control Voltage Mixer
-- [Track Mixer](#track-mixer) - Multi-Channel Mixer
-- [Attenuverter](#attenuverter) - Attenuate/Invert Signal
-- [Lag Processor](#lag-processor) - Slew Limiter/Smoother
-- [Math](#math) - Mathematical Operations
-- [MapRange](#maprange) - Value Range Mapper
-- [Quantizer](#quantizer) - Musical Scale Quantizer
-- [Rate](#rate) - Rate Value Converter
-- [Comparator](#comparator) - Threshold Comparator
-- [Logic](#logic) - Boolean Logic Operations
-- [Clock Divider](#clock-divider) - Clock Division/Multiplication
-- [Sequential Switch](#sequential-switch) - Signal Router
+- [vca](#vca) - Voltage-Controlled Amplifier
+- [mixer](#mixer) - Stereo Audio Mixer
+- [cv_mixer](#cv_mixer) - Control Voltage Mixer
+- [track_mixer](#track_mixer) - Multi-Channel Mixer
+- [attenuverter](#attenuverter) - Attenuate/Invert Signal
+- [lag_processor](#lag_processor) - Slew Limiter/Smoother
+- [math](#math) - Mathematical Operations
+- [map_range](#map_range) - Value Range Mapper
+- [quantizer](#quantizer) - Musical Scale Quantizer
+- [rate](#rate) - Rate Value Converter
+- [comparator](#comparator) - Threshold Comparator
+- [logic](#logic) - Boolean Logic Operations
+- [clock_divider](#clock_divider) - Clock Division/Multiplication
+- [sequential_switch](#sequential_switch) - Signal Router
 
 #### 5. SEQUENCER NODES
-- [Sequencer](#sequencer) - 16-Step CV/Gate Sequencer
-- [Multi Sequencer](#multi-sequencer) - Advanced Multi-Output Sequencer
-- [Snapshot Sequencer](#snapshot-sequencer) - Patch State Sequencer
-- [Stroke Sequencer](#stroke-sequencer) - Gesture-Based Sequencer
-- [Tempo Clock](#tempo-clock) - Global Clock Generator
-- [Timeline](#timeline) - Automation Recorder and Playback
+- [sequencer](#sequencer) - 16-Step CV/Gate Sequencer
+- [multi_sequencer](#multi_sequencer) - Advanced Multi-Output Sequencer
+- [snapshot_sequencer](#snapshot_sequencer) - Patch State Sequencer
+- [stroke_sequencer](#stroke_sequencer) - Gesture-Based Sequencer
+- [tempo_clock](#tempo_clock) - Global Clock Generator
+- [timeline](#timeline) - Automation Recorder and Playback
 
 #### 6. MIDI NODES
-- [MIDI CV](#midi-cv) - MIDI to CV Converter
-- [MIDI Player](#midi-player) - MIDI File Player
-- [MIDI Faders](#midi-faders) - MIDI-Learnable Faders (1-16)
-- [MIDI Knobs](#midi-knobs) - MIDI-Learnable Knobs (1-16)
-- [MIDI Buttons](#midi-buttons) - MIDI-Learnable Buttons (1-32)
-- [MIDI Jog Wheel](#midi-jog-wheel) - MIDI Jog Wheel Control
+- [midi_cv](#midi_cv) - MIDI to CV Converter
+- [midi_player](#midi_player) - MIDI File Player
+- [midi_faders](#midi_faders) - MIDI-Learnable Faders (1-16)
+- [midi_knobs](#midi_knobs) - MIDI-Learnable Knobs (1-16)
+- [midi_buttons](#midi_buttons) - MIDI-Learnable Buttons (1-32)
+- [midi_jog_wheel](#midi_jog_wheel) - MIDI Jog Wheel Control
 
 #### 7. ANALYSIS NODES
-- [Scope](#scope) - Oscilloscope
-- [Debug](#debug) - Signal Value Logger
-- [Input Debug](#input-debug) - Passthrough Debug Logger
-- [Frequency Graph](#frequency-graph) - Spectrum Analyzer
+- [scope](#scope) - Oscilloscope
+- [debug](#debug) - Signal Value Logger
+- [input_debug](#input_debug) - Passthrough Debug Logger
+- [frequency_graph](#frequency_graph) - Spectrum Analyzer
 
 #### 8. TTS (TEXT-TO-SPEECH) NODES
-- [TTS Performer](#tts-performer) - Text-to-Speech Engine
-- [Vocal Tract Filter](#vocal-tract-filter) - Formant Filter
+- [tts_performer](#tts_performer) - Text-to-Speech Engine
+- [vocal_tract_filter](#vocal_tract_filter) - Formant Filter
 
 #### 9. SPECIAL NODES
-- [Physics](#physics) - 2D Physics Simulation
-- [Animation](#animation) - 3D Animation Player
+- [physics](#physics) - 2D Physics Simulation
+- [animation](#animation) - 3D Animation Player
 
 #### 10. COMPUTER VISION NODES
-- [Webcam Loader](#webcam-loader) - Webcam Video Source
-- [Video File Loader](#video-file-loader) - Video File Source
-- [Movement Detector](#movement-detector) - Motion Detection
-- [Human Detector](#human-detector) - Face/Body Detection
-- [Object Detector](#object-detector) - Object Detection (YOLOv3)
-- [Pose Estimator](#pose-estimator) - Body Keypoint Detection
-- [Hand Tracker](#hand-tracker) - Hand Keypoint Tracking
-- [Face Tracker](#face-tracker) - Facial Landmark Tracking
-- [Color Tracker](#color-tracker) - Multi-Color Tracking
-- [Contour Detector](#contour-detector) - Shape Detection
-- [Semantic Segmentation](#semantic-segmentation) - Scene Segmentation
-- [Video FX](#video-fx) - Real-Time Video Effects
-- [Crop Video](#crop-video) - Video Cropping and Tracking
+- [webcam_loader](#webcam_loader) - Webcam Video Source
+- [video_file_loader](#video_file_loader) - Video File Source
+- [movement_detector](#movement_detector) - Motion Detection
+- [human_detector](#human_detector) - Face/Body Detection
+- [object_detector](#object_detector) - Object Detection (YOLOv3)
+- [pose_estimator](#pose_estimator) - Body Keypoint Detection
+- [hand_tracker](#hand_tracker) - Hand Keypoint Tracking
+- [face_tracker](#face_tracker) - Facial Landmark Tracking
+- [color_tracker](#color_tracker) - Multi-Color Tracking
+- [contour_detector](#contour_detector) - Shape Detection
+- [semantic_segmentation](#semantic_segmentation) - Scene Segmentation
+- [video_fx](#video_fx) - Real-Time Video Effects
+- [crop_video](#crop_video) - Video Cropping and Tracking
 
 #### 11. SYSTEM NODES
-- [Meta](#meta) - Meta Module Container
-- [Inlet](#inlet) - Meta Module Input
-- [Outlet](#outlet) - Meta Module Output
-- [Comment](#comment) - Documentation Node
-- [Recorder](#recorder) - Audio Recording to File
-- [VST Host](#vst-host) - VST Plugin Host
-- [BPM Monitor](#bpm-monitor) - Rhythm Detection and BPM Reporting
+- [meta](#meta) - Meta Module Container
+- [inlet](#inlet) - Meta Module Input
+- [outlet](#outlet) - Meta Module Output
+- [comment](#comment) - Documentation Node
+- [recorder](#recorder) - Audio Recording to File
+- [vst_host](#vst_host) - VST Plugin Host
+- [bpm_monitor](#bpm_monitor) - Rhythm Detection and BPM Reporting
 
 ---
 
@@ -120,7 +120,7 @@
 
 Source nodes generate or input signals into your patch.
 
-### VCO
+### vco
 **Voltage-Controlled Oscillator**
 
 A standard analog-style oscillator that generates periodic waveforms.
@@ -149,7 +149,7 @@ A standard analog-style oscillator that generates periodic waveforms.
 
 ---
 
-### PolyVCO
+### polyvco
 **Multi-Voice Oscillator Bank**
 
 A polyphonic oscillator module with up to 32 independent voices, ideal for creating rich, layered sounds or building polyphonic synthesizers.
@@ -179,7 +179,7 @@ A polyphonic oscillator module with up to 32 independent voices, ideal for creat
 
 ---
 
-### Noise
+### noise
 **Noise Generator**
 
 Generates white, pink, or brown noise for percussion, ambience, or modulation.
@@ -205,7 +205,7 @@ Generates white, pink, or brown noise for percussion, ambience, or modulation.
 
 ---
 
-### Audio Input
+### audio_input
 **Hardware Audio Input**
 
 Brings external audio from your audio interface into the patch.
@@ -230,7 +230,7 @@ Brings external audio from your audio interface into the patch.
 
 ---
 
-### Sample Loader
+### sample_loader
 **Audio Sample Player**
 
 Loads and plays audio samples with extensive playback control and modulation options.
@@ -271,7 +271,7 @@ Loads and plays audio samples with extensive playback control and modulation opt
 
 ---
 
-### Value
+### value
 **Constant Value Generator**
 
 Outputs a constant, adjustable numerical value in multiple formats.
@@ -301,7 +301,7 @@ Outputs a constant, adjustable numerical value in multiple formats.
 
 Effect nodes process audio signals to shape tone, add space, or create sonic textures.
 
-### VCF
+### vcf
 **Voltage-Controlled Filter**
 
 A resonant multi-mode filter for subtractive synthesis and tone shaping.
@@ -334,7 +334,7 @@ A resonant multi-mode filter for subtractive synthesis and tone shaping.
 
 ---
 
-### Delay
+### delay
 **Stereo Delay Effect**
 
 A stereo delay effect with modulation and tempo sync capabilities.
@@ -368,7 +368,7 @@ A stereo delay effect with modulation and tempo sync capabilities.
 
 ---
 
-### Reverb
+### reverb
 **Stereo Reverb Effect**
 
 A stereo reverb effect that simulates acoustic spaces.
@@ -400,7 +400,7 @@ A stereo reverb effect that simulates acoustic spaces.
 
 ---
 
-### Chorus
+### chorus
 **Stereo Chorus Effect**
 
 A stereo chorus effect that creates thick, shimmering textures by layering slightly detuned copies of the signal.
@@ -431,7 +431,7 @@ A stereo chorus effect that creates thick, shimmering textures by layering sligh
 
 ---
 
-### Phaser
+### phaser
 **Stereo Phaser Effect**
 
 A stereo phaser effect that creates sweeping notches in the frequency spectrum.
@@ -466,7 +466,7 @@ A stereo phaser effect that creates sweeping notches in the frequency spectrum.
 
 ---
 
-### Compressor
+### compressor
 **Dynamic Range Compressor**
 
 Reduces the dynamic range of audio signals, making quiet parts louder and loud parts quieter.
@@ -501,7 +501,7 @@ Reduces the dynamic range of audio signals, making quiet parts louder and loud p
 
 ---
 
-### Limiter
+### limiter
 **Audio Limiter**
 
 Prevents audio from exceeding a set level, acting as a "brick wall" for peaks.
@@ -529,7 +529,7 @@ Prevents audio from exceeding a set level, acting as a "brick wall" for peaks.
 
 ---
 
-### Gate
+### gate
 **Noise Gate**
 
 Silences signals below a threshold, useful for removing background noise or creating rhythmic effects.
@@ -557,7 +557,7 @@ Silences signals below a threshold, useful for removing background noise or crea
 
 ---
 
-### Drive
+### drive
 **Waveshaping Distortion**
 
 A waveshaping distortion effect that adds harmonic content and saturation.
@@ -584,7 +584,7 @@ A waveshaping distortion effect that adds harmonic content and saturation.
 
 ---
 
-### Graphic EQ
+### graphic_eq
 **8-Band Graphic Equalizer**
 
 An 8-band graphic equalizer with CV outputs for frequency-based triggering.
@@ -616,7 +616,7 @@ An 8-band graphic equalizer with CV outputs for frequency-based triggering.
 
 ---
 
-### Waveshaper
+### waveshaper
 **Multi-Algorithm Waveshaper**
 
 A distortion effect with multiple waveshaping algorithms for varied saturation and distortion effects.
@@ -644,7 +644,7 @@ A distortion effect with multiple waveshaping algorithms for varied saturation a
 
 ---
 
-### 8-Band Shaper
+### 8bandshaper
 **Multi-Band Waveshaper**
 
 A multi-band waveshaper that applies frequency-specific distortion across 8 bands.
@@ -671,7 +671,7 @@ A multi-band waveshaper that applies frequency-specific distortion across 8 band
 
 ---
 
-### Granulator
+### granulator
 **Granular Synthesizer/Effect**
 
 A granular processor that plays small grains of audio for textural and rhythmic effects.
@@ -711,7 +711,7 @@ A granular processor that plays small grains of audio for textural and rhythmic 
 
 ---
 
-### Harmonic Shaper
+### harmonic_shaper
 **Harmonic Content Shaper**
 
 Shapes the harmonic content of a signal using frequency-specific waveshaping.
@@ -738,7 +738,7 @@ Shapes the harmonic content of a signal using frequency-specific waveshaping.
 
 ---
 
-### TimePitch
+### timepitch
 **Time/Pitch Manipulation**
 
 Real-time pitch and time manipulation using the RubberBand library for high-quality time stretching and pitch shifting.
@@ -766,7 +766,7 @@ Real-time pitch and time manipulation using the RubberBand library for high-qual
 
 ---
 
-### De-Crackle
+### de_crackle
 **Click/Pop Reducer**
 
 A utility to reduce clicks and pops caused by discontinuous CV or audio signals.
@@ -794,7 +794,7 @@ A utility to reduce clicks and pops caused by discontinuous CV or audio signals.
 
 Modulator nodes generate control voltages for animating parameters over time.
 
-### LFO
+### lfo
 **Low-Frequency Oscillator**
 
 A versatile LFO for modulating parameters with periodic waveforms.
@@ -826,7 +826,7 @@ A versatile LFO for modulating parameters with periodic waveforms.
 
 ---
 
-### ADSR
+### adsr
 **Attack-Decay-Sustain-Release Envelope Generator**
 
 A classic ADSR envelope generator for shaping sounds over time.
@@ -864,7 +864,7 @@ A classic ADSR envelope generator for shaping sounds over time.
 
 ---
 
-### Random
+### random
 **Random Value Generator**
 
 Generates random values at a specified rate with multiple output formats and tempo sync.
@@ -900,7 +900,7 @@ Generates random values at a specified rate with multiple output formats and tem
 
 ---
 
-### S&H
+### s_and_h
 **Sample & Hold**
 
 Samples and holds an input signal when triggered.
@@ -933,7 +933,7 @@ Samples and holds an input signal when triggered.
 
 ---
 
-### Function Generator
+### function_generator
 **Drawable Envelope/LFO Generator**
 
 A complex, drawable envelope and LFO generator with multiple curve slots and extensive modulation options.
@@ -983,7 +983,7 @@ A complex, drawable envelope and LFO generator with multiple curve slots and ext
 
 ---
 
-### Shaping Oscillator
+### shaping_oscillator
 **Oscillator with Built-in Waveshaper**
 
 An oscillator with integrated waveshaping for generating harmonically rich tones.
@@ -1016,7 +1016,7 @@ An oscillator with integrated waveshaping for generating harmonically rich tones
 
 Utility nodes provide essential signal processing, routing, and logic operations.
 
-### VCA
+### vca
 **Voltage-Controlled Amplifier**
 
 A basic amp module for controlling audio levels with CV.
@@ -1041,7 +1041,7 @@ A basic amp module for controlling audio levels with CV.
 
 ---
 
-### Mixer
+### mixer
 **Stereo Audio Mixer**
 
 A two-input stereo mixer with gain, pan, and crossfade controls.
@@ -1069,7 +1069,7 @@ A two-input stereo mixer with gain, pan, and crossfade controls.
 
 ---
 
-### CV Mixer
+### cv_mixer
 **Control Voltage Mixer**
 
 A mixer specifically designed for mixing CV signals.
@@ -1092,7 +1092,7 @@ A mixer specifically designed for mixing CV signals.
 
 ---
 
-### Track Mixer
+### track_mixer
 **Multi-Channel Mixer**
 
 A mixer for up to 8 monophonic tracks with individual gain and pan controls.
@@ -1119,7 +1119,7 @@ A mixer for up to 8 monophonic tracks with individual gain and pan controls.
 
 ---
 
-### Attenuverter
+### attenuverter
 **Attenuate/Invert Signal**
 
 Attenuates (reduces) and/or inverts CV or audio signals.
@@ -1143,7 +1143,7 @@ Attenuates (reduces) and/or inverts CV or audio signals.
 
 ---
 
-### Lag Processor
+### lag_processor
 **Slew Limiter/Smoother**
 
 Smooths abrupt changes in signals using independent rise and fall times.
@@ -1169,7 +1169,7 @@ Smooths abrupt changes in signals using independent rise and fall times.
 
 ---
 
-### Math
+### math
 **Mathematical Operations**
 
 Performs mathematical operations on two input signals.
@@ -1198,7 +1198,7 @@ Performs mathematical operations on two input signals.
 
 ---
 
-### MapRange
+### map_range
 **Value Range Mapper**
 
 Remaps values from one range to another.
@@ -1225,7 +1225,7 @@ Remaps values from one range to another.
 
 ---
 
-### Quantizer
+### quantizer
 **Musical Scale Quantizer**
 
 Snaps continuous CV to musical scales.
@@ -1251,7 +1251,7 @@ Snaps continuous CV to musical scales.
 
 ---
 
-### Rate
+### rate
 **Rate Value Converter**
 
 Converts raw values to normalized rate values for tempo-related modulation.
@@ -1272,7 +1272,7 @@ Converts raw values to normalized rate values for tempo-related modulation.
 
 ---
 
-### Comparator
+### comparator
 **Threshold Comparator**
 
 Outputs a gate signal when input exceeds a threshold.
@@ -1295,7 +1295,7 @@ Outputs a gate signal when input exceeds a threshold.
 
 ---
 
-### Logic
+### logic
 **Boolean Logic Operations**
 
 Performs boolean logic operations on gate signals.
@@ -1320,7 +1320,7 @@ Performs boolean logic operations on gate signals.
 
 ---
 
-### Clock Divider
+### clock_divider
 **Clock Division/Multiplication**
 
 Divides and multiplies clock signals for polyrhythmic patterns.
@@ -1342,7 +1342,7 @@ Divides and multiplies clock signals for polyrhythmic patterns.
 
 ---
 
-### Sequential Switch
+### sequential_switch
 **Signal Router**
 
 Routes an input signal to one of four outputs based on CV thresholds.
@@ -1370,7 +1370,7 @@ Routes an input signal to one of four outputs based on CV thresholds.
 
 Sequencer nodes generate rhythmic and melodic patterns.
 
-### Sequencer
+### sequencer
 **16-Step CV/Gate Sequencer**
 
 A classic 16-step sequencer for creating melodies and rhythms.
@@ -1401,7 +1401,7 @@ A classic 16-step sequencer for creating melodies and rhythms.
 
 ---
 
-### Multi Sequencer
+### multi_sequencer
 **Advanced Multi-Output Sequencer**
 
 An advanced sequencer with parallel per-step outputs for polyphonic sequencing.
@@ -1418,7 +1418,7 @@ An advanced sequencer with parallel per-step outputs for polyphonic sequencing.
 
 ---
 
-### Tempo Clock
+### tempo_clock
 **Global Clock Generator**
 
 Master tempo/clock source with transport controls.
@@ -1453,7 +1453,7 @@ Master tempo/clock source with transport controls.
 
 ---
 
-### Snapshot Sequencer
+### snapshot_sequencer
 **Patch State Sequencer**
 
 Sequences complete patch states, recalling all parameter values.
@@ -1465,7 +1465,7 @@ Sequences complete patch states, recalling all parameter values.
 
 ---
 
-### Stroke Sequencer
+### stroke_sequencer
 **Gesture-Based Sequencer**
 
 Records and plays back drawn gestures as CV sequences.
@@ -1477,7 +1477,7 @@ Records and plays back drawn gestures as CV sequences.
 
 ---
 
-### Timeline
+### timeline
 **Automation Recorder and Playback**
 
 A transport-synchronized automation recorder that captures and plays back CV, Gate, Trigger, and Raw signals with sample-accurate precision. The Timeline Node serves as the single source of truth for temporal automation in the modular synthesizer.
@@ -1548,7 +1548,7 @@ A transport-synchronized automation recorder that captures and plays back CV, Ga
 
 MIDI nodes handle MIDI input/output and conversion to CV.
 
-### MIDI CV
+### midi_cv
 **MIDI to CV Converter**
 
 Converts incoming MIDI notes to CV/Gate signals (monophonic).
@@ -1569,7 +1569,7 @@ Converts incoming MIDI notes to CV/Gate signals (monophonic).
 
 ---
 
-### MIDI Player
+### midi_player
 **MIDI File Player**
 
 Plays MIDI files with per-track CV/Gate outputs.
@@ -1581,7 +1581,7 @@ Plays MIDI files with per-track CV/Gate outputs.
 
 ---
 
-### MIDI Faders
+### midi_faders
 **MIDI-Learnable Faders (1-16)**
 
 1-16 MIDI-learnable faders with customizable output ranges.
@@ -1601,14 +1601,14 @@ Plays MIDI files with per-track CV/Gate outputs.
 
 ---
 
-### MIDI Knobs
+### midi_knobs
 **MIDI-Learnable Knobs (1-16)**
 
 Similar to MIDI Faders but optimized for rotary controls.
 
 ---
 
-### MIDI Buttons
+### midi_buttons
 **MIDI-Learnable Buttons (1-32)**
 
 1-32 MIDI-learnable buttons with Gate/Toggle/Trigger modes.
@@ -1623,7 +1623,7 @@ Similar to MIDI Faders but optimized for rotary controls.
 
 ---
 
-### MIDI Jog Wheel
+### midi_jog_wheel
 **MIDI Jog Wheel Control**
 
 A single MIDI-learnable jog wheel for expressive modulation.
@@ -1637,7 +1637,7 @@ A single MIDI-learnable jog wheel for expressive modulation.
 
 Analysis nodes visualize and inspect signals.
 
-### Scope
+### scope
 **Oscilloscope**
 
 Visualizes audio or CV signals over time.
@@ -1658,7 +1658,7 @@ Visualizes audio or CV signals over time.
 
 ---
 
-### Debug
+### debug
 **Signal Value Logger**
 
 Logs signal value changes to the console.
@@ -1671,14 +1671,14 @@ Logs signal value changes to the console.
 
 ---
 
-### Input Debug
+### input_debug
 **Passthrough Debug Logger**
 
 Like Debug but with pass-through output.
 
 ---
 
-### Frequency Graph
+### frequency_graph
 **Spectrum Analyzer**
 
 High-resolution real-time spectrum analyzer with frequency-based gate outputs.
@@ -1706,7 +1706,7 @@ High-resolution real-time spectrum analyzer with frequency-based gate outputs.
 
 Special nodes provide unique functionality beyond traditional synthesis.
 
-### TTS Performer
+### tts_performer
 **Text-to-Speech Engine**
 
 Advanced text-to-speech with word-level sequencing.
@@ -1735,7 +1735,7 @@ Advanced text-to-speech with word-level sequencing.
 
 ---
 
-### Vocal Tract Filter
+### vocal_tract_filter
 **Formant Filter**
 
 Simulates human vowel sounds through formant filtering.
@@ -1754,7 +1754,7 @@ Simulates human vowel sounds through formant filtering.
 
 ---
 
-### Physics
+### physics
 **2D Physics Simulation**
 
 A 2D physics engine that outputs collision and contact data as CV.
@@ -1769,7 +1769,7 @@ A 2D physics engine that outputs collision and contact data as CV.
 
 ---
 
-### Animation
+### animation
 **3D Animation Player**
 
 Loads and plays 3D animations, outputs joint positions and velocities.
@@ -1786,7 +1786,7 @@ Loads and plays 3D animations, outputs joint positions and velocities.
 
 Computer vision nodes process video for audio/CV generation.
 
-### Webcam Loader
+### webcam_loader
 **Webcam Video Source**
 
 Captures video from webcam and publishes a `Source ID` for vision processing modules.
@@ -1800,7 +1800,7 @@ Captures video from webcam and publishes a `Source ID` for vision processing mod
 
 ---
 
-### Video File Loader
+### video_file_loader
 **Video File Source**
 
 Loads and plays video files; publishes a `Source ID` for vision processing modules.
@@ -1814,7 +1814,7 @@ Loads and plays video files; publishes a `Source ID` for vision processing modul
 
 ---
 
-### Movement Detector
+### movement_detector
 **Motion Detection**
 
 Analyzes video for motion via optical flow or background subtraction.
@@ -1841,7 +1841,7 @@ Analyzes video for motion via optical flow or background subtraction.
 
 ---
 
-### Human Detector
+### human_detector
 **Face/Body Detection**
 
 Detects faces or bodies in video via Haar Cascades or HOG.
@@ -1869,7 +1869,7 @@ Detects faces or bodies in video via Haar Cascades or HOG.
 
 ---
 
-### Pose Estimator
+### pose_estimator
 **Body Keypoint Detection**
 
 Uses OpenPose MPI model to detect 15 body keypoints. Outputs 30 CV pins programmatically (X/Y for each keypoint).
@@ -1928,7 +1928,7 @@ Uses OpenPose MPI model to detect 15 body keypoints. Outputs 30 CV pins programm
 
 ---
 
-### Hand Tracker
+### hand_tracker
 **Hand Keypoint Detection**
 
 Uses OpenPose hand model to detect 21 hand keypoints. Outputs 42 CV pins (X/Y per keypoint).
@@ -1971,7 +1971,7 @@ Uses OpenPose hand model to detect 21 hand keypoints. Outputs 42 CV pins (X/Y pe
 
 ---
 
-### Face Tracker
+### face_tracker
 **Facial Landmark Detection**
 
 Uses OpenPose face model to detect 70 facial landmarks. Outputs 140 CV pins (X/Y per point).
@@ -2014,7 +2014,7 @@ Uses OpenPose face model to detect 70 facial landmarks. Outputs 140 CV pins (X/Y
 
 ---
 
-### Object Detector
+### object_detector
 **YOLOv3 Object Detection**
 
 Uses YOLOv3 deep learning model to detect objects from 80 COCO classes (person, car, bottle, etc.) in real-time video.
@@ -2065,7 +2065,7 @@ Uses YOLOv3 deep learning model to detect objects from 80 COCO classes (person, 
 
 ---
 
-### Color Tracker
+### color_tracker
 **Multi-Color HSV Tracking**
 
 Tracks multiple custom colors in video using HSV color space. Outputs are dynamic: each added color creates three CV outputs.
@@ -2112,7 +2112,7 @@ Tracks multiple custom colors in video using HSV color space. Outputs are dynami
 
 ---
 
-### Contour Detector
+### contour_detector
 **Shape Detection via Background Subtraction**
 
 Detects shapes and their properties using background subtraction and contour analysis.
@@ -2157,7 +2157,7 @@ Detects shapes and their properties using background subtraction and contour ana
 
 ---
 
-### Semantic Segmentation
+### semantic_segmentation
 **Scene Segmentation via Deep Learning**
 
 Uses semantic segmentation (ENet or DeepLabV3) to identify a target class and output region properties.
@@ -2203,7 +2203,7 @@ Uses semantic segmentation (ENet or DeepLabV3) to identify a target class and ou
 
 ---
 
-### Video FX
+### video_fx
 **Real-Time Video Effects Processor**
 
 A comprehensive video processing node that applies real-time effects to video streams. Supports chaining multiple effects for complex video transformations. All parameters can be modulated via CV inputs.
@@ -2276,7 +2276,7 @@ A comprehensive video processing node that applies real-time effects to video st
 
 ---
 
-### Crop Video
+### crop_video
 **Video Cropping with Automatic Tracking**
 
 Crops video frames to a specified region. Supports three modes: manual cropping, automatic face tracking, and automatic object tracking (YOLOv3). Perfect for following detected objects or isolating regions of interest.
@@ -2359,7 +2359,7 @@ Crops video frames to a specified region. Supports three modes: manual cropping,
 
 System nodes provide special functionality for patch organization.
 
-### Meta
+### meta
 **Meta Module Container**
 
 A container for creating custom reusable modules from sub-patches.
@@ -2372,21 +2372,21 @@ A container for creating custom reusable modules from sub-patches.
 
 ---
 
-### Inlet
+### inlet
 **Meta Module Input**
 
 Defines an input for a Meta module.
 
 ---
 
-### Outlet
+### outlet
 **Meta Module Output**
 
 Defines an output for a Meta module.
 
 ---
 
-### Comment
+### comment
 **Documentation Node**
 
 A text comment node for documenting patches.
@@ -2399,7 +2399,7 @@ A text comment node for documenting patches.
 
 ---
 
-### Recorder
+### recorder
 **Audio Recording to File**
 
 Records incoming audio to WAV, AIFF, or FLAC files.
@@ -2421,7 +2421,7 @@ Records incoming audio to WAV, AIFF, or FLAC files.
 
 ---
 
-### VST Host
+### vst_host
 **VST Plugin Host**
 
 Hosts VST2/VST3 plugins within the modular environment.
@@ -2434,7 +2434,7 @@ Hosts VST2/VST3 plugins within the modular environment.
 
 ---
 
-### BPM Monitor
+### bpm_monitor
 **Rhythm Detection and BPM Reporting**
 
 A hybrid smart system that automatically detects and reports BPM from rhythm-producing modules and audio inputs. This node is always present in patches (like the output node) and cannot be deleted. It dynamically generates output pins for each detected rhythm source.
