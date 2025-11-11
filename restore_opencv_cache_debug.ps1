@@ -1,6 +1,11 @@
 #!/usr/bin/env pwsh
-# Restore OpenCV CUDA Build Cache (Debug)
-# Recovers lengthy CUDA compilation time for the Debug configuration
+# Restore OpenCV CUDA Build Cache - Debug (DEPRECATED - Use Standalone System!)
+# 
+# ⚠️  DEPRECATED: This script is for the OLD inline build system.
+# 
+# 🎉 NEW RECOMMENDED APPROACH:
+#    Use the standalone OpenCV build system instead:
+#    .\restore_opencv_standalone.ps1
 
 param(
     [Parameter(Mandatory=$false)]
@@ -14,8 +19,11 @@ $ffmpegDllCandidates = @(
     "opencv_videoio_ffmpeg4130_64.dll"
 )
 
-Write-Host "`n========================================" -ForegroundColor Cyan
-Write-Host "  OpenCV CUDA Cache Restore Tool (Debug)" -ForegroundColor Cyan
+Write-Host "`n⚠️  DEPRECATED SCRIPT - Consider using standalone system!" -ForegroundColor Yellow
+Write-Host "   See: .\restore_opencv_standalone.ps1`n" -ForegroundColor Cyan
+
+Write-Host "========================================" -ForegroundColor Cyan
+Write-Host "  OpenCV CUDA Cache Restore Tool (Debug, Old)" -ForegroundColor Cyan
 Write-Host "========================================`n" -ForegroundColor Cyan
 
 # Find archive if not specified

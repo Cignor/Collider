@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="UTF-8"?>
 
-<ModularSynthPreset version="1">
+<ModularSynthPreset version="1" bpm="120.0">
   <modules>
-    <module logicalId="1" type="TTS Performer">
+    <module logicalId="1" type="tts_performer">
       <params>
         <TTSPerformerParams>
           <PARAM id="engine" value="1.0"/>
@@ -21,10 +21,15 @@
           <PARAM id="trimStart" value="0.0"/>
           <PARAM id="trimStart_mod" value="0.0"/>
           <PARAM id="volume" value="0.7999999523162842"/>
+          <PARAM id="rate_division" value="6.0"/>
+          <PARAM id="sync" value="0.0"/>
         </TTSPerformerParams>
       </params>
+      <extra>
+        <TTSPerformerState selectedClipId="eeb55fc5"/>
+      </extra>
     </module>
-    <module logicalId="2" type="Random">
+    <module logicalId="2" type="random">
       <params>
         <RandomParams>
           <PARAM id="boolThreshold" value="0.5"/>
@@ -34,32 +39,112 @@
           <PARAM id="min" value="0.0"/>
           <PARAM id="rate" value="1.00000011920929"/>
           <PARAM id="slew" value="0.0"/>
+          <PARAM id="normMax"/>
+          <PARAM id="normMin"/>
+          <PARAM id="rate_division"/>
+          <PARAM id="sync"/>
+          <PARAM id="trigThreshold"/>
         </RandomParams>
       </params>
+      <extra>
+        <RandomState sync="0.0" rate_division="3.0"/>
+      </extra>
     </module>
-    <module logicalId="4" type="Comparator">
+    <module logicalId="4" type="comparator">
       <params>
         <ComparatorParams>
           <PARAM id="threshold" value="0.5"/>
         </ComparatorParams>
       </params>
     </module>
+    <module logicalId="11" type="delay">
+      <params>
+        <DelayParams>
+          <PARAM id="feedback" value="0.4000000059604645"/>
+          <PARAM id="mix" value="0.300000011920929"/>
+          <PARAM id="relativeFeedbackMod" value="1.0"/>
+          <PARAM id="relativeMixMod" value="1.0"/>
+          <PARAM id="relativeTimeMod" value="1.0"/>
+          <PARAM id="timeMs" value="400.0"/>
+        </DelayParams>
+      </params>
+    </module>
+    <module logicalId="15" type="compressor">
+      <params>
+        <CompressorParams>
+          <PARAM id="attack" value="45.59999847412109"/>
+          <PARAM id="makeup" value="11.69999885559082"/>
+          <PARAM id="ratio" value="14.09999942779541"/>
+          <PARAM id="relativeAttackMod" value="1.0"/>
+          <PARAM id="relativeMakeupMod" value="1.0"/>
+          <PARAM id="relativeRatioMod" value="1.0"/>
+          <PARAM id="relativeReleaseMod" value="1.0"/>
+          <PARAM id="relativeThresholdMod" value="1.0"/>
+          <PARAM id="release" value="649.0"/>
+          <PARAM id="threshold" value="-20.90000152587891"/>
+        </CompressorParams>
+      </params>
+    </module>
+    <module logicalId="17" type="gate">
+      <params>
+        <GateParams>
+          <PARAM id="attack" value="16.60000038146973"/>
+          <PARAM id="release" value="361.0"/>
+          <PARAM id="threshold" value="-13.90000152587891"/>
+        </GateParams>
+      </params>
+    </module>
+    <module logicalId="19" type="de_crackle">
+      <params>
+        <DeCrackleParams>
+          <PARAM id="amount" value="1.0"/>
+          <PARAM id="smoothing_time" value="13.38000011444092"/>
+          <PARAM id="threshold" value="0.1519999951124191"/>
+        </DeCrackleParams>
+      </params>
+    </module>
+    <module logicalId="25" type="phaser">
+      <params>
+        <PhaserParams>
+          <PARAM id="centreHz" value="473.0"/>
+          <PARAM id="depth" value="0.8999999761581421"/>
+          <PARAM id="feedback" value="0.7199999690055847"/>
+          <PARAM id="mix" value="0.85999995470047"/>
+          <PARAM id="rate" value="1.120000004768372"/>
+          <PARAM id="relativeCentreMod" value="1.0"/>
+          <PARAM id="relativeDepthMod" value="1.0"/>
+          <PARAM id="relativeFeedbackMod" value="1.0"/>
+          <PARAM id="relativeMixMod" value="1.0"/>
+          <PARAM id="relativeRateMod" value="1.0"/>
+        </PhaserParams>
+      </params>
+    </module>
   </modules>
   <connections>
-    <connection srcId="1" srcChan="0" dstId="output" dstChan="0"/>
-    <connection srcId="2" srcChan="0" dstId="1" dstChan="1"/>
-    <connection srcId="2" srcChan="0" dstId="1" dstChan="2"/>
-    <connection srcId="2" srcChan="0" dstId="1" dstChan="3"/>
-    <connection srcId="2" srcChan="0" dstId="1" dstChan="4"/>
-    <connection srcId="2" srcChan="0" dstId="1" dstChan="5"/>
-    <connection srcId="2" srcChan="0" dstId="1" dstChan="6"/>
-    <connection srcId="2" srcChan="0" dstId="1" dstChan="7"/>
+    <connection srcId="1" srcChan="0" dstId="11" dstChan="0"/>
+    <connection srcId="1" srcChan="0" dstId="11" dstChan="1"/>
     <connection srcId="2" srcChan="0" dstId="4" dstChan="0"/>
     <connection srcId="4" srcChan="0" dstId="1" dstChan="0"/>
+    <connection srcId="11" srcChan="0" dstId="15" dstChan="0"/>
+    <connection srcId="11" srcChan="1" dstId="15" dstChan="1"/>
+    <connection srcId="15" srcChan="0" dstId="17" dstChan="0"/>
+    <connection srcId="15" srcChan="1" dstId="17" dstChan="1"/>
+    <connection srcId="17" srcChan="0" dstId="19" dstChan="0"/>
+    <connection srcId="17" srcChan="1" dstId="19" dstChan="1"/>
+    <connection srcId="19" srcChan="0" dstId="25" dstChan="0"/>
+    <connection srcId="19" srcChan="1" dstId="25" dstChan="1"/>
+    <connection srcId="25" srcChan="0" dstId="output" dstChan="0"/>
+    <connection srcId="25" srcChan="1" dstId="output" dstChan="1"/>
   </connections>
   <NodeEditorUI>
-    <node id="1" x="-181.0" y="205.0"/>
-    <node id="2" x="-719.0" y="514.0"/>
-    <node id="4" x="-896.525146484375" y="1101.234741210938"/>
+    <node id="1" x="-195.0" y="127.0"/>
+    <node id="2" x="-899.0" y="655.0"/>
+    <node id="4" x="-1298.525146484375" y="632.2347412109375"/>
+    <node id="11" x="1016.0" y="820.0"/>
+    <node id="15" x="1514.0" y="764.0"/>
+    <node id="17" x="2009.0" y="949.0"/>
+    <node id="19" x="2064.0" y="1165.0"/>
+    <node id="25" x="2459.0" y="917.0"/>
+    <node id="0" x="3481.0" y="1097.0"/>
   </NodeEditorUI>
 </ModularSynthPreset>

@@ -1,14 +1,24 @@
 #!/usr/bin/env pwsh
-# Restore OpenCV CUDA Build Cache
-# Recovers 30+ minutes of CUDA compilation time
+# Restore OpenCV CUDA Build Cache (DEPRECATED - Use Standalone System!)
+# 
+# ⚠️  DEPRECATED: This script is for the OLD inline build system.
+# 
+# 🎉 NEW RECOMMENDED APPROACH:
+#    Use the standalone OpenCV build system instead:
+#    1. Build once: .\build_opencv_cuda_once.ps1
+#    2. Archive:    .\archive_opencv_standalone.ps1
+#    3. Restore:    .\restore_opencv_standalone.ps1
 
 param(
     [Parameter(Mandatory=$false)]
     [string]$ArchivePath
 )
 
-Write-Host "`n========================================" -ForegroundColor Cyan
-Write-Host "  OpenCV CUDA Cache Restore Tool" -ForegroundColor Cyan
+Write-Host "`n⚠️  DEPRECATED SCRIPT - Consider using standalone system!" -ForegroundColor Yellow
+Write-Host "   See: .\restore_opencv_standalone.ps1`n" -ForegroundColor Cyan
+
+Write-Host "========================================" -ForegroundColor Cyan
+Write-Host "  OpenCV CUDA Cache Restore Tool (Old)" -ForegroundColor Cyan
 Write-Host "========================================`n" -ForegroundColor Cyan
 
 # Find archive if not specified

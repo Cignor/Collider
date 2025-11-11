@@ -78,6 +78,7 @@ private:
     // Smoothed parameters for zipper-free modulation
     juce::SmoothedValue<float> speedSm;
     juce::SmoothedValue<float> pitchSm;
+    TimePitchProcessor::Mode lastMode { TimePitchProcessor::Mode::RubberBand };
 };
 
 

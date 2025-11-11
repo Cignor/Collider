@@ -41,6 +41,7 @@
 #include "../modules/TimePitchModuleProcessor.h"
 #include "../modules/DebugModuleProcessor.h"
 #include "../modules/CommentModuleProcessor.h"
+#include "../modules/RerouteModuleProcessor.h"
 #include "../modules/MIDIPlayerModuleProcessor.h"
 #include "../modules/PolyVCOModuleProcessor.h"
 #include "../modules/BestPracticeNodeProcessor.h"
@@ -834,6 +835,7 @@ namespace {
             reg("gate", []{ return std::make_unique<GateModuleProcessor>(); });
             reg("drive", []{ return std::make_unique<DriveModuleProcessor>(); });
             reg("comment", []{ return std::make_unique<CommentModuleProcessor>(); });
+            reg("reroute", []{ return std::make_unique<RerouteModuleProcessor>(); });
             reg("snapshot_sequencer", []{ return std::make_unique<SnapshotSequencerModuleProcessor>(); });
             reg("midi_cv", []{ return std::make_unique<MIDICVModuleProcessor>(); });
             reg("midi_faders", []{ return std::make_unique<MIDIFadersModuleProcessor>(); });
@@ -861,12 +863,12 @@ namespace {
             reg("crop_video", []{ return std::make_unique<CropVideoModule>(); });
             reg("stroke_sequencer", []{ return std::make_unique<StrokeSequencerModuleProcessor>(); });
             
-            reg("meta_module", []{ return std::make_unique<MetaModuleProcessor>(); });
-            reg("meta module", []{ return std::make_unique<MetaModuleProcessor>(); });
-            reg("metamodule", []{ return std::make_unique<MetaModuleProcessor>(); });
-            reg("meta", []{ return std::make_unique<MetaModuleProcessor>(); });
-            reg("inlet", []{ return std::make_unique<InletModuleProcessor>(); });
-            reg("outlet", []{ return std::make_unique<OutletModuleProcessor>(); });
+            // reg("meta_module", []{ return std::make_unique<MetaModuleProcessor>(); });
+            // reg("meta module", []{ return std::make_unique<MetaModuleProcessor>(); });
+            // reg("metamodule", []{ return std::make_unique<MetaModuleProcessor>(); });
+            // reg("meta", []{ return std::make_unique<MetaModuleProcessor>(); });
+            // reg("inlet", []{ return std::make_unique<InletModuleProcessor>(); });
+            // reg("outlet", []{ return std::make_unique<OutletModuleProcessor>(); });
 
             initialised = true;
         }
@@ -1632,20 +1634,31 @@ void ModularSynthProcessor::setProbeConnection(const NodeID& sourceNodeID, int s
         return;
     }
     
+    if (internalGraph == nullptr)
+        return;
+    
+    const juce::ScopedLock lock (moduleLock);
+
     // Clear old connections to probe scope
     auto connections = internalGraph->getConnections();
     for (const auto& conn : connections)
     {
         if (conn.destination.nodeID == probeScopeNodeId)
         {
-            internalGraph->removeConnection(conn, juce::AudioProcessorGraph::UpdateKind::none);
+            internalGraph->removeConnection(conn, juce::AudioProcessorGraph::UpdateKind::sync);
         }
     }
     
     // Connect source to probe scope
-    bool success = connect(sourceNodeID, sourceChannel, probeScopeNodeId, 0);
-    
-    commitChanges();
+    juce::AudioProcessorGraph::Connection newProbeConnection {
+        { sourceNodeID, sourceChannel },
+        { probeScopeNodeId, 0 }
+    };
+
+    if (internalGraph->addConnection(newProbeConnection, juce::AudioProcessorGraph::UpdateKind::sync))
+    {
+        updateConnectionSnapshot_Locked();
+    }
 }
 
 void ModularSynthProcessor::clearProbeConnection()
@@ -1655,18 +1668,23 @@ void ModularSynthProcessor::clearProbeConnection()
     
     bool cleared = false;
     
+    if (internalGraph == nullptr)
+        return;
+    
+    const juce::ScopedLock lock (moduleLock);
+
     auto connections = internalGraph->getConnections();
     for (const auto& conn : connections)
     {
         if (conn.destination.nodeID == probeScopeNodeId)
         {
-            internalGraph->removeConnection(conn, juce::AudioProcessorGraph::UpdateKind::none);
+            internalGraph->removeConnection(conn, juce::AudioProcessorGraph::UpdateKind::sync);
             cleared = true;
         }
     }
     
     if (cleared) {
-        commitChanges();
+        updateConnectionSnapshot_Locked();
     }
 }
 

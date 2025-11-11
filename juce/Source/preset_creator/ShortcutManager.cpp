@@ -1,6 +1,19 @@
 #include "ShortcutManager.h"
 #include <imgui_internal.h>
 #include <juce_gui_basics/juce_gui_basics.h>
+#include <unordered_set>
+
+namespace std
+{
+    template <>
+    struct hash<juce::Identifier>
+    {
+        size_t operator()(const juce::Identifier& id) const noexcept
+        {
+            return static_cast<size_t>(id.toString().hashCode64());
+        }
+    };
+}
 
 namespace collider
 {
@@ -8,6 +21,7 @@ namespace collider
     {
         constexpr const char* kBindingsKey = "bindings";
         constexpr const char* kOverridesKey = "overrides";
+        const juce::Identifier kGlobalContext { "Global" };
 
         juce::String keyToString(ImGuiKey key)
         {
@@ -160,7 +174,7 @@ namespace collider
         {
             for (const auto& binding : it->second)
             {
-                if ((binding.context == preferredContext || binding.context == "Global") && binding.chord.isValid())
+                if ((binding.context == preferredContext || binding.context == kGlobalContext) && binding.chord.isValid())
                     return binding.chord;
             }
         }
@@ -169,7 +183,7 @@ namespace collider
         {
             for (const auto& binding : it->second)
             {
-                if ((binding.context == preferredContext || binding.context == "Global") && binding.chord.isValid())
+                if ((binding.context == preferredContext || binding.context == kGlobalContext) && binding.chord.isValid())
                     return binding.chord;
             }
         }
@@ -186,19 +200,42 @@ namespace collider
         rebuildActiveMap();
     }
 
+    const juce::Identifier& ShortcutManager::getGlobalContextIdentifier() noexcept
+    {
+        return kGlobalContext;
+    }
+
     void ShortcutManager::rebuildActiveMap()
     {
         activeKeymap.clear();
 
-        const auto insertBindings = [&](const std::unordered_map<juce::Identifier, std::vector<ShortcutBinding>>& source) {
+        std::unordered_map<juce::Identifier, std::unordered_set<juce::Identifier>, IdentifierHash> overriddenContexts;
+        for (const auto& [actionId, bindings] : userBindings)
+        {
+            auto& contextSet = overriddenContexts[actionId];
+            for (const auto& binding : bindings)
+                contextSet.insert(binding.context);
+        }
+
+        const auto isContextOverridden = [&](const juce::Identifier& actionId, const juce::Identifier& context)
+        {
+            if (auto it = overriddenContexts.find(actionId); it != overriddenContexts.end())
+                return it->second.count(context) > 0;
+            return false;
+        };
+
+        const auto insertBindings = [&](const auto& source, bool isDefault) {
             for (const auto& [actionId, bindings] : source)
             {
                 for (const auto& binding : bindings)
                 {
+                    if (isDefault && isContextOverridden(actionId, binding.context))
+                        continue;
+
                     if (!binding.chord.isValid())
                         continue;
 
-                    if (binding.context != "Global" && binding.context != currentContext)
+                    if (binding.context != kGlobalContext && binding.context != currentContext)
                         continue;
 
                     activeKeymap[binding.chord] = actionId;
@@ -206,8 +243,54 @@ namespace collider
             }
         };
 
-        insertBindings(defaultBindings);
-        insertBindings(userBindings);
+        insertBindings(defaultBindings, true);
+        insertBindings(userBindings, false);
+    }
+
+    juce::Optional<KeyChord> ShortcutManager::getUserBinding(const juce::Identifier& actionId,
+                                                             const juce::Identifier& context) const
+    {
+        if (auto it = userBindings.find(actionId); it != userBindings.end())
+        {
+            for (const auto& binding : it->second)
+            {
+                if (binding.context == context)
+                    return binding.chord;
+            }
+        }
+        return {};
+    }
+
+    juce::Optional<KeyChord> ShortcutManager::getDefaultBinding(const juce::Identifier& actionId,
+                                                                const juce::Identifier& context) const
+    {
+        if (auto it = defaultBindings.find(actionId); it != defaultBindings.end())
+        {
+            for (const auto& binding : it->second)
+            {
+                if (binding.context == context)
+                    return binding.chord;
+            }
+        }
+        return {};
+    }
+
+    KeyChord ShortcutManager::getBindingForContext(const juce::Identifier& actionId,
+                                                   const juce::Identifier& context) const
+    {
+        if (auto user = getUserBinding(actionId, context))
+        {
+            if (user->isValid())
+                return *user;
+        }
+
+        if (auto defaults = getDefaultBinding(actionId, context))
+        {
+            if (defaults->isValid())
+                return *defaults;
+        }
+
+        return {};
     }
 
     bool ShortcutManager::processKeyChord(const KeyChord& chord)
@@ -249,18 +332,27 @@ namespace collider
         return handled;
     }
 
-    void ShortcutManager::loadDefaultBindingsFromFile(const juce::File& file)
+    bool ShortcutManager::loadDefaultBindingsFromFile(const juce::File& file)
     {
         if (!file.existsAsFile())
-            return;
+        {
+            juce::Logger::writeToLog("[ShortcutManager] Default bindings file not found: " + file.getFullPathName());
+            return false;
+        }
 
         auto json = juce::JSON::parse(file);
         if (json.isVoid() || !json.isObject())
-            return;
+        {
+            juce::Logger::writeToLog("[ShortcutManager] Failed to parse default bindings JSON: " + file.getFullPathName());
+            return false;
+        }
 
         const auto* object = json.getDynamicObject();
         if (object == nullptr)
-            return;
+        {
+            juce::Logger::writeToLog("[ShortcutManager] Default bindings JSON root is not an object: " + file.getFullPathName());
+            return false;
+        }
 
         if (auto* list = object->getProperty(kBindingsKey).getArray())
         {
@@ -270,20 +362,28 @@ namespace collider
                     setDefaultBinding(binding->actionId, binding->context, binding->chord);
             }
         }
+
+        return true;
     }
 
-    void ShortcutManager::loadUserBindingsFromFile(const juce::File& file)
+    bool ShortcutManager::loadUserBindingsFromFile(const juce::File& file)
     {
         if (!file.existsAsFile())
-            return;
+            return false;
 
         auto json = juce::JSON::parse(file);
         if (json.isVoid() || !json.isObject())
-            return;
+        {
+            juce::Logger::writeToLog("[ShortcutManager] Failed to parse user bindings JSON: " + file.getFullPathName());
+            return false;
+        }
 
         const auto* object = json.getDynamicObject();
         if (object == nullptr)
-            return;
+        {
+            juce::Logger::writeToLog("[ShortcutManager] User bindings JSON root is not an object: " + file.getFullPathName());
+            return false;
+        }
 
         if (auto* list = object->getProperty(kOverridesKey).getArray())
         {
@@ -293,9 +393,11 @@ namespace collider
                     setUserBinding(binding->actionId, binding->context, binding->chord);
             }
         }
+
+        return true;
     }
 
-    void ShortcutManager::saveUserBindingsToFile(const juce::File& file) const
+    bool ShortcutManager::saveUserBindingsToFile(const juce::File& file) const
     {
         juce::DynamicObject::Ptr root(new juce::DynamicObject());
         juce::Array<juce::var> overrides;
@@ -308,7 +410,13 @@ namespace collider
 
         root->setProperty(kOverridesKey, overrides);
         const auto json = juce::JSON::toString(juce::var(root));
-        file.replaceWithText(json);
+        if (!file.replaceWithText(json))
+        {
+            juce::Logger::writeToLog("[ShortcutManager] Failed to write user bindings JSON: " + file.getFullPathName());
+            return false;
+        }
+
+        return true;
     }
 
     juce::var ShortcutManager::bindingToVar(const ShortcutBinding& binding)

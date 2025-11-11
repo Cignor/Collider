@@ -46,8 +46,8 @@ void TimePitchModuleProcessor::prepareToPlay (double sampleRate, int samplesPerB
     sr = sampleRate;
     timePitch.prepare (sampleRate, 2, samplesPerBlock);
 
-    // Initialize FIFO to ~2 seconds of audio
-    fifoSize = (int) (sampleRate * 2.0);
+    // Initialize FIFO to ~5 seconds of audio (match VideoFileLoader headroom)
+    fifoSize = (int) (sampleRate * 5.0);
     if (fifoSize < samplesPerBlock * 4) fifoSize = samplesPerBlock * 4; // safety minimum
     inputFifo.setSize (2, fifoSize);
     abstractFifo.setTotalSize (fifoSize);
@@ -86,26 +86,26 @@ void TimePitchModuleProcessor::processBlock (juce::AudioBuffer<float>& buffer, j
 
     // 2) Read params and configure engine
     const int engineIdx = engineParam != nullptr ? engineParam->getIndex() : 0;
+    const auto requestedMode = (engineIdx == 0 ? TimePitchProcessor::Mode::RubberBand
+                                               : TimePitchProcessor::Mode::Fifo);
+    if (requestedMode != lastMode)
     {
-        static int currentMode = -1;
-        const int requestedMode = (engineIdx == 0 ? (int) TimePitchProcessor::Mode::RubberBand : (int) TimePitchProcessor::Mode::Fifo);
-        if (requestedMode != currentMode)
-        {
-            timePitch.reset();
-            currentMode = requestedMode;
-        }
-        timePitch.setMode ((TimePitchProcessor::Mode) requestedMode);
+        timePitch.reset();
+        lastMode = requestedMode;
     }
+    timePitch.setMode (requestedMode);
 
     // Get pointers to modulation CV inputs
-    const bool isSpeedMod = isParamInputConnected("speed");
-    const bool isPitchMod = isParamInputConnected("pitch");
+    const bool isSpeedMod = isParamInputConnected(paramIdSpeedMod);
+    const bool isPitchMod = isParamInputConnected(paramIdPitchMod);
     
     const float* speedCV = isSpeedMod && inBus.getNumChannels() > 2 ? inBus.getReadPointer(2) : nullptr;
     const float* pitchCV = isPitchMod && inBus.getNumChannels() > 3 ? inBus.getReadPointer(3) : nullptr;
     
     // Process in slices to reduce engine reconfig cost
     const int sliceSize = 32;
+    double maxConsumptionRatio = 0.0;
+    double lastPlaybackSpeed = juce::jlimit (0.25, 4.0, (double) speedSm.getCurrentValue());
     for (int sliceStart = 0; sliceStart < numSamples; sliceStart += sliceSize)
     {
         const int sliceEnd = juce::jmin(sliceStart + sliceSize, numSamples);
@@ -129,31 +129,42 @@ void TimePitchModuleProcessor::processBlock (juce::AudioBuffer<float>& buffer, j
         }
         
         // Set targets and advance smoothing
-        speedSm.setTargetValue(juce::jlimit(0.1f, 4.0f, targetSpeed));
+        speedSm.setTargetValue(juce::jlimit(0.25f, 4.0f, targetSpeed));
         pitchSm.setTargetValue(juce::jlimit(-24.0f, 24.0f, targetPitch));
         
-        // Update telemetry for live UI feedback (once per slice)
-        setLiveParamValue("speed_live", speedSm.getCurrentValue());
-        setLiveParamValue("pitch_live", pitchSm.getCurrentValue());
-        
-        // Advance smoothing for this slice
         for (int i = 0; i < sliceSamples; ++i) {
             speedSm.skip(1);
             pitchSm.skip(1);
         }
         
-        // Configure engine with current smoothed values
-        timePitch.setTimeStretchRatio(speedSm.getCurrentValue());
-        timePitch.setPitchSemitones(pitchSm.getCurrentValue());
+        const double playbackSpeed = juce::jlimit (0.25, 4.0, (double) speedSm.getCurrentValue());
+        const double pitchSemis = juce::jlimit (-24.0, 24.0, (double) pitchSm.getCurrentValue());
+        const double ratioForEngine = (requestedMode == TimePitchProcessor::Mode::RubberBand)
+                                        ? (1.0 / juce::jmax (0.01, playbackSpeed))
+                                        : playbackSpeed;
         
-        // Publish telemetry
-        setLiveParamValue("speed", speedSm.getCurrentValue());
-        setLiveParamValue("pitch", pitchSm.getCurrentValue());
+        timePitch.setTimeStretchRatio(ratioForEngine);
+        timePitch.setPitchSemitones(pitchSemis);
+        
+        const double pitchFactor = std::pow (2.0, pitchSemis / 12.0);
+        double consumptionCandidate = playbackSpeed;
+        if (requestedMode == TimePitchProcessor::Mode::Fifo)
+            consumptionCandidate *= pitchFactor;
+        maxConsumptionRatio = juce::jmax (maxConsumptionRatio, consumptionCandidate);
+        lastPlaybackSpeed = playbackSpeed;
+        
+        const float playbackSpeedF = static_cast<float> (playbackSpeed);
+        const float pitchSemisF = static_cast<float> (pitchSemis);
+        setLiveParamValue("speed_live", playbackSpeedF);
+        setLiveParamValue("pitch_live", pitchSemisF);
+        setLiveParamValue("speed", playbackSpeedF);
+        setLiveParamValue("pitch", pitchSemisF);
     }
 
     // 3) Compute frames needed to fill this block
-    const double safeSpeed = juce::jlimit (0.1, 4.0, (double) speedSm.getCurrentValue());
-    const int framesToFeed = juce::jmax (1, (int) std::ceil ((double) numSamples / safeSpeed));
+    if (maxConsumptionRatio <= 0.0)
+        maxConsumptionRatio = juce::jlimit (0.25, 4.0, lastPlaybackSpeed);
+    const int framesToFeed = juce::jmax (1, (int) std::ceil ((double) numSamples * maxConsumptionRatio));
 
     outBus.clear();
     if (abstractFifo.getNumReady() >= framesToFeed)
@@ -200,8 +211,8 @@ void TimePitchModuleProcessor::processBlock (juce::AudioBuffer<float>& buffer, j
 bool TimePitchModuleProcessor::getParamRouting(const juce::String& paramId, int& outBusIndex, int& outChannelIndexInBus) const
 {
     outBusIndex = 0;
-    if (paramId == "speed") { outChannelIndexInBus = 2; return true; }  // Speed Mod
-    if (paramId == "pitch") { outChannelIndexInBus = 3; return true; }  // Pitch Mod
+    if (paramId == paramIdSpeedMod) { outChannelIndexInBus = 2; return true; }  // Speed Mod
+    if (paramId == paramIdPitchMod) { outChannelIndexInBus = 3; return true; }  // Pitch Mod
     return false;
 }
 
@@ -214,14 +225,14 @@ void TimePitchModuleProcessor::drawParametersInNode (float itemWidth,
     auto& ap = getAPVTS();
 
     // Speed
-    bool spMod = isParamModulated ("speed");
+    bool spMod = isParamModulated (paramIdSpeedMod);
     if (spMod) { 
         ImGui::BeginDisabled(); 
         ImGui::PushStyleColor (ImGuiCol_FrameBg, ImVec4 (1,1,0,0.3f)); 
     }
     float speed = ap.getRawParameterValue (paramIdSpeed)->load();
     if (spMod) {
-        speed = getLiveParamValueFor("speed", "speed_live", speed);
+        speed = getLiveParamValueFor(paramIdSpeedMod, "speed_live", speed);
     }
     if (ImGui::SliderFloat ("Speed", &speed, 0.25f, 4.0f, "%.2fx")) {
         if (!spMod) {
@@ -233,14 +244,14 @@ void TimePitchModuleProcessor::drawParametersInNode (float itemWidth,
     if (spMod) { ImGui::PopStyleColor(); ImGui::EndDisabled(); }
 
     // Pitch
-    bool piMod = isParamModulated ("pitch");
+    bool piMod = isParamModulated (paramIdPitchMod);
     if (piMod) { 
         ImGui::BeginDisabled(); 
         ImGui::PushStyleColor (ImGuiCol_FrameBg, ImVec4 (1,1,0,0.3f)); 
     }
     float pitch = ap.getRawParameterValue (paramIdPitch)->load();
     if (piMod) {
-        pitch = getLiveParamValueFor("pitch", "pitch_live", pitch);
+        pitch = getLiveParamValueFor(paramIdPitchMod, "pitch_live", pitch);
     }
     if (ImGui::SliderFloat ("Pitch", &pitch, -24.0f, 24.0f, "%.1f st"))
         if (!piMod) if (auto* p = dynamic_cast<juce::AudioParameterFloat*>(ap.getParameter (paramIdPitch))) *p = pitch;

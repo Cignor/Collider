@@ -211,25 +211,9 @@ void ScopeModuleProcessor::drawParametersInNode (float itemWidth, const std::fun
 
 void ScopeModuleProcessor::getStatistics(float& outMin, float& outMax) const
 {
-    // Compute statistics on-demand from history (thread-safe for read, history written in audio thread)
-    if (histCount > 0)
-    {
-        float hmin = std::numeric_limits<float>::infinity();
-        float hmax = -std::numeric_limits<float>::infinity();
-        for (int i = 0; i < histCount; ++i)
-        {
-            const float v = history[i];
-            hmin = std::min(hmin, v);
-            hmax = std::max(hmax, v);
-        }
-        outMin = hmin;
-        outMax = hmax;
-    }
-    else
-    {
-        outMin = 0.0f;
-        outMax = 0.0f;
-    }
+    // rollMin/rollMax are updated in processBlock; simply forward the cached values here.
+    outMin = rollMin;
+    outMax = rollMax;
 }
 
 #endif

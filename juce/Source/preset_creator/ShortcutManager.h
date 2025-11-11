@@ -5,6 +5,7 @@
 #include <juce_data_structures/juce_data_structures.h>
 #include <functional>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 namespace collider
@@ -59,6 +60,14 @@ namespace collider
         KeyChord chord;
     };
 
+    struct IdentifierHash
+    {
+        std::size_t operator()(const juce::Identifier& id) const noexcept
+        {
+            return static_cast<std::size_t>(id.toString().hashCode());
+        }
+    };
+
     class ShortcutManager final
     {
     public:
@@ -93,11 +102,20 @@ namespace collider
         bool processKeyChord(const KeyChord& chord);
         bool processImGuiIO(const ImGuiIO& io);
 
-        void loadDefaultBindingsFromFile(const juce::File& file);
-        void loadUserBindingsFromFile(const juce::File& file);
-        void saveUserBindingsToFile(const juce::File& file) const;
+        bool loadDefaultBindingsFromFile(const juce::File& file);
+        bool loadUserBindingsFromFile(const juce::File& file);
+        bool saveUserBindingsToFile(const juce::File& file) const;
 
-        [[nodiscard]] const std::unordered_map<juce::Identifier, ShortcutAction>& getRegistry() const noexcept
+        [[nodiscard]] static const juce::Identifier& getGlobalContextIdentifier() noexcept;
+
+        [[nodiscard]] juce::Optional<KeyChord> getUserBinding(const juce::Identifier& actionId,
+                                                              const juce::Identifier& context) const;
+        [[nodiscard]] juce::Optional<KeyChord> getDefaultBinding(const juce::Identifier& actionId,
+                                                                 const juce::Identifier& context) const;
+        [[nodiscard]] KeyChord getBindingForContext(const juce::Identifier& actionId,
+                                                    const juce::Identifier& context) const;
+
+        [[nodiscard]] const std::unordered_map<juce::Identifier, ShortcutAction, IdentifierHash>& getRegistry() const noexcept
         {
             return actionRegistry;
         }
@@ -115,16 +133,41 @@ namespace collider
         static juce::var bindingToVar(const ShortcutBinding& binding);
         static juce::Optional<ShortcutBinding> bindingFromVar(const juce::var& value);
 
-        std::unordered_map<juce::Identifier, ShortcutAction> actionRegistry;
-        std::unordered_map<juce::Identifier, ActionCallback> actionCallbacks;
-        std::unordered_map<juce::Identifier, std::vector<ShortcutBinding>> defaultBindings;
-        std::unordered_map<juce::Identifier, std::vector<ShortcutBinding>> userBindings;
+        std::unordered_map<juce::Identifier, ShortcutAction, IdentifierHash> actionRegistry;
+        std::unordered_map<juce::Identifier, ActionCallback, IdentifierHash> actionCallbacks;
+        std::unordered_map<juce::Identifier, std::vector<ShortcutBinding>, IdentifierHash> defaultBindings;
+        std::unordered_map<juce::Identifier, std::vector<ShortcutBinding>, IdentifierHash> userBindings;
 
         std::unordered_map<KeyChord, juce::Identifier, KeyChordHash> activeKeymap;
 
         juce::Identifier currentContext { "Global" };
 
         JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(ShortcutManager)
+    };
+
+    class ScopedShortcutContext
+    {
+    public:
+        ScopedShortcutContext(ShortcutManager& manager, const juce::Identifier& newContext)
+            : shortcutManager(manager),
+              previousContext(manager.getContext())
+        {
+            shortcutManager.setContext(newContext);
+        }
+
+        ~ScopedShortcutContext()
+        {
+            shortcutManager.setContext(previousContext);
+        }
+
+        ScopedShortcutContext(const ScopedShortcutContext&) = delete;
+        ScopedShortcutContext& operator=(const ScopedShortcutContext&) = delete;
+        ScopedShortcutContext(ScopedShortcutContext&&) = delete;
+        ScopedShortcutContext& operator=(ScopedShortcutContext&&) = delete;
+
+    private:
+        ShortcutManager& shortcutManager;
+        juce::Identifier previousContext;
     };
 
 } // namespace collider

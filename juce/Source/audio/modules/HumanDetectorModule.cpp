@@ -213,7 +213,12 @@ DetectionResult HumanDetectorModule::analyzeFrame(const cv::Mat& inputFrame, juc
         cv::resize(displayFrame, displaySmall, cv::Size(320, 240));
         
         // Check if face cascade is loaded before using it
-        if (faceCascadeLoaded || faceCascadeGpu)
+        bool hasCascade = faceCascadeLoaded;
+        #if WITH_CUDA_SUPPORT
+            hasCascade = hasCascade || faceCascadeGpu;
+        #endif
+        
+        if (hasCascade)
         {
             #if WITH_CUDA_SUPPORT
                 if (useGpu && faceCascadeGpu)

@@ -141,14 +141,27 @@ public:
         // Show first 5 delay taps as dots
         for (int i = 0; i < 5; ++i)
         {
-            if (i > 0) ImGui::SameLine();
-            
+            if (i > 0)
+                ImGui::SameLine();
+
             float tapLevel = fb * std::pow(fb, (float)i);  // Exponential decay
+            tapLevel = juce::jlimit(0.0f, 1.0f, tapLevel);
             ImVec4 color = ImColor::HSV(0.15f, 0.7f, tapLevel).Value;
-            
+
+            juce::String buttonLabel = "Tap " + juce::String(i + 1);
+
+            ImGui::PushID(i);
             ImGui::PushStyleColor(ImGuiCol_Button, color);
-            ImGui::Button("•", ImVec2(itemWidth * 0.18f, 20));
+            ImGui::Button(buttonLabel.toRawUTF8(), ImVec2(itemWidth * 0.18f, 20));
             ImGui::PopStyleColor();
+
+            if (ImGui::IsItemHovered())
+            {
+                ImGui::BeginItemTooltip();
+                ImGui::Text("Relative level: %.2f", tapLevel);
+                ImGui::EndTooltip();
+            }
+            ImGui::PopID();
         }
         
         ImGui::PopItemWidth();

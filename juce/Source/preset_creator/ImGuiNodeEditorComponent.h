@@ -141,6 +141,7 @@ public:
 
     // New intelligent auto-connection system
     void parsePinName(const juce::String& fullName, juce::String& outType, int& outIndex);
+    void updateRerouteTypeFromConnections(juce::uint32 rerouteLogicalId);
     
     // Helper functions to get pins from modules
     std::vector<AudioPin> getOutputPins(const juce::String& moduleType);
@@ -257,7 +258,6 @@ public:
         return pinId;
     }
 
-
     juce::OpenGLContext glContext;
     ImGuiContext* imguiContext { nullptr };
     ImGuiIO* imguiIO { nullptr };
@@ -323,7 +323,85 @@ public:
     juce::uint32 hoveredLinkDstId { 0 };
     static constexpr juce::uint32 kOutputHighlightId = 0xFFFFFFFFu; // sentinel for main output node highlight
     int lastHoveredLinkId { -1 }; // cache inside-editor hovered link id for post-editor use
+    int m_currentlyProbedLinkId { -1 }; // caches the last link sent to the probe to avoid redundant graph rebuilds
     static inline const juce::Identifier nodeEditorContextId { "NodeEditor" };
+
+    void registerShortcuts();
+    void unregisterShortcuts();
+
+    static bool consumeShortcutFlag(std::atomic<bool>& flag) noexcept
+    {
+        return flag.exchange(false, std::memory_order_acq_rel);
+    }
+
+    struct ShortcutActionIds
+    {
+        static inline const juce::Identifier fileSave { "actions.file.save" };
+        static inline const juce::Identifier fileSaveAs { "actions.file.saveAs" };
+        static inline const juce::Identifier fileOpen { "actions.file.open" };
+        static inline const juce::Identifier fileRandomizePatch { "actions.file.randomizePatch" };
+        static inline const juce::Identifier fileRandomizeConnections { "actions.file.randomizeConnections" };
+        static inline const juce::Identifier fileBeautifyLayout { "actions.file.beautifyLayout" };
+        static inline const juce::Identifier editCtrlR { "actions.edit.resetOrRecord" };
+        static inline const juce::Identifier editMuteSelection { "actions.edit.muteSelection" };
+        static inline const juce::Identifier editSelectAll { "actions.edit.selectAll" };
+        static inline const juce::Identifier editConnectOutput { "actions.edit.connectToOutput" };
+        static inline const juce::Identifier editDisconnectSelection { "actions.edit.disconnectSelection" };
+        static inline const juce::Identifier editDuplicate { "actions.edit.duplicate" };
+        static inline const juce::Identifier editDuplicateWithRouting { "actions.edit.duplicateWithRouting" };
+        static inline const juce::Identifier editDelete { "actions.edit.delete" };
+        static inline const juce::Identifier editBypassDelete { "actions.edit.bypassDelete" };
+        static inline const juce::Identifier viewFrameSelection { "actions.view.frameSelection" };
+        static inline const juce::Identifier viewFrameAll { "actions.view.frameAll" };
+        static inline const juce::Identifier viewResetOrigin { "actions.view.resetOrigin" };
+        static inline const juce::Identifier viewToggleMinimap { "actions.view.toggleMinimap" };
+        static inline const juce::Identifier viewToggleShortcutsWindow { "actions.view.toggleShortcutsWindow" };
+        static inline const juce::Identifier historyUndo { "actions.history.undo" };
+        static inline const juce::Identifier historyRedo { "actions.history.redo" };
+        static inline const juce::Identifier debugToggleOverlay { "actions.debug.toggleDiagnostics" };
+        static inline const juce::Identifier graphInsertMixer { "actions.graph.insertMixer" };
+        static inline const juce::Identifier graphShowInsertPopup { "actions.graph.showInsertPopup" };
+        static inline const juce::Identifier graphInsertOnLink { "actions.graph.insertOnLink" };
+        static inline const juce::Identifier graphChainSequential { "actions.graph.chainSequential" };
+        static inline const juce::Identifier graphChainAudio { "actions.graph.chainAudio" };
+        static inline const juce::Identifier graphChainCv { "actions.graph.chainCv" };
+        static inline const juce::Identifier graphChainGate { "actions.graph.chainGate" };
+        static inline const juce::Identifier graphChainRaw { "actions.graph.chainRaw" };
+        static inline const juce::Identifier graphChainVideo { "actions.graph.chainVideo" };
+    };
+
+    std::atomic<bool> shortcutFileSaveRequested { false };
+    std::atomic<bool> shortcutFileSaveAsRequested { false };
+    std::atomic<bool> shortcutFileOpenRequested { false };
+    std::atomic<bool> shortcutRandomizePatchRequested { false };
+    std::atomic<bool> shortcutRandomizeConnectionsRequested { false };
+    std::atomic<bool> shortcutBeautifyLayoutRequested { false };
+    std::atomic<bool> shortcutCtrlRRequested { false };
+    std::atomic<bool> shortcutSelectAllRequested { false };
+    std::atomic<bool> shortcutMuteSelectionRequested { false };
+    std::atomic<bool> shortcutConnectOutputRequested { false };
+    std::atomic<bool> shortcutDisconnectRequested { false };
+    std::atomic<bool> shortcutDuplicateRequested { false };
+    std::atomic<bool> shortcutDuplicateWithRoutingRequested { false };
+    std::atomic<bool> shortcutDeleteRequested { false };
+    std::atomic<bool> shortcutBypassDeleteRequested { false };
+    std::atomic<bool> shortcutFrameSelectionRequested { false };
+    std::atomic<bool> shortcutFrameAllRequested { false };
+    std::atomic<bool> shortcutResetOriginRequested { false };
+    std::atomic<bool> shortcutToggleMinimapRequested { false };
+    std::atomic<bool> shortcutToggleShortcutsWindowRequested { false };
+    std::atomic<bool> shortcutUndoRequested { false };
+    std::atomic<bool> shortcutRedoRequested { false };
+    std::atomic<bool> shortcutToggleDebugRequested { false };
+    std::atomic<bool> shortcutInsertMixerRequested { false };
+    std::atomic<bool> shortcutShowInsertPopupRequested { false };
+    std::atomic<bool> shortcutInsertOnLinkRequested { false };
+    std::atomic<bool> shortcutChainSequentialRequested { false };
+    std::atomic<bool> shortcutChainAudioRequested { false };
+    std::atomic<bool> shortcutChainCvRequested { false };
+    std::atomic<bool> shortcutChainGateRequested { false };
+    std::atomic<bool> shortcutChainRawRequested { false };
+    std::atomic<bool> shortcutChainVideoRequested { false };
 
     // Positions to apply for specific node IDs on the next render (grid space)
     std::unordered_map<int, ImVec2> pendingNodePositions;
@@ -356,8 +434,9 @@ public:
     ImVec2 dragInsertDropPos { 0.0f, 0.0f };
     bool shouldOpenDragInsertPopup { false };
 
-    // Module suggestion cache
-    std::map<PinDataType, std::vector<juce::String>> dragInsertSuggestions;
+    // Module suggestion caches (directional)
+    std::map<PinDataType, std::vector<juce::String>> dragInsertSuggestionsInputs;
+    std::map<PinDataType, std::vector<juce::String>> dragInsertSuggestionsOutputs;
 
     // A map to cache the screen position of every pin attribute ID each frame.
     // This is a necessary workaround as ImNodes doesn't provide a public API
@@ -401,6 +480,46 @@ public:
 
     // Help window
     bool showShortcutsWindow { false };
+    bool showShortcutEditorWindow { false };
+    juce::String shortcutsSearchTerm;
+    juce::Identifier shortcutContextSelection { nodeEditorContextId };
+    bool shortcutsDirty { false };
+    juce::File defaultShortcutFile;
+    juce::File userShortcutFile;
+
+    struct ShortcutCaptureState
+    {
+        bool isCapturing { false };
+        juce::Identifier actionId;
+        juce::Identifier context;
+        collider::KeyChord captured;
+        bool hasCaptured { false };
+        juce::Identifier conflictActionId;
+        juce::Identifier conflictContextId;
+        bool conflictIsUserBinding { false };
+    };
+
+    ShortcutCaptureState shortcutCaptureState;
+
+    void renderShortcutEditorWindow();
+    void renderShortcutEditorTable(const juce::Identifier& context);
+    void renderShortcutRow(const collider::ShortcutAction& action,
+                           const juce::Identifier& actionId,
+                           const juce::Identifier& context,
+                           bool categoryChanged);
+    void renderShortcutEditorContents(bool includeCloseButton);
+    void renderShortcutCapturePanel();
+    void beginShortcutCapture(const juce::Identifier& actionId, const juce::Identifier& context);
+    void updateShortcutCapture();
+    void cancelShortcutCapture();
+    void applyShortcutCapture(bool forceReplace);
+    void evaluateShortcutCaptureConflict();
+    void clearShortcutForContext(const juce::Identifier& actionId, const juce::Identifier& context);
+    void resetShortcutForContext(const juce::Identifier& actionId, const juce::Identifier& context);
+    void saveUserShortcutBindings();
+    juce::String getBindingLabelForContext(const juce::Identifier& actionId,
+                                           const juce::Identifier& context,
+                                           juce::String& sourceLabel) const;
 
     // Shortcut debounce
     bool mixerShortcutCooldown { false };

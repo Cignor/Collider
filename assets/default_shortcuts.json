@@ -1,0 +1,294 @@
+{
+  "version": 1,
+  "bindings": [
+    {
+      "actionId": "actions.file.save",
+      "context": "NodeEditor",
+      "key": 564,
+      "ctrl": true,
+      "shift": false,
+      "alt": false,
+      "super": false
+    },
+    {
+      "actionId": "actions.file.saveAs",
+      "context": "NodeEditor",
+      "key": 564,
+      "ctrl": true,
+      "shift": false,
+      "alt": true,
+      "super": false
+    },
+    {
+      "actionId": "actions.file.open",
+      "context": "NodeEditor",
+      "key": 560,
+      "ctrl": true,
+      "shift": false,
+      "alt": false,
+      "super": false
+    },
+    {
+      "actionId": "actions.file.randomizePatch",
+      "context": "NodeEditor",
+      "key": 561,
+      "ctrl": true,
+      "shift": false,
+      "alt": false,
+      "super": false
+    },
+    {
+      "actionId": "actions.file.randomizeConnections",
+      "context": "NodeEditor",
+      "key": 558,
+      "ctrl": true,
+      "shift": false,
+      "alt": false,
+      "super": false
+    },
+    {
+      "actionId": "actions.file.beautifyLayout",
+      "context": "NodeEditor",
+      "key": 547,
+      "ctrl": true,
+      "shift": false,
+      "alt": false,
+      "super": false
+    },
+    {
+      "actionId": "actions.edit.resetOrRecord",
+      "context": "NodeEditor",
+      "key": 563,
+      "ctrl": true,
+      "shift": false,
+      "alt": false,
+      "super": false
+    },
+    {
+      "actionId": "actions.edit.selectAll",
+      "context": "NodeEditor",
+      "key": 546,
+      "ctrl": true,
+      "shift": false,
+      "alt": false,
+      "super": false
+    },
+    {
+      "actionId": "actions.edit.muteSelection",
+      "context": "NodeEditor",
+      "key": 558,
+      "ctrl": false,
+      "shift": false,
+      "alt": false,
+      "super": false
+    },
+    {
+      "actionId": "actions.edit.connectToOutput",
+      "context": "NodeEditor",
+      "key": 560,
+      "ctrl": false,
+      "shift": false,
+      "alt": false,
+      "super": false
+    },
+    {
+      "actionId": "actions.edit.disconnectSelection",
+      "context": "NodeEditor",
+      "key": 549,
+      "ctrl": false,
+      "shift": false,
+      "alt": true,
+      "super": false
+    },
+    {
+      "actionId": "actions.edit.duplicate",
+      "context": "NodeEditor",
+      "key": 549,
+      "ctrl": true,
+      "shift": false,
+      "alt": false,
+      "super": false
+    },
+    {
+      "actionId": "actions.edit.duplicateWithRouting",
+      "context": "NodeEditor",
+      "key": 549,
+      "ctrl": false,
+      "shift": true,
+      "alt": false,
+      "super": false
+    },
+    {
+      "actionId": "actions.edit.delete",
+      "context": "NodeEditor",
+      "key": 522,
+      "ctrl": false,
+      "shift": false,
+      "alt": false,
+      "super": false
+    },
+    {
+      "actionId": "actions.edit.bypassDelete",
+      "context": "NodeEditor",
+      "key": 522,
+      "ctrl": false,
+      "shift": true,
+      "alt": false,
+      "super": false
+    },
+    {
+      "actionId": "actions.view.frameSelection",
+      "context": "NodeEditor",
+      "key": 551,
+      "ctrl": false,
+      "shift": false,
+      "alt": false,
+      "super": false
+    },
+    {
+      "actionId": "actions.view.frameAll",
+      "context": "NodeEditor",
+      "key": 519,
+      "ctrl": false,
+      "shift": false,
+      "alt": false,
+      "super": false
+    },
+    {
+      "actionId": "actions.view.resetOrigin",
+      "context": "NodeEditor",
+      "key": 519,
+      "ctrl": true,
+      "shift": false,
+      "alt": false,
+      "super": false
+    },
+    {
+      "actionId": "actions.view.toggleMinimap",
+      "context": "NodeEditor",
+      "key": 597,
+      "ctrl": false,
+      "shift": false,
+      "alt": false,
+      "super": false
+    },
+    {
+      "actionId": "actions.view.toggleShortcutsWindow",
+      "context": "NodeEditor",
+      "key": 572,
+      "ctrl": false,
+      "shift": false,
+      "alt": false,
+      "super": false
+    },
+    {
+      "actionId": "actions.history.undo",
+      "context": "NodeEditor",
+      "key": 571,
+      "ctrl": true,
+      "shift": false,
+      "alt": false,
+      "super": false
+    },
+    {
+      "actionId": "actions.history.redo",
+      "context": "NodeEditor",
+      "key": 570,
+      "ctrl": true,
+      "shift": false,
+      "alt": false,
+      "super": false
+    },
+    {
+      "actionId": "actions.debug.toggleDiagnostics",
+      "context": "NodeEditor",
+      "key": 549,
+      "ctrl": true,
+      "shift": true,
+      "alt": false,
+      "super": false
+    },
+    {
+      "actionId": "actions.graph.insertMixer",
+      "context": "NodeEditor",
+      "key": 565,
+      "ctrl": true,
+      "shift": false,
+      "alt": false,
+      "super": false
+    },
+    {
+      "actionId": "actions.graph.showInsertPopup",
+      "context": "NodeEditor",
+      "key": 554,
+      "ctrl": true,
+      "shift": false,
+      "alt": false,
+      "super": false
+    },
+    {
+      "actionId": "actions.graph.insertOnLink",
+      "context": "NodeEditor",
+      "key": 554,
+      "ctrl": false,
+      "shift": false,
+      "alt": false,
+      "super": false
+    },
+    {
+      "actionId": "actions.graph.chainSequential",
+      "context": "NodeEditor",
+      "key": 548,
+      "ctrl": false,
+      "shift": false,
+      "alt": false,
+      "super": false
+    },
+    {
+      "actionId": "actions.graph.chainAudio",
+      "context": "NodeEditor",
+      "key": 552,
+      "ctrl": false,
+      "shift": false,
+      "alt": false,
+      "super": false
+    },
+    {
+      "actionId": "actions.graph.chainCv",
+      "context": "NodeEditor",
+      "key": 547,
+      "ctrl": false,
+      "shift": false,
+      "alt": false,
+      "super": false
+    },
+    {
+      "actionId": "actions.graph.chainGate",
+      "context": "NodeEditor",
+      "key": 570,
+      "ctrl": false,
+      "shift": false,
+      "alt": false,
+      "super": false
+    },
+    {
+      "actionId": "actions.graph.chainRaw",
+      "context": "NodeEditor",
+      "key": 563,
+      "ctrl": false,
+      "shift": false,
+      "alt": false,
+      "super": false
+    },
+    {
+      "actionId": "actions.graph.chainVideo",
+      "context": "NodeEditor",
+      "key": 567,
+      "ctrl": false,
+      "shift": false,
+      "alt": false,
+      "super": false
+    }
+  ]
+}
+

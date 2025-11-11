@@ -1,6 +1,33 @@
 cmake_minimum_required(VERSION 3.22)
 project(ColliderAudioEngine VERSION 0.1.0)
 
+if(MSVC)
+    set(CMAKE_C_FLAGS_DEBUG "${CMAKE_C_FLAGS_DEBUG} /Z7")
+    set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} /Z7")
+endif()
+
+# ==============================================================================
+# [OPTIONAL] Enable sccache for faster C/C++/CUDA rebuilds
+# ==============================================================================
+# Add an option to control sccache usage, default to ON
+option(ENABLE_SCCACHE "Enable sccache if found for faster builds" ON)
+
+if(ENABLE_SCCACHE)
+    find_program(SCCACHE_EXECUTABLE sccache)
+    if(SCCACHE_EXECUTABLE)
+        message(STATUS "✓ sccache found, enabling compiler cache: ${SCCACHE_EXECUTABLE}")
+        set(CMAKE_C_COMPILER_LAUNCHER ${SCCACHE_EXECUTABLE})
+        set(CMAKE_CXX_COMPILER_LAUNCHER ${SCCACHE_EXECUTABLE})
+        set(CMAKE_CUDA_COMPILER_LAUNCHER ${SCCACHE_EXECUTABLE})
+    else()
+        message(WARNING "sccache not found in PATH. Compiler cache is DISABLED. \
+                         Install with 'brew install sccache' or 'cargo install sccache' for faster builds.")
+    endif()
+else()
+    message(STATUS "sccache disabled by user (ENABLE_SCCACHE=OFF).")
+endif()
+# ==============================================================================
+
 # --- TTS Integration (Piper) ---
 
 # 1. Set paths to pre-built Piper and ONNX Runtime
@@ -222,123 +249,173 @@ else()
     set(OPENCV_DNN_CUDA OFF CACHE BOOL "" FORCE)
 endif()
 
-# --------------------------------------------------------------
-# OpenCV (Computer Vision Library - used for Preset Creator UI)
-# --------------------------------------------------------------
+# ==============================================================================
+# OpenCV (Computer Vision Library - with CUDA Support)
+# ==============================================================================
+# NEW ISOLATION STRATEGY:
+# 1. Try to find pre-built OpenCV (from standalone builder)
+# 2. Fall back to building from source if not found
+# 
+# This prevents OpenCV CUDA from rebuilding when CMakeLists.txt changes!
+# 
+# To build OpenCV once: .\build_opencv_cuda_once.ps1
+# ==============================================================================
 
-# Add /FS flag for MSVC BEFORE declaring OpenCV to fix parallel compilation PDB access issues
-if(MSVC)
-    # Save current flags
-    set(SAVED_CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}")
-    set(SAVED_CMAKE_C_FLAGS "${CMAKE_C_FLAGS}")
-    
-    # Add /FS flag to init variables (used by subprojects)
-    set(CMAKE_CXX_FLAGS_INIT "${CMAKE_CXX_FLAGS_INIT} /FS" CACHE STRING "" FORCE)
-    set(CMAKE_C_FLAGS_INIT "${CMAKE_C_FLAGS_INIT} /FS" CACHE STRING "" FORCE)
-    
-    # Also add to current flags
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /FS")
-    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} /FS")
-endif()
-
-# CRITICAL FIX: Add CUDA include directories using CMake's proper mechanism
-# This works for both C++ and CUDA compilation (unlike compiler flags which break on spaces)
+# Add CUDA include directories for all builds
 include_directories(SYSTEM ${CUDAToolkit_INCLUDE_DIRS})
 
-# UPGRADED: Using OpenCV 4.x development branch with CUDA 12.9+ fix
-# This includes PR #27288 which fixes nppGetStreamContext() issue for CUDA 12.9+
-FetchContent_Declare(
-  opencv
-  GIT_REPOSITORY https://github.com/opencv/opencv.git
-  GIT_TAG        4.x # Latest development branch with CUDA 13.0 support
-)
+# Check for standalone pre-built OpenCV
+set(OPENCV_INSTALL_PREFIX "${CMAKE_SOURCE_DIR}/opencv_cuda_install")
+set(OPENCV_PREBUILT FALSE)
+set(OPENCV_HAS_RELEASE FALSE)
+set(OPENCV_HAS_DEBUG FALSE)
 
-# ADDED: opencv_contrib is required for many CUDA modules and advanced features (especially cudev).
-FetchContent_Declare(
-  opencv_contrib
-  GIT_REPOSITORY https://github.com/opencv/opencv_contrib.git
-  GIT_TAG        4.x # Must match the main OpenCV branch
-)
-
-# Fetch and populate opencv_contrib FIRST so we can get its source directory
-FetchContent_GetProperties(opencv_contrib)
-if(NOT opencv_contrib_POPULATED)
-    FetchContent_Populate(opencv_contrib)
+# Check if the standalone installation exists
+if(EXISTS "${OPENCV_INSTALL_PREFIX}/lib/opencv_world4130.lib")
+    set(OPENCV_HAS_RELEASE TRUE)
+endif()
+if(EXISTS "${OPENCV_INSTALL_PREFIX}/lib/opencv_world4130d.lib")
+    set(OPENCV_HAS_DEBUG TRUE)
 endif()
 
-# Get the opencv_contrib source directory BEFORE configuring OpenCV
-FetchContent_GetProperties(opencv_contrib SOURCE_DIR opencv_contrib_SOURCE_DIR)
-
-# CRITICAL: Set OPENCV_EXTRA_MODULES_PATH BEFORE FetchContent_MakeAvailable(opencv)
-# This ensures OpenCV can find the cudev module during configuration
-set(OPENCV_EXTRA_MODULES_PATH "${opencv_contrib_SOURCE_DIR}/modules" CACHE PATH "" FORCE)
-
-# --- OpenCV Build Configuration ---
-set(BUILD_SHARED_LIBS OFF)
-set(BUILD_opencv_world ON)
-set(BUILD_TESTS OFF)
-set(BUILD_PERF_TESTS OFF)
-set(BUILD_EXAMPLES OFF)
-set(BUILD_opencv_apps OFF)
-set(ENABLE_PRECOMPILED_HEADERS OFF)
-set(BUILD_WITH_STATIC_CRT OFF) # Correctly matches JUCE's dynamic runtime
-set(WITH_IPP OFF) # Disable Intel IPP to avoid header path issues
-
-# --- CUDA and cuDNN Configuration ---
-set(WITH_CUDA ON CACHE BOOL "" FORCE)
-# OPENCV_DNN_CUDA and WITH_CUDNN are set above based on cuDNN availability
-set(WITH_NVIDIA_NPP ON CACHE BOOL "" FORCE)
-set(WITH_NVCUVID OFF) # Video decoding, disable if not needed.
-set(WITH_NVCUVENC OFF) # Video encoding, disable if not needed.
-
-# Explicitly provide CUDA paths to OpenCV (critical for finding NPP headers)
-set(CUDA_TOOLKIT_ROOT_DIR "${CUDAToolkit_TARGET_DIR}" CACHE PATH "" FORCE)
-set(CUDA_INCLUDE_DIRS "${CUDAToolkit_INCLUDE_DIRS}" CACHE PATH "" FORCE)
-# DO NOT set CUDA_LIBRARIES to a directory - causes "x64.lib" linker error
-# OpenCV will find CUDA libraries automatically via CUDA_TOOLKIT_ROOT_DIR
-
-# --- CUDA Architecture Targeting ---
-# Target NVIDIA Blackwell (RTX 5090), Ada Lovelace (40-series), and Ampere (30-series)
-set(CUDA_ARCH_BIN "8.6;8.9;12.0")
-# Provide forward compatibility for future architectures
-set(CUDA_ARCH_PTX "12.0")
-
-# Explicitly enable required modules.
-set(BUILD_opencv_core ON)
-set(BUILD_opencv_dnn ON)
-set(BUILD_opencv_features2d ON)
-set(BUILD_opencv_highgui ON)
-set(BUILD_opencv_imgcodecs ON)
-set(BUILD_opencv_imgproc ON)
-set(BUILD_opencv_objdetect ON)
-set(BUILD_opencv_tracking ON)
-set(BUILD_opencv_video ON)
-set(BUILD_opencv_videoio ON)
-set(BUILD_opencv_calib3d ON)
-set(OPENCV_DNN_CAFFE ON)
-
-# --- Finalize and Build OpenCV ---
-FetchContent_MakeAvailable(opencv)
-
-# Get the OpenCV build directory for generated headers
-FetchContent_GetProperties(opencv)
-if(NOT opencv_POPULATED)
-    FetchContent_Populate(opencv)
-endif()
-set(OPENCV_BUILD_DIR "${CMAKE_BINARY_DIR}/_deps/opencv-build")
-
-# ==============================================================================
-# AUTO-GENERATE opencv_modules.hpp
-# ==============================================================================
-# OpenCV's build system should generate this file, but sometimes it doesn't
-# create it during the initial configuration. This ensures it always exists.
-set(OPENCV_MODULES_HPP "${OPENCV_BUILD_DIR}/opencv2/opencv_modules.hpp")
-if(NOT EXISTS "${OPENCV_MODULES_HPP}")
-    message(STATUS "Generating missing opencv_modules.hpp...")
-    file(MAKE_DIRECTORY "${OPENCV_BUILD_DIR}/opencv2")
-    file(WRITE "${OPENCV_MODULES_HPP}"
+if(OPENCV_HAS_RELEASE OR OPENCV_HAS_DEBUG)
+    # Found standalone OpenCV - use find_package() to get everything
+    set(OPENCV_PREBUILT TRUE)
+    
+    message(STATUS "")
+    message(STATUS "========================================")
+    message(STATUS "  Found Pre-Built OpenCV with CUDA!")
+    message(STATUS "========================================")
+    message(STATUS "Location: ${OPENCV_INSTALL_PREFIX}")
+    message(STATUS "")
+    if(OPENCV_HAS_RELEASE)
+        message(STATUS "✓ Release configuration available")
+    endif()
+    if(OPENCV_HAS_DEBUG)
+        message(STATUS "✓ Debug configuration available")
+    endif()
+    message(STATUS "")
+    message(STATUS "✓ Using cached build (no rebuild needed!)")
+    message(STATUS "  You can modify CMakeLists.txt without rebuilding OpenCV!")
+    message(STATUS "")
+    
+    # Use find_package to get ALL transitive dependencies automatically
+    set(OpenCV_DIR "${OPENCV_INSTALL_PREFIX}/lib/cmake/OpenCV")
+    find_package(OpenCV 4.13 REQUIRED)
+    
+    if(NOT OpenCV_FOUND)
+        message(FATAL_ERROR "OpenCV installation found but CMake config is broken!")
+    endif()
+    
+    message(STATUS "✓ OpenCV CMake config loaded successfully")
+    message(STATUS "  - Include dirs: ${OpenCV_INCLUDE_DIRS}")
+    message(STATUS "  - Libraries: ${OpenCV_LIBS}")
+    message(STATUS "  - Version: ${OpenCV_VERSION}")
+    
+    # Set paths for compatibility with rest of CMakeLists
+    set(opencv_SOURCE_DIR "${OPENCV_INSTALL_PREFIX}/include")
+    set(OPENCV_BUILD_DIR "${OPENCV_INSTALL_PREFIX}/include")
+    set(opencv_contrib_SOURCE_DIR "${OPENCV_INSTALL_PREFIX}/include")
+    
+else()
+    message(STATUS "")
+    message(STATUS "========================================")
+    message(STATUS "  Pre-Built OpenCV NOT Found")
+    message(STATUS "========================================")
+    message(STATUS "Will build from source (takes 30-45 minutes)")
+    message(STATUS "")
+    message(STATUS "To avoid future rebuilds, run:")
+    message(STATUS "  .\\build_opencv_cuda_once.ps1")
+    message(STATUS "")
+    
+    # Add /FS flag for MSVC BEFORE declaring OpenCV
+    if(MSVC)
+        set(SAVED_CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}")
+        set(SAVED_CMAKE_C_FLAGS "${CMAKE_C_FLAGS}")
+        set(CMAKE_CXX_FLAGS_INIT "${CMAKE_CXX_FLAGS_INIT} /FS" CACHE STRING "" FORCE)
+        set(CMAKE_C_FLAGS_INIT "${CMAKE_C_FLAGS_INIT} /FS" CACHE STRING "" FORCE)
+        set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /FS")
+        set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} /FS")
+    endif()
+    
+    # Fetch OpenCV from source
+    FetchContent_Declare(
+      opencv
+      GIT_REPOSITORY https://github.com/opencv/opencv.git
+      GIT_TAG        4.x
+    )
+    
+    FetchContent_Declare(
+      opencv_contrib
+      GIT_REPOSITORY https://github.com/opencv/opencv_contrib.git
+      GIT_TAG        4.x
+    )
+    
+    # Populate opencv_contrib first
+    FetchContent_GetProperties(opencv_contrib)
+    if(NOT opencv_contrib_POPULATED)
+        FetchContent_Populate(opencv_contrib)
+    endif()
+    FetchContent_GetProperties(opencv_contrib SOURCE_DIR opencv_contrib_SOURCE_DIR)
+    
+    set(OPENCV_EXTRA_MODULES_PATH "${opencv_contrib_SOURCE_DIR}/modules" CACHE PATH "" FORCE)
+    
+    # OpenCV Build Configuration
+    set(BUILD_SHARED_LIBS OFF)
+    set(BUILD_opencv_world ON)
+    set(BUILD_TESTS OFF)
+    set(BUILD_PERF_TESTS OFF)
+    set(BUILD_EXAMPLES OFF)
+    set(BUILD_opencv_apps OFF)
+    set(ENABLE_PRECOMPILED_HEADERS OFF)
+    set(BUILD_WITH_STATIC_CRT OFF)
+    set(WITH_IPP OFF)
+    
+    # CUDA Configuration
+    set(WITH_CUDA ON CACHE BOOL "" FORCE)
+    set(WITH_NVIDIA_NPP ON CACHE BOOL "" FORCE)
+    set(WITH_NVCUVID OFF)
+    set(WITH_NVCUVENC OFF)
+    
+    set(CUDA_TOOLKIT_ROOT_DIR "${CUDAToolkit_TARGET_DIR}" CACHE PATH "" FORCE)
+    set(CUDA_INCLUDE_DIRS "${CUDAToolkit_INCLUDE_DIRS}" CACHE PATH "" FORCE)
+    
+    # CUDA Architecture
+    set(CUDA_ARCH_BIN "8.6;8.9;12.0")
+    set(CUDA_ARCH_PTX "12.0")
+    
+    # Required modules
+    set(BUILD_opencv_core ON)
+    set(BUILD_opencv_dnn ON)
+    set(BUILD_opencv_features2d ON)
+    set(BUILD_opencv_highgui ON)
+    set(BUILD_opencv_imgcodecs ON)
+    set(BUILD_opencv_imgproc ON)
+    set(BUILD_opencv_objdetect ON)
+    set(BUILD_opencv_tracking ON)
+    set(BUILD_opencv_video ON)
+    set(BUILD_opencv_videoio ON)
+    set(BUILD_opencv_calib3d ON)
+    set(OPENCV_DNN_CAFFE ON)
+    
+    # Build OpenCV
+    FetchContent_MakeAvailable(opencv)
+    
+    # Get build directory
+    FetchContent_GetProperties(opencv)
+    if(NOT opencv_POPULATED)
+        FetchContent_Populate(opencv)
+    endif()
+    set(OPENCV_BUILD_DIR "${CMAKE_BINARY_DIR}/_deps/opencv-build")
+    
+    # Generate opencv_modules.hpp if missing
+    set(OPENCV_MODULES_HPP "${OPENCV_BUILD_DIR}/opencv2/opencv_modules.hpp")
+    if(NOT EXISTS "${OPENCV_MODULES_HPP}")
+        message(STATUS "Generating opencv_modules.hpp...")
+        file(MAKE_DIRECTORY "${OPENCV_BUILD_DIR}/opencv2")
+        file(WRITE "${OPENCV_MODULES_HPP}"
 "/*
- * This file is auto-generated. Do not edit!
+ * Auto-generated by CMake
  */
 
 #ifndef OPENCV_MODULES_HPP
@@ -363,14 +440,28 @@ if(NOT EXISTS "${OPENCV_MODULES_HPP}")
 
 #endif
 ")
-    message(STATUS "Generated opencv_modules.hpp at ${OPENCV_MODULES_HPP}")
+    endif()
+    
+    # Restore flags
+    if(MSVC)
+        set(CMAKE_CXX_FLAGS "${SAVED_CMAKE_CXX_FLAGS} /FS")
+        set(CMAKE_C_FLAGS "${SAVED_CMAKE_C_FLAGS} /FS")
+    endif()
 endif()
-# ==============================================================================
 
-# Restore flags after OpenCV if needed
-if(MSVC)
-    set(CMAKE_CXX_FLAGS "${SAVED_CMAKE_CXX_FLAGS} /FS")
-    set(CMAKE_C_FLAGS "${SAVED_CMAKE_C_FLAGS} /FS")
+# ==============================================================================
+# Post-Configuration (Common to both pre-built and source builds)
+# ==============================================================================
+# Set OpenCV link libraries based on whether we're using pre-built or source-built
+
+if(OPENCV_PREBUILT)
+    # Pre-built: Use ${OpenCV_LIBS} which includes all transitive dependencies
+    set(OPENCV_LINK_LIBS ${OpenCV_LIBS})
+    message(STATUS "Using pre-built OpenCV: ${OpenCV_LIBS}")
+else()
+    # Source-built: Use the opencv_world target directly
+    set(OPENCV_LINK_LIBS opencv_world)
+    message(STATUS "Using source-built OpenCV: opencv_world target")
 endif()
 
 # ==============================================================================
@@ -672,6 +763,8 @@ target_sources(ColliderApp PRIVATE
         Source/audio/modules/DebugModuleProcessor.cpp
         Source/audio/modules/CommentModuleProcessor.h
         Source/audio/modules/CommentModuleProcessor.cpp
+        Source/audio/modules/RerouteModuleProcessor.h
+        Source/audio/modules/RerouteModuleProcessor.cpp
         Source/audio/modules/InputDebugModuleProcessor.h
         Source/audio/modules/InputDebugModuleProcessor.cpp
     Source/audio/modules/TTSPerformerModuleProcessor.h
@@ -806,7 +899,7 @@ target_link_libraries(ColliderApp PRIVATE
     glm::glm
     tinygltf
     ufbx_static
-    opencv_world
+    ${OPENCV_LINK_LIBS}
     $<$<BOOL:${USE_RUBBERBAND}>:${RUBBERBAND_TARGET}>
     $<$<BOOL:${FFMPEG_FOUND}>:${AVFORMAT_LIBRARY}>
     $<$<BOOL:${FFMPEG_FOUND}>:${AVCODEC_LIBRARY}>
@@ -990,7 +1083,8 @@ target_sources(PresetCreatorApp PRIVATE
         Source/audio/modules/TrackMixerModuleProcessor.cpp
     Source/audio/modules/PolyVCOModuleProcessor.h
     Source/audio/modules/PolyVCOModuleProcessor.cpp
-    
+    Source/audio/modules/RerouteModuleProcessor.h
+    Source/audio/modules/RerouteModuleProcessor.cpp
     Source/audio/modules/TTSPerformerModuleProcessor.h
     Source/audio/modules/TTSPerformerModuleProcessor.cpp
     Source/audio/modules/TimingData.h
@@ -1194,7 +1288,7 @@ target_link_libraries(PresetCreatorApp PRIVATE
     glm::glm
     tinygltf
     ufbx_static
-    opencv_world
+    ${OPENCV_LINK_LIBS}  # Uses ${OpenCV_LIBS} for pre-built (includes all deps) or opencv_world for source-built
     $<$<BOOL:${USE_RUBBERBAND}>:${RUBBERBAND_TARGET}>
     $<$<BOOL:${FFMPEG_FOUND}>:${AVFORMAT_LIBRARY}>
     $<$<BOOL:${FFMPEG_FOUND}>:${AVCODEC_LIBRARY}>
@@ -1215,6 +1309,18 @@ endif()
 # Link Windows libraries for native camera enumeration (DirectShow)
 if(WIN32)
     target_link_libraries(PresetCreatorApp PRIVATE ole32 strmiids)
+endif()
+
+# ==============================================================================
+# FORCE EMBEDDED DEBUG INFO (/Z7) FOR ALL TARGETS TO FIX NINJA PDB LOCKING
+# ==============================================================================
+if(MSVC)
+    target_compile_options(soundtouch PRIVATE "$<$<CONFIG:Debug>:/Z7>")
+    target_compile_options(box2d PRIVATE "$<$<CONFIG:Debug>:/Z7>")
+    target_compile_options(ufbx_static PRIVATE "$<$<CONFIG:Debug>:/Z7>")
+    target_compile_options(rubberband_single PRIVATE "$<$<CONFIG:Debug>:/Z7>")
+    target_compile_options(ColliderApp PRIVATE "$<$<CONFIG:Debug>:/Z7>")
+    target_compile_options(PresetCreatorApp PRIVATE "$<$<CONFIG:Debug>:/Z7>")
 endif()
 
 # Add compile definition to signal zoom mode for app code if enabled
@@ -1241,10 +1347,12 @@ if(WIN32)
         COMMAND ${CMAKE_COMMAND} -E copy_if_different
                 "${ONNXRUNTIME_DIR}/lib/onnxruntime_providers_shared.dll"
                 "$<TARGET_FILE_DIR:ColliderApp>"
-        # Copy OpenCV FFmpeg video backend DLL (relative to build tree)
+        # Copy OpenCV FFmpeg video backend DLL (if it exists - optional video codec)
+        # Path differs between pre-built and source-built OpenCV
         COMMAND ${CMAKE_COMMAND} -E copy_if_different
-                "${CMAKE_BINARY_DIR}/bin/$<CONFIG>/opencv_videoio_ffmpeg4130_64.dll"
+                "$<IF:$<BOOL:${OPENCV_PREBUILT}>,${OPENCV_INSTALL_PREFIX}/bin/opencv_videoio_ffmpeg4130_64.dll,${CMAKE_BINARY_DIR}/_deps/opencv-build/bin/$<CONFIG>/opencv_videoio_ffmpeg4130_64.dll>"
                 "$<TARGET_FILE_DIR:ColliderApp>"
+        || ${CMAKE_COMMAND} -E echo "Note: OpenCV FFmpeg DLL not found (optional video codec)"
     )
     
     # Copy FFmpeg DLLs separately (if FFmpeg is found)
@@ -1304,10 +1412,12 @@ if(WIN32)
         COMMAND ${CMAKE_COMMAND} -E copy_if_different
                 "${ONNXRUNTIME_DIR}/lib/onnxruntime_providers_shared.dll"
                 "$<TARGET_FILE_DIR:PresetCreatorApp>"
-        # Copy OpenCV FFmpeg video backend DLL (relative to build tree)
+        # Copy OpenCV FFmpeg video backend DLL (if it exists - optional video codec)
+        # Path differs between pre-built and source-built OpenCV
         COMMAND ${CMAKE_COMMAND} -E copy_if_different
-                "${CMAKE_BINARY_DIR}/bin/$<CONFIG>/opencv_videoio_ffmpeg4130_64.dll"
+                "$<IF:$<BOOL:${OPENCV_PREBUILT}>,${OPENCV_INSTALL_PREFIX}/bin/opencv_videoio_ffmpeg4130_64.dll,${CMAKE_BINARY_DIR}/_deps/opencv-build/bin/$<CONFIG>/opencv_videoio_ffmpeg4130_64.dll>"
                 "$<TARGET_FILE_DIR:PresetCreatorApp>"
+        || ${CMAKE_COMMAND} -E echo "Note: OpenCV FFmpeg DLL not found (optional video codec)"
         COMMAND ${CMAKE_COMMAND} -E copy_directory
                 "${PIPER_DIR}/espeak-ng-data"
                 "$<TARGET_FILE_DIR:PresetCreatorApp>/espeak-ng-data"

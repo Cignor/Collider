@@ -71,6 +71,7 @@ void populateModuleDescriptions()
     descriptions["logic"]               = "Performs boolean logic (AND, OR, XOR, NOT) on gate signals.";
     descriptions["clock_divider"]       = "Divides and multiplies clock signals.";
     descriptions["sequential_switch"]   = "A signal router with multiple thresholds.";
+    descriptions["reroute"]             = "A polymorphic passthrough node. Pin color adapts to the input signal.";
     descriptions["comment"]             = "A plain text comment node for documentation.";
     descriptions["snapshot_sequencer"]  = "A sequencer that stores and recalls complete patch states.";
     // Analysis
@@ -210,6 +211,12 @@ void populatePinDatabase()
           AudioPin("In B R", 3, PinDataType::Audio), AudioPin("Gain Mod", 4, PinDataType::CV), AudioPin("Pan Mod", 5, PinDataType::CV),
           AudioPin("X-Fade Mod", 6, PinDataType::CV) },
         { AudioPin("Out L", 0, PinDataType::Audio), AudioPin("Out R", 1, PinDataType::Audio) },
+        {}
+    );
+    db["reroute"] = ModulePinInfo(
+        NodeWidth::Small,
+        { AudioPin("In", 0, PinDataType::Audio) },
+        { AudioPin("Out", 0, PinDataType::Audio) },
         {}
     );
     db["scope"] = ModulePinInfo(

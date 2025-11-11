@@ -479,6 +479,33 @@ if (lower.contains("vcf") || lower.contains("delay") ||
 
 ---
 
+## 10. Theme Integration (Optional, but Recommended for Custom UI Styling)
+
+If your new module introduces unique visual elements (custom overlays, novel pin types, or per-module colour accents), sanity-check the theme system so designers can tweak those aspects from the Theme Editor.
+
+1. **Default Colour/Style Support**
+   - Add any new colour slots to the `Theme` struct inside `juce/Source/preset_creator/theme/Theme.h`.
+   - Initialise sensible defaults in `ThemeManager::loadDefaultTheme()` (`juce/Source/preset_creator/theme/ThemeManager.cpp`).
+
+2. **Runtime Accessors**
+   - Expose getters in `ThemeManager` if runtime code needs easy access (`getCategoryColor`, `getPinColor`, etc. follow the pattern).
+   - In your module drawing code, query `ThemeManager::getInstance()` rather than hard-coding RGBA values.
+
+3. **Theme Editor Hooks**
+   - Add editing widgets to the relevant tab in `ThemeEditorComponent` (e.g. extend the **Modules** tab if you add module-specific colours).
+   - Remember to flag `m_hasChanges` when new controls mutate the working copy so `Apply Changes` becomes enabled.
+
+4. **Preset Serialization**
+   - Update `ThemeManager::loadTheme()` and `saveTheme()` to parse/emit the new properties. Reuse existing helper lambdas like `colorToVar` / `varToColor`.
+
+5. **Testing**
+   - Launch the Theme Editor (Settings → Theme → *Edit Current Theme...*) and verify the new controls appear.
+   - Save a preset, relaunch, and ensure the new colours persist.
+
+For a deeper rundown of the theming pipeline, see `guides/THEME_SYSTEM_OVERVIEW.md`.
+
+---
+
 ## Complete Checklist for Adding a New Module
 
 Use this checklist to ensure you've registered your module everywhere:

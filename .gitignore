@@ -1,6 +1,12 @@
 # Build directories
 juce/build/
+juce/build-ninja-debug/
+juce/build-ninja-release/
+juce/build-ninja-*/
 build/
+opencv_build/
+opencv_cache/
+opencv_cuda_install/
 *.dir/
 cmake-build-*/
 

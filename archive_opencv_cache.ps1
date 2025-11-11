@@ -1,12 +1,26 @@
 #!/usr/bin/env pwsh
-# Archive OpenCV CUDA Build Cache
-# Preserves 30+ minutes of CUDA compilation time
+# Archive OpenCV CUDA Build Cache (DEPRECATED - Use Standalone System!)
+# 
+# ⚠️  DEPRECATED: This script is for the OLD inline build system.
+# 
+# 🎉 NEW RECOMMENDED APPROACH:
+#    Use the standalone OpenCV build system instead:
+#    1. Build once: .\build_opencv_cuda_once.ps1
+#    2. Archive:    .\archive_opencv_standalone.ps1
+#    3. Restore:    .\restore_opencv_standalone.ps1
+# 
+# The new system prevents OpenCV from rebuilding when you modify CMakeLists.txt!
+# 
+# This old script still works if you're using the inline FetchContent build.
 
 $timestamp = Get-Date -Format "yyyyMMdd_HHmm"
 $archivePath = "opencv_cuda_cache_archive_$timestamp"
 
-Write-Host "`n========================================" -ForegroundColor Cyan
-Write-Host "  OpenCV CUDA Cache Archive Creator" -ForegroundColor Cyan
+Write-Host "`n⚠️  DEPRECATED SCRIPT - Consider using standalone system!" -ForegroundColor Yellow
+Write-Host "   Run: .\build_opencv_cuda_once.ps1 for better isolation`n" -ForegroundColor Cyan
+
+Write-Host "========================================" -ForegroundColor Cyan
+Write-Host "  OpenCV CUDA Cache Archive Creator (Old)" -ForegroundColor Cyan
 Write-Host "========================================`n" -ForegroundColor Cyan
 
 # Verify source exists
