@@ -164,10 +164,12 @@ void TimePitchModuleProcessor::processBlock (juce::AudioBuffer<float>& buffer, j
     // 3) Compute frames needed to fill this block
     if (maxConsumptionRatio <= 0.0)
         maxConsumptionRatio = juce::jlimit (0.25, 4.0, lastPlaybackSpeed);
-    const int framesToFeed = juce::jmax (1, (int) std::ceil ((double) numSamples * maxConsumptionRatio));
+    const int framesRequired = juce::jmax (1, (int) std::ceil ((double) numSamples * maxConsumptionRatio));
+    const int availableFrames = abstractFifo.getNumReady();
+    const int framesToFeed = juce::jmin (framesRequired, availableFrames);
 
     outBus.clear();
-    if (abstractFifo.getNumReady() >= framesToFeed)
+    if (framesToFeed > 0)
     {
         // 4) Read from FIFO and interleave
         ensureCapacity (interleavedInput, framesToFeed, 2, interleavedInputCapacityFrames);

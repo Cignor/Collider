@@ -2519,7 +2519,34 @@ const juce::String& type = mod.second;
             ++gImNodesNodeDepth;
 #endif
             ImNodes::BeginNodeTitleBar();
-            ImGui::TextUnformatted (type.toRawUTF8());
+            // Special handling for reroute nodes: show dynamic type in name
+            if (type.equalsIgnoreCase("reroute"))
+            {
+                if (auto* reroute = dynamic_cast<RerouteModuleProcessor*>(synth->getModuleForLogical(lid)))
+                {
+                    PinDataType passthroughType = reroute->getPassthroughType();
+                    juce::String typeName;
+                    switch (passthroughType)
+                    {
+                        case PinDataType::CV:    typeName = "CV"; break;
+                        case PinDataType::Audio: typeName = "Audio"; break;
+                        case PinDataType::Gate:  typeName = "Gate"; break;
+                        case PinDataType::Raw:   typeName = "Raw"; break;
+                        case PinDataType::Video: typeName = "Video"; break;
+                        default:                 typeName = "Audio"; break;
+                    }
+                    juce::String displayName = "Reroute " + typeName;
+                    ImGui::TextUnformatted(displayName.toRawUTF8());
+                }
+                else
+                {
+                    ImGui::TextUnformatted(type.toRawUTF8());
+                }
+            }
+            else
+            {
+                ImGui::TextUnformatted(type.toRawUTF8());
+            }
             ImNodes::EndNodeTitleBar();
 
             // Get node content width - check if module has custom size, otherwise use default
@@ -3972,15 +3999,16 @@ if (auto* mp = synth->getModuleForLogical (lid))
             }
 
             // 3. Push the chosen color (either normal or glowing) to the style stack.
+            const auto& theme = ThemeManager::getInstance().getCurrentTheme();
             ImNodes::PushColorStyle(ImNodesCol_Link, linkColor);
-            ImNodes::PushColorStyle(ImNodesCol_LinkHovered, IM_COL32(255, 255, 0, 255));
-            ImNodes::PushColorStyle(ImNodesCol_LinkSelected, IM_COL32(255, 255, 0, 255));
+            ImNodes::PushColorStyle(ImNodesCol_LinkHovered, theme.links.link_hovered);
+            ImNodes::PushColorStyle(ImNodesCol_LinkSelected, theme.links.link_selected);
 
             // 4. Check for node hover highlight (this should override the glow).
             const bool hl = (hoveredNodeId != -1) && ((int) c.srcLogicalId == hoveredNodeId || (! c.dstIsOutput && (int) c.dstLogicalId == hoveredNodeId) || (c.dstIsOutput && hoveredNodeId == 0));
             if (hl)
             {
-                ImNodes::PushColorStyle(ImNodesCol_Link, IM_COL32(255, 255, 0, 255));
+                ImNodes::PushColorStyle(ImNodesCol_Link, theme.links.link_highlighted);
             }
             
             // 5. Tell imnodes to draw the link. It will use the color we just pushed.
@@ -4375,12 +4403,13 @@ if (auto* mp = synth->getModuleForLogical (lid))
         const char* text = "PROBE MODE: Click output pin";
         auto textSize = ImGui::CalcTextSize(text);
         ImVec2 textPos = ImVec2(mousePos.x + 20, mousePos.y - 20);
+        const auto& theme = ThemeManager::getInstance().getCurrentTheme();
         drawList->AddRectFilled(
             ImVec2(textPos.x - 5, textPos.y - 2),
             ImVec2(textPos.x + textSize.x + 5, textPos.y + textSize.y + 2),
-            IM_COL32(50, 50, 50, 200)
+            theme.links.label_background
         );
-        drawList->AddText(textPos, IM_COL32(255, 255, 100, 255), text);
+        drawList->AddText(textPos, theme.links.label_text, text);
         
         // Check for pin clicks
         if (ImGui::IsMouseClicked(ImGuiMouseButton_Left))
@@ -4442,7 +4471,8 @@ if (auto* mp = synth->getModuleForLogical (lid))
         {
             ImVec2 sourcePos = it->second;
             ImVec2 mousePos = ImGui::GetMousePos();
-            ImGui::GetForegroundDrawList()->AddLine(sourcePos, mousePos, IM_COL32(255, 255, 0, 200), 3.0f);
+            const auto& theme = ThemeManager::getInstance().getCurrentTheme();
+            ImGui::GetForegroundDrawList()->AddLine(sourcePos, mousePos, theme.links.preview_color, theme.links.preview_width);
         }
 
         // 3. Handle completion or cancellation of the drag.
@@ -5136,6 +5166,18 @@ if (auto* mp = synth->getModuleForLogical (lid))
             if (!srcPin.isInput && dstPin.isInput)
             {
                 PinDataType srcType = getPinDataTypeForPin(srcPin);
+                
+                // CRITICAL: Update reroute node type BEFORE checking compatibility
+                // This ensures reroute nodes adopt the source type before type checks
+                if (dstPin.logicalId != 0 && getTypeForLogical(dstPin.logicalId).equalsIgnoreCase("reroute"))
+                {
+                    if (auto* reroute = dynamic_cast<RerouteModuleProcessor*>(synth->getModuleForLogical(dstPin.logicalId)))
+                    {
+                        reroute->setPassthroughType(srcType);
+                    }
+                }
+                
+                // Re-query dstType after potential reroute update
                 PinDataType dstType = getPinDataTypeForPin(dstPin);
 
                 bool conversionHandled = false;
@@ -9273,17 +9315,27 @@ void ImGuiNodeEditorComponent::insertNodeOnLinkStereo(const juce::String& nodeTy
 
     // 5. Reconnect Through the New Node
     // Left cable -> new node's LEFT input (ch0)
-    synth->connect(leftSrcNodeId, linkLeft.srcPin.channel, newNodeId, 0);
+    bool leftInConnected = synth->connect(leftSrcNodeId, linkLeft.srcPin.channel, newNodeId, 0);
     
     // Right cable -> new node's RIGHT input (ch1)
-    synth->connect(rightSrcNodeId, linkRight.srcPin.channel, newNodeId, 1);
+    bool rightInConnected = synth->connect(rightSrcNodeId, linkRight.srcPin.channel, newNodeId, 1);
     
     // New node's outputs -> original destinations
     // Note: We'll connect both outputs to their respective destinations
-    synth->connect(newNodeId, 0, leftDstNodeId, linkLeft.dstPin.channel);
-    synth->connect(newNodeId, 1, rightDstNodeId, linkRight.dstPin.channel);
+    bool leftOutConnected = synth->connect(newNodeId, 0, leftDstNodeId, linkLeft.dstPin.channel);
+    bool rightOutConnected = synth->connect(newNodeId, 1, rightDstNodeId, linkRight.dstPin.channel);
 
-    juce::Logger::writeToLog("[InsertStereo] Successfully inserted stereo node with separate sources/destinations");
+    if (leftInConnected && rightInConnected && leftOutConnected && rightOutConnected)
+    {
+        juce::Logger::writeToLog("[InsertStereo] Successfully inserted stereo node: both channels connected");
+    }
+    else
+    {
+        juce::Logger::writeToLog("[InsertStereo] WARNING: Some connections failed - leftIn=" + juce::String(leftInConnected ? 1 : 0) +
+                                ", rightIn=" + juce::String(rightInConnected ? 1 : 0) +
+                                ", leftOut=" + juce::String(leftOutConnected ? 1 : 0) +
+                                ", rightOut=" + juce::String(rightOutConnected ? 1 : 0));
+    }
 }
 void ImGuiNodeEditorComponent::insertNodeBetween(const juce::String& nodeType, const PinID& srcPin, const PinID& dstPin, bool createUndoSnapshot)
 {
@@ -9403,36 +9455,71 @@ void ImGuiNodeEditorComponent::handleInsertNodeOnSelectedLinks(const juce::Strin
             {
                 auto isStereoCandidate = [&]() -> bool
                 {
+                    // Both links must be from the same source node
                     if (firstLink.srcPin.logicalId != secondLink.srcPin.logicalId)
+                    {
+                        juce::Logger::writeToLog("[InsertNode] Not stereo: different source nodes");
                         return false;
+                    }
 
+                    // Both links must go to the same destination (or both to main output)
                     const bool bothToMainOutput = (firstLink.dstPin.logicalId == 0 && secondLink.dstPin.logicalId == 0);
                     if (!bothToMainOutput && firstLink.dstPin.logicalId != secondLink.dstPin.logicalId)
+                    {
+                        juce::Logger::writeToLog("[InsertNode] Not stereo: different destination nodes");
                         return false;
+                    }
 
+                    // Source channels should be consecutive (0-1, 1-2, etc.) for stereo
                     const int srcDelta = std::abs(firstLink.srcPin.channel - secondLink.srcPin.channel);
                     const int dstDelta = std::abs(firstLink.dstPin.channel - secondLink.dstPin.channel);
-                    if (srcDelta != 1 || dstDelta != 1)
+                    
+                    // For stereo, we expect channels 0 and 1, but allow other consecutive pairs
+                    if (srcDelta != 1)
+                    {
+                        juce::Logger::writeToLog("[InsertNode] Not stereo: source channels not consecutive (delta=" + juce::String(srcDelta) + ")");
                         return false;
+                    }
+                    
+                    // Destination channels should also be consecutive
+                    if (dstDelta != 1)
+                    {
+                        juce::Logger::writeToLog("[InsertNode] Not stereo: destination channels not consecutive (delta=" + juce::String(dstDelta) + ")");
+                        return false;
+                    }
 
+                    // All pins must be audio type
                     const auto srcTypeA = getPinDataTypeForPin(firstLink.srcPin);
                     const auto srcTypeB = getPinDataTypeForPin(secondLink.srcPin);
                     const auto dstTypeA = getPinDataTypeForPin(firstLink.dstPin);
                     const auto dstTypeB = getPinDataTypeForPin(secondLink.dstPin);
                     const bool allAudio = srcTypeA == PinDataType::Audio && srcTypeB == PinDataType::Audio
                                           && dstTypeA == PinDataType::Audio && dstTypeB == PinDataType::Audio;
-                    return allAudio;
+                    
+                    if (!allAudio)
+                    {
+                        juce::Logger::writeToLog("[InsertNode] Not stereo: not all audio pins");
+                        return false;
+                    }
+
+                    juce::Logger::writeToLog("[InsertNode] Detected stereo pair: ch" + juce::String(firstLink.srcPin.channel) + 
+                                            " and ch" + juce::String(secondLink.srcPin.channel));
+                    return true;
                 };
 
                 if (isStereoCandidate())
                 {
                     LinkInfo leftLink = firstLink;
                     LinkInfo rightLink = secondLink;
+                    
+                    // Ensure left link has the lower channel number
                     if (rightLink.srcPin.channel < leftLink.srcPin.channel)
                         std::swap(leftLink, rightLink);
 
+                    juce::Logger::writeToLog("[InsertNode] Inserting STEREO node: left=ch" + juce::String(leftLink.srcPin.channel) + 
+                                            ", right=ch" + juce::String(rightLink.srcPin.channel));
                     insertNodeOnLinkStereo(nodeType, leftLink, rightLink, basePosition);
-                    juce::Logger::writeToLog("[InsertNode] Inserted STEREO node for 2 selected audio cables");
+                    juce::Logger::writeToLog("[InsertNode] Successfully inserted STEREO node for 2 selected audio cables");
                     graphNeedsRebuild = true;
                     return;
                 }

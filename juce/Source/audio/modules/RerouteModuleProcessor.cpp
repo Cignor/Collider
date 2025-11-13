@@ -19,21 +19,32 @@ void RerouteModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce
 {
     juce::ignoreUnused(midi);
 
-    auto input = getBusBuffer(buffer, true, 0);
-    auto output = getBusBuffer(buffer, false, 0);
-
-    output.clear();
-
-    const int numChannels = juce::jmin(input.getNumChannels(), output.getNumChannels());
-    const int numSamples = juce::jmin(input.getNumSamples(), output.getNumSamples());
-
-    if (numChannels > 0 && numSamples > 0)
+    // True passthrough: copy input to output, channel-matched, avoid aliasing
+    auto in = getBusBuffer(buffer, true, 0);
+    auto out = getBusBuffer(buffer, false, 0);
+    const int n = buffer.getNumSamples();
+    
+    // Mono passthrough; avoid aliasing
+    if (in.getNumChannels() > 0 && out.getNumChannels() > 0)
     {
-        for (int ch = 0; ch < numChannels; ++ch)
-            output.copyFrom(ch, 0, input, ch, 0, numSamples);
+        auto* srcCh = in.getReadPointer(0);
+        auto* dst = out.getWritePointer(0);
+        if (dst != srcCh)
+            juce::FloatVectorOperations::copy(dst, srcCh, n);
     }
 
-    updateOutputTelemetry(output);
+    // Update inspector with block peak of output
+    if (!lastOutputValues.empty())
+    {
+        const float* p = out.getNumChannels() > 0 ? out.getReadPointer(0) : nullptr;
+        float m = 0.0f;
+        if (p)
+        {
+            for (int i = 0; i < n; ++i)
+                m = juce::jmax(m, std::abs(p[i]));
+        }
+        lastOutputValues[0]->store(m);
+    }
 }
 
 void RerouteModuleProcessor::setPassthroughType(PinDataType newType)
