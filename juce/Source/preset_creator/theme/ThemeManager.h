@@ -3,6 +3,7 @@
 #include <juce_core/juce_core.h>
 #include <imgui.h>
 #include <atomic>
+#include <cmath>
 #include "Theme.h"
 
 class ThemeManager
@@ -25,6 +26,7 @@ public:
 
 	const Theme& getCurrentTheme() const;
 	Theme& getEditableTheme();  // For theme editor - returns mutable reference
+	juce::String getCurrentThemeFilename() const { return m_currentThemeFilename; }  // Get filename of currently loaded theme
 
 	// Colors
 	ImU32 getCategoryColor(ModuleCategory cat, bool hovered = false);
@@ -82,6 +84,7 @@ private:
 
 	Theme currentTheme;
 	Theme defaultTheme;
+	juce::String m_currentThemeFilename;  // Filename of currently loaded theme (empty if default)
 
 	std::atomic<bool> fontReloadPending { false };
 };
@@ -134,6 +137,105 @@ inline void ThemeText(const char* text)
 	// Get the default text color from ImGui style settings
 	ImVec4 defaultColor = ImGui::GetStyle().Colors[ImGuiCol_Text];
 	ThemeText(text, defaultColor);
+}
+
+/**
+ * Utility functions for automatic text color adjustment based on background luminance.
+ * Implements WCAG 2.1 relative luminance calculation for accessibility.
+ */
+namespace ThemeUtils
+{
+	/**
+	 * Calculate relative luminance of a color using WCAG 2.1 formula.
+	 * Returns a value between 0.0 (black) and 1.0 (white).
+	 * 
+	 * @param color ImU32 color in format IM_COL32(R, G, B, A)
+	 * @return Relative luminance (0.0 = darkest, 1.0 = lightest)
+	 */
+	inline float calculateRelativeLuminance(ImU32 color)
+	{
+		// Extract RGB components (ImU32 is typically ARGB or RGBA depending on endianness)
+		// ImGui uses IM_COL32(R, G, B, A) which creates RGBA format
+		ImVec4 rgba = ImGui::ColorConvertU32ToFloat4(color);
+		
+		// Convert sRGB to linear RGB (gamma correction)
+		auto toLinear = [](float c) -> float
+		{
+			if (c <= 0.04045f)
+				return c / 12.92f;
+			return std::pow((c + 0.055f) / 1.055f, 2.4f);
+		};
+		
+		float r = toLinear(rgba.x);
+		float g = toLinear(rgba.y);
+		float b = toLinear(rgba.z);
+		
+		// Calculate relative luminance using WCAG 2.1 coefficients
+		// These weights account for human eye sensitivity to different colors
+		return 0.2126f * r + 0.7152f * g + 0.0722f * b;
+	}
+	
+	/**
+	 * Calculate contrast ratio between two colors using WCAG 2.1 formula.
+	 * Returns a value >= 1.0, where higher values indicate better contrast.
+	 * WCAG AA requires 4.5:1 for normal text, 3:1 for large text.
+	 * 
+	 * @param color1 First color (lighter should be first for accurate ratio)
+	 * @param color2 Second color (darker should be second)
+	 * @return Contrast ratio (1.0 = no contrast, 21.0 = maximum contrast)
+	 */
+	inline float calculateContrastRatio(ImU32 color1, ImU32 color2)
+	{
+		float l1 = calculateRelativeLuminance(color1);
+		float l2 = calculateRelativeLuminance(color2);
+		
+		// Ensure lighter color is first
+		if (l1 < l2)
+		{
+			float temp = l1;
+			l1 = l2;
+			l2 = temp;
+		}
+		
+		// WCAG contrast ratio formula: (L1 + 0.05) / (L2 + 0.05)
+		return (l1 + 0.05f) / (l2 + 0.05f);
+	}
+	
+	/**
+	 * Get optimal text color (black or white) for a given background color.
+	 * Uses contrast ratio calculation to ensure WCAG-compliant legibility.
+	 * Chooses the text color (black or white) that provides the best contrast.
+	 * 
+	 * @param backgroundColor Background color in ImU32 format
+	 * @param minContrast Minimum contrast ratio required (default 4.5 for WCAG AA)
+	 * @return IM_COL32(0, 0, 0, 255) for black text, IM_COL32(255, 255, 255, 255) for white text
+	 */
+	inline ImU32 getOptimalTextColor(ImU32 backgroundColor, float minContrast = 4.5f)
+	{
+		// Define pure black and white
+		const ImU32 blackText = IM_COL32(0, 0, 0, 255);
+		const ImU32 whiteText = IM_COL32(255, 255, 255, 255);
+		
+		// Calculate contrast ratios for both text color options
+		// calculateContrastRatio ensures lighter color is first, so order doesn't matter
+		float contrastWithBlack = calculateContrastRatio(backgroundColor, blackText);
+		float contrastWithWhite = calculateContrastRatio(whiteText, backgroundColor);
+		
+		// Choose the option with better contrast
+		// This handles edge cases like bright yellow where white text has poor contrast
+		if (contrastWithBlack >= contrastWithWhite)
+		{
+			// Black text provides better or equal contrast
+			// This will be chosen for light backgrounds (yellow, light green, etc.)
+			return blackText;
+		}
+		else
+		{
+			// White text provides better contrast
+			// This will be chosen for dark backgrounds
+			return whiteText;
+		}
+	}
 }
 
 

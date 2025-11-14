@@ -16,6 +16,7 @@ ThemeManager::ThemeManager()
 {
 	loadDefaultTheme();
 	currentTheme = defaultTheme;
+	m_currentThemeFilename = juce::String();  // Default theme has no filename
 }
 
 void ThemeManager::applyTheme()
@@ -59,6 +60,7 @@ void ThemeManager::rebuildFontsNow()
 void ThemeManager::resetToDefault()
 {
 	currentTheme = defaultTheme;
+	m_currentThemeFilename = juce::String();  // Clear filename when using default
 	applyTheme();
 	requestFontReload();
 }
@@ -591,9 +593,19 @@ bool ThemeManager::loadTheme(const juce::File& themeFile)
 			t.modules.physics.overlay_line = varToVec4(physObj->getProperty("overlay_line"), t.modules.physics.overlay_line);
 			t.modules.physics.separator_line = varToVec4(physObj->getProperty("separator_line"), t.modules.physics.separator_line);
 		}
+		if (o->hasProperty("panvol_node_width")) t.modules.panvol_node_width = (float) o->getProperty("panvol_node_width");
+		t.modules.panvol_grid_background = varToColor(o->getProperty("panvol_grid_background"), t.modules.panvol_grid_background);
+		t.modules.panvol_grid_border = varToColor(o->getProperty("panvol_grid_border"), t.modules.panvol_grid_border);
+		t.modules.panvol_grid_lines = varToColor(o->getProperty("panvol_grid_lines"), t.modules.panvol_grid_lines);
+		t.modules.panvol_crosshair = varToColor(o->getProperty("panvol_crosshair"), t.modules.panvol_crosshair);
+		t.modules.panvol_circle_manual = varToColor(o->getProperty("panvol_circle_manual"), t.modules.panvol_circle_manual);
+		t.modules.panvol_circle_modulated = varToColor(o->getProperty("panvol_circle_modulated"), t.modules.panvol_circle_modulated);
+		t.modules.panvol_label_text = varToColor(o->getProperty("panvol_label_text"), t.modules.panvol_label_text);
+		t.modules.panvol_value_text = varToColor(o->getProperty("panvol_value_text"), t.modules.panvol_value_text);
 	}
 
 	currentTheme = t;
+	m_currentThemeFilename = themeFile.getFileName();  // Store the filename
 	applyTheme();
 	return true;
 }
@@ -906,11 +918,25 @@ bool ThemeManager::saveTheme(const juce::File& themeFile)
 			physObj->setProperty("separator_line", vec4ToVar(currentTheme.modules.physics.separator_line));
 			o->setProperty("physics", juce::var(physObj.get()));
 		}
+		o->setProperty("panvol_node_width", currentTheme.modules.panvol_node_width);
+		o->setProperty("panvol_grid_background", colorToVar(currentTheme.modules.panvol_grid_background));
+		o->setProperty("panvol_grid_border", colorToVar(currentTheme.modules.panvol_grid_border));
+		o->setProperty("panvol_grid_lines", colorToVar(currentTheme.modules.panvol_grid_lines));
+		o->setProperty("panvol_crosshair", colorToVar(currentTheme.modules.panvol_crosshair));
+		o->setProperty("panvol_circle_manual", colorToVar(currentTheme.modules.panvol_circle_manual));
+		o->setProperty("panvol_circle_modulated", colorToVar(currentTheme.modules.panvol_circle_modulated));
+		o->setProperty("panvol_label_text", colorToVar(currentTheme.modules.panvol_label_text));
+		o->setProperty("panvol_value_text", colorToVar(currentTheme.modules.panvol_value_text));
 		root->setProperty("modules", juce::var(o.get()));
 	}
 
 	juce::String json = juce::JSON::toString(juce::var(root.get()), true);
-	return themeFile.replaceWithText(json);
+	if (themeFile.replaceWithText(json))
+	{
+		m_currentThemeFilename = themeFile.getFileName();  // Update current theme filename after successful save
+		return true;
+	}
+	return false;
 }
 
 void ThemeManager::applyImGuiStyle()
@@ -1217,9 +1243,20 @@ void ThemeManager::loadDefaultTheme()
 	defaultTheme.modules.physics.vector_outline = ImVec4(1.0f, 1.0f, 1.0f, 0.78f);
 	defaultTheme.modules.physics.vector_fill = ImVec4(1.0f, 1.0f, 1.0f, 0.6f);
 	defaultTheme.modules.physics.soil_detail = ImVec4(0.55f, 0.27f, 0.07f, 0.7f);
-	defaultTheme.modules.physics.overlay_text = ImVec4(0.0f, 0.0f, 0.0f, 0.78f);
-	defaultTheme.modules.physics.overlay_line = ImVec4(1.0f, 1.0f, 1.0f, 0.5f);
-	defaultTheme.modules.physics.separator_line = ImVec4(1.0f, 0.84f, 0.0f, 0.78f);
+		defaultTheme.modules.physics.overlay_text = ImVec4(0.0f, 0.0f, 0.0f, 0.78f);
+		defaultTheme.modules.physics.overlay_line = ImVec4(1.0f, 1.0f, 1.0f, 0.5f);
+		defaultTheme.modules.physics.separator_line = ImVec4(1.0f, 0.84f, 0.0f, 0.78f);
+		
+		// PanVol module defaults
+		defaultTheme.modules.panvol_node_width = 180.0f;
+		defaultTheme.modules.panvol_grid_background = IM_COL32(20, 20, 20, 255);
+		defaultTheme.modules.panvol_grid_border = IM_COL32(100, 100, 100, 255);
+		defaultTheme.modules.panvol_grid_lines = IM_COL32(50, 50, 50, 255);
+		defaultTheme.modules.panvol_crosshair = IM_COL32(80, 80, 80, 200);
+		defaultTheme.modules.panvol_circle_manual = IM_COL32(255, 200, 100, 255);
+		defaultTheme.modules.panvol_circle_modulated = IM_COL32(100, 200, 255, 255);
+		defaultTheme.modules.panvol_label_text = IM_COL32(150, 150, 150, 200);
+		defaultTheme.modules.panvol_value_text = IM_COL32(100, 100, 100, 120);
 }
 
 void ThemeManager::saveUserThemePreference(const juce::String& themeFilename)
@@ -1289,6 +1326,7 @@ bool ThemeManager::loadUserThemePreference()
 		{
 			if (loadTheme(themeFile))
 			{
+				// loadTheme() already sets m_currentThemeFilename, so we're good
 				juce::Logger::writeToLog("[Theme] Loaded saved preference: " + themeFilename);
 				return true;
 			}

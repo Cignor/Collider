@@ -723,6 +723,8 @@ target_sources(ColliderApp PRIVATE
     Source/audio/modules/GateModuleProcessor.cpp
     Source/audio/modules/DriveModuleProcessor.h
     Source/audio/modules/DriveModuleProcessor.cpp
+    Source/audio/modules/PanVolModuleProcessor.h
+    Source/audio/modules/PanVolModuleProcessor.cpp
     Source/audio/modules/MathModuleProcessor.h
     Source/audio/modules/MathModuleProcessor.cpp
     Source/audio/modules/MapRangeModuleProcessor.h
@@ -995,6 +997,8 @@ target_sources(PresetCreatorApp PRIVATE
     Source/preset_creator/theme/ThemeManager.cpp
     Source/preset_creator/theme/ThemeEditorComponent.h
     Source/preset_creator/theme/ThemeEditorComponent.cpp
+    Source/preset_creator/HelpManagerComponent.h
+    Source/preset_creator/HelpManagerComponent.cpp
 
     # Add ImGui, imnodes, and the backend DIRECTLY as source files
     ${imgui_fc_SOURCE_DIR}/imgui.cpp
@@ -1136,6 +1140,8 @@ target_sources(PresetCreatorApp PRIVATE
     Source/audio/modules/GateModuleProcessor.cpp
     Source/audio/modules/DriveModuleProcessor.h
     Source/audio/modules/DriveModuleProcessor.cpp
+    Source/audio/modules/PanVolModuleProcessor.h
+    Source/audio/modules/PanVolModuleProcessor.cpp
     Source/audio/modules/InletModuleProcessor.h
     Source/audio/modules/InletModuleProcessor.cpp
     Source/audio/modules/OutletModuleProcessor.h
@@ -1447,6 +1453,16 @@ if(WIN32)
                 "${CMAKE_SOURCE_DIR}/assets/fonts"
                 "$<TARGET_FILE_DIR:PresetCreatorApp>/fonts"
         COMMENT "Copying fonts to PresetCreatorApp/fonts"
+    )
+
+    add_custom_command(
+        TARGET PresetCreatorApp POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E make_directory
+                "$<TARGET_FILE_DIR:PresetCreatorApp>/USER_MANUAL"
+        COMMAND ${CMAKE_COMMAND} -E copy_directory
+                "${CMAKE_SOURCE_DIR}/../USER_MANUAL"
+                "$<TARGET_FILE_DIR:PresetCreatorApp>/USER_MANUAL"
+        COMMENT "Copying USER_MANUAL documentation files to PresetCreatorApp/USER_MANUAL"
     )
 
     add_custom_command(

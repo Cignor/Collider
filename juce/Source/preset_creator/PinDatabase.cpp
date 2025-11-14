@@ -37,6 +37,7 @@ void populateModuleDescriptions()
     descriptions["limiter"]             = "Prevents a signal from exceeding a set level.";
     descriptions["gate"]                = "A stereo noise gate to silence signals below a threshold.";
     descriptions["drive"]               = "A waveshaping distortion effect.";
+    descriptions["panvol"]              = "A 2D control surface for simultaneous volume and panning adjustment.";
     descriptions["graphic_eq"]          = "An 8-band graphic equalizer.";
     descriptions["frequency_graph"]     = "A high-resolution, real-time spectrum analyzer.";
     descriptions["waveshaper"]          = "A distortion effect with multiple shaping algorithms.";
@@ -303,6 +304,12 @@ void populatePinDatabase()
         NodeWidth::Small,
         { AudioPin("In L", 0, PinDataType::Audio), AudioPin("In R", 1, PinDataType::Audio) },
         { AudioPin("Out L", 0, PinDataType::Audio), AudioPin("Out R", 1, PinDataType::Audio) },
+        {}
+    );
+    db["panvol"] = ModulePinInfo(
+        NodeWidth::Small,
+        { AudioPin("Pan Mod", 0, PinDataType::CV), AudioPin("Vol Mod", 1, PinDataType::CV) },
+        { AudioPin("Pan Out", 0, PinDataType::CV), AudioPin("Vol Out", 1, PinDataType::CV) },
         {}
     );
     db["timepitch"] = ModulePinInfo(

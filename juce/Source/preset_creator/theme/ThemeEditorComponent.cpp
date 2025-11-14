@@ -46,6 +46,7 @@ void ThemeEditorComponent::open()
     m_isOpen = true;
     // Refresh working copy from current theme
     m_workingCopy = ThemeManager::getInstance().getCurrentTheme();
+    m_currentThemeFilename = ThemeManager::getInstance().getCurrentThemeFilename();  // Get current theme filename
     m_hasChanges = false;
     m_currentTab = 0;
     m_showSaveDialog = false;
@@ -69,6 +70,7 @@ void ThemeEditorComponent::close()
 void ThemeEditorComponent::refreshThemeFromManager()
 {
     m_workingCopy = ThemeManager::getInstance().getCurrentTheme();
+    m_currentThemeFilename = ThemeManager::getInstance().getCurrentThemeFilename();  // Update current theme filename
     m_hasChanges = false;
     juce::Logger::writeToLog("[ThemeEditor] Refreshed working copy from ThemeManager");
     syncFontBuffersFromWorkingCopy();
@@ -88,7 +90,22 @@ void ThemeEditorComponent::render()
     ImGui::SetNextWindowSize(ImVec2(900, 700), ImGuiCond_FirstUseEver);
     ImGui::SetNextWindowPos(ImVec2(100, 100), ImGuiCond_FirstUseEver);
 
-    if (ImGui::Begin("Theme Editor", &m_isOpen, flags))
+    // Build window title with current theme name
+    juce::String windowTitle = "Theme Editor";
+    if (m_currentThemeFilename.isNotEmpty())
+    {
+        // Remove .json extension and format nicely
+        juce::String displayName = m_currentThemeFilename;
+        if (displayName.endsWithIgnoreCase(".json"))
+            displayName = displayName.substring(0, displayName.length() - 5);
+        windowTitle += " - " + displayName;
+    }
+    else
+    {
+        windowTitle += " - Default Theme";
+    }
+    
+    if (ImGui::Begin(windowTitle.toRawUTF8(), &m_isOpen, flags))
     {
         // Toolbar
         if (ImGui::Button("Apply Changes"))
@@ -101,10 +118,34 @@ void ThemeEditorComponent::render()
             resetCurrentTab();
         }
         ImGui::SameLine();
+        
+        // Save button (only enabled if editing an existing theme)
+        bool hasCurrentTheme = m_currentThemeFilename.isNotEmpty();
+        if (!hasCurrentTheme)
+            ImGui::BeginDisabled();
+        if (ImGui::Button("Save"))
+        {
+            saveTheme();
+        }
+        if (!hasCurrentTheme)
+            ImGui::EndDisabled();
+        
+        ImGui::SameLine();
         if (ImGui::Button("Save As..."))
         {
             m_showSaveDialog = true;
-            strncpy(m_saveThemeName, "CustomTheme", sizeof(m_saveThemeName) - 1);
+            // Pre-fill with current theme name if available, otherwise use "CustomTheme"
+            if (m_currentThemeFilename.isNotEmpty())
+            {
+                juce::String baseName = m_currentThemeFilename;
+                if (baseName.endsWithIgnoreCase(".json"))
+                    baseName = baseName.substring(0, baseName.length() - 5);
+                strncpy(m_saveThemeName, baseName.toRawUTF8(), sizeof(m_saveThemeName) - 1);
+            }
+            else
+            {
+                strncpy(m_saveThemeName, "CustomTheme", sizeof(m_saveThemeName) - 1);
+            }
         }
         ImGui::SameLine();
         if (m_hasChanges)
@@ -1873,6 +1914,20 @@ void ThemeEditorComponent::renderModulesTab()
         colorEdit4("Frame Active", m_workingCopy.modules.stroke_seq_frame_bg_active);
     }
     
+    if (ImGui::CollapsingHeader("PanVol Module"))
+    {
+        dragFloat("Node Width", m_workingCopy.modules.panvol_node_width, 1.0f, 120.0f, 400.0f);
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip("Custom width for PanVol node (default: 180px)");
+        colorEditU32("Grid Background", m_workingCopy.modules.panvol_grid_background);
+        colorEditU32("Grid Border", m_workingCopy.modules.panvol_grid_border);
+        colorEditU32("Grid Lines", m_workingCopy.modules.panvol_grid_lines);
+        colorEditU32("Crosshair", m_workingCopy.modules.panvol_crosshair);
+        colorEditU32("Circle (Manual)", m_workingCopy.modules.panvol_circle_manual);
+        colorEditU32("Circle (Modulated)", m_workingCopy.modules.panvol_circle_modulated);
+        colorEditU32("Label Text", m_workingCopy.modules.panvol_label_text);
+        colorEditU32("Value Text", m_workingCopy.modules.panvol_value_text);
+    }
+    
     ImGui::NextColumn();
     
     // Right: Live Preview
@@ -1969,6 +2024,56 @@ void ThemeEditorComponent::renderModulesTab()
     drawList->AddRect(framePos, ImVec2(framePos.x + frameSize.x, framePos.y + frameSize.y), 
                      IM_COL32(100, 100, 100, 255));
     
+    ImGui::SetCursorScreenPos(ImVec2(canvasPos.x, seqPos.y + seqSize.y + 20));
+    ImGui::Spacing();
+    ImGui::Separator();
+    ImGui::Spacing();
+    
+    // PanVol Preview
+    ImGui::Text("PanVol Preview:");
+    ImVec2 panvolPos = ImVec2(canvasPos.x, ImGui::GetCursorScreenPos().y + 5);
+    float panvolWidth = m_workingCopy.modules.panvol_node_width;
+    if (panvolWidth > 200.0f) panvolWidth = 200.0f; // Limit for preview
+    float gridSize = juce::jmin(panvolWidth - 20.0f, 100.0f);
+    ImVec2 gridMin = ImVec2(panvolPos.x + (panvolWidth - gridSize) * 0.5f, panvolPos.y + 10);
+    ImVec2 gridMax = ImVec2(gridMin.x + gridSize, gridMin.y + gridSize);
+    
+    // Draw grid
+    drawList->AddRectFilled(gridMin, gridMax, m_workingCopy.modules.panvol_grid_background);
+    drawList->AddRect(gridMin, gridMax, m_workingCopy.modules.panvol_grid_border, 0.0f, 0, 2.0f);
+    
+    // Draw grid lines
+    for (int i = 1; i < 4; ++i)
+    {
+        float t = (float)i / 4.0f;
+        float x = gridMin.x + t * gridSize;
+        float y = gridMin.y + t * gridSize;
+        drawList->AddLine(ImVec2(x, gridMin.y), ImVec2(x, gridMax.y), m_workingCopy.modules.panvol_grid_lines, 1.0f);
+        drawList->AddLine(ImVec2(gridMin.x, y), ImVec2(gridMax.x, y), m_workingCopy.modules.panvol_grid_lines, 1.0f);
+    }
+    
+    // Draw crosshair
+    ImVec2 center = ImVec2(gridMin.x + gridSize * 0.5f, gridMin.y + gridSize * 0.5f);
+    drawList->AddLine(ImVec2(center.x, gridMin.y), ImVec2(center.x, gridMax.y), m_workingCopy.modules.panvol_crosshair, 1.0f);
+    drawList->AddLine(ImVec2(gridMin.x, center.y), ImVec2(gridMax.x, center.y), m_workingCopy.modules.panvol_crosshair, 1.0f);
+    
+    // Draw circle (manual state)
+    drawList->AddCircleFilled(center, 6.0f, m_workingCopy.modules.panvol_circle_manual, 16);
+    drawList->AddCircle(center, 6.0f, IM_COL32(255, 255, 255, 255), 16, 1.5f);
+    
+    // Draw labels
+    drawList->AddText(ImVec2(gridMin.x + 2, gridMin.y + 2), m_workingCopy.modules.panvol_label_text, "Vol");
+    ImVec2 panTextSize = ImGui::CalcTextSize("Pan");
+    drawList->AddText(ImVec2(gridMax.x - panTextSize.x - 2, gridMin.y + 2), m_workingCopy.modules.panvol_label_text, "Pan");
+    
+    // Draw value readouts
+    drawList->AddText(ImVec2(gridMin.x + 2, gridMin.y + 2 + ImGui::GetFontSize() + 2), m_workingCopy.modules.panvol_value_text, "-55.1dB");
+    ImVec2 panValSize = ImGui::CalcTextSize("0.76");
+    drawList->AddText(ImVec2(gridMax.x - panValSize.x - 2, gridMin.y + 2 + ImGui::GetFontSize() + 2), m_workingCopy.modules.panvol_value_text, "0.76");
+    
+    ImGui::SetCursorScreenPos(ImVec2(canvasPos.x, gridMax.y + 20));
+    ImGui::Text("Node Width: %.0fpx", m_workingCopy.modules.panvol_node_width);
+    
     ImGui::Columns(1);
 }
 
@@ -1984,7 +2089,7 @@ void ThemeEditorComponent::renderSaveDialog()
         
         if (ImGui::Button("Save"))
         {
-            saveTheme();
+            saveThemeAs();
             m_showSaveDialog = false;
             ImGui::CloseCurrentPopup();
         }
@@ -2000,6 +2105,50 @@ void ThemeEditorComponent::renderSaveDialog()
 }
 
 void ThemeEditorComponent::saveTheme()
+{
+    // Save to current theme file (if one exists)
+    if (m_currentThemeFilename.isEmpty())
+    {
+        // No current theme file, should use Save As instead
+        juce::Logger::writeToLog("[ThemeEditor] Cannot save: no current theme file. Use 'Save As...' instead.");
+        return;
+    }
+    
+    // Find the current theme file
+    auto exeDir = juce::File::getSpecialLocation(juce::File::currentExecutableFile).getParentDirectory();
+    auto themesDir = exeDir.getChildFile("themes");
+    auto themeFile = themesDir.getChildFile(m_currentThemeFilename);
+    
+    // Also check source tree as fallback
+    if (!themeFile.existsAsFile())
+    {
+        auto sourceThemesDir = exeDir.getParentDirectory().getParentDirectory()
+            .getChildFile("Source")
+            .getChildFile("preset_creator")
+            .getChildFile("theme")
+            .getChildFile("presets");
+        themeFile = sourceThemesDir.getChildFile(m_currentThemeFilename);
+    }
+    
+    if (!themeFile.existsAsFile())
+    {
+        juce::Logger::writeToLog("[ThemeEditor] ERROR: Current theme file not found: " + m_currentThemeFilename);
+        return;
+    }
+    
+    ThemeManager::getInstance().getEditableTheme() = m_workingCopy;
+    if (ThemeManager::getInstance().saveTheme(themeFile))
+    {
+        juce::Logger::writeToLog("[ThemeEditor] Saved theme to: " + themeFile.getFullPathName());
+        m_hasChanges = false;
+    }
+    else
+    {
+        juce::Logger::writeToLog("[ThemeEditor] ERROR saving theme: " + themeFile.getFullPathName());
+    }
+}
+
+void ThemeEditorComponent::saveThemeAs()
 {
     juce::String themeName(m_saveThemeName);
     if (themeName.isEmpty())
@@ -2019,14 +2168,16 @@ void ThemeEditorComponent::saveTheme()
     if (ThemeManager::getInstance().saveTheme(themeFile))
     {
         juce::Logger::writeToLog("[ThemeEditor] Saved theme to: " + themeFile.getFullPathName());
+        // Update current theme filename
+        m_currentThemeFilename = themeFile.getFileName();
         // Persist as last-used
         ThemeManager::getInstance().saveUserThemePreference(themeFile.getFileName());
+        m_hasChanges = false;
     }
     else
     {
         juce::Logger::writeToLog("[ThemeEditor] ERROR saving theme: " + themeFile.getFullPathName());
     }
-    m_hasChanges = false;
 }
 
 void ThemeEditorComponent::resetCurrentTab()

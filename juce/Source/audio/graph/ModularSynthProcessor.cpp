@@ -61,6 +61,7 @@
 #include "../modules/LimiterModuleProcessor.h"
 #include "../modules/GateModuleProcessor.h"
 #include "../modules/DriveModuleProcessor.h"
+#include "../modules/PanVolModuleProcessor.h"
 #include "../modules/SnapshotSequencerModuleProcessor.h"
 #include "../modules/MIDICVModuleProcessor.h"
 #include "../modules/MIDIFadersModuleProcessor.h"
@@ -834,6 +835,7 @@ namespace {
             reg("limiter", []{ return std::make_unique<LimiterModuleProcessor>(); });
             reg("gate", []{ return std::make_unique<GateModuleProcessor>(); });
             reg("drive", []{ return std::make_unique<DriveModuleProcessor>(); });
+            reg("panvol", []{ return std::make_unique<PanVolModuleProcessor>(); });
             reg("comment", []{ return std::make_unique<CommentModuleProcessor>(); });
             reg("reroute", []{ return std::make_unique<RerouteModuleProcessor>(); });
             reg("snapshot_sequencer", []{ return std::make_unique<SnapshotSequencerModuleProcessor>(); });

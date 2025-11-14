@@ -49,6 +49,7 @@
 - [mixer](#mixer) - Stereo Audio Mixer
 - [cv_mixer](#cv_mixer) - Control Voltage Mixer
 - [track_mixer](#track_mixer) - Multi-Channel Mixer
+- [panvol](#panvol) - 2D Volume and Panning Control
 - [attenuverter](#attenuverter) - Attenuate/Invert Signal
 - [lag_processor](#lag_processor) - Slew Limiter/Smoother
 - [math](#math) - Mathematical Operations
@@ -1116,6 +1117,57 @@ A mixer for up to 8 monophonic tracks with individual gain and pan controls.
 2. Adjust per-track gain and pan
 3. Set Num Tracks to control how many inputs are active
 4. Perfect for mixing polyphonic voices
+
+---
+
+### panvol
+**2D Volume and Panning Control**
+
+A compact, intuitive control surface that provides simultaneous volume and panning adjustment via a draggable circle on a 2D grid.
+
+**Inputs:**
+- `Pan Mod` (CV) - Panning modulation input
+- `Vol Mod` (CV) - Volume modulation input
+
+**Outputs:**
+- `Pan Out` (CV) - Panning CV output (normalized 0.0 to 1.0, maps to -1.0 to +1.0 in mixers)
+- `Vol Out` (CV) - Volume CV output (normalized 0.0 to 1.0, maps to -60dB to +6dB in mixers)
+
+**Parameters:**
+- `Pan` (-1.0 to +1.0) - Panning position (-1.0 = Full Left, 0.0 = Center, +1.0 = Full Right)
+- `Volume` (-60.0 to +6.0 dB) - Volume level (0.0 dB = Unity gain)
+
+**How to Use:**
+1. **Interactive Control:**
+   - Click and drag the circle on the grid to adjust both volume and panning simultaneously
+   - Vertical movement controls volume (up = louder, down = quieter)
+   - Horizontal movement controls panning (left = left, right = right)
+   - Click anywhere on the grid to jump the circle to that position
+
+2. **Connecting to Mixers:**
+   - Connect `Pan Out` → Mixer's `Pan Mod` input
+   - Connect `Vol Out` → Mixer's `Gain Mod` input
+   - Or connect to Track Mixer's per-track pan and gain modulation inputs
+
+3. **CV Modulation:**
+   - Connect CV sources to `Pan Mod` and `Vol Mod` inputs for automated control
+   - When CV is connected, manual control is disabled (indicated by cyan circle color)
+   - Perfect for LFO-driven spatial effects or envelope-controlled volume sweeps
+
+4. **Reset Button:**
+   - Click "Reset to Center" to instantly return to center pan and unity gain
+
+5. **Creative Applications:**
+   - Live performance: Quick volume and pan adjustments during performance
+   - Spatial mixing: Precise positioning of sounds in stereo field
+   - Automation: Connect to sequencers or LFOs for automated movement
+   - Gesture control: Connect to motion sensors or touch controllers for hands-free control
+
+**Visual Feedback:**
+- Orange circle = Manual control active
+- Cyan circle = CV modulation active
+- Grid lines and center crosshair for visual reference
+- Axis labels (↑ Vol, ← Pan →) for orientation
 
 ---
 

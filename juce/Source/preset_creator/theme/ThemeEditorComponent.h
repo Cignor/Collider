@@ -70,7 +70,8 @@ private:
     
     // Save/Load
     void renderSaveDialog();
-    void saveTheme();
+    void saveTheme();  // Save to current theme file
+    void saveThemeAs();  // Save to new theme file
     void resetCurrentTab();
     void applyChanges();
     void syncFontBuffersFromWorkingCopy();
@@ -83,6 +84,7 @@ private:
     Theme m_workingCopy;  // Working copy of theme (modifications applied here)
     bool m_hasChanges = false;
     int m_currentTab = 0;
+    juce::String m_currentThemeFilename;  // Filename of currently loaded theme (empty if default)
     
     // Save dialog state
     bool m_showSaveDialog = false;

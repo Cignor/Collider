@@ -306,25 +306,6 @@ ImGuiNodeEditorComponent::ImGuiNodeEditorComponent(juce::AudioDeviceManager& dm)
     setWantsKeyboardFocus (true);
     registerShortcuts();
 
-    auto executable = juce::File::getSpecialLocation(juce::File::currentExecutableFile);
-    auto exeDir = executable.getParentDirectory();
-    auto assetsDir = exeDir.getChildFile("assets");
-    defaultShortcutFile = assetsDir.getChildFile("default_shortcuts.json");
-    if (defaultShortcutFile.existsAsFile())
-        shortcutManager.loadDefaultBindingsFromFile(defaultShortcutFile);
-
-    juce::File userSettingsDir;
-    if (auto* props = PresetCreatorApplication::getApp().getProperties())
-        userSettingsDir = props->getFile().getParentDirectory();
-    else
-        userSettingsDir = juce::File::getSpecialLocation(juce::File::userApplicationDataDirectory).getChildFile("Collider");
-
-    if (!userSettingsDir.isDirectory())
-        userSettingsDir.createDirectory();
-
-    userShortcutFile = userSettingsDir.getChildFile("user_shortcuts.json");
-    shortcutManager.loadUserBindingsFromFile(userShortcutFile);
-
     // Wire Theme Editor to use framebuffer-based eyedropper
     themeEditor.setStartPicker([this](std::function<void(ImU32)> onPicked){ this->startColorPicking(std::move(onPicked)); });
     
@@ -364,8 +345,6 @@ ImGuiNodeEditorComponent::ImGuiNodeEditorComponent(juce::AudioDeviceManager& dm)
 
 ImGuiNodeEditorComponent::~ImGuiNodeEditorComponent()
 {
-    if (shortcutsDirty)
-        saveUserShortcutBindings();
     unregisterShortcuts();
     glContext.detach();
 }
@@ -520,12 +499,41 @@ void ImGuiNodeEditorComponent::registerShortcuts()
                    { ImGuiKey_Comma, false, false, false, false },
                    shortcutToggleMinimapRequested);
 
-    registerAction(ShortcutActionIds::viewToggleShortcutsWindow,
-                   "Toggle Shortcuts Window",
-                   "Show or hide the shortcuts reference window.",
-                   "Help",
-                   { ImGuiKey_F1, false, false, false, false },
-                   shortcutToggleShortcutsWindowRequested);
+    // This action now opens the new Help Manager to the Shortcuts tab
+    // If a node is selected, opens to that node's dictionary entry instead
+    shortcutManager.registerAction(
+        { ShortcutActionIds::viewToggleShortcutsWindow, "Help Manager", "Show the Help Manager window.", "Help" },
+        [this]() {
+            // Check if a node is selected
+            int numSelected = ImNodes::NumSelectedNodes();
+            if (numSelected > 0)
+            {
+                // Get the first selected node
+                std::vector<int> selectedNodeIds(numSelected);
+                ImNodes::GetSelectedNodes(selectedNodeIds.data());
+                if (!selectedNodeIds.empty())
+                {
+                    juce::uint32 logicalId = (juce::uint32)selectedNodeIds[0];
+                    if (synth != nullptr)
+                    {
+                        juce::String moduleType = synth->getModuleTypeForLogical(logicalId);
+                        
+                        if (moduleType.isNotEmpty())
+                        {
+                            // Open Help Manager to this node's dictionary entry
+                            m_helpManager.openToNode(moduleType);
+                            return;
+                        }
+                    }
+                }
+            }
+            
+            // Default behavior: open to Shortcuts tab
+            m_helpManager.open();
+            m_helpManager.setActiveTab(0); // 0 = Shortcuts tab
+        }
+    );
+    shortcutManager.setDefaultBinding(ShortcutActionIds::viewToggleShortcutsWindow, nodeEditorContextId, { ImGuiKey_F1, false, false, false, false });
 
     registerAction(ShortcutActionIds::historyUndo,
                    "Undo",
@@ -755,6 +763,7 @@ void ImGuiNodeEditorComponent::renderOpenGL()
     // Demo is hidden by default; toggle can be added later if needed
     renderImGui();
     themeEditor.render();  // Render theme editor if open
+    m_helpManager.render(); // Render help manager if open
     ImGui::Render();
     auto* dd = ImGui::GetDrawData();
     // Render via OpenGL2 backend
@@ -846,14 +855,9 @@ void ImGuiNodeEditorComponent::renderImGui()
 
     collider::ScopedShortcutContext contextGuard(shortcutManager, nodeEditorContextId);
 
-    if (imguiIO != nullptr && !shortcutCaptureState.isCapturing)
+    if (imguiIO != nullptr)
         shortcutManager.processImGuiIO(*imguiIO);
 
-    // Handle toggling of shortcuts window via ShortcutManager
-    if (consumeShortcutFlag(shortcutToggleShortcutsWindowRequested))
-    {
-        showShortcutsWindow = !showShortcutsWindow;
-    }
 
     // --- ZOOM CONTROL HANDLER (requires imnodes zoom-enabled build) ---
 #if defined(IMNODES_ZOOM_ENABLED)
@@ -1123,9 +1127,10 @@ void ImGuiNodeEditorComponent::renderImGui()
                 showMidiDeviceManager = !showMidiDeviceManager;
             }
 
-            if (ImGui::MenuItem("Keyboard Shortcuts..."))
+            if (ImGui::MenuItem("Help Manager...", "F1"))
             {
-                showShortcutEditorWindow = true;
+                m_helpManager.open();
+                m_helpManager.setActiveTab(0); // Open to Shortcuts tab
             }
             
             ImGui::Separator();
@@ -1138,8 +1143,8 @@ void ImGuiNodeEditorComponent::renderImGui()
                     }
                     ImGui::Separator();
                     
-                    // Simple static theme list for now - will add dynamic scanning later
-                    auto loadThemePreset = [&](const char* label, const char* filename)
+                    // Dynamic theme scanning - refreshes each time menu is opened
+                    auto loadThemePreset = [&](const char* label, const juce::String& filename)
                     {
                         if (ImGui::MenuItem(label))
                         {
@@ -1164,47 +1169,119 @@ void ImGuiNodeEditorComponent::renderImGui()
                         }
                     };
                     
-                    loadThemePreset("Moofy Dark (Default)", "MoofyDark.json");
-
-                    std::vector<std::pair<juce::String, juce::String>> presetList = {
-                        { "Atom One Light", "AtomOneLight.json" },
-                        { "Classic", "ClassicTheme.json" },
-                        { "Cobalt2", "Cobalt2.json" },
-                        { "Cyberpunk", "Cyberpunk.json" },
-                        { "Dracula", "Dracula.json" },
-                        { "Dracula Midnight", "DraculaMidnight.json" },
-                        { "Electric Grey", "ElectricGrey.json" },
-                        { "Everforest Night", "Everforest.json" },
-                        { "Gruvbox Dark", "GruvboxDark.json" },
-                        { "High Contrast Neon", "HighContrastNeon.json" },
-                        { "Horizon Sunset", "HorizonSunset.json" },
-                        { "Light", "LightTheme.json" },
-                        { "Monokai Pro", "MonokaiPro.json" },
-                        { "Night Owl Neo", "NightOwl.json" },
-                        { "Noctis Azure", "NoctisAzure.json" },
-                        { "Nord", "Nord.json" },
-                        { "One Dark Pro", "OneDarkPro.json" },
-                        { "Paper White", "PaperWhite.json" },
-                        { "Quiet Light", "QuietLight.json" },
-                        { "Retro Terminal Amber", "RetroTerminalAmber.json" },
-                        { "Retro Terminal Green", "RetroTerminalGreen.json" },
-                        { "Ros\u00E9 Pine Moon", "RosePine.json" },
-                        { "Shades of Purple", "ShadesOfPurple.json" },
-                        { "Solar Flare", "SolarFlare.json" },
-                        { "Solarized Dark", "SolarizedDark.json" },
-                        { "Solarized Light", "SolarizedLight.json" },
-                        { "Synthwave '84", "Synthwave84.json" },
-                        { "Tokyo Night", "TokyoNight.json" }
+                    // Helper to convert filename to display name
+                    auto filenameToDisplayName = [](const juce::String& filename) -> juce::String
+                    {
+                        juce::String name = filename;
+                        // Remove .json extension
+                        if (name.endsWithIgnoreCase(".json"))
+                            name = name.substring(0, name.length() - 5);
+                        
+                        // Special case for MoofyDark
+                        if (name.equalsIgnoreCase("MoofyDark"))
+                            return "Moofy Dark (Default)";
+                        
+                        // Convert camelCase/PascalCase to Title Case with spaces
+                        // e.g., "AtomOneLight" -> "Atom One Light", "ClassicTheme" -> "Classic Theme"
+                        juce::String result;
+                        for (int i = 0; i < name.length(); ++i)
+                        {
+                            juce::juce_wchar c = name[i];
+                            // Insert space before uppercase letters (except first character)
+                            if (i > 0 && juce::CharacterFunctions::isUpperCase(c))
+                                result += " ";
+                            result += c;
+                        }
+                        
+                        // Handle special cases
+                        result = result.replace("Synthwave 84", "Synthwave '84");
+                        result = result.replace("Rosé Pine", "Rosé Pine Moon");
+                        result = result.replace("Night Owl", "Night Owl Neo");
+                        result = result.replace("Everforest", "Everforest Night");
+                        result = result.replace("Dracula Midnight", "Dracula Midnight");
+                        
+                        return result;
                     };
-
-                    std::sort(presetList.begin(), presetList.end(), [] (const auto& a, const auto& b)
+                    
+                    // Scan themes directory for all .json files
+                    auto exeFile = juce::File::getSpecialLocation(juce::File::currentExecutableFile);
+                    auto exeDir = exeFile.getParentDirectory();
+                    auto themesDir = exeDir.getChildFile("themes");
+                    
+                    std::vector<std::pair<juce::String, juce::String>> foundThemes; // {displayName, filename}
+                    
+                    if (themesDir.exists() && themesDir.isDirectory())
+                    {
+                        juce::Array<juce::File> themeFiles;
+                        themesDir.findChildFiles(themeFiles, juce::File::findFiles, false, "*.json");
+                        
+                        for (const auto& themeFile : themeFiles)
+                        {
+                            juce::String filename = themeFile.getFileName();
+                            // Skip hidden/system files
+                            if (filename.startsWithChar('.'))
+                                continue;
+                            
+                            juce::String displayName = filenameToDisplayName(filename);
+                            foundThemes.push_back({displayName, filename});
+                        }
+                    }
+                    
+                    // Also check source tree for development (fallback)
+                    {
+                        auto sourceThemesDir = exeDir.getParentDirectory().getParentDirectory()
+                            .getChildFile("Source")
+                            .getChildFile("preset_creator")
+                            .getChildFile("theme")
+                            .getChildFile("presets");
+                        
+                        if (sourceThemesDir.exists() && sourceThemesDir.isDirectory())
+                        {
+                            juce::Array<juce::File> sourceThemeFiles;
+                            sourceThemesDir.findChildFiles(sourceThemeFiles, juce::File::findFiles, false, "*.json");
+                            
+                            for (const auto& themeFile : sourceThemeFiles)
+                            {
+                                juce::String filename = themeFile.getFileName();
+                                if (filename.startsWithChar('.'))
+                                    continue;
+                                
+                                // Check if we already have this theme from exe/themes
+                                bool alreadyFound = false;
+                                for (const auto& existing : foundThemes)
+                                {
+                                    if (existing.second.equalsIgnoreCase(filename))
+                                    {
+                                        alreadyFound = true;
+                                        break;
+                                    }
+                                }
+                                
+                                if (!alreadyFound)
+                                {
+                                    juce::String displayName = filenameToDisplayName(filename);
+                                    foundThemes.push_back({displayName, filename});
+                                }
+                            }
+                        }
+                    }
+                    
+                    // Sort themes alphabetically by display name
+                    std::sort(foundThemes.begin(), foundThemes.end(), [](const auto& a, const auto& b)
                     {
                         return a.first.compareIgnoreCase(b.first) < 0;
                     });
-
-                    for (const auto& preset : presetList)
+                    
+                    // Render menu items from dynamically found themes
+                    for (const auto& theme : foundThemes)
                     {
-                        loadThemePreset(preset.first.toRawUTF8(), preset.second.toRawUTF8());
+                        loadThemePreset(theme.first.toRawUTF8(), theme.second);
+                    }
+                    
+                    // If no themes found, show a message
+                    if (foundThemes.empty())
+                    {
+                        ImGui::TextDisabled("No themes found in themes/ directory");
                     }
 
                     ImGui::EndMenu();
@@ -1353,6 +1430,8 @@ void ImGuiNodeEditorComponent::renderImGui()
                 if (ImGui::MenuItem("VCA")) { insertNodeBetween("vca"); }
                 if (ImGui::MenuItem("Mixer")) { insertNodeBetween("mixer"); }
                 if (ImGui::MenuItem("CV Mixer")) { insertNodeBetween("cv_mixer"); }
+                if (ImGui::MenuItem("Track Mixer")) { insertNodeBetween("track_mixer"); }
+                if (ImGui::MenuItem("PanVol")) { insertNodeBetween("panvol"); }
                 if (ImGui::MenuItem("Attenuverter")) { insertNodeBetween("attenuverter"); }
                 if (ImGui::MenuItem("Lag Processor")) { insertNodeBetween("lag_processor"); }
                 if (ImGui::MenuItem("Math")) { insertNodeBetween("math"); }
@@ -1686,6 +1765,10 @@ void ImGuiNodeEditorComponent::renderImGui()
         ImGui::PushStyleColor(ImGuiCol_Header, color);
         ImGui::PushStyleColor(ImGuiCol_HeaderHovered, ImGui::ColorConvertFloat4ToU32(ImVec4(c.x*1.2f, c.y*1.2f, c.z*1.2f, 1.0f)));
         ImGui::PushStyleColor(ImGuiCol_HeaderActive, ImGui::ColorConvertFloat4ToU32(ImVec4(c.x*1.4f, c.y*1.4f, c.z*1.4f, 1.0f)));
+        
+        // Automatically adjust text color based on background contrast for optimal legibility
+        ImU32 optimalTextColor = ThemeUtils::getOptimalTextColor(color);
+        ImGui::PushStyleColor(ImGuiCol_Text, optimalTextColor);
     };
     auto pushHeaderColors = [&](const TriStateColor& tri)
     {
@@ -1699,11 +1782,17 @@ void ImGuiNodeEditorComponent::renderImGui()
         ImGui::PushStyleColor(ImGuiCol_Header, toVec4(tri.base, ImGuiCol_Header));
         ImGui::PushStyleColor(ImGuiCol_HeaderHovered, toVec4(tri.hovered, ImGuiCol_HeaderHovered));
         ImGui::PushStyleColor(ImGuiCol_HeaderActive, toVec4(tri.active, ImGuiCol_HeaderActive));
+        
+        // Automatically adjust text color based on background luminance for optimal legibility
+        // Use the base background color to determine text color (Option B: single text color)
+        ImU32 baseBgColor = tri.base != 0 ? tri.base : ImGui::ColorConvertFloat4ToU32(styleRef.Colors[ImGuiCol_Header]);
+        ImU32 optimalTextColor = ThemeUtils::getOptimalTextColor(baseBgColor);
+        ImGui::PushStyleColor(ImGuiCol_Text, optimalTextColor);
     };
     // === PRESET BROWSER ===
     pushHeaderColors(theme.headers.presets);
     bool presetsExpanded = ImGui::CollapsingHeader("Presets");
-    ImGui::PopStyleColor(3);
+    ImGui::PopStyleColor(4); // 3 background colors + 1 text color
     if (presetsExpanded)
     {
         // 1. Path Display (read-only)
@@ -1824,7 +1913,7 @@ void ImGuiNodeEditorComponent::renderImGui()
     // === SAMPLE BROWSER ===
     pushHeaderColors(theme.headers.samples);
     bool samplesExpanded = ImGui::CollapsingHeader("Samples");
-    ImGui::PopStyleColor(3);
+    ImGui::PopStyleColor(4); // 3 background colors + 1 text color
     
     if (samplesExpanded)
     {
@@ -1878,7 +1967,7 @@ void ImGuiNodeEditorComponent::renderImGui()
     // === MIDI BROWSER ===
     pushHeaderColors(theme.headers.recent);
     bool midiExpanded = ImGui::CollapsingHeader("MIDI Files");
-    ImGui::PopStyleColor(3);
+    ImGui::PopStyleColor(4); // 3 background colors + 1 text color
     
     if (midiExpanded)
     {
@@ -1997,7 +2086,7 @@ void ImGuiNodeEditorComponent::renderImGui()
     // === MODULE BROWSER ===
     pushHeaderColors(theme.headers.system);
     bool modulesExpanded = ImGui::CollapsingHeader("Modules", ImGuiTreeNodeFlags_DefaultOpen);
-    ImGui::PopStyleColor(3);
+    ImGui::PopStyleColor(4); // 3 background colors + 1 text color
     
     if (modulesExpanded)
     {
@@ -2067,7 +2156,7 @@ void ImGuiNodeEditorComponent::renderImGui()
     // ═══════════════════════════════════════════════════════════════════════════════
     pushCategoryColor(ModuleCategory::Source);
     bool sourcesExpanded = ImGui::CollapsingHeader("Sources", ImGuiTreeNodeFlags_DefaultOpen);
-    ImGui::PopStyleColor(3);
+    ImGui::PopStyleColor(4); // 3 background colors + 1 text color
     if (sourcesExpanded) {
         addModuleButton("VCO", "vco");
         addModuleButton("Polyphonic VCO", "polyvco");
@@ -2082,7 +2171,7 @@ void ImGuiNodeEditorComponent::renderImGui()
     // ═══════════════════════════════════════════════════════════════════════════════
     pushCategoryColor(ModuleCategory::Effect);
     bool effectsExpanded = ImGui::CollapsingHeader("Effects", ImGuiTreeNodeFlags_DefaultOpen);
-    ImGui::PopStyleColor(3);
+    ImGui::PopStyleColor(4); // 3 background colors + 1 text color
     if (effectsExpanded) {
         addModuleButton("VCF", "vcf");
         addModuleButton("Delay", "delay");
@@ -2107,7 +2196,7 @@ void ImGuiNodeEditorComponent::renderImGui()
     // ═══════════════════════════════════════════════════════════════════════════════
     pushCategoryColor(ModuleCategory::Modulator);
     bool modulatorsExpanded = ImGui::CollapsingHeader("Modulators", ImGuiTreeNodeFlags_DefaultOpen);
-    ImGui::PopStyleColor(3);
+    ImGui::PopStyleColor(4); // 3 background colors + 1 text color
     if (modulatorsExpanded) {
         addModuleButton("LFO", "lfo");
         addModuleButton("ADSR", "adsr");
@@ -2121,7 +2210,7 @@ void ImGuiNodeEditorComponent::renderImGui()
     // ═══════════════════════════════════════════════════════════════════════════════
     pushCategoryColor(ModuleCategory::Utility);
     bool utilitiesExpanded = ImGui::CollapsingHeader("Utilities & Logic", ImGuiTreeNodeFlags_DefaultOpen);
-    ImGui::PopStyleColor(3);
+    ImGui::PopStyleColor(4); // 3 background colors + 1 text color
     if (utilitiesExpanded) {
         addModuleButton("VCA", "vca");
         addModuleButton("Mixer", "mixer");
@@ -2138,6 +2227,7 @@ void ImGuiNodeEditorComponent::renderImGui()
         addModuleButton("Logic", "logic");
         addModuleButton("Clock Divider", "clock_divider");
         addModuleButton("Sequential Switch", "sequential_switch");
+        addModuleButton("PanVol", "panvol");
     }
     
     // ═══════════════════════════════════════════════════════════════════════════════
@@ -2145,7 +2235,7 @@ void ImGuiNodeEditorComponent::renderImGui()
     // ═══════════════════════════════════════════════════════════════════════════════
     pushCategoryColor(ModuleCategory::Seq);
     bool sequencersExpanded = ImGui::CollapsingHeader("Sequencers", ImGuiTreeNodeFlags_DefaultOpen);
-    ImGui::PopStyleColor(3);
+    ImGui::PopStyleColor(4); // 3 background colors + 1 text color
     if (sequencersExpanded) {
         addModuleButton("Sequencer", "sequencer");
         addModuleButton("Multi Sequencer", "multi_sequencer");
@@ -2160,7 +2250,7 @@ void ImGuiNodeEditorComponent::renderImGui()
     // ═══════════════════════════════════════════════════════════════════════════════
     pushCategoryColor(ModuleCategory::MIDI);
     bool midiExpanded = ImGui::CollapsingHeader("MIDI", ImGuiTreeNodeFlags_DefaultOpen);
-    ImGui::PopStyleColor(3);
+    ImGui::PopStyleColor(4); // 3 background colors + 1 text color
     if (midiExpanded) {
         addModuleButton("MIDI CV", "midi_cv");
         addModuleButton("MIDI Player", "midi_player");
@@ -2179,7 +2269,7 @@ void ImGuiNodeEditorComponent::renderImGui()
     // ═══════════════════════════════════════════════════════════════════════════════
     pushCategoryColor(ModuleCategory::Analysis);
     bool analysisExpanded = ImGui::CollapsingHeader("Analysis", ImGuiTreeNodeFlags_DefaultOpen);
-    ImGui::PopStyleColor(3);
+    ImGui::PopStyleColor(4); // 3 background colors + 1 text color
     if (analysisExpanded) {
         addModuleButton("Scope", "scope");
         addModuleButton("Debug", "debug");
@@ -2192,7 +2282,7 @@ void ImGuiNodeEditorComponent::renderImGui()
     // ═══════════════════════════════════════════════════════════════════════════════
     pushCategoryColor(ModuleCategory::TTS_Voice);
     bool ttsExpanded = ImGui::CollapsingHeader("TTS", ImGuiTreeNodeFlags_DefaultOpen);
-    ImGui::PopStyleColor(3);
+    ImGui::PopStyleColor(4); // 3 background colors + 1 text color
     if (ttsExpanded) {
         addModuleButton("TTS Performer", "tts_performer");
         addModuleButton("Vocal Tract Filter", "vocal_tract_filter");
@@ -2203,7 +2293,7 @@ void ImGuiNodeEditorComponent::renderImGui()
     // ═══════════════════════════════════════════════════════════════════════════════
     pushCategoryColor(ModuleCategory::Special_Exp);
     bool specialExpanded = ImGui::CollapsingHeader("Special", ImGuiTreeNodeFlags_DefaultOpen);
-    ImGui::PopStyleColor(3);
+    ImGui::PopStyleColor(4); // 3 background colors + 1 text color
     if (specialExpanded) {
         addModuleButton("Physics", "physics");
         addModuleButton("Animation", "animation");
@@ -2214,7 +2304,7 @@ void ImGuiNodeEditorComponent::renderImGui()
     // ═══════════════════════════════════════════════════════════════════════════════
     pushCategoryColor(ModuleCategory::OpenCV);
     bool openCVExpanded = ImGui::CollapsingHeader("Computer Vision", ImGuiTreeNodeFlags_DefaultOpen);
-    ImGui::PopStyleColor(3);
+    ImGui::PopStyleColor(4); // 3 background colors + 1 text color
     if (openCVExpanded) {
         ThemeText("Sources:", theme.text.section_header);
         addModuleButton("Webcam Loader", "webcam_loader");
@@ -2238,7 +2328,7 @@ void ImGuiNodeEditorComponent::renderImGui()
     // ═══════════════════════════════════════════════════════════════════════════════
     pushCategoryColor(ModuleCategory::Plugin);
     bool pluginsExpanded = ImGui::CollapsingHeader("Plugins / VST", ImGuiTreeNodeFlags_DefaultOpen);
-    ImGui::PopStyleColor(3);
+    ImGui::PopStyleColor(4); // 3 background colors + 1 text color
     if (pluginsExpanded) {
         addPluginModules();
     }
@@ -2248,14 +2338,13 @@ void ImGuiNodeEditorComponent::renderImGui()
     // ═══════════════════════════════════════════════════════════════════════════════
     pushCategoryColor(ModuleCategory::Sys);
     bool systemExpanded = ImGui::CollapsingHeader("System", ImGuiTreeNodeFlags_DefaultOpen);
-    ImGui::PopStyleColor(3);
+    ImGui::PopStyleColor(4); // 3 background colors + 1 text color
     if (systemExpanded) {
         // addModuleButton("Meta", "meta");
         // addModuleButton("Inlet", "inlet");
         // addModuleButton("Outlet", "outlet");
         addModuleButton("Comment", "comment");
         addModuleButton("Recorder", "recorder");
-        addModuleButton("VST Host", "vst_host");
         ImGui::Separator();
         addModuleButton("Best Practice", "best_practice");
     }
@@ -2493,22 +2582,30 @@ const juce::String& type = mod.second;
 
             // Color-code modules by category (base colors)
             const auto moduleCategory = getModuleCategory(type);
-            ImNodes::PushColorStyle(ImNodesCol_TitleBar, getImU32ForCategory(moduleCategory));
+            ImU32 baseTitleBarColor = getImU32ForCategory(moduleCategory);
+            ImNodes::PushColorStyle(ImNodesCol_TitleBar, baseTitleBarColor);
             ImNodes::PushColorStyle(ImNodesCol_TitleBarHovered, getImU32ForCategory(moduleCategory, true));
             ImNodes::PushColorStyle(ImNodesCol_TitleBarSelected, getImU32ForCategory(moduleCategory, true));
 
+            // Determine the actual title bar color that will be used (checking overrides in order)
+            ImU32 actualTitleBarColor = baseTitleBarColor;
+            
             // Highlight nodes participating in the hovered link (overrides category color)
             const bool isHoveredSource = (hoveredLinkSrcId != 0 && hoveredLinkSrcId == (juce::uint32) lid);
             const bool isHoveredDest   = (hoveredLinkDstId != 0 && hoveredLinkDstId == (juce::uint32) lid);
             if (isHoveredSource || isHoveredDest)
-                ImNodes::PushColorStyle(ImNodesCol_TitleBar, IM_COL32(255, 220, 0, 255));
+            {
+                actualTitleBarColor = IM_COL32(255, 220, 0, 255);
+                ImNodes::PushColorStyle(ImNodesCol_TitleBar, actualTitleBarColor);
+            }
 
             // Visual feedback for muted nodes (overrides category color and hover)
             const bool isMuted = mutedNodeStates.count(lid) > 0;
             if (isMuted) {
+                actualTitleBarColor = IM_COL32(80, 80, 80, 255);
                 ImNodes::PushStyleVar(ImNodesStyleVar_NodePadding, ImVec2(8, 8));
                 ImGui::PushStyleVar(ImGuiStyleVar_Alpha, 0.5f);
-                ImNodes::PushColorStyle(ImNodesCol_TitleBar, IM_COL32(80, 80, 80, 255));
+                ImNodes::PushColorStyle(ImNodesCol_TitleBar, actualTitleBarColor);
             }
 
 #if JUCE_DEBUG
@@ -2519,6 +2616,11 @@ const juce::String& type = mod.second;
             ++gImNodesNodeDepth;
 #endif
             ImNodes::BeginNodeTitleBar();
+            
+            // Calculate optimal text color based on title bar background color
+            ImU32 optimalTextColor = ThemeUtils::getOptimalTextColor(actualTitleBarColor);
+            ImGui::PushStyleColor(ImGuiCol_Text, ImGui::ColorConvertU32ToFloat4(optimalTextColor));
+            
             // Special handling for reroute nodes: show dynamic type in name
             if (type.equalsIgnoreCase("reroute"))
             {
@@ -2547,6 +2649,10 @@ const juce::String& type = mod.second;
             {
                 ImGui::TextUnformatted(type.toRawUTF8());
             }
+            
+            // Pop the text color we pushed
+            ImGui::PopStyleColor();
+            
             ImNodes::EndNodeTitleBar();
 
             // Get node content width - check if module has custom size, otherwise use default
@@ -3830,11 +3936,21 @@ if (auto* mp = synth->getModuleForLogical (lid))
 
         // Output sink node with stereo inputs (single, fixed ID 0)
         const bool isOutputHovered = (hoveredLinkDstId == kOutputHighlightId);
+        ImU32 outputTitleBarColor = IM_COL32(80, 80, 80, 255);  // Default output node color (dark grey)
         if (isOutputHovered)
-            ImNodes::PushColorStyle(ImNodesCol_TitleBar, IM_COL32(255, 220, 0, 255));
+        {
+            outputTitleBarColor = IM_COL32(255, 220, 0, 255);  // Yellow when hovered
+            ImNodes::PushColorStyle(ImNodesCol_TitleBar, outputTitleBarColor);
+        }
         ImNodes::BeginNode (0);
         ImNodes::BeginNodeTitleBar();
+        
+        // Calculate optimal text color based on title bar background color
+        ImU32 optimalTextColor = ThemeUtils::getOptimalTextColor(outputTitleBarColor);
+        ImGui::PushStyleColor(ImGuiCol_Text, ImGui::ColorConvertU32ToFloat4(optimalTextColor));
         ImGui::TextUnformatted ("Output");
+        ImGui::PopStyleColor();
+        
         ImNodes::EndNodeTitleBar();
         if (isOutputHovered)
             ImNodes::PopColorStyle();
@@ -4904,6 +5020,7 @@ if (auto* mp = synth->getModuleForLogical (lid))
                     if (ImGui::MenuItem("Mixer")) addAtMouse("mixer");
                     if (ImGui::MenuItem("CV Mixer")) addAtMouse("cv_mixer");
                     if (ImGui::MenuItem("Track Mixer")) addAtMouse("track_mixer");
+                    if (ImGui::MenuItem("PanVol")) addAtMouse("panvol");
                     if (ImGui::MenuItem("Attenuverter")) addAtMouse("attenuverter");
                     if (ImGui::MenuItem("Lag Processor")) addAtMouse("lag_processor");
                     if (ImGui::MenuItem("Math")) addAtMouse("math");
@@ -4989,7 +5106,6 @@ if (auto* mp = synth->getModuleForLogical (lid))
                     // if (ImGui::MenuItem("Outlet")) addAtMouse("outlet");
                     if (ImGui::MenuItem("Comment")) addAtMouse("comment");
                     if (ImGui::MenuItem("Recorder")) addAtMouse("recorder");
-                    if (ImGui::MenuItem("VST Host")) addAtMouse("vst_host");
                     ImGui::Separator();
                     if (ImGui::MenuItem("Best Practice")) addAtMouse("best_practice");
                     ImGui::EndMenu();
@@ -5291,7 +5407,6 @@ if (auto* mp = synth->getModuleForLogical (lid))
             }
         }
         // Handle link deletion (multi-select via Delete)
-
         // Keyboard shortcuts
         // Only process global keyboard shortcuts if no ImGui widget wants the keyboard
         if (!ImGui::GetIO().WantCaptureKeyboard)
@@ -5772,23 +5887,11 @@ if (auto* mp = synth->getModuleForLogical (lid))
         ImGui::End();
     }
 
-    // Keyboard Shortcuts Help Window (F1)
-    if (showShortcutsWindow)
-    {
-        if (ImGui::Begin("Keyboard Shortcuts", &showShortcutsWindow, ImGuiWindowFlags_AlwaysAutoResize))
-        {
-            renderShortcutEditorContents(false);
-        }
-        ImGui::End();
-    }
-
     ImGui::End();
     
     // === POP THE TRANSPARENT BACKGROUND STYLE ===
     ImGui::PopStyleColor();
     // === END OF FIX ===
-    
-    renderShortcutEditorWindow();
 
     // Render notification system (must be called at the end to appear on top)
     NotificationManager::render();
@@ -6040,433 +6143,6 @@ void ImGuiNodeEditorComponent::applyUiValueTree (const juce::ValueTree& uiState)
     uiPending = uiState;
 }
 
-void ImGuiNodeEditorComponent::renderShortcutEditorWindow()
-{
-    if (showShortcutEditorWindow)
-    {
-        ImGui::OpenPopup("Shortcut Editor");
-        showShortcutEditorWindow = false;
-    }
-
-    if (ImGui::BeginPopupModal("Shortcut Editor", nullptr, ImGuiWindowFlags_AlwaysAutoResize))
-    {
-        renderShortcutEditorContents(true);
-
-        ImGui::EndPopup();
-    }
-
-    if (!ImGui::IsPopupOpen("Shortcut Editor"))
-    {
-        if (shortcutsDirty)
-            saveUserShortcutBindings();
-        if (shortcutCaptureState.isCapturing)
-            cancelShortcutCapture();
-    }
-}
-
-void ImGuiNodeEditorComponent::renderShortcutEditorTable(const juce::Identifier& context)
-{
-    const auto& registry = shortcutManager.getRegistry();
-    std::vector<std::pair<juce::Identifier, collider::ShortcutAction>> actions;
-    actions.reserve(registry.size());
-    for (const auto& entry : registry)
-        actions.emplace_back(entry.first, entry.second);
-
-    std::sort(actions.begin(), actions.end(), [](const auto& a, const auto& b)
-    {
-        int categoryCompare = a.second.category.compareIgnoreCase(b.second.category);
-        if (categoryCompare != 0)
-            return categoryCompare < 0;
-        return a.second.name.compareIgnoreCase(b.second.name) < 0;
-    });
-
-    if (ImGui::BeginTable("shortcut-editor-table", 5, ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg | ImGuiTableFlags_Resizable))
-    {
-        ImGui::TableSetupColumn("Category", ImGuiTableColumnFlags_WidthFixed, 140.0f);
-        ImGui::TableSetupColumn("Action", ImGuiTableColumnFlags_WidthStretch);
-        ImGui::TableSetupColumn("Binding", ImGuiTableColumnFlags_WidthFixed, 160.0f);
-        ImGui::TableSetupColumn("Source", ImGuiTableColumnFlags_WidthFixed, 160.0f);
-        ImGui::TableSetupColumn("Options", ImGuiTableColumnFlags_WidthFixed, 200.0f);
-        ImGui::TableHeadersRow();
-
-        juce::String previousCategory;
-        for (const auto& [actionId, action] : actions)
-        {
-            if (shortcutsSearchTerm.isNotEmpty())
-            {
-                const juce::String search = shortcutsSearchTerm;
-                if (!action.name.containsIgnoreCase(search)
-                    && !action.description.containsIgnoreCase(search)
-                    && !action.category.containsIgnoreCase(search))
-                {
-                    continue;
-                }
-            }
-
-            const bool categoryChanged = previousCategory != action.category;
-            renderShortcutRow(action, actionId, context, categoryChanged);
-            previousCategory = action.category;
-        }
-
-        ImGui::EndTable();
-    }
-}
-
-void ImGuiNodeEditorComponent::renderShortcutRow(const collider::ShortcutAction& action,
-                                                 const juce::Identifier& actionId,
-                                                 const juce::Identifier& context,
-                                                 bool categoryChanged)
-{
-    ImGui::TableNextRow();
-
-    ImGui::TableSetColumnIndex(0);
-    if (categoryChanged)
-        ImGui::TextUnformatted(action.category.toRawUTF8());
-
-    ImGui::TableSetColumnIndex(1);
-    ImGui::TextUnformatted(action.name.toRawUTF8());
-    if (!action.description.isEmpty() && ImGui::IsItemHovered())
-    {
-        ImGui::BeginTooltip();
-        ImGui::TextUnformatted(action.description.toRawUTF8());
-        ImGui::EndTooltip();
-    }
-
-    ImGui::TableSetColumnIndex(2);
-    juce::String sourceLabel;
-    juce::String bindingLabel = getBindingLabelForContext(actionId, context, sourceLabel);
-    ImGui::TextUnformatted(bindingLabel.toRawUTF8());
-
-    ImGui::TableSetColumnIndex(3);
-    ImGui::TextUnformatted(sourceLabel.toRawUTF8());
-
-    ImGui::TableSetColumnIndex(4);
-    juce::String assignId = "Assign##" + actionId.toString() + ":" + context.toString();
-    if (ImGui::Button(assignId.toRawUTF8()))
-    {
-        beginShortcutCapture(actionId, context);
-    }
-
-    ImGui::SameLine();
-    juce::String clearId = "Clear##" + actionId.toString() + ":" + context.toString();
-    if (ImGui::Button(clearId.toRawUTF8()))
-    {
-        clearShortcutForContext(actionId, context);
-    }
-
-    ImGui::SameLine();
-    juce::String resetId = "Reset##" + actionId.toString() + ":" + context.toString();
-    if (ImGui::Button(resetId.toRawUTF8()))
-    {
-        resetShortcutForContext(actionId, context);
-    }
-}
-
-void ImGuiNodeEditorComponent::renderShortcutEditorContents(bool includeCloseButton)
-{
-    updateShortcutCapture();
-
-    const auto& globalContext = collider::ShortcutManager::getGlobalContextIdentifier();
-    const juce::Identifier contexts[] = { globalContext, nodeEditorContextId };
-    int selectedIndex = (shortcutContextSelection == globalContext) ? 0 : 1;
-
-    if (ImGui::BeginCombo("Context", contextDisplayName(shortcutContextSelection).toRawUTF8()))
-    {
-        for (int i = 0; i < 2; ++i)
-        {
-            const bool isSelected = (selectedIndex == i);
-            if (ImGui::Selectable(contextDisplayName(contexts[i]).toRawUTF8(), isSelected))
-                shortcutContextSelection = contexts[i];
-            if (isSelected)
-                ImGui::SetItemDefaultFocus();
-        }
-        ImGui::EndCombo();
-    }
-
-    char searchBuffer[128] = {};
-    std::strncpy(searchBuffer, shortcutsSearchTerm.toRawUTF8(), sizeof(searchBuffer) - 1);
-    if (ImGui::InputTextWithHint("##shortcut-search", "Search actions…", searchBuffer, sizeof(searchBuffer)))
-    {
-        shortcutsSearchTerm = juce::String(searchBuffer).trim();
-    }
-
-    ImGui::Separator();
-    renderShortcutEditorTable(shortcutContextSelection);
-
-    renderShortcutCapturePanel();
-
-    ImGui::Separator();
-    if (ImGui::Button("Save Changes"))
-    {
-        saveUserShortcutBindings();
-    }
-
-    if (includeCloseButton)
-    {
-        ImGui::SameLine();
-        if (ImGui::Button("Close"))
-        {
-            ImGui::CloseCurrentPopup();
-        }
-    }
-}
-
-void ImGuiNodeEditorComponent::renderShortcutCapturePanel()
-{
-    if (!shortcutCaptureState.isCapturing)
-        return;
-
-    const auto& registry = shortcutManager.getRegistry();
-    juce::String actionName = shortcutCaptureState.actionId.toString();
-    if (auto it = registry.find(shortcutCaptureState.actionId); it != registry.end())
-        actionName = it->second.name;
-
-    ImGui::Text("Assigning: %s (%s)",
-                actionName.toRawUTF8(),
-                contextDisplayName(shortcutCaptureState.context).toRawUTF8());
-    ImGui::TextUnformatted("Press a key combination… (Esc to cancel)");
-}
-
-void ImGuiNodeEditorComponent::beginShortcutCapture(const juce::Identifier& actionId, const juce::Identifier& context)
-{
-    shortcutCaptureState = {};
-    shortcutCaptureState.isCapturing = true;
-    shortcutCaptureState.actionId = actionId;
-    shortcutCaptureState.context = context;
-}
-
-void ImGuiNodeEditorComponent::updateShortcutCapture()
-{
-    if (!shortcutCaptureState.isCapturing)
-        return;
-
-    if (ImGui::IsKeyPressed(ImGuiKey_Escape, false))
-    {
-        cancelShortcutCapture();
-        return;
-    }
-
-    const ImGuiIO& io = ImGui::GetIO();
-    for (int keyIndex = ImGuiKey_NamedKey_BEGIN; keyIndex < ImGuiKey_NamedKey_END; ++keyIndex)
-    {
-        const ImGuiKey key = static_cast<ImGuiKey>(keyIndex);
-
-        if (key >= ImGuiKey_MouseLeft && key <= ImGuiKey_MouseWheelY)
-            continue;
-        if (key >= ImGuiKey_ReservedForModCtrl)
-            continue;
-
-        const ImGuiKeyData* data = ImGui::GetKeyData(key);
-        if (data == nullptr)
-            continue;
-
-        if (data->Down && data->DownDuration == 0.0f)
-        {
-            shortcutCaptureState.captured = collider::KeyChord::fromImGui(io, key);
-            shortcutCaptureState.hasCaptured = shortcutCaptureState.captured.isValid();
-            evaluateShortcutCaptureConflict();
-            applyShortcutCapture(true);
-            break;
-        }
-    }
-}
-
-void ImGuiNodeEditorComponent::cancelShortcutCapture()
-{
-    shortcutCaptureState = {};
-}
-
-void ImGuiNodeEditorComponent::applyShortcutCapture(bool forceReplace)
-{
-    if (!shortcutCaptureState.isCapturing || !shortcutCaptureState.hasCaptured || !shortcutCaptureState.captured.isValid())
-        return;
-
-    const auto& actionId = shortcutCaptureState.actionId;
-    const auto& context = shortcutCaptureState.context;
-
-    if (auto userBinding = shortcutManager.getUserBinding(actionId, context))
-    {
-        if (userBinding->isValid() && chordsEqual(*userBinding, shortcutCaptureState.captured))
-        {
-            cancelShortcutCapture();
-            return;
-        }
-    }
-
-    if (auto defaultBinding = shortcutManager.getDefaultBinding(actionId, context))
-    {
-        if (defaultBinding->isValid() && chordsEqual(*defaultBinding, shortcutCaptureState.captured))
-        {
-            if (shortcutManager.removeUserBinding(actionId, context))
-                shortcutsDirty = true;
-            cancelShortcutCapture();
-            return;
-        }
-    }
-
-    if (shortcutCaptureState.conflictActionId.isValid())
-    {
-        if (!forceReplace)
-            return;
-
-        clearShortcutForContext(shortcutCaptureState.conflictActionId, shortcutCaptureState.conflictContextId);
-    }
-
-    shortcutManager.setUserBinding(actionId, context, shortcutCaptureState.captured);
-    shortcutsDirty = true;
-    cancelShortcutCapture();
-}
-
-void ImGuiNodeEditorComponent::evaluateShortcutCaptureConflict()
-{
-    shortcutCaptureState.conflictActionId = {};
-    shortcutCaptureState.conflictContextId = {};
-    shortcutCaptureState.conflictIsUserBinding = false;
-
-    if (!shortcutCaptureState.hasCaptured || !shortcutCaptureState.captured.isValid())
-        return;
-
-    const auto& chord = shortcutCaptureState.captured;
-    const auto& targetAction = shortcutCaptureState.actionId;
-    const auto& targetContext = shortcutCaptureState.context;
-    const auto& globalContext = collider::ShortcutManager::getGlobalContextIdentifier();
-
-    const auto& registry = shortcutManager.getRegistry();
-    const juce::Identifier contextsToCheck[] = { globalContext, nodeEditorContextId };
-
-    auto isSameChord = [&](const juce::Identifier& actionId, const juce::Identifier& contextId, const juce::Optional<collider::KeyChord>& chordOpt, bool isUser)
-    {
-        if (!chordOpt.hasValue() || !chordOpt->isValid())
-            return false;
-        if (!chordsEqual(*chordOpt, chord))
-            return false;
-
-        shortcutCaptureState.conflictActionId = actionId;
-        shortcutCaptureState.conflictContextId = contextId;
-        shortcutCaptureState.conflictIsUserBinding = isUser;
-        return true;
-    };
-
-    // Ignore if chord matches current binding for this action/context
-    auto currentBinding = shortcutManager.getBindingForContext(targetAction, targetContext);
-    if (currentBinding.isValid() && chordsEqual(currentBinding, chord))
-        return;
-
-    for (const auto& [actionId, action] : registry)
-    {
-        for (const auto& ctx : contextsToCheck)
-        {
-            if (ctx != targetContext && targetContext == globalContext && ctx != globalContext)
-                continue; // when editing global, only check global + other contexts once
-
-            auto userBinding = shortcutManager.getUserBinding(actionId, ctx);
-            if (isSameChord(actionId, ctx, userBinding, true))
-                return;
-
-            auto defaultBinding = shortcutManager.getDefaultBinding(actionId, ctx);
-            // Only check default if no user override
-            if (!userBinding.hasValue())
-            {
-                if (isSameChord(actionId, ctx, defaultBinding, false))
-                    return;
-            }
-        }
-    }
-}
-
-void ImGuiNodeEditorComponent::clearShortcutForContext(const juce::Identifier& actionId, const juce::Identifier& context)
-{
-    collider::KeyChord cleared;
-    shortcutManager.setUserBinding(actionId, context, cleared);
-    shortcutsDirty = true;
-
-    if (shortcutCaptureState.isCapturing &&
-        shortcutCaptureState.actionId == actionId &&
-        shortcutCaptureState.context == context)
-    {
-        cancelShortcutCapture();
-    }
-}
-
-void ImGuiNodeEditorComponent::resetShortcutForContext(const juce::Identifier& actionId, const juce::Identifier& context)
-{
-    if (shortcutManager.removeUserBinding(actionId, context))
-    {
-        shortcutsDirty = true;
-    }
-
-    if (shortcutCaptureState.isCapturing &&
-        shortcutCaptureState.actionId == actionId &&
-        shortcutCaptureState.context == context)
-    {
-        cancelShortcutCapture();
-    }
-}
-
-void ImGuiNodeEditorComponent::saveUserShortcutBindings()
-{
-    if (userShortcutFile.getFullPathName().isEmpty())
-        return;
-
-    auto parent = userShortcutFile.getParentDirectory();
-    if (!parent.isDirectory())
-        parent.createDirectory();
-
-    shortcutManager.saveUserBindingsToFile(userShortcutFile);
-    shortcutsDirty = false;
-}
-
-juce::String ImGuiNodeEditorComponent::getBindingLabelForContext(const juce::Identifier& actionId,
-                                                                 const juce::Identifier& context,
-                                                                 juce::String& sourceLabel) const
-{
-    const auto& globalContext = collider::ShortcutManager::getGlobalContextIdentifier();
-    auto userBinding = shortcutManager.getUserBinding(actionId, context);
-    if (userBinding.hasValue())
-    {
-        if (userBinding->isValid())
-        {
-            sourceLabel = "User";
-            return userBinding->toString();
-        }
-
-        sourceLabel = "User (cleared)";
-        return "Unassigned";
-    }
-
-    auto defaultBinding = shortcutManager.getDefaultBinding(actionId, context);
-    if (defaultBinding.hasValue() && defaultBinding->isValid())
-    {
-        sourceLabel = "Default";
-        return defaultBinding->toString();
-    }
-
-    if (context != globalContext)
-    {
-        auto userGlobal = shortcutManager.getUserBinding(actionId, globalContext);
-        if (userGlobal.hasValue())
-        {
-            if (userGlobal->isValid())
-            {
-                sourceLabel = "Global (user)";
-                return userGlobal->toString();
-            }
-
-            sourceLabel = "Global (user cleared)";
-            return "Unassigned";
-        }
-
-        auto defaultGlobal = shortcutManager.getDefaultBinding(actionId, globalContext);
-        if (defaultGlobal.hasValue() && defaultGlobal->isValid())
-        {
-            sourceLabel = "Global (default)";
-            return defaultGlobal->toString();
-        }
-    }
-
-    sourceLabel = "Unassigned";
-    return "Unassigned";
-}
 void ImGuiNodeEditorComponent::handleDeletion()
 {
     if (synth == nullptr)
@@ -8331,7 +8007,6 @@ void ImGuiNodeEditorComponent::renderMetaModuleEditor(MetaModuleEditorSession& s
 
     ImNodes::SetCurrentContext(editorContext);
 }
-
 void ImGuiNodeEditorComponent::handleColorTrackerAutoConnectPolyVCO(ColorTrackerModule* colorTracker, juce::uint32 colorTrackerLid)
 {
     if (!synth || !colorTracker) return;
@@ -9013,7 +8688,7 @@ void ImGuiNodeEditorComponent::drawInsertNodeOnLinkPopup()
             {"Math", "math"}, {"Map Range", "map_range"}, {"Quantizer", "quantizer"},
             {"Rate", "rate"}, {"Comparator", "comparator"}, {"Logic", "logic"},
             {"Reroute", "reroute"},
-            {"CV Mixer", "cv_mixer"}, {"Sequential Switch", "sequential_switch"},
+            {"CV Mixer", "cv_mixer"}, {"PanVol", "panvol"}, {"Sequential Switch", "sequential_switch"},
             // Modulators
             {"S&H", "s_and_h"}, {"Function Generator", "function_generator"},
             // Sequencers
@@ -9109,7 +8784,6 @@ void ImGuiNodeEditorComponent::drawInsertNodeOnLinkPopup()
         linkToInsertOn.linkId = -1;
     }
 }
-
 void ImGuiNodeEditorComponent::drawLinkInspectorTooltip(const LinkInfo& link)
 {
     if (synth == nullptr) return;
@@ -10338,7 +10012,7 @@ ImGuiNodeEditorComponent::ModuleCategory ImGuiNodeEditorComponent::getModuleCate
         lower.contains("math") || lower.contains("map_range") ||
         lower.contains("quantizer") || lower.contains("rate") ||
         lower.contains("comparator") || lower.contains("logic") ||
-        lower.contains("reroute") ||
+        lower.contains("reroute") || lower.contains("panvol") ||
         lower.contains("clock_divider") || lower.contains("sequential_switch"))
         return ModuleCategory::Utility;
     
@@ -10461,6 +10135,7 @@ std::map<juce::String, std::pair<const char*, const char*>> ImGuiNodeEditorCompo
         {"Limiter", {"limiter", "Peak limiter"}},
         {"Noise Gate", {"gate", "Noise gate"}},
         {"Drive", {"drive", "Distortion/overdrive"}},
+        {"PanVol", {"panvol", "2D control surface for volume and panning"}},
         {"Graphic EQ", {"graphic_eq", "Graphic equalizer"}},
         {"Waveshaper", {"waveshaper", "Waveshaping distortion"}},
         {"8-Band Shaper", {"8bandshaper", "8-band spectral shaper"}},
@@ -10534,18 +10209,57 @@ void ImGuiNodeEditorComponent::addPluginModules()
     synth->setPluginFormatManager(&formatManager);
     synth->setKnownPluginList(&knownPluginList);
     
-    // Display each known plugin as a button
-    const auto& plugins = knownPluginList.getTypes();
+    // Get the VST folder at exe position
+    juce::File exeDir = juce::File::getSpecialLocation(juce::File::currentApplicationFile).getParentDirectory();
+    juce::File vstFolder = exeDir.getChildFile("VST");
     
-    if (plugins.isEmpty())
+    // Get all plugins and filter/deduplicate
+    const auto& allPlugins = knownPluginList.getTypes();
+    
+    if (allPlugins.isEmpty())
     {
         ImGui::TextDisabled("No plugins found.");
         ImGui::TextDisabled("Use 'Scan for Plugins...' in the File menu.");
         return;
     }
     
-    for (const auto& desc : plugins)
+    // Filter to only plugins in the VST folder and deduplicate
+    std::vector<juce::PluginDescription> filteredPlugins;
+    std::set<juce::String> seenPlugins; // Use name + manufacturer as unique key
+    
+    for (const auto& desc : allPlugins)
     {
+        // Check if plugin is in the VST folder at exe position
+        juce::File pluginFile(desc.fileOrIdentifier);
+        if (!pluginFile.existsAsFile())
+            continue;
+            
+        juce::File pluginDir = pluginFile.getParentDirectory();
+        if (!pluginDir.isAChildOf(vstFolder) && pluginDir != vstFolder)
+            continue;
+        
+        // Create unique key for deduplication (name + manufacturer)
+        juce::String uniqueKey = desc.name + "|" + desc.manufacturerName;
+        if (seenPlugins.find(uniqueKey) != seenPlugins.end())
+            continue; // Skip duplicate
+        
+        seenPlugins.insert(uniqueKey);
+        filteredPlugins.push_back(desc);
+    }
+    
+    if (filteredPlugins.empty())
+    {
+        ImGui::TextDisabled("No plugins found in VST folder.");
+        ImGui::TextDisabled(("Place VST plugins in: " + vstFolder.getFullPathName()).toRawUTF8());
+        return;
+    }
+    
+    // Use PushID to create unique IDs for each plugin to avoid conflicts when called from multiple menus
+    ImGui::PushID("PluginList");
+    int pluginIndex = 0;
+    for (const auto& desc : filteredPlugins)
+    {
+        ImGui::PushID(pluginIndex++);
         juce::String buttonLabel = desc.name;
         if (desc.manufacturerName.isNotEmpty())
         {
@@ -10562,6 +10276,8 @@ void ImGuiNodeEditorComponent::addPluginModules()
                 pendingNodeScreenPositions[(int)logicalId] = mouse;
                 snapshotAfterEditor = true;
                 juce::Logger::writeToLog("[VST] Added plugin: " + desc.name);
+                // Close popup if we're in a popup context (safe to call even if not in popup)
+                ImGui::CloseCurrentPopup();
             }
             else
             {
@@ -10582,7 +10298,10 @@ void ImGuiNodeEditorComponent::addPluginModules()
             ImGui::Text("Outputs: %d", desc.numOutputChannels);
             ImGui::EndTooltip();
         }
+        
+        ImGui::PopID(); // Pop plugin index ID
     }
+    ImGui::PopID(); // Pop PluginList ID
 }
 void ImGuiNodeEditorComponent::handleCollapseToMetaModule()
 {

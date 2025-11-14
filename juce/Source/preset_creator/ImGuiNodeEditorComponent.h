@@ -18,6 +18,7 @@
 #include "NotificationManager.h"
 #include "ShortcutManager.h"
 #include "theme/ThemeEditorComponent.h"
+#include "HelpManagerComponent.h"
 
 // Forward declarations from Dear ImGui / imnodes
 struct ImGuiContext; struct ImGuiIO; struct ImNodesContext;
@@ -389,7 +390,6 @@ public:
     std::atomic<bool> shortcutFrameAllRequested { false };
     std::atomic<bool> shortcutResetOriginRequested { false };
     std::atomic<bool> shortcutToggleMinimapRequested { false };
-    std::atomic<bool> shortcutToggleShortcutsWindowRequested { false };
     std::atomic<bool> shortcutUndoRequested { false };
     std::atomic<bool> shortcutRedoRequested { false };
     std::atomic<bool> shortcutToggleDebugRequested { false };
@@ -478,48 +478,8 @@ public:
     std::atomic<bool> isSaveInProgress { false }; // Debouncing flag for save operations
     juce::ThreadPool threadPool { 2 };
 
-    // Help window
-    bool showShortcutsWindow { false };
-    bool showShortcutEditorWindow { false };
-    juce::String shortcutsSearchTerm;
-    juce::Identifier shortcutContextSelection { nodeEditorContextId };
-    bool shortcutsDirty { false };
-    juce::File defaultShortcutFile;
-    juce::File userShortcutFile;
-
-    struct ShortcutCaptureState
-    {
-        bool isCapturing { false };
-        juce::Identifier actionId;
-        juce::Identifier context;
-        collider::KeyChord captured;
-        bool hasCaptured { false };
-        juce::Identifier conflictActionId;
-        juce::Identifier conflictContextId;
-        bool conflictIsUserBinding { false };
-    };
-
-    ShortcutCaptureState shortcutCaptureState;
-
-    void renderShortcutEditorWindow();
-    void renderShortcutEditorTable(const juce::Identifier& context);
-    void renderShortcutRow(const collider::ShortcutAction& action,
-                           const juce::Identifier& actionId,
-                           const juce::Identifier& context,
-                           bool categoryChanged);
-    void renderShortcutEditorContents(bool includeCloseButton);
-    void renderShortcutCapturePanel();
-    void beginShortcutCapture(const juce::Identifier& actionId, const juce::Identifier& context);
-    void updateShortcutCapture();
-    void cancelShortcutCapture();
-    void applyShortcutCapture(bool forceReplace);
-    void evaluateShortcutCaptureConflict();
-    void clearShortcutForContext(const juce::Identifier& actionId, const juce::Identifier& context);
-    void resetShortcutForContext(const juce::Identifier& actionId, const juce::Identifier& context);
-    void saveUserShortcutBindings();
-    juce::String getBindingLabelForContext(const juce::Identifier& actionId,
-                                           const juce::Identifier& context,
-                                           juce::String& sourceLabel) const;
+    // Help Manager (replaces old shortcut editor window)
+    HelpManagerComponent m_helpManager { this };
 
     // Shortcut debounce
     bool mixerShortcutCooldown { false };

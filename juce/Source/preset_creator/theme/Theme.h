@@ -228,6 +228,17 @@ struct Theme
 			ImVec4 overlay_line { 1.0f, 1.0f, 1.0f, 0.5f };
 			ImVec4 separator_line { 1.0f, 0.84f, 0.0f, 0.78f };
 		} physics;
+		
+		// PanVol module settings
+		float panvol_node_width { 180.0f };  // Custom compact width (default 180px)
+		ImU32 panvol_grid_background { IM_COL32(20, 20, 20, 255) };
+		ImU32 panvol_grid_border { IM_COL32(100, 100, 100, 255) };
+		ImU32 panvol_grid_lines { IM_COL32(50, 50, 50, 255) };
+		ImU32 panvol_crosshair { IM_COL32(80, 80, 80, 200) };
+		ImU32 panvol_circle_manual { IM_COL32(255, 200, 100, 255) };  // Orange when manual
+		ImU32 panvol_circle_modulated { IM_COL32(100, 200, 255, 255) };  // Cyan when modulated
+		ImU32 panvol_label_text { IM_COL32(150, 150, 150, 200) };
+		ImU32 panvol_value_text { IM_COL32(100, 100, 100, 120) };
 	} modules;
 };
 
