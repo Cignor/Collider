@@ -152,9 +152,20 @@ ModularSynthProcessor::ModularSynthProcessor()
         voice.age = 0;
         voice.targetModuleLogicalId = 0;
     }
+    
+    // Start timer for deferred commitChanges()
+    startTimerHz(30);
 }
 
-ModularSynthProcessor::~ModularSynthProcessor() {}
+ModularSynthProcessor::~ModularSynthProcessor()
+{
+    stopTimer();
+}
+
+void ModularSynthProcessor::timerCallback()
+{
+    processQueuedCommit();
+}
 
 void ModularSynthProcessor::prepareToPlay(double sampleRate, int samplesPerBlock)
 {
@@ -264,61 +275,31 @@ void ModularSynthProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce:
         {
             const juce::ScopedLock lock(midiActivityLock);
             
-            // DEBUG: Log every processBlock attempt to check the buffer
-            static int checkCount = 0;
-            static int distributionCount = 0;
-            checkCount++;
-            
-            if (!currentBlockMidiMessages.empty())
+            // --- THREAD-SAFE FIX: Use the same atomic snapshot as the timing info loop ---
+            // This prevents race conditions when graph is being rebuilt
+            auto currentProcessors = activeAudioProcessors.load();
+            if (currentProcessors && !currentBlockMidiMessages.empty())
             {
-                distributionCount++;
-                
-                // Log only first few times to avoid spam
-                if (distributionCount <= 5)
+                int moduleCount = 0;
+                for (const auto& modulePtr : *currentProcessors)
                 {
-                    juce::Logger::writeToLog("[ModularSynth processBlock] CHECK #" + juce::String(checkCount) + 
-                                            " - Found " + juce::String(currentBlockMidiMessages.size()) + " messages to distribute");
+                    if (modulePtr != nullptr)
+                    {
+                        modulePtr->handleDeviceSpecificMidi(currentBlockMidiMessages);
+                        moduleCount++;
+                    }
                 }
                 
-                if (internalGraph)
+                // Merge device-aware MIDI into standard MidiBuffer for backward compatibility
+                for (const auto& msg : currentBlockMidiMessages)
                 {
-                    int nodeCount = internalGraph->getNodes().size();
-                    int moduleCount = 0;
-                    
-                    if (distributionCount <= 5)
-                    {
-                        juce::Logger::writeToLog("[ModularSynth] Distributing to " + juce::String(nodeCount) + " nodes");
-                    }
-                    
-                    for (auto* node : internalGraph->getNodes())
-                    {
-                        if (auto* module = dynamic_cast<ModuleProcessor*>(node->getProcessor()))
-                        {
-                            moduleCount++;
-                            module->handleDeviceSpecificMidi(currentBlockMidiMessages);
-                        }
-                    }
-                    
-                    if (distributionCount <= 5)
-                    {
-                        juce::Logger::writeToLog("[ModularSynth] Called handleDeviceSpecificMidi on " + 
-                                                juce::String(moduleCount) + " modules");
-                    }
-                    
-                    // Merge device-aware MIDI into standard MidiBuffer for backward compatibility
-                    for (const auto& msg : currentBlockMidiMessages)
-                    {
-                        midiMessages.addEvent(msg.message, 0);
-                    }
-                    
-                    // Clear for next block
-                    currentBlockMidiMessages.clear();
+                    midiMessages.addEvent(msg.message, 0);
                 }
-                else
-                {
-                    juce::Logger::writeToLog("[ModularSynth] WARNING: Have MIDI messages but internalGraph is null!");
-                }
+                
+                // Clear for next block
+                currentBlockMidiMessages.clear();
             }
+            // --- END OF THREAD-SAFE FIX ---
         }
         // === END MULTI-MIDI DISTRIBUTION ===
         
@@ -1103,19 +1084,75 @@ bool ModularSynthProcessor::connect(const NodeID& sourceNodeID, int sourceChanne
     return ok;
 }
 
-void ModularSynthProcessor::commitChanges()
+void ModularSynthProcessor::processQueuedCommit()
 {
-    const juce::ScopedLock lock (moduleLock);
+    // 1. Check if a commit is queued. If not, return immediately.
+    if (!commitQueued.load(std::memory_order_acquire))
+        return;
+
+    // 2. Reset the flag immediately.
+    commitQueued.store(false, std::memory_order_release);
+
+    juce::Logger::writeToLog("[GraphSync] Timer triggered. Applying queued commit.");
+
+    // 3. This is the entire body of our "Level 1.5" commitChanges() function:
+    
+    // Build snapshots OF THE NEW STATE while holding the lock.
+    auto newProcessors = std::make_shared<std::vector<std::shared_ptr<ModuleProcessor>>>();
+    
+    {
+        const juce::ScopedLock lock(moduleLock);
 #if JUCE_DEBUG
-    ScopedGraphMutation mutation(graphMutationDepth);
+        ScopedGraphMutation mutation(graphMutationDepth);
 #endif
+        
+        // Set logical IDs (this must be done inside the lock)
+        for (const auto& kv : logicalIdToModule)
+        {
+            if (ModuleProcessor* mp = getModuleForLogical(kv.first)) // This call is safe, getModuleForLogical is locked
+            {
+                mp->setLogicalId(kv.first);
+            }
+        }
+        
+        // Build the new processor list (FIX: No double lock needed - we're already inside the lock)
+        newProcessors->reserve(logicalIdToModule.size());
+        juce::Logger::writeToLog("[GraphSync] Building new processor list...");
+        for (const auto& pair : logicalIdToModule)
+        {
+            auto modIt = modules.find((juce::uint32)pair.second.nodeID.uid);
+            if (modIt != modules.end())
+            {
+                auto nodePtr = modIt->second; // This is a Node::Ptr (shared_ptr<Node>)
+                if (auto* proc = dynamic_cast<ModuleProcessor*>(nodePtr->getProcessor()))
+                {
+                    // Create a shared_ptr to the processor with a custom deleter that keeps the Node alive
+                    auto processor = std::shared_ptr<ModuleProcessor>(proc, [nodePtr](ModuleProcessor*) {
+                        // Custom deleter: just hold the nodePtr, don't actually delete the processor
+                        // When this shared_ptr is destroyed, the nodePtr will be released
+                    });
+                    newProcessors->push_back(processor);
+                    juce::Logger::writeToLog("  [+] Adding module L-ID " + juce::String(pair.first) + 
+                                           " (ptr: 0x" + juce::String::toHexString((int64_t)proc) + ")");
+                }
+            }
+        }
+        
+        // Update connection snapshot (must be done inside the lock)
+        updateConnectionSnapshot_Locked();
+    } 
+    
+    // RELEASE THE LOCK before running expensive operations.
+    juce::Logger::writeToLog("[GraphSync] Lock released. Calling rebuild().");
     internalGraph->rebuild();
     
     if (getSampleRate() > 0 && getBlockSize() > 0)
     {
+        juce::Logger::writeToLog("[GraphSync] Calling prepareToPlay().");
         internalGraph->prepareToPlay(getSampleRate(), getBlockSize());
     }
-
+    
+    // Logging (moved outside lock to avoid blocking audio thread)
     juce::Logger::writeToLog("--- Modular Synth Internal Patch State ---");
     juce::Logger::writeToLog("Num Nodes: " + juce::String(internalGraph->getNodes().size()));
     juce::Logger::writeToLog("Num Connections: " + juce::String(internalGraph->getConnections().size()));
@@ -1134,45 +1171,15 @@ void ModularSynthProcessor::commitChanges()
     }
     juce::Logger::writeToLog("-----------------------------------------");
     
-    for (const auto& kv : logicalIdToModule)
-    {
-        if (ModuleProcessor* mp = getModuleForLogical(kv.first))
-        {
-            mp->setLogicalId(kv.first);
-        }
-    }
-    
-    // --- FINAL THREAD-SAFE FIX: Rebuild the list of active processors for the audio thread ---
-    auto newProcessors = std::make_shared<std::vector<std::shared_ptr<ModuleProcessor>>>();
-    {
-        const juce::ScopedLock lock(moduleLock);
-        newProcessors->reserve(logicalIdToModule.size());
-        juce::Logger::writeToLog("[GraphSync] Building new processor list...");
-        for (const auto& pair : logicalIdToModule)
-        {
-            // Find the Node::Ptr from the modules map
-            auto modIt = modules.find((juce::uint32)pair.second.nodeID.uid);
-            if (modIt != modules.end())
-            {
-                auto nodePtr = modIt->second; // This is a Node::Ptr (shared_ptr<Node>)
-                if (auto* proc = dynamic_cast<ModuleProcessor*>(nodePtr->getProcessor()))
-                {
-                    // Create a shared_ptr to the processor with a custom deleter that keeps the Node alive
-                    auto processor = std::shared_ptr<ModuleProcessor>(proc, [nodePtr](ModuleProcessor*) {
-                        // Custom deleter: just hold the nodePtr, don't actually delete the processor
-                        // When this shared_ptr is destroyed, the nodePtr will be released
-                    });
-                    newProcessors->push_back(processor);
-                    juce::Logger::writeToLog("  [+] Adding module L-ID " + juce::String(pair.first) + 
-                                           " (ptr: 0x" + juce::String::toHexString((int64_t)proc) + ")");
-                }
-            }
-        }
-    }
+    // Atomically swap in the new processor list for the audio thread to use.
     activeAudioProcessors.store(newProcessors);
     juce::Logger::writeToLog("[GraphSync] Updated active processor list for audio thread with " + juce::String(newProcessors->size()) + " modules.");
+}
 
-    updateConnectionSnapshot_Locked();
+void ModularSynthProcessor::commitChanges()
+{
+    // Lightweight, non-blocking trigger: just set the flag
+    commitQueued.store(true, std::memory_order_release);
 }
 
 void ModularSynthProcessor::clearAll()

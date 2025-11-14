@@ -8746,10 +8746,52 @@ void ImGuiNodeEditorComponent::drawInsertNodeOnLinkPopup()
             {
                 auto& app = PresetCreatorApplication::getApp();
                 auto& knownPluginList = app.getKnownPluginList();
+                auto& formatManager = app.getPluginFormatManager();
                 
-                for (const auto& desc : knownPluginList.getTypes())
+                // Get the VST folder at exe position
+                juce::File exeDir = juce::File::getSpecialLocation(juce::File::currentApplicationFile).getParentDirectory();
+                juce::File vstFolder = exeDir.getChildFile("VST");
+                
+                // Get all plugins and filter/deduplicate
+                const auto& allPlugins = knownPluginList.getTypes();
+                
+                // Filter to only plugins in the VST folder and deduplicate
+                std::vector<juce::PluginDescription> filteredPlugins;
+                std::set<juce::String> seenPlugins; // Use name + manufacturer as unique key
+                
+                for (const auto& desc : allPlugins)
                 {
-                    if (ImGui::MenuItem(desc.name.toRawUTF8()))
+                    // Check if plugin is in the VST folder at exe position
+                    juce::File pluginFile(desc.fileOrIdentifier);
+                    if (!pluginFile.existsAsFile())
+                        continue;
+                        
+                    juce::File pluginDir = pluginFile.getParentDirectory();
+                    if (!pluginDir.isAChildOf(vstFolder) && pluginDir != vstFolder)
+                        continue;
+                    
+                    // Create unique key for deduplication (name + manufacturer)
+                    juce::String uniqueKey = desc.name + "|" + desc.manufacturerName;
+                    if (seenPlugins.find(uniqueKey) != seenPlugins.end())
+                        continue; // Skip duplicate
+                    
+                    seenPlugins.insert(uniqueKey);
+                    filteredPlugins.push_back(desc);
+                }
+                
+                // Use PushID to create unique IDs for each plugin
+                ImGui::PushID("InsertVSTList");
+                int pluginIndex = 0;
+                for (const auto& desc : filteredPlugins)
+                {
+                    ImGui::PushID(pluginIndex++);
+                    juce::String menuLabel = desc.name;
+                    if (desc.manufacturerName.isNotEmpty())
+                    {
+                        menuLabel += " (" + desc.manufacturerName + ")";
+                    }
+                    
+                    if (ImGui::MenuItem(menuLabel.toRawUTF8()))
                     {
                         if (isMultiInsert)
                         {
@@ -8770,7 +8812,16 @@ void ImGuiNodeEditorComponent::drawInsertNodeOnLinkPopup()
                         ImGui::Text("Version: %s", desc.version.toRawUTF8());
                         ImGui::EndTooltip();
                     }
+                    
+                    ImGui::PopID(); // Pop plugin index ID
                 }
+                ImGui::PopID(); // Pop InsertVSTList ID
+                
+                if (filteredPlugins.empty())
+                {
+                    ImGui::TextDisabled("No plugins in VST folder");
+                }
+                
                 ImGui::EndMenu();
             }
         }
@@ -8847,14 +8898,32 @@ void ImGuiNodeEditorComponent::insertNodeOnLink(const juce::String& nodeType, co
     auto& knownPluginList = app.getKnownPluginList();
     bool isVst = false;
     
+    // Get the VST folder at exe position for filtering
+    juce::File exeDir = juce::File::getSpecialLocation(juce::File::currentApplicationFile).getParentDirectory();
+    juce::File vstFolder = exeDir.getChildFile("VST");
+    
     for (const auto& desc : knownPluginList.getTypes())
     {
         if (desc.name == nodeType)
         {
-            // This is a VST plugin - use addVstModule
-            newNodeId = synth->addVstModule(app.getPluginFormatManager(), desc);
-            isVst = true;
-            break;
+            // Check if plugin is in the VST folder at exe position
+            juce::File pluginFile(desc.fileOrIdentifier);
+            if (pluginFile.existsAsFile())
+            {
+                juce::File pluginDir = pluginFile.getParentDirectory();
+                if (pluginDir.isAChildOf(vstFolder) || pluginDir == vstFolder)
+                {
+                    // This is a VST plugin - use addVstModule
+                    newNodeId = synth->addVstModule(app.getPluginFormatManager(), desc);
+                    if (newNodeId.uid == 0)
+                    {
+                        juce::Logger::writeToLog("[InsertNode] ERROR: Failed to create VST module: " + desc.name);
+                        return; // Don't disconnect if node creation failed
+                    }
+                    isVst = true;
+                    break;
+                }
+            }
         }
     }
     
@@ -8862,6 +8931,11 @@ void ImGuiNodeEditorComponent::insertNodeOnLink(const juce::String& nodeType, co
     {
         // Regular module - use addModule
         newNodeId = synth->addModule(nodeType);
+        if (newNodeId.uid == 0)
+        {
+            juce::Logger::writeToLog("[InsertNode] ERROR: Failed to create module: " + nodeType);
+            return; // Don't disconnect if node creation failed
+        }
     }
     
     juce::String nodeName = isVst ? nodeType : juce::String(nodeType).replaceCharacter('_', ' ');
@@ -8882,6 +8956,12 @@ void ImGuiNodeEditorComponent::insertNodeOnLink(const juce::String& nodeType, co
     }
     
     auto newNodeLid = synth->getLogicalIdForNode(newNodeId);
+    if (newNodeLid == 0)
+    {
+        juce::Logger::writeToLog("[InsertNode] ERROR: Failed to get logical ID for new node");
+        return; // Don't disconnect if we can't get logical ID
+    }
+    
     pendingNodeScreenPositions[(int)newNodeLid] = position;
 
     if (!linkInfo.srcPin.isMod)
@@ -8896,7 +8976,7 @@ void ImGuiNodeEditorComponent::insertNodeOnLink(const juce::String& nodeType, co
         ? synth->getOutputNodeID() 
         : synth->getNodeIdForLogical(linkInfo.dstPin.logicalId);
 
-    // 3. Disconnect the Original Link
+    // 3. Disconnect the Original Link (only after node is confirmed created)
     synth->disconnect(originalSrcNodeId, linkInfo.srcPin.channel, originalDstNodeId, linkInfo.dstPin.channel);
 
     // 4. Configure newly inserted node if necessary (e.g., MapRange)
@@ -8939,19 +9019,42 @@ void ImGuiNodeEditorComponent::insertNodeOnLinkStereo(const juce::String& nodeTy
     auto& knownPluginList = app.getKnownPluginList();
     bool isVst = false;
     
+    // Get the VST folder at exe position for filtering
+    juce::File exeDir = juce::File::getSpecialLocation(juce::File::currentApplicationFile).getParentDirectory();
+    juce::File vstFolder = exeDir.getChildFile("VST");
+    
     for (const auto& desc : knownPluginList.getTypes())
     {
         if (desc.name == nodeType)
         {
-            newNodeId = synth->addVstModule(app.getPluginFormatManager(), desc);
-            isVst = true;
-            break;
+            // Check if plugin is in the VST folder at exe position
+            juce::File pluginFile(desc.fileOrIdentifier);
+            if (pluginFile.existsAsFile())
+            {
+                juce::File pluginDir = pluginFile.getParentDirectory();
+                if (pluginDir.isAChildOf(vstFolder) || pluginDir == vstFolder)
+                {
+                    newNodeId = synth->addVstModule(app.getPluginFormatManager(), desc);
+                    if (newNodeId.uid == 0)
+                    {
+                        juce::Logger::writeToLog("[InsertNode] ERROR: Failed to create VST module: " + desc.name);
+                        return; // Don't disconnect if node creation failed
+                    }
+                    isVst = true;
+                    break;
+                }
+            }
         }
     }
     
     if (!isVst)
     {
         newNodeId = synth->addModule(nodeType);
+        if (newNodeId.uid == 0)
+        {
+            juce::Logger::writeToLog("[InsertNode] ERROR: Failed to create module: " + nodeType);
+            return; // Don't disconnect if node creation failed
+        }
     }
     
     juce::String nodeName = isVst ? nodeType : juce::String(nodeType).replaceCharacter('_', ' ');
@@ -8972,6 +9075,12 @@ void ImGuiNodeEditorComponent::insertNodeOnLinkStereo(const juce::String& nodeTy
     }
     
     auto newNodeLid = synth->getLogicalIdForNode(newNodeId);
+    if (newNodeLid == 0)
+    {
+        juce::Logger::writeToLog("[InsertNode] ERROR: Failed to get logical ID for new stereo node");
+        return; // Don't disconnect if we can't get logical ID
+    }
+    
     pendingNodeScreenPositions[(int)newNodeLid] = position;
 
     // 2. Get Original Connection Points for LEFT cable (first cable)
@@ -8986,7 +9095,7 @@ void ImGuiNodeEditorComponent::insertNodeOnLinkStereo(const juce::String& nodeTy
         ? synth->getOutputNodeID() 
         : synth->getNodeIdForLogical(linkRight.dstPin.logicalId);
 
-    // 4. Disconnect BOTH Original Links (using their actual source/dest channels)
+    // 4. Disconnect BOTH Original Links (only after node is confirmed created)
     synth->disconnect(leftSrcNodeId, linkLeft.srcPin.channel, leftDstNodeId, linkLeft.dstPin.channel);
     synth->disconnect(rightSrcNodeId, linkRight.srcPin.channel, rightDstNodeId, linkRight.dstPin.channel);
 
@@ -9031,20 +9140,51 @@ void ImGuiNodeEditorComponent::insertNodeBetween(const juce::String& nodeType, c
     auto& knownPluginList = app.getKnownPluginList();
     bool isVst = false;
 
+    // Get the VST folder at exe position for filtering
+    juce::File exeDir = juce::File::getSpecialLocation(juce::File::currentApplicationFile).getParentDirectory();
+    juce::File vstFolder = exeDir.getChildFile("VST");
+
     for (const auto& desc : knownPluginList.getTypes())
     {
         if (desc.name == nodeType)
         {
-            newNodeId = synth->addVstModule(app.getPluginFormatManager(), desc);
-            isVst = true;
-            break;
+            // Check if plugin is in the VST folder at exe position
+            juce::File pluginFile(desc.fileOrIdentifier);
+            if (pluginFile.existsAsFile())
+            {
+                juce::File pluginDir = pluginFile.getParentDirectory();
+                if (pluginDir.isAChildOf(vstFolder) || pluginDir == vstFolder)
+                {
+                    newNodeId = synth->addVstModule(app.getPluginFormatManager(), desc);
+                    if (newNodeId.uid == 0)
+                    {
+                        juce::Logger::writeToLog("[InsertNode] ERROR: Failed to create VST module: " + desc.name);
+                        return; // Don't disconnect if node creation failed
+                    }
+                    isVst = true;
+                    break;
+                }
+            }
         }
     }
 
     if (! isVst)
+    {
         newNodeId = synth->addModule(nodeType);
+        if (newNodeId.uid == 0)
+        {
+            juce::Logger::writeToLog("[InsertNode] ERROR: Failed to create module: " + nodeType);
+            return; // Don't disconnect if node creation failed
+        }
+    }
 
     auto newNodeLid = synth->getLogicalIdForNode(newNodeId);
+    if (newNodeLid == 0)
+    {
+        juce::Logger::writeToLog("[InsertNode] ERROR: Failed to get logical ID for new node");
+        return; // Don't disconnect if we can't get logical ID
+    }
+    
     pendingNodePositions[(int)newNodeLid] = newNodePos;
 
     if (!srcPin.isMod)
