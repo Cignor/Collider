@@ -1,6 +1,7 @@
 #pragma once
 
 #include "ModuleProcessor.h"
+#include <juce_dsp/juce_dsp.h>
 
 class BitCrusherModuleProcessor : public ModuleProcessor
 {
@@ -9,10 +10,12 @@ public:
     static constexpr auto paramIdBitDepth = "bit_depth";
     static constexpr auto paramIdSampleRate = "sample_rate";
     static constexpr auto paramIdMix = "mix";
+    static constexpr auto paramIdAntiAlias = "antiAlias";
     
     // Virtual modulation target IDs (no APVTS parameters required)
     static constexpr auto paramIdBitDepthMod = "bit_depth_mod";
     static constexpr auto paramIdSampleRateMod = "sample_rate_mod";
+    static constexpr auto paramIdAntiAliasMod = "antiAlias_mod";
 
     BitCrusherModuleProcessor();
     ~BitCrusherModuleProcessor() override = default;
@@ -46,12 +49,17 @@ private:
     std::atomic<float>* bitDepthParam { nullptr };
     std::atomic<float>* sampleRateParam { nullptr };
     std::atomic<float>* mixParam { nullptr };
+    std::atomic<float>* antiAliasParam { nullptr };
     std::atomic<float>* relativeBitDepthModParam { nullptr };
     std::atomic<float>* relativeSampleRateModParam { nullptr };
 
     // Smoothed values to prevent zipper noise
     juce::SmoothedValue<float> mBitDepthSm;
     juce::SmoothedValue<float> mSampleRateSm;
+
+    // Anti-aliasing filters (stereo)
+    juce::dsp::StateVariableTPTFilter<float> mAntiAliasFilterL;
+    juce::dsp::StateVariableTPTFilter<float> mAntiAliasFilterR;
 
     // Sample-and-hold decimator state
     float mSrCounterL = 0.0f;

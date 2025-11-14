@@ -91,7 +91,6 @@ void populateModuleDescriptions()
     descriptions["video_file_loader"]   = "Loads and plays a video file, publishes it as a source for vision processing modules.";
     descriptions["video_fx"]            = "Applies real-time video effects (brightness, contrast, saturation, blur, sharpen, etc.) to video sources, chainable.";
     descriptions["movement_detector"]   = "Analyzes video source for motion via optical flow or background subtraction, outputs motion data as CV.";
-    descriptions["human_detector"]      = "Detects faces or bodies in video source via Haar Cascades or HOG, outputs position and size as CV.";
     descriptions["pose_estimator"]      = "Uses OpenPose to detect 15 body keypoints and outputs their positions as CV signals.";
     descriptions["hand_tracker"]        = "Detects 21 hand keypoints and outputs their X/Y positions as CV (42 channels).";
     descriptions["face_tracker"]        = "Detects 70 facial landmarks and outputs X/Y positions as CV (140 channels).";
@@ -309,7 +308,7 @@ void populatePinDatabase()
     );
     db["bit_crusher"] = ModulePinInfo(
         NodeWidth::Small,
-        { AudioPin("In L", 0, PinDataType::Audio), AudioPin("In R", 1, PinDataType::Audio), AudioPin("Bit Depth Mod", 2, PinDataType::CV), AudioPin("Sample Rate Mod", 3, PinDataType::CV) },
+        { AudioPin("In L", 0, PinDataType::Audio), AudioPin("In R", 1, PinDataType::Audio), AudioPin("Bit Depth Mod", 2, PinDataType::CV), AudioPin("Sample Rate Mod", 3, PinDataType::CV), AudioPin("Anti-Alias Mod", 4, PinDataType::Gate) },
         { AudioPin("Out L", 0, PinDataType::Audio), AudioPin("Out R", 1, PinDataType::Audio) },
         {}
     );
@@ -1036,19 +1035,6 @@ db["random"] = ModulePinInfo(
             AudioPin("Motion X", 0, PinDataType::CV), AudioPin("Motion Y", 1, PinDataType::CV),
             AudioPin("Amount", 2, PinDataType::CV), AudioPin("Trigger", 3, PinDataType::Gate),
             AudioPin("Video Out", 0, PinDataType::Video) // Bus 1
-        },
-        {}
-    );
-
-    db["human_detector"] = ModulePinInfo(
-        NodeWidth::Exception,
-        { AudioPin("Source In", 0, PinDataType::Video) },
-        {
-            AudioPin("X", 0, PinDataType::CV), AudioPin("Y", 1, PinDataType::CV),
-            AudioPin("Width", 2, PinDataType::CV), AudioPin("Height", 3, PinDataType::CV),
-            AudioPin("Gate", 4, PinDataType::Gate),
-            AudioPin("Video Out", 0, PinDataType::Video),   // Bus 1
-            AudioPin("Cropped Out", 1, PinDataType::Video) // Bus 2
         },
         {}
     );

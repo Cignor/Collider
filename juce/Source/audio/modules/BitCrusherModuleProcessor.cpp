@@ -19,6 +19,9 @@ juce::AudioProcessorValueTreeState::ParameterLayout BitCrusherModuleProcessor::c
     // Mix: 0.0f to 1.0f (linear, like DriveModuleProcessor)
     params.push_back(std::make_unique<juce::AudioParameterFloat>(paramIdMix, "Mix", 0.0f, 1.0f, 1.0f));
     
+    // Anti-aliasing filter
+    params.push_back(std::make_unique<juce::AudioParameterBool>(paramIdAntiAlias, "Anti-Aliasing", true));
+    
     // Relative modulation parameters
     params.push_back(std::make_unique<juce::AudioParameterBool>("relativeBitDepthMod", "Relative Bit Depth Mod", true));
     params.push_back(std::make_unique<juce::AudioParameterBool>("relativeSampleRateMod", "Relative Sample Rate Mod", true));
@@ -28,13 +31,14 @@ juce::AudioProcessorValueTreeState::ParameterLayout BitCrusherModuleProcessor::c
 
 BitCrusherModuleProcessor::BitCrusherModuleProcessor()
     : ModuleProcessor(BusesProperties()
-          .withInput("Audio In", juce::AudioChannelSet::discreteChannels(4), true) // 0-1: Audio, 2: BitDepth Mod, 3: SampleRate Mod
+          .withInput("Audio In", juce::AudioChannelSet::discreteChannels(5), true) // 0-1: Audio, 2: BitDepth Mod, 3: SampleRate Mod, 4: AntiAlias Mod
           .withOutput("Audio Out", juce::AudioChannelSet::stereo(), true)),
       apvts(*this, nullptr, "BitCrusherParams", createParameterLayout())
 {
     bitDepthParam = apvts.getRawParameterValue(paramIdBitDepth);
     sampleRateParam = apvts.getRawParameterValue(paramIdSampleRate);
     mixParam = apvts.getRawParameterValue(paramIdMix);
+    antiAliasParam = apvts.getRawParameterValue(paramIdAntiAlias);
     relativeBitDepthModParam = apvts.getRawParameterValue("relativeBitDepthMod");
     relativeSampleRateModParam = apvts.getRawParameterValue("relativeSampleRateMod");
 
@@ -53,6 +57,14 @@ void BitCrusherModuleProcessor::prepareToPlay(double sampleRate, int samplesPerB
     // Set smoothing time for parameters (10ms)
     mBitDepthSm.reset(sampleRate, 0.01);
     mSampleRateSm.reset(sampleRate, 0.01);
+    
+    // Prepare anti-aliasing filters
+    juce::dsp::ProcessSpec specL { sampleRate, (juce::uint32)samplesPerBlock, 1 };
+    juce::dsp::ProcessSpec specR { sampleRate, (juce::uint32)samplesPerBlock, 1 };
+    mAntiAliasFilterL.prepare(specL);
+    mAntiAliasFilterR.prepare(specR);
+    mAntiAliasFilterL.setType(juce::dsp::StateVariableTPTFilterType::lowpass);
+    mAntiAliasFilterR.setType(juce::dsp::StateVariableTPTFilterType::lowpass);
 }
 
 void BitCrusherModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midi)
@@ -77,9 +89,12 @@ void BitCrusherModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
     // Use virtual _mod IDs as per BestPracticeNodeProcessor.md
     const bool isBitDepthMod = isParamInputConnected(paramIdBitDepthMod);
     const bool isSampleRateMod = isParamInputConnected(paramIdSampleRateMod);
+    const bool isAntiAliasMod = isParamInputConnected(paramIdAntiAliasMod);
     const float* bitDepthCV = isBitDepthMod && inBus.getNumChannels() > 2 ? inBus.getReadPointer(2) : nullptr;
     const float* sampleRateCV = isSampleRateMod && inBus.getNumChannels() > 3 ? inBus.getReadPointer(3) : nullptr;
+    const float* antiAliasCV = isAntiAliasMod && inBus.getNumChannels() > 4 ? inBus.getReadPointer(4) : nullptr;
     
+    const bool baseAntiAlias = antiAliasParam != nullptr && antiAliasParam->load() > 0.5f;
     const bool relativeBitDepthMode = relativeBitDepthModParam != nullptr && relativeBitDepthModParam->load() > 0.5f;
     const bool relativeSampleRateMode = relativeSampleRateModParam != nullptr && relativeSampleRateModParam->load() > 0.5f;
 
@@ -125,6 +140,14 @@ void BitCrusherModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
     // 1. Make a copy of the original (dry) signal.
     tempBuffer.makeCopyOf(outBus);
 
+    // Create temporary single-sample buffers for anti-aliasing filter processing (per channel)
+    juce::AudioBuffer<float> sampleBufferL(1, 1);
+    juce::AudioBuffer<float> sampleBufferR(1, 1);
+    juce::dsp::AudioBlock<float> blockL(sampleBufferL);
+    juce::dsp::AudioBlock<float> blockR(sampleBufferR);
+    juce::dsp::ProcessContextReplacing<float> contextL(blockL);
+    juce::dsp::ProcessContextReplacing<float> contextR(blockR);
+
     // Process each channel
     for (int ch = 0; ch < numChannels; ++ch)
     {
@@ -134,6 +157,11 @@ void BitCrusherModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
         // Per-channel decimator state
         float& srCounter = (ch == 0) ? mSrCounterL : mSrCounterR;
         float& lastSample = (ch == 0) ? mLastSampleL : mLastSampleR;
+        
+        // Select the correct anti-aliasing filter and context for this channel
+        auto& antiAliasFilter = (ch == 0) ? mAntiAliasFilterL : mAntiAliasFilterR;
+        auto& sampleBuffer = (ch == 0) ? sampleBufferL : sampleBufferR;
+        auto& context = (ch == 0) ? contextL : contextR;
         
         for (int i = 0; i < numSamples; ++i)
         {
@@ -177,12 +205,31 @@ void BitCrusherModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
             mSampleRateSm.setTargetValue(sampleRate);
             sampleRate = mSampleRateSm.getNextValue();
             
-            // Sample-and-hold decimation
+            // Determine effective anti-aliasing state for this sample
+            bool isAntiAliasOn = baseAntiAlias;
+            if (isAntiAliasMod && antiAliasCV != nullptr) {
+                isAntiAliasOn = (antiAliasCV[i] > 0.5f);
+            }
+            
+            // Get the sample *before* decimation
+            float sampleToDecimate = data[i];
+            
+            // Update the anti-aliasing filter cutoff based on the *current* smoothed sample rate
+            antiAliasFilter.setCutoffFrequency(sampleRate * (getSampleRate() * 0.45f));
+            
+            // Conditionally filter the sample using ProcessContextReplacing (like VCFModuleProcessor)
+            if (isAntiAliasOn) {
+                sampleBuffer.setSample(0, 0, sampleToDecimate);
+                antiAliasFilter.process(context);
+                sampleToDecimate = sampleBuffer.getSample(0, 0);
+            }
+            
+            // Now, perform the sample-and-hold on the (potentially filtered) sample
             srCounter += sampleRate;
             if (srCounter >= 1.0f)
             {
                 srCounter -= 1.0f;
-                lastSample = data[i];
+                lastSample = sampleToDecimate;
             }
             float decimatedSample = lastSample;
             
@@ -201,6 +248,7 @@ void BitCrusherModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
             if ((i & 0x3F) == 0) {
                 setLiveParamValue("bit_depth_live", bitDepth);
                 setLiveParamValue("sample_rate_live", sampleRate);
+                setLiveParamValue("antiAlias_live", isAntiAliasOn ? 1.0f : 0.0f);
             }
         }
     }
@@ -220,6 +268,7 @@ bool BitCrusherModuleProcessor::getParamRouting(const juce::String& paramId, int
     // Use virtual _mod IDs as per BestPracticeNodeProcessor.md
     if (paramId == paramIdBitDepthMod) { outChannelIndexInBus = 2; return true; }
     if (paramId == paramIdSampleRateMod) { outChannelIndexInBus = 3; return true; }
+    if (paramId == paramIdAntiAliasMod) { outChannelIndexInBus = 4; return true; }
     return false;
 }
 
@@ -231,6 +280,7 @@ juce::String BitCrusherModuleProcessor::getAudioInputLabel(int channel) const
         case 1: return "In R";
         case 2: return "Bit Depth Mod";
         case 3: return "Sample Rate Mod";
+        case 4: return "Anti-Alias Mod";
         default: return juce::String("In ") + juce::String(channel + 1);
     }
 }
@@ -310,6 +360,28 @@ void BitCrusherModuleProcessor::drawParametersInNode(float itemWidth, const std:
     HelpMarker("Dry/wet mix (0-1)\n0 = clean, 1 = fully crushed");
 
     ImGui::Spacing();
+
+    // Anti-Aliasing
+    // Use virtual _mod ID to check for modulation as per BestPracticeNodeProcessor.md
+    bool isAntiAliasModulated = isParamModulated(paramIdAntiAliasMod);
+    // Get live value if modulated, otherwise use base parameter value
+    bool antiAlias = isAntiAliasModulated
+        ? (getLiveParamValueFor(paramIdAntiAliasMod, "antiAlias_live", antiAliasParam != nullptr && antiAliasParam->load() > 0.5f ? 1.0f : 0.0f) > 0.5f)
+        : (antiAliasParam != nullptr && antiAliasParam->load() > 0.5f);
+    if (isAntiAliasModulated) {
+        ImGui::BeginDisabled();
+    }
+    if (ImGui::Checkbox("Anti-Aliasing", &antiAlias)) {
+        if (!isAntiAliasModulated) {
+            if (auto* p = dynamic_cast<juce::AudioParameterBool*>(ap.getParameter(paramIdAntiAlias))) *p = antiAlias;
+        }
+    }
+    if (ImGui::IsItemDeactivatedAfterEdit()) { onModificationEnded(); }
+    if (isAntiAliasModulated) { ImGui::EndDisabled(); ImGui::SameLine(); ImGui::TextUnformatted("(mod)"); }
+    ImGui::SameLine();
+    HelpMarker("ON: Applies a low-pass filter before decimation to reduce aliasing.\nOFF: Disables the filter for a harsher, classic aliased sound.");
+
+    ImGui::Spacing();
     ImGui::Separator();
     ImGui::Spacing();
 
@@ -355,6 +427,8 @@ void BitCrusherModuleProcessor::drawIoPins(const NodePinHelpers& helpers)
         helpers.drawAudioInputPin("Bit Depth Mod", getChannelIndexInProcessBlockBuffer(true, busIdx, chanInBus));
     if (getParamRouting(paramIdSampleRateMod, busIdx, chanInBus))
         helpers.drawAudioInputPin("Sample Rate Mod", getChannelIndexInProcessBlockBuffer(true, busIdx, chanInBus));
+    if (getParamRouting(paramIdAntiAliasMod, busIdx, chanInBus))
+        helpers.drawAudioInputPin("Anti-Alias Mod", getChannelIndexInProcessBlockBuffer(true, busIdx, chanInBus));
     
     helpers.drawAudioOutputPin("Out L", 0);
     helpers.drawAudioOutputPin("Out R", 1);

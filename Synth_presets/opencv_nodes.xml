@@ -1,0 +1,148 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<ModularSynthPreset version="1" bpm="120.0">
+  <modules>
+    <module logicalId="3" type="movement_detector">
+      <params>
+        <MovementParams>
+          <PARAM id="maxFeatures" value="100.0"/>
+          <PARAM id="mode" value="0.0"/>
+          <PARAM id="noiseReduction" value="0.0"/>
+          <PARAM id="sensitivity" value="0.09999999403953552"/>
+          <PARAM id="useGpu" value="1.0"/>
+          <PARAM id="zoomLevel" value="1.0"/>
+        </MovementParams>
+      </params>
+    </module>
+    <module logicalId="5" type="video_file_loader">
+      <params>
+        <VideoFileLoaderParams>
+          <PARAM id="engine" value="1.0"/>
+          <PARAM id="in" value="0.0"/>
+          <PARAM id="loop" value="1.0"/>
+          <PARAM id="out" value="1.0"/>
+          <PARAM id="speed" value="1.0"/>
+          <PARAM id="sync" value="1.0"/>
+          <PARAM id="zoomLevel" value="1.0"/>
+        </VideoFileLoaderParams>
+      </params>
+      <extra>
+        <VideoFileLoaderState videoFilePath="C:\Users\PIMP-TOWERPRIMUS\Downloads\Rover. Shuffle_cuttingshapes.mp4"/>
+      </extra>
+    </module>
+    <module logicalId="11" type="pose_estimator">
+      <params>
+        <PoseEstimatorParams>
+          <PARAM id="confidence" value="0.05999999865889549"/>
+          <PARAM id="drawSkeleton" value="1.0"/>
+          <PARAM id="model" value="2.0"/>
+          <PARAM id="quality" value="1.0"/>
+          <PARAM id="sourceId" value="0.0"/>
+          <PARAM id="useGpu" value="1.0"/>
+          <PARAM id="zoomLevel" value="0.0"/>
+        </PoseEstimatorParams>
+      </params>
+      <extra>
+        <PoseEstimatorState assetsPath=""/>
+      </extra>
+    </module>
+    <module logicalId="13" type="vco">
+      <params>
+        <VCOParams>
+          <PARAM id="frequency" value="440.0"/>
+          <PARAM id="portamento" value="0.0"/>
+          <PARAM id="relative_freq_mod" value="1.0"/>
+          <PARAM id="waveform" value="0.0"/>
+        </VCOParams>
+      </params>
+    </module>
+    <module logicalId="15" type="mixer">
+      <params>
+        <MixerParams>
+          <PARAM id="crossfade" value="0.0"/>
+          <PARAM id="gain" value="0.0"/>
+          <PARAM id="pan" value="0.0"/>
+        </MixerParams>
+      </params>
+    </module>
+    <module logicalId="17" type="vco">
+      <params>
+        <VCOParams>
+          <PARAM id="frequency" value="440.0"/>
+          <PARAM id="portamento" value="0.0"/>
+          <PARAM id="relative_freq_mod" value="1.0"/>
+          <PARAM id="waveform" value="0.0"/>
+        </VCOParams>
+      </params>
+    </module>
+    <module logicalId="19" type="Outer Space">
+      <extra>
+        <VstHostState fileOrIdentifier="H:\0000_CODE\01_collider_pyo\juce\build-ninja-release\PresetCreatorApp_artefacts\Release\VST\OuterSpace_x64.vst3"
+                      name="Outer Space" manufacturerName="AudioThing" version="1.3.3"
+                      pluginFormatName="VST3" pluginState="2147.VMjLgnEB...O+fWarAhckI2bo8la8HRLt.iHfTlai8FYo41Y8HRUTYTK3HxO9.BOVMEUy.Ea0cVZtMEcgQWY9vSRC8Vav8lak4Fc9DSMxTiKV0zQicUPt3hKl4hKt3BTt3hKt3hKLoGVzMGQt3BUPIiQIoGTtEjKt3BR1MEUMcDUtPjctLjKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKtTDUpU0PIMERtPkKt3hc48zLvXTXlg0UYgWSWoUczX0SnQTZKYGRBgzZzDCV0EkUZQ2XV8DZTUTUFAiPNg1Mo8jY1k2TvD0UYgWSEI1YMYUVk0TUQQUTUIkSioGUlgTUYYWUVgkdIUEV5UULQIGNrg0Y2Y0Sn4RZKEiXCwjctLDS1QTZMEiYS4TdtLDSvfjPHIUUFI1ZEYzXRUjQis1YTk0YQYES3fjPLQGV40jctLDS14xTLECVC4DMLMDS1QUZHYFRUkkcUYEV5kTUXoWUFI0ZEYTV3oWZHY2Ln0jLtLDS14xPLcGVo0zLpkGS14xTMglKnQ0ZAcUVmEUaTcVTWkERUYEVp0zTOglKosTLhMDS14xPLYGQo0TLlMkS44xPLACRBgzTq0VXoASZHY2LBwDZtHkTzE0UYQWSWokdqc0Sn4RZKYmZCwjctLDS14RdLAiXo0DdhMjSwnVZHYFU5gka3vVU0cmUiMWUV8DZtj1R2gzTNQiZS4DMpMUS3wzTLECRC4jdHIDRMgiQYsFLogjcyfWSvn1TNQiZS4DMtLTSwvTZLACVC4DZtfWU0MVaQIWUGMldUwlX3fjPLQmYS4DMpMkSznVdMECQS0zLDMTS3QTZHYFTUgkcUYTUzDzUYgCRBwDctjFRl4xZhsVUTElcmYEV4sVLhgCRBwDcLMESzn1TNQiZS4DdlMTSx.0PMgGVogjYHQEV40zUOglKosTdDMkSzn1TNQiZowzLPkWS5AUZLECRBgDUIcUVncmUYgCRBwDchkWSzn1TNQiZ40zcLMjSzHVdMYGUogjYHUUVwTEahgVVvDlbUcUXqASZHY2LB4zcpMkSzn1TNQCRC4jdhMTS5gTZMglKBE0ZMYEVz.SZHc2LBwDZtf1T0sVLhsFLogjcyHTSw3xPLYmKCwjclkGS5AUZMAiK4wDZtf1T0sVLhsVUpEVLUYTX0EzUYgCRRwDctjFRlolZgYWUGMlU3XTXv.iUYgCRBwDchMkS14xPLYmKC4zctjVS3wzTLEiZogjY2P0X5EzUioWVvDlbUcUXqASZHY2LB4DMpMkSzn1TNICVSwDLlMES5gzTLglK3U0ZQIyTzcmUjgCRRwDctjFRlwTUYQWTV8DZDk1R1gjPHMUTWkEdUESX3fjPLQmKogjYHQEY1UTLhkGLogjcyHDSn4BZUU2cVM1bUYjTqUjQYcmdogjcyHUSn4BZUU2cVM1bUYjTqUjQYgmdogjcyHUSn4BZUU2cVM1bUYjTqUjQYkmdogjcyHUSn4hPTcFMFI0ZEYTV2oWZHY2LR0DZtHDUmQiQRsVQFkEd5kFR1MiTMglKBQ0YzXjTqUjQYkmdogjcyHUSn4hPSU2Xx.ELQc0Sn4RZKoGSS4DMpMkSzfUdMMCQ4wjdpMESyfjPHgzZw.ELQc0Sn4RZKgmXS4DMpMkSz.0TLAiY40jdPMjS2gjPHQTUxfUbqwVXsASZHY2LB4TLtLDS14xPLcGT4wjcTMES2AUdMglKnQ0YQcUVBUjQgI2ZwHldqECV3fjPLQmZ4wjctLDS14xPLICQS0DdTMUSx.UZHYFVUgEdqYEVncmUYMUPWk0ZQY0Sn4RZKYGSS4DMpMkSzn1TNcmKS0DMLMDS4wTZHYFSEM1ZIcUV0EEUYIWQVQFNHIDSzI1PLQiZS4DMpkWSyP0PMgGSowjLpkFRlMidg8VSWkEU3vVXqASZHY2L30DMtLDS14xPLgGQC0DLhkVSxfzTLglKBQEdUYETyEzUOgFQosjcHIDRMUkQisVRxD0YqwVX3fjPLQGSSwDMpMkSzn1TNgmYC0jLPMTS3gUZHYFRUkULUwlXnEUUjYWUV8DZtj1R1gjPHwzZVE1aQcUV3ASZHYGRBgTS3vVX0ASZHYGRBgDREU0SnQTZHYFUTQEdUw1XqkTaXgCRBwDZtf2TwTEahkWQVElc2YUV3fjTLglKRM0ZQcUV3ASZHcGRBgjUUwlX4sVLgQGLogzcyfGSzwTZHYlKqI1ZMcUV5ASZHMzaCcUUMcUV30zQWAUUsgkbqECVhEkdgkVUWE1ZzXzX4cWUPASTVoUcQUjVuQSLYIVPqI1ZMcUV50zQW8TUGM1ZIICU1UTLXs1cUIEcqYzXzQjQiYWRBgDTEwlXmAiUYoWUrIFS3DCVwASZHglKBU0YAcUVVUjQgASUV8DZtjFRlAUUXYWUFE0aMczX0kzQi8FNrEFNHIDSn4BdSASTWkEdMUjXm0jUYMUUFMldqwVXsUzTK0TUVEFNHI0R4MiPMYGTSwDLpMDS5QkQNg1Mn8jKt3hKt3hKt3hKt3hRUACTEEzZh8VVWgkdUYTTmE0UX4BQP4hPqcjXm0jLh4BQP4xPt.0Qt3hKt3hKt3hKtQUUCUEQTg2ZrM1YQcUVDUjQicVP77RRC8Vav8lak4Fc9vyKVMEUy.Ea0cVZtMEcgQWY9.."/>
+      </extra>
+    </module>
+    <module logicalId="20" type="video_fx">
+      <params>
+        <VideoFXParams>
+          <PARAM id="blur" value="0.0"/>
+          <PARAM id="brightness" value="-64.29000091552734"/>
+          <PARAM id="cannyEnable" value="0.0"/>
+          <PARAM id="cannyThresh1" value="50.0"/>
+          <PARAM id="cannyThresh2" value="150.0"/>
+          <PARAM id="contrast" value="2.200000047683716"/>
+          <PARAM id="flipH" value="0.0"/>
+          <PARAM id="flipV" value="0.0"/>
+          <PARAM id="gainBlue" value="1.629999995231628"/>
+          <PARAM id="gainGreen" value="1.919999957084656"/>
+          <PARAM id="gainRed" value="0.3899999856948853"/>
+          <PARAM id="grayscale" value="0.0"/>
+          <PARAM id="hueShift" value="56.25"/>
+          <PARAM id="invert" value="0.0"/>
+          <PARAM id="kaleidoscope" value="0.0"/>
+          <PARAM id="pixelateSize" value="4.0"/>
+          <PARAM id="posterizeLevels" value="3.0"/>
+          <PARAM id="saturation" value="2.259999990463257"/>
+          <PARAM id="sepia" value="0.0"/>
+          <PARAM id="sharpen" value="0.0"/>
+          <PARAM id="temperature" value="-0.4100000262260437"/>
+          <PARAM id="thresholdEnable" value="0.0"/>
+          <PARAM id="thresholdLevel" value="127.0"/>
+          <PARAM id="useGpu" value="1.0"/>
+          <PARAM id="vignetteAmount" value="0.0"/>
+          <PARAM id="vignetteSize" value="0.4999999701976776"/>
+          <PARAM id="zoomLevel" value="1.0"/>
+        </VideoFXParams>
+      </params>
+      <extra>
+        <VideoFXState/>
+      </extra>
+    </module>
+    <module logicalId="999" type="bpm_monitor"/>
+  </modules>
+  <connections>
+    <connection srcId="3" srcChan="4" dstId="11" dstChan="0"/>
+    <connection srcId="5" srcChan="0" dstId="3" dstChan="0"/>
+    <connection srcId="11" srcChan="27" dstId="13" dstChan="0"/>
+    <connection srcId="11" srcChan="21" dstId="17" dstChan="0"/>
+    <connection srcId="11" srcChan="30" dstId="20" dstChan="0"/>
+    <connection srcId="13" srcChan="0" dstId="15" dstChan="0"/>
+    <connection srcId="15" srcChan="0" dstId="19" dstChan="0"/>
+    <connection srcId="15" srcChan="1" dstId="19" dstChan="1"/>
+    <connection srcId="17" srcChan="0" dstId="15" dstChan="1"/>
+    <connection srcId="19" srcChan="0" dstId="output" dstChan="0"/>
+    <connection srcId="19" srcChan="1" dstId="output" dstChan="1"/>
+  </connections>
+  <NodeEditorUI>
+    <node id="3" x="634.0" y="361.0"/>
+    <node id="5" x="24.0" y="399.0"/>
+    <node id="11" x="1353.0" y="467.0"/>
+    <node id="13" x="2056.0" y="823.0"/>
+    <node id="15" x="2632.0" y="710.0"/>
+    <node id="17" x="2569.0" y="1130.0"/>
+    <node id="19" x="3207.225341796875" y="931.620849609375"/>
+    <node id="20" x="3630.168701171875" y="423.6979370117188"/>
+    <node id="999" x="263.0" y="37.0"/>
+    <node id="0" x="3207.225341796875" y="626.6207885742188"/>
+  </NodeEditorUI>
+</ModularSynthPreset>

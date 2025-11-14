@@ -120,7 +120,6 @@ bool ImGuiNodeEditorComponent::s_globalGpuEnabled = true;
 #include "../audio/modules/WebcamLoaderModule.h"
 #include "../audio/modules/VideoFileLoaderModule.h"
 #include "../audio/modules/MovementDetectorModule.h"
-#include "../audio/modules/HumanDetectorModule.h"
 #include "../audio/modules/PoseEstimatorModule.h"
 #include "../audio/modules/ColorTrackerModule.h"
 #include "../audio/modules/ContourDetectorModule.h"
@@ -2315,7 +2314,6 @@ void ImGuiNodeEditorComponent::renderImGui()
         ThemeText("Processors:", theme.text.section_header);
         addModuleButton("Video FX", "video_fx");
         addModuleButton("Movement Detector", "movement_detector");
-        addModuleButton("Human Detector", "human_detector");
         addModuleButton("Object Detector", "object_detector");
         addModuleButton("Pose Estimator", "pose_estimator");
         addModuleButton("Hand Tracker", "hand_tracker");
@@ -3041,35 +3039,6 @@ if (auto* mp = synth->getModuleForLogical (lid))
             }
         }
         movementModule->drawParametersInNode(nodeContentWidth, isParamModulated, onModificationEnded);
-    }
-    else if (auto* humanModule = dynamic_cast<HumanDetectorModule*>(mp))
-    {
-        juce::Image frame = humanModule->getLatestFrame();
-        if (!frame.isNull())
-        {
-            if (visionModuleTextures.find((int)lid) == visionModuleTextures.end())
-            {
-                visionModuleTextures[(int)lid] = std::make_unique<juce::OpenGLTexture>();
-            }
-            juce::OpenGLTexture* texture = visionModuleTextures[(int)lid].get();
-            texture->loadImage(frame);
-            if (texture->getTextureID() != 0)
-            {
-                // Calculate aspect ratio dynamically from the actual frame dimensions
-                float nativeWidth = (float)frame.getWidth();
-                float nativeHeight = (float)frame.getHeight();
-                
-                // Preserve the video's native aspect ratio (handles portrait, landscape, square, etc.)
-                float aspectRatio = (nativeWidth > 0.0f) ? nativeHeight / nativeWidth : 0.75f; // Default to 4:3
-                
-                // Width is fixed at itemWidth (480px for video modules), height scales proportionally
-                ImVec2 renderSize = ImVec2(nodeContentWidth, nodeContentWidth * aspectRatio);
-                
-                // Flip Y-coordinates to fix upside-down video (OpenCV uses top-left origin, OpenGL uses bottom-left)
-                ImGui::Image((void*)(intptr_t)texture->getTextureID(), renderSize, ImVec2(0, 1), ImVec2(1, 0));
-            }
-        }
-        humanModule->drawParametersInNode(nodeContentWidth, isParamModulated, onModificationEnded);
     }
     else if (auto* poseModule = dynamic_cast<PoseEstimatorModule*>(mp))
     {
@@ -5087,7 +5056,6 @@ if (auto* mp = synth->getModuleForLogical (lid))
                     if (ImGui::MenuItem("Crop Video")) addAtMouse("crop_video");
                     ImGui::Separator();
                     if (ImGui::MenuItem("Movement Detector")) addAtMouse("movement_detector");
-                    if (ImGui::MenuItem("Human Detector")) addAtMouse("human_detector");
                     if (ImGui::MenuItem("Object Detector")) addAtMouse("object_detector");
                     if (ImGui::MenuItem("Pose Estimator")) addAtMouse("pose_estimator");
                     if (ImGui::MenuItem("Hand Tracker")) addAtMouse("hand_tracker");
@@ -8703,7 +8671,7 @@ void ImGuiNodeEditorComponent::drawInsertNodeOnLinkPopup()
             {"Video FX", "video_fx"}, {"Crop Video", "crop_video"},
             {"Reroute", "reroute"},
             {"Movement Detector", "movement_detector"},
-            {"Human Detector", "human_detector"}, {"Object Detector", "object_detector"},
+            {"Object Detector", "object_detector"},
             {"Pose Estimator", "pose_estimator"}, {"Hand Tracker", "hand_tracker"},
             {"Face Tracker", "face_tracker"}, {"Color Tracker", "color_tracker"},
             {"Contour Detector", "contour_detector"}, {"Semantic Segmentation", "semantic_segmentation"}
@@ -9827,67 +9795,69 @@ std::vector<AudioPin> ImGuiNodeEditorComponent::getPinsOfType(juce::uint32 logic
         return matchingPins;
     }
 
-    auto it = getModulePinDatabase().find(moduleType);
-
-    // --- CASE-INSENSITIVE LOOKUP ---
-    if (it == getModulePinDatabase().end())
+    // *** PRIORITIZE DYNAMIC PINS OVER STATIC PINS ***
+    // Dynamic pins are more accurate and up-to-date for modules that provide them
+    if (auto* module = synth->getModuleForLogical(logicalId))
     {
-        for (const auto& kv : getModulePinDatabase())
+        // --- DYNAMIC PATH FOR MODULES WITH getDynamicInputPins/getDynamicOutputPins ---
+        auto dynamicPins = isInput ? module->getDynamicInputPins() : module->getDynamicOutputPins();
+        
+        if (!dynamicPins.empty())
         {
-            if (kv.first.compareIgnoreCase(moduleType) == 0)
+            // Module provides dynamic pins - filter by type
+            for (const auto& pin : dynamicPins)
             {
-                it = getModulePinDatabase().find(kv.first);
-                break;
-            }
-        }
-    }
-
-    if (it != getModulePinDatabase().end())
-    {
-        // --- Standard path for built-in modules ---
-        const auto& pins = isInput ? it->second.audioIns : it->second.audioOuts;
-        for (const auto& pin : pins)
-        {
-            if (pin.type == targetType)
-            {
-                matchingPins.push_back(pin);
-            }
-        }
-    }
-
-    // If no static pins matched (or none defined), fall back to dynamic pins from the module
-    if (matchingPins.empty())
-    {
-        if (auto* module = synth->getModuleForLogical(logicalId))
-        {
-            // --- DYNAMIC PATH FOR MODULES WITH getDynamicInputPins/getDynamicOutputPins ---
-            auto dynamicPins = isInput ? module->getDynamicInputPins() : module->getDynamicOutputPins();
-            
-            if (!dynamicPins.empty())
-            {
-                // Module provides dynamic pins - filter by type
-                for (const auto& pin : dynamicPins)
+                if (pin.type == targetType)
                 {
-                    if (pin.type == targetType)
+                    matchingPins.emplace_back(pin.name, pin.channel, pin.type);
+                }
+            }
+        }
+        else if (auto* vst = dynamic_cast<VstHostModuleProcessor*>(module))
+        {
+            // For VSTs without dynamic pins, assume all pins are 'Audio' type for chaining.
+            if (targetType == PinDataType::Audio)
+            {
+                const int numChannels = isInput ? vst->getTotalNumInputChannels() : vst->getTotalNumOutputChannels();
+                for (int i = 0; i < numChannels; ++i)
+                {
+                    juce::String pinName = isInput ? vst->getAudioInputLabel(i) : vst->getAudioOutputLabel(i);
+                    if (pinName.isNotEmpty())
                     {
-                        matchingPins.emplace_back(pin.name, pin.channel, pin.type);
+                        matchingPins.emplace_back(pinName, i, PinDataType::Audio);
                     }
                 }
             }
-            else if (auto* vst = dynamic_cast<VstHostModuleProcessor*>(module))
+        }
+    }
+
+    // If no dynamic pins matched, fall back to static pins from the database
+    if (matchingPins.empty())
+    {
+        auto it = getModulePinDatabase().find(moduleType);
+
+        // --- CASE-INSENSITIVE LOOKUP ---
+        if (it == getModulePinDatabase().end())
+        {
+            for (const auto& kv : getModulePinDatabase())
             {
-                // For VSTs without dynamic pins, assume all pins are 'Audio' type for chaining.
-                if (targetType == PinDataType::Audio)
+                if (kv.first.compareIgnoreCase(moduleType) == 0)
                 {
-                    const int numChannels = isInput ? vst->getTotalNumInputChannels() : vst->getTotalNumOutputChannels();
-                    for (int i = 0; i < numChannels; ++i)
-                    {
-                        juce::String pinName = isInput ? vst->getAudioInputLabel(i) : vst->getAudioOutputLabel(i);
-                        if (pinName.isNotEmpty())
-                        {
-                            matchingPins.emplace_back(pinName, i, PinDataType::Audio);
-                        }
-                    }
+                    it = getModulePinDatabase().find(kv.first);
+                    break;
+                }
+            }
+        }
+
+        if (it != getModulePinDatabase().end())
+        {
+            // --- Standard path for built-in modules ---
+            const auto& pins = isInput ? it->second.audioIns : it->second.audioOuts;
+            for (const auto& pin : pins)
+            {
+                if (pin.type == targetType)
+                {
+                    matchingPins.push_back(pin);
                 }
             }
         }
@@ -10258,7 +10228,6 @@ std::map<juce::String, std::pair<const char*, const char*>> ImGuiNodeEditorCompo
         {"Video FX", {"video_fx", "Applies real-time video effects (brightness, contrast, saturation, blur, sharpen, etc.) to video sources, chainable"}},
         {"Crop Video", {"crop_video", "Crops and resizes video frames to a specified region, chainable video processor"}},
         {"Movement Detector", {"movement_detector", "Analyzes video source for motion via optical flow or background subtraction, outputs motion data as CV"}},
-        {"Human Detector", {"human_detector", "Detects faces or bodies in video source via Haar Cascades or HOG, outputs position and size as CV"}},
         {"Object Detector", {"object_detector", "Uses YOLOv3 to detect objects (person, car, etc.) and outputs bounding box position/size as CV"}},
         {"Pose Estimator", {"pose_estimator", "Uses OpenPose to detect 15 body keypoints (head, shoulders, elbows, wrists, hips, knees, ankles) and outputs their positions as CV signals"}},
         {"Hand Tracker", {"hand_tracker", "Detects 21 hand keypoints and outputs their X/Y positions as CV (42 channels)"}},
@@ -11091,6 +11060,12 @@ void ImGuiNodeEditorComponent::insertNodeFromDragSelection(const juce::String& m
         ? PinDataType::CV
         : getPinDataTypeForPin(dragInsertStartPin);
 
+    juce::Logger::writeToLog("[DragInsert] primaryType=" + juce::String(toString(primaryType))
+                             + ", startPin: lid=" + juce::String((int)dragInsertStartPin.logicalId)
+                             + ", channel=" + juce::String(dragInsertStartPin.channel)
+                             + ", isInput=" + juce::String(dragInsertStartPin.isInput ? 1 : 0)
+                             + ", isMod=" + juce::String(dragInsertStartPin.isMod ? 1 : 0));
+
     auto getSortedPinsForType = [&](juce::uint32 logicalId, bool isInput) -> std::vector<AudioPin>
     {
         std::vector<AudioPin> pins;
@@ -11142,6 +11117,17 @@ void ImGuiNodeEditorComponent::insertNodeFromDragSelection(const juce::String& m
             {
                 const auto sourcePins = getSortedPinsForType(dragInsertStartPin.logicalId, false);
                 const auto targetPins = getSortedPinsForType((juce::uint32)newLogicalId, true);
+
+                juce::Logger::writeToLog("[DragInsert] sourcePins count=" + juce::String(sourcePins.size()));
+                for (const auto& pin : sourcePins)
+                {
+                    juce::Logger::writeToLog("  source: " + pin.name + " ch=" + juce::String(pin.channel) + " type=" + juce::String(toString(pin.type)));
+                }
+                juce::Logger::writeToLog("[DragInsert] targetPins count=" + juce::String(targetPins.size()));
+                for (const auto& pin : targetPins)
+                {
+                    juce::Logger::writeToLog("  target: " + pin.name + " ch=" + juce::String(pin.channel) + " type=" + juce::String(toString(pin.type)));
+                }
 
         if (!sourcePins.empty() && !targetPins.empty())
         {
@@ -11205,14 +11191,53 @@ void ImGuiNodeEditorComponent::insertNodeFromDragSelection(const juce::String& m
             }
             else
             {
-                const int sourceIndex = juce::jmax(0, findChannelIndex(sourcePins, dragInsertStartPin.channel));
-                const int targetIndex = juce::jlimit(0, (int)targetPins.size() - 1, sourceIndex);
-
-                synth->connect(srcNodeId,
-                               sourcePins[(size_t)sourceIndex].channel,
-                               newNodeId,
-                               targetPins[(size_t)targetIndex].channel);
-                connected = true;
+                // For non-Audio types (Video, CV, Gate, etc.), match by actual channel number
+                // First, find the source pin that matches the drag start channel
+                int sourceChannel = dragInsertStartPin.channel;
+                const int sourceIndex = findChannelIndex(sourcePins, sourceChannel);
+                
+                if (sourceIndex >= 0 && sourceIndex < (int)sourcePins.size())
+                {
+                    sourceChannel = sourcePins[(size_t)sourceIndex].channel;
+                    
+                    // Try to find a target pin at the same channel number
+                    int targetChannel = -1;
+                    const int targetIndexByChannel = findChannelIndex(targetPins, sourceChannel);
+                    
+                    if (targetIndexByChannel >= 0 && targetIndexByChannel < (int)targetPins.size())
+                    {
+                        // Found exact channel match
+                        targetChannel = targetPins[(size_t)targetIndexByChannel].channel;
+                    }
+                    else if (!targetPins.empty())
+                    {
+                        // No exact match, use first available pin of the matching type
+                        targetChannel = targetPins[0].channel;
+                    }
+                    
+                    if (targetChannel >= 0)
+                    {
+                        juce::Logger::writeToLog("[DragInsert] Connecting: srcNodeId=" + juce::String((int)srcNodeId.uid)
+                                                 + " srcChannel=" + juce::String(sourceChannel)
+                                                 + " -> newNodeId=" + juce::String((int)newNodeId.uid)
+                                                 + " targetChannel=" + juce::String(targetChannel));
+                        synth->connect(srcNodeId, sourceChannel, newNodeId, targetChannel);
+                        connected = true;
+                    }
+                    else
+                    {
+                        juce::Logger::writeToLog("[DragInsert] ERROR: targetChannel < 0, cannot connect");
+                    }
+                }
+                else if (!sourcePins.empty() && !targetPins.empty())
+                {
+                    // Fallback: use first available pins if channel lookup failed
+                    synth->connect(srcNodeId,
+                                   sourcePins[0].channel,
+                                   newNodeId,
+                                   targetPins[0].channel);
+                    connected = true;
+                }
             }
         }
         else
@@ -11234,18 +11259,21 @@ void ImGuiNodeEditorComponent::insertNodeFromDragSelection(const juce::String& m
                 if (!sourcePins.empty() && !destinationPins.empty())
                 {
                     const int destinationIndex = findChannelIndex(destinationPins, dragInsertStartPin.channel);
-                    if (destinationIndex >= 0)
+                    if (destinationIndex >= 0 && destinationIndex < (int)destinationPins.size())
                     {
-                        const int sourceIndex = juce::jlimit(0, (int)sourcePins.size() - 1, destinationIndex);
-
-                        synth->connect(newNodeId,
-                                       sourcePins[(size_t)sourceIndex].channel,
-                                       dstNodeId,
-                                       destinationPins[(size_t)destinationIndex].channel);
-                        connected = true;
-
+                        const int destinationChannel = destinationPins[(size_t)destinationIndex].channel;
+                        
                         if (primaryType == PinDataType::Audio)
                         {
+                            // Audio path: use array indices for stereo pairs
+                            const int sourceIndex = juce::jlimit(0, (int)sourcePins.size() - 1, destinationIndex);
+
+                            synth->connect(newNodeId,
+                                           sourcePins[(size_t)sourceIndex].channel,
+                                           dstNodeId,
+                                           destinationChannel);
+                            connected = true;
+
                             const int stereoSourceIndex = sourceIndex + 1;
                             const int stereoDestinationIndex = destinationIndex + 1;
 
@@ -11256,6 +11284,29 @@ void ImGuiNodeEditorComponent::insertNodeFromDragSelection(const juce::String& m
                                                sourcePins[(size_t)stereoSourceIndex].channel,
                                                dstNodeId,
                                                destinationPins[(size_t)stereoDestinationIndex].channel);
+                            }
+                        }
+                        else
+                        {
+                            // Non-Audio path: match by actual channel number
+                            int sourceChannel = -1;
+                            const int sourceIndexByChannel = findChannelIndex(sourcePins, destinationChannel);
+                            
+                            if (sourceIndexByChannel >= 0 && sourceIndexByChannel < (int)sourcePins.size())
+                            {
+                                // Found exact channel match
+                                sourceChannel = sourcePins[(size_t)sourceIndexByChannel].channel;
+                            }
+                            else if (!sourcePins.empty())
+                            {
+                                // No exact match, use first available pin of the matching type
+                                sourceChannel = sourcePins[0].channel;
+                            }
+                            
+                            if (sourceChannel >= 0)
+                            {
+                                synth->connect(newNodeId, sourceChannel, dstNodeId, destinationChannel);
+                                connected = true;
                             }
                         }
                     }

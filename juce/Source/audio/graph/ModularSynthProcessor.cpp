@@ -79,7 +79,6 @@
 #include "../modules/VideoFileLoaderModule.h"
 #include "../modules/VideoFXModule.h"
 #include "../modules/MovementDetectorModule.h"
-#include "../modules/HumanDetectorModule.h"
 #include "../modules/PoseEstimatorModule.h"
 #include "../modules/HandTrackerModule.h"
 #include "../modules/FaceTrackerModule.h"
@@ -837,7 +836,6 @@ namespace {
             reg("video_file_loader", []{ return std::make_unique<VideoFileLoaderModule>(); });
             reg("video_fx", []{ return std::make_unique<VideoFXModule>(); });
             reg("movement_detector", []{ return std::make_unique<MovementDetectorModule>(); });
-            reg("human_detector", []{ return std::make_unique<HumanDetectorModule>(); });
             reg("pose_estimator", []{ return std::make_unique<PoseEstimatorModule>(); });
             reg("hand_tracker", []{ return std::make_unique<HandTrackerModule>(); });
             reg("face_tracker", []{ return std::make_unique<FaceTrackerModule>(); });

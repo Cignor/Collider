@@ -95,7 +95,6 @@
 - [webcam_loader](#webcam_loader) - Webcam Video Source
 - [video_file_loader](#video_file_loader) - Video File Source
 - [movement_detector](#movement_detector) - Motion Detection
-- [human_detector](#human_detector) - Face/Body Detection
 - [object_detector](#object_detector) - Object Detection (YOLOv3)
 - [pose_estimator](#pose_estimator) - Body Keypoint Detection
 - [hand_tracker](#hand_tracker) - Hand Keypoint Tracking
@@ -1939,29 +1938,6 @@ Analyzes video for motion via optical flow or background subtraction. Detects fe
 - Lower Max Features values process faster but track fewer points
 - Good lighting and contrast improve feature detection accuracy
 - Video output updates continuously at ~30 FPS for smooth passthrough
-
----
-
-### human_detector
-**Face/Body Detection**
-
-Detects faces or bodies in video via Haar Cascades or HOG.
-
-#### Inputs
-- `Source In` (Video) - Video source ID
-
-#### Outputs
-- `X` (CV), `Y` (CV) - Center position
-- `Width` (CV), `Height` (CV) - Bounding box size
-- `Gate` (Gate) - High when person detected
-- `Video Out` (Video) - Passthrough video output for chaining
-- `Cropped Out` (Video) - Cropped region around detected face/body
-
-#### How to Use
-1. Connect video source
-2. Detects faces/bodies
-3. Outputs position and size as CV
-4. Use for interactive performances
 
 ---
 
