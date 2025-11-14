@@ -126,21 +126,21 @@ Source nodes generate or input signals into your patch.
 
 A standard analog-style oscillator that generates periodic waveforms.
 
-**Inputs:**
+#### Inputs
 - `Frequency` (CV) - Frequency modulation input
 - `Waveform` (CV) - Waveform selection modulation
 - `Gate` (Gate) - Gate input for amplitude control
 
-**Outputs:**
+#### Outputs
 - `Out` (Audio) - Mono audio output
 
-**Parameters:**
+#### Parameters
 - `Frequency` (20 Hz - 20 kHz) - Base oscillator frequency
 - `Waveform` (Choice) - Sine, Sawtooth, or Square wave
 - `Relative Freq Mod` (Bool) - When enabled, CV modulates ±4 octaves around slider position. When disabled, CV directly maps to 20 Hz - 20 kHz
 - `Portamento` (0-2 seconds) - Frequency glide/smoothing time
 
-**How to Use:**
+#### How to Use
 1. Connect the audio output to an effect or VCA
 2. Set the frequency slider to your desired pitch
 3. Optionally connect CV (from sequencer, LFO, or ADSR) to modulate frequency
@@ -155,23 +155,23 @@ A standard analog-style oscillator that generates periodic waveforms.
 
 A polyphonic oscillator module with up to 32 independent voices, ideal for creating rich, layered sounds or building polyphonic synthesizers.
 
-**Inputs:**
+#### Inputs
 - `Num Voices Mod` (Raw) - Control number of active voices (1-32)
 - `Freq 1-32 Mod` (CV) - Individual frequency modulation for each voice
 - `Wave 1-32 Mod` (CV) - Individual waveform modulation for each voice
 - `Gate 1-32 Mod` (Gate) - Individual gate inputs for each voice
 
-**Outputs:**
+#### Outputs
 - `Out 1-32` (Audio) - 32 independent audio outputs (one per voice)
 
-**Parameters:**
+#### Parameters
 - `Num Voices` (1-32) - Number of active voices
 - `Base Frequency` (20 Hz - 20 kHz) - Base frequency for all voices
 - `Detune Amount` (0-100 cents) - Amount of random detuning between voices
 - `Spread` (0-100%) - Frequency spread between voices
 - `Waveform` (Choice) - Base waveform for all voices (Sine, Sawtooth, Square)
 
-**How to Use:**
+#### How to Use
 1. Set the number of voices you want active
 2. Connect the voice outputs to a Track Mixer or individual effects
 3. Use the detune parameter to create a chorus-like effect
@@ -185,19 +185,19 @@ A polyphonic oscillator module with up to 32 independent voices, ideal for creat
 
 Generates white, pink, or brown noise for percussion, ambience, or modulation.
 
-**Inputs:**
+#### Inputs
 - `Level Mod` (CV) - Level modulation input
 - `Colour Mod` (CV) - Noise color modulation
 
-**Outputs:**
+#### Outputs
 - `Out L` (Audio) - Left channel output
 - `Out R` (Audio) - Right channel output
 
-**Parameters:**
+#### Parameters
 - `Colour` (Choice) - White (flat spectrum), Pink (-3 dB/octave), or Brown (-6 dB/octave)
 - `Level dB` (-60 to +6 dB) - Output level in decibels
 
-**How to Use:**
+#### How to Use
 1. Select the noise color (white for hi-hats, pink for general noise, brown for low rumble)
 2. Adjust the level to taste
 3. Optionally modulate the color with CV for dynamic timbral changes
@@ -211,19 +211,19 @@ Generates white, pink, or brown noise for percussion, ambience, or modulation.
 
 Brings external audio from your audio interface into the patch.
 
-**Outputs:**
+#### Outputs
 - `Out 1` (Audio) - Input channel 1
 - `Out 2` (Audio) - Input channel 2
 - `Gate` (Gate) - Gate signal when audio exceeds threshold
 - `Trigger` (Gate) - Trigger signal on transients
 - `EOP` (Gate) - End of phrase detection
 
-**Parameters:**
+#### Parameters
 - `Input Gain` (-60 to +20 dB) - Input gain control
 - `Gate Threshold` (-60 to 0 dB) - Threshold for gate output
 - `Trigger Sensitivity` (Low/Medium/High) - Transient detection sensitivity
 
-**How to Use:**
+#### How to Use
 1. Connect your external audio source (microphone, instrument, etc.) to your audio interface
 2. Adjust input gain to get a healthy signal level
 3. Use the gate and trigger outputs to create envelope followers or rhythm detection
@@ -236,7 +236,7 @@ Brings external audio from your audio interface into the patch.
 
 Loads and plays audio samples with extensive playback control and modulation options.
 
-**Inputs:**
+#### Inputs
 - `Pitch Mod` (CV) - Pitch modulation in semitones
 - `Speed Mod` (CV) - Playback speed modulation
 - `Gate Mod` (CV) - Gate/trigger modulation
@@ -245,11 +245,11 @@ Loads and plays audio samples with extensive playback control and modulation opt
 - `Range End Mod` (CV) - Modulate sample end point
 - `Randomize Trig` (Gate) - Randomize sample settings on trigger
 
-**Outputs:**
+#### Outputs
 - `Out L` (Audio) - Left channel output
 - `Out R` (Audio) - Right channel output
 
-**Parameters:**
+#### Parameters
 - `File` (Button) - Load audio file (WAV, AIFF, FLAC, MP3)
 - `Pitch` (-48 to +48 semitones) - Pitch shift amount
 - `Speed` (0.1x to 4x) - Playback speed multiplier
@@ -260,7 +260,7 @@ Loads and plays audio samples with extensive playback control and modulation opt
 - `Reverse` (Bool) - Play sample in reverse
 - `Randomize Range` (Bool) - Randomize start/end on each trigger
 
-**How to Use:**
+#### How to Use
 1. Click the "Load File" button and select an audio file
 2. Set the pitch and speed for your desired sound
 3. Choose a loop mode (Off for one-shots, Forward for sustained sounds)
@@ -277,17 +277,17 @@ Loads and plays audio samples with extensive playback control and modulation opt
 
 Outputs a constant, adjustable numerical value in multiple formats.
 
-**Outputs:**
+#### Outputs
 - `Raw` (Raw) - Unprocessed value as-is
 - `Normalized` (CV) - Value normalized to 0-1 range
 - `Inverted` (Raw) - Negative of raw value
 - `Integer` (Raw) - Truncated integer value
 - `CV Out` (CV) - Scaled CV output (0-1 range)
 
-**Parameters:**
+#### Parameters
 - `Value` (-100 to +100) - The constant value to output
 
-**How to Use:**
+#### How to Use
 1. Adjust the value slider to your desired number
 2. Connect the appropriate output to the destination:
    - Use `CV Out` for standard 0-1 modulation
@@ -307,25 +307,25 @@ Effect nodes process audio signals to shape tone, add space, or create sonic tex
 
 A resonant multi-mode filter for subtractive synthesis and tone shaping.
 
-**Inputs:**
+#### Inputs
 - `In L` (Audio) - Left audio input
 - `In R` (Audio) - Right audio input
 - `Cutoff Mod` (CV) - Cutoff frequency modulation
 - `Resonance Mod` (CV) - Resonance amount modulation
 - `Type Mod` (CV) - Filter type modulation
 
-**Outputs:**
+#### Outputs
 - `Out L` (Audio) - Left filtered output
 - `Out R` (Audio) - Right filtered output
 
-**Parameters:**
+#### Parameters
 - `Cutoff` (20 Hz - 20 kHz) - Filter cutoff frequency
 - `Resonance` (0.1 - 10.0) - Resonance/Q factor
 - `Type` (Choice) - Low-pass, High-pass, or Band-pass
 - `Relative Cutoff Mod` (Bool) - When enabled, CV modulates ±5 octaves around slider. When disabled, CV maps to full 20 Hz - 20 kHz range
 - `Relative Resonance Mod` (Bool) - When enabled, CV scales resonance 0.25x-4x. When disabled, CV maps to full 0.1-10.0 range
 
-**How to Use:**
+#### How to Use
 1. Connect audio through the filter
 2. Adjust cutoff to set the frequency where filtering occurs
 3. Increase resonance for emphasis around the cutoff (be careful, high values can self-oscillate!)
@@ -340,18 +340,18 @@ A resonant multi-mode filter for subtractive synthesis and tone shaping.
 
 A stereo delay effect with modulation and tempo sync capabilities.
 
-**Inputs:**
+#### Inputs
 - `In L` (Audio) - Left audio input
 - `In R` (Audio) - Right audio input
 - `Time Mod` (CV) - Delay time modulation
 - `Feedback Mod` (CV) - Feedback amount modulation
 - `Mix Mod` (CV) - Wet/dry mix modulation
 
-**Outputs:**
+#### Outputs
 - `Out L` (Audio) - Left delayed output
 - `Out R` (Audio) - Right delayed output
 
-**Parameters:**
+#### Parameters
 - `Time (ms)` (1-2000 ms) - Delay time in milliseconds
 - `Feedback` (0-0.95) - Amount of delayed signal fed back into the delay
 - `Mix` (0-1) - Wet/dry balance (0=dry, 1=wet)
@@ -359,7 +359,7 @@ A stereo delay effect with modulation and tempo sync capabilities.
 - `Relative Feedback Mod` (Bool) - Enable relative feedback modulation
 - `Relative Mix Mod` (Bool) - Enable relative mix modulation
 
-**How to Use:**
+#### How to Use
 1. Send audio through the delay
 2. Set delay time to taste (short for slapback, long for echoes)
 3. Adjust feedback for the number of repeats (be careful, high values can self-oscillate!)
@@ -374,24 +374,24 @@ A stereo delay effect with modulation and tempo sync capabilities.
 
 A stereo reverb effect that simulates acoustic spaces.
 
-**Inputs:**
+#### Inputs
 - `In L` (Audio) - Left audio input
 - `In R` (Audio) - Right audio input
 - `Size Mod` (CV) - Room size modulation
 - `Damp Mod` (CV) - Damping modulation
 - `Mix Mod` (CV) - Wet/dry mix modulation
 
-**Outputs:**
+#### Outputs
 - `Out L` (Audio) - Left reverb output
 - `Out R` (Audio) - Right reverb output
 
-**Parameters:**
+#### Parameters
 - `Size` (0-1) - Room size (0=small, 1=large)
 - `Damping` (0-1) - High frequency damping (0=bright, 1=dark)
 - `Width` (0-1) - Stereo width
 - `Mix` (0-1) - Wet/dry balance (0=dry, 1=wet)
 
-**How to Use:**
+#### How to Use
 1. Send audio through the reverb
 2. Adjust size to set the perceived space (small room to large hall)
 3. Use damping to control brightness (low damping=reflective surfaces, high damping=absorptive)
@@ -406,23 +406,23 @@ A stereo reverb effect that simulates acoustic spaces.
 
 A stereo chorus effect that creates thick, shimmering textures by layering slightly detuned copies of the signal.
 
-**Inputs:**
+#### Inputs
 - `In L` (Audio) - Left audio input
 - `In R` (Audio) - Right audio input
 - `Rate Mod` (CV) - LFO rate modulation
 - `Depth Mod` (CV) - Effect depth modulation
 - `Mix Mod` (CV) - Wet/dry mix modulation
 
-**Outputs:**
+#### Outputs
 - `Out L` (Audio) - Left chorus output
 - `Out R` (Audio) - Right chorus output
 
-**Parameters:**
+#### Parameters
 - `Rate` (0.1-10 Hz) - LFO speed
 - `Depth` (0-1) - Modulation depth
 - `Mix` (0-1) - Wet/dry balance
 
-**How to Use:**
+#### How to Use
 1. Send audio through the chorus
 2. Set rate for the speed of the sweeping effect (slow=gentle, fast=vibrato)
 3. Adjust depth for intensity of detuning
@@ -437,7 +437,7 @@ A stereo chorus effect that creates thick, shimmering textures by layering sligh
 
 A stereo phaser effect that creates sweeping notches in the frequency spectrum.
 
-**Inputs:**
+#### Inputs
 - `In L` (Audio) - Left audio input
 - `In R` (Audio) - Right audio input
 - `Rate Mod` (CV) - LFO rate modulation
@@ -446,18 +446,18 @@ A stereo phaser effect that creates sweeping notches in the frequency spectrum.
 - `Feedback Mod` (CV) - Feedback amount modulation
 - `Mix Mod` (CV) - Wet/dry mix modulation
 
-**Outputs:**
+#### Outputs
 - `Out L` (Audio) - Left phaser output
 - `Out R` (Audio) - Right phaser output
 
-**Parameters:**
+#### Parameters
 - `Rate` (0.1-10 Hz) - LFO speed
 - `Depth` (0-1) - Modulation depth
 - `Centre Freq` (200-2000 Hz) - Center frequency of the sweep
 - `Feedback` (0-0.95) - Amount of feedback (increases resonance)
 - `Mix` (0-1) - Wet/dry balance
 
-**How to Use:**
+#### How to Use
 1. Send audio through the phaser
 2. Adjust rate for sweep speed (slow=subtle, fast=intense)
 3. Set centre frequency to target specific frequency ranges
@@ -472,7 +472,7 @@ A stereo phaser effect that creates sweeping notches in the frequency spectrum.
 
 Reduces the dynamic range of audio signals, making quiet parts louder and loud parts quieter.
 
-**Inputs:**
+#### Inputs
 - `In L` (Audio) - Left audio input
 - `In R` (Audio) - Right audio input
 - `Thresh Mod` (CV) - Threshold modulation
@@ -481,18 +481,18 @@ Reduces the dynamic range of audio signals, making quiet parts louder and loud p
 - `Release Mod` (CV) - Release time modulation
 - `Makeup Mod` (CV) - Makeup gain modulation
 
-**Outputs:**
+#### Outputs
 - `Out L` (Audio) - Left compressed output
 - `Out R` (Audio) - Right compressed output
 
-**Parameters:**
+#### Parameters
 - `Threshold` (-60 to 0 dB) - Level above which compression starts
 - `Ratio` (1:1 to 20:1) - Amount of compression
 - `Attack` (0.1-100 ms) - How quickly compression engages
 - `Release` (10-1000 ms) - How quickly compression disengages
 - `Makeup Gain` (0-24 dB) - Output gain to compensate for level reduction
 
-**How to Use:**
+#### How to Use
 1. Set threshold to the level where you want compression to start
 2. Adjust ratio (2:1 for gentle, 10:1+ for heavy compression)
 3. Use fast attack to catch transients, slow attack to preserve punch
@@ -507,21 +507,21 @@ Reduces the dynamic range of audio signals, making quiet parts louder and loud p
 
 Prevents audio from exceeding a set level, acting as a "brick wall" for peaks.
 
-**Inputs:**
+#### Inputs
 - `In L` (Audio) - Left audio input
 - `In R` (Audio) - Right audio input
 - `Thresh Mod` (CV) - Threshold modulation
 - `Release Mod` (CV) - Release time modulation
 
-**Outputs:**
+#### Outputs
 - `Out L` (Audio) - Left limited output
 - `Out R` (Audio) - Right limited output
 
-**Parameters:**
+#### Parameters
 - `Threshold` (-60 to 0 dB) - Maximum allowed level
 - `Release` (10-1000 ms) - Recovery time
 
-**How to Use:**
+#### How to Use
 1. Set threshold to the maximum level you want to allow
 2. Adjust release time (fast for transparent, slow for smoother)
 3. Use at the end of your signal chain to prevent clipping
@@ -535,21 +535,21 @@ Prevents audio from exceeding a set level, acting as a "brick wall" for peaks.
 
 Silences signals below a threshold, useful for removing background noise or creating rhythmic effects.
 
-**Inputs:**
+#### Inputs
 - `In L` (Audio) - Left audio input
 - `In R` (Audio) - Right audio input
 
-**Outputs:**
+#### Outputs
 - `Out L` (Audio) - Left gated output
 - `Out R` (Audio) - Right gated output
 
-**Parameters:**
+#### Parameters
 - `Threshold` (-60 to 0 dB) - Level below which the gate closes
 - `Attack` (0.1-100 ms) - How quickly the gate opens
 - `Release` (10-1000 ms) - How quickly the gate closes
 - `Range` (-60 to 0 dB) - Amount of attenuation when gate is closed
 
-**How to Use:**
+#### How to Use
 1. Set threshold just above your noise floor
 2. Adjust attack and release for smooth or rhythmic gating
 3. Use range to set how much the signal is reduced (not necessarily to silence)
@@ -563,20 +563,20 @@ Silences signals below a threshold, useful for removing background noise or crea
 
 A waveshaping distortion effect that adds harmonic content and saturation.
 
-**Inputs:**
+#### Inputs
 - `In L` (Audio) - Left audio input
 - `In R` (Audio) - Right audio input
 
-**Outputs:**
+#### Outputs
 - `Out L` (Audio) - Left distorted output
 - `Out R` (Audio) - Right distorted output
 
-**Parameters:**
+#### Parameters
 - `Drive` (0-100) - Amount of distortion
 - `Type` (Choice) - Distortion algorithm (Soft clip, Hard clip, Foldback, etc.)
 - `Output Gain` (-12 to +12 dB) - Output level compensation
 
-**How to Use:**
+#### How to Use
 1. Start with low drive and gradually increase
 2. Try different distortion types for various tonal characters
 3. Adjust output gain to compensate for level changes
@@ -590,26 +590,26 @@ A waveshaping distortion effect that adds harmonic content and saturation.
 
 An 8-band graphic equalizer with CV outputs for frequency-based triggering.
 
-**Inputs:**
+#### Inputs
 - `In L` (Audio) - Left audio input
 - `In R` (Audio) - Right audio input
 - `Band 1-8 Mod` (CV) - Individual band gain modulation
 - `Gate Thresh Mod` (CV) - Gate threshold modulation
 - `Trig Thresh Mod` (CV) - Trigger threshold modulation
 
-**Outputs:**
+#### Outputs
 - `Out L` (Audio) - Left EQ output
 - `Out R` (Audio) - Right EQ output
 - `Gate Out` (Gate) - Gates when signal exceeds gate threshold
 - `Trig Out` (Gate) - Triggers on transients above trigger threshold
 
-**Parameters:**
+#### Parameters
 - `Gain Band 1-8` (-60 to +12 dB) - Gain for each frequency band (centered at: 60, 170, 310, 600, 1000, 3000, 6000, 12000 Hz)
 - `Output Level` (-24 to +24 dB) - Overall output level
 - `Gate Threshold` (-60 to 0 dB) - Threshold for gate output
 - `Trigger Threshold` (-60 to 0 dB) - Threshold for trigger detection
 
-**How to Use:**
+#### How to Use
 1. Boost or cut specific frequency bands to shape your sound
 2. Use negative gain to remove unwanted frequencies
 3. Use the gate and trigger outputs for frequency-responsive triggering (great for kick/bass triggering)
@@ -622,22 +622,22 @@ An 8-band graphic equalizer with CV outputs for frequency-based triggering.
 
 A distortion effect with multiple waveshaping algorithms for varied saturation and distortion effects.
 
-**Inputs:**
+#### Inputs
 - `In L` (Audio) - Left audio input
 - `In R` (Audio) - Right audio input
 - `Drive Mod` (CV) - Drive amount modulation
 - `Type Mod` (CV) - Algorithm selection modulation
 
-**Outputs:**
+#### Outputs
 - `Out L` (Audio) - Left waveshaped output
 - `Out R` (Audio) - Right waveshaped output
 
-**Parameters:**
+#### Parameters
 - `Drive` (0-100) - Amount of waveshaping
 - `Type` (Choice) - Waveshaping algorithm (Soft Clip, Hard Clip, Foldback, etc.)
 - `Mix` (0-1) - Wet/dry balance
 
-**How to Use:**
+#### How to Use
 1. Choose a waveshaping algorithm
 2. Gradually increase drive to add saturation
 3. Try different algorithms for different characters
@@ -650,21 +650,21 @@ A distortion effect with multiple waveshaping algorithms for varied saturation a
 
 A multi-band waveshaper that applies frequency-specific distortion across 8 bands.
 
-**Inputs:**
+#### Inputs
 - `In L` (Audio) - Left audio input
 - `In R` (Audio) - Right audio input
 - `Drive 1-8 Mod` (CV) - Per-band drive modulation
 - `Gain Mod` (CV) - Output gain modulation
 
-**Outputs:**
+#### Outputs
 - `Out L` (Audio) - Left processed output
 - `Out R` (Audio) - Right processed output
 
-**Parameters:**
+#### Parameters
 - `Drive Band 1-8` (0-10) - Drive amount for each frequency band
 - `Output Gain` (-24 to +24 dB) - Overall output level
 
-**How to Use:**
+#### How to Use
 1. Adjust individual band drives to add selective distortion
 2. Drive bass frequencies differently than highs for balanced distortion
 3. Great for adding harmonics to specific frequency ranges
@@ -677,7 +677,7 @@ A multi-band waveshaper that applies frequency-specific distortion across 8 band
 
 A granular processor that plays small grains of audio for textural and rhythmic effects.
 
-**Inputs:**
+#### Inputs
 - `In L` (Audio) - Left audio input (recorded to internal buffer)
 - `In R` (Audio) - Right audio input (recorded to internal buffer)
 - `Trigger In` (Gate) - Manual grain triggering
@@ -687,11 +687,11 @@ A granular processor that plays small grains of audio for textural and rhythmic 
 - `Pitch Mod` (CV) - Pitch modulation
 - `Gate Mod` (CV) - Gate amount modulation
 
-**Outputs:**
+#### Outputs
 - `Out L` (Audio) - Left granulated output
 - `Out R` (Audio) - Right granulated output
 
-**Parameters:**
+#### Parameters
 - `Density` (0.1-100 Hz) - How often grains are triggered
 - `Size` (5-500 ms) - Length of each grain
 - `Position` (0-1) - Where in the buffer to read grains
@@ -701,7 +701,7 @@ A granular processor that plays small grains of audio for textural and rhythmic 
 - `Pan Random` (0-1) - Random stereo placement per grain
 - `Gate` (0-1) - Overall output level/gate
 
-**How to Use:**
+#### How to Use
 1. Audio is continuously recorded to a 2-second buffer
 2. Adjust density for grain triggering rate (low=sparse, high=dense cloud)
 3. Set grain size (small=rhythmic, large=smooth textures)
@@ -717,21 +717,21 @@ A granular processor that plays small grains of audio for textural and rhythmic 
 
 Shapes the harmonic content of a signal using frequency-specific waveshaping.
 
-**Inputs:**
+#### Inputs
 - `In L` (Audio) - Left audio input
 - `In R` (Audio) - Right audio input
 - `Freq Mod` (CV) - Frequency modulation
 - `Drive Mod` (CV) - Drive modulation
 
-**Outputs:**
+#### Outputs
 - `Out L` (Audio) - Left shaped output
 - `Out R` (Audio) - Right shaped output
 
-**Parameters:**
+#### Parameters
 - `Master Frequency` (20 Hz - 20 kHz) - Center frequency for harmonic shaping
 - `Master Drive` (0-10) - Amount of harmonic emphasis
 
-**How to Use:**
+#### How to Use
 1. Set the master frequency to target specific harmonics
 2. Increase drive to emphasize those harmonics
 3. Great for adding presence and character to sounds
@@ -744,22 +744,22 @@ Shapes the harmonic content of a signal using frequency-specific waveshaping.
 
 Real-time pitch and time manipulation using the RubberBand library for high-quality time stretching and pitch shifting.
 
-**Inputs:**
+#### Inputs
 - `In L` (Audio) - Left audio input
 - `In R` (Audio) - Right audio input
 - `Speed Mod` (CV) - Playback speed modulation
 - `Pitch Mod` (CV) - Pitch shift modulation
 
-**Outputs:**
+#### Outputs
 - `Out L` (Audio) - Left processed output
 - `Out R` (Audio) - Right processed output
 
-**Parameters:**
+#### Parameters
 - `Speed` (0.25x to 4x) - Playback speed without affecting pitch
 - `Pitch` (-24 to +24 semitones) - Pitch shift without affecting tempo
 - `Formant` (Bool) - Preserve formants when pitch shifting
 
-**How to Use:**
+#### How to Use
 1. Adjust speed to time-stretch audio (0.5x=half speed, 2x=double speed)
 2. Adjust pitch to transpose audio independently
 3. Enable formant preservation for natural-sounding vocal pitch shifts
@@ -772,18 +772,18 @@ Real-time pitch and time manipulation using the RubberBand library for high-qual
 
 A utility to reduce clicks and pops caused by discontinuous CV or audio signals.
 
-**Inputs:**
+#### Inputs
 - `In L` (Audio) - Left audio input
 - `In R` (Audio) - Right audio input
 
-**Outputs:**
+#### Outputs
 - `Out L` (Audio) - Left de-clicked output
 - `Out R` (Audio) - Right de-clicked output
 
-**Parameters:**
+#### Parameters
 - `Sensitivity` (Low/Medium/High) - How aggressively to detect and reduce clicks
 
-**How to Use:**
+#### How to Use
 1. Insert after modules that produce discontinuous signals
 2. Adjust sensitivity based on the severity of clicks
 3. Essential for smoothing abrupt parameter changes
@@ -800,15 +800,15 @@ Modulator nodes generate control voltages for animating parameters over time.
 
 A versatile LFO for modulating parameters with periodic waveforms.
 
-**Inputs:**
+#### Inputs
 - `Rate Mod` (CV) - Rate modulation input
 - `Depth Mod` (CV) - Depth modulation input
 - `Wave Mod` (CV) - Waveform selection modulation
 
-**Outputs:**
+#### Outputs
 - `Out` (CV) - CV modulation output
 
-**Parameters:**
+#### Parameters
 - `Rate` (0.05-20 Hz) - LFO frequency
 - `Depth` (0-1) - Modulation amount
 - `Bipolar` (Bool) - Output range: On = -1 to +1, Off = 0 to 1
@@ -817,7 +817,7 @@ A versatile LFO for modulating parameters with periodic waveforms.
 - `Division` (Choice) - Note division when synced (1/32 to 8 bars)
 - `Relative Mod` (Bool) - When enabled, rate CV is additive around slider position
 
-**How to Use:**
+#### How to Use
 1. Set rate to desired modulation speed
 2. Choose bipolar for modulation around a center point, unipolar for one-directional
 3. Select waveform based on desired modulation shape
@@ -832,7 +832,7 @@ A versatile LFO for modulating parameters with periodic waveforms.
 
 A classic ADSR envelope generator for shaping sounds over time.
 
-**Inputs:**
+#### Inputs
 - `Gate In` (Gate) - Gate signal to trigger and hold envelope
 - `Trigger In` (Gate) - Trigger signal to retrigger envelope
 - `Attack Mod` (CV) - Attack time modulation
@@ -840,20 +840,20 @@ A classic ADSR envelope generator for shaping sounds over time.
 - `Sustain Mod` (CV) - Sustain level modulation
 - `Release Mod` (CV) - Release time modulation
 
-**Outputs:**
+#### Outputs
 - `Env Out` (CV) - Main envelope output (0-1)
 - `Inv Out` (CV) - Inverted envelope output (1-0)
 - `EOR Gate` (Gate) - End of Release gate
 - `EOC Gate` (Gate) - End of Cycle gate
 
-**Parameters:**
+#### Parameters
 - `Attack` (0.001-5 seconds) - Rise time from 0 to 1
 - `Decay` (0.001-5 seconds) - Fall time from 1 to sustain level
 - `Sustain` (0-1) - Held level while gate is high
 - `Release` (0.001-5 seconds) - Fall time from sustain to 0 after gate goes low
 - `Relative Attack/Decay/Sustain/Release Mod` (Bool) - Enable relative modulation modes
 
-**How to Use:**
+#### How to Use
 1. Connect a gate source (sequencer, MIDI CV, etc.) to Gate In
 2. Adjust Attack for how quickly sound reaches full volume
 3. Set Decay for how quickly it falls to the sustain level
@@ -870,14 +870,14 @@ A classic ADSR envelope generator for shaping sounds over time.
 
 Generates random values at a specified rate with multiple output formats and tempo sync.
 
-**Outputs:**
+#### Outputs
 - `Norm Out` (CV) - Normalized random values (0-1 range)
 - `Raw Out` (Raw) - Raw random values (custom range)
 - `CV Out` (CV) - CV random values (custom CV range)
 - `Bool Out` (Gate) - Random boolean (on/off)
 - `Trig Out` (Gate) - Trigger pulse on each new random value
 
-**Parameters:**
+#### Parameters
 - `Rate` (0.1-50 Hz) - How often new random values are generated
 - `Min` (-100 to 100) - Minimum value for Raw output
 - `Max` (-100 to 100) - Maximum value for Raw output
@@ -890,7 +890,7 @@ Generates random values at a specified rate with multiple output formats and tem
 - `Sync` (Bool) - Sync to global tempo
 - `Division` (Choice) - Note division when synced
 
-**How to Use:**
+#### How to Use
 1. Set rate for how often random values change
 2. Adjust min/max ranges for each output type as needed
 3. Use slew to smooth transitions between random values (0=stepped, 1=smooth)
@@ -906,7 +906,7 @@ Generates random values at a specified rate with multiple output formats and tem
 
 Samples and holds an input signal when triggered.
 
-**Inputs:**
+#### Inputs
 - `Signal In L` (Audio) - Left signal to sample
 - `Signal In R` (Audio) - Right signal to sample
 - `Trig In L` (Gate) - Trigger for left channel
@@ -915,16 +915,16 @@ Samples and holds an input signal when triggered.
 - `Edge Mod` (CV) - Trigger edge selection modulation
 - `Slew Mod` (CV) - Slew limiting modulation
 
-**Outputs:**
+#### Outputs
 - `Out L` (Audio) - Left sampled & held output
 - `Out R` (Audio) - Right sampled & held output
 
-**Parameters:**
+#### Parameters
 - `Threshold` (0-1) - Trigger threshold level
 - `Edge` (Choice) - Rising, Falling, or Both edges
 - `Slew` (0-1) - Slew limiting between sampled values
 
-**How to Use:**
+#### How to Use
 1. Connect a signal to sample (CV, audio, etc.)
 2. Connect a trigger source (LFO, clock, gate)
 3. Each trigger samples the current input value and holds it
@@ -939,7 +939,7 @@ Samples and holds an input signal when triggered.
 
 A complex, drawable envelope and LFO generator with multiple curve slots and extensive modulation options.
 
-**Inputs:**
+#### Inputs
 - `Gate In` (Gate) - Gate input for envelope triggering
 - `Trigger In` (Gate) - Trigger input for envelope
 - `Sync In` (Gate) - Sync input for phase reset
@@ -951,7 +951,7 @@ A complex, drawable envelope and LFO generator with multiple curve slots and ext
 - `Value Mult Mod` (CV) - Value multiplier modulation
 - `Curve Select Mod` (CV) - Curve selection modulation
 
-**Outputs:**
+#### Outputs
 - `Value` (CV) - Main output value
 - `Inverted` (CV) - Inverted output
 - `Bipolar` (CV) - Bipolar output (-1 to +1)
@@ -962,7 +962,7 @@ A complex, drawable envelope and LFO generator with multiple curve slots and ext
 - `Blue/Red/Green Value` (CV) - Per-curve outputs
 - `Blue/Red/Green Pitch` (CV) - Per-curve pitch outputs
 
-**Parameters:**
+#### Parameters
 - `Rate` (0.05-20 Hz) - Cycle speed
 - `Slew` (0-1) - Smoothing between points
 - `Gate Threshold` (0-1) - Threshold for gate output
@@ -972,7 +972,7 @@ A complex, drawable envelope and LFO generator with multiple curve slots and ext
 - `Curve Select` (0-2) - Choose active curve (Blue, Red, or Green)
 - Drawing Interface - Click and drag to draw curves
 
-**How to Use:**
+#### How to Use
 1. Click "Draw" to enter drawing mode
 2. Draw up to 3 different curves (Blue, Red, Green tabs)
 3. Set rate for cycle speed
@@ -989,22 +989,22 @@ A complex, drawable envelope and LFO generator with multiple curve slots and ext
 
 An oscillator with integrated waveshaping for generating harmonically rich tones.
 
-**Inputs:**
+#### Inputs
 - `In L` (Audio) - External audio input (optional, can shape external audio)
 - `In R` (Audio) - External audio input right channel
 - `Freq Mod` (CV) - Frequency modulation
 - `Wave Mod` (CV) - Waveform modulation
 - `Drive Mod` (CV) - Drive modulation
 
-**Outputs:**
+#### Outputs
 - `Out` (Audio) - Shaped oscillator output
 
-**Parameters:**
+#### Parameters
 - `Frequency` (20 Hz - 20 kHz) - Oscillator frequency
 - `Waveform` (Choice) - Base waveform
 - `Drive` (0-10) - Waveshaping amount
 
-**How to Use:**
+#### How to Use
 1. Set frequency for desired pitch
 2. Choose base waveform
 3. Increase drive to add harmonics via waveshaping
@@ -1022,19 +1022,19 @@ Utility nodes provide essential signal processing, routing, and logic operations
 
 A basic amp module for controlling audio levels with CV.
 
-**Inputs:**
+#### Inputs
 - `In L` (Audio) - Left audio input
 - `In R` (Audio) - Right audio input
 - `Gain Mod` (CV) - Gain modulation
 
-**Outputs:**
+#### Outputs
 - `Out L` (Audio) - Left amplified output
 - `Out R` (Audio) - Right amplified output
 
-**Parameters:**
+#### Parameters
 - `Gain` (-60 to +12 dB) - Base gain level
 
-**How to Use:**
+#### How to Use
 1. Send audio through the VCA
 2. Connect an envelope or LFO to Gain Mod for amplitude control
 3. Essential for creating dynamic amplitude envelopes
@@ -1047,22 +1047,22 @@ A basic amp module for controlling audio levels with CV.
 
 A two-input stereo mixer with gain, pan, and crossfade controls.
 
-**Inputs:**
+#### Inputs
 - `In A L/R` (Audio) - Input A stereo pair
 - `In B L/R` (Audio) - Input B stereo pair
 - `Gain Mod` (CV) - Gain modulation
 - `Pan Mod` (CV) - Pan modulation
 - `X-Fade Mod` (CV) - Crossfade modulation
 
-**Outputs:**
+#### Outputs
 - `Out L/R` (Audio) - Mixed stereo output
 
-**Parameters:**
+#### Parameters
 - `Gain` (-60 to +12 dB) - Overall output gain
 - `Pan` (-1 to +1) - Stereo panning
 - `Crossfade` (0-1) - Blend between input A (0) and input B (1)
 
-**How to Use:**
+#### How to Use
 1. Connect two stereo sources
 2. Use crossfade to blend between them
 3. Adjust gain and pan for final mix
@@ -1075,17 +1075,17 @@ A two-input stereo mixer with gain, pan, and crossfade controls.
 
 A mixer specifically designed for mixing CV signals.
 
-**Inputs:**
+#### Inputs
 - `In A/B` (CV) - CV inputs
 - `Gain Mod` (CV) - Gain modulation
 
-**Outputs:**
+#### Outputs
 - `Out` (CV) - Mixed CV output
 
-**Parameters:**
+#### Parameters
 - `Gain A/B` (-2 to +2) - Gain for each input
 
-**How to Use:**
+#### How to Use
 1. Mix multiple CV sources together
 2. Use negative gain to invert signals
 3. Create complex modulation by combining LFOs and envelopes
@@ -1098,21 +1098,21 @@ A mixer specifically designed for mixing CV signals.
 
 A mixer for up to 8 monophonic tracks with individual gain and pan controls.
 
-**Inputs:**
+#### Inputs
 - `In 1-8` (Audio) - 8 mono audio inputs
 - `Num Tracks Mod` (Raw) - Number of active tracks modulation
 - `Gain 1-8 Mod` (CV) - Per-track gain modulation
 - `Pan 1-8 Mod` (CV) - Per-track pan modulation
 
-**Outputs:**
+#### Outputs
 - `Out L/R` (Audio) - Stereo mixed output
 
-**Parameters:**
+#### Parameters
 - `Num Tracks` (1-8) - Number of active tracks
 - `Gain 1-8` (-60 to +12 dB) - Per-track gain
 - `Pan 1-8` (-1 to +1) - Per-track stereo panning
 
-**How to Use:**
+#### How to Use
 1. Connect multiple mono sources (great with PolyVCO outputs)
 2. Adjust per-track gain and pan
 3. Set Num Tracks to control how many inputs are active
@@ -1125,19 +1125,19 @@ A mixer for up to 8 monophonic tracks with individual gain and pan controls.
 
 A compact, intuitive control surface that provides simultaneous volume and panning adjustment via a draggable circle on a 2D grid.
 
-**Inputs:**
+#### Inputs
 - `Pan Mod` (CV) - Panning modulation input
 - `Vol Mod` (CV) - Volume modulation input
 
-**Outputs:**
+#### Outputs
 - `Pan Out` (CV) - Panning CV output (normalized 0.0 to 1.0, maps to -1.0 to +1.0 in mixers)
 - `Vol Out` (CV) - Volume CV output (normalized 0.0 to 1.0, maps to -60dB to +6dB in mixers)
 
-**Parameters:**
+#### Parameters
 - `Pan` (-1.0 to +1.0) - Panning position (-1.0 = Full Left, 0.0 = Center, +1.0 = Full Right)
 - `Volume` (-60.0 to +6.0 dB) - Volume level (0.0 dB = Unity gain)
 
-**How to Use:**
+#### How to Use
 1. **Interactive Control:**
    - Click and drag the circle on the grid to adjust both volume and panning simultaneously
    - Vertical movement controls volume (up = louder, down = quieter)
@@ -1176,17 +1176,17 @@ A compact, intuitive control surface that provides simultaneous volume and panni
 
 Attenuates (reduces) and/or inverts CV or audio signals.
 
-**Inputs:**
+#### Inputs
 - `In L/R` (Audio) - Stereo inputs
 - `Amount Mod` (CV) - Amount modulation
 
-**Outputs:**
+#### Outputs
 - `Out L/R` (Audio) - Processed outputs
 
-**Parameters:**
+#### Parameters
 - `Amount` (-1 to +1) - Attenuation/inversion amount (0=silent, 0.5=half, 1=full, negative=inverted)
 
-**How to Use:**
+#### How to Use
 1. Use positive values (0-1) to reduce signal levels
 2. Use negative values (-1-0) to invert and reduce
 3. Set to 0 for silence
@@ -1200,19 +1200,19 @@ Attenuates (reduces) and/or inverts CV or audio signals.
 
 Smooths abrupt changes in signals using independent rise and fall times.
 
-**Inputs:**
+#### Inputs
 - `Signal In` (CV) - CV input to smooth
 - `Rise Mod` (CV) - Rise time modulation
 - `Fall Mod` (CV) - Fall time modulation
 
-**Outputs:**
+#### Outputs
 - `Smoothed Out` (CV) - Smoothed CV output
 
-**Parameters:**
+#### Parameters
 - `Rise Time` (0.1-1000 ms) - Time to reach rising values
 - `Fall Time` (0.1-1000 ms) - Time to reach falling values
 
-**How to Use:**
+#### How to Use
 1. Insert between a CV source and destination to smooth transitions
 2. Use equal rise/fall times for symmetrical smoothing
 3. Use different rise/fall for attack/release character
@@ -1226,22 +1226,22 @@ Smooths abrupt changes in signals using independent rise and fall times.
 
 Performs mathematical operations on two input signals.
 
-**Inputs:**
+#### Inputs
 - `In A` (CV) - First operand
 - `In B` (CV) - Second operand
 
-**Outputs:**
+#### Outputs
 - `Add` (CV) - A + B
 - `Subtract` (CV) - A - B
 - `Multiply` (CV) - A × B
 - `Divide` (CV) - A ÷ B
 
-**Parameters:**
+#### Parameters
 - `Value A` (-100 to 100) - Default value for A (used if not patched)
 - `Value B` (-100 to 100) - Default value for B (used if not patched)
 - `Operation` (Choice) - Add, Subtract, Multiply, Divide, Min, Max, Power, Sqrt(A), Sin(A), Cos(A), Tan(A), Abs(A), Modulo, Fract(A), Int(A), A>B, A<B
 
-**How to Use:**
+#### How to Use
 1. Connect CV sources or use internal values
 2. Choose operation
 3. Use outputs for complex CV processing
@@ -1255,20 +1255,20 @@ Performs mathematical operations on two input signals.
 
 Remaps values from one range to another.
 
-**Inputs:**
+#### Inputs
 - `Raw In` (Raw) - Input value to remap
 
-**Outputs:**
+#### Outputs
 - `CV Out` (CV) - Remapped to 0-1 range
 - `Audio Out` (Audio) - Remapped to audio-rate
 
-**Parameters:**
+#### Parameters
 - `Min In` (-1000 to 1000) - Input range minimum
 - `Max In` (-1000 to 1000) - Input range maximum
 - `Min Out` (-1000 to 1000) - Output range minimum
 - `Max Out` (-1000 to 1000) - Output range maximum
 
-**How to Use:**
+#### How to Use
 1. Define your input range (min/max in)
 2. Define your desired output range (min/max out)
 3. Connect input signal
@@ -1282,19 +1282,19 @@ Remaps values from one range to another.
 
 Snaps continuous CV to musical scales.
 
-**Inputs:**
+#### Inputs
 - `CV In` (CV) - Continuous pitch CV
 - `Scale Mod` (CV) - Scale selection modulation
 - `Root Mod` (CV) - Root note modulation
 
-**Outputs:**
+#### Outputs
 - `Out` (CV) - Quantized pitch CV
 
-**Parameters:**
+#### Parameters
 - `Scale` (Choice) - Musical scale (Major, Minor, Chromatic, Pentatonic, etc.)
 - `Root` (Choice) - Root note (C, C#, D, etc.)
 
-**How to Use:**
+#### How to Use
 1. Connect a continuous CV source (LFO, random, etc.)
 2. Choose a musical scale
 3. Set the root note
@@ -1308,16 +1308,16 @@ Snaps continuous CV to musical scales.
 
 Converts raw values to normalized rate values for tempo-related modulation.
 
-**Inputs:**
+#### Inputs
 - `Rate Mod` (CV) - Rate modulation input
 
-**Outputs:**
+#### Outputs
 - `Out` (CV) - Normalized rate output
 
-**Parameters:**
+#### Parameters
 - `Rate` (0.1-20) - Rate multiplier
 
-**How to Use:**
+#### How to Use
 1. Use to convert between different rate representations
 2. Useful for tempo-syncing external modulators
 3. Provides standardized rate output for consistent timing
@@ -1329,16 +1329,16 @@ Converts raw values to normalized rate values for tempo-related modulation.
 
 Outputs a gate signal when input exceeds a threshold.
 
-**Inputs:**
+#### Inputs
 - `In` (CV) - CV input to compare
 
-**Outputs:**
+#### Outputs
 - `Out` (Gate) - Gate output (high when input > threshold)
 
-**Parameters:**
+#### Parameters
 - `Threshold` (0-1) - Comparison threshold
 
-**How to Use:**
+#### How to Use
 1. Connect a CV source
 2. Set threshold
 3. Output goes high when input exceeds threshold
@@ -1352,17 +1352,17 @@ Outputs a gate signal when input exceeds a threshold.
 
 Performs boolean logic operations on gate signals.
 
-**Inputs:**
+#### Inputs
 - `In A` (Gate) - First input
 - `In B` (Gate) - Second input
 
-**Outputs:**
+#### Outputs
 - `AND` (Gate) - High when both inputs are high
 - `OR` (Gate) - High when either input is high
 - `XOR` (Gate) - High when inputs differ
 - `NOT A` (Gate) - Inverted A
 
-**How to Use:**
+#### How to Use
 1. Connect two gate sources
 2. Use outputs for different logic combinations
 3. AND: Both gates must be high (good for requiring multiple conditions)
@@ -1377,15 +1377,15 @@ Performs boolean logic operations on gate signals.
 
 Divides and multiplies clock signals for polyrhythmic patterns.
 
-**Inputs:**
+#### Inputs
 - `Clock In` (Gate) - Clock input to divide/multiply
 - `Reset` (Gate) - Reset all divisions to sync
 
-**Outputs:**
+#### Outputs
 - `/2, /4, /8` (Gate) - Divided clocks (half, quarter, eighth speed)
 - `x2, x3, x4` (Gate) - Multiplied clocks (double, triple, quadruple speed)
 
-**How to Use:**
+#### How to Use
 1. Connect a clock source
 2. Use divided outputs for slower rhythms
 3. Use multiplied outputs for faster rhythms
@@ -1399,17 +1399,17 @@ Divides and multiplies clock signals for polyrhythmic patterns.
 
 Routes an input signal to one of four outputs based on CV thresholds.
 
-**Inputs:**
+#### Inputs
 - `Gate In` (Audio) - Signal to route
 - `Thresh 1-4 CV` (CV) - Threshold values for each output
 
-**Outputs:**
+#### Outputs
 - `Out 1-4` (Audio) - Four possible output destinations
 
-**Parameters:**
+#### Parameters
 - `Threshold 1-4` (0-1) - Threshold levels
 
-**How to Use:**
+#### How to Use
 1. Connect a signal to Gate In
 2. Set thresholds for each output
 3. As input CV changes, signal routes to different outputs
@@ -1427,10 +1427,10 @@ Sequencer nodes generate rhythmic and melodic patterns.
 
 A classic 16-step sequencer for creating melodies and rhythms.
 
-**Inputs:**
+#### Inputs
 - Extensive per-step modulation inputs for values, triggers, and gates
 
-**Outputs:**
+#### Outputs
 - `Pitch` (CV) - Current step pitch value
 - `Gate` (Gate) - Gate output
 - `Gate Nuanced` (CV) - Gate with velocity
@@ -1438,13 +1438,13 @@ A classic 16-step sequencer for creating melodies and rhythms.
 - `Mod` (CV) - Modulation output
 - `Trigger` (Gate) - Trigger on each step
 
-**Parameters:**
+#### Parameters
 - `Rate` (0.1-20 Hz) - Sequence speed
 - `Num Steps` (1-16) - Number of active steps
 - `Gate Length` (0-1) - Duration of gates
 - Per-step: Pitch, Gate, Velocity, Modulation values
 
-**How to Use:**
+#### How to Use
 1. Set number of steps and rate
 2. Program pitch values for each step
 3. Set gates on/off for rhythm
@@ -1458,11 +1458,11 @@ A classic 16-step sequencer for creating melodies and rhythms.
 
 An advanced sequencer with parallel per-step outputs for polyphonic sequencing.
 
-**Outputs:**
+#### Outputs
 - Live outputs: Pitch, Gate, Trigger, Velocity, Mod
 - Parallel outputs: Pitch 1-16, Gate 1-16, Trig 1-16 (all steps output simultaneously)
 
-**How to Use:**
+#### How to Use
 1. Similar to Sequencer but with simultaneous output of all 16 steps
 2. Connect parallel outputs to PolyVCO for poly synth
 3. Create complex polyphonic arrangements
@@ -1475,14 +1475,14 @@ An advanced sequencer with parallel per-step outputs for polyphonic sequencing.
 
 Master tempo/clock source with transport controls.
 
-**Inputs:**
+#### Inputs
 - `BPM Mod` (CV) - BPM modulation
 - `Tap` (Gate) - Tap tempo input
 - `Nudge+/-` (Gate) - Fine tempo adjustment
 - `Play/Stop/Reset` (Gate) - Transport controls
 - `Swing Mod` (CV) - Swing amount modulation
 
-**Outputs:**
+#### Outputs
 - `Clock` (Gate) - Main clock pulse
 - `Beat Trig` (Gate) - Trigger on each beat
 - `Bar Trig` (Gate) - Trigger on each bar
@@ -1491,13 +1491,13 @@ Master tempo/clock source with transport controls.
 - `BPM CV` (CV) - BPM as CV
 - `Downbeat` (Gate) - First beat of bar
 
-**Parameters:**
+#### Parameters
 - `BPM` (20-300) - Tempo in beats per minute
 - `Time Signature` (Choice) - 4/4, 3/4, 6/8, etc.
 - `Swing` (0-100%) - Swing amount
 - `Global Division` (Bool) - Override all synced modules' divisions
 
-**How to Use:**
+#### How to Use
 1. Set BPM for your project
 2. Use clock outputs to drive sequencers and LFOs
 3. Enable Global Division to control all synced modules at once
@@ -1510,7 +1510,7 @@ Master tempo/clock source with transport controls.
 
 Sequences complete patch states, recalling all parameter values.
 
-**How to Use:**
+#### How to Use
 1. Create snapshots of your entire patch at different states
 2. Sequence through snapshots for dramatic changes
 3. Great for live performance and automation
@@ -1522,7 +1522,7 @@ Sequences complete patch states, recalling all parameter values.
 
 Records and plays back drawn gestures as CV sequences.
 
-**How to Use:**
+#### How to Use
 1. Draw patterns with your mouse/tablet
 2. Playback converts drawing to CV
 3. Unique way to create expressive, human-feeling sequences
@@ -1540,7 +1540,7 @@ A transport-synchronized automation recorder that captures and plays back CV, Ga
 **Outputs (Dynamic):**
 - `[Channel Name] Out` (CV) - One output per automation channel (up to 32 channels)
 
-**Parameters:**
+#### Parameters
 - `Record` (Bool) - Enable recording mode (mutually exclusive with Play)
 - `Play` (Bool) - Enable playback mode (mutually exclusive with Record)
 - `Add Channel` (Button) - Create a new automation channel
@@ -1551,7 +1551,7 @@ A transport-synchronized automation recorder that captures and plays back CV, Ga
 - **Y (Gate)**: Chain gate/trigger outputs to gate inputs
 - **R (Raw)**: Chain raw value outputs
 
-**How to Use:**
+#### How to Use
 1. **Setup Channels:**
    - Click "Add Channel" to create automation channels
    - Each channel can record a separate signal (CV, Gate, Trigger, or Raw)
@@ -1605,7 +1605,7 @@ MIDI nodes handle MIDI input/output and conversion to CV.
 
 Converts incoming MIDI notes to CV/Gate signals (monophonic).
 
-**Outputs:**
+#### Outputs
 - `Pitch` (CV) - Note pitch as CV (V/Oct)
 - `Gate` (Gate) - Note on/off gate
 - `Velocity` (CV) - Note velocity
@@ -1613,7 +1613,7 @@ Converts incoming MIDI notes to CV/Gate signals (monophonic).
 - `Pitch Bend` (CV) - Pitch bend wheel
 - `Aftertouch` (CV) - Channel aftertouch
 
-**How to Use:**
+#### How to Use
 1. Connect MIDI controller or use virtual MIDI
 2. Play notes → outputs CV/Gate
 3. Use with VCO + VCA + ADSR for classic synth voice
@@ -1626,7 +1626,7 @@ Converts incoming MIDI notes to CV/Gate signals (monophonic).
 
 Plays MIDI files with per-track CV/Gate outputs.
 
-**How to Use:**
+#### How to Use
 1. Load a MIDI file
 2. Outputs CV/Gate for each MIDI track
 3. Great for backing tracks or complex sequences
@@ -1638,14 +1638,14 @@ Plays MIDI files with per-track CV/Gate outputs.
 
 1-16 MIDI-learnable faders with customizable output ranges.
 
-**Outputs:**
+#### Outputs
 - `Fader 1-16` (CV) - CV outputs (0-1 range)
 
-**Parameters:**
+#### Parameters
 - MIDI Learn for each fader
 - Min/Max output range per fader
 
-**How to Use:**
+#### How to Use
 1. Click MIDI Learn
 2. Move a fader on your controller
 3. Fader is now linked
@@ -1665,7 +1665,7 @@ Similar to MIDI Faders but optimized for rotary controls.
 
 1-32 MIDI-learnable buttons with Gate/Toggle/Trigger modes.
 
-**Outputs:**
+#### Outputs
 - `Button 1-32` (Gate) - Gate/trigger outputs
 
 **Modes:**
@@ -1697,12 +1697,12 @@ Visualizes audio or CV signals over time.
 **Inputs/Outputs:**
 - `In/Out` (Audio) - Pass-through with visualization
 
-**Parameters:**
+#### Parameters
 - `Window Size` (0.5-20 seconds) - Time window to display
 - `Trigger Mode` (Choice) - Free-run, Rising Edge, Falling Edge
 - `Trigger Level` (0-1) - Trigger threshold
 
-**How to Use:**
+#### How to Use
 1. Insert in signal path (pass-through)
 2. Adjust window size to see desired time range
 3. Use trigger modes for stable waveform display
@@ -1715,7 +1715,7 @@ Visualizes audio or CV signals over time.
 
 Logs signal value changes to the console.
 
-**How to Use:**
+#### How to Use
 1. Insert in CV path
 2. Logs values to console when they change
 3. Great for troubleshooting CV routing
@@ -1735,18 +1735,18 @@ Like Debug but with pass-through output.
 
 High-resolution real-time spectrum analyzer with frequency-based gate outputs.
 
-**Inputs:**
+#### Inputs
 - `In` (Audio) - Mono audio to analyze
 
-**Outputs:**
+#### Outputs
 - `Out L/R` (Audio) - Stereo pass-through
 - `Sub/Bass/Mid/High Gate` (Gate) - Per-band gate outputs
 - `Sub/Bass/Mid/High Trig` (Gate) - Per-band trigger outputs
 
-**Parameters:**
+#### Parameters
 - `Gate Threshold` per band - Threshold for gate outputs
 
-**How to Use:**
+#### How to Use
 1. Send audio through for visualization
 2. Displays frequency spectrum in real-time
 3. Use gate/trigger outputs for frequency-reactive triggering
@@ -1763,22 +1763,22 @@ Special nodes provide unique functionality beyond traditional synthesis.
 
 Advanced text-to-speech with word-level sequencing.
 
-**Inputs:**
+#### Inputs
 - Per-word trigger inputs (1-16)
 - Rate, Gate, Speed, Pitch modulation
 
-**Outputs:**
+#### Outputs
 - `Audio` - Speech audio output
 - `Word Gate` - Gate while speaking
 - `EOP Gate` - End of phrase gate
 - Per-word gates and triggers (1-16)
 
-**Parameters:**
+#### Parameters
 - Text input field
 - Voice selection
 - Rate, pitch, speed controls
 
-**How to Use:**
+#### How to Use
 1. Type text into text field
 2. Choose voice
 3. Trigger individual words or play entire phrase
@@ -1792,13 +1792,13 @@ Advanced text-to-speech with word-level sequencing.
 
 Simulates human vowel sounds through formant filtering.
 
-**Parameters:**
+#### Parameters
 - `Vowel Shape` - Continuous blend between vowels (A, E, I, O, U)
 - `Formant Shift` - Shift formant frequencies up/down
 - `Instability` - Add human-like variation
 - `Gain` - Formant emphasis
 
-**How to Use:**
+#### How to Use
 1. Send audio through (great with sawtooth waves)
 2. Adjust vowel shape to morph between vowels
 3. Modulate with LFOs for talking/singing effects
@@ -1811,7 +1811,7 @@ Simulates human vowel sounds through formant filtering.
 
 A 2D physics engine that outputs collision and contact data as CV.
 
-**How to Use:**
+#### How to Use
 1. Create physics objects in the UI
 2. Set gravity, friction, elasticity
 3. Objects collide and interact
@@ -1826,7 +1826,7 @@ A 2D physics engine that outputs collision and contact data as CV.
 
 Loads and plays 3D animations, outputs joint positions and velocities.
 
-**How to Use:**
+#### How to Use
 1. Load 3D animation file (FBX, etc.)
 2. Play animation
 3. Outputs joint positions as CV
@@ -1843,7 +1843,7 @@ Computer vision nodes process video for audio/CV generation.
 
 Captures video from webcam and publishes a `Source ID` for vision processing modules.
 
-**Outputs:**
+#### Outputs
 - `Source ID` (Video) - Video source identifier
 
 **Auto-Connect Shortcuts:**
@@ -1857,7 +1857,7 @@ Captures video from webcam and publishes a `Source ID` for vision processing mod
 
 Loads and plays video files; publishes a `Source ID` for vision processing modules.
 
-**Outputs:**
+#### Outputs
 - `Source ID` (Video) - Video source identifier
 
 **Auto-Connect Shortcuts:**
@@ -1871,10 +1871,10 @@ Loads and plays video files; publishes a `Source ID` for vision processing modul
 
 Analyzes video for motion via optical flow or background subtraction.
 
-**Inputs:**
+#### Inputs
 - `Source In` (Video) - Video source ID
 
-**Outputs:**
+#### Outputs
 - `Motion X` (CV), `Motion Y` (CV) - Motion vector components
 - `Amount` (CV) - Total motion amount
 - `Trigger` (Gate) - Trigger on significant motion
@@ -1885,7 +1885,7 @@ Analyzes video for motion via optical flow or background subtraction.
 - **B (CV)**: Chain `Motion X/Y/Amount` to CV destinations
 - **Y (Gate)**: Chain `Trigger` to gate inputs
 
-**How to Use:**
+#### How to Use
 1. Connect webcam or video file loader
 2. Outputs motion as CV
 3. Use for interactive installations
@@ -1898,10 +1898,10 @@ Analyzes video for motion via optical flow or background subtraction.
 
 Detects faces or bodies in video via Haar Cascades or HOG.
 
-**Inputs:**
+#### Inputs
 - `Source In` (Video) - Video source ID
 
-**Outputs:**
+#### Outputs
 - `X` (CV), `Y` (CV) - Center position
 - `Width` (CV), `Height` (CV) - Bounding box size
 - `Gate` (Gate) - High when person detected
@@ -1913,7 +1913,7 @@ Detects faces or bodies in video via Haar Cascades or HOG.
 - **B (CV)**: Chain X/Y/Width/Height to CV inputs
 - **Y (Gate)**: Chain `Gate` to gate inputs
 
-**How to Use:**
+#### How to Use
 1. Connect video source
 2. Detects faces/bodies
 3. Outputs position and size as CV
@@ -1926,7 +1926,7 @@ Detects faces or bodies in video via Haar Cascades or HOG.
 
 Uses OpenPose MPI model to detect 15 body keypoints. Outputs 30 CV pins programmatically (X/Y for each keypoint).
 
-**Inputs:**
+#### Inputs
 - `Source In` (Video) - Video source ID from webcam or video file loader
 
 **Outputs (dynamic/programmatic):**
@@ -1938,12 +1938,12 @@ Uses OpenPose MPI model to detect 15 body keypoints. Outputs 30 CV pins programm
 - **V (Video)**: Connect loader `Source ID` → `Source In`; chain `Video Out` or `Cropped Out` → next video module
 - **B (CV)**: Chain any keypoint X/Y outputs to CV targets
 
-**Parameters:**
+#### Parameters
 - `Confidence` (0.0-1.0) - Detection confidence threshold (default: 0.1). Lower values detect more keypoints but may include false positives
 - `Draw Skeleton` (Bool) - Toggle skeleton overlay on video preview
 - `Zoom` (+/-) - Toggle between normal (480px) and zoomed (960px) video preview
 
-**How to Use:**
+#### How to Use
 1. **Setup:** Download OpenPose MPI model files (see `guides/POSE_ESTIMATOR_SETUP.md`)
 2. **Connect Video Source:** Connect a Webcam Loader or Video File Loader's `Source ID` output to `Source In`
 3. **Adjust Confidence:** Lower threshold for more sensitive detection, higher for more reliable detection
@@ -1985,7 +1985,7 @@ Uses OpenPose MPI model to detect 15 body keypoints. Outputs 30 CV pins programm
 
 Uses OpenPose hand model to detect 21 hand keypoints. Outputs 42 CV pins (X/Y per keypoint).
 
-**Inputs:**
+#### Inputs
 - `Source In` (Video) - Video source ID
 
 **Outputs (dynamic/programmatic):**
@@ -1997,11 +1997,11 @@ Uses OpenPose hand model to detect 21 hand keypoints. Outputs 42 CV pins (X/Y pe
 - **V (Video)**: Connect loader `Source ID` → `Source In`; chain `Video Out` or `Cropped Out` → next video module
 - **B (CV)**: Chain any keypoint X/Y outputs to CV targets
 
-**Parameters:**
+#### Parameters
 - `Confidence` (0.0-1.0) - Detection confidence threshold (default: 0.1)
 - `Zoom` (+/-) - Adjust preview size: Small (240px), Normal (480px), Large (960px)
 
-**How to Use:**
+#### How to Use
 1. **Setup:** Requires OpenPose hand model files in `assets/openpose_models/hand/`
 2. **Connect Video Source:** Connect Webcam or Video File Loader's `Source ID` to `Source In`
 3. **Adjust Confidence:** Lower values for sensitive detection, higher for reliable detection
@@ -2028,7 +2028,7 @@ Uses OpenPose hand model to detect 21 hand keypoints. Outputs 42 CV pins (X/Y pe
 
 Uses OpenPose face model to detect 70 facial landmarks. Outputs 140 CV pins (X/Y per point).
 
-**Inputs:**
+#### Inputs
 - `Source In` (Video) - Video source ID
 
 **Outputs (dynamic/programmatic):**
@@ -2040,11 +2040,11 @@ Uses OpenPose face model to detect 70 facial landmarks. Outputs 140 CV pins (X/Y
 - **V (Video)**: Connect loader `Source ID` → `Source In`; chain `Video Out` or `Cropped Out` → next video module
 - **B (CV)**: Chain landmark X/Y outputs to CV targets
 
-**Parameters:**
+#### Parameters
 - `Confidence` (0.0-1.0) - Detection confidence threshold (default: 0.1)
 - `Zoom` (+/-) - Adjust preview size: Small (240px), Normal (480px), Large (960px)
 
-**How to Use:**
+#### How to Use
 1. **Setup:** Requires OpenPose face model files in `assets/openpose_models/face/`
 2. **Connect Video Source:** Connect Webcam or Video File Loader's `Source ID` to `Source In`
 3. **Adjust Confidence:** Lower values for sensitive detection, higher for reliable detection
@@ -2071,10 +2071,10 @@ Uses OpenPose face model to detect 70 facial landmarks. Outputs 140 CV pins (X/Y
 
 Uses YOLOv3 deep learning model to detect objects from 80 COCO classes (person, car, bottle, etc.) in real-time video.
 
-**Inputs:**
+#### Inputs
 - `Source In` (Video) - Video source ID
 
-**Outputs:**
+#### Outputs
 - `X` (CV) - Center X position (0-1)
 - `Y` (CV) - Center Y position (0-1)
 - `Width` (CV) - Width (0-1)
@@ -2088,12 +2088,12 @@ Uses YOLOv3 deep learning model to detect objects from 80 COCO classes (person, 
 - **B (CV)**: Chain X/Y/Width/Height to CV inputs
 - **Y (Gate)**: Chain `Gate` to gate inputs
 
-**Parameters:**
+#### Parameters
 - `Target Class` (Choice) - Object class to detect (person, car, bicycle, etc.)
 - `Confidence` (0.0-1.0) - Detection confidence threshold (default: 0.5)
 - `Zoom` (+/-) - Adjust preview size: Small (240px), Normal (480px), Large (960px)
 
-**How to Use:**
+#### How to Use
 1. **Setup:** Requires YOLOv3 model files (`yolov3.cfg`, `yolov3.weights`, `coco.names`) in `assets/`
 2. **Connect Video Source:** Connect Webcam or Video File Loader's `Source ID` to `Source In`
 3. **Select Target Class:** Choose which object type to detect
@@ -2122,7 +2122,7 @@ Uses YOLOv3 deep learning model to detect objects from 80 COCO classes (person, 
 
 Tracks multiple custom colors in video using HSV color space. Outputs are dynamic: each added color creates three CV outputs.
 
-**Inputs:**
+#### Inputs
 - `Source In` (Video) - Video source ID
 
 **Outputs (dynamic):**
@@ -2136,11 +2136,11 @@ Tracks multiple custom colors in video using HSV color space. Outputs are dynami
 - **V (Video)**: Connect loader `Source ID` → `Source In`; chain `Video Out` → next video module
 - **B (CV)**: Chain per-color X/Y/Area to CV inputs
 
-**Parameters:**
+#### Parameters
 - `Add Color...` (Button) - Click to pick a color from the video preview
 - `Zoom` (+/-) - Adjust preview size: Small (240px), Normal (480px), Large (960px)
 
-**How to Use:**
+#### How to Use
 1. **Connect Video Source:** Connect Webcam or Video File Loader's `Source ID` to `Source In`
 2. **Pick Colors:** Click "Add Color..." and click on the video preview to sample a color
 3. **Track Multiple:** Add up to 8 different colors to track simultaneously
@@ -2169,10 +2169,10 @@ Tracks multiple custom colors in video using HSV color space. Outputs are dynami
 
 Detects shapes and their properties using background subtraction and contour analysis.
 
-**Inputs:**
+#### Inputs
 - `Source In` (Video) - Video source ID
 
-**Outputs:**
+#### Outputs
 - `Area` (CV) - Detected shape area (0-1)
 - `Complexity` (CV) - Polygon complexity (0-1)
 - `Aspect Ratio` (CV) - Width/height ratio
@@ -2182,12 +2182,12 @@ Detects shapes and their properties using background subtraction and contour ana
 - **V (Video)**: Connect loader `Source ID` → `Source In`; chain `Video Out` → next video module
 - **B (CV)**: Chain outputs to CV inputs
 
-**Parameters:**
+#### Parameters
 - `Threshold` (0-255) - Threshold for foreground/background separation (default: 128)
 - `Noise Reduction` (Bool) - Enable morphological filtering to reduce noise (default: On)
 - `Zoom` (+/-) - Adjust preview size: Small (240px), Normal (480px), Large (960px)
 
-**How to Use:**
+#### How to Use
 1. **Connect Video Source:** Connect Webcam or Video File Loader's `Source ID` to `Source In`
 2. **Adjust Threshold:** Set threshold to separate foreground from background
 3. **Enable Noise Reduction:** Reduce detection of small, noisy artifacts
@@ -2214,10 +2214,10 @@ Detects shapes and their properties using background subtraction and contour ana
 
 Uses semantic segmentation (ENet or DeepLabV3) to identify a target class and output region properties.
 
-**Inputs:**
+#### Inputs
 - `Source In` (Video) - Video source ID
 
-**Outputs:**
+#### Outputs
 - `Area` (CV) - Frame coverage of target class (0-1)
 - `Center X` (CV) - Center X of detected region (0-1)
 - `Center Y` (CV) - Center Y of detected region (0-1)
@@ -2229,11 +2229,11 @@ Uses semantic segmentation (ENet or DeepLabV3) to identify a target class and ou
 - **B (CV)**: Chain Area and Center outputs to CV targets.
 - **Y (Gate)**: Chain `Gate` to gate inputs.
 
-**Parameters:**
+#### Parameters
 - `Target Class` (Choice) - Semantic class to detect (person, road, car, etc.)
 - `Zoom` (+/-) - Adjust preview size: Small (240px), Normal (480px), Large (960px)
 
-**How to Use:**
+#### How to Use
 1. **Setup:** Requires ENet or DeepLabV3 model files in `assets/`
 2. **Connect Video Source:** Connect Webcam or Video File Loader's `Source ID` to `Source In`
 3. **Select Target Class:** Choose which semantic class to track
@@ -2260,10 +2260,10 @@ Uses semantic segmentation (ENet or DeepLabV3) to identify a target class and ou
 
 A comprehensive video processing node that applies real-time effects to video streams. Supports chaining multiple effects for complex video transformations. All parameters can be modulated via CV inputs.
 
-**Inputs:**
+#### Inputs
 - `Source In` (Video) - Video source ID from webcam, video file, or other video processing nodes
 
-**Outputs:**
+#### Outputs
 - `Output ID` (Video) - Processed video source ID for chaining to other video modules
 
 **Parameters (All CV-Modulatable):**
@@ -2303,7 +2303,7 @@ A comprehensive video processing node that applies real-time effects to video st
 - **V (Video)**: Chain video source → `Source In`, `Output ID` → next video module
 - All color/filter parameters accept CV modulation for dynamic effects
 
-**How to Use:**
+#### How to Use
 1. **Connect Video Source:** Connect Webcam, Video File Loader, or another Video FX node to `Source In`
 2. **Chain Effects:** Connect `Output ID` to another Video FX or CV processing module
 3. **Adjust Parameters:** Use sliders for real-time preview
@@ -2333,17 +2333,17 @@ A comprehensive video processing node that applies real-time effects to video st
 
 Crops video frames to a specified region. Supports three modes: manual cropping, automatic face tracking, and automatic object tracking (YOLOv3). Perfect for following detected objects or isolating regions of interest.
 
-**Inputs:**
+#### Inputs
 - `Source In` (Video) - Video source ID
 - `Center X Mod` (CV) - Center X position modulation (0-1)
 - `Center Y Mod` (CV) - Center Y position modulation (0-1)
 - `Width Mod` (CV) - Crop width modulation (0-1)
 - `Height Mod` (CV) - Crop height modulation (0-1)
 
-**Outputs:**
+#### Outputs
 - `Output ID` (Video) - Cropped video source ID for chaining
 
-**Parameters:**
+#### Parameters
 - `Tracking Mode` (Choice) - Manual, Track Face, or Track Object
 - `Target Class` (Choice) - Object class when tracking objects (person, car, etc.)
 - `Confidence` (0.0-1.0) - Detection confidence threshold
@@ -2360,7 +2360,7 @@ Crops video frames to a specified region. Supports three modes: manual cropping,
 - **V (Video)**: Chain video source → `Source In`, `Output ID` → next video module
 - **B (CV)**: Connect CV signals (from Object/Human/Pose detectors) to Center X/Y/Width/Height modulation inputs
 
-**How to Use:**
+#### How to Use
 1. **Manual Mode:**
    - Connect video source to `Source In`
    - Adjust Center X/Y and Width/Height sliders
@@ -2416,7 +2416,7 @@ System nodes provide special functionality for patch organization.
 
 A container for creating custom reusable modules from sub-patches.
 
-**How to Use:**
+#### How to Use
 1. Create a patch inside the Meta module
 2. Use Inlet/Outlet nodes to define interface
 3. Save as reusable module
@@ -2443,7 +2443,7 @@ Defines an output for a Meta module.
 
 A text comment node for documenting patches.
 
-**How to Use:**
+#### How to Use
 1. Add comment node
 2. Type documentation text
 3. Helps explain complex patches
@@ -2456,16 +2456,16 @@ A text comment node for documenting patches.
 
 Records incoming audio to WAV, AIFF, or FLAC files.
 
-**Inputs:**
+#### Inputs
 - `In L/R` (Audio) - Stereo audio to record
 
-**Parameters:**
+#### Parameters
 - File path/name
 - Format (WAV, AIFF, FLAC)
 - Bit depth (16/24/32)
 - Record button
 
-**How to Use:**
+#### How to Use
 1. Set file path and format
 2. Connect audio source
 3. Click Record to start
@@ -2478,7 +2478,7 @@ Records incoming audio to WAV, AIFF, or FLAC files.
 
 Hosts VST2/VST3 plugins within the modular environment.
 
-**How to Use:**
+#### How to Use
 1. Load VST plugin
 2. Audio routed through plugin
 3. Use external effects and instruments
@@ -2501,7 +2501,7 @@ A hybrid smart system that automatically detects and reports BPM from rhythm-pro
   - `[Source Name] Active` (Gate) - High when source is active (for introspected sources)
   - `[Source Name] Confidence` (CV) - Detection confidence (0-1, for detected sources)
 
-**Parameters:**
+#### Parameters
 - `Operation Mode` (Choice) - Auto (both methods), Introspection Only, or Detection Only
 - `Min BPM` (20-120) - Minimum BPM for normalization (default: 60)
 - `Max BPM` (120-300) - Maximum BPM for normalization (default: 240)
@@ -2512,7 +2512,7 @@ A hybrid smart system that automatically detects and reports BPM from rhythm-pro
 - **R (Raw)**: Chain `[Source] BPM` outputs to raw value inputs
 - **G (Audio)**: Connect audio sources to beat detection inputs
 
-**How to Use:**
+#### How to Use
 1. **Operation Modes:**
    - **Auto**: Uses both introspection (fast) and beat detection (universal)
    - **Introspection Only**: Only scans modules that report rhythm info (sequencers, animations)

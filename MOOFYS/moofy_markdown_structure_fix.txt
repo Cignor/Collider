@@ -1,10 +1,81 @@
+﻿================================================================================
+CONTEXT BUNDLE: Markdown Structure Fix for Color-Coded Sections
+================================================================================
+Generated: 2025-11-14 09:42:46
+Purpose: Fix markdown structure to enable section-based color coding
+
+================================================================================
+PROBLEM IDENTIFIED
+================================================================================
+
+ISSUE:
+The Nodes_Dictionary.md file uses bold text (**Inputs:**, **Outputs:**, etc.) for
+section headers, but the markdown parser expects Level 4 headers (#### Inputs).
+
+CURRENT STRUCTURE:
+### noise
+**Noise Generator**
+...
+**Inputs:**
+- Level Mod (CV)...
+**Outputs:**
+- Out L (Audio)...
+**Parameters:**
+- Colour (Choice)...
+**How to Use:**
+1. Select the noise color...
+
+PROBLEM:
+- Parser looks for #### headers to create MarkdownSection objects
+- Bold text is parsed as regular content, not structural elements
+- All content after node name becomes one continuous block
+- Cannot distinguish between Description, Inputs, Outputs, Parameters, How to Use
+- Cannot apply different background colors to different sections
+
+REQUIRED STRUCTURE:
+### noise
+**Noise Generator**
+...
+#### Inputs
+- Level Mod (CV)...
+#### Outputs
+- Out L (Audio)...
+#### Parameters
+- Colour (Choice)...
+#### How to Use
+1. Select the noise color...
+
+================================================================================
+SOLUTION
+================================================================================
+
+UPDATE Nodes_Dictionary.md:
+1. Replace **Inputs:** with #### Inputs
+2. Replace **Outputs:** with #### Outputs
+3. Replace **Parameters:** with #### Parameters
+4. Replace **How to Use:** with #### How to Use
+5. Remove colons from headers (optional but cleaner)
+
+This will allow the parser to:
+- Create proper MarkdownSection objects for each section
+- renderMarkdownSection() can iterate through children
+- Identify sections by title and apply appropriate background colors
+
+================================================================================
+CODE FILES
+================================================================================
+
+
+================================================================================
+FILE: juce/Source/preset_creator/HelpManagerComponent.cpp
+================================================================================
+
 #include "HelpManagerComponent.h"
 
 #include "ImGuiNodeEditorComponent.h" // Required for parentEditor
 #include "theme/ThemeManager.h"      // For themed colors (includes Theme.h with ModuleCategory)
 #include "PresetCreatorApplication.h"  // For app properties
 #include "NotificationManager.h"     // For notification posting
-#include "../audio/modules/ModuleProcessor.h" // For PinDataType
 #include <juce_gui_basics/juce_gui_basics.h>
 #include <imgui_internal.h> // For IsKeyPressed
 #include <vector>
@@ -458,7 +529,7 @@ void HelpManagerComponent::renderShortcutsTab()
     char searchBuffer[128] = {};
     std::strncpy(searchBuffer, shortcutsSearchTerm.toRawUTF8(), sizeof(searchBuffer) - 1);
     ImGui::SetNextItemWidth(300.0f);
-    if (ImGui::InputTextWithHint("##shortcut-search", "Search actions…", searchBuffer, sizeof(searchBuffer)))
+    if (ImGui::InputTextWithHint("##shortcut-search", "Search actionsâ€¦", searchBuffer, sizeof(searchBuffer)))
     {
         shortcutsSearchTerm = juce::String(searchBuffer).trim();
     }
@@ -595,7 +666,7 @@ void HelpManagerComponent::renderShortcutCapturePanel()
                     contextDisplayName(shortcutCaptureState.context).toRawUTF8());
         
         ImGui::Separator();
-        ImGui::TextUnformatted("Press a key combination… (Esc to cancel)");
+        ImGui::TextUnformatted("Press a key combinationâ€¦ (Esc to cancel)");
         
         ImGui::End();
     }
@@ -939,10 +1010,6 @@ void HelpManagerComponent::parseMarkdown(const juce::String& content, std::vecto
     {
         juce::String line = lines[i].trimEnd();
         
-        // Skip horizontal rules (---) - they're just separators, not content
-        if (line == "---")
-            continue;
-        
         // Check for headers (##, ###, ####)
         if (line.startsWith("##"))
         {
@@ -1111,7 +1178,7 @@ void HelpManagerComponent::renderMarkdownSection(const MarkdownSection& section,
     }
     else
     {
-        // Level 3+ (####) - enhanced styled header with distinct colors and larger font
+        // Level 3+ (####) - smaller styled header
         
         // Check if this is the target section for scrolling - scroll BEFORE rendering header
         if (isTargetSection)
@@ -1121,52 +1188,13 @@ void HelpManagerComponent::renderMarkdownSection(const MarkdownSection& section,
         }
         
         ImGui::Spacing();
-        ImGui::Spacing(); // Extra spacing before Level 3 headers
         ImGui::PushID(section.anchor.toRawUTF8()); // Unique ID for each subsection
         
-        // Determine color based on section type for better visual rhythm
-        ImVec4 subHeaderColor;
-        juce::String titleUpper = section.title.toUpperCase();
-        
-        if (titleUpper.contains("INPUTS"))
-        {
-            // Inputs - use CV pin color (typically blue/cyan)
-            ImU32 pinColor = ThemeManager::getInstance().getPinColor(PinDataType::CV);
-            subHeaderColor = ImGui::ColorConvertU32ToFloat4(pinColor);
-            subHeaderColor.w = 1.0f; // Full opacity
-        }
-        else if (titleUpper.contains("OUTPUTS"))
-        {
-            // Outputs - use Audio pin color (typically green)
-            ImU32 pinColor = ThemeManager::getInstance().getPinColor(PinDataType::Audio);
-            subHeaderColor = ImGui::ColorConvertU32ToFloat4(pinColor);
-            subHeaderColor.w = 1.0f;
-        }
-        else if (titleUpper.contains("PARAMETERS"))
-        {
-            // Parameters - use a warm accent color (orange/yellow)
-            ImVec4 accent = ImGui::GetStyleColorVec4(ImGuiCol_HeaderHovered);
-            subHeaderColor = ImVec4(accent.x * 1.2f, accent.y * 0.9f, accent.z * 0.7f, 1.0f);
-        }
-        else if (titleUpper.contains("HOW TO USE") || titleUpper.contains("HOW TO"))
-        {
-            // How to Use - use a bright informative color (cyan/teal)
-            ImVec4 accent = ImGui::GetStyleColorVec4(ImGuiCol_HeaderHovered);
-            subHeaderColor = ImVec4(accent.x * 0.7f, accent.y * 1.1f, accent.z * 1.2f, 1.0f);
-        }
-        else
-        {
-            // Default - bright accent color
-            subHeaderColor = ImGui::GetStyleColorVec4(ImGuiCol_HeaderHovered);
-            subHeaderColor.w = 1.0f;
-            subHeaderColor.x = std::min(1.0f, subHeaderColor.x * 1.15f);
-            subHeaderColor.y = std::min(1.0f, subHeaderColor.y * 1.15f);
-            subHeaderColor.z = std::min(1.0f, subHeaderColor.z * 1.15f);
-        }
-        
-        // Apply bold, larger font with distinct color
+        // Use theme text color with slight emphasis
+        ImVec4 subHeaderColor = ImGui::GetStyleColorVec4(ImGuiCol_Text);
+        subHeaderColor.w = 0.9f; // Slightly brighter than disabled
         ImGui::PushStyleColor(ImGuiCol_Text, subHeaderColor);
-        ImGui::SetWindowFontScale(1.4f); // Larger font for better visibility
+        ImGui::SetWindowFontScale(1.1f);
         ImGui::TextUnformatted(section.title.toRawUTF8());
         ImGui::SetWindowFontScale(1.0f);
         ImGui::PopStyleColor();
@@ -1482,19 +1510,7 @@ void HelpManagerComponent::buildNavigationList(const std::vector<MarkdownSection
 {
     for (const auto& section : sections)
     {
-        // Skip Level 3 sections (Inputs, Outputs, Parameters, How to Use) from navigation
-        // They should only appear in the content window, not the sidebar
-        if (section.level == 3)
-        {
-            // Still recurse into children in case there are deeper levels
-            if (!section.children.empty())
-            {
-                buildNavigationList(section.children, navItems, level);
-            }
-            continue;
-        }
-        
-        // Add sections to navigation, but indent based on hierarchy
+        // Add all sections to navigation, but indent based on hierarchy
         NavigationItem item;
         item.title = section.title;
         item.anchor = section.anchor;
@@ -1646,3 +1662,297 @@ void HelpManagerComponent::renderNodeDictionaryContent(const std::vector<Markdow
     }
 }
 
+
+
+
+
+================================================================================
+FILE: juce/Source/preset_creator/HelpManagerComponent.h
+================================================================================
+
+#pragma once
+
+#include <juce_core/juce_core.h>
+#include <imgui.h>
+#include "ShortcutManager.h" // We need this for the capture state and manager reference
+
+// Forward declaration
+class ImGuiNodeEditorComponent;
+
+/**
+ * @class HelpManagerComponent
+ * Manages the non-modal, tabbed Help window.
+ *
+ * This component consolidates:
+ * 1. Shortcut Editor (migrated from ImGuiNodeEditorComponent)
+ * 2. Node Dictionary (Markdown renderer)
+ * 3. Getting Started (Markdown renderer)
+ * 4. About Page
+ *
+ * It follows the same self-contained window pattern as ThemeEditorComponent.
+ */
+class HelpManagerComponent
+{
+public:
+    HelpManagerComponent(ImGuiNodeEditorComponent* parent);
+    ~HelpManagerComponent() = default;
+
+    // === Public API ===
+    void render();
+    void open();
+    void close();
+    bool isOpen() const { return m_isOpen; }
+
+    /**
+     * @brief Sets the currently active tab by its index.
+     * 0 = Shortcuts, 1 = Node Dictionary, 2 = Getting Started, 3 = FAQ, 4 = About
+     * This is used by external triggers (like F1 or context menus) to
+     * open the manager to a specific tab.
+     * @param tabIndex The index of the tab to select.
+     */
+    void setActiveTab(int tabIndex) 
+    { 
+        m_currentTab = tabIndex; 
+        m_shouldSetTab = true; // Flag that we want to programmatically set this tab
+    }
+    
+    /**
+     * @brief Opens the Help Manager to the Node Dictionary tab and scrolls to a specific node.
+     * @param nodeAnchor The anchor of the node to scroll to (e.g., "vco", "track-mixer").
+     *                   The anchor should match the format used in the markdown file.
+     */
+    void openToNode(const juce::String& nodeAnchor);
+
+private:
+    // === Window State ===
+    bool m_isOpen = false;
+    int m_currentTab = 0; // 0:Shortcuts, 1:Dictionary, 2:GettingStarted, 3:FAQ, 4:About
+    bool m_shouldSetTab = false; // Flag to programmatically set tab (e.g., from F1)
+    ImGuiNodeEditorComponent* parentEditor = nullptr;
+    collider::ShortcutManager& shortcutManager;
+
+    // === Tab Rendering Functions ===
+    void renderShortcutsTab();
+    void renderNodeDictionaryTab();
+    void renderGettingStartedTab();
+    void renderFaqTab();
+    void renderAboutTab();
+
+    // === Markdown Parsing & Rendering (for Node Dictionary and Getting Started) ===
+    struct MarkdownSection
+    {
+        juce::String title;
+        int level; // 1 = ##, 2 = ###, 3 = ####
+        juce::String content; // Text content before subsections
+        std::vector<MarkdownSection> children;
+        juce::String anchor; // For anchor links (e.g., #vco)
+        
+        // Helper to check if this section or any child matches search
+        bool matchesSearch(const juce::String& searchTerm) const;
+        
+        // Helper to check if this section or any child contains the given anchor
+        bool containsAnchor(const juce::String& targetAnchor) const;
+    };
+
+    // Node Dictionary state
+    juce::String nodeDictionarySearchTerm;
+    std::vector<MarkdownSection> nodeDictionarySections;
+    bool nodeDictionaryLoaded = false;
+    juce::File nodeDictionaryFile;
+
+    // Getting Started state
+    juce::String gettingStartedSearchTerm;
+    std::vector<MarkdownSection> gettingStartedSections;
+    bool gettingStartedLoaded = false;
+    juce::File gettingStartedFile;
+
+    // FAQ state
+    juce::String faqSearchTerm;
+    std::vector<MarkdownSection> faqSections;
+    bool faqLoaded = false;
+    juce::File faqFile;
+
+    // Markdown parsing functions
+    void loadNodeDictionary();
+    void loadGettingStarted();
+    void loadFaq();
+    void parseMarkdown(const juce::String& content, std::vector<MarkdownSection>& sections);
+    void renderMarkdownSection(const MarkdownSection& section, const juce::String& searchTerm, bool parentMatches = true, bool forceExpand = false);
+    void renderMarkdownText(const juce::String& text);
+    void renderFormattedText(const juce::String& text); // Renders text with inline formatting (bold, code)
+    juce::String extractAnchor(const juce::String& headerLine);
+    
+    // Helper to get category color from section title
+    ImU32 getCategoryColorForSection(const juce::String& sectionTitle) const;
+    
+    // Helper to scroll to anchor (stores anchor to scroll to)
+    juce::String scrollToAnchor;
+    bool scrollToSectionIfNeeded(const juce::String& anchor);
+    
+    // Split-pane navigation state
+    struct NavigationItem
+    {
+        juce::String title;
+        juce::String anchor;
+        int level; // Indentation level
+        bool isCategory; // True for category headers (like "SOURCE NODES")
+    };
+    std::vector<NavigationItem> nodeDictionaryNavItems; // Flattened navigation list
+    void buildNavigationList(const std::vector<MarkdownSection>& sections, std::vector<NavigationItem>& navItems, int level = 0);
+    void renderNavigationSidebar(const std::vector<NavigationItem>& navItems, const juce::String& searchTerm);
+    void renderNodeDictionaryContent(const std::vector<MarkdownSection>& sections, const juce::String& searchTerm);
+    std::unordered_map<juce::String, float> sectionScrollPositions; // Anchor -> scroll position
+    float findSectionScrollPosition(const juce::String& anchor, const std::vector<MarkdownSection>& sections, float currentPos = 0.0f);
+
+    // === START: State Migrated from ImGuiNodeEditorComponent ===
+    // This state is moving here to make the Help Manager self-contained.
+    juce::String shortcutsSearchTerm;
+    juce::Identifier shortcutContextSelection;
+    bool shortcutsDirty { false };
+    juce::File defaultShortcutFile;
+    juce::File userShortcutFile;
+
+    // Struct for shortcut capture state
+    struct ShortcutCaptureState
+    {
+        bool isCapturing { false };
+        juce::Identifier actionId;
+        juce::Identifier context;
+        collider::KeyChord captured;
+        bool hasCaptured { false };
+        juce::Identifier conflictActionId;
+        juce::Identifier conflictContextId;
+        bool conflictIsUserBinding { false };
+    };
+
+    ShortcutCaptureState shortcutCaptureState;
+
+    // Helper functions for the shortcut editor
+    void renderShortcutEditorTable(const juce::Identifier& context);
+    void renderShortcutRow(const collider::ShortcutAction& action,
+                           const juce::Identifier& actionId,
+                           const juce::Identifier& context,
+                           bool categoryChanged);
+    void renderShortcutCapturePanel();
+    void beginShortcutCapture(const juce::Identifier& actionId, const juce::Identifier& context);
+    void updateShortcutCapture();
+    void cancelShortcutCapture();
+    void applyShortcutCapture(bool forceReplace);
+    void evaluateShortcutCaptureConflict();
+    void clearShortcutForContext(const juce::Identifier& actionId, const juce::Identifier& context);
+    void resetShortcutForContext(const juce::Identifier& actionId, const juce::Identifier& context);
+    void saveUserShortcutBindings();
+    juce::String getBindingLabelForContext(const juce::Identifier& actionId,
+                                           const juce::Identifier& context,
+                                           juce::String& sourceLabel) const;
+    // === END: State Migrated from ImGuiNodeEditorComponent ===
+};
+
+
+
+
+
+================================================================================
+FILE: USER_MANUAL/Nodes_Dictionary.md
+================================================================================
+
+# Collider Modular Synthesizer - Node Dictionary
+
+**Last Updated:** December 18, 2024  
+**Version:** 1.2
+
+---
+
+## Table of Contents
+
+### Quick Reference Index
+
+#### 1. SOURCE NODES
+- [vco](#vco) - Voltage-Controlled Oscillator
+- [polyvco](#polyvco) - Multi-Voice Oscillator Bank
+- [noise](#noise) - Noise Generator
+- [audio_input](#audio_input) - Hardware Audio Input
+- [sample_loader](#sample_loader) - Audio Sample Player
+- [value](#value) - Constant Value Generator
+
+#### 2. EFFECT NODES
+- [vcf](#vcf) - Voltage-Controlled Filter
+- [delay](#delay) - Stereo Delay Effect
+- [reverb](#reverb) - Stereo Reverb Effect
+- [chorus](#chorus) - Stereo Chorus Effect
+- [phaser](#phaser) - Stereo Phaser Effect
+- [compressor](#compressor) - Dynamic Range Compressor
+- [limiter](#limiter) - Audio Limiter
+- [gate](#gate) - Noise Gate
+- [drive](#drive) - Waveshaping Distortion
+- [graphic_eq](#graphic_eq) - 8-Band Graphic Equalizer
+- [waveshaper](#waveshaper) - Multi-Algorithm Waveshaper
+- [8bandshaper](#8bandshaper) - Multi-Band Waveshaper
+- [granulator](#granulator) - Granular Synthesizer/Effect
+- [harmonic_shaper](#harmonic_shaper) - Harmonic Content Shaper
+- [timepitch](#timepitch) - Time/Pitch Manipulation
+- [de_crackle](#de_crackle) - Click/Pop Reducer
+- [vocal_tract_filter](#vocal_tract_filter) - Formant Filter
+
+#### 3. MODULATOR NODES
+- [lfo](#lfo) - Low-Frequency Oscillator
+- [adsr](#adsr) - Envelope Generator
+- [random](#random) - Random Value Generator
+- [s_and_h](#s_and_h) - Sample & Hold
+- [function_generator](#function_generator) - Drawable Envelope/LFO
+- [shaping_oscillator](#shaping_oscillator) - Oscillator with Built-in Waveshaper
+
+#### 4. UTILITY & LOGIC NODES
+- [vca](#vca) - Voltage-Controlled Amplifier
+- [mixer](#mixer) - Stereo Audio Mixer
+- [cv_mixer](#cv_mixer) - Control Voltage Mixer
+- [track_mixer](#track_mixer) - Multi-Channel Mixer
+- [panvol](#panvol) - 2D Volume and Panning Control
+- [attenuverter](#attenuverter) - Attenuate/Invert Signal
+- [lag_processor](#lag_processor) - Slew Limiter/Smoother
+- [math](#math) - Mathematical Operations
+- [map_range](#map_range) - Value Range Mapper
+- [quantizer](#quantizer) - Musical Scale Quantizer
+- [rate](#rate) - Rate Value Converter
+- [comparator](#comparator) - Threshold Comparator
+- [logic](#logic) - Boolean Logic Operations
+- [clock_divider](#clock_divider) - Clock Division/Multiplication
+- [sequential_switch](#sequential_switch) - Signal Router
+
+#### 5. SEQUENCER NODES
+- [sequencer](#sequencer) - 16-Step CV/Gate Sequencer
+- [multi_sequencer](#multi_sequencer) - Advanced Multi-Output Sequencer
+- [snapshot_sequencer](#snapshot_sequencer) - Patch State Sequencer
+- [stroke_sequencer](#stroke_sequencer) - Gesture-Based Sequencer
+- [tempo_clock](#tempo_clock) - Global Clock Generator
+- [timeline](#timeline) - Automation Recorder and Playback
+
+#### 6. MIDI NODES
+- [midi_cv](#midi_cv) - MIDI to CV Converter
+- [midi_player](#midi_player
+
+================================================================================
+IMPLEMENTATION TASK
+================================================================================
+
+TASK: Update Nodes_Dictionary.md to use proper markdown headers
+
+SEARCH AND REPLACE:
+1. **Inputs:** â†’ #### Inputs
+2. **Outputs:** â†’ #### Outputs
+3. **Parameters:** â†’ #### Parameters
+4. **How to Use:** â†’ #### How to Use
+
+METHOD:
+- Use regex or find/replace to update all occurrences
+- Ensure consistency across all node entries
+- Verify parser can now create proper section structure
+
+VERIFICATION:
+- After update, parser should create child sections for each node
+- renderMarkdownSection() should be able to iterate through children
+- Each section should have proper title and content separation
+
+================================================================================
+END OF CONTEXT BUNDLE
+================================================================================

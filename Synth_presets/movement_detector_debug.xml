@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<ModularSynthPreset version="1" bpm="120.0">
+  <modules>
+    <module logicalId="1" type="video_file_loader">
+      <params>
+        <VideoFileLoaderParams>
+          <PARAM id="engine" value="1.0"/>
+          <PARAM id="in" value="0.0"/>
+          <PARAM id="loop" value="1.0"/>
+          <PARAM id="out" value="1.0"/>
+          <PARAM id="speed" value="1.0"/>
+          <PARAM id="sync" value="1.0"/>
+          <PARAM id="zoomLevel" value="1.0"/>
+        </VideoFileLoaderParams>
+      </params>
+      <extra>
+        <VideoFileLoaderState videoFilePath="C:\Users\PIMP-TOWERPRIMUS\Downloads\Rover. Shuffle_cuttingshapes.mp4"/>
+      </extra>
+    </module>
+    <module logicalId="3" type="movement_detector">
+      <params>
+        <MovementParams>
+          <PARAM id="maxFeatures" value="113.0"/>
+          <PARAM id="mode" value="0.0"/>
+          <PARAM id="noiseReduction" value="0.0"/>
+          <PARAM id="pyramidLevels" value="3.0"/>
+          <PARAM id="sensitivity" value="0.009999999776482582"/>
+          <PARAM id="useGpu" value="1.0"/>
+          <PARAM id="zoomLevel" value="1.0"/>
+        </MovementParams>
+      </params>
+    </module>
+    <module logicalId="999" type="bpm_monitor"/>
+  </modules>
+  <connections>
+    <connection srcId="1" srcChan="0" dstId="3" dstChan="0"/>
+  </connections>
+  <NodeEditorUI>
+    <node id="1" x="390.0" y="431.0"/>
+    <node id="3" x="1143.426391601562" y="491.4543151855469"/>
+    <node id="999" x="0.0" y="0.0"/>
+    <node id="0" x="0.0" y="0.0"/>
+  </NodeEditorUI>
+</ModularSynthPreset>

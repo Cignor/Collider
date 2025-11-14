@@ -19,7 +19,6 @@ juce::AudioProcessorValueTreeState::ParameterLayout MovementDetectorModule::crea
         "zoomLevel", "Zoom Level", juce::StringArray{ "Small", "Normal", "Large" }, 1));
     // NEW: tuning parameters
     params.push_back(std::make_unique<juce::AudioParameterInt>("maxFeatures", "Max Features", 20, 500, 100));
-    params.push_back(std::make_unique<juce::AudioParameterInt>("pyramidLevels", "Pyramid Levels", 1, 5, 3));
     params.push_back(std::make_unique<juce::AudioParameterBool>("noiseReduction", "Noise Reduction", false));
     
     // GPU acceleration toggle - default from global setting
@@ -46,12 +45,14 @@ MovementDetectorModule::MovementDetectorModule()
     useGpuParam = dynamic_cast<juce::AudioParameterBool*>(apvts.getParameter("useGpu"));
     // NEW: init parameter pointers
     maxFeaturesParam = dynamic_cast<juce::AudioParameterInt*>(apvts.getParameter("maxFeatures"));
-    pyramidLevelsParam = dynamic_cast<juce::AudioParameterInt*>(apvts.getParameter("pyramidLevels"));
     noiseReductionParam = dynamic_cast<juce::AudioParameterBool*>(apvts.getParameter("noiseReduction"));
     pBackSub = cv::createBackgroundSubtractorMOG2();
     
     fifoBuffer.resize(16);
     fifo.setTotalSize(16);
+    
+    // Initialize lastMaxFeatures to default value
+    lastMaxFeatures = maxFeaturesParam ? maxFeaturesParam->get() : 100;
 }
 
 MovementDetectorModule::~MovementDetectorModule()
@@ -116,6 +117,16 @@ void MovementDetectorModule::run()
                 }
             }
         }
+        else if (myLogicalId != 0)
+        {
+            // Input frame is empty, but we should still output the last good frame to prevent freezing
+            // This ensures continuous video output even when source temporarily stops
+            const juce::ScopedLock lock(lastOutputFrameLock);
+            if (!lastOutputFrame.empty())
+            {
+                VideoFrameManager::getInstance().setFrame(myLogicalId, lastOutputFrame);
+            }
+        }
         
         wait(33); // ~30 FPS analysis rate
     }
@@ -135,10 +146,42 @@ MovementResult MovementDetectorModule::analyzeFrame(const cv::Mat& inputFrame, j
 
     if (mode == 0) // Optical Flow
     {
-        if (prevPoints.size() < 50)
+        int maxFeatures = maxFeaturesParam ? maxFeaturesParam->get() : 100;
+        
+        // Re-detect features if:
+        // 1. Parameter changed (any change triggers re-detection for immediate feedback)
+        // 2. Current point count is significantly below desired maxFeatures (less than 70% of target)
+        // 3. Point count dropped below absolute minimum threshold (50)
+        bool shouldRedetect = false;
+        if (lastMaxFeatures != maxFeatures)
         {
-            int maxFeatures = maxFeaturesParam ? maxFeaturesParam->get() : 100;
-            cv::goodFeaturesToTrack(gray, prevPoints, maxFeatures, 0.3, 7);
+            // Parameter changed - always re-detect for immediate visual feedback
+            shouldRedetect = true;
+            lastMaxFeatures = maxFeatures;
+        }
+        
+        // Also re-detect if we have significantly fewer points than desired
+        int minDesiredPoints = (int)(maxFeatures * 0.7f); // Want at least 70% of target
+        if (prevPoints.size() < juce::jmax(50, minDesiredPoints))
+        {
+            shouldRedetect = true;
+        }
+        
+        if (shouldRedetect)
+        {
+            // Clear previous points before re-detection
+            prevPoints.clear();
+            // Detect features - note: goodFeaturesToTrack finds UP TO maxFeatures, not exactly maxFeatures
+            // Adjust quality threshold: lower threshold allows more features when maxFeatures is high
+            // Quality threshold ranges from 0.1 (more features) to 0.3 (fewer, higher quality features)
+            double qualityLevel = juce::jmap((double)maxFeatures, 20.0, 500.0, 0.3, 0.1);
+            qualityLevel = juce::jlimit(0.05, 0.3, qualityLevel); // Clamp to reasonable range
+            cv::goodFeaturesToTrack(gray, prevPoints, maxFeatures, qualityLevel, 7);
+            // Draw all newly detected feature points immediately (blue circles)
+            for (const auto& pt : prevPoints)
+            {
+                cv::circle(displayFrame, pt, 3, cv::Scalar(255, 0, 0), -1); // Blue filled circle
+            }
         }
 
         if (!prevGrayFrame.empty() && !prevPoints.empty())
@@ -150,7 +193,7 @@ MovementResult MovementDetectorModule::analyzeFrame(const cv::Mat& inputFrame, j
             
             std::vector<cv::Point2f> nextPoints;
             std::vector<uchar> status;
-            int levels = pyramidLevelsParam ? pyramidLevelsParam->get() : 3;
+            const int levels = 3; // Fixed pyramid levels (optimal default)
             
             #if WITH_CUDA_SUPPORT
                 if (useGpu)
@@ -197,12 +240,19 @@ MovementResult MovementDetectorModule::analyzeFrame(const cv::Mat& inputFrame, j
 
             float sumX = 0.0f, sumY = 0.0f;
             int trackedCount = 0;
+            
+            // First, draw all feature points (blue circles)
+            for (const auto& pt : prevPoints)
+            {
+                cv::circle(displayFrame, pt, 2, cv::Scalar(255, 0, 0), -1); // Blue filled circle
+            }
+            
+            // Then draw tracking vectors for successfully tracked points (green lines)
             for (size_t i = 0; i < prevPoints.size(); ++i)
             {
                 if (status[i])
                 {
                     cv::line(displayFrame, prevPoints[i], nextPoints[i], cv::Scalar(0, 255, 0), 1);
-                    cv::circle(displayFrame, nextPoints[i], 2, cv::Scalar(255, 0, 0), -1);
                     
                     sumX += nextPoints[i].x - prevPoints[i].x;
                     sumY += nextPoints[i].y - prevPoints[i].y;
@@ -222,6 +272,14 @@ MovementResult MovementDetectorModule::analyzeFrame(const cv::Mat& inputFrame, j
                 }
             }
             prevPoints = nextPoints;
+        }
+        else if (!prevPoints.empty())
+        {
+            // No previous frame yet, but we have detected points - draw them
+            for (const auto& pt : prevPoints)
+            {
+                cv::circle(displayFrame, pt, 3, cv::Scalar(255, 0, 0), -1); // Blue filled circle
+            }
         }
         gray.copyTo(prevGrayFrame);
     }
@@ -260,7 +318,12 @@ MovementResult MovementDetectorModule::analyzeFrame(const cv::Mat& inputFrame, j
 
     // --- PASSTHROUGH LOGIC ---
     if (logicalId != 0)
+    {
         VideoFrameManager::getInstance().setFrame(logicalId, displayFrame);
+        // Cache the last output frame for continuous passthrough
+        const juce::ScopedLock lock(lastOutputFrameLock);
+        displayFrame.copyTo(lastOutputFrame);
+    }
     updateGuiFrame(displayFrame);
     return result;
 }
@@ -480,12 +543,6 @@ void MovementDetectorModule::drawParametersInNode(float itemWidth,
         {
             int maxF = maxFeaturesParam->get();
             if (ImGui::SliderInt("Max Features", &maxF, 20, 500)) { *maxFeaturesParam = maxF; }
-            if (ImGui::IsItemDeactivatedAfterEdit()) onModificationEnded();
-        }
-        if (pyramidLevelsParam)
-        {
-            int lv = pyramidLevelsParam->get();
-            if (ImGui::SliderInt("Pyramid Levels", &lv, 1, 5)) { *pyramidLevelsParam = lv; }
             if (ImGui::IsItemDeactivatedAfterEdit()) onModificationEnded();
         }
     }

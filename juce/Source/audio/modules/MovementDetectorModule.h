@@ -75,12 +75,12 @@ private:
 
     // NEW: Algorithm-specific tuning parameters
     juce::AudioParameterInt* maxFeaturesParam = nullptr;
-    juce::AudioParameterInt* pyramidLevelsParam = nullptr;
     juce::AudioParameterBool* noiseReductionParam = nullptr;
 
     // State for Optical Flow mode
     cv::Mat prevGrayFrame;
     std::vector<cv::Point2f> prevPoints;
+    int lastMaxFeatures = 0; // Track last maxFeatures value to detect parameter changes
 
     // State for Background Subtraction mode
     cv::Ptr<cv::BackgroundSubtractorMOG2> pBackSub;
@@ -99,5 +99,9 @@ private:
     // GUI preview
     juce::Image latestFrameForGui;
     juce::CriticalSection imageLock;
+    
+    // Cached last output frame for continuous video passthrough
+    cv::Mat lastOutputFrame;
+    juce::CriticalSection lastOutputFrameLock;
 };
 

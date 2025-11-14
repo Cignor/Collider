@@ -1,10 +1,259 @@
+﻿================================================================================
+CONTEXT BUNDLE: Node Dictionary Color-Coded Sections Implementation
+================================================================================
+Generated: 2025-11-14 09:38:37
+Purpose: Plan and implement color-coded background sections for node documentation
+
+================================================================================
+REQUIREMENT
+================================================================================
+
+USER REQUEST:
+Divide node documentation by colors for each explanation section. There's a common
+structure to definitions:
+1. Description (always different but always first)
+2. Inputs (if any)
+3. Outputs
+4. Parameters
+5. How to Use
+
+Each section should have a background color that is:
+- Consistent with the Theme Manager
+- Matches the actual colors used in the software
+- Allows users to quickly understand the structure at a glance
+
+================================================================================
+CURRENT STRUCTURE
+================================================================================
+
+MARKDOWN STRUCTURE:
+- Level 2 (###) = Node name (e.g., "### noise")
+- Level 3 (####) = Section headers (e.g., "#### Inputs:", "#### Outputs:")
+- Content follows each header
+
+EXAMPLE NODE ENTRY:
+### noise
+**Noise Generator**
+
+Generates white, pink, or brown noise for percussion, ambience, or modulation.
+
+**Inputs:**
+- Level Mod (CV) - Level modulation input
+- Colour Mod (CV) - Noise color modulation
+
+**Outputs:**
+- Out L (Audio) - Left channel output
+- Out R (Audio) - Right channel output
+
+**Parameters:**
+- Colour (Choice) - White, Pink, or Brown
+- Level dB (-60 to +6 dB) - Output level
+
+**How to Use:**
+1. Select the noise color
+2. Adjust the level to taste
+...
+
+================================================================================
+CURRENT RENDERING
+================================================================================
+
+
+================================================================================
+FILE: juce/Source/preset_creator/HelpManagerComponent.h
+================================================================================
+
+#pragma once
+
+#include <juce_core/juce_core.h>
+#include <imgui.h>
+#include "ShortcutManager.h" // We need this for the capture state and manager reference
+
+// Forward declaration
+class ImGuiNodeEditorComponent;
+
+/**
+ * @class HelpManagerComponent
+ * Manages the non-modal, tabbed Help window.
+ *
+ * This component consolidates:
+ * 1. Shortcut Editor (migrated from ImGuiNodeEditorComponent)
+ * 2. Node Dictionary (Markdown renderer)
+ * 3. Getting Started (Markdown renderer)
+ * 4. About Page
+ *
+ * It follows the same self-contained window pattern as ThemeEditorComponent.
+ */
+class HelpManagerComponent
+{
+public:
+    HelpManagerComponent(ImGuiNodeEditorComponent* parent);
+    ~HelpManagerComponent() = default;
+
+    // === Public API ===
+    void render();
+    void open();
+    void close();
+    bool isOpen() const { return m_isOpen; }
+
+    /**
+     * @brief Sets the currently active tab by its index.
+     * 0 = Shortcuts, 1 = Node Dictionary, 2 = Getting Started, 3 = FAQ, 4 = About
+     * This is used by external triggers (like F1 or context menus) to
+     * open the manager to a specific tab.
+     * @param tabIndex The index of the tab to select.
+     */
+    void setActiveTab(int tabIndex) 
+    { 
+        m_currentTab = tabIndex; 
+        m_shouldSetTab = true; // Flag that we want to programmatically set this tab
+    }
+    
+    /**
+     * @brief Opens the Help Manager to the Node Dictionary tab and scrolls to a specific node.
+     * @param nodeAnchor The anchor of the node to scroll to (e.g., "vco", "track-mixer").
+     *                   The anchor should match the format used in the markdown file.
+     */
+    void openToNode(const juce::String& nodeAnchor);
+
+private:
+    // === Window State ===
+    bool m_isOpen = false;
+    int m_currentTab = 0; // 0:Shortcuts, 1:Dictionary, 2:GettingStarted, 3:FAQ, 4:About
+    bool m_shouldSetTab = false; // Flag to programmatically set tab (e.g., from F1)
+    ImGuiNodeEditorComponent* parentEditor = nullptr;
+    collider::ShortcutManager& shortcutManager;
+
+    // === Tab Rendering Functions ===
+    void renderShortcutsTab();
+    void renderNodeDictionaryTab();
+    void renderGettingStartedTab();
+    void renderFaqTab();
+    void renderAboutTab();
+
+    // === Markdown Parsing & Rendering (for Node Dictionary and Getting Started) ===
+    struct MarkdownSection
+    {
+        juce::String title;
+        int level; // 1 = ##, 2 = ###, 3 = ####
+        juce::String content; // Text content before subsections
+        std::vector<MarkdownSection> children;
+        juce::String anchor; // For anchor links (e.g., #vco)
+        
+        // Helper to check if this section or any child matches search
+        bool matchesSearch(const juce::String& searchTerm) const;
+        
+        // Helper to check if this section or any child contains the given anchor
+        bool containsAnchor(const juce::String& targetAnchor) const;
+    };
+
+    // Node Dictionary state
+    juce::String nodeDictionarySearchTerm;
+    std::vector<MarkdownSection> nodeDictionarySections;
+    bool nodeDictionaryLoaded = false;
+    juce::File nodeDictionaryFile;
+
+    // Getting Started state
+    juce::String gettingStartedSearchTerm;
+    std::vector<MarkdownSection> gettingStartedSections;
+    bool gettingStartedLoaded = false;
+    juce::File gettingStartedFile;
+
+    // FAQ state
+    juce::String faqSearchTerm;
+    std::vector<MarkdownSection> faqSections;
+    bool faqLoaded = false;
+    juce::File faqFile;
+
+    // Markdown parsing functions
+    void loadNodeDictionary();
+    void loadGettingStarted();
+    void loadFaq();
+    void parseMarkdown(const juce::String& content, std::vector<MarkdownSection>& sections);
+    void renderMarkdownSection(const MarkdownSection& section, const juce::String& searchTerm, bool parentMatches = true, bool forceExpand = false);
+    void renderMarkdownText(const juce::String& text);
+    void renderFormattedText(const juce::String& text); // Renders text with inline formatting (bold, code)
+    juce::String extractAnchor(const juce::String& headerLine);
+    
+    // Helper to get category color from section title
+    ImU32 getCategoryColorForSection(const juce::String& sectionTitle) const;
+    
+    // Helper to scroll to anchor (stores anchor to scroll to)
+    juce::String scrollToAnchor;
+    bool scrollToSectionIfNeeded(const juce::String& anchor);
+    
+    // Split-pane navigation state
+    struct NavigationItem
+    {
+        juce::String title;
+        juce::String anchor;
+        int level; // Indentation level
+        bool isCategory; // True for category headers (like "SOURCE NODES")
+    };
+    std::vector<NavigationItem> nodeDictionaryNavItems; // Flattened navigation list
+    void buildNavigationList(const std::vector<MarkdownSection>& sections, std::vector<NavigationItem>& navItems, int level = 0);
+    void renderNavigationSidebar(const std::vector<NavigationItem>& navItems, const juce::String& searchTerm);
+    void renderNodeDictionaryContent(const std::vector<MarkdownSection>& sections, const juce::String& searchTerm);
+    std::unordered_map<juce::String, float> sectionScrollPositions; // Anchor -> scroll position
+    float findSectionScrollPosition(const juce::String& anchor, const std::vector<MarkdownSection>& sections, float currentPos = 0.0f);
+
+    // === START: State Migrated from ImGuiNodeEditorComponent ===
+    // This state is moving here to make the Help Manager self-contained.
+    juce::String shortcutsSearchTerm;
+    juce::Identifier shortcutContextSelection;
+    bool shortcutsDirty { false };
+    juce::File defaultShortcutFile;
+    juce::File userShortcutFile;
+
+    // Struct for shortcut capture state
+    struct ShortcutCaptureState
+    {
+        bool isCapturing { false };
+        juce::Identifier actionId;
+        juce::Identifier context;
+        collider::KeyChord captured;
+        bool hasCaptured { false };
+        juce::Identifier conflictActionId;
+        juce::Identifier conflictContextId;
+        bool conflictIsUserBinding { false };
+    };
+
+    ShortcutCaptureState shortcutCaptureState;
+
+    // Helper functions for the shortcut editor
+    void renderShortcutEditorTable(const juce::Identifier& context);
+    void renderShortcutRow(const collider::ShortcutAction& action,
+                           const juce::Identifier& actionId,
+                           const juce::Identifier& context,
+                           bool categoryChanged);
+    void renderShortcutCapturePanel();
+    void beginShortcutCapture(const juce::Identifier& actionId, const juce::Identifier& context);
+    void updateShortcutCapture();
+    void cancelShortcutCapture();
+    void applyShortcutCapture(bool forceReplace);
+    void evaluateShortcutCaptureConflict();
+    void clearShortcutForContext(const juce::Identifier& actionId, const juce::Identifier& context);
+    void resetShortcutForContext(const juce::Identifier& actionId, const juce::Identifier& context);
+    void saveUserShortcutBindings();
+    juce::String getBindingLabelForContext(const juce::Identifier& actionId,
+                                           const juce::Identifier& context,
+                                           juce::String& sourceLabel) const;
+    // === END: State Migrated from ImGuiNodeEditorComponent ===
+};
+
+
+
+
+================================================================================
+FILE: juce/Source/preset_creator/HelpManagerComponent.cpp
+================================================================================
+
 #include "HelpManagerComponent.h"
 
 #include "ImGuiNodeEditorComponent.h" // Required for parentEditor
 #include "theme/ThemeManager.h"      // For themed colors (includes Theme.h with ModuleCategory)
 #include "PresetCreatorApplication.h"  // For app properties
 #include "NotificationManager.h"     // For notification posting
-#include "../audio/modules/ModuleProcessor.h" // For PinDataType
 #include <juce_gui_basics/juce_gui_basics.h>
 #include <imgui_internal.h> // For IsKeyPressed
 #include <vector>
@@ -458,7 +707,7 @@ void HelpManagerComponent::renderShortcutsTab()
     char searchBuffer[128] = {};
     std::strncpy(searchBuffer, shortcutsSearchTerm.toRawUTF8(), sizeof(searchBuffer) - 1);
     ImGui::SetNextItemWidth(300.0f);
-    if (ImGui::InputTextWithHint("##shortcut-search", "Search actions…", searchBuffer, sizeof(searchBuffer)))
+    if (ImGui::InputTextWithHint("##shortcut-search", "Search actionsâ€¦", searchBuffer, sizeof(searchBuffer)))
     {
         shortcutsSearchTerm = juce::String(searchBuffer).trim();
     }
@@ -595,7 +844,7 @@ void HelpManagerComponent::renderShortcutCapturePanel()
                     contextDisplayName(shortcutCaptureState.context).toRawUTF8());
         
         ImGui::Separator();
-        ImGui::TextUnformatted("Press a key combination… (Esc to cancel)");
+        ImGui::TextUnformatted("Press a key combinationâ€¦ (Esc to cancel)");
         
         ImGui::End();
     }
@@ -939,10 +1188,6 @@ void HelpManagerComponent::parseMarkdown(const juce::String& content, std::vecto
     {
         juce::String line = lines[i].trimEnd();
         
-        // Skip horizontal rules (---) - they're just separators, not content
-        if (line == "---")
-            continue;
-        
         // Check for headers (##, ###, ####)
         if (line.startsWith("##"))
         {
@@ -1111,7 +1356,7 @@ void HelpManagerComponent::renderMarkdownSection(const MarkdownSection& section,
     }
     else
     {
-        // Level 3+ (####) - enhanced styled header with distinct colors and larger font
+        // Level 3+ (####) - smaller styled header
         
         // Check if this is the target section for scrolling - scroll BEFORE rendering header
         if (isTargetSection)
@@ -1121,52 +1366,13 @@ void HelpManagerComponent::renderMarkdownSection(const MarkdownSection& section,
         }
         
         ImGui::Spacing();
-        ImGui::Spacing(); // Extra spacing before Level 3 headers
         ImGui::PushID(section.anchor.toRawUTF8()); // Unique ID for each subsection
         
-        // Determine color based on section type for better visual rhythm
-        ImVec4 subHeaderColor;
-        juce::String titleUpper = section.title.toUpperCase();
-        
-        if (titleUpper.contains("INPUTS"))
-        {
-            // Inputs - use CV pin color (typically blue/cyan)
-            ImU32 pinColor = ThemeManager::getInstance().getPinColor(PinDataType::CV);
-            subHeaderColor = ImGui::ColorConvertU32ToFloat4(pinColor);
-            subHeaderColor.w = 1.0f; // Full opacity
-        }
-        else if (titleUpper.contains("OUTPUTS"))
-        {
-            // Outputs - use Audio pin color (typically green)
-            ImU32 pinColor = ThemeManager::getInstance().getPinColor(PinDataType::Audio);
-            subHeaderColor = ImGui::ColorConvertU32ToFloat4(pinColor);
-            subHeaderColor.w = 1.0f;
-        }
-        else if (titleUpper.contains("PARAMETERS"))
-        {
-            // Parameters - use a warm accent color (orange/yellow)
-            ImVec4 accent = ImGui::GetStyleColorVec4(ImGuiCol_HeaderHovered);
-            subHeaderColor = ImVec4(accent.x * 1.2f, accent.y * 0.9f, accent.z * 0.7f, 1.0f);
-        }
-        else if (titleUpper.contains("HOW TO USE") || titleUpper.contains("HOW TO"))
-        {
-            // How to Use - use a bright informative color (cyan/teal)
-            ImVec4 accent = ImGui::GetStyleColorVec4(ImGuiCol_HeaderHovered);
-            subHeaderColor = ImVec4(accent.x * 0.7f, accent.y * 1.1f, accent.z * 1.2f, 1.0f);
-        }
-        else
-        {
-            // Default - bright accent color
-            subHeaderColor = ImGui::GetStyleColorVec4(ImGuiCol_HeaderHovered);
-            subHeaderColor.w = 1.0f;
-            subHeaderColor.x = std::min(1.0f, subHeaderColor.x * 1.15f);
-            subHeaderColor.y = std::min(1.0f, subHeaderColor.y * 1.15f);
-            subHeaderColor.z = std::min(1.0f, subHeaderColor.z * 1.15f);
-        }
-        
-        // Apply bold, larger font with distinct color
+        // Use theme text color with slight emphasis
+        ImVec4 subHeaderColor = ImGui::GetStyleColorVec4(ImGuiCol_Text);
+        subHeaderColor.w = 0.9f; // Slightly brighter than disabled
         ImGui::PushStyleColor(ImGuiCol_Text, subHeaderColor);
-        ImGui::SetWindowFontScale(1.4f); // Larger font for better visibility
+        ImGui::SetWindowFontScale(1.1f);
         ImGui::TextUnformatted(section.title.toRawUTF8());
         ImGui::SetWindowFontScale(1.0f);
         ImGui::PopStyleColor();
@@ -1482,19 +1688,7 @@ void HelpManagerComponent::buildNavigationList(const std::vector<MarkdownSection
 {
     for (const auto& section : sections)
     {
-        // Skip Level 3 sections (Inputs, Outputs, Parameters, How to Use) from navigation
-        // They should only appear in the content window, not the sidebar
-        if (section.level == 3)
-        {
-            // Still recurse into children in case there are deeper levels
-            if (!section.children.empty())
-            {
-                buildNavigationList(section.children, navItems, level);
-            }
-            continue;
-        }
-        
-        // Add sections to navigation, but indent based on hierarchy
+        // Add all sections to navigation, but indent based on hierarchy
         NavigationItem item;
         item.title = section.title;
         item.anchor = section.anchor;
@@ -1646,3 +1840,605 @@ void HelpManagerComponent::renderNodeDictionaryContent(const std::vector<Markdow
     }
 }
 
+
+
+
+
+================================================================================
+FILE: juce/Source/preset_creator/theme/Theme.h
+================================================================================
+
+#pragma once
+
+#include <imgui.h>
+#include <map>
+#include <juce_core/juce_core.h>
+
+#include "../../audio/modules/ModuleProcessor.h" // For PinDataType
+
+// Shared module category enum for theming (mirrors UI categories)
+enum class ModuleCategory { Source, Effect, Modulator, Utility, Seq, MIDI, Analysis, TTS_Voice, Special_Exp, OpenCV, Sys, Comment, Plugin, Default };
+
+struct TriStateColor
+{
+	ImU32 base { 0 };
+	ImU32 hovered { 0 };
+	ImU32 active { 0 };
+};
+
+struct Theme
+{
+	// ImGui base style (padding/rounding etc.)
+	ImGuiStyle style {};
+
+	// Global accent color used across highlights
+	ImVec4 accent { 0.0f, 0.8f, 1.0f, 1.0f };
+
+	struct TextColors
+	{
+		ImVec4 section_header { 0.7f, 0.7f, 0.7f, 1.0f };
+		ImVec4 warning { 1.0f, 0.8f, 0.0f, 1.0f };
+		ImVec4 success { 0.0f, 1.0f, 0.0f, 1.0f };
+		ImVec4 error { 1.0f, 0.5f, 0.0f, 1.0f };
+		ImVec4 disabled { 100/255.f, 100/255.f, 100/255.f, 1.0f };
+		ImVec4 active { 100/255.f, 255/255.f, 100/255.f, 1.0f };
+		float tooltip_wrap_standard { 35.0f };
+		float tooltip_wrap_compact { 25.0f };
+		bool enable_text_glow { false };
+		ImVec4 text_glow_color { 0.0f, 0.0f, 0.0f, 0.5f };
+	} text;
+
+	struct StatusColors
+	{
+		ImVec4 edited { 1.0f, 1.0f, 0.0f, 1.0f };
+		ImVec4 saved { 0.0f, 1.0f, 0.0f, 1.0f };
+	} status;
+
+	struct HeaderColors
+	{
+		TriStateColor recent {};
+		TriStateColor samples {};
+		TriStateColor presets {};
+		TriStateColor system {};
+	} headers;
+
+	struct ImNodesColors
+	{
+		std::map<ModuleCategory, ImU32> category_colors;
+		std::map<PinDataType, ImU32> pin_colors;
+		ImU32 pin_connected { 0 };
+		ImU32 pin_disconnected { 0 };
+		ImU32 node_muted { 0 };
+		float node_muted_alpha { 0.5f };
+		ImU32 node_hovered_link_highlight { 0 };
+	} imnodes;
+
+	struct LinkColors
+	{
+		ImU32 link_hovered { 0 };
+		ImU32 link_selected { 0 };
+		ImU32 link_highlighted { 0 };
+		ImU32 preview_color { 0 };
+		float preview_width { 3.0f };
+		ImU32 label_background { 0 };
+		ImU32 label_text { 0 };
+	} links;
+
+	struct CanvasColors
+	{
+		// Canvas background (drawn behind grid)
+		ImU32 canvas_background { 0 };
+		// Grid settings (custom drawn)
+		ImU32 grid_color { 0 };
+		ImU32 grid_origin_color { 0 };
+		float grid_size { 64.0f };
+		ImU32 scale_text_color { 0 };
+		float scale_interval { 400.0f };
+		ImU32 drop_target_overlay { 0 };
+		ImU32 mouse_position_text { 0 };
+		// Node styling (ImNodes)
+		ImU32 node_background { 0 };
+		ImU32 node_frame { 0 };
+		ImU32 node_frame_hovered { 0 };
+		ImU32 node_frame_selected { 0 };
+		float node_rounding { 0.0f };
+		float node_border_width { 0.0f };
+		ImU32 selection_rect { 0 };
+		ImU32 selection_rect_outline { 0 };
+	} canvas;
+
+	struct LayoutSettings
+	{
+		float sidebar_width { 260.0f };
+		float window_padding { 10.0f };
+		float node_vertical_padding { 50.0f };
+		float preset_vertical_padding { 100.0f };
+		float node_default_width { 240.0f };
+		ImVec2 node_default_padding { 8.0f, 8.0f };
+		ImVec2 node_muted_padding { 8.0f, 8.0f };
+	} layout;
+
+	struct FontSettings
+	{
+		float default_size { 16.0f };
+		juce::String default_path; // empty = ImGui default
+	} fonts;
+
+	struct WindowSettings
+	{
+		float status_overlay_alpha { 0.5f };
+		float probe_scope_alpha { 0.85f };
+		float preset_status_alpha { 0.7f };
+		float notifications_alpha { 0.92f };
+		float probe_scope_width { 260.0f };
+		float probe_scope_height { 180.0f };
+	} windows;
+
+	struct ModulationColors
+	{
+		ImVec4 frequency { 0.4f, 0.8f, 1.0f, 1.0f };
+		ImVec4 timbre { 1.0f, 0.8f, 0.4f, 1.0f };
+		ImVec4 amplitude { 1.0f, 0.4f, 1.0f, 1.0f };
+		ImVec4 filter { 0.4f, 1.0f, 0.4f, 1.0f };
+	} modulation;
+
+	struct MeterColors
+	{
+		ImVec4 safe { 0.2f, 0.8f, 0.2f, 1.0f };
+		ImVec4 warning { 0.9f, 0.7f, 0.0f, 1.0f };
+		ImVec4 clipping { 0.9f, 0.2f, 0.2f, 1.0f };
+	} meters;
+
+	struct TimelineColors
+	{
+		ImU32 marker_start_end { 0 };
+		ImU32 marker_gate { 0 };
+		ImU32 marker_trigger { 0 };
+	} timeline;
+
+	struct ModuleColors
+	{
+		ImVec4 videofx_section_header { 0.7f, 0.7f, 0.7f, 1.0f };
+		ImVec4 videofx_section_subheader { 0.9f, 0.9f, 0.5f, 1.0f };
+		ImVec4 scope_section_header { 0.7f, 0.7f, 0.7f, 1.0f };
+		ImVec4 sequencer_section_header { 0.5f, 1.0f, 0.7f, 1.0f };
+		ImVec4 sequencer_step_active_frame { 0.3f, 0.7f, 1.0f, 1.0f };
+		ImVec4 sequencer_step_active_grab { 0.9f, 0.9f, 0.9f, 1.0f };
+		ImVec4 sequencer_gate_active_frame { 1.0f, 0.7f, 0.3f, 1.0f };
+		ImU32 sequencer_threshold_line { IM_COL32(255, 255, 0, 200) };
+		ImVec4 stroke_seq_title { 0.9f, 0.95f, 0.2f, 1.0f };
+		ImVec4 stroke_seq_section { 0.85f, 0.9f, 0.3f, 1.0f };
+		ImU32 scope_plot_bg { 0 };
+		ImU32 scope_plot_fg { 0 };
+		ImU32 scope_plot_max { 0 };
+		ImU32 scope_plot_min { 0 };
+		ImVec4 scope_text_max { 1.0f, 0.3f, 0.3f, 1.0f };
+		ImVec4 scope_text_min { 1.0f, 0.86f, 0.31f, 1.0f };
+		ImU32 stroke_seq_border { 0 };
+		ImU32 stroke_seq_canvas_bg { 0 };
+		ImU32 stroke_seq_line_inactive { 0 };
+		ImU32 stroke_seq_line_active { 0 };
+		ImU32 stroke_seq_playhead { 0 };
+		ImU32 stroke_seq_thresh_floor { 0 };
+		ImU32 stroke_seq_thresh_mid { 0 };
+		ImU32 stroke_seq_thresh_ceil { 0 };
+		ImVec4 stroke_seq_frame_bg { 0.3f, 0.28f, 0.1f, 0.7f };
+		ImVec4 stroke_seq_frame_bg_hovered { 0.4f, 0.38f, 0.15f, 0.8f };
+		ImVec4 stroke_seq_frame_bg_active { 0.5f, 0.48f, 0.2f, 0.9f };
+		
+		struct FrequencyGraphColors
+		{
+			ImU32 background { IM_COL32(20, 22, 24, 255) };
+			ImU32 grid { IM_COL32(50, 55, 60, 255) };
+			ImU32 label { IM_COL32(150, 150, 150, 255) };
+			ImU32 peak_line { IM_COL32(255, 150, 80, 150) };
+			ImU32 live_line { IM_COL32(120, 170, 255, 220) };
+			ImU32 border { IM_COL32(80, 80, 80, 255) };
+			ImU32 threshold { IM_COL32(255, 100, 100, 150) };
+		} frequency_graph;
+		
+		struct PhysicsColors
+		{
+			ImVec4 sandbox_title { 0.3f, 0.9f, 1.0f, 1.0f };
+			ImVec4 stroke_label { 0.9f, 0.9f, 0.5f, 1.0f };
+			ImVec4 physics_section { 0.7f, 0.9f, 0.7f, 1.0f };
+			ImVec4 spawn_section { 0.5f, 0.9f, 1.0f, 1.0f };
+			ImVec4 count_ok { 0.6f, 0.9f, 0.6f, 1.0f };
+			ImVec4 count_warn { 1.0f, 0.9f, 0.4f, 1.0f };
+			ImVec4 count_alert { 1.0f, 0.4f, 0.4f, 1.0f };
+			ImVec4 stroke_metal { 0.53f, 0.81f, 0.92f, 1.0f };
+			ImVec4 stroke_wood { 0.96f, 0.64f, 0.38f, 1.0f };
+			ImVec4 stroke_soil { 0.0f, 0.39f, 0.0f, 1.0f };
+			ImVec4 stroke_conveyor { 0.58f, 0.44f, 0.86f, 1.0f };
+			ImVec4 stroke_bouncy { 0.0f, 0.98f, 0.6f, 1.0f };
+			ImVec4 stroke_sticky { 0.54f, 0.27f, 0.07f, 1.0f };
+			ImVec4 stroke_emitter { 1.0f, 0.84f, 0.0f, 1.0f };
+			ImVec4 spawn_ball { 1.0f, 0.4f, 0.4f, 1.0f };
+			ImVec4 spawn_square { 0.4f, 1.0f, 0.4f, 1.0f };
+			ImVec4 spawn_triangle { 0.4f, 0.4f, 1.0f, 1.0f };
+			ImVec4 spawn_vortex { 0.7f, 0.4f, 1.0f, 1.0f };
+			ImVec4 spawn_clear { 0.6f, 0.2f, 0.2f, 0.8f };
+			ImVec4 spawn_clear_hover { 0.8f, 0.3f, 0.3f, 1.0f };
+			ImVec4 spawn_clear_active { 1.0f, 0.4f, 0.4f, 1.0f };
+			ImVec4 canvas_background { 0.12f, 0.12f, 0.12f, 1.0f };
+			ImVec4 canvas_border { 0.39f, 0.39f, 0.39f, 1.0f };
+			ImVec4 drag_indicator_fill { 1.0f, 1.0f, 0.0f, 0.4f };
+			ImVec4 drag_indicator_outline { 1.0f, 1.0f, 0.0f, 0.8f };
+			ImVec4 eraser_fill { 1.0f, 0.39f, 0.39f, 0.24f };
+			ImVec4 eraser_outline { 0.86f, 0.08f, 0.08f, 0.7f };
+			ImVec4 crosshair_idle { 1.0f, 1.0f, 1.0f, 0.5f };
+			ImVec4 crosshair_active { 1.0f, 1.0f, 0.0f, 1.0f };
+			ImVec4 magnet_north { 1.0f, 0.39f, 0.39f, 0.78f };
+			ImVec4 magnet_south { 0.39f, 0.39f, 1.0f, 0.78f };
+			ImVec4 magnet_link { 1.0f, 1.0f, 0.0f, 0.78f };
+			ImVec4 vector_outline { 1.0f, 1.0f, 1.0f, 0.78f };
+			ImVec4 vector_fill { 1.0f, 1.0f, 1.0f, 0.6f };
+			ImVec4 soil_detail { 0.55f, 0.27f, 0.07f, 0.7f };
+			ImVec4 overlay_text { 0.0f, 0.0f, 0.0f, 0.78f };
+			ImVec4 overlay_line { 1.0f, 1.0f, 1.0f, 0.5f };
+			ImVec4 separator_line { 1.0f, 0.84f, 0.0f, 0.78f };
+		} physics;
+		
+		// PanVol module settings
+		float panvol_node_width { 180.0f };  // Custom compact width (default 180px)
+		ImU32 panvol_grid_background { IM_COL32(20, 20, 20, 255) };
+		ImU32 panvol_grid_border { IM_COL32(100, 100, 100, 255) };
+		ImU32 panvol_grid_lines { IM_COL32(50, 50, 50, 255) };
+		ImU32 panvol_crosshair { IM_COL32(80, 80, 80, 200) };
+		ImU32 panvol_circle_manual { IM_COL32(255, 200, 100, 255) };  // Orange when manual
+		ImU32 panvol_circle_modulated { IM_COL32(100, 200, 255, 255) };  // Cyan when modulated
+		ImU32 panvol_label_text { IM_COL32(150, 150, 150, 200) };
+		ImU32 panvol_value_text { IM_COL32(100, 100, 100, 120) };
+	} modules;
+};
+
+
+
+
+
+================================================================================
+FILE: juce/Source/preset_creator/theme/ThemeManager.h
+================================================================================
+
+#pragma once
+
+#include <juce_core/juce_core.h>
+#include <imgui.h>
+#include <atomic>
+#include <cmath>
+#include "Theme.h"
+
+class ThemeManager
+{
+public:
+	static ThemeManager& getInstance();
+
+	bool loadTheme(const juce::File& themeFile);
+	bool saveTheme(const juce::File& themeFile);
+	void applyTheme();
+	void resetToDefault();
+	void applyFonts(ImGuiIO& io);
+	void requestFontReload();
+	bool consumeFontReloadRequest();
+	void rebuildFontsNow();
+	
+	// Persistence
+	void saveUserThemePreference(const juce::String& themeFilename);
+	bool loadUserThemePreference();
+
+	const Theme& getCurrentTheme() const;
+	Theme& getEditableTheme();  // For theme editor - returns mutable reference
+	juce::String getCurrentThemeFilename() const { return m_currentThemeFilename; }  // Get filename of currently loaded theme
+
+	// Colors
+	ImU32 getCategoryColor(ModuleCategory cat, bool hovered = false);
+	ImU32 getPinColor(PinDataType type);
+	ImU32 getPinConnectedColor();
+	ImU32 getPinDisconnectedColor();
+	ImU32 getCategoryColor(ModuleCategory category) const;
+
+	// Layout
+	float getSidebarWidth() const;
+	float getNodeDefaultWidth() const;
+	float getWindowPadding() const;
+	
+	// Canvas
+	ImU32 getCanvasBackground() const;
+	ImU32 getGridColor() const;
+	ImU32 getGridOriginColor() const;
+	float getGridSize() const;
+	ImU32 getScaleTextColor() const;
+	float getScaleInterval() const;
+	ImU32 getDropTargetOverlay() const;
+	ImU32 getMousePositionText() const;
+	ImU32 getSelectionRect() const;
+	ImU32 getSelectionRectOutline() const;
+	
+	// Node styling
+	ImU32 getNodeBackground() const;
+	ImU32 getNodeFrame() const;
+	ImU32 getNodeFrameHovered() const;
+	ImU32 getNodeFrameSelected() const;
+	float getNodeRounding() const;
+	float getNodeBorderWidth() const;
+
+private:
+	ThemeManager();
+	~ThemeManager() = default;
+	ThemeManager(const ThemeManager&) = delete;
+	ThemeManager& operator=(const ThemeManager&) = delete;
+	ThemeManager(ThemeManager&&) = delete;
+	ThemeManager& operator=(ThemeManager&&) = delete;
+
+	void loadDefaultTheme();
+	void applyImGuiStyle();
+
+	// JSON helpers
+	static juce::var colorToVar(ImU32 c);
+	static ImU32 varToColor(const juce::var& v, ImU32 fallback);
+	static juce::var vec4ToVar(const ImVec4& v);
+	static ImVec4 varToVec4(const juce::var& v, const ImVec4& fallback);
+
+	static juce::String moduleCategoryToString(ModuleCategory c);
+	static bool stringToModuleCategory(const juce::String& s, ModuleCategory& out);
+	static juce::String pinTypeToString(PinDataType t);
+	static bool stringToPinType(const juce::String& s, PinDataType& out);
+
+	Theme currentTheme;
+	Theme defaultTheme;
+	juce::String m_currentThemeFilename;  // Filename of currently loaded theme (empty if default)
+
+	std::atomic<bool> fontReloadPending { false };
+};
+
+/**
+ * A theme-aware replacement for ImGui::TextColored.
+ * It automatically applies a text glow/shadow if enabled in the theme.
+ */
+inline void ThemeText(const char* text, ImVec4 color)
+{
+	const auto& theme = ThemeManager::getInstance().getCurrentTheme();
+
+	if (theme.text.enable_text_glow)
+	{
+		// --- DRAW GLOW/SHADOW ---
+		// Get the current cursor, draw the shadows offset,
+		// then reset the cursor to draw the main text on top.
+		
+		ImVec2 pos = ImGui::GetCursorPos();
+		ImVec4 glowColor = theme.text.text_glow_color;
+
+		ImGui::PushStyleColor(ImGuiCol_Text, glowColor);
+		
+		// Draw 4 shadow layers for a soft "glow" effect.
+		// We must use ImGui::TextUnformatted and handle newlines
+		// manually to prevent formatting issues with ImGui::Text.
+		ImGui::SetCursorPos(ImVec2(pos.x - 1, pos.y)); ImGui::TextUnformatted(text);
+		ImGui::SetCursorPos(ImVec2(pos.x + 1, pos.y)); ImGui::TextUnformatted(text);
+		ImGui::SetCursorPos(ImVec2(pos.x, pos.y - 1)); ImGui::TextUnformatted(text);
+		ImGui::SetCursorPos(ImVec2(pos.x, pos.y + 1)); ImGui::TextUnformatted(text);
+
+		ImGui::PopStyleColor();
+
+		// Reset cursor to the original position
+		ImGui::SetCursorPos(pos);
+	}
+	
+	// --- DRAW MAIN TEXT ---
+	// This draws the main text and advances the cursor normally.
+	ImGui::PushStyleColor(ImGuiCol_Text, color);
+	ImGui::TextUnformatted(text); // Use TextUnformatted for consistency
+	ImGui::PopStyleColor();
+}
+
+/**
+ * Overload for non-colored text (uses default theme text color)
+ */
+inline void ThemeText(const char* text)
+{
+	// Get the default text color from ImGui style settings
+	ImVec4 defaultColor = ImGui::GetStyle().Colors[ImGuiCol_Text];
+	ThemeText(text, defaultColor);
+}
+
+/**
+ * Utility functions for automatic text color adjustment based on background luminance.
+ * Implements WCAG 2.1 relative luminance calculation for accessibility.
+ */
+namespace ThemeUtils
+{
+	/**
+	 * Calculate relative luminance of a color using WCAG 2.1 formula.
+	 * Returns a value between 0.0 (black) and 1.0 (white).
+	 * 
+	 * @param color ImU32 color in format IM_COL32(R, G, B, A)
+	 * @return Relative luminance (0.0 = darkest, 1.0 = lightest)
+	 */
+	inline float calculateRelativeLuminance(ImU32 color)
+	{
+		// Extract RGB components (ImU32 is typically ARGB or RGBA depending on endianness)
+		// ImGui uses IM_COL32(R, G, B, A) which creates RGBA format
+		ImVec4 rgba = ImGui::ColorConvertU32ToFloat4(color);
+		
+		// Convert sRGB to linear RGB (gamma correction)
+		auto toLinear = [](float c) -> float
+		{
+			if (c <= 0.04045f)
+				return c / 12.92f;
+			return std::pow((c + 0.055f) / 1.055f, 2.4f);
+		};
+		
+		float r = toLinear(rgba.x);
+		float g = toLinear(rgba.y);
+		float b = toLinear(rgba.z);
+		
+		// Calculate relative luminance using WCAG 2.1 coefficients
+		// These weights account for human eye sensitivity to different colors
+		return 0.2126f * r + 0.7152f * g + 0.0722f * b;
+	}
+	
+	/**
+	 * Calculate contrast ratio between two colors using WCAG 2.1 formula.
+	 * Returns a value >= 1.0, where higher values indicate better contrast.
+	 * WCAG AA requires 4.5:1 for normal text, 3:1 for large text.
+	 * 
+	 * @param color1 First color (lighter should be first for accurate ratio)
+	 * @param color2 Second color (darker should be second)
+	 * @return Contrast ratio (1.0 = no contrast, 21.0 = maximum contrast)
+	 */
+	inline float calculateContrastRatio(ImU32 color1, ImU32 color2)
+	{
+		float l1 = calculateRelativeLuminance(color1);
+		float l2 = calculateRelativeLuminance(color2);
+		
+		// Ensure lighter color is first
+		if (l1 < l2)
+		{
+			float temp = l1;
+			l1 = l2;
+			l2 = temp;
+		}
+		
+		// WCAG contrast ratio formula: (L1 + 0.05) / (L2 + 0.05)
+		return (l1 + 0.05f) / (l2 + 0.05f);
+	}
+	
+	/**
+	 * Get optimal text color (black or white) for a given background color.
+	 * Uses contrast ratio calculation to ensure WCAG-compliant legibility.
+	 * Chooses the text color (black or white) that provides the best contrast.
+	 * 
+	 * @param backgroundColor Background color in ImU32 format
+	 * @param minContrast Minimum contrast ratio required (default 4.5 for WCAG AA)
+	 * @return IM_COL32(0, 0, 0, 255) for black text, IM_COL32(255, 255, 255, 255) for white text
+	 */
+	inline ImU32 getOptimalTextColor(ImU32 backgroundColor, float minContrast = 4.5f)
+	{
+		// Define pure black and white
+		const ImU32 blackText = IM_COL32(0, 0, 0, 255);
+		const ImU32 whiteText = IM_COL32(255, 255, 255, 255);
+		
+		// Calculate contrast ratios for both text color options
+		// calculateContrastRatio ensures lighter color is first, so order doesn't matter
+		float contrastWithBlack = calculateContrastRatio(backgroundColor, blackText);
+		float contrastWithWhite = calculateContrastRatio(whiteText, backgroundColor);
+		
+		// Choose the option with better contrast
+		// This handles edge cases like bright yellow where white text has poor contrast
+		if (contrastWithBlack >= contrastWithWhite)
+		{
+			// Black text provides better or equal contrast
+			// This will be chosen for light backgrounds (yellow, light green, etc.)
+			return blackText;
+		}
+		else
+		{
+			// White text provides better contrast
+			// This will be chosen for dark backgrounds
+			return whiteText;
+		}
+	}
+}
+
+
+
+
+
+================================================================================
+FILE: USER_MANUAL/Nodes_Dictionary.md
+================================================================================
+
+# Collider Modular Synthesizer - Node Dictionary
+
+**Last Updated:** December 18, 2024  
+**Version:** 1.2
+
+---
+
+## Table of Contents
+
+### Quick Reference Index
+
+#### 1. SOURCE NODES
+- [vco](#vco) - Voltage-Controlled Oscillator
+- [polyvco](#polyvco) - Multi-Voice Oscillator Bank
+- [noise](#noise) - Noise Generator
+- [audio_input](#audio_input) - Hardware Audio Input
+- [sample_loader](#sample_loader) - Audio Sample Player
+- [value](#value) - Constant Value Generator
+
+#### 2. EFFECT NODES
+- [vcf](#vcf) - Voltage-Controlled Filter
+- [delay](#delay) - Stereo Delay Effect
+- [reverb](#reverb) - Stereo Reverb Effect
+- [chorus](#chorus) - Stereo Chorus Effect
+- [phaser](#phaser) - Stereo Phaser Effect
+- [compressor](#compressor) - Dynamic Range Compressor
+- [limiter](#limiter) - Audio Limiter
+- [gate](#gate) - Noise Gate
+- [drive](#drive) - Waveshaping Distortion
+- [graphic_eq](#graphic_eq) - 8-Band Graphic Equalizer
+- [waveshaper](#waveshaper) - Multi-Algorithm Waveshaper
+- [8bandshaper](#8bandshaper) - Multi-Band Waveshaper
+- [granulator](#granulator) - Granular Synthesizer/Effect
+- [harmonic_shaper](#harmonic_shaper) - Harmonic Content Shaper
+- [timepitch](#timepitch) - Time/Pitch Manipulation
+- [de_crackle](#de_crackle) - Click/Pop Reducer
+- [vocal_tract_filter](#vocal_tract_filter) - Formant Filter
+
+#### 3. MODULATOR NODES
+- [lfo](#lfo) - Low-Frequency Oscillator
+- [adsr](#adsr) - Envelope Generator
+- [random](#random) - Random Value Generator
+- [s_and_h](#s_and_h) - Sample & Hold
+- [function_generator](#function_generator) - Drawable Envelope/LFO
+- [shaping_oscillator](#shaping_oscillator) - Oscillator with Built-in Waveshaper
+
+#### 4. UTILITY & LOGIC NODES
+- [vca](#vca) - Voltage-Controlled Amplifier
+- [mixer](#mixer) - Stereo Audio Mixer
+- [cv_mixer](#cv_mixer) - Control Voltage Mixer
+- [track_mixer](#track_mixer) - Multi-Channel Mixer
+- [panvol](#panvol) - 2D Volume and Panning Control
+- [attenuverter](#attenuverte
+
+================================================================================
+IMPLEMENTATION PLAN
+================================================================================
+
+1. DETECT SECTION TYPES:
+   - Parse level 3 headers to identify section type
+   - Map headers to section types: Description, Inputs, Outputs, Parameters, How to Use
+   - Track current section while rendering
+
+2. COLOR SCHEME:
+   - Description: Subtle background (maybe light tint of category color or neutral)
+   - Inputs: Color related to CV/input signals (could use PinDataType::CV color)
+   - Outputs: Color related to audio/output signals (could use PinDataType::Audio color)
+   - Parameters: Color related to controls (maybe FrameBg or ButtonBg variant)
+   - How to Use: Tutorial/guide color (maybe accent color with low opacity)
+
+3. RENDERING APPROACH:
+   - Use ImGui::BeginChild() with background color for each section
+   - Or use ImGui::PushStyleColor(ImGuiCol_ChildBg) before rendering section content
+   - Apply padding and rounding for visual separation
+   - Ensure text contrast is maintained
+
+4. THEME INTEGRATION:
+   - Use ThemeManager colors where possible
+   - Use ImGui style colors (FrameBg, ButtonBg, etc.) as fallback
+   - Ensure colors work with both light and dark themes
+
+================================================================================
+KEY QUESTIONS
+================================================================================
+
+1. Which theme colors should be used for each section type?
+2. Should sections have borders or just background colors?
+3. How much padding/spacing between sections?
+4. Should the background color be subtle or prominent?
+5. How to handle sections that span multiple paragraphs?
+
+================================================================================
+END OF CONTEXT BUNDLE
+================================================================================

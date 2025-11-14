@@ -1356,7 +1356,7 @@ if(WIN32)
         # Copy OpenCV FFmpeg video backend DLL (if it exists - optional video codec)
         # Path differs between pre-built and source-built OpenCV
         COMMAND ${CMAKE_COMMAND} -E copy_if_different
-                "$<IF:$<BOOL:${OPENCV_PREBUILT}>,${OPENCV_INSTALL_PREFIX}/bin/opencv_videoio_ffmpeg4130_64.dll,${CMAKE_BINARY_DIR}/_deps/opencv-build/bin/$<CONFIG>/opencv_videoio_ffmpeg4130_64.dll>"
+                "$<IF:$<BOOL:${OPENCV_PREBUILT}>,${OPENCV_INSTALL_PREFIX}/bin/opencv_videoio_ffmpeg4130_64.dll,${CMAKE_BINARY_DIR}/bin/opencv_videoio_ffmpeg4130_64.dll>"
                 "$<TARGET_FILE_DIR:ColliderApp>"
         || ${CMAKE_COMMAND} -E echo "Note: OpenCV FFmpeg DLL not found (optional video codec)"
     )
@@ -1421,7 +1421,7 @@ if(WIN32)
         # Copy OpenCV FFmpeg video backend DLL (if it exists - optional video codec)
         # Path differs between pre-built and source-built OpenCV
         COMMAND ${CMAKE_COMMAND} -E copy_if_different
-                "$<IF:$<BOOL:${OPENCV_PREBUILT}>,${OPENCV_INSTALL_PREFIX}/bin/opencv_videoio_ffmpeg4130_64.dll,${CMAKE_BINARY_DIR}/_deps/opencv-build/bin/$<CONFIG>/opencv_videoio_ffmpeg4130_64.dll>"
+                "$<IF:$<BOOL:${OPENCV_PREBUILT}>,${OPENCV_INSTALL_PREFIX}/bin/opencv_videoio_ffmpeg4130_64.dll,${CMAKE_BINARY_DIR}/bin/opencv_videoio_ffmpeg4130_64.dll>"
                 "$<TARGET_FILE_DIR:PresetCreatorApp>"
         || ${CMAKE_COMMAND} -E echo "Note: OpenCV FFmpeg DLL not found (optional video codec)"
         COMMAND ${CMAKE_COMMAND} -E copy_directory
