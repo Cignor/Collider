@@ -117,6 +117,35 @@
 
 ---
 
+## Auto-Connect Shortcuts
+
+When multiple nodes are selected, you can use keyboard shortcuts to automatically chain them by data type. These shortcuts intelligently connect compatible outputs to inputs based on signal types.
+
+| Key | Data Type | Color | Use Case |
+|-----|-----------|-------|----------|
+| **C** | Standard Chaining | White | Stereo audio chain (channels 0→0, 1→1) |
+| **G** | Audio | Green | Audio effects chain |
+| **B** | CV (Control Voltage) | Blue | CV signal chain (modulation inputs) |
+| **Y** | Gate | Yellow | Gate/trigger chain |
+| **R** | Raw | Red | Raw value chain |
+| **V** | Video | Cyan | Video source chain (webcam/video → vision processing modules) |
+
+**How It Works:**
+- Select 2 or more nodes
+- Press the appropriate key for the data type you want to chain
+- The system automatically connects compatible outputs to inputs
+- Works with most node types that have matching signal types
+
+**Examples:**
+- **Video Processing:** Select Webcam Loader → Movement Detector, press **V** to connect `Source ID` → `Source In`
+- **CV Modulation:** Select LFO → VCF, press **B** to connect LFO output → Cutoff Mod input
+- **Audio Chain:** Select VCO → VCF → VCA, press **G** to chain audio outputs to inputs
+- **Gate Triggers:** Select Sequencer → ADSR, press **Y** to connect Gate output → Gate In
+
+**Note:** Auto-connection shortcuts only work when 2+ nodes are selected.
+
+---
+
 ## 1. SOURCE NODES
 
 Source nodes generate or input signals into your patch.
@@ -1546,11 +1575,6 @@ A transport-synchronized automation recorder that captures and plays back CV, Ga
 - `Add Channel` (Button) - Create a new automation channel
 - `Remove Channel` (Button) - Remove the last automation channel
 
-**Auto-Connect Shortcuts:**
-- **B (CV)**: Chain automation outputs to CV modulation inputs
-- **Y (Gate)**: Chain gate/trigger outputs to gate inputs
-- **R (Raw)**: Chain raw value outputs
-
 #### How to Use
 1. **Setup Channels:**
    - Click "Add Channel" to create automation channels
@@ -1846,10 +1870,6 @@ Captures video from webcam and publishes a `Source ID` for vision processing mod
 #### Outputs
 - `Source ID` (Video) - Video source identifier
 
-**Auto-Connect Shortcuts:**
-- **V (Video)**: Connect `Source ID` to any `Source In` (Video) input on vision processing modules (e.g., Movement/Human/Object/Color/Pose/Hand/Face/Contour/Segmentation).
-- Other chaining keys (**C/G/B/Y/R**) not applicable for this node.
-
 ---
 
 ### video_file_loader
@@ -1860,36 +1880,65 @@ Loads and plays video files; publishes a `Source ID` for vision processing modul
 #### Outputs
 - `Source ID` (Video) - Video source identifier
 
-**Auto-Connect Shortcuts:**
-- **V (Video)**: Connect `Source ID` to any `Source In` (Video) input on vision processing modules.
-- Other chaining keys (**C/G/B/Y/R**) not applicable for this node.
-
 ---
 
 ### movement_detector
 **Motion Detection**
 
-Analyzes video for motion via optical flow or background subtraction.
+Analyzes video for motion via optical flow or background subtraction. Detects feature points (displayed as blue circles) and tracks their movement between frames.
 
 #### Inputs
 - `Source In` (Video) - Video source ID
 
 #### Outputs
-- `Motion X` (CV), `Motion Y` (CV) - Motion vector components
-- `Amount` (CV) - Total motion amount
-- `Trigger` (Gate) - Trigger on significant motion
-- `Video Out` (Video) - Passthrough video output for chaining
+- `Motion X` (CV) - Horizontal motion component (-1 to +1)
+- `Motion Y` (CV) - Vertical motion component (-1 to +1)
+- `Amount` (CV) - Total motion magnitude (0-1)
+- `Trigger` (Gate) - Trigger pulse on significant motion (above sensitivity threshold)
+- `Video Out` (Video) - Passthrough video output with motion visualization (blue feature points and green motion vectors)
 
-**Auto-Connect Shortcuts:**
-- **V (Video)**: Connect loader `Source ID` → `Source In`; chain `Video Out` → next video module
-- **B (CV)**: Chain `Motion X/Y/Amount` to CV destinations
-- **Y (Gate)**: Chain `Trigger` to gate inputs
+#### Parameters
+- `Mode` (Choice) - Optical Flow or Background Subtraction
+- `Sensitivity` (0.01-1.0) - Motion detection threshold (higher = less sensitive)
+- `Max Features` (20-500) - Maximum number of feature points to track (Optical Flow mode only)
+  - Lower values (20-100): Fewer, higher-quality feature points
+  - Higher values (200-500): More feature points, including weaker corners
+  - Feature points are displayed as blue circles on the video preview
+- `Noise Reduction` (Bool) - Enable morphological filtering to reduce noise (Background Subtraction mode only)
+- `Use GPU (CUDA)` (Bool) - Enable GPU acceleration for optical flow (requires CUDA-capable GPU)
+- `Zoom` (+/-) - Adjust preview size: Small (240px), Normal (480px), Large (960px)
 
 #### How to Use
-1. Connect webcam or video file loader
-2. Outputs motion as CV
-3. Use for interactive installations
-4. Motion triggers synthesis events
+1. **Connect Video Source:** Connect Webcam Loader or Video File Loader's `Source ID` to `Source In`
+2. **Choose Detection Mode:**
+   - **Optical Flow:** Tracks individual feature points (blue circles) and their motion vectors (green lines)
+   - **Background Subtraction:** Detects moving regions by comparing to learned background
+3. **Adjust Max Features (Optical Flow):**
+   - Increase to track more points for detailed motion analysis
+   - Decrease for faster processing and cleaner tracking
+   - Feature points appear as blue circles on the video preview
+4. **Set Sensitivity:** Adjust threshold for motion trigger output (higher = less sensitive)
+5. **Map Motion to Synthesis:**
+   - Connect `Motion X/Y` to panning, filter cutoff, or oscillator frequency
+   - Use `Amount` to control effect intensity based on overall motion
+   - Connect `Trigger` to sequencers or envelope gates for motion-triggered events
+6. **Chain Video Processing:** Connect `Video Out` to other video modules (Video FX, Human Detector, etc.) for multi-stage processing
+7. **Example Patches:**
+   - **Gesture Control:** Map hand/body motion to synthesis parameters
+   - **Motion-Triggered Sequences:** Use motion trigger to advance sequencers
+   - **Interactive Installations:** Create soundscapes that respond to movement
+   - **Dance Performance:** Full-body motion drives multiple synthesis parameters
+
+**Visual Feedback:**
+- **Blue circles:** Detected feature points (Optical Flow mode)
+- **Green lines:** Motion vectors showing direction and magnitude of movement
+- **Centroid circle (Background Subtraction):** Center point of detected motion region
+
+**Performance Tips:**
+- GPU acceleration significantly improves optical flow performance (if available)
+- Lower Max Features values process faster but track fewer points
+- Good lighting and contrast improve feature detection accuracy
+- Video output updates continuously at ~30 FPS for smooth passthrough
 
 ---
 
@@ -1907,11 +1956,6 @@ Detects faces or bodies in video via Haar Cascades or HOG.
 - `Gate` (Gate) - High when person detected
 - `Video Out` (Video) - Passthrough video output for chaining
 - `Cropped Out` (Video) - Cropped region around detected face/body
-
-**Auto-Connect Shortcuts:**
-- **V (Video)**: Connect loader `Source ID` → `Source In`; chain `Video Out` or `Cropped Out` → next video module
-- **B (CV)**: Chain X/Y/Width/Height to CV inputs
-- **Y (Gate)**: Chain `Gate` to gate inputs
 
 #### How to Use
 1. Connect video source
@@ -1933,10 +1977,6 @@ Uses OpenPose MPI model to detect 15 body keypoints. Outputs 30 CV pins programm
 - `Head X/Y`, `Neck X/Y`, `R Shoulder X/Y`, `R Elbow X/Y`, `R Wrist X/Y`, `L Shoulder X/Y`, `L Elbow X/Y`, `L Wrist X/Y`, `R Hip X/Y`, `R Knee X/Y`, `R Ankle X/Y`, `L Hip X/Y`, `L Knee X/Y`, `L Ankle X/Y`, `Chest X/Y` (all CV)
 - `Video Out` (Video) - Passthrough video output for chaining
 - `Cropped Out` (Video) - Cropped region around detected body
-
-**Auto-Connect Shortcuts:**
-- **V (Video)**: Connect loader `Source ID` → `Source In`; chain `Video Out` or `Cropped Out` → next video module
-- **B (CV)**: Chain any keypoint X/Y outputs to CV targets
 
 #### Parameters
 - `Confidence` (0.0-1.0) - Detection confidence threshold (default: 0.1). Lower values detect more keypoints but may include false positives
@@ -1993,10 +2033,6 @@ Uses OpenPose hand model to detect 21 hand keypoints. Outputs 42 CV pins (X/Y pe
 - `Video Out` (Video) - Passthrough video output for chaining
 - `Cropped Out` (Video) - Cropped region around detected hand
 
-**Auto-Connect Shortcuts:**
-- **V (Video)**: Connect loader `Source ID` → `Source In`; chain `Video Out` or `Cropped Out` → next video module
-- **B (CV)**: Chain any keypoint X/Y outputs to CV targets
-
 #### Parameters
 - `Confidence` (0.0-1.0) - Detection confidence threshold (default: 0.1)
 - `Zoom` (+/-) - Adjust preview size: Small (240px), Normal (480px), Large (960px)
@@ -2035,10 +2071,6 @@ Uses OpenPose face model to detect 70 facial landmarks. Outputs 140 CV pins (X/Y
 - `Pt 1-70 X/Y` (CV) - Landmark positions
 - `Video Out` (Video) - Passthrough video output for chaining
 - `Cropped Out` (Video) - Cropped region around detected face
-
-**Auto-Connect Shortcuts:**
-- **V (Video)**: Connect loader `Source ID` → `Source In`; chain `Video Out` or `Cropped Out` → next video module
-- **B (CV)**: Chain landmark X/Y outputs to CV targets
 
 #### Parameters
 - `Confidence` (0.0-1.0) - Detection confidence threshold (default: 0.1)
@@ -2082,11 +2114,6 @@ Uses YOLOv3 deep learning model to detect objects from 80 COCO classes (person, 
 - `Gate` (Gate) - High when target detected
 - `Video Out` (Video) - Passthrough video output for chaining
 - `Cropped Out` (Video) - Cropped region around detected object
-
-**Auto-Connect Shortcuts:**
-- **V (Video)**: Connect loader `Source ID` → `Source In`; chain `Video Out` or `Cropped Out` → next video module
-- **B (CV)**: Chain X/Y/Width/Height to CV inputs
-- **Y (Gate)**: Chain `Gate` to gate inputs
 
 #### Parameters
 - `Target Class` (Choice) - Object class to detect (person, car, bicycle, etc.)
@@ -2132,10 +2159,6 @@ Tracks multiple custom colors in video using HSV color space. Outputs are dynami
   - `[Color] Area` (CV) - Covered area (0-1)
 - `Video Out` (Video) - Passthrough video output for chaining
 
-**Auto-Connect Shortcuts:**
-- **V (Video)**: Connect loader `Source ID` → `Source In`; chain `Video Out` → next video module
-- **B (CV)**: Chain per-color X/Y/Area to CV inputs
-
 #### Parameters
 - `Add Color...` (Button) - Click to pick a color from the video preview
 - `Zoom` (+/-) - Adjust preview size: Small (240px), Normal (480px), Large (960px)
@@ -2178,10 +2201,6 @@ Detects shapes and their properties using background subtraction and contour ana
 - `Aspect Ratio` (CV) - Width/height ratio
 - `Video Out` (Video) - Passthrough video output for chaining
 
-**Auto-Connect Shortcuts:**
-- **V (Video)**: Connect loader `Source ID` → `Source In`; chain `Video Out` → next video module
-- **B (CV)**: Chain outputs to CV inputs
-
 #### Parameters
 - `Threshold` (0-255) - Threshold for foreground/background separation (default: 128)
 - `Noise Reduction` (Bool) - Enable morphological filtering to reduce noise (default: On)
@@ -2223,11 +2242,6 @@ Uses semantic segmentation (ENet or DeepLabV3) to identify a target class and ou
 - `Center Y` (CV) - Center Y of detected region (0-1)
 - `Gate` (Gate) - High when target detected
 - `Video Out` (Video) - Passthrough video output for chaining
-
-**Auto-Connect Shortcuts:**
-- **V (Video)**: Connect loader `Source ID` → `Source In`; chain `Video Out` → next video module
-- **B (CV)**: Chain Area and Center outputs to CV targets.
-- **Y (Gate)**: Chain `Gate` to gate inputs.
 
 #### Parameters
 - `Target Class` (Choice) - Semantic class to detect (person, road, car, etc.)
@@ -2299,10 +2313,6 @@ A comprehensive video processing node that applies real-time effects to video st
 - `Use GPU (CUDA)` (Bool) - Enable GPU acceleration (if available)
 - `Zoom` (+/-) - Adjust preview size: Small (240px), Normal (480px), Large (960px)
 
-**Auto-Connect Shortcuts:**
-- **V (Video)**: Chain video source → `Source In`, `Output ID` → next video module
-- All color/filter parameters accept CV modulation for dynamic effects
-
 #### How to Use
 1. **Connect Video Source:** Connect Webcam, Video File Loader, or another Video FX node to `Source In`
 2. **Chain Effects:** Connect `Output ID` to another Video FX or CV processing module
@@ -2355,10 +2365,6 @@ Crops video frames to a specified region. Supports three modes: manual cropping,
 **Manual Crop Controls:**
 - `Center X/Y` (0-1) - Crop region center position
 - `Width/Height` (0-1) - Crop region size
-
-**Auto-Connect Shortcuts:**
-- **V (Video)**: Chain video source → `Source In`, `Output ID` → next video module
-- **B (CV)**: Connect CV signals (from Object/Human/Pose detectors) to Center X/Y/Width/Height modulation inputs
 
 #### How to Use
 1. **Manual Mode:**
@@ -2506,12 +2512,6 @@ A hybrid smart system that automatically detects and reports BPM from rhythm-pro
 - `Min BPM` (20-120) - Minimum BPM for normalization (default: 60)
 - `Max BPM` (120-300) - Maximum BPM for normalization (default: 240)
 
-**Auto-Connect Shortcuts:**
-- **B (CV)**: Chain `[Source] CV` outputs to CV modulation inputs
-- **Y (Gate)**: Chain `[Source] Active` outputs to gate inputs
-- **R (Raw)**: Chain `[Source] BPM` outputs to raw value inputs
-- **G (Audio)**: Connect audio sources to beat detection inputs
-
 #### How to Use
 1. **Operation Modes:**
    - **Auto**: Uses both introspection (fast) and beat detection (universal)
@@ -2589,23 +2589,6 @@ A hybrid smart system that automatically detects and reports BPM from rhythm-pro
 **Bipolar:** Signal range from -1 to +1 (centered at 0).
 
 **Unipolar:** Signal range from 0 to 1.
-
----
-
-## Keyboard Shortcuts for Auto-Connection
-
-When multiple nodes are selected, use these keys to chain them by data type:
-
-| Key | Data Type | Color | Use Case |
-|-----|-----------|-------|----------|
-| **C** | Standard Chaining | White | Stereo audio chain (channels 0→0, 1→1) |
-| **G** | Audio | Green | Audio effects chain |
-| **B** | CV (Control Voltage) | Blue | CV signal chain |
-| **Y** | Gate | Yellow | Gate/trigger chain |
-| **R** | Raw | Red | Raw value chain |
-| **V** | Video | Cyan | Video source chain (webcam/video → CV modules) |
-
-**Note:** Auto-connection shortcuts only work when 2+ nodes are selected.
 
 ---
 

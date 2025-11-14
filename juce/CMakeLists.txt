@@ -723,6 +723,8 @@ target_sources(ColliderApp PRIVATE
     Source/audio/modules/GateModuleProcessor.cpp
     Source/audio/modules/DriveModuleProcessor.h
     Source/audio/modules/DriveModuleProcessor.cpp
+    Source/audio/modules/BitCrusherModuleProcessor.h
+    Source/audio/modules/BitCrusherModuleProcessor.cpp
     Source/audio/modules/PanVolModuleProcessor.h
     Source/audio/modules/PanVolModuleProcessor.cpp
     Source/audio/modules/MathModuleProcessor.h
@@ -1140,6 +1142,8 @@ target_sources(PresetCreatorApp PRIVATE
     Source/audio/modules/GateModuleProcessor.cpp
     Source/audio/modules/DriveModuleProcessor.h
     Source/audio/modules/DriveModuleProcessor.cpp
+    Source/audio/modules/BitCrusherModuleProcessor.h
+    Source/audio/modules/BitCrusherModuleProcessor.cpp
     Source/audio/modules/PanVolModuleProcessor.h
     Source/audio/modules/PanVolModuleProcessor.cpp
     Source/audio/modules/InletModuleProcessor.h

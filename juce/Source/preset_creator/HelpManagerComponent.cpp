@@ -1183,12 +1183,72 @@ void HelpManagerComponent::renderMarkdownSection(const MarkdownSection& section,
     }
 }
 
+juce::String HelpManagerComponent::replaceShortcutPlaceholders(const juce::String& text)
+{
+    // Map of shortcut keys to their action IDs
+    struct ShortcutMapping
+    {
+        juce::String key; // e.g., "C", "G", "B", etc.
+        juce::Identifier actionId;
+    };
+    
+    const auto& context = ImGuiNodeEditorComponent::nodeEditorContextId;
+    const ShortcutMapping mappings[] = {
+        { "C", ImGuiNodeEditorComponent::ShortcutActionIds::graphChainSequential },
+        { "G", ImGuiNodeEditorComponent::ShortcutActionIds::graphChainAudio },
+        { "B", ImGuiNodeEditorComponent::ShortcutActionIds::graphChainCv },
+        { "Y", ImGuiNodeEditorComponent::ShortcutActionIds::graphChainGate },
+        { "R", ImGuiNodeEditorComponent::ShortcutActionIds::graphChainRaw },
+        { "V", ImGuiNodeEditorComponent::ShortcutActionIds::graphChainVideo },
+    };
+    
+    juce::String result = text;
+    
+    for (const auto& mapping : mappings)
+    {
+        // Get the actual shortcut key
+        juce::String sourceLabel;
+        juce::String shortcutKey = getBindingLabelForContext(mapping.actionId, context, sourceLabel);
+        
+        // Extract just the key character from the shortcut string (e.g., "C" from "Ctrl+C" or just "C")
+        juce::String actualKey = mapping.key; // Default to original if we can't extract
+        if (shortcutKey != "Unassigned" && !shortcutKey.isEmpty())
+        {
+            // The toString() format is like "Ctrl+C" or just "C", so we extract the last part
+            juce::StringArray parts;
+            parts.addTokens(shortcutKey, "+", "");
+            if (parts.size() > 0)
+            {
+                actualKey = parts[parts.size() - 1].trim().toUpperCase(); // Get the last part (the key)
+            }
+        }
+        
+        // Replace patterns in the text
+        // Pattern 1: **X** (bold standalone)
+        result = result.replace("**" + mapping.key + "**", "**" + actualKey + "**");
+        
+        // Pattern 2: **X (Type)**: (bold with type in parentheses)
+        result = result.replace("**" + mapping.key + " (", "**" + actualKey + " (");
+        
+        // Pattern 3: | **X** | (in tables)
+        result = result.replace("| **" + mapping.key + "** |", "| **" + actualKey + "** |");
+        
+        // Pattern 4: - **X (Type)**: (in lists)
+        result = result.replace("- **" + mapping.key + " (", "- **" + actualKey + " (");
+    }
+    
+    return result;
+}
+
 void HelpManagerComponent::renderMarkdownText(const juce::String& text)
 {
     if (text.isEmpty())
         return;
     
-    auto lines = juce::StringArray::fromLines(text);
+    // Replace hardcoded shortcuts with actual shortcuts from ShortcutManager
+    juce::String processedText = replaceShortcutPlaceholders(text);
+    
+    auto lines = juce::StringArray::fromLines(processedText);
     bool inCodeBlock = false;
     
     for (int lineIdx = 0; lineIdx < lines.size(); ++lineIdx)

@@ -1,0 +1,122 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<ModularSynthPreset version="1" bpm="120.0">
+  <modules>
+    <module logicalId="1" type="bit_crusher">
+      <params>
+        <BitCrusherParams>
+          <PARAM id="bit_depth" value="1.569999933242798"/>
+          <PARAM id="mix" value="1.0"/>
+          <PARAM id="relativeBitDepthMod" value="1.0"/>
+          <PARAM id="relativeSampleRateMod" value="1.0"/>
+          <PARAM id="sample_rate" value="0.1620000004768372"/>
+        </BitCrusherParams>
+      </params>
+    </module>
+    <module logicalId="3" type="random">
+      <params>
+        <RandomParams>
+          <PARAM id="cvMax" value="0.5799999833106995"/>
+          <PARAM id="cvMin" value="0.4699999988079071"/>
+          <PARAM id="max" value="1.0"/>
+          <PARAM id="min" value="-57.13999938964844"/>
+          <PARAM id="normMax" value="0.3899999856948853"/>
+          <PARAM id="normMin" value="0.25"/>
+          <PARAM id="rate" value="5.739999771118164"/>
+          <PARAM id="rate_division" value="3.0"/>
+          <PARAM id="slew" value="0.0"/>
+          <PARAM id="sync" value="0.0"/>
+          <PARAM id="trigThreshold" value="0.5"/>
+        </RandomParams>
+      </params>
+      <extra>
+        <RandomState sync="0.0" rate_division="3.0"/>
+      </extra>
+    </module>
+    <module logicalId="5" type="vco">
+      <params>
+        <VCOParams>
+          <PARAM id="frequency" value="89.0"/>
+          <PARAM id="portamento" value="0.0"/>
+          <PARAM id="relative_freq_mod" value="1.0"/>
+          <PARAM id="waveform" value="0.0"/>
+        </VCOParams>
+      </params>
+    </module>
+    <module logicalId="7" type="random">
+      <params>
+        <RandomParams>
+          <PARAM id="cvMax" value="0.75"/>
+          <PARAM id="cvMin" value="0.4699999988079071"/>
+          <PARAM id="max" value="1.0"/>
+          <PARAM id="min" value="0.0"/>
+          <PARAM id="normMax" value="0.4899999797344208"/>
+          <PARAM id="normMin" value="0.25"/>
+          <PARAM id="rate" value="5.739999771118164"/>
+          <PARAM id="rate_division" value="3.0"/>
+          <PARAM id="slew" value="0.0"/>
+          <PARAM id="sync" value="1.0"/>
+          <PARAM id="trigThreshold" value="0.5"/>
+        </RandomParams>
+      </params>
+      <extra>
+        <RandomState sync="1.0" rate_division="3.0"/>
+      </extra>
+    </module>
+    <module logicalId="9" type="sample_loader">
+      <params>
+        <SampleLoaderParameters samplePath="H:\0000_CODE\01_collider_pyo\audio\samples\melodic\KSHMR_Instrumental_Fill_05_105_Kemenche_G#m.wav">
+          <PARAM id="engine" value="1.0"/>
+          <PARAM id="gate" value="0.3700000047683716"/>
+          <PARAM id="gate_mod" value="1.0"/>
+          <PARAM id="loop" value="1.0"/>
+          <PARAM id="pitch" value="-9.600000381469727"/>
+          <PARAM id="pitch_mod" value="0.0"/>
+          <PARAM id="rangeEnd" value="0.7049999833106995"/>
+          <PARAM id="rangeEnd_mod" value="1.0"/>
+          <PARAM id="rangeStart" value="0.3440000116825104"/>
+          <PARAM id="rangeStart_mod" value="0.0"/>
+          <PARAM id="rbPhaseInd" value="1.0"/>
+          <PARAM id="rbWindowShort" value="1.0"/>
+          <PARAM id="speed" value="1.839999914169312"/>
+          <PARAM id="speed_mod" value="1.0"/>
+          <PARAM id="trigger_mod" value="0.0"/>
+        </SampleLoaderParameters>
+      </params>
+    </module>
+    <module logicalId="13" type="reverb">
+      <params>
+        <ReverbParams>
+          <PARAM id="damp" value="0.3619999885559082"/>
+          <PARAM id="mix" value="0.2770000100135803"/>
+          <PARAM id="relativeDampMod" value="1.0"/>
+          <PARAM id="relativeMixMod" value="1.0"/>
+          <PARAM id="relativeSizeMod" value="1.0"/>
+          <PARAM id="size" value="0.6430000066757202"/>
+        </ReverbParams>
+      </params>
+    </module>
+    <module logicalId="999" type="bpm_monitor"/>
+  </modules>
+  <connections>
+    <connection srcId="1" srcChan="0" dstId="13" dstChan="0"/>
+    <connection srcId="1" srcChan="1" dstId="13" dstChan="1"/>
+    <connection srcId="3" srcChan="2" dstId="1" dstChan="2"/>
+    <connection srcId="5" srcChan="0" dstId="1" dstChan="0"/>
+    <connection srcId="7" srcChan="2" dstId="1" dstChan="3"/>
+    <connection srcId="7" srcChan="0" dstId="5" dstChan="0"/>
+    <connection srcId="9" srcChan="1" dstId="1" dstChan="1"/>
+    <connection srcId="13" srcChan="0" dstId="output" dstChan="0"/>
+    <connection srcId="13" srcChan="1" dstId="output" dstChan="1"/>
+  </connections>
+  <NodeEditorUI>
+    <node id="1" x="1196.0" y="254.0"/>
+    <node id="3" x="427.0" y="151.0"/>
+    <node id="5" x="228.0" y="348.0"/>
+    <node id="7" x="953.6240844726562" y="636.0869750976562"/>
+    <node id="9" x="-212.4956512451172" y="396.30908203125"/>
+    <node id="13" x="1812.29296875" y="320.3355102539062"/>
+    <node id="999" x="844.8237915039062" y="-146.4722900390625"/>
+    <node id="0" x="2305.54248046875" y="349.5631103515625"/>
+  </NodeEditorUI>
+</ModularSynthPreset>

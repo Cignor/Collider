@@ -37,6 +37,7 @@ void populateModuleDescriptions()
     descriptions["limiter"]             = "Prevents a signal from exceeding a set level.";
     descriptions["gate"]                = "A stereo noise gate to silence signals below a threshold.";
     descriptions["drive"]               = "A waveshaping distortion effect.";
+    descriptions["bit_crusher"]         = "A bit depth and sample rate reduction effect for lo-fi textures.";
     descriptions["panvol"]              = "A 2D control surface for simultaneous volume and panning adjustment.";
     descriptions["graphic_eq"]          = "An 8-band graphic equalizer.";
     descriptions["frequency_graph"]     = "A high-resolution, real-time spectrum analyzer.";
@@ -303,6 +304,12 @@ void populatePinDatabase()
     db["drive"] = ModulePinInfo(
         NodeWidth::Small,
         { AudioPin("In L", 0, PinDataType::Audio), AudioPin("In R", 1, PinDataType::Audio) },
+        { AudioPin("Out L", 0, PinDataType::Audio), AudioPin("Out R", 1, PinDataType::Audio) },
+        {}
+    );
+    db["bit_crusher"] = ModulePinInfo(
+        NodeWidth::Small,
+        { AudioPin("In L", 0, PinDataType::Audio), AudioPin("In R", 1, PinDataType::Audio), AudioPin("Bit Depth Mod", 2, PinDataType::CV), AudioPin("Sample Rate Mod", 3, PinDataType::CV) },
         { AudioPin("Out L", 0, PinDataType::Audio), AudioPin("Out R", 1, PinDataType::Audio) },
         {}
     );

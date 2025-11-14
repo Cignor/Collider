@@ -262,8 +262,15 @@ MovementResult MovementDetectorModule::analyzeFrame(const cv::Mat& inputFrame, j
 
             if (trackedCount > 0)
             {
-                result.avgMotionX = juce::jlimit(-1.0f, 1.0f, sumX / (trackedCount * 10.0f));
-                result.avgMotionY = juce::jlimit(-1.0f, 1.0f, sumY / (trackedCount * 10.0f));
+                // Normalize based on frame dimensions (320x240) to account for aspect ratio
+                // Use a normalization factor that scales motion to -1 to +1 range
+                // Frame is 320 wide, 240 tall, so normalize X by width and Y by height
+                const float frameWidth = 320.0f;
+                const float frameHeight = 240.0f;
+                const float normalizationFactor = 0.1f; // Scale factor for sensitivity
+                
+                result.avgMotionX = juce::jlimit(-1.0f, 1.0f, (sumX / trackedCount) / (frameWidth * normalizationFactor));
+                result.avgMotionY = juce::jlimit(-1.0f, 1.0f, (sumY / trackedCount) / (frameHeight * normalizationFactor));
                 result.motionAmount = juce::jlimit(0.0f, 1.0f, std::sqrt(result.avgMotionX * result.avgMotionX + result.avgMotionY * result.avgMotionY));
                 
                 if (result.motionAmount > sensitivityParam->load())

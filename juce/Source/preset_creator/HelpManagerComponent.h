@@ -109,6 +109,7 @@ private:
     void renderMarkdownText(const juce::String& text);
     void renderFormattedText(const juce::String& text); // Renders text with inline formatting (bold, code)
     juce::String extractAnchor(const juce::String& headerLine);
+    juce::String replaceShortcutPlaceholders(const juce::String& text); // Replaces hardcoded shortcuts with actual shortcuts from ShortcutManager
     
     // Helper to get category color from section title
     ImU32 getCategoryColorForSection(const juce::String& sectionTitle) const;
