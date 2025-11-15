@@ -22,6 +22,10 @@ juce::AudioProcessorValueTreeState::ParameterLayout BitCrusherModuleProcessor::c
     // Anti-aliasing filter
     params.push_back(std::make_unique<juce::AudioParameterBool>(paramIdAntiAlias, "Anti-Aliasing", true));
     
+    // Quantization mode
+    params.push_back(std::make_unique<juce::AudioParameterChoice>(paramIdQuantMode, "Quant Mode", 
+        juce::StringArray{"Linear", "Dither (TPDF)", "Noise Shaping"}, 0));
+    
     // Relative modulation parameters
     params.push_back(std::make_unique<juce::AudioParameterBool>("relativeBitDepthMod", "Relative Bit Depth Mod", true));
     params.push_back(std::make_unique<juce::AudioParameterBool>("relativeSampleRateMod", "Relative Sample Rate Mod", true));
@@ -31,7 +35,7 @@ juce::AudioProcessorValueTreeState::ParameterLayout BitCrusherModuleProcessor::c
 
 BitCrusherModuleProcessor::BitCrusherModuleProcessor()
     : ModuleProcessor(BusesProperties()
-          .withInput("Audio In", juce::AudioChannelSet::discreteChannels(5), true) // 0-1: Audio, 2: BitDepth Mod, 3: SampleRate Mod, 4: AntiAlias Mod
+          .withInput("Audio In", juce::AudioChannelSet::discreteChannels(6), true) // 0-1: Audio, 2: BitDepth Mod, 3: SampleRate Mod, 4: AntiAlias Mod, 5: QuantMode Mod
           .withOutput("Audio Out", juce::AudioChannelSet::stereo(), true)),
       apvts(*this, nullptr, "BitCrusherParams", createParameterLayout())
 {
@@ -39,6 +43,7 @@ BitCrusherModuleProcessor::BitCrusherModuleProcessor()
     sampleRateParam = apvts.getRawParameterValue(paramIdSampleRate);
     mixParam = apvts.getRawParameterValue(paramIdMix);
     antiAliasParam = apvts.getRawParameterValue(paramIdAntiAlias);
+    quantModeParam = apvts.getRawParameterValue(paramIdQuantMode);
     relativeBitDepthModParam = apvts.getRawParameterValue("relativeBitDepthMod");
     relativeSampleRateModParam = apvts.getRawParameterValue("relativeSampleRateMod");
 
@@ -65,6 +70,10 @@ void BitCrusherModuleProcessor::prepareToPlay(double sampleRate, int samplesPerB
     mAntiAliasFilterR.prepare(specR);
     mAntiAliasFilterL.setType(juce::dsp::StateVariableTPTFilterType::lowpass);
     mAntiAliasFilterR.setType(juce::dsp::StateVariableTPTFilterType::lowpass);
+    
+    // Reset quantization errors
+    mQuantErrorL = 0.0f;
+    mQuantErrorR = 0.0f;
 }
 
 void BitCrusherModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midi)
@@ -90,11 +99,14 @@ void BitCrusherModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
     const bool isBitDepthMod = isParamInputConnected(paramIdBitDepthMod);
     const bool isSampleRateMod = isParamInputConnected(paramIdSampleRateMod);
     const bool isAntiAliasMod = isParamInputConnected(paramIdAntiAliasMod);
+    const bool isQuantModeMod = isParamInputConnected(paramIdQuantModeMod);
     const float* bitDepthCV = isBitDepthMod && inBus.getNumChannels() > 2 ? inBus.getReadPointer(2) : nullptr;
     const float* sampleRateCV = isSampleRateMod && inBus.getNumChannels() > 3 ? inBus.getReadPointer(3) : nullptr;
     const float* antiAliasCV = isAntiAliasMod && inBus.getNumChannels() > 4 ? inBus.getReadPointer(4) : nullptr;
+    const float* quantModeCV = isQuantModeMod && inBus.getNumChannels() > 5 ? inBus.getReadPointer(5) : nullptr;
     
     const bool baseAntiAlias = antiAliasParam != nullptr && antiAliasParam->load() > 0.5f;
+    const int baseQuantMode = quantModeParam != nullptr ? static_cast<int>(quantModeParam->load()) : 0;
     const bool relativeBitDepthMode = relativeBitDepthModParam != nullptr && relativeBitDepthModParam->load() > 0.5f;
     const bool relativeSampleRateMode = relativeSampleRateModParam != nullptr && relativeSampleRateModParam->load() > 0.5f;
 
@@ -158,6 +170,9 @@ void BitCrusherModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
         float& srCounter = (ch == 0) ? mSrCounterL : mSrCounterR;
         float& lastSample = (ch == 0) ? mLastSampleL : mLastSampleR;
         
+        // Per-channel quantization error state
+        float& quantError = (ch == 0) ? mQuantErrorL : mQuantErrorR;
+        
         // Select the correct anti-aliasing filter and context for this channel
         auto& antiAliasFilter = (ch == 0) ? mAntiAliasFilterL : mAntiAliasFilterR;
         auto& sampleBuffer = (ch == 0) ? sampleBufferL : sampleBufferR;
@@ -211,6 +226,12 @@ void BitCrusherModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
                 isAntiAliasOn = (antiAliasCV[i] > 0.5f);
             }
             
+            // Determine effective quantization mode for this sample
+            int quantMode = baseQuantMode;
+            if (isQuantModeMod && quantModeCV != nullptr) {
+                quantMode = static_cast<int>(juce::jmap(juce::jlimit(0.0f, 1.0f, quantModeCV[i]), 0.0f, 2.99f));
+            }
+            
             // Get the sample *before* decimation
             float sampleToDecimate = data[i];
             
@@ -233,11 +254,40 @@ void BitCrusherModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
             }
             float decimatedSample = lastSample;
             
-            // Bit depth quantization (linear)
-            // Map from [-1, 1] to [0, 2^N-1], round, then map back
+            // --- New Quantization Logic ---
             float numLevels = std::exp2(bitDepth);
-            float quantizedSample = std::round((decimatedSample + 1.0f) * 0.5f * (numLevels - 1.0f)) / (numLevels - 1.0f) * 2.0f - 1.0f;
+            float step = 2.0f / (numLevels - 1.0f); // Step size for [-1, 1] range
+            
+            float dither = 0.0f;
+            float sampleToQuantize = decimatedSample;
+            
+            switch (quantMode)
+            {
+                case 1: // Dither (TPDF)
+                    dither = (mRandom.nextFloat() - mRandom.nextFloat()) * 0.5f * step;
+                    quantError = 0.0f; // Reset error if switching
+                    break;
+                case 2: // Noise Shaping
+                    dither = (mRandom.nextFloat() - mRandom.nextFloat()) * 0.5f * step;
+                    sampleToQuantize += quantError; // Add previous sample's error
+                    break;
+                case 0: // Linear
+                default:
+                    quantError = 0.0f; // Reset error
+                    break;
+            }
+            
+            // Quantize using floor-rounding
+            float quantizedSample = std::floor((sampleToQuantize + dither) / step + 0.5f) * step;
             quantizedSample = juce::jlimit(-1.0f, 1.0f, quantizedSample);
+            
+            // If noise shaping, calculate and store the error for the *next* sample
+            if (quantMode == 2)
+            {
+                float error = sampleToQuantize - quantizedSample;
+                quantError = error * 0.95f; // Simple 1-pole high-pass on error
+            }
+            // --- End of New Quantization Logic ---
             
             // Apply dry/wet mix
             const float dryLevel = 1.0f - mixAmount;
@@ -249,6 +299,7 @@ void BitCrusherModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
                 setLiveParamValue("bit_depth_live", bitDepth);
                 setLiveParamValue("sample_rate_live", sampleRate);
                 setLiveParamValue("antiAlias_live", isAntiAliasOn ? 1.0f : 0.0f);
+                setLiveParamValue("quant_mode_live", static_cast<float>(quantMode));
             }
         }
     }
@@ -269,6 +320,7 @@ bool BitCrusherModuleProcessor::getParamRouting(const juce::String& paramId, int
     if (paramId == paramIdBitDepthMod) { outChannelIndexInBus = 2; return true; }
     if (paramId == paramIdSampleRateMod) { outChannelIndexInBus = 3; return true; }
     if (paramId == paramIdAntiAliasMod) { outChannelIndexInBus = 4; return true; }
+    if (paramId == paramIdQuantModeMod) { outChannelIndexInBus = 5; return true; }
     return false;
 }
 
@@ -281,6 +333,7 @@ juce::String BitCrusherModuleProcessor::getAudioInputLabel(int channel) const
         case 2: return "Bit Depth Mod";
         case 3: return "Sample Rate Mod";
         case 4: return "Anti-Alias Mod";
+        case 5: return "Quant Mode Mod";
         default: return juce::String("In ") + juce::String(channel + 1);
     }
 }
@@ -381,6 +434,26 @@ void BitCrusherModuleProcessor::drawParametersInNode(float itemWidth, const std:
     ImGui::SameLine();
     HelpMarker("ON: Applies a low-pass filter before decimation to reduce aliasing.\nOFF: Disables the filter for a harsher, classic aliased sound.");
 
+    // Quant Mode
+    // Use virtual _mod ID to check for modulation as per BestPracticeNodeProcessor.md
+    bool isQuantModeModulated = isParamModulated(paramIdQuantModeMod);
+    // Get live value if modulated, otherwise use base parameter value
+    int quantMode = isQuantModeModulated
+        ? static_cast<int>(getLiveParamValueFor(paramIdQuantModeMod, "quant_mode_live", quantModeParam != nullptr ? quantModeParam->load() : 0.0f))
+        : (quantModeParam != nullptr ? static_cast<int>(quantModeParam->load()) : 0);
+    if (isQuantModeModulated) {
+        ImGui::BeginDisabled();
+    }
+    if (ImGui::Combo("Quant Mode", &quantMode, "Linear\0Dither (TPDF)\0Noise Shaping\0\0")) {
+        if (!isQuantModeModulated) {
+            if (auto* p = dynamic_cast<juce::AudioParameterChoice*>(ap.getParameter(paramIdQuantMode))) *p = quantMode;
+        }
+    }
+    if (ImGui::IsItemDeactivatedAfterEdit()) { onModificationEnded(); }
+    if (isQuantModeModulated) { ImGui::EndDisabled(); ImGui::SameLine(); ImGui::TextUnformatted("(mod)"); }
+    ImGui::SameLine();
+    HelpMarker("Quantization Algorithm:\nLinear: Basic, harsh quantization.\nDither: Adds noise to reduce artifacts.\nNoise Shaping: Pushes quantization noise into higher, less audible frequencies.");
+
     ImGui::Spacing();
     ImGui::Separator();
     ImGui::Spacing();
@@ -429,6 +502,8 @@ void BitCrusherModuleProcessor::drawIoPins(const NodePinHelpers& helpers)
         helpers.drawAudioInputPin("Sample Rate Mod", getChannelIndexInProcessBlockBuffer(true, busIdx, chanInBus));
     if (getParamRouting(paramIdAntiAliasMod, busIdx, chanInBus))
         helpers.drawAudioInputPin("Anti-Alias Mod", getChannelIndexInProcessBlockBuffer(true, busIdx, chanInBus));
+    if (getParamRouting(paramIdQuantModeMod, busIdx, chanInBus))
+        helpers.drawAudioInputPin("Quant Mode Mod", getChannelIndexInProcessBlockBuffer(true, busIdx, chanInBus));
     
     helpers.drawAudioOutputPin("Out L", 0);
     helpers.drawAudioOutputPin("Out R", 1);

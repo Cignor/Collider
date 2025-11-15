@@ -308,7 +308,7 @@ void populatePinDatabase()
     );
     db["bit_crusher"] = ModulePinInfo(
         NodeWidth::Small,
-        { AudioPin("In L", 0, PinDataType::Audio), AudioPin("In R", 1, PinDataType::Audio), AudioPin("Bit Depth Mod", 2, PinDataType::CV), AudioPin("Sample Rate Mod", 3, PinDataType::CV), AudioPin("Anti-Alias Mod", 4, PinDataType::Gate) },
+        { AudioPin("In L", 0, PinDataType::Audio), AudioPin("In R", 1, PinDataType::Audio), AudioPin("Bit Depth Mod", 2, PinDataType::CV), AudioPin("Sample Rate Mod", 3, PinDataType::CV), AudioPin("Anti-Alias Mod", 4, PinDataType::Gate), AudioPin("Quant Mode Mod", 5, PinDataType::CV) },
         { AudioPin("Out L", 0, PinDataType::Audio), AudioPin("Out R", 1, PinDataType::Audio) },
         {}
     );

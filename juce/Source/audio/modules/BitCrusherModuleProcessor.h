@@ -11,11 +11,13 @@ public:
     static constexpr auto paramIdSampleRate = "sample_rate";
     static constexpr auto paramIdMix = "mix";
     static constexpr auto paramIdAntiAlias = "antiAlias";
+    static constexpr auto paramIdQuantMode = "quant_mode";
     
     // Virtual modulation target IDs (no APVTS parameters required)
     static constexpr auto paramIdBitDepthMod = "bit_depth_mod";
     static constexpr auto paramIdSampleRateMod = "sample_rate_mod";
     static constexpr auto paramIdAntiAliasMod = "antiAlias_mod";
+    static constexpr auto paramIdQuantModeMod = "quant_mode_mod";
 
     BitCrusherModuleProcessor();
     ~BitCrusherModuleProcessor() override = default;
@@ -50,6 +52,7 @@ private:
     std::atomic<float>* sampleRateParam { nullptr };
     std::atomic<float>* mixParam { nullptr };
     std::atomic<float>* antiAliasParam { nullptr };
+    std::atomic<float>* quantModeParam { nullptr };
     std::atomic<float>* relativeBitDepthModParam { nullptr };
     std::atomic<float>* relativeSampleRateModParam { nullptr };
 
@@ -66,5 +69,12 @@ private:
     float mLastSampleL = 0.0f;
     float mSrCounterR = 0.0f;
     float mLastSampleR = 0.0f;
+    
+    // Random number generator for dithering
+    juce::Random mRandom;
+    
+    // Noise shaping state (one per channel)
+    float mQuantErrorL = 0.0f;
+    float mQuantErrorR = 0.0f;
 };
 

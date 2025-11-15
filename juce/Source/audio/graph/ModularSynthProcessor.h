@@ -10,7 +10,7 @@
 // Forward declaration
 class ScopeModuleProcessor;
 
-class ModularSynthProcessor : public juce::AudioProcessor, private juce::Timer
+class ModularSynthProcessor : public juce::AudioProcessor
 {
 public:
     ModularSynthProcessor();
@@ -249,15 +249,6 @@ private:
 
     // Optional UI callback for notifications (only set by Preset Creator UI)
     std::function<void(const juce::String&)> onModuleCreated;
-    
-    // Timer callback for deferred commitChanges()
-    void timerCallback() override;
-    
-    // Asynchronous commit processing
-    void processQueuedCommit();
-    
-    // Atomic flag to queue commits
-    std::atomic<bool> commitQueued { false };
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (ModularSynthProcessor)
 };
