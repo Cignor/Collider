@@ -27,7 +27,7 @@ juce::AudioProcessorValueTreeState::ParameterLayout FaceTrackerModule::createPar
 FaceTrackerModule::FaceTrackerModule()
     : ModuleProcessor(BusesProperties()
                         .withInput("Input", juce::AudioChannelSet::mono(), true)
-                        .withOutput("CV Out", juce::AudioChannelSet::discreteChannels(FACE_NUM_KEYPOINTS * 2), true)
+                        .withOutput("CV Out", juce::AudioChannelSet::discreteChannels(36), true)  // Simplified: 2 face center + 2 nose + 8 R eye + 8 L eye + 8 mouth + 8 eyebrows = 36
                         .withOutput("Video Out", juce::AudioChannelSet::mono(), true)    // PASSTHROUGH
                         .withOutput("Cropped Out", juce::AudioChannelSet::mono(), true)), // CROPPED
       juce::Thread("Face Tracker Thread"),
@@ -200,6 +200,9 @@ void FaceTrackerModule::run()
             // Clear cropped output when no face detected
             cv::Mat emptyFrame;
             VideoFrameManager::getInstance().setFrame(getSecondaryLogicalId(), emptyFrame);
+            // Mark face center as invalid when no face detected
+            result.faceCenterX = -1.0f;
+            result.faceCenterY = -1.0f;
         }
         
         if (fifo.getFreeSpace()>=1){ auto w=fifo.write(1); if (w.blockSize1>0) fifoBuffer[w.startIndex1]=result; }
@@ -217,6 +220,11 @@ void FaceTrackerModule::parseFaceOutput(const cv::Mat& netOutput, const cv::Rect
     int H=netOutput.size[2], W=netOutput.size[3];
     float thresh = confidenceThresholdParam ? confidenceThresholdParam->load() : 0.1f;
     result.detectedPoints=0; int count=juce::jmin(FACE_NUM_KEYPOINTS, netOutput.size[1]);
+    
+    // Calculate face center from bounding box (this is our reference point)
+    result.faceCenterX = faceBox.x + faceBox.width * 0.5f;
+    result.faceCenterY = faceBox.y + faceBox.height * 0.5f;
+    
     for (int i=0;i<count;++i)
     {
         cv::Mat heat(H,W,CV_32F,(void*)netOutput.ptr<float>(0,i));
@@ -251,18 +259,93 @@ void FaceTrackerModule::processBlock(juce::AudioBuffer<float>& buffer, juce::Mid
     
     // Output CV on bus 0
     auto cvOutBus = getBusBuffer(buffer, false, 0);
-    for(int i=0;i<FACE_NUM_KEYPOINTS;++i)
-    {
-        int chX=i*2, chY=i*2+1; 
-        if(chY>=cvOutBus.getNumChannels()) break; 
-        float xn=(lastResultForAudio.keypoints[i][0]>=0)?juce::jlimit(0.0f,1.0f,lastResultForAudio.keypoints[i][0]/640.0f):0.0f; 
-        float yn=(lastResultForAudio.keypoints[i][1]>=0)?juce::jlimit(0.0f,1.0f,lastResultForAudio.keypoints[i][1]/480.0f):0.0f; 
-        for(int s=0;s<cvOutBus.getNumSamples();++s)
+    
+    // Get face center position (our reference point)
+    float faceCenterX = lastResultForAudio.faceCenterX;
+    float faceCenterY = lastResultForAudio.faceCenterY;
+    
+    // Normalization factors (using typical frame size - actual frame size could vary)
+    // These are used to normalize relative offsets to a reasonable 0.0-1.0 range
+    const float normScaleX = 1.0f / 640.0f;  // Normalize by typical frame width
+    const float normScaleY = 1.0f / 480.0f;  // Normalize by typical frame height
+    
+    // Helper function to output a keypoint relative to face center
+    auto outputKeypoint = [&](int keypointIndex, int channelStart, int numSamples) {
+        int chX = channelStart;
+        int chY = channelStart + 1;
+        
+        if (faceCenterX >= 0 && faceCenterY >= 0 && 
+            keypointIndex >= 0 && keypointIndex < FACE_NUM_KEYPOINTS &&
+            lastResultForAudio.keypoints[keypointIndex][0] >= 0 && 
+            lastResultForAudio.keypoints[keypointIndex][1] >= 0)
         {
-            cvOutBus.setSample(chX,s,xn); 
-            cvOutBus.setSample(chY,s,yn);
+            // Calculate relative offset from face center
+            float relX = (lastResultForAudio.keypoints[keypointIndex][0] - faceCenterX) * normScaleX;
+            float relY = (lastResultForAudio.keypoints[keypointIndex][1] - faceCenterY) * normScaleY;
+            
+            // Map relative offset to 0.0-1.0 range where 0.5 = no offset (centered at face center)
+            const float relScale = 2.5f;  // Scale factor to make relative positions more usable
+            float relX_norm = juce::jlimit(0.0f, 1.0f, 0.5f + relX * relScale);
+            float relY_norm = juce::jlimit(0.0f, 1.0f, 0.5f + relY * relScale);
+            
+            for(int s=0; s<numSamples; ++s)
+            {
+                if (chX < cvOutBus.getNumChannels())
+                    cvOutBus.setSample(chX, s, relX_norm);
+                if (chY < cvOutBus.getNumChannels())
+                    cvOutBus.setSample(chY, s, relY_norm);
+            }
         }
+        else
+        {
+            // No face center or keypoint not detected - output center value (0.5 = no offset)
+            for(int s=0; s<numSamples; ++s)
+            {
+                if (chX < cvOutBus.getNumChannels())
+                    cvOutBus.setSample(chX, s, 0.5f);
+                if (chY < cvOutBus.getNumChannels())
+                    cvOutBus.setSample(chY, s, 0.5f);
+            }
+        }
+    };
+    
+    int numSamples = cvOutBus.getNumSamples();
+    
+    // Output face center absolute position (channels 0, 1)
+    float faceCenterX_norm = (faceCenterX >= 0) ? juce::jlimit(0.0f, 1.0f, faceCenterX * normScaleX) : 0.5f;
+    float faceCenterY_norm = (faceCenterY >= 0) ? juce::jlimit(0.0f, 1.0f, faceCenterY * normScaleY) : 0.5f;
+    for (int s=0; s<numSamples; ++s)
+    {
+        cvOutBus.setSample(0, s, faceCenterX_norm);  // Face Center X (absolute)
+        cvOutBus.setSample(1, s, faceCenterY_norm);  // Face Center Y (absolute)
     }
+    
+    // Output Nose Base (index 32) - channels 2, 3
+    outputKeypoint(32, 2, numSamples);
+    
+    // Output Right Eye: Outer(36), Top(37), Inner(38), Bottom(39) - channels 4-11
+    outputKeypoint(36, 4, numSamples);   // R Eye Outer
+    outputKeypoint(37, 6, numSamples);   // R Eye Top
+    outputKeypoint(38, 8, numSamples);   // R Eye Inner
+    outputKeypoint(39, 10, numSamples);  // R Eye Bottom
+    
+    // Output Left Eye: Inner(42), Top(43), Outer(44), Bottom(45) - channels 12-19
+    outputKeypoint(42, 12, numSamples);  // L Eye Inner
+    outputKeypoint(43, 14, numSamples);  // L Eye Top
+    outputKeypoint(44, 16, numSamples);  // L Eye Outer
+    outputKeypoint(45, 18, numSamples);  // L Eye Bottom
+    
+    // Output Mouth: Corner R(48), Top Center(51), Corner L(54), Bottom Center(57) - channels 20-27
+    outputKeypoint(48, 20, numSamples);  // Mouth Corner R
+    outputKeypoint(51, 22, numSamples);  // Mouth Top Center
+    outputKeypoint(54, 24, numSamples);  // Mouth Corner L
+    outputKeypoint(57, 26, numSamples);  // Mouth Bottom Center
+    
+    // Output Eyebrows: R Outer(17), R Inner(21), L Inner(22), L Outer(26) - channels 28-35
+    outputKeypoint(17, 28, numSamples);  // R Eyebrow Outer
+    outputKeypoint(21, 30, numSamples);  // R Eyebrow Inner
+    outputKeypoint(22, 32, numSamples);  // L Eyebrow Inner
+    outputKeypoint(26, 34, numSamples);  // L Eyebrow Outer
     
     // Passthrough Video ID on bus 1
     auto videoOutBus = getBusBuffer(buffer, false, 1);
@@ -341,8 +424,7 @@ void FaceTrackerModule::drawParametersInNode(float itemWidth,
 void FaceTrackerModule::drawIoPins(const NodePinHelpers& helpers)
 {
     helpers.drawAudioInputPin("Source In", 0);
-    for(int i=0;i<FACE_NUM_KEYPOINTS;++i)
-    { juce::String base = juce::String("Pt ") + juce::String(i+1); helpers.drawAudioOutputPin((base+" X").toRawUTF8(), i*2); helpers.drawAudioOutputPin((base+" Y").toRawUTF8(), i*2+1);}
+    // Outputs are dynamic; editor queries via getDynamicOutputPins
     helpers.drawAudioOutputPin("Video Out", 0);     // Bus 1
     helpers.drawAudioOutputPin("Cropped Out", 1); // Bus 2
 }
@@ -365,21 +447,67 @@ juce::Image FaceTrackerModule::getLatestFrame()
 
 std::vector<DynamicPinInfo> FaceTrackerModule::getDynamicOutputPins() const
 {
-    // Bus 0: CV Out (140 channels - 70 keypoints * 2 coordinates)
-    // Bus 1: Video Out (1 channel)
-    // Bus 2: Cropped Out (1 channel)
+    // Bus 0: CV Out (36 channels - simplified set of key expressive points)
+    //   Channels 0-1: Face Center X/Y (absolute screen position)
+    //   Channels 2-3: Nose Base (relative to face center)
+    //   Channels 4-11: Right Eye (4 points: Outer, Top, Inner, Bottom)
+    //   Channels 12-19: Left Eye (4 points: Inner, Top, Outer, Bottom)
+    //   Channels 20-27: Mouth (4 points: Corner R, Top Center, Corner L, Bottom Center)
+    //   Channels 28-35: Eyebrows (4 points: R Outer, R Inner, L Inner, L Outer)
+    // Bus 1: Video Out (1 channel) - PASSTHROUGH
+    // Bus 2: Cropped Out (1 channel) - CROPPED
     std::vector<DynamicPinInfo> pins;
     
-    // Add all 70 keypoint pins
-    for (int i = 0; i < 70; ++i)
-    {
-        std::string base = "Pt " + std::to_string(i + 1);
-        pins.emplace_back(base + " X", i * 2, PinDataType::CV);
-        pins.emplace_back(base + " Y", i * 2 + 1, PinDataType::CV);
-    }
+    // Add face center pins (absolute position)
+    pins.emplace_back("Face Center X (Abs)", 0, PinDataType::CV);
+    pins.emplace_back("Face Center Y (Abs)", 1, PinDataType::CV);
     
-    // Add Video Out and Cropped Out pins
-    const int videoOutStartChannel = 140;
+    // Nose Base (channels 2, 3)
+    pins.emplace_back("Nose Base X (Rel)", 2, PinDataType::CV);
+    pins.emplace_back("Nose Base Y (Rel)", 3, PinDataType::CV);
+    
+    // Right Eye (channels 4-11)
+    pins.emplace_back("R Eye Outer X (Rel)", 4, PinDataType::CV);
+    pins.emplace_back("R Eye Outer Y (Rel)", 5, PinDataType::CV);
+    pins.emplace_back("R Eye Top X (Rel)", 6, PinDataType::CV);
+    pins.emplace_back("R Eye Top Y (Rel)", 7, PinDataType::CV);
+    pins.emplace_back("R Eye Inner X (Rel)", 8, PinDataType::CV);
+    pins.emplace_back("R Eye Inner Y (Rel)", 9, PinDataType::CV);
+    pins.emplace_back("R Eye Bottom X (Rel)", 10, PinDataType::CV);
+    pins.emplace_back("R Eye Bottom Y (Rel)", 11, PinDataType::CV);
+    
+    // Left Eye (channels 12-19)
+    pins.emplace_back("L Eye Inner X (Rel)", 12, PinDataType::CV);
+    pins.emplace_back("L Eye Inner Y (Rel)", 13, PinDataType::CV);
+    pins.emplace_back("L Eye Top X (Rel)", 14, PinDataType::CV);
+    pins.emplace_back("L Eye Top Y (Rel)", 15, PinDataType::CV);
+    pins.emplace_back("L Eye Outer X (Rel)", 16, PinDataType::CV);
+    pins.emplace_back("L Eye Outer Y (Rel)", 17, PinDataType::CV);
+    pins.emplace_back("L Eye Bottom X (Rel)", 18, PinDataType::CV);
+    pins.emplace_back("L Eye Bottom Y (Rel)", 19, PinDataType::CV);
+    
+    // Mouth (channels 20-27)
+    pins.emplace_back("Mouth Corner R X (Rel)", 20, PinDataType::CV);
+    pins.emplace_back("Mouth Corner R Y (Rel)", 21, PinDataType::CV);
+    pins.emplace_back("Mouth Top Center X (Rel)", 22, PinDataType::CV);
+    pins.emplace_back("Mouth Top Center Y (Rel)", 23, PinDataType::CV);
+    pins.emplace_back("Mouth Corner L X (Rel)", 24, PinDataType::CV);
+    pins.emplace_back("Mouth Corner L Y (Rel)", 25, PinDataType::CV);
+    pins.emplace_back("Mouth Bottom Center X (Rel)", 26, PinDataType::CV);
+    pins.emplace_back("Mouth Bottom Center Y (Rel)", 27, PinDataType::CV);
+    
+    // Eyebrows (channels 28-35)
+    pins.emplace_back("R Eyebrow Outer X (Rel)", 28, PinDataType::CV);
+    pins.emplace_back("R Eyebrow Outer Y (Rel)", 29, PinDataType::CV);
+    pins.emplace_back("R Eyebrow Inner X (Rel)", 30, PinDataType::CV);
+    pins.emplace_back("R Eyebrow Inner Y (Rel)", 31, PinDataType::CV);
+    pins.emplace_back("L Eyebrow Inner X (Rel)", 32, PinDataType::CV);
+    pins.emplace_back("L Eyebrow Inner Y (Rel)", 33, PinDataType::CV);
+    pins.emplace_back("L Eyebrow Outer X (Rel)", 34, PinDataType::CV);
+    pins.emplace_back("L Eyebrow Outer Y (Rel)", 35, PinDataType::CV);
+    
+    // Add Video Out and Cropped Out pins (after CV outputs, like HandTrackerModule)
+    const int videoOutStartChannel = 36;
     const int croppedOutStartChannel = videoOutStartChannel + 1;
     pins.emplace_back("Video Out", videoOutStartChannel, PinDataType::Video);
     pins.emplace_back("Cropped Out", croppedOutStartChannel, PinDataType::Video);

@@ -123,7 +123,6 @@ bool ImGuiNodeEditorComponent::s_globalGpuEnabled = true;
 #include "../audio/modules/PoseEstimatorModule.h"
 #include "../audio/modules/ColorTrackerModule.h"
 #include "../audio/modules/ContourDetectorModule.h"
-#include "../audio/modules/SemanticSegmentationModule.h"
 #include "../audio/modules/ObjectDetectorModule.h"
 #include "../audio/modules/HandTrackerModule.h"
 #include "../audio/modules/FaceTrackerModule.h"
@@ -2320,7 +2319,6 @@ void ImGuiNodeEditorComponent::renderImGui()
         addModuleButton("Face Tracker", "face_tracker");
         addModuleButton("Color Tracker", "color_tracker");
         addModuleButton("Contour Detector", "contour_detector");
-        addModuleButton("Semantic Segmentation", "semantic_segmentation");
     }
     
     // ═══════════════════════════════════════════════════════════════════════════════
@@ -3185,24 +3183,6 @@ if (auto* mp = synth->getModuleForLogical (lid))
             }
         }
         contourModule->drawParametersInNode(nodeContentWidth, isParamModulated, onModificationEnded);
-    }
-    else if (auto* segModule = dynamic_cast<SemanticSegmentationModule*>(mp))
-    {
-        juce::Image frame = segModule->getLatestFrame();
-        if (!frame.isNull())
-        {
-            if (visionModuleTextures.find((int)lid) == visionModuleTextures.end())
-                visionModuleTextures[(int)lid] = std::make_unique<juce::OpenGLTexture>();
-            auto* texture = visionModuleTextures[(int)lid].get();
-            texture->loadImage(frame);
-            if (texture->getTextureID() != 0)
-            {
-                float ar = (float)frame.getHeight() / juce::jmax(1.0f, (float)frame.getWidth());
-                ImVec2 size(nodeContentWidth, nodeContentWidth * ar);
-                ImGui::Image((void*)(intptr_t)texture->getTextureID(), size, ImVec2(0,1), ImVec2(1,0));
-            }
-        }
-        segModule->drawParametersInNode(nodeContentWidth, isParamModulated, onModificationEnded);
     }
     else if (auto* objModule = dynamic_cast<ObjectDetectorModule*>(mp))
     {
@@ -5062,7 +5042,6 @@ if (auto* mp = synth->getModuleForLogical (lid))
                     if (ImGui::MenuItem("Face Tracker")) addAtMouse("face_tracker");
                     if (ImGui::MenuItem("Color Tracker")) addAtMouse("color_tracker");
                     if (ImGui::MenuItem("Contour Detector")) addAtMouse("contour_detector");
-                    if (ImGui::MenuItem("Semantic Segmentation")) addAtMouse("semantic_segmentation");
                     ImGui::EndMenu();
                 }
                 
@@ -8674,7 +8653,7 @@ void ImGuiNodeEditorComponent::drawInsertNodeOnLinkPopup()
             {"Object Detector", "object_detector"},
             {"Pose Estimator", "pose_estimator"}, {"Hand Tracker", "hand_tracker"},
             {"Face Tracker", "face_tracker"}, {"Color Tracker", "color_tracker"},
-            {"Contour Detector", "contour_detector"}, {"Semantic Segmentation", "semantic_segmentation"}
+            {"Contour Detector", "contour_detector"}
         };
         
         // Determine which list to show based on cable type

@@ -92,12 +92,11 @@ void populateModuleDescriptions()
     descriptions["video_fx"]            = "Applies real-time video effects (brightness, contrast, saturation, blur, sharpen, etc.) to video sources, chainable.";
     descriptions["movement_detector"]   = "Analyzes video source for motion via optical flow or background subtraction, outputs motion data as CV.";
     descriptions["pose_estimator"]      = "Uses OpenPose to detect 15 body keypoints and outputs their positions as CV signals.";
-    descriptions["hand_tracker"]        = "Detects 21 hand keypoints and outputs their X/Y positions as CV (42 channels).";
-    descriptions["face_tracker"]        = "Detects 70 facial landmarks and outputs X/Y positions as CV (140 channels).";
+    descriptions["hand_tracker"]        = "Detects 21 hand keypoints. Wrist outputs absolute screen position; all other keypoints output relative positions to wrist, making the hand an instrument independent of screen location.";
+    descriptions["face_tracker"]        = "Detects facial landmarks. Outputs face center (absolute), plus simplified set of expressive points: nose, eyes, mouth, eyebrows (all relative to face center). 36 CV outputs + 2 video outputs.";
     descriptions["object_detector"]     = "Uses YOLOv3 to detect objects and outputs bounding box position/size as CV.";
     descriptions["color_tracker"]       = "Tracks multiple colors in video and outputs their positions and sizes as CV.";
     descriptions["contour_detector"]    = "Detects shapes via background subtraction and outputs area, complexity, and aspect ratio as CV.";
-    descriptions["semantic_segmentation"]= "Uses deep learning to segment video into semantic regions and outputs detected areas as CV.";
     descriptions["crop_video"]          = "Crops a video stream based on CV signals (X, Y, Width, Height). Perfect for following detected objects or regions.";
 }
 
@@ -1085,6 +1084,8 @@ db["random"] = ModulePinInfo(
     db["pose_estimator"].audioOuts.emplace_back("Cropped Out", 1, PinDataType::Video);
 
     // Hand Tracker: 21 keypoints x 2 = 42 outs
+    //   Channels 0-1: Wrist X/Y (absolute screen position)
+    //   Channels 2-41: Other keypoints X/Y (relative to wrist)
     db["hand_tracker"] = ModulePinInfo();
     db["hand_tracker"].defaultWidth = NodeWidth::Exception;
     db["hand_tracker"].audioIns.emplace_back("Source In", 0, PinDataType::Video);
@@ -1096,28 +1097,85 @@ db["random"] = ModulePinInfo(
         "Ring 1","Ring 2","Ring 3","Ring 4",
         "Pinky 1","Pinky 2","Pinky 3","Pinky 4"
     };
-    for (int i=0;i<21;++i)
+    // Add wrist pins (absolute position)
+    db["hand_tracker"].audioOuts.emplace_back("Wrist X (Abs)", 0, PinDataType::CV);
+    db["hand_tracker"].audioOuts.emplace_back("Wrist Y (Abs)", 1, PinDataType::CV);
+    // Add all other keypoint pins (relative to wrist)
+    for (int i=1;i<21;++i)
     {
-        db["hand_tracker"].audioOuts.emplace_back(std::string(handNames[i]) + " X", i*2, PinDataType::CV);
-        db["hand_tracker"].audioOuts.emplace_back(std::string(handNames[i]) + " Y", i*2+1, PinDataType::CV);
+        db["hand_tracker"].audioOuts.emplace_back(std::string(handNames[i]) + " X (Rel)", i*2, PinDataType::CV);
+        db["hand_tracker"].audioOuts.emplace_back(std::string(handNames[i]) + " Y (Rel)", i*2+1, PinDataType::CV);
     }
     // Add Video Out and Cropped Out pins (bus 1 and 2)
     db["hand_tracker"].audioOuts.emplace_back("Video Out", 0, PinDataType::Video);
     db["hand_tracker"].audioOuts.emplace_back("Cropped Out", 1, PinDataType::Video);
 
-    // Face Tracker: 70 * 2 = 140 outs + Video Out + Cropped Out
+    // Face Tracker: Simplified to 36 CV outputs + 2 Video outputs
+    //   Channels 0-1: Face Center X/Y (absolute screen position)
+    //   Channels 2-3: Nose Base (relative to face center)
+    //   Channels 4-11: Right Eye (4 points: Outer, Top, Inner, Bottom)
+    //   Channels 12-19: Left Eye (4 points: Inner, Top, Outer, Bottom)
+    //   Channels 20-27: Mouth (4 points: Corner R, Top Center, Corner L, Bottom Center)
+    //   Channels 28-35: Eyebrows (4 points: R Outer, R Inner, L Inner, L Outer)
+    //   Bus 1: Video Out (passthrough)
+    //   Bus 2: Cropped Out (cropped face region)
     db["face_tracker"] = ModulePinInfo();
     db["face_tracker"].defaultWidth = NodeWidth::Exception;
     db["face_tracker"].audioIns.emplace_back("Source In", 0, PinDataType::Video);
-    for (int i=0;i<70;++i)
-    {
-        std::string base = std::string("Pt ") + std::to_string(i+1);
-        db["face_tracker"].audioOuts.emplace_back(base + " X", i*2, PinDataType::CV);
-        db["face_tracker"].audioOuts.emplace_back(base + " Y", i*2+1, PinDataType::CV);
-    }
-    // Add Video Out and Cropped Out pins (bus 1 and 2)
-    db["face_tracker"].audioOuts.emplace_back("Video Out", 0, PinDataType::Video);
-    db["face_tracker"].audioOuts.emplace_back("Cropped Out", 1, PinDataType::Video);
+    
+    // Face Center (absolute position)
+    db["face_tracker"].audioOuts.emplace_back("Face Center X (Abs)", 0, PinDataType::CV);
+    db["face_tracker"].audioOuts.emplace_back("Face Center Y (Abs)", 1, PinDataType::CV);
+    
+    // Nose Base (channels 2, 3)
+    db["face_tracker"].audioOuts.emplace_back("Nose Base X (Rel)", 2, PinDataType::CV);
+    db["face_tracker"].audioOuts.emplace_back("Nose Base Y (Rel)", 3, PinDataType::CV);
+    
+    // Right Eye (channels 4-11)
+    db["face_tracker"].audioOuts.emplace_back("R Eye Outer X (Rel)", 4, PinDataType::CV);
+    db["face_tracker"].audioOuts.emplace_back("R Eye Outer Y (Rel)", 5, PinDataType::CV);
+    db["face_tracker"].audioOuts.emplace_back("R Eye Top X (Rel)", 6, PinDataType::CV);
+    db["face_tracker"].audioOuts.emplace_back("R Eye Top Y (Rel)", 7, PinDataType::CV);
+    db["face_tracker"].audioOuts.emplace_back("R Eye Inner X (Rel)", 8, PinDataType::CV);
+    db["face_tracker"].audioOuts.emplace_back("R Eye Inner Y (Rel)", 9, PinDataType::CV);
+    db["face_tracker"].audioOuts.emplace_back("R Eye Bottom X (Rel)", 10, PinDataType::CV);
+    db["face_tracker"].audioOuts.emplace_back("R Eye Bottom Y (Rel)", 11, PinDataType::CV);
+    
+    // Left Eye (channels 12-19)
+    db["face_tracker"].audioOuts.emplace_back("L Eye Inner X (Rel)", 12, PinDataType::CV);
+    db["face_tracker"].audioOuts.emplace_back("L Eye Inner Y (Rel)", 13, PinDataType::CV);
+    db["face_tracker"].audioOuts.emplace_back("L Eye Top X (Rel)", 14, PinDataType::CV);
+    db["face_tracker"].audioOuts.emplace_back("L Eye Top Y (Rel)", 15, PinDataType::CV);
+    db["face_tracker"].audioOuts.emplace_back("L Eye Outer X (Rel)", 16, PinDataType::CV);
+    db["face_tracker"].audioOuts.emplace_back("L Eye Outer Y (Rel)", 17, PinDataType::CV);
+    db["face_tracker"].audioOuts.emplace_back("L Eye Bottom X (Rel)", 18, PinDataType::CV);
+    db["face_tracker"].audioOuts.emplace_back("L Eye Bottom Y (Rel)", 19, PinDataType::CV);
+    
+    // Mouth (channels 20-27)
+    db["face_tracker"].audioOuts.emplace_back("Mouth Corner R X (Rel)", 20, PinDataType::CV);
+    db["face_tracker"].audioOuts.emplace_back("Mouth Corner R Y (Rel)", 21, PinDataType::CV);
+    db["face_tracker"].audioOuts.emplace_back("Mouth Top Center X (Rel)", 22, PinDataType::CV);
+    db["face_tracker"].audioOuts.emplace_back("Mouth Top Center Y (Rel)", 23, PinDataType::CV);
+    db["face_tracker"].audioOuts.emplace_back("Mouth Corner L X (Rel)", 24, PinDataType::CV);
+    db["face_tracker"].audioOuts.emplace_back("Mouth Corner L Y (Rel)", 25, PinDataType::CV);
+    db["face_tracker"].audioOuts.emplace_back("Mouth Bottom Center X (Rel)", 26, PinDataType::CV);
+    db["face_tracker"].audioOuts.emplace_back("Mouth Bottom Center Y (Rel)", 27, PinDataType::CV);
+    
+    // Eyebrows (channels 28-35)
+    db["face_tracker"].audioOuts.emplace_back("R Eyebrow Outer X (Rel)", 28, PinDataType::CV);
+    db["face_tracker"].audioOuts.emplace_back("R Eyebrow Outer Y (Rel)", 29, PinDataType::CV);
+    db["face_tracker"].audioOuts.emplace_back("R Eyebrow Inner X (Rel)", 30, PinDataType::CV);
+    db["face_tracker"].audioOuts.emplace_back("R Eyebrow Inner Y (Rel)", 31, PinDataType::CV);
+    db["face_tracker"].audioOuts.emplace_back("L Eyebrow Inner X (Rel)", 32, PinDataType::CV);
+    db["face_tracker"].audioOuts.emplace_back("L Eyebrow Inner Y (Rel)", 33, PinDataType::CV);
+    db["face_tracker"].audioOuts.emplace_back("L Eyebrow Outer X (Rel)", 34, PinDataType::CV);
+    db["face_tracker"].audioOuts.emplace_back("L Eyebrow Outer Y (Rel)", 35, PinDataType::CV);
+    
+    // Add Video Out and Cropped Out pins (after CV outputs, like HandTrackerModule)
+    const int videoOutStartChannel = 36;
+    const int croppedOutStartChannel = videoOutStartChannel + 1;
+    db["face_tracker"].audioOuts.emplace_back("Video Out", videoOutStartChannel, PinDataType::Video);
+    db["face_tracker"].audioOuts.emplace_back("Cropped Out", croppedOutStartChannel, PinDataType::Video);
 
     // Contour Detector: 1 input, 3 CV outputs + Video Out
     db["contour_detector"] = ModulePinInfo(
@@ -1126,18 +1184,6 @@ db["random"] = ModulePinInfo(
         { 
             AudioPin("Area", 0, PinDataType::CV), AudioPin("Complexity", 1, PinDataType::CV), 
             AudioPin("Aspect Ratio", 2, PinDataType::CV), AudioPin("Video Out", 0, PinDataType::Video) // Bus 1
-        },
-        {}
-    );
-
-    // Semantic Segmentation: 1 input, 4 CV outputs + Video Out
-    db["semantic_segmentation"] = ModulePinInfo(
-        NodeWidth::Exception,
-        { AudioPin("Source In", 0, PinDataType::Video) },
-        { 
-            AudioPin("Area", 0, PinDataType::CV), AudioPin("Center X", 1, PinDataType::CV), 
-            AudioPin("Center Y", 2, PinDataType::CV), AudioPin("Gate", 3, PinDataType::Gate),
-            AudioPin("Video Out", 0, PinDataType::Video) // Bus 1
         },
         {}
     );

@@ -17,6 +17,8 @@ constexpr int FACE_NUM_KEYPOINTS = 70;
 struct FaceResult
 {
     float keypoints[FACE_NUM_KEYPOINTS][2] = {{0}};
+    float faceCenterX = -1.0f;  // Face center X (absolute screen position)
+    float faceCenterY = -1.0f;  // Face center Y (absolute screen position)
     int detectedPoints = 0;
 };
 

@@ -288,15 +288,61 @@ void HandTrackerModule::processBlock(juce::AudioBuffer<float>& buffer, juce::Mid
     
     // Output CV on bus 0
     auto cvOutBus = getBusBuffer(buffer, false, 0);
-    for (int i=0;i<HAND_NUM_KEYPOINTS;++i)
+    
+    // Get wrist position (keypoint 0) - this is our reference point
+    float wristX = (lastResultForAudio.keypoints[0][0] >= 0) ? lastResultForAudio.keypoints[0][0] : -1.0f;
+    float wristY = (lastResultForAudio.keypoints[0][1] >= 0) ? lastResultForAudio.keypoints[0][1] : -1.0f;
+    
+    // Normalization factors (using typical frame size - actual frame size could vary)
+    // These are used to normalize relative offsets to a reasonable 0.0-1.0 range
+    const float normScaleX = 1.0f / 640.0f;  // Normalize by typical frame width
+    const float normScaleY = 1.0f / 480.0f;  // Normalize by typical frame height
+    
+    // Output wrist absolute position (channels 0, 1)
+    float wristX_norm = (wristX >= 0) ? juce::jlimit(0.0f, 1.0f, wristX * normScaleX) : 0.5f;
+    float wristY_norm = (wristY >= 0) ? juce::jlimit(0.0f, 1.0f, wristY * normScaleY) : 0.5f;
+    
+    for (int s=0; s<cvOutBus.getNumSamples(); ++s)
     {
-        int chX=i*2, chY=i*2+1; if (chY>=cvOutBus.getNumChannels()) break;
-        float xn = (lastResultForAudio.keypoints[i][0] >= 0) ? juce::jlimit(0.0f,1.0f,lastResultForAudio.keypoints[i][0]/640.0f) : 0.0f;
-        float yn = (lastResultForAudio.keypoints[i][1] >= 0) ? juce::jlimit(0.0f,1.0f,lastResultForAudio.keypoints[i][1]/480.0f) : 0.0f;
-        for (int s=0;s<cvOutBus.getNumSamples();++s)
+        cvOutBus.setSample(0, s, wristX_norm);  // Wrist X (absolute)
+        cvOutBus.setSample(1, s, wristY_norm);  // Wrist Y (absolute)
+    }
+    
+    // Output all other keypoints relative to wrist (channels 2-41)
+    for (int i=1; i<HAND_NUM_KEYPOINTS; ++i)
+    {
+        int chX = i*2;     // Channel for X (e.g., i=1 -> ch 2, i=2 -> ch 4, etc.)
+        int chY = i*2+1;   // Channel for Y (e.g., i=1 -> ch 3, i=2 -> ch 5, etc.)
+        
+        if (chY >= cvOutBus.getNumChannels()) break;
+        
+        if (wristX >= 0 && wristY >= 0 && 
+            lastResultForAudio.keypoints[i][0] >= 0 && lastResultForAudio.keypoints[i][1] >= 0)
         {
-            cvOutBus.setSample(chX,s,xn); 
-            cvOutBus.setSample(chY,s,yn);
+            // Calculate relative offset from wrist
+            float relX = (lastResultForAudio.keypoints[i][0] - wristX) * normScaleX;
+            float relY = (lastResultForAudio.keypoints[i][1] - wristY) * normScaleY;
+            
+            // Map relative offset to 0.0-1.0 range where 0.5 = no offset (centered at wrist)
+            // Typical hand spans ~0.1-0.2 in normalized frame units, so we scale by 2-3x to fill range
+            const float relScale = 2.5f;  // Scale factor to make relative positions more usable
+            float relX_norm = juce::jlimit(0.0f, 1.0f, 0.5f + relX * relScale);
+            float relY_norm = juce::jlimit(0.0f, 1.0f, 0.5f + relY * relScale);
+            
+            for (int s=0; s<cvOutBus.getNumSamples(); ++s)
+            {
+                cvOutBus.setSample(chX, s, relX_norm);
+                cvOutBus.setSample(chY, s, relY_norm);
+            }
+        }
+        else
+        {
+            // No wrist or keypoint not detected - output center value (0.5 = no offset)
+            for (int s=0; s<cvOutBus.getNumSamples(); ++s)
+            {
+                cvOutBus.setSample(chX, s, 0.5f);
+                cvOutBus.setSample(chY, s, 0.5f);
+            }
         }
     }
     
@@ -426,6 +472,8 @@ juce::Image HandTrackerModule::getLatestFrame()
 std::vector<DynamicPinInfo> HandTrackerModule::getDynamicOutputPins() const
 {
     // Bus 0: CV Out (42 channels - 21 keypoints * 2 coordinates)
+    //   Channels 0-1: Wrist X/Y (absolute screen position)
+    //   Channels 2-41: Other keypoints X/Y (relative to wrist)
     // Bus 1: Video Out (1 channel)
     // Bus 2: Cropped Out (1 channel)
     std::vector<DynamicPinInfo> pins;
@@ -440,11 +488,15 @@ std::vector<DynamicPinInfo> HandTrackerModule::getDynamicOutputPins() const
         "Pinky 1","Pinky 2","Pinky 3","Pinky 4"
     };
     
-    // Add all 21 keypoint pins
-    for (int i = 0; i < 21; ++i)
+    // Add wrist pins (absolute position)
+    pins.emplace_back("Wrist X (Abs)", 0, PinDataType::CV);
+    pins.emplace_back("Wrist Y (Abs)", 1, PinDataType::CV);
+    
+    // Add all other keypoint pins (relative to wrist)
+    for (int i = 1; i < 21; ++i)
     {
-        pins.emplace_back(std::string(handNames[i]) + " X", i * 2, PinDataType::CV);
-        pins.emplace_back(std::string(handNames[i]) + " Y", i * 2 + 1, PinDataType::CV);
+        pins.emplace_back(std::string(handNames[i]) + " X (Rel)", i * 2, PinDataType::CV);
+        pins.emplace_back(std::string(handNames[i]) + " Y (Rel)", i * 2 + 1, PinDataType::CV);
     }
     
     // Add Video Out and Cropped Out pins
