@@ -90,13 +90,13 @@ void populateModuleDescriptions()
     descriptions["webcam_loader"]       = "Captures video from a webcam and publishes it as a source for vision processing modules.";
     descriptions["video_file_loader"]   = "Loads and plays a video file, publishes it as a source for vision processing modules.";
     descriptions["video_fx"]            = "Applies real-time video effects (brightness, contrast, saturation, blur, sharpen, etc.) to video sources, chainable.";
-    descriptions["movement_detector"]   = "Analyzes video source for motion via optical flow or background subtraction, outputs motion data as CV.";
-    descriptions["pose_estimator"]      = "Uses OpenPose to detect 15 body keypoints and outputs their positions as CV signals.";
-    descriptions["hand_tracker"]        = "Detects 21 hand keypoints. Wrist outputs absolute screen position; all other keypoints output relative positions to wrist, making the hand an instrument independent of screen location.";
-    descriptions["face_tracker"]        = "Detects facial landmarks. Outputs face center (absolute), plus simplified set of expressive points: nose, eyes, mouth, eyebrows (all relative to face center). 36 CV outputs + 2 video outputs.";
-    descriptions["object_detector"]     = "Uses YOLOv3 to detect objects and outputs bounding box position/size as CV.";
-    descriptions["color_tracker"]       = "Tracks multiple colors in video and outputs their positions and sizes as CV.";
-    descriptions["contour_detector"]    = "Detects shapes via background subtraction and outputs area, complexity, and aspect ratio as CV.";
+    descriptions["movement_detector"]   = "Analyzes video source for motion via optical flow or background subtraction, outputs motion data as CV, and 4 zone gates as Gate.";
+    descriptions["pose_estimator"]      = "Uses OpenPose to detect 15 body keypoints, outputs their positions as CV, and 4 zone gates as Gate.";
+    descriptions["hand_tracker"]        = "Detects 21 hand keypoints. Wrist outputs absolute screen position; all other keypoints output relative positions to wrist, making the hand an instrument independent of screen location. Outputs 4 zone gates as Gate.";
+    descriptions["face_tracker"]        = "Detects facial landmarks. Outputs face center (absolute), plus simplified set of expressive points: nose, eyes, mouth, eyebrows (all relative to face center). 36 CV outputs + 4 zone gates as Gate + 2 video outputs.";
+    descriptions["object_detector"]     = "Uses YOLOv3 to detect objects, outputs bounding box position/size as CV, and 4 zone gates as Gate.";
+    descriptions["color_tracker"]       = "Tracks multiple colors in video, outputs their positions and sizes as CV, and 4 zone gates as Gate.";
+    descriptions["contour_detector"]    = "Detects shapes via background subtraction and outputs area, complexity, aspect ratio, and 4 zone gates as CV.";
     descriptions["crop_video"]          = "Crops a video stream based on CV signals (X, Y, Width, Height). Perfect for following detected objects or regions.";
 }
 
@@ -1033,6 +1033,10 @@ db["random"] = ModulePinInfo(
         { 
             AudioPin("Motion X", 0, PinDataType::CV), AudioPin("Motion Y", 1, PinDataType::CV),
             AudioPin("Amount", 2, PinDataType::CV), AudioPin("Trigger", 3, PinDataType::Gate),
+            AudioPin("Red Zone Gate", 4, PinDataType::Gate),
+            AudioPin("Green Zone Gate", 5, PinDataType::Gate),
+            AudioPin("Blue Zone Gate", 6, PinDataType::Gate),
+            AudioPin("Yellow Zone Gate", 7, PinDataType::Gate),
             AudioPin("Video Out", 0, PinDataType::Video) // Bus 1
         },
         {}
@@ -1046,20 +1050,24 @@ db["random"] = ModulePinInfo(
             AudioPin("X", 0, PinDataType::CV), AudioPin("Y", 1, PinDataType::CV),
             AudioPin("Width", 2, PinDataType::CV), AudioPin("Height", 3, PinDataType::CV),
             AudioPin("Gate", 4, PinDataType::Gate),
+            AudioPin("Red Zone Gate", 5, PinDataType::Gate),
+            AudioPin("Green Zone Gate", 6, PinDataType::Gate),
+            AudioPin("Blue Zone Gate", 7, PinDataType::Gate),
+            AudioPin("Yellow Zone Gate", 8, PinDataType::Gate),
             AudioPin("Video Out", 0, PinDataType::Video),   // Bus 1
             AudioPin("Cropped Out", 1, PinDataType::Video) // Bus 2
         },
         {}
     );
 
-    // Color Tracker: dynamic outputs (3 per color). Only declare input here.
+    // Color Tracker: dynamic outputs (3 per color) + 4 zone gates. Only declare input here.
     db["color_tracker"] = ModulePinInfo(
         NodeWidth::Exception, // custom node width with zoom
         {
             AudioPin("Source In", 0, PinDataType::Video)
         },
         {
-            AudioPin("Video Out", 0, PinDataType::Video) // Bus 1 - dynamic color pins are added programmatically
+            AudioPin("Video Out", 0, PinDataType::Video) // Bus 1 - dynamic color pins and zone gates are added programmatically
         },
         {}
     );
@@ -1079,6 +1087,11 @@ db["random"] = ModulePinInfo(
         db["pose_estimator"].audioOuts.emplace_back(keypointNames[i] + " X", static_cast<int>(i * 2), PinDataType::CV);
         db["pose_estimator"].audioOuts.emplace_back(keypointNames[i] + " Y", static_cast<int>(i * 2 + 1), PinDataType::CV);
     }
+    // Add zone gate pins (channels 30-33)
+    db["pose_estimator"].audioOuts.emplace_back("Red Zone Gate", 30, PinDataType::Gate);
+    db["pose_estimator"].audioOuts.emplace_back("Green Zone Gate", 31, PinDataType::Gate);
+    db["pose_estimator"].audioOuts.emplace_back("Blue Zone Gate", 32, PinDataType::Gate);
+    db["pose_estimator"].audioOuts.emplace_back("Yellow Zone Gate", 33, PinDataType::Gate);
     // Add Video Out and Cropped Out pins (bus 1 and 2)
     db["pose_estimator"].audioOuts.emplace_back("Video Out", 0, PinDataType::Video);
     db["pose_estimator"].audioOuts.emplace_back("Cropped Out", 1, PinDataType::Video);
@@ -1106,6 +1119,11 @@ db["random"] = ModulePinInfo(
         db["hand_tracker"].audioOuts.emplace_back(std::string(handNames[i]) + " X (Rel)", i*2, PinDataType::CV);
         db["hand_tracker"].audioOuts.emplace_back(std::string(handNames[i]) + " Y (Rel)", i*2+1, PinDataType::CV);
     }
+    // Add zone gate pins (channels 42-45)
+    db["hand_tracker"].audioOuts.emplace_back("Red Zone Gate", 42, PinDataType::Gate);
+    db["hand_tracker"].audioOuts.emplace_back("Green Zone Gate", 43, PinDataType::Gate);
+    db["hand_tracker"].audioOuts.emplace_back("Blue Zone Gate", 44, PinDataType::Gate);
+    db["hand_tracker"].audioOuts.emplace_back("Yellow Zone Gate", 45, PinDataType::Gate);
     // Add Video Out and Cropped Out pins (bus 1 and 2)
     db["hand_tracker"].audioOuts.emplace_back("Video Out", 0, PinDataType::Video);
     db["hand_tracker"].audioOuts.emplace_back("Cropped Out", 1, PinDataType::Video);
@@ -1171,19 +1189,30 @@ db["random"] = ModulePinInfo(
     db["face_tracker"].audioOuts.emplace_back("L Eyebrow Outer X (Rel)", 34, PinDataType::CV);
     db["face_tracker"].audioOuts.emplace_back("L Eyebrow Outer Y (Rel)", 35, PinDataType::CV);
     
-    // Add Video Out and Cropped Out pins (after CV outputs, like HandTrackerModule)
-    const int videoOutStartChannel = 36;
-    const int croppedOutStartChannel = videoOutStartChannel + 1;
-    db["face_tracker"].audioOuts.emplace_back("Video Out", videoOutStartChannel, PinDataType::Video);
-    db["face_tracker"].audioOuts.emplace_back("Cropped Out", croppedOutStartChannel, PinDataType::Video);
+    // Add zone gate pins (channels 36-39)
+    db["face_tracker"].audioOuts.emplace_back("Red Zone Gate", 36, PinDataType::Gate);
+    db["face_tracker"].audioOuts.emplace_back("Green Zone Gate", 37, PinDataType::Gate);
+    db["face_tracker"].audioOuts.emplace_back("Blue Zone Gate", 38, PinDataType::Gate);
+    db["face_tracker"].audioOuts.emplace_back("Yellow Zone Gate", 39, PinDataType::Gate);
+    
+    // Add Video Out and Cropped Out pins (bus 1 and 2, not CV channels)
+    db["face_tracker"].audioOuts.emplace_back("Video Out", 0, PinDataType::Video);  // Bus 1, channel 0
+    db["face_tracker"].audioOuts.emplace_back("Cropped Out", 1, PinDataType::Video); // Bus 2, channel 1
 
-    // Contour Detector: 1 input, 3 CV outputs + Video Out
+    // Contour Detector: 1 input, 3 CV outputs + 4 zone gates + Video Out
+    // Outputs are dynamic (defined by getDynamicOutputPins()), but we list them here for documentation
     db["contour_detector"] = ModulePinInfo(
         NodeWidth::Exception,
         { AudioPin("Source In", 0, PinDataType::Video) },
         { 
-            AudioPin("Area", 0, PinDataType::CV), AudioPin("Complexity", 1, PinDataType::CV), 
-            AudioPin("Aspect Ratio", 2, PinDataType::CV), AudioPin("Video Out", 0, PinDataType::Video) // Bus 1
+            AudioPin("Area", 0, PinDataType::CV), 
+            AudioPin("Complexity", 1, PinDataType::CV), 
+            AudioPin("Aspect Ratio", 2, PinDataType::CV),
+            AudioPin("Red Zone Gate", 3, PinDataType::Gate),
+            AudioPin("Green Zone Gate", 4, PinDataType::Gate),
+            AudioPin("Blue Zone Gate", 5, PinDataType::Gate),
+            AudioPin("Yellow Zone Gate", 6, PinDataType::Gate),
+            AudioPin("Video Out", 0, PinDataType::Video) // Bus 1 (channel 0 on bus 1)
         },
         {}
     );

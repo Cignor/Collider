@@ -2,14 +2,49 @@
 
 <ModularSynthPreset version="1" bpm="120.0">
   <modules>
-    <module logicalId="5" type="video_file_loader">
+    <module logicalId="1" type="contour_detector">
+      <params>
+        <ContourDetectorParams zone_color_0_rects="0.3042,0.1000,0.3958,0.3704" zone_color_1_rects="0.1875,0.7037,0.6979,0.2889">
+          <PARAM id="noiseReduction" value="0.0"/>
+          <PARAM id="sourceId" value="0.0"/>
+          <PARAM id="threshold" value="223.0"/>
+          <PARAM id="useGpu" value="1.0"/>
+          <PARAM id="zone_1_color" value="2.0"/>
+          <PARAM id="zone_1_enabled" value="0.0"/>
+          <PARAM id="zone_1_height" value="0.6399999856948853"/>
+          <PARAM id="zone_1_width" value="0.4599999785423279"/>
+          <PARAM id="zone_1_x" value="0.2099999934434891"/>
+          <PARAM id="zone_1_y" value="0.1599999964237213"/>
+          <PARAM id="zone_2_color" value="0.0"/>
+          <PARAM id="zone_2_enabled" value="0.0"/>
+          <PARAM id="zone_2_height" value="0.2899999916553497"/>
+          <PARAM id="zone_2_width" value="0.5699999928474426"/>
+          <PARAM id="zone_2_x" value="0.239999994635582"/>
+          <PARAM id="zone_2_y" value="0.6299999952316284"/>
+          <PARAM id="zone_3_color" value="2.0"/>
+          <PARAM id="zone_3_enabled" value="0.0"/>
+          <PARAM id="zone_3_height" value="0.2699999809265137"/>
+          <PARAM id="zone_3_width" value="0.60999995470047"/>
+          <PARAM id="zone_3_x" value="0.1899999976158142"/>
+          <PARAM id="zone_3_y" value="0.4599999785423279"/>
+          <PARAM id="zone_4_color" value="3.0"/>
+          <PARAM id="zone_4_enabled" value="0.0"/>
+          <PARAM id="zone_4_height" value="0.3899999856948853"/>
+          <PARAM id="zone_4_width" value="0.7899999618530273"/>
+          <PARAM id="zone_4_x" value="0.05999999865889549"/>
+          <PARAM id="zone_4_y" value="0.09999999403953552"/>
+          <PARAM id="zoomLevel" value="1.0"/>
+        </ContourDetectorParams>
+      </params>
+    </module>
+    <module logicalId="3" type="video_file_loader">
       <params>
         <VideoFileLoaderParams>
           <PARAM id="engine" value="1.0"/>
           <PARAM id="in" value="0.0"/>
           <PARAM id="loop" value="1.0"/>
           <PARAM id="out" value="1.0"/>
-          <PARAM id="speed" value="4.0"/>
+          <PARAM id="speed" value="1.0"/>
           <PARAM id="sync" value="1.0"/>
           <PARAM id="zoomLevel" value="1.0"/>
         </VideoFileLoaderParams>
@@ -18,95 +53,83 @@
         <VideoFileLoaderState videoFilePath="C:\Users\PIMP-TOWERPRIMUS\Downloads\Rover. Shuffle_cuttingshapes.mp4"/>
       </extra>
     </module>
-    <module logicalId="1016" type="scope">
+    <module logicalId="1006" type="sample_loader">
       <params>
-        <ScopeParams>
-          <PARAM id="monitorSeconds" value="5.0"/>
-        </ScopeParams>
+        <SampleLoaderParameters samplePath="H:\0000_CODE\01_collider_pyo\audio\samples\ambient\KSHMR_Bass_Slide_02_A#.wav">
+          <PARAM id="engine" value="1.0"/>
+          <PARAM id="gate" value="0.7999999523162842"/>
+          <PARAM id="gate_mod" value="1.0"/>
+          <PARAM id="loop" value="0.0"/>
+          <PARAM id="pitch" value="0.0"/>
+          <PARAM id="pitch_mod" value="0.0"/>
+          <PARAM id="rangeEnd" value="1.0"/>
+          <PARAM id="rangeEnd_mod" value="1.0"/>
+          <PARAM id="rangeStart" value="0.0"/>
+          <PARAM id="rangeStart_mod" value="0.0"/>
+          <PARAM id="rbPhaseInd" value="1.0"/>
+          <PARAM id="rbWindowShort" value="1.0"/>
+          <PARAM id="speed" value="1.0"/>
+          <PARAM id="speed_mod" value="1.0"/>
+          <PARAM id="trigger_mod" value="0.0"/>
+        </SampleLoaderParameters>
       </params>
     </module>
-    <module logicalId="1029" type="pose_estimator">
+    <module logicalId="1008" type="sample_loader">
       <params>
-        <PoseEstimatorParams zone_color_0_rects="0.5875,0.1593,0.2479,0.5296;0.2604,0.2111,0.0542,0.3407;0.1688,0.7074,0.1604,0.1704"
-                             zone_color_1_rects="0.5146,0.7519,0.0917,0.1296;0.3271,0.8148,0.0813,0.1556"
-                             zone_color_2_rects="0.3708,0.0481,0.0667,0.1333">
-          <PARAM id="confidence" value="0.09999999403953552"/>
-          <PARAM id="drawSkeleton" value="1.0"/>
-          <PARAM id="model" value="3.0"/>
-          <PARAM id="quality" value="1.0"/>
-          <PARAM id="sourceId" value="0.0"/>
+        <SampleLoaderParameters samplePath="H:\0000_CODE\01_collider_pyo\audio\samples\percussion\KSHMR_Acoustic_Crash_08 - Copy.wav">
+          <PARAM id="engine" value="1.0"/>
+          <PARAM id="gate" value="0.7999999523162842"/>
+          <PARAM id="gate_mod" value="1.0"/>
+          <PARAM id="loop" value="0.0"/>
+          <PARAM id="pitch" value="0.0"/>
+          <PARAM id="pitch_mod" value="0.0"/>
+          <PARAM id="rangeEnd" value="1.0"/>
+          <PARAM id="rangeEnd_mod" value="1.0"/>
+          <PARAM id="rangeStart" value="0.0"/>
+          <PARAM id="rangeStart_mod" value="0.0"/>
+          <PARAM id="rbPhaseInd" value="1.0"/>
+          <PARAM id="rbWindowShort" value="1.0"/>
+          <PARAM id="speed" value="1.0"/>
+          <PARAM id="speed_mod" value="1.0"/>
+          <PARAM id="trigger_mod" value="0.0"/>
+        </SampleLoaderParameters>
+      </params>
+    </module>
+    <module logicalId="1019" type="movement_detector">
+      <params>
+        <MovementParams zone_color_0_rects="0.0812,0.5444,0.1188,0.2444" zone_color_1_rects=""
+                        zone_color_3_rects="" zone_color_2_rects="">
+          <PARAM id="maxFeatures" value="100.0"/>
+          <PARAM id="mode" value="0.0"/>
+          <PARAM id="noiseReduction" value="0.0"/>
+          <PARAM id="sensitivity" value="0.09999999403953552"/>
           <PARAM id="useGpu" value="1.0"/>
           <PARAM id="zoomLevel" value="1.0"/>
-        </PoseEstimatorParams>
+        </MovementParams>
       </params>
-      <extra>
-        <PoseEstimatorState assetsPath=""/>
-      </extra>
     </module>
-    <module logicalId="1031" type="sample_loader">
+    <module logicalId="1021" type="sample_loader">
       <params>
-        <SampleLoaderParameters samplePath="H:\0000_CODE\01_collider_pyo\audio\samples\percussion\KSHMR_Acoustic_Crash_01.wav">
+        <SampleLoaderParameters samplePath="H:\0000_CODE\01_collider_pyo\audio\samples\melodic\KSHMR_Instrumental_Fill_17_128_Steel_Drums_Am.wav">
           <PARAM id="engine" value="1.0"/>
-          <PARAM id="gate" value="0.7999999523162842"/>
+          <PARAM id="gate" value="0.6699999570846558"/>
           <PARAM id="gate_mod" value="1.0"/>
           <PARAM id="loop" value="0.0"/>
-          <PARAM id="pitch" value="0.0"/>
+          <PARAM id="pitch" value="-13.90000057220459"/>
           <PARAM id="pitch_mod" value="0.0"/>
           <PARAM id="rangeEnd" value="1.0"/>
           <PARAM id="rangeEnd_mod" value="1.0"/>
-          <PARAM id="rangeStart" value="0.0"/>
+          <PARAM id="rangeStart" value="0.3880000114440918"/>
           <PARAM id="rangeStart_mod" value="0.0"/>
           <PARAM id="rbPhaseInd" value="1.0"/>
           <PARAM id="rbWindowShort" value="1.0"/>
-          <PARAM id="speed" value="1.0"/>
+          <PARAM id="speed" value="1.860000014305115"/>
           <PARAM id="speed_mod" value="1.0"/>
           <PARAM id="trigger_mod" value="0.0"/>
         </SampleLoaderParameters>
       </params>
     </module>
-    <module logicalId="1033" type="sample_loader">
-      <params>
-        <SampleLoaderParameters samplePath="H:\0000_CODE\01_collider_pyo\audio\samples\percussion\KSHMR_Acoustic_Kick_01_Big - Copy.wav">
-          <PARAM id="engine" value="1.0"/>
-          <PARAM id="gate" value="0.7999999523162842"/>
-          <PARAM id="gate_mod" value="1.0"/>
-          <PARAM id="loop" value="0.0"/>
-          <PARAM id="pitch" value="0.0"/>
-          <PARAM id="pitch_mod" value="0.0"/>
-          <PARAM id="rangeEnd" value="1.0"/>
-          <PARAM id="rangeEnd_mod" value="1.0"/>
-          <PARAM id="rangeStart" value="0.0"/>
-          <PARAM id="rangeStart_mod" value="0.0"/>
-          <PARAM id="rbPhaseInd" value="1.0"/>
-          <PARAM id="rbWindowShort" value="1.0"/>
-          <PARAM id="speed" value="1.0"/>
-          <PARAM id="speed_mod" value="1.0"/>
-          <PARAM id="trigger_mod" value="0.0"/>
-        </SampleLoaderParameters>
-      </params>
-    </module>
-    <module logicalId="1035" type="sample_loader">
-      <params>
-        <SampleLoaderParameters samplePath="H:\0000_CODE\01_collider_pyo\audio\samples\percussion\KSHMR_Acoustic_Tom_04_Low_D.wav">
-          <PARAM id="engine" value="1.0"/>
-          <PARAM id="gate" value="0.7999999523162842"/>
-          <PARAM id="gate_mod" value="1.0"/>
-          <PARAM id="loop" value="0.0"/>
-          <PARAM id="pitch" value="0.0"/>
-          <PARAM id="pitch_mod" value="0.0"/>
-          <PARAM id="rangeEnd" value="1.0"/>
-          <PARAM id="rangeEnd_mod" value="1.0"/>
-          <PARAM id="rangeStart" value="0.0"/>
-          <PARAM id="rangeStart_mod" value="0.0"/>
-          <PARAM id="rbPhaseInd" value="1.0"/>
-          <PARAM id="rbWindowShort" value="1.0"/>
-          <PARAM id="speed" value="1.0"/>
-          <PARAM id="speed_mod" value="1.0"/>
-          <PARAM id="trigger_mod" value="0.0"/>
-        </SampleLoaderParameters>
-      </params>
-    </module>
-    <module logicalId="1037" type="value">
+    <module logicalId="1027" type="value">
       <params>
         <ValueParams>
           <PARAM id="cvMax" value="1.0"/>
@@ -115,12 +138,12 @@
         </ValueParams>
       </params>
     </module>
-    <module logicalId="1039" type="track_mixer">
+    <module logicalId="1029" type="track_mixer">
       <params>
         <TrackMixerParams>
           <PARAM id="numTracks" value="8.0"/>
           <PARAM id="numTracks_max" value="64.0"/>
-          <PARAM id="track_gain_1" value="6.0"/>
+          <PARAM id="track_gain_1" value="-60.0"/>
           <PARAM id="track_gain_10" value="0.0"/>
           <PARAM id="track_gain_11" value="0.0"/>
           <PARAM id="track_gain_12" value="0.0"/>
@@ -131,7 +154,7 @@
           <PARAM id="track_gain_17" value="0.0"/>
           <PARAM id="track_gain_18" value="0.0"/>
           <PARAM id="track_gain_19" value="0.0"/>
-          <PARAM id="track_gain_2" value="6.0"/>
+          <PARAM id="track_gain_2" value="-60.0"/>
           <PARAM id="track_gain_20" value="0.0"/>
           <PARAM id="track_gain_21" value="0.0"/>
           <PARAM id="track_gain_22" value="0.0"/>
@@ -184,7 +207,7 @@
           <PARAM id="track_gain_7" value="0.0"/>
           <PARAM id="track_gain_8" value="0.0"/>
           <PARAM id="track_gain_9" value="0.0"/>
-          <PARAM id="track_pan_1" value="-0.3100000023841858"/>
+          <PARAM id="track_pan_1" value="0.0"/>
           <PARAM id="track_pan_10" value="0.0"/>
           <PARAM id="track_pan_11" value="0.0"/>
           <PARAM id="track_pan_12" value="0.0"/>
@@ -195,7 +218,7 @@
           <PARAM id="track_pan_17" value="0.0"/>
           <PARAM id="track_pan_18" value="0.0"/>
           <PARAM id="track_pan_19" value="0.0"/>
-          <PARAM id="track_pan_2" value="0.2099999189376831"/>
+          <PARAM id="track_pan_2" value="0.0"/>
           <PARAM id="track_pan_20" value="0.0"/>
           <PARAM id="track_pan_21" value="0.0"/>
           <PARAM id="track_pan_22" value="0.0"/>
@@ -206,7 +229,7 @@
           <PARAM id="track_pan_27" value="0.0"/>
           <PARAM id="track_pan_28" value="0.0"/>
           <PARAM id="track_pan_29" value="0.0"/>
-          <PARAM id="track_pan_3" value="0.1399999856948853"/>
+          <PARAM id="track_pan_3" value="0.0"/>
           <PARAM id="track_pan_30" value="0.0"/>
           <PARAM id="track_pan_31" value="0.0"/>
           <PARAM id="track_pan_32" value="0.0"/>
@@ -253,29 +276,29 @@
     </module>
   </modules>
   <connections>
-    <connection srcId="5" srcChan="0" dstId="1029" dstChan="0"/>
-    <connection srcId="1029" srcChan="1" dstId="1031" dstChan="1"/>
-    <connection srcId="1029" srcChan="30" dstId="1031" dstChan="3"/>
-    <connection srcId="1029" srcChan="1" dstId="1033" dstChan="0"/>
-    <connection srcId="1029" srcChan="32" dstId="1033" dstChan="3"/>
-    <connection srcId="1029" srcChan="1" dstId="1035" dstChan="0"/>
-    <connection srcId="1029" srcChan="31" dstId="1035" dstChan="3"/>
-    <connection srcId="1031" srcChan="0" dstId="1039" dstChan="2"/>
-    <connection srcId="1033" srcChan="0" dstId="1039" dstChan="1"/>
-    <connection srcId="1035" srcChan="0" dstId="1039" dstChan="0"/>
-    <connection srcId="1037" srcChan="0" dstId="1039" dstChan="64"/>
-    <connection srcId="1039" srcChan="0" dstId="output" dstChan="0"/>
-    <connection srcId="1039" srcChan="1" dstId="output" dstChan="1"/>
+    <connection srcId="1" srcChan="4" dstId="1006" dstChan="3"/>
+    <connection srcId="1" srcChan="3" dstId="1008" dstChan="3"/>
+    <connection srcId="3" srcChan="0" dstId="1" dstChan="0"/>
+    <connection srcId="3" srcChan="0" dstId="1019" dstChan="0"/>
+    <connection srcId="1006" srcChan="0" dstId="1029" dstChan="0"/>
+    <connection srcId="1008" srcChan="0" dstId="1029" dstChan="1"/>
+    <connection srcId="1019" srcChan="4" dstId="1021" dstChan="2"/>
+    <connection srcId="1019" srcChan="4" dstId="1021" dstChan="3"/>
+    <connection srcId="1019" srcChan="6" dstId="1021" dstChan="6"/>
+    <connection srcId="1021" srcChan="0" dstId="1029" dstChan="2"/>
+    <connection srcId="1027" srcChan="0" dstId="1029" dstChan="64"/>
+    <connection srcId="1029" srcChan="0" dstId="output" dstChan="0"/>
+    <connection srcId="1029" srcChan="1" dstId="output" dstChan="1"/>
   </connections>
   <NodeEditorUI>
-    <node id="5" x="-193.0" y="395.0"/>
-    <node id="1016" x="1160.0" y="405.0"/>
-    <node id="1029" x="465.0" y="825.0"/>
-    <node id="1031" x="1583.0" y="885.0"/>
-    <node id="1033" x="1584.0" y="414.0"/>
-    <node id="1035" x="1583.0" y="1530.0"/>
-    <node id="1037" x="1982.33349609375" y="815.0"/>
-    <node id="1039" x="2384.0" y="943.0"/>
-    <node id="0" x="2820.225341796875" y="878.6207885742188"/>
+    <node id="1" x="588.3353271484375" y="458.3861694335938"/>
+    <node id="3" x="-74.0" y="349.0"/>
+    <node id="1006" x="1340.021118164062" y="362.284423828125"/>
+    <node id="1008" x="1697.02099609375" y="378.2843627929688"/>
+    <node id="1019" x="582.0" y="1173.0"/>
+    <node id="1021" x="1373.218627929688" y="1032.048461914062"/>
+    <node id="1027" x="2219.0869140625" y="1017.872375488281"/>
+    <node id="1029" x="2497.02099609375" y="589.8723754882812"/>
+    <node id="0" x="3048.0" y="558.0"/>
   </NodeEditorUI>
 </ModularSynthPreset>

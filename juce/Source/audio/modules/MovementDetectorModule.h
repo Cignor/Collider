@@ -21,6 +21,7 @@ struct MovementResult
     float avgMotionY = 0.0f;     // Average vertical motion (-1 to 1)
     float motionAmount = 0.0f;   // Magnitude of motion or area of detected movement (0 to 1)
     bool motionTrigger = false;  // A one-shot trigger on significant motion
+    bool zoneHits[4] = {false, false, false, false};  // Zone hit detection results
 };
 
 /**
@@ -65,6 +66,21 @@ private:
     MovementResult analyzeFrame(const cv::Mat& inputFrame, juce::uint32 logicalId);
     
     static juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout();
+    
+    // Zone rectangles structure: each color zone can have multiple rectangles
+    struct ZoneRect
+    {
+        float x = 0.0f;
+        float y = 0.0f;
+        float width = 0.0f;
+        float height = 0.0f;
+    };
+    
+    // Helper functions to serialize/deserialize zone rectangles
+    static juce::String serializeZoneRects(const std::vector<ZoneRect>& rects);
+    static std::vector<ZoneRect> deserializeZoneRects(const juce::String& data);
+    void loadZoneRects(int colorIndex, std::vector<ZoneRect>& rects) const;
+    void saveZoneRects(int colorIndex, const std::vector<ZoneRect>& rects);
 
     juce::AudioProcessorValueTreeState apvts;
     std::atomic<float>* modeParam = nullptr;

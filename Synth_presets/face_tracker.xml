@@ -2,22 +2,6 @@
 
 <ModularSynthPreset version="1" bpm="120.0">
   <modules>
-    <module logicalId="5" type="video_file_loader">
-      <params>
-        <VideoFileLoaderParams>
-          <PARAM id="engine" value="1.0"/>
-          <PARAM id="in" value="0.0"/>
-          <PARAM id="loop" value="1.0"/>
-          <PARAM id="out" value="1.0"/>
-          <PARAM id="speed" value="4.0"/>
-          <PARAM id="sync" value="1.0"/>
-          <PARAM id="zoomLevel" value="1.0"/>
-        </VideoFileLoaderParams>
-      </params>
-      <extra>
-        <VideoFileLoaderState videoFilePath="C:\Users\PIMP-TOWERPRIMUS\Downloads\Rover. Shuffle_cuttingshapes.mp4"/>
-      </extra>
-    </module>
     <module logicalId="1016" type="scope">
       <params>
         <ScopeParams>
@@ -25,27 +9,9 @@
         </ScopeParams>
       </params>
     </module>
-    <module logicalId="1029" type="pose_estimator">
-      <params>
-        <PoseEstimatorParams zone_color_0_rects="0.5875,0.1593,0.2479,0.5296;0.2604,0.2111,0.0542,0.3407;0.1688,0.7074,0.1604,0.1704"
-                             zone_color_1_rects="0.5146,0.7519,0.0917,0.1296;0.3271,0.8148,0.0813,0.1556"
-                             zone_color_2_rects="0.3708,0.0481,0.0667,0.1333">
-          <PARAM id="confidence" value="0.09999999403953552"/>
-          <PARAM id="drawSkeleton" value="1.0"/>
-          <PARAM id="model" value="3.0"/>
-          <PARAM id="quality" value="1.0"/>
-          <PARAM id="sourceId" value="0.0"/>
-          <PARAM id="useGpu" value="1.0"/>
-          <PARAM id="zoomLevel" value="1.0"/>
-        </PoseEstimatorParams>
-      </params>
-      <extra>
-        <PoseEstimatorState assetsPath=""/>
-      </extra>
-    </module>
     <module logicalId="1031" type="sample_loader">
       <params>
-        <SampleLoaderParameters samplePath="H:\0000_CODE\01_collider_pyo\audio\samples\percussion\KSHMR_Acoustic_Crash_01.wav">
+        <SampleLoaderParameters samplePath="H:\0000_CODE\01_collider_pyo\audio\samples\percussion\KSHMR_Acoustic_Tom_14_Medium_G - Copy.wav">
           <PARAM id="engine" value="1.0"/>
           <PARAM id="gate" value="0.7999999523162842"/>
           <PARAM id="gate_mod" value="1.0"/>
@@ -66,7 +32,7 @@
     </module>
     <module logicalId="1033" type="sample_loader">
       <params>
-        <SampleLoaderParameters samplePath="H:\0000_CODE\01_collider_pyo\audio\samples\percussion\KSHMR_Acoustic_Kick_01_Big - Copy.wav">
+        <SampleLoaderParameters samplePath="H:\0000_CODE\01_collider_pyo\audio\samples\percussion\KSHMR_Acoustic_Crash_08.wav">
           <PARAM id="engine" value="1.0"/>
           <PARAM id="gate" value="0.7999999523162842"/>
           <PARAM id="gate_mod" value="1.0"/>
@@ -87,7 +53,7 @@
     </module>
     <module logicalId="1035" type="sample_loader">
       <params>
-        <SampleLoaderParameters samplePath="H:\0000_CODE\01_collider_pyo\audio\samples\percussion\KSHMR_Acoustic_Tom_04_Low_D.wav">
+        <SampleLoaderParameters samplePath="H:\0000_CODE\01_collider_pyo\audio\samples\percussion\KSHMR_Acoustic_Ride_07.wav">
           <PARAM id="engine" value="1.0"/>
           <PARAM id="gate" value="0.7999999523162842"/>
           <PARAM id="gate_mod" value="1.0"/>
@@ -206,7 +172,7 @@
           <PARAM id="track_pan_27" value="0.0"/>
           <PARAM id="track_pan_28" value="0.0"/>
           <PARAM id="track_pan_29" value="0.0"/>
-          <PARAM id="track_pan_3" value="0.1399999856948853"/>
+          <PARAM id="track_pan_3" value="0.1200000047683716"/>
           <PARAM id="track_pan_30" value="0.0"/>
           <PARAM id="track_pan_31" value="0.0"/>
           <PARAM id="track_pan_32" value="0.0"/>
@@ -251,31 +217,99 @@
         </TrackMixerParams>
       </params>
     </module>
+    <module logicalId="1041" type="Springs">
+      <extra>
+        <VstHostState fileOrIdentifier="H:\0000_CODE\01_collider_pyo\juce\build-ninja-release\PresetCreatorApp_artefacts\Release\VST\Springs.vst3"
+                      name="Springs" manufacturerName="AudioThing" version="1.3.3"
+                      pluginFormatName="VST3" pluginState="1651.VMjLgnlA...O+fWarAhckI2bo8la8HRLt.iHfTlai8FYo41Y8HRUTYTK3HxO9.BOVMEUy.Ea0cVZtMEcgQWY9vSRC8Vav8lak4Fc9DSL0LiKV0zQicUPt3hKl4hKt3BTt3hKt3hKLoGVzMGQt3BTPokQIoGTtEjKt3BR1QkcIUkVtPjctLjKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKt3hKtLDQyU0PIMERL4jKt3hc48zLvXTXlg0UYgWSWoUczX0SnQTZKYGRBgzZzDCV0EkUZQ2XV8DZTUTUFAiPNg1Mo8jY1kGU1kzUZQ2XwHVYMUUTTEUUR4zX5QkYpoVX1U0QigCRBwDcLMkS1A0TNQiZ40DMHMUSxP0PNkGVogjYPolXuk0UYgCRBwDcPMjS4o1TNQiZS4jLLkWSxvzTNACVogjYpoVX1U0QiwTPU8DZtj1Rv.0PLYmKCwjcHMES5QUdMEiXowzcHIDRIQiQhASTGIETvjFR1MiPLcmZS4DMpMkSyfTdMMiZSwDLlMjS3gjPHMUPsI1azDSVTs1QhsFLogDRIU0R2gTZHYFTTkUZEYEY3fjPLQmKogjYtTjVm0zUYkDMrM1ZIczX3fjPLQmKogjYlQEU3fjPLQmKogjYynWXu0zUYgCRBwDctLkS54xTLYmZC4TLLMjSxHVZLQCVC0DZtf1T0sVLhsVUpEVLUYTX0EzUYgCRRwDctjFRlwTQisVRWkUciUkVpE0QZgCRBwDcPkGS14xPLYmKCwjLDMUS3Q0TMICTogjYtrlXqAiPQs1cVgEMvjFR1MCdLEiKCwjctLDS2AUdLYGUSwzcPkWSn4hTQMWPGo0YMckV4ASZHY2LR0DdpMkSzn1TNICQ4wzLpkWSx3xTMglK3AUcvXjX3UULhkGLogjcyHjSw3xPLYmKCwzcPkGS1Q0TLcGT40DZtfFTm0jLhcTQVoEcvjFR1MiPLgGVCwjctLDS3QzPLgGUS0TdlMTS5gjPHITQwHVdYolXqUzUisFMwfEMvjFR1MiPNgmKCwjctLDSvfzPMACRCwzLhMTSn4hTS8VTwD0YqwVX3fjPLQGRS0DMpMkSzn1TNYGTo0TdHMUSwXVZHYldTokZYolXqUzUisFMwfEMvjFR1MCdLomZS4DMpMkS1AUZMkGRS0TLlMTSn4hTS8VTVQENHIDSzQUZLQiZS4DMpkWS2wzPNQiX40jcTkFRlA0ZhsVRFE1ZiQEVuQiUOglKosTdDMjSv3xPLYGQowzcTMkS4AUdMACRBgDUIcUVncmUYYTRWk0cUcUVz0jUjgCRBwDcPMTSzn1TNQiZS0zLHkWSwH1PMMiXogjYTQEUMgiQYsFLogzcyHDSn4hTQEUUpE1YIYTXqASZHc2LBwDZtfGU0kkQiMzcVokcvjFR2MiPLglK3U0ZQc0Sn4RZKICUogjYPolXz.SZHY2L30jcpMkSzn1TNIiYS0jdHkGS3I1TNglKnAEMAcEV40zUOgFQosjcHIDRIkTQT8VTxfkavjFR1MiTMglKRIkTMUzXmkzQigCRBwDctjFRlolZTUDMFkENHIESz4RZHYlZpQkQEYTVqslZggCRBwDctjFRlolZTYTQFk0ZqoVXCUUahESUV8DZtj1RvfjPHkTRqE0YQYUVOU0QigCRRwDctjFRlolZTYTQFk0Z3P0X50DUigWVWkENHIDSzQUZHYlZpQUQQYkV5gCahUDMVgEZ2YUV3fjTLQmKogjYXUUV30zUZUGMV8DZDk1R4MCdLglKREkZqYzX0kzUOglKogjYtTEV3UjUgsVTWkEd2oWXoMmUOgFRBgDTIcUV4UkQigCRRIEcqYzXncCZO4hKt3hKt3hKt3hKtnTUv.UQAslXuk0UXoWUFE0YQcEVtPDTtHzZGI1YMIiXtPDTtLjKPcjKt3hKt3hKt3haTU0PUQDU3sFaicVTWkEQEYzXmEDOujzPu0Fbu4VYtQmO77hUSQ0LPwVcmklaSQWXzUlO.."/>
+      </extra>
+    </module>
+    <module logicalId="1042" type="8bandshaper">
+      <params>
+        <MultiBandShaperParams>
+          <PARAM id="drive_1" value="2.93999981880188"/>
+          <PARAM id="drive_2" value="17.77999877929688"/>
+          <PARAM id="drive_3" value="3.519999980926514"/>
+          <PARAM id="drive_4" value="1.71999990940094"/>
+          <PARAM id="drive_5" value="2.93999981880188"/>
+          <PARAM id="drive_6" value="6.029999732971191"/>
+          <PARAM id="drive_7" value="0.2800000011920929"/>
+          <PARAM id="drive_8" value="0.4899999797344208"/>
+          <PARAM id="outputGain" value="0.0"/>
+          <PARAM id="relativeDriveMod_1" value="1.0"/>
+          <PARAM id="relativeDriveMod_2" value="1.0"/>
+          <PARAM id="relativeDriveMod_3" value="1.0"/>
+          <PARAM id="relativeDriveMod_4" value="1.0"/>
+          <PARAM id="relativeDriveMod_5" value="1.0"/>
+          <PARAM id="relativeDriveMod_6" value="1.0"/>
+          <PARAM id="relativeDriveMod_7" value="1.0"/>
+          <PARAM id="relativeDriveMod_8" value="1.0"/>
+          <PARAM id="relativeGainMod" value="1.0"/>
+        </MultiBandShaperParams>
+      </params>
+    </module>
+    <module logicalId="1044" type="bit_crusher">
+      <params>
+        <BitCrusherParams>
+          <PARAM id="antiAlias" value="1.0"/>
+          <PARAM id="bit_depth" value="3.25"/>
+          <PARAM id="mix" value="1.0"/>
+          <PARAM id="quant_mode" value="0.0"/>
+          <PARAM id="relativeBitDepthMod" value="1.0"/>
+          <PARAM id="relativeSampleRateMod" value="1.0"/>
+          <PARAM id="sample_rate" value="0.242000013589859"/>
+        </BitCrusherParams>
+      </params>
+    </module>
+    <module logicalId="1069" type="webcam_loader">
+      <params>
+        <WebcamLoaderParams>
+          <PARAM id="cameraIndex" value="3.0"/>
+          <PARAM id="zoomLevel" value="1.0"/>
+        </WebcamLoaderParams>
+      </params>
+    </module>
+    <module logicalId="1090" type="face_tracker">
+      <params>
+        <FaceTrackerParams zone_color_0_rects="0.3875,0.7361,0.4969,0.2056" zone_color_2_rects="0.4156,0.4278,0.1146,0.1625"
+                           zone_color_1_rects="0.5396,0.3847,0.1073,0.2069">
+          <PARAM id="confidence" value="0.09999999403953552"/>
+          <PARAM id="sourceId" value="0.0"/>
+          <PARAM id="useGpu" value="1.0"/>
+          <PARAM id="zoomLevel" value="2.0"/>
+        </FaceTrackerParams>
+      </params>
+    </module>
   </modules>
   <connections>
-    <connection srcId="5" srcChan="0" dstId="1029" dstChan="0"/>
-    <connection srcId="1029" srcChan="1" dstId="1031" dstChan="1"/>
-    <connection srcId="1029" srcChan="30" dstId="1031" dstChan="3"/>
-    <connection srcId="1029" srcChan="1" dstId="1033" dstChan="0"/>
-    <connection srcId="1029" srcChan="32" dstId="1033" dstChan="3"/>
-    <connection srcId="1029" srcChan="1" dstId="1035" dstChan="0"/>
-    <connection srcId="1029" srcChan="31" dstId="1035" dstChan="3"/>
-    <connection srcId="1031" srcChan="0" dstId="1039" dstChan="2"/>
+    <connection srcId="1031" srcChan="0" dstId="1044" dstChan="0"/>
     <connection srcId="1033" srcChan="0" dstId="1039" dstChan="1"/>
     <connection srcId="1035" srcChan="0" dstId="1039" dstChan="0"/>
     <connection srcId="1037" srcChan="0" dstId="1039" dstChan="64"/>
-    <connection srcId="1039" srcChan="0" dstId="output" dstChan="0"/>
-    <connection srcId="1039" srcChan="1" dstId="output" dstChan="1"/>
+    <connection srcId="1039" srcChan="0" dstId="1041" dstChan="0"/>
+    <connection srcId="1039" srcChan="1" dstId="1041" dstChan="1"/>
+    <connection srcId="1041" srcChan="0" dstId="1042" dstChan="0"/>
+    <connection srcId="1041" srcChan="1" dstId="1042" dstChan="1"/>
+    <connection srcId="1042" srcChan="0" dstId="output" dstChan="0"/>
+    <connection srcId="1042" srcChan="1" dstId="output" dstChan="1"/>
+    <connection srcId="1044" srcChan="0" dstId="1039" dstChan="2"/>
+    <connection srcId="1069" srcChan="0" dstId="1090" dstChan="0"/>
+    <connection srcId="1090" srcChan="38" dstId="1031" dstChan="3"/>
+    <connection srcId="1090" srcChan="36" dstId="1033" dstChan="3"/>
+    <connection srcId="1090" srcChan="37" dstId="1035" dstChan="3"/>
   </connections>
   <NodeEditorUI>
-    <node id="5" x="-193.0" y="395.0"/>
     <node id="1016" x="1160.0" y="405.0"/>
-    <node id="1029" x="465.0" y="825.0"/>
-    <node id="1031" x="1583.0" y="885.0"/>
-    <node id="1033" x="1584.0" y="414.0"/>
+    <node id="1031" x="1581.000122070312" y="853.0"/>
+    <node id="1033" x="1651.187744140625" y="7.381709098815918"/>
     <node id="1035" x="1583.0" y="1530.0"/>
     <node id="1037" x="1982.33349609375" y="815.0"/>
     <node id="1039" x="2384.0" y="943.0"/>
-    <node id="0" x="2820.225341796875" y="878.6207885742188"/>
+    <node id="1041" x="2862.0" y="1158.0"/>
+    <node id="1042" x="3163.0" y="1168.0"/>
+    <node id="1044" x="1976.0" y="1102.0"/>
+    <node id="1069" x="-216.3792724609375" y="59.61328125"/>
+    <node id="1090" x="451.1467895507812" y="-222.552734375"/>
+    <node id="0" x="3577.225341796875" y="1127.620849609375"/>
   </NodeEditorUI>
 </ModularSynthPreset>

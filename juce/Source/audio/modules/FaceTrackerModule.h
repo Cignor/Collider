@@ -20,6 +20,7 @@ struct FaceResult
     float faceCenterX = -1.0f;  // Face center X (absolute screen position)
     float faceCenterY = -1.0f;  // Face center Y (absolute screen position)
     int detectedPoints = 0;
+    bool zoneHits[4] = {false, false, false, false};  // Zone hit detection results
 };
 
 class FaceTrackerModule : public ModuleProcessor, private juce::Thread
@@ -32,6 +33,21 @@ public:
     juce::Image getLatestFrame();
 
     std::vector<DynamicPinInfo> getDynamicOutputPins() const override;
+
+    // Zone rectangles structure: each color zone can have multiple rectangles
+    struct ZoneRect
+    {
+        float x = 0.0f;
+        float y = 0.0f;
+        float width = 0.0f;
+        float height = 0.0f;
+    };
+
+    // Helper functions to serialize/deserialize zone rectangles
+    static juce::String serializeZoneRects(const std::vector<ZoneRect>& rects);
+    static std::vector<ZoneRect> deserializeZoneRects(const juce::String& data);
+    void loadZoneRects(int colorIndex, std::vector<ZoneRect>& rects) const;
+    void saveZoneRects(int colorIndex, const std::vector<ZoneRect>& rects);
 
     void prepareToPlay(double sampleRate, int samplesPerBlock) override;
     void releaseResources() override;

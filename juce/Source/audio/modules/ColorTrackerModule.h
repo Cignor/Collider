@@ -23,8 +23,15 @@ struct TrackedColor
     float tolerance { 1.0f }; // 1.0 = default window; <1 shrink, >1 expand
 };
 
-// x, y, area for each color
-using ColorResult = std::vector<std::tuple<float, float, float>>;
+// x, y, area for each color, plus zone hits
+struct ColorResultEntry
+{
+    float x = 0.5f;
+    float y = 0.5f;
+    float area = 0.0f;
+    bool zoneHits[4] = {false, false, false, false};  // Zone hit detection results
+};
+using ColorResult = std::vector<ColorResultEntry>;
 
 class ColorTrackerModule : public ModuleProcessor, private juce::Thread
 {
@@ -78,6 +85,21 @@ private:
     void updateGuiFrame(const cv::Mat& frame);
     
     static juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout();
+    
+    // Zone rectangles structure: each color zone can have multiple rectangles
+    struct ZoneRect
+    {
+        float x = 0.0f;
+        float y = 0.0f;
+        float width = 0.0f;
+        float height = 0.0f;
+    };
+    
+    // Helper functions to serialize/deserialize zone rectangles
+    static juce::String serializeZoneRects(const std::vector<ZoneRect>& rects);
+    static std::vector<ZoneRect> deserializeZoneRects(const juce::String& data);
+    void loadZoneRects(int colorIndex, std::vector<ZoneRect>& rects) const;
+    void saveZoneRects(int colorIndex, const std::vector<ZoneRect>& rects);
     juce::AudioProcessorValueTreeState apvts;
     
     std::atomic<float>* sourceIdParam = nullptr;

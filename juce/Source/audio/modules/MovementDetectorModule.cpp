@@ -8,6 +8,9 @@
 #include <imgui.h>
 #include "../../preset_creator/ImGuiNodeEditorComponent.h"
 #include "../../preset_creator/theme/ThemeManager.h"
+#include <juce_opengl/juce_opengl.h>
+#include <map>
+#include <unordered_map>
 #endif
 
 juce::AudioProcessorValueTreeState::ParameterLayout MovementDetectorModule::createParameterLayout()
@@ -34,7 +37,7 @@ juce::AudioProcessorValueTreeState::ParameterLayout MovementDetectorModule::crea
 MovementDetectorModule::MovementDetectorModule()
     : ModuleProcessor(BusesProperties()
                      .withInput("Input", juce::AudioChannelSet::mono(), true)
-                     .withOutput("CV Out", juce::AudioChannelSet::discreteChannels(4), true)
+                     .withOutput("CV Out", juce::AudioChannelSet::discreteChannels(8), true)  // 4 detection + 4 zone gates
                      .withOutput("Video Out", juce::AudioChannelSet::mono(), true)), // PASSTHROUGH
       juce::Thread("Movement Detector Analysis Thread"),
       apvts(*this, nullptr, "MovementParams", createParameterLayout())
@@ -135,6 +138,10 @@ void MovementDetectorModule::run()
 MovementResult MovementDetectorModule::analyzeFrame(const cv::Mat& inputFrame, juce::uint32 logicalId)
 {
     MovementResult result;
+    // Initialize all zone hits to false
+    for (int z = 0; z < 4; ++z)
+        result.zoneHits[z] = false;
+    
     cv::Mat gray, displayFrame;
     
     inputFrame.copyTo(displayFrame);
@@ -277,7 +284,91 @@ MovementResult MovementDetectorModule::analyzeFrame(const cv::Mat& inputFrame, j
                 {
                     result.motionTrigger = true;
                 }
+                
+                // For Optical Flow: Check if ANY successfully tracked point is inside a zone
+                // This is more permissive than averaging - if movement is happening anywhere in the zone, we detect it
+                if (trackedCount > 0)
+                {
+                    static int logCounter = 0;
+                    logCounter++;
+                    bool shouldLog = (logCounter % 10 == 0); // Log every 10 frames to avoid spam
+                    
+                    if (shouldLog)
+                    {
+                        juce::Logger::writeToLog("[MovementDetector] Optical Flow: trackedCount=" + juce::String(trackedCount) + 
+                                                 ", motionAmount=" + juce::String(result.motionAmount, 3));
+                    }
+                    
+                    // For each color zone, check if any tracked point is inside
+                    for (int colorIdx = 0; colorIdx < 4; ++colorIdx)
+                    {
+                        std::vector<ZoneRect> rects;
+                        loadZoneRects(colorIdx, rects);
+                        
+                        if (shouldLog && !rects.empty())
+                        {
+                            juce::String zoneName = colorIdx == 0 ? "Red" : (colorIdx == 1 ? "Green" : (colorIdx == 2 ? "Blue" : "Yellow"));
+                            juce::Logger::writeToLog("[MovementDetector] Zone " + zoneName + ": " + juce::String(rects.size()) + " rectangles");
+                            for (size_t r = 0; r < rects.size(); ++r)
+                            {
+                                juce::Logger::writeToLog("[MovementDetector]   Rect " + juce::String(r) + ": x=" + juce::String(rects[r].x, 3) + 
+                                                         ", y=" + juce::String(rects[r].y, 3) + 
+                                                         ", w=" + juce::String(rects[r].width, 3) + 
+                                                         ", h=" + juce::String(rects[r].height, 3));
+                            }
+                        }
+                        
+                        bool hit = false;
+                        int pointsChecked = 0;
+                        int pointsInZone = 0;
+                        
+                        // Check each successfully tracked point
+                        for (size_t i = 0; i < prevPoints.size(); ++i)
+                        {
+                            if (status[i] && i < nextPoints.size())
+                            {
+                                pointsChecked++;
+                                
+                                // Normalize point position to 0-1 range
+                                float posX = nextPoints[i].x / (float)gray.cols;
+                                float posY = nextPoints[i].y / (float)gray.rows;
+                                
+                                // Check if this point is inside any rectangle of this color zone
+                                for (const auto& rect : rects)
+                                {
+                                    if (posX >= rect.x && posX <= rect.x + rect.width &&
+                                        posY >= rect.y && posY <= rect.y + rect.height)
+                                    {
+                                        hit = true;
+                                        pointsInZone++;
+                                        if (shouldLog)
+                                        {
+                                            juce::String zoneName = colorIdx == 0 ? "Red" : (colorIdx == 1 ? "Green" : (colorIdx == 2 ? "Blue" : "Yellow"));
+                                            juce::Logger::writeToLog("[MovementDetector] Zone " + zoneName + " HIT! Point " + juce::String(i) + 
+                                                                     " at (" + juce::String(posX, 3) + ", " + juce::String(posY, 3) + ")");
+                                        }
+                                        break; // Found a point in this zone, no need to check more
+                                    }
+                                }
+                                
+                                if (hit) break; // Found a hit for this zone, check next zone
+                            }
+                        }
+                        
+                        if (shouldLog)
+                        {
+                            juce::String zoneName = colorIdx == 0 ? "Red" : (colorIdx == 1 ? "Green" : (colorIdx == 2 ? "Blue" : "Yellow"));
+                            juce::Logger::writeToLog("[MovementDetector] Zone " + zoneName + " result: hit=" + (hit ? "TRUE" : "FALSE") + 
+                                                     ", pointsChecked=" + juce::String(pointsChecked) + 
+                                                     ", pointsInZone=" + juce::String(pointsInZone));
+                        }
+                        
+                        result.zoneHits[colorIdx] = hit;
+                    }
+                }
+                // If trackedCount is 0, zones remain false (already initialized)
             }
+            // If trackedCount is 0, zones remain false (already initialized)
             prevPoints = nextPoints;
         }
         else if (!prevPoints.empty())
@@ -305,13 +396,66 @@ MovementResult MovementDetectorModule::analyzeFrame(const cv::Mat& inputFrame, j
         
         if (result.motionAmount > 0.001)
         {
-             result.avgMotionX = juce::jmap((float)(m.m10 / m.m00), 0.0f, 320.0f, -1.0f, 1.0f);
-             result.avgMotionY = juce::jmap((float)(m.m01 / m.m00), 0.0f, 240.0f, -1.0f, 1.0f);
+             // Get centroid position in pixels
+             float centroidX = (float)(m.m10 / m.m00);
+             float centroidY = (float)(m.m01 / m.m00);
              
-             cv::Point2f centroid(m.m10 / m.m00, m.m01 / m.m00);
+             // Map to -1/+1 range using actual frame dimensions
+             result.avgMotionX = juce::jmap(centroidX, 0.0f, (float)gray.cols, -1.0f, 1.0f);
+             result.avgMotionY = juce::jmap(centroidY, 0.0f, (float)gray.rows, -1.0f, 1.0f);
+             
+             cv::Point2f centroid(centroidX, centroidY);
              cv::circle(displayFrame, centroid, 5, cv::Scalar(0, 255, 0), -1);
              cv::circle(displayFrame, centroid, 8, cv::Scalar(255, 255, 255), 2);
+             
+             // Check zones: normalize centroid position to 0-1 range using actual frame dimensions
+             float posX = centroidX / (float)gray.cols;
+             float posY = centroidY / (float)gray.rows;
+             
+             static int logCounterBgSub = 0;
+             logCounterBgSub++;
+             bool shouldLogBgSub = (logCounterBgSub % 10 == 0); // Log every 10 frames
+             
+             if (shouldLogBgSub)
+             {
+                 juce::Logger::writeToLog("[MovementDetector] Background Subtraction: motionAmount=" + juce::String(result.motionAmount, 3) + 
+                                          ", centroid=(" + juce::String(centroidX, 1) + ", " + juce::String(centroidY, 1) + 
+                                          "), normalized=(" + juce::String(posX, 3) + ", " + juce::String(posY, 3) + ")");
+             }
+             
+             // Check each color zone
+             for (int colorIdx = 0; colorIdx < 4; ++colorIdx)
+             {
+                 std::vector<ZoneRect> rects;
+                 loadZoneRects(colorIdx, rects);
+                 
+                 bool hit = false;
+                 for (const auto& rect : rects)
+                 {
+                     if (posX >= rect.x && posX <= rect.x + rect.width &&
+                         posY >= rect.y && posY <= rect.y + rect.height)
+                     {
+                         hit = true;
+                         if (shouldLogBgSub)
+                         {
+                             juce::String zoneName = colorIdx == 0 ? "Red" : (colorIdx == 1 ? "Green" : (colorIdx == 2 ? "Blue" : "Yellow"));
+                             juce::Logger::writeToLog("[MovementDetector] Zone " + zoneName + " HIT! Centroid at (" + 
+                                                      juce::String(posX, 3) + ", " + juce::String(posY, 3) + ")");
+                         }
+                         break;
+                     }
+                 }
+                 
+                 if (shouldLogBgSub)
+                 {
+                     juce::String zoneName = colorIdx == 0 ? "Red" : (colorIdx == 1 ? "Green" : (colorIdx == 2 ? "Blue" : "Yellow"));
+                     juce::Logger::writeToLog("[MovementDetector] Zone " + zoneName + " result: hit=" + (hit ? "TRUE" : "FALSE"));
+                 }
+                 
+                 result.zoneHits[colorIdx] = hit;
+             }
         }
+        // If motionAmount <= 0.001, zones remain false (already initialized)
         
         cv::Mat fgMaskColor;
         cv::cvtColor(fgMask, fgMaskColor, cv::COLOR_GRAY2BGR);
@@ -359,11 +503,75 @@ juce::Image MovementDetectorModule::getLatestFrame()
     return latestFrameForGui.createCopy();
 }
 
+// Serialize zone rectangles to string: "x1,y1,w1,h1;x2,y2,w2,h2;..."
+juce::String MovementDetectorModule::serializeZoneRects(const std::vector<ZoneRect>& rects)
+{
+    juce::String result;
+    for (size_t i = 0; i < rects.size(); ++i)
+    {
+        if (i > 0) result += ";";
+        result += juce::String(rects[i].x, 4) + "," +
+                  juce::String(rects[i].y, 4) + "," +
+                  juce::String(rects[i].width, 4) + "," +
+                  juce::String(rects[i].height, 4);
+    }
+    return result;
+}
+
+// Deserialize zone rectangles from string
+std::vector<MovementDetectorModule::ZoneRect> MovementDetectorModule::deserializeZoneRects(const juce::String& data)
+{
+    std::vector<ZoneRect> rects;
+    if (data.isEmpty()) return rects;
+    
+    juce::StringArray rectStrings;
+    rectStrings.addTokens(data, ";", "");
+    
+    for (const auto& rectStr : rectStrings)
+    {
+        juce::StringArray coords;
+        coords.addTokens(rectStr, ",", "");
+        if (coords.size() == 4)
+        {
+            ZoneRect rect;
+            rect.x = coords[0].getFloatValue();
+            rect.y = coords[1].getFloatValue();
+            rect.width = coords[2].getFloatValue();
+            rect.height = coords[3].getFloatValue();
+            rects.push_back(rect);
+        }
+    }
+    return rects;
+}
+
+// Load zone rectangles for a color from APVTS state tree
+void MovementDetectorModule::loadZoneRects(int colorIndex, std::vector<ZoneRect>& rects) const
+{
+    juce::String key = "zone_color_" + juce::String(colorIndex) + "_rects";
+    juce::var value = apvts.state.getProperty(key);
+    if (value.isString())
+    {
+        rects = deserializeZoneRects(value.toString());
+    }
+    else
+    {
+        rects.clear();
+    }
+}
+
+// Save zone rectangles for a color to APVTS state tree
+void MovementDetectorModule::saveZoneRects(int colorIndex, const std::vector<ZoneRect>& rects)
+{
+    juce::String key = "zone_color_" + juce::String(colorIndex) + "_rects";
+    juce::String data = serializeZoneRects(rects);
+    apvts.state.setProperty(key, data, nullptr);
+}
+
 std::vector<DynamicPinInfo> MovementDetectorModule::getDynamicOutputPins() const
 {
-    // Bus 0: CV Out (4 channels)
+    // Bus 0: CV Out (8 channels: 4 detection + 4 zone gates)
     // Bus 1: Video Out (1 channel)
-    const int cvOutChannels = 4;
+    const int cvOutChannels = 8;
     const int videoOutStartChannel = cvOutChannels;
 
     return {
@@ -371,6 +579,10 @@ std::vector<DynamicPinInfo> MovementDetectorModule::getDynamicOutputPins() const
         { "Y", 1, PinDataType::CV },
         { "Amount", 2, PinDataType::CV },
         { "Gate", 3, PinDataType::Gate },
+        { "Red Zone Gate", 4, PinDataType::Gate },
+        { "Green Zone Gate", 5, PinDataType::Gate },
+        { "Blue Zone Gate", 6, PinDataType::Gate },
+        { "Yellow Zone Gate", 7, PinDataType::Gate },
         { "Video Out", videoOutStartChannel, PinDataType::Video }
     };
 }
@@ -402,7 +614,8 @@ void MovementDetectorModule::processBlock(juce::AudioBuffer<float>& buffer, juce
     // --- END FIX ---
     
     // Get latest result from analysis thread via FIFO
-    if (fifo.getNumReady() > 0)
+    // Read ALL available results and keep only the latest (like ContourDetector)
+    while (fifo.getNumReady() > 0)
     {
         auto readScope = fifo.read(1);
         if (readScope.blockSize1 > 0)
@@ -413,8 +626,9 @@ void MovementDetectorModule::processBlock(juce::AudioBuffer<float>& buffer, juce
     
     // Write results to output channels (bus 0 - CV Out)
     auto cvOutBus = getBusBuffer(buffer, false, 0);
-    if (cvOutBus.getNumChannels() < 4) return;
+    if (cvOutBus.getNumChannels() < 8) return;
     
+    // Output detection channels (0-3)
     cvOutBus.setSample(0, 0, lastResultForAudio.avgMotionX);
     cvOutBus.setSample(1, 0, lastResultForAudio.avgMotionY);
     cvOutBus.setSample(2, 0, lastResultForAudio.motionAmount);
@@ -436,8 +650,59 @@ void MovementDetectorModule::processBlock(juce::AudioBuffer<float>& buffer, juce
         cvOutBus.setSample(3, 0, 0.0f);
     }
     
-    // Fill rest of buffer
-    for (int channel = 0; channel < 4; ++channel)
+    // Output zone gates (channels 4-7)
+    static int logCounterGates = 0;
+    logCounterGates++;
+    bool shouldLogGates = (logCounterGates % 100 == 0); // Log every 100 audio blocks (~2 seconds at 48kHz)
+    
+    if (shouldLogGates)
+    {
+        juce::Logger::writeToLog("[MovementDetector] === Gate Output (before) ===");
+        juce::Logger::writeToLog("[MovementDetector] FIFO ready: " + juce::String(fifo.getNumReady()));
+        juce::String zoneHitsStr = "[MovementDetector] lastResult.zoneHits: R=";
+        zoneHitsStr += (lastResultForAudio.zoneHits[0] ? "T" : "F");
+        zoneHitsStr += ", G=";
+        zoneHitsStr += (lastResultForAudio.zoneHits[1] ? "T" : "F");
+        zoneHitsStr += ", B=";
+        zoneHitsStr += (lastResultForAudio.zoneHits[2] ? "T" : "F");
+        zoneHitsStr += ", Y=";
+        zoneHitsStr += (lastResultForAudio.zoneHits[3] ? "T" : "F");
+        juce::Logger::writeToLog(zoneHitsStr);
+    }
+    
+    for (int z = 0; z < 4; ++z)
+    {
+        int ch = 4 + z;
+        if (ch < cvOutBus.getNumChannels())
+        {
+            float gateValue = lastResultForAudio.zoneHits[z] ? 1.0f : 0.0f;
+            
+            // Fill entire buffer with same value (gates should be steady-state)
+            for (int s = 0; s < cvOutBus.getNumSamples(); ++s)
+            {
+                cvOutBus.setSample(ch, s, gateValue);
+            }
+            
+            if (shouldLogGates)
+            {
+                juce::String zoneName = z == 0 ? "Red" : (z == 1 ? "Green" : (z == 2 ? "Blue" : "Yellow"));
+                juce::Logger::writeToLog("[MovementDetector] Gate " + zoneName + " (ch " + juce::String(ch) + "): " + 
+                                         juce::String(gateValue, 1) + " (zoneHit=" + (lastResultForAudio.zoneHits[z] ? "TRUE" : "FALSE") + ")");
+            }
+        }
+    }
+    
+    if (shouldLogGates)
+    {
+        juce::Logger::writeToLog("[MovementDetector] === Gate Output Summary ===");
+        juce::Logger::writeToLog("[MovementDetector] Red=" + juce::String(lastResultForAudio.zoneHits[0] ? 1.0f : 0.0f, 1) + 
+                                 ", Green=" + juce::String(lastResultForAudio.zoneHits[1] ? 1.0f : 0.0f, 1) + 
+                                 ", Blue=" + juce::String(lastResultForAudio.zoneHits[2] ? 1.0f : 0.0f, 1) + 
+                                 ", Yellow=" + juce::String(lastResultForAudio.zoneHits[3] ? 1.0f : 0.0f, 1));
+    }
+    
+    // Fill rest of buffer (for channels 0-3 only, channels 4-7 are already filled above)
+    for (int channel = 0; channel < juce::jmin(4, cvOutBus.getNumChannels()); ++channel)
     {
         cvOutBus.copyFrom(channel, 1, cvOutBus, channel, 0, cvOutBus.getNumSamples() - 1);
     }
@@ -573,6 +838,245 @@ void MovementDetectorModule::drawParametersInNode(float itemWidth,
     else
     {
         ThemeText("No source connected", theme.text.error);
+    }
+
+    ImGui::Separator();
+    
+    // Zone color palette (4 colors)
+    static const ImVec4 ZONE_COLORS[4] = {
+        ImVec4(1.0f, 0.0f, 0.0f, 0.3f),  // Red - 30% opacity
+        ImVec4(0.0f, 1.0f, 0.0f, 0.3f),  // Green - 30% opacity
+        ImVec4(0.0f, 0.0f, 1.0f, 0.3f),  // Blue - 30% opacity
+        ImVec4(1.0f, 1.0f, 0.0f, 0.3f)   // Yellow - 30% opacity
+    };
+    
+    // Static state for mouse interaction (per-instance using logical ID)
+    static std::map<int, int> activeZoneColorIndexByNode;
+    static std::map<int, int> drawingZoneIndexByNode;
+    static std::map<int, float> dragStartXByNode;
+    static std::map<int, float> dragStartYByNode;
+    
+    int nodeId = (int)getLogicalId();
+    int& activeZoneColorIndex = activeZoneColorIndexByNode[nodeId];
+    int& drawingZoneIndex = drawingZoneIndexByNode[nodeId];
+    float& dragStartX = dragStartXByNode[nodeId];
+    float& dragStartY = dragStartYByNode[nodeId];
+    
+    // Initialize active color index if not set
+    if (activeZoneColorIndexByNode.find(nodeId) == activeZoneColorIndexByNode.end())
+        activeZoneColorIndex = 0;
+    
+    // Color picker boxes
+    ImGui::Text("Zone Colors:");
+    ImGui::SameLine();
+    for (int c = 0; c < 4; ++c)
+    {
+        ImGui::PushID(c);
+        ImVec4 color = ZONE_COLORS[c];
+        color.w = 1.0f;  // Full opacity for picker button
+        if (ImGui::ColorButton("##ZoneColor", color, ImGuiColorEditFlags_NoAlpha | ImGuiColorEditFlags_NoTooltip, ImVec2(20, 20)))
+        {
+            activeZoneColorIndex = c;
+        }
+        if (ImGui::IsItemHovered())
+        {
+            ImGui::SetTooltip("Click to select color %d", c + 1);
+        }
+        ImGui::PopID();
+        if (c < 3) ImGui::SameLine();
+    }
+    
+    ImGui::Separator();
+    
+    // Video preview with zone overlays
+    juce::Image frame = getLatestFrame();
+    if (!frame.isNull())
+    {
+        // Use static map for texture management (per-module-instance textures)
+        static std::unordered_map<int, std::unique_ptr<juce::OpenGLTexture>> localTextures;
+        
+        if (localTextures.find(nodeId) == localTextures.end())
+            localTextures[nodeId] = std::make_unique<juce::OpenGLTexture>();
+        
+        auto* texture = localTextures[nodeId].get();
+        texture->loadImage(frame);
+        
+        if (texture->getTextureID() != 0)
+        {
+            float ar = (float)frame.getHeight() / juce::jmax(1.0f, (float)frame.getWidth());
+            ImVec2 size(itemWidth, itemWidth * ar);
+            ImGui::Image((void*)(intptr_t)texture->getTextureID(), size, ImVec2(0, 1), ImVec2(1, 0));
+            
+            // Get image screen coordinates and size for interaction
+            ImVec2 imageRectMin = ImGui::GetItemRectMin();
+            ImVec2 imageRectMax = ImGui::GetItemRectMax();
+            ImVec2 imageSize = ImGui::GetItemRectSize();
+            ImDrawList* drawList = ImGui::GetWindowDrawList();
+            
+            // Use InvisibleButton to capture mouse input and prevent node movement (like CropVideoModule)
+            ImGui::SetCursorScreenPos(imageRectMin);
+            ImGui::InvisibleButton("##zone_interaction", imageSize);
+            
+            ImVec2 mousePos = ImGui::GetMousePos();
+            
+            // Draw zones - each color zone can have multiple rectangles
+            for (int colorIdx = 0; colorIdx < 4; ++colorIdx)
+            {
+                std::vector<ZoneRect> rects;
+                loadZoneRects(colorIdx, rects);
+                
+                ImVec4 color = ZONE_COLORS[colorIdx];
+                ImU32 fillColor = ImGui::ColorConvertFloat4ToU32(color);
+                ImU32 borderColor = ImGui::ColorConvertFloat4ToU32(ImVec4(color.x, color.y, color.z, 1.0f));
+                
+                for (const auto& rect : rects)
+                {
+                    ImVec2 zoneMin(imageRectMin.x + rect.x * imageSize.x,
+                                  imageRectMin.y + rect.y * imageSize.y);
+                    ImVec2 zoneMax(imageRectMin.x + (rect.x + rect.width) * imageSize.x,
+                                  imageRectMin.y + (rect.y + rect.height) * imageSize.y);
+                    
+                    drawList->AddRectFilled(zoneMin, zoneMax, fillColor);
+                    drawList->AddRect(zoneMin, zoneMax, borderColor, 0.0f, 0, 2.0f);
+                }
+            }
+            
+            // Mouse interaction - use InvisibleButton's hover state
+            if (ImGui::IsItemHovered())
+            {
+                // Normalize mouse position (0.0-1.0)
+                float mouseX = (mousePos.x - imageRectMin.x) / imageSize.x;
+                float mouseY = (mousePos.y - imageRectMin.y) / imageSize.y;
+                
+                // Check if Ctrl key is held
+                bool ctrlHeld = ImGui::GetIO().KeyCtrl;
+                
+                // Zone drawing: Only with Ctrl+Left-click
+                if (ctrlHeld)
+                {
+                    // Ctrl+Left-click: Start drawing a new rectangle for the selected color zone
+                    if (ImGui::IsItemClicked(ImGuiMouseButton_Left))
+                    {
+                        dragStartX = mouseX;
+                        dragStartY = mouseY;
+                        drawingZoneIndex = activeZoneColorIndex;  // Drawing for the selected color
+                    }
+                    
+                    // Ctrl+Left-drag: Update rectangle being drawn and show preview
+                    if (ImGui::IsMouseDragging(ImGuiMouseButton_Left) && drawingZoneIndex >= 0 && ctrlHeld)
+                    {
+                        float dragEndX = mouseX;
+                        float dragEndY = mouseY;
+                        
+                        // Calculate rectangle from drag start to current position
+                        float zx = juce::jmin(dragStartX, dragEndX);
+                        float zy = juce::jmin(dragStartY, dragEndY);
+                        float zw = std::abs(dragEndX - dragStartX);
+                        float zh = std::abs(dragEndY - dragStartY);
+                        
+                        // Clamp to image bounds
+                        zx = juce::jlimit(0.0f, 1.0f, zx);
+                        zy = juce::jlimit(0.0f, 1.0f, zy);
+                        zw = juce::jlimit(0.01f, 1.0f - zx, zw);
+                        zh = juce::jlimit(0.01f, 1.0f - zy, zh);
+                        
+                        // Draw preview rectangle
+                        ImVec2 previewMin(imageRectMin.x + zx * imageSize.x,
+                                         imageRectMin.y + zy * imageSize.y);
+                        ImVec2 previewMax(imageRectMin.x + (zx + zw) * imageSize.x,
+                                         imageRectMin.y + (zy + zh) * imageSize.y);
+                        
+                        ImVec4 previewColor = ZONE_COLORS[drawingZoneIndex];
+                        ImU32 previewFillColor = ImGui::ColorConvertFloat4ToU32(previewColor);
+                        ImU32 previewBorderColor = ImGui::ColorConvertFloat4ToU32(ImVec4(previewColor.x, previewColor.y, previewColor.z, 1.0f));
+                        
+                        drawList->AddRectFilled(previewMin, previewMax, previewFillColor);
+                        drawList->AddRect(previewMin, previewMax, previewBorderColor, 0.0f, 0, 2.0f);
+                    }
+                    
+                    // Ctrl+Left-release: Finish drawing - add rectangle to the color zone
+                    if (ImGui::IsMouseReleased(ImGuiMouseButton_Left) && drawingZoneIndex >= 0)
+                    {
+                        float dragEndX = mouseX;
+                        float dragEndY = mouseY;
+                        
+                        // Calculate final rectangle
+                        float zx = juce::jmin(dragStartX, dragEndX);
+                        float zy = juce::jmin(dragStartY, dragEndY);
+                        float zw = std::abs(dragEndX - dragStartX);
+                        float zh = std::abs(dragEndY - dragStartY);
+                        
+                        // Only add if rectangle is large enough
+                        if (zw > 0.01f && zh > 0.01f)
+                        {
+                            // Clamp to image bounds
+                            zx = juce::jlimit(0.0f, 1.0f, zx);
+                            zy = juce::jlimit(0.0f, 1.0f, zy);
+                            zw = juce::jlimit(0.01f, 1.0f - zx, zw);
+                            zh = juce::jlimit(0.01f, 1.0f - zy, zh);
+                            
+                            // Load existing rectangles for this color
+                            std::vector<ZoneRect> rects;
+                            loadZoneRects(drawingZoneIndex, rects);
+                            
+                            // Add new rectangle
+                            ZoneRect newRect;
+                            newRect.x = zx;
+                            newRect.y = zy;
+                            newRect.width = zw;
+                            newRect.height = zh;
+                            rects.push_back(newRect);
+                            
+                            // Save back to APVTS
+                            saveZoneRects(drawingZoneIndex, rects);
+                            onModificationEnded();
+                        }
+                        
+                        drawingZoneIndex = -1;
+                    }
+                }
+                
+                // Right-drag: Eraser mode (delete rectangles from color zones) - works regardless of Ctrl
+                if (ImGui::IsMouseDragging(ImGuiMouseButton_Right))
+                {
+                    // Check if mouse is inside any rectangle of any color zone
+                    for (int colorIdx = 0; colorIdx < 4; ++colorIdx)
+                    {
+                        std::vector<ZoneRect> rects;
+                        loadZoneRects(colorIdx, rects);
+                        
+                        // Check each rectangle and remove if mouse is inside
+                        bool modified = false;
+                        for (auto it = rects.begin(); it != rects.end();)
+                        {
+                            bool inside = (mouseX >= it->x && mouseX <= it->x + it->width &&
+                                          mouseY >= it->y && mouseY <= it->y + it->height);
+                            
+                            if (inside)
+                            {
+                                it = rects.erase(it);
+                                modified = true;
+                            }
+                            else
+                            {
+                                ++it;
+                            }
+                        }
+                        
+                        if (modified)
+                        {
+                            saveZoneRects(colorIdx, rects);
+                            onModificationEnded();
+                        }
+                    }
+                }
+                
+                // Show tooltip for zone drawing hints
+                ImGui::BeginTooltip();
+                ImGui::TextDisabled("Ctrl+Left-drag: Draw zone\nRight-drag: Erase zone");
+                ImGui::EndTooltip();
+            }
+        }
     }
     
     ImGui::PopItemWidth();

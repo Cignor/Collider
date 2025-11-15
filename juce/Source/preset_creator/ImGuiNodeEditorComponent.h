@@ -361,6 +361,7 @@ public:
         static inline const juce::Identifier historyRedo { "actions.history.redo" };
         static inline const juce::Identifier debugToggleOverlay { "actions.debug.toggleDiagnostics" };
         static inline const juce::Identifier graphInsertMixer { "actions.graph.insertMixer" };
+        static inline const juce::Identifier graphConnectSelectedToTrackMixer { "actions.graph.connectSelectedToTrackMixer" };
         static inline const juce::Identifier graphShowInsertPopup { "actions.graph.showInsertPopup" };
         static inline const juce::Identifier graphInsertOnLink { "actions.graph.insertOnLink" };
         static inline const juce::Identifier graphChainSequential { "actions.graph.chainSequential" };
@@ -394,6 +395,7 @@ public:
     std::atomic<bool> shortcutRedoRequested { false };
     std::atomic<bool> shortcutToggleDebugRequested { false };
     std::atomic<bool> shortcutInsertMixerRequested { false };
+    std::atomic<bool> shortcutConnectSelectedToTrackMixerRequested { false };
     std::atomic<bool> shortcutShowInsertPopupRequested { false };
     std::atomic<bool> shortcutInsertOnLinkRequested { false };
     std::atomic<bool> shortcutChainSequentialRequested { false };

@@ -558,8 +558,15 @@ void ImGuiNodeEditorComponent::registerShortcuts()
                    "Insert Mixer",
                    "Insert a mixer after the selected node.",
                    "Graph",
-                   { ImGuiKey_T, true, false, false, false },
+                   { ImGuiKey_None, false, false, false, false }, // No default shortcut - user can assign if needed
                    shortcutInsertMixerRequested);
+
+    registerAction(ShortcutActionIds::graphConnectSelectedToTrackMixer,
+                   "Connect Selected to Track Mixer",
+                   "Connect selected nodes to a new Track Mixer with automatic routing.",
+                   "Graph",
+                   { ImGuiKey_T, true, false, false, false }, // Ctrl+T default
+                   shortcutConnectSelectedToTrackMixerRequested);
 
     registerAction(ShortcutActionIds::graphShowInsertPopup,
                    "Open Insert Node Popup",
@@ -622,6 +629,7 @@ void ImGuiNodeEditorComponent::unregisterShortcuts()
 {
     shortcutManager.unregisterAction(ShortcutActionIds::graphInsertOnLink);
     shortcutManager.unregisterAction(ShortcutActionIds::graphShowInsertPopup);
+    shortcutManager.unregisterAction(ShortcutActionIds::graphConnectSelectedToTrackMixer);
     shortcutManager.unregisterAction(ShortcutActionIds::graphInsertMixer);
     shortcutManager.unregisterAction(ShortcutActionIds::debugToggleOverlay);
     shortcutManager.unregisterAction(ShortcutActionIds::historyRedo);
@@ -1335,7 +1343,26 @@ void ImGuiNodeEditorComponent::renderImGui()
             bool anyNodesSelected = ImNodes::NumSelectedNodes() > 0;
             bool multipleNodesSelected = ImNodes::NumSelectedNodes() > 1;
             
-            if (ImGui::MenuItem("Connect Selected to Track Mixer", nullptr, false, anyNodesSelected))
+            // Get the shortcut string for "Connect Selected to Track Mixer"
+            juce::String shortcutLabel;
+            {
+                const auto& context = nodeEditorContextId;
+                auto userBinding = shortcutManager.getUserBinding(ShortcutActionIds::graphConnectSelectedToTrackMixer, context);
+                if (userBinding.hasValue() && userBinding->isValid())
+                {
+                    shortcutLabel = userBinding->toString();
+                }
+                else
+                {
+                    auto defaultBinding = shortcutManager.getDefaultBinding(ShortcutActionIds::graphConnectSelectedToTrackMixer, context);
+                    if (defaultBinding.hasValue() && defaultBinding->isValid())
+                    {
+                        shortcutLabel = defaultBinding->toString();
+                    }
+                }
+            }
+            
+            if (ImGui::MenuItem("Connect Selected to Track Mixer", shortcutLabel.isEmpty() ? nullptr : shortcutLabel.toRawUTF8(), false, anyNodesSelected))
             {
                 handleConnectSelectedToTrackMixer();
             }
@@ -3011,180 +3038,30 @@ if (auto* mp = synth->getModuleForLogical (lid))
     }
     else if (auto* movementModule = dynamic_cast<MovementDetectorModule*>(mp))
     {
-        juce::Image frame = movementModule->getLatestFrame();
-        if (!frame.isNull())
-        {
-            if (visionModuleTextures.find((int)lid) == visionModuleTextures.end())
-            {
-                visionModuleTextures[(int)lid] = std::make_unique<juce::OpenGLTexture>();
-            }
-            juce::OpenGLTexture* texture = visionModuleTextures[(int)lid].get();
-            texture->loadImage(frame);
-            if (texture->getTextureID() != 0)
-            {
-                // Calculate aspect ratio dynamically from the actual frame dimensions
-                float nativeWidth = (float)frame.getWidth();
-                float nativeHeight = (float)frame.getHeight();
-                
-                // Preserve the video's native aspect ratio (handles portrait, landscape, square, etc.)
-                float aspectRatio = (nativeWidth > 0.0f) ? nativeHeight / nativeWidth : 0.75f; // Default to 4:3
-                
-                // Width is fixed at itemWidth (480px for video modules), height scales proportionally
-                ImVec2 renderSize = ImVec2(nodeContentWidth, nodeContentWidth * aspectRatio);
-                
-                // Flip Y-coordinates to fix upside-down video (OpenCV uses top-left origin, OpenGL uses bottom-left)
-                ImGui::Image((void*)(intptr_t)texture->getTextureID(), renderSize, ImVec2(0, 1), ImVec2(1, 0));
-            }
-        }
+        // MovementDetectorModule handles its own video preview rendering with zone interaction in drawParametersInNode
         movementModule->drawParametersInNode(nodeContentWidth, isParamModulated, onModificationEnded);
     }
     else if (auto* poseModule = dynamic_cast<PoseEstimatorModule*>(mp))
     {
-        juce::Image frame = poseModule->getLatestFrame();
-        if (!frame.isNull())
-        {
-            if (visionModuleTextures.find((int)lid) == visionModuleTextures.end())
-            {
-                visionModuleTextures[(int)lid] = std::make_unique<juce::OpenGLTexture>();
-            }
-            juce::OpenGLTexture* texture = visionModuleTextures[(int)lid].get();
-            texture->loadImage(frame);
-            if (texture->getTextureID() != 0)
-            {
-                // Calculate aspect ratio dynamically from the actual frame dimensions
-                float nativeWidth = (float)frame.getWidth();
-                float nativeHeight = (float)frame.getHeight();
-                
-                // Preserve the video's native aspect ratio (handles portrait, landscape, square, etc.)
-                float aspectRatio = (nativeWidth > 0.0f) ? nativeHeight / nativeWidth : 0.75f; // Default to 4:3
-                
-                // Width is fixed at itemWidth (480px for video modules), height scales proportionally
-                ImVec2 renderSize = ImVec2(nodeContentWidth, nodeContentWidth * aspectRatio);
-                
-                // Flip Y-coordinates to fix upside-down video (OpenCV uses top-left origin, OpenGL uses bottom-left)
-                ImGui::Image((void*)(intptr_t)texture->getTextureID(), renderSize, ImVec2(0, 1), ImVec2(1, 0));
-            }
-        }
+        // PoseEstimatorModule handles its own video preview rendering with zone interaction in drawParametersInNode
         poseModule->drawParametersInNode(nodeContentWidth, isParamModulated, onModificationEnded);
     }
     else if (auto* colorModule = dynamic_cast<ColorTrackerModule*>(mp))
     {
-        juce::Image frame = colorModule->getLatestFrame();
-        if (!frame.isNull())
-        {
-            static std::map<int, int> hoverRadiusByNode; // logicalId -> radius (half-size), default 2 => 5x5
-            if (visionModuleTextures.find((int)lid) == visionModuleTextures.end())
-                visionModuleTextures[(int)lid] = std::make_unique<juce::OpenGLTexture>();
-            auto* texture = visionModuleTextures[(int)lid].get();
-            texture->loadImage(frame);
-            if (texture->getTextureID() != 0)
-            {
-                float ar = (float)frame.getHeight() / juce::jmax(1.0f, (float)frame.getWidth());
-                ImVec2 size(nodeContentWidth, nodeContentWidth * ar);
-                ImGui::Image((void*)(intptr_t)texture->getTextureID(), size, ImVec2(0,1), ImVec2(1,0));
-
-                // Handle color picker clicks when active
-                if (colorModule->isPickerActive() && ImGui::IsItemHovered())
-                {
-                    ImGui::SetTooltip("Click to pick a color from the video");
-                    if (ImGui::IsMouseClicked(ImGuiMouseButton_Left))
-                    {
-                        ImVec2 mousePos = ImGui::GetMousePos();
-                        ImVec2 itemMin = ImGui::GetItemRectMin();
-                        ImVec2 itemSize = ImGui::GetItemRectSize();
-                        float nx = (mousePos.x - itemMin.x) / itemSize.x;
-                        float ny = (mousePos.y - itemMin.y) / itemSize.y;
-                        nx = juce::jlimit(0.0f, 1.0f, nx);
-                        ny = juce::jlimit(0.0f, 1.0f, ny);
-                        // Use ny directly (no flip) to align clicks with displayed image
-                        int px = (int)juce::jlimit(0.0f, (float)frame.getWidth()  - 1.0f, nx * (float)frame.getWidth());
-                        int py = (int)juce::jlimit(0.0f, (float)frame.getHeight() - 1.0f, ny * (float)frame.getHeight());
-                        juce::Logger::writeToLog(juce::String("[ColorTracker][UI] nx=") + juce::String(nx, 3) + ", ny=" + juce::String(ny, 3) +
-                                                  ", px=" + juce::String(px) + ", py=" + juce::String(py));
-                        colorModule->addColorAt(px, py);
-                        colorModule->exitPickerMode();
-                    }
-                }
-
-                // Hover preview: median/average color swatch and scroll-wheel radius control
-                if (ImGui::IsItemHovered())
-                {
-                    // Update radius by mouse wheel
-                    int& rad = hoverRadiusByNode[(int)lid]; if (rad <= 0) rad = 2;
-                    float wheel = ImGui::GetIO().MouseWheel;
-                    if (wheel != 0.0f)
-                    {
-                        rad += (wheel > 0) ? 1 : -1;
-                        rad = juce::jlimit(1, 30, rad); // (2*rad+1)^2 window, max 61x61
-                    }
-
-                    // Map mouse to pixel
-                    ImVec2 mousePos = ImGui::GetMousePos();
-                    ImVec2 itemMin = ImGui::GetItemRectMin();
-                    ImVec2 itemSize = ImGui::GetItemRectSize();
-                    float nx = (mousePos.x - itemMin.x) / itemSize.x;
-                    float ny = (mousePos.y - itemMin.y) / itemSize.y;
-                    nx = juce::jlimit(0.0f, 1.0f, nx);
-                    ny = juce::jlimit(0.0f, 1.0f, ny);
-                    int cx = (int)juce::jlimit(0.0f, (float)frame.getWidth()  - 1.0f, nx * (float)frame.getWidth());
-                    int cy = (int)juce::jlimit(0.0f, (float)frame.getHeight() - 1.0f, ny * (float)frame.getHeight());
-
-                    // Sample ROI from juce::Image
-                    std::vector<int> vr, vg, vb; vr.reserve((2*rad+1)*(2*rad+1)); vg.reserve(vr.capacity()); vb.reserve(vr.capacity());
-                    juce::Image::BitmapData bd(frame, juce::Image::BitmapData::readOnly);
-                    auto clampi = [](int v, int lo, int hi){ return (v < lo) ? lo : (v > hi ? hi : v); };
-                    for (int y = cy - rad; y <= cy + rad; ++y)
-                    {
-                        int yy = clampi(y, 0, frame.getHeight()-1);
-                        const juce::PixelARGB* row = (const juce::PixelARGB*)(bd.getLinePointer(yy));
-                        for (int x = cx - rad; x <= cx + rad; ++x)
-                        {
-                            int xx = clampi(x, 0, frame.getWidth()-1);
-                            const juce::PixelARGB& p = row[xx];
-                            vr.push_back(p.getRed());
-                            vg.push_back(p.getGreen());
-                            vb.push_back(p.getBlue());
-                        }
-                    }
-                    auto median = [](std::vector<int>& v){ std::nth_element(v.begin(), v.begin()+v.size()/2, v.end()); return v[v.size()/2]; };
-                    int mr = median(vr), mg = median(vg), mb = median(vb);
-                    juce::Colour mc((juce::uint8)mr, (juce::uint8)mg, (juce::uint8)mb);
-                    float h = mc.getHue(), s = mc.getSaturation(), b = mc.getBrightness();
-
-                    // Tooltip near cursor with swatch and numbers
-                    ImGui::BeginTooltip();
-                    ImGui::Text("(%d,%d) rad=%d", cx, cy, rad);
-                    ImGui::ColorButton("##hoverSwatch", ImVec4(mc.getFloatRed(), mc.getFloatGreen(), mc.getFloatBlue(), 1.0f), 0, ImVec2(22,22));
-                    ImGui::SameLine();
-                    ImGui::Text("RGB %d,%d,%d\nHSV %d,%d,%d", mr, mg, mb, (int)(h*180.0f), (int)(s*255.0f), (int)(b*255.0f));
-                    ImGui::EndTooltip();
-
-                    // Textual summary under the image (lightweight)
-                    ImGui::TextDisabled("Hover RGB %d,%d,%d  HSV %d,%d,%d  rad=%d", mr, mg, mb, (int)(h*180.0f), (int)(s*255.0f), (int)(b*255.0f), rad);
-                }
-            }
-        }
+        // ColorTrackerModule handles its own video preview rendering with zone interaction in drawParametersInNode
         colorModule->drawParametersInNode(nodeContentWidth, isParamModulated, onModificationEnded);
     }
     else if (auto* contourModule = dynamic_cast<ContourDetectorModule*>(mp))
     {
-        juce::Image frame = contourModule->getLatestFrame();
-        if (!frame.isNull())
-        {
-            if (visionModuleTextures.find((int)lid) == visionModuleTextures.end())
-                visionModuleTextures[(int)lid] = std::make_unique<juce::OpenGLTexture>();
-            auto* texture = visionModuleTextures[(int)lid].get();
-            texture->loadImage(frame);
-            if (texture->getTextureID() != 0)
-            {
-                float ar = (float)frame.getHeight() / juce::jmax(1.0f, (float)frame.getWidth());
-                ImVec2 size(nodeContentWidth, nodeContentWidth * ar);
-                ImGui::Image((void*)(intptr_t)texture->getTextureID(), size, ImVec2(0,1), ImVec2(1,0));
-            }
-        }
+        // ContourDetectorModule handles its own video preview rendering with zone interaction in drawParametersInNode
         contourModule->drawParametersInNode(nodeContentWidth, isParamModulated, onModificationEnded);
     }
     else if (auto* objModule = dynamic_cast<ObjectDetectorModule*>(mp))
+    {
+        // ObjectDetectorModule handles its own video preview rendering with zone interaction in drawParametersInNode
+        objModule->drawParametersInNode(nodeContentWidth, isParamModulated, onModificationEnded);
+    }
+    else if (false)  // Keep old code commented below for reference
     {
         juce::Image frame = objModule->getLatestFrame();
         if (!frame.isNull())
@@ -3204,44 +3081,12 @@ if (auto* mp = synth->getModuleForLogical (lid))
     }
     else if (auto* handModule = dynamic_cast<HandTrackerModule*>(mp))
     {
-        juce::Image frame = handModule->getLatestFrame();
-        if (!frame.isNull())
-        {
-            if (visionModuleTextures.find((int)lid) == visionModuleTextures.end())
-                visionModuleTextures[(int)lid] = std::make_unique<juce::OpenGLTexture>();
-            juce::OpenGLTexture* texture = visionModuleTextures[(int)lid].get();
-            texture->loadImage(frame);
-            if (texture->getTextureID() != 0)
-            {
-                float nativeWidth = (float)frame.getWidth();
-                float nativeHeight = (float)frame.getHeight();
-                float aspectRatio = (nativeWidth > 0.0f) ? nativeHeight / nativeWidth : 0.75f;
-                ImVec2 renderSize = ImVec2(nodeContentWidth, nodeContentWidth * aspectRatio);
-                ImGui::Image((void*)(intptr_t)texture->getTextureID(), renderSize, ImVec2(0, 1), ImVec2(1, 0));
-            }
-        }
+        // HandTrackerModule handles its own video preview rendering with zone interaction in drawParametersInNode
         handModule->drawParametersInNode(nodeContentWidth, isParamModulated, onModificationEnded);
     }
     else if (auto* faceModule = dynamic_cast<FaceTrackerModule*>(mp))
     {
-        juce::Image frame = faceModule->getLatestFrame();
-        if (!frame.isNull())
-        {
-            if (visionModuleTextures.find((int)lid) == visionModuleTextures.end())
-            {
-                visionModuleTextures[(int)lid] = std::make_unique<juce::OpenGLTexture>();
-            }
-            juce::OpenGLTexture* texture = visionModuleTextures[(int)lid].get();
-            texture->loadImage(frame);
-            if (texture->getTextureID() != 0)
-            {
-                float nativeWidth = (float)frame.getWidth();
-                float nativeHeight = (float)frame.getHeight();
-                float aspectRatio = (nativeWidth > 0.0f) ? nativeHeight / nativeWidth : 0.75f;
-                ImVec2 renderSize = ImVec2(nodeContentWidth, nodeContentWidth * aspectRatio);
-                ImGui::Image((void*)(intptr_t)texture->getTextureID(), renderSize, ImVec2(0, 1), ImVec2(1, 0));
-            }
-        }
+        // FaceTrackerModule handles its own video preview rendering with zone interaction in drawParametersInNode
         faceModule->drawParametersInNode(nodeContentWidth, isParamModulated, onModificationEnded);
     }
     else if (auto* fxModule = dynamic_cast<VideoFXModule*>(mp))
@@ -3728,6 +3573,14 @@ if (auto* mp = synth->getModuleForLogical (lid))
         }
 
         const bool insertMixerShortcut = consumeShortcutFlag(shortcutInsertMixerRequested);
+        const bool connectToTrackMixerShortcut = consumeShortcutFlag(shortcutConnectSelectedToTrackMixerRequested);
+        
+        // Handle "Connect Selected to Track Mixer" shortcut
+        if (connectToTrackMixerShortcut && ImNodes::NumSelectedNodes() > 0)
+        {
+            handleConnectSelectedToTrackMixer();
+        }
+        
         if ((triggerInsertMixer || (selectedLogicalId != 0 && insertMixerShortcut)) && !mixerShortcutCooldown)
         {
             mixerShortcutCooldown = true; // Prevent re-triggering in the same frame
