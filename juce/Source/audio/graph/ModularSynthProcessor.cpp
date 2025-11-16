@@ -44,7 +44,6 @@
 #include "../modules/RerouteModuleProcessor.h"
 #include "../modules/MIDIPlayerModuleProcessor.h"
 #include "../modules/PolyVCOModuleProcessor.h"
-#include "../modules/BestPracticeNodeProcessor.h"
 #include "../modules/TimelineModuleProcessor.h"
 #include "../modules/BPMMonitorModuleProcessor.h"
 #include "../modules/ShapingOscillatorModuleProcessor.h"
@@ -792,7 +791,6 @@ namespace {
             reg("timepitch", []{ return std::make_unique<TimePitchModuleProcessor>(); });
             reg("midi_player", []{ return std::make_unique<MIDIPlayerModuleProcessor>(); });
             reg("polyvco", []{ return std::make_unique<PolyVCOModuleProcessor>(); });
-            reg("best_practice", []{ return std::make_unique<BestPracticeNodeProcessor>(); });
             reg("timeline", []{ return std::make_unique<TimelineModuleProcessor>(); });
             reg("shaping_oscillator", []{ return std::make_unique<ShapingOscillatorModuleProcessor>(); });
             reg("multi_sequencer", []{ return std::make_unique<MultiSequencerModuleProcessor>(); });

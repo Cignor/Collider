@@ -1,0 +1,130 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<ModularSynthPreset version="1" bpm="120.0">
+  <modules>
+    <module logicalId="1" type="granulator">
+      <params>
+        <GranulatorParams>
+          <PARAM id="density" value="32.99999618530273"/>
+          <PARAM id="gate" value="1.0"/>
+          <PARAM id="panRandom" value="0.0"/>
+          <PARAM id="pitch" value="-3.399999618530273"/>
+          <PARAM id="pitchRandom" value="4.099999904632568"/>
+          <PARAM id="position" value="0.0"/>
+          <PARAM id="size" value="346.0"/>
+          <PARAM id="spread" value="0.2599999904632568"/>
+          <PARAM id="relativeDensityMod"/>
+          <PARAM id="relativePitchMod"/>
+          <PARAM id="relativePositionMod"/>
+          <PARAM id="relativeSizeMod"/>
+        </GranulatorParams>
+      </params>
+    </module>
+    <module logicalId="3" type="random">
+      <params>
+        <RandomParams>
+          <PARAM id="cvMax" value="0.6299999952316284"/>
+          <PARAM id="cvMin" value="0.4799999892711639"/>
+          <PARAM id="max" value="1.0"/>
+          <PARAM id="min" value="0.0"/>
+          <PARAM id="normMax" value="1.0"/>
+          <PARAM id="normMin" value="0.0"/>
+          <PARAM id="rate" value="1.600000023841858"/>
+          <PARAM id="rate_division" value="3.0"/>
+          <PARAM id="slew" value="0.1610000133514404"/>
+          <PARAM id="sync" value="0.0"/>
+          <PARAM id="trigThreshold" value="0.5"/>
+        </RandomParams>
+      </params>
+      <extra>
+        <RandomState sync="0.0" rate_division="3.0"/>
+      </extra>
+    </module>
+    <module logicalId="1008" type="sample_loader">
+      <params>
+        <SampleLoaderParameters samplePath="H:\0000_CODE\01_collider_pyo\audio\samples\percussion\KSHMR_Acoustic_Crash_01.wav">
+          <PARAM id="engine" value="1.0"/>
+          <PARAM id="gate" value="0.7999999523162842"/>
+          <PARAM id="gate_mod" value="1.0"/>
+          <PARAM id="loop" value="1.0"/>
+          <PARAM id="pitch" value="-12.80000019073486"/>
+          <PARAM id="pitch_mod" value="0.0"/>
+          <PARAM id="rangeEnd" value="0.3569999933242798"/>
+          <PARAM id="rangeEnd_mod" value="1.0"/>
+          <PARAM id="rangeStart" value="0.0"/>
+          <PARAM id="rangeStart_mod" value="0.0"/>
+          <PARAM id="rbPhaseInd" value="1.0"/>
+          <PARAM id="rbWindowShort" value="1.0"/>
+          <PARAM id="speed" value="3.159999847412109"/>
+          <PARAM id="speed_mod" value="1.0"/>
+          <PARAM id="trigger_mod" value="0.0"/>
+        </SampleLoaderParameters>
+      </params>
+    </module>
+    <module logicalId="1017" type="8bandshaper">
+      <params>
+        <MultiBandShaperParams>
+          <PARAM id="drive_1" value="1.0"/>
+          <PARAM id="drive_2" value="6.039999961853027"/>
+          <PARAM id="drive_3" value="1.429999947547913"/>
+          <PARAM id="drive_4" value="0.2899999916553497"/>
+          <PARAM id="drive_5" value="0.1700000017881393"/>
+          <PARAM id="drive_6" value="0.07000000029802322"/>
+          <PARAM id="drive_7" value="3.519999980926514"/>
+          <PARAM id="drive_8" value="0.0"/>
+          <PARAM id="outputGain" value="0.0"/>
+          <PARAM id="relativeDriveMod_1" value="1.0"/>
+          <PARAM id="relativeDriveMod_2" value="1.0"/>
+          <PARAM id="relativeDriveMod_3" value="1.0"/>
+          <PARAM id="relativeDriveMod_4" value="1.0"/>
+          <PARAM id="relativeDriveMod_5" value="1.0"/>
+          <PARAM id="relativeDriveMod_6" value="1.0"/>
+          <PARAM id="relativeDriveMod_7" value="1.0"/>
+          <PARAM id="relativeDriveMod_8" value="1.0"/>
+          <PARAM id="relativeGainMod" value="1.0"/>
+        </MultiBandShaperParams>
+      </params>
+    </module>
+    <module logicalId="1019" type="bit_crusher">
+      <params>
+        <BitCrusherParams>
+          <PARAM id="antiAlias" value="1.0"/>
+          <PARAM id="bit_depth" value="5.489999771118164"/>
+          <PARAM id="mix" value="0.8700000047683716"/>
+          <PARAM id="quant_mode" value="2.0"/>
+          <PARAM id="relativeBitDepthMod" value="1.0"/>
+          <PARAM id="relativeSampleRateMod" value="1.0"/>
+          <PARAM id="sample_rate" value="0.624000072479248"/>
+          <PARAM id="relativeMixMod" value="1.0"/>
+        </BitCrusherParams>
+      </params>
+    </module>
+  </modules>
+  <connections>
+    <connection srcId="1" srcChan="0" dstId="1019" dstChan="0"/>
+    <connection srcId="1" srcChan="1" dstId="1019" dstChan="1"/>
+    <connection srcId="3" srcChan="0" dstId="1" dstChan="3"/>
+    <connection srcId="3" srcChan="2" dstId="1008" dstChan="5"/>
+    <connection srcId="3" srcChan="0" dstId="1017" dstChan="6"/>
+    <connection srcId="3" srcChan="2" dstId="1017" dstChan="2"/>
+    <connection srcId="3" srcChan="2" dstId="1017" dstChan="3"/>
+    <connection srcId="3" srcChan="2" dstId="1017" dstChan="4"/>
+    <connection srcId="3" srcChan="2" dstId="1017" dstChan="8"/>
+    <connection srcId="3" srcChan="2" dstId="1019" dstChan="2"/>
+    <connection srcId="3" srcChan="2" dstId="1019" dstChan="4"/>
+    <connection srcId="1008" srcChan="0" dstId="1" dstChan="0"/>
+    <connection srcId="1008" srcChan="1" dstId="1" dstChan="1"/>
+    <connection srcId="1017" srcChan="0" dstId="output" dstChan="0"/>
+    <connection srcId="1017" srcChan="1" dstId="output" dstChan="1"/>
+    <connection srcId="1019" srcChan="0" dstId="1017" dstChan="0"/>
+    <connection srcId="1019" srcChan="1" dstId="1017" dstChan="1"/>
+  </connections>
+  <NodeEditorUI>
+    <node id="1" x="255.0" y="-25.0"/>
+    <node id="3" x="-570.0" y="119.0"/>
+    <node id="1008" x="-187.0" y="-163.0"/>
+    <node id="1017" x="1205.94140625" y="-19.63510131835938"/>
+    <node id="1019" x="700.0" y="-24.0"/>
+    <node id="0" x="1888.0" y="58.0"/>
+  </NodeEditorUI>
+</ModularSynthPreset>

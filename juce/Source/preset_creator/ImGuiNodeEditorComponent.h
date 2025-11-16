@@ -494,7 +494,7 @@ public:
     
     // Probe tool state
     bool isProbeModeActive { false };
-    bool showProbeScope { true };
+    bool showProbeScope { false };
     
     // Insert node on link state
     struct LinkInfo
@@ -596,4 +596,12 @@ private:
     // Eyedropper state
     bool m_isPickingColor { false };
     std::function<void(ImU32)> m_onColorPicked;
+
+    // --- Cut-by-line state (grid space) ---
+    bool cutModeActive { false };
+    bool cutJustPerformed { false };
+    ImVec2 cutStartGrid { 0.0f, 0.0f };
+    ImVec2 cutEndGrid { 0.0f, 0.0f };
+    float cutMergeEpsilonPx { 8.0f };
+    float cutEndpointTEpsilon { 0.05f };
 };

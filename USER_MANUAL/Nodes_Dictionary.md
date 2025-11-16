@@ -101,7 +101,6 @@
 - [face_tracker](#face_tracker) - Facial Landmark Tracking
 - [color_tracker](#color_tracker) - Multi-Color Tracking
 - [contour_detector](#contour_detector) - Shape Detection
-- [semantic_segmentation](#semantic_segmentation) - Scene Segmentation
 - [video_fx](#video_fx) - Real-Time Video Effects
 - [crop_video](#crop_video) - Video Cropping and Tracking
 
@@ -1546,14 +1545,71 @@ Sequences complete patch states, recalling all parameter values.
 ---
 
 ### stroke_sequencer
-**Gesture-Based Sequencer**
+**Gesture-Based Beat/Stroke Sequencer**
 
-Records and plays back drawn gestures as CV sequences.
+Draw strokes on a canvas and generate timing/gate events when the playhead crosses user-defined threshold lines. Functions as a beat-maker: three independent trigger lanes (Floor/Mid/Ceiling) can fire per cycle and can auto-wire to samplers/mixers via the in-module quick-connect button. Also produces continuous and held pitch CV derived from the stroke under the playhead.
 
 #### How to Use
-1. Draw patterns with your mouse/tablet
-2. Playback converts drawing to CV
-3. Unique way to create expressive, human-feeling sequences
+1. Draw with Left-click (adds points); Erase with Right-click (cuts segments)
+2. Set threshold lines (Floor/Mid/Ceiling) to define where triggers should occur
+3. Run free (Rate) or sync to Transport with musical Division
+4. Use 3 trigger outputs as drum lanes, and the quick-connect button to build a drum kit
+5. Map Continuous/Held Pitch CV to tonal parameters (oscillator, filter, etc.)
+
+#### Inputs
+- `Reset In` (Gate) - Resets playhead to start (immediate, sample-accurate)
+- `Rate Mod In` (CV) - Modulates Rate in free-run mode (0-1 maps to full range)
+- `Floor Mod In` (CV) - Modulates Floor threshold (0-1)
+- `Mid Mod In` (CV) - Modulates Mid threshold (0-1)
+- `Ceiling Mod In` (CV) - Modulates Ceiling threshold (0-1)
+
+#### Outputs
+- `Floor Trig Out` (Gate) - Trigger when stroke crosses Floor
+- `Mid Trig Out` (Gate) - Trigger when stroke crosses Mid
+- `Ceiling Trig Out` (Gate) - Trigger when stroke crosses Ceiling
+- `Continuous Pitch` (CV) - Current stroke Y under playhead (0-1), live
+- `Floor Pitch` (CV) - Held pitch while on a stroke that crosses Floor
+- `Mid Pitch` (CV) - Held pitch while on a stroke that crosses Mid
+- `Ceiling Pitch` (CV) - Held pitch while on a stroke that crosses Ceiling
+
+#### Parameters
+- `Sync to Transport` (Bool) - When on, playhead follows global transport
+- `Division` (Choice) - Musical division for sync mode (1/32 … 8). May be overridden by Tempo Clock’s Global Division
+- `Rate` (0.1-20 Hz) - Free-run speed (log slider). Active only when Sync is off
+- `Floor Y` (0-1) - Floor threshold height
+- `Mid Y` (0-1) - Mid threshold height
+- `Ceiling Y` (0-1) - Ceiling threshold height
+- `Playhead` (0-1) - Manual scrub control (UI slider; takes temporary priority over auto-advance while dragging)
+
+#### Behavior Details
+- Triggers fire on any crossing of a horizontal threshold (upwards or downwards) by the line segment swept between consecutive playhead samples
+- The sequencer is “primed” only while on a stroke; crossings are ignored in gaps
+- In sync mode, playhead is computed from global song position × selected Division; wraps at 1.0
+- In free-run mode, Rate sets per-sample increment; wraps at 1.0
+- Reset gate immediately zeros playhead and phase
+
+#### Beat Maker / Quick-Connect
+- Button: “BUILD DRUM KIT” auto-creates a 3-pad drum kit (3 sample players + mixer) and wires:
+  - `Floor Trig Out` → Kick sampler trigger
+  - `Mid Trig Out` → Snare sampler trigger
+  - `Ceiling Trig Out` → Hi-hat sampler trigger
+  - Mixer output routed appropriately
+- Use Auto-Connect shortcuts with multiple nodes selected:
+  - Press `Y` to chain Gate outputs to Gate inputs
+  - Press `B` to chain CV outputs (e.g., Pitch) to CV inputs
+
+#### UI Notes
+- Canvas: 840×360 area with retro visual theme; active strokes under the playhead highlight thicker and brighter
+- Threshold lines show subtle gradients; vertical slider controls to the right match their colors
+- L-Click: draw; R-Click: erase (eraser radius around mouse)
+- “CLEAR” removes all strokes
+- Manual playhead slider shows the live position at all times; dragging temporarily takes control
+
+#### Presets
+- Stroke preset dropdown with Save/Delete management:
+  - Save current strokes and transport settings as a named preset
+  - Load to replace current strokes
+  - Presets persist with patches
 
 ---
 
@@ -1894,6 +1950,7 @@ Analyzes video for motion via optical flow or background subtraction. Detects fe
 - `Motion Y` (CV) - Vertical motion component (-1 to +1)
 - `Amount` (CV) - Total motion magnitude (0-1)
 - `Trigger` (Gate) - Trigger pulse on significant motion (above sensitivity threshold)
+- `Red/Green/Blue/Yellow Zone Gate` (Gate) - High while movement is detected inside any rectangle of the corresponding zone color
 - `Video Out` (Video) - Passthrough video output with motion visualization (blue feature points and green motion vectors)
 
 #### Parameters
@@ -1917,14 +1974,20 @@ Analyzes video for motion via optical flow or background subtraction. Detects fe
    - Decrease for faster processing and cleaner tracking
    - Feature points appear as blue circles on the video preview
 4. **Set Sensitivity:** Adjust threshold for motion trigger output (higher = less sensitive)
-5. **Map Motion to Synthesis:**
+5. **Define Zones (UI Overlay):**
+   - Hold Ctrl and Left-drag on the video to draw rectangles for the active zone color
+   - Right-drag to erase rectangles under the cursor
+   - Click the color swatches to choose the active zone (Red/Green/Blue/Yellow)
+   - Semi-transparent overlays show current zones
+   - Tooltips remind: “Ctrl+Left-drag: Draw zone / Right-drag: Erase zone”
+6. **Map Motion to Synthesis:**
    - Connect `Motion X/Y` to panning, filter cutoff, or oscillator frequency
    - Use `Amount` to control effect intensity based on overall motion
-   - Connect `Trigger` to sequencers or envelope gates for motion-triggered events
-6. **Chain Video Processing:** Connect `Video Out` to other video modules (Video FX, Human Detector, etc.) for multi-stage processing
-7. **Example Patches:**
+   - Connect any Zone Gate to sequencers or envelopes for region-based gating
+7. **Chain Video Processing:** Connect `Video Out` to other video modules (Video FX, etc.) for multi-stage processing
+8. **Example Patches:**
    - **Gesture Control:** Map hand/body motion to synthesis parameters
-   - **Motion-Triggered Sequences:** Use motion trigger to advance sequencers
+   - **Motion-Triggered Sequences:** Use a Zone Gate to advance sequencers when movement enters a region
    - **Interactive Installations:** Create soundscapes that respond to movement
    - **Dance Performance:** Full-body motion drives multiple synthesis parameters
 
@@ -1944,13 +2007,14 @@ Analyzes video for motion via optical flow or background subtraction. Detects fe
 ### pose_estimator
 **Body Keypoint Detection**
 
-Uses OpenPose MPI model to detect 15 body keypoints. Outputs 30 CV pins programmatically (X/Y for each keypoint).
+Uses OpenPose MPI model to detect 15 body keypoints. Outputs 30 CV pins (X/Y per keypoint) plus 4 zone gates. Zone gates go high if any detected keypoint is inside the corresponding zone color.
 
 #### Inputs
 - `Source In` (Video) - Video source ID from webcam or video file loader
 
 **Outputs (dynamic/programmatic):**
 - `Head X/Y`, `Neck X/Y`, `R Shoulder X/Y`, `R Elbow X/Y`, `R Wrist X/Y`, `L Shoulder X/Y`, `L Elbow X/Y`, `L Wrist X/Y`, `R Hip X/Y`, `R Knee X/Y`, `R Ankle X/Y`, `L Hip X/Y`, `L Knee X/Y`, `L Ankle X/Y`, `Chest X/Y` (all CV)
+- `Red/Green/Blue/Yellow Zone Gate` (Gate) - High if any detected keypoint is inside any rectangle of the zone color
 - `Video Out` (Video) - Passthrough video output for chaining
 - `Cropped Out` (Video) - Cropped region around detected body
 
@@ -1964,6 +2028,10 @@ Uses OpenPose MPI model to detect 15 body keypoints. Outputs 30 CV pins programm
 2. **Connect Video Source:** Connect a Webcam Loader or Video File Loader's `Source ID` output to `Source In`
 3. **Adjust Confidence:** Lower threshold for more sensitive detection, higher for more reliable detection
 4. **Map Keypoints:** Connect individual keypoint X/Y outputs to any CV modulation input
+5. **Define Zones (UI Overlay):**
+   - Hold Ctrl and Left-drag to draw zone rectangles for the active color; Right-drag to erase
+   - Click color swatches to pick the active zone (Red/Green/Blue/Yellow)
+   - Zone gates are high if any detected keypoint is inside a zone area
 5. **Example Patches:**
    - **Hand-Controlled Oscillator:** Connect `R Wrist X` → VCO Frequency, `R Wrist Y` → VCF Cutoff
    - **Body-Driven Rhythm:** Connect `R Knee Y` → Sequencer Rate, `L Knee Y` → Gate threshold
@@ -1999,13 +2067,15 @@ Uses OpenPose MPI model to detect 15 body keypoints. Outputs 30 CV pins programm
 ### hand_tracker
 **Hand Keypoint Detection**
 
-Uses OpenPose hand model to detect 21 hand keypoints. Outputs 42 CV pins (X/Y per keypoint).
+Uses OpenPose hand model to detect 21 hand keypoints. Outputs make the hand behave like an instrument independent of screen position: the wrist is absolute, all other keypoints are relative to the wrist. Also includes 4 zone gates.
 
 #### Inputs
 - `Source In` (Video) - Video source ID
 
 **Outputs (dynamic/programmatic):**
-- `Wrist X/Y`, `Thumb 1-4 X/Y`, `Index 1-4 X/Y`, `Middle 1-4 X/Y`, `Ring 1-4 X/Y`, `Pinky 1-4 X/Y` (all CV)
+- `Wrist X/Y` (CV, absolute), all other keypoints are relative to the wrist:
+  - `Thumb 1-4 X/Y (Rel)`, `Index 1-4 X/Y (Rel)`, `Middle 1-4 X/Y (Rel)`, `Ring 1-4 X/Y (Rel)`, `Pinky 1-4 X/Y (Rel)`
+- `Red/Green/Blue/Yellow Zone Gate` (Gate) - High if any detected keypoint is inside any rectangle of the zone color
 - `Video Out` (Video) - Passthrough video output for chaining
 - `Cropped Out` (Video) - Cropped region around detected hand
 
@@ -2017,7 +2087,11 @@ Uses OpenPose hand model to detect 21 hand keypoints. Outputs 42 CV pins (X/Y pe
 1. **Setup:** Requires OpenPose hand model files in `assets/openpose_models/hand/`
 2. **Connect Video Source:** Connect Webcam or Video File Loader's `Source ID` to `Source In`
 3. **Adjust Confidence:** Lower values for sensitive detection, higher for reliable detection
-4. **Map Gestures:** Connect finger joint positions to synthesis parameters
+4. **Define Zones (UI Overlay):**
+   - Hold Ctrl and Left-drag to draw zone rectangles for the active color; Right-drag to erase
+   - Click color swatches to pick the active zone (Red/Green/Blue/Yellow)
+   - Zone gates are high if any detected keypoint is inside a zone area
+5. **Map Gestures:** Connect finger joint positions to synthesis parameters
 5. **Example Patches:**
    - **Gesture Control:** Map thumb position to filter cutoff, index position to VCO frequency
    - **Finger Tracking:** Use individual finger tips for multi-parameter control
@@ -2038,13 +2112,19 @@ Uses OpenPose hand model to detect 21 hand keypoints. Outputs 42 CV pins (X/Y pe
 ### face_tracker
 **Facial Landmark Detection**
 
-Uses OpenPose face model to detect 70 facial landmarks. Outputs 140 CV pins (X/Y per point).
+Uses OpenPose face model to detect 70 facial landmarks, but the module outputs a simplified, expressive set of 36 CV pins plus 4 zone gates. The face center is absolute; expressive points (nose base, eyes, mouth, eyebrows) are relative to the face center for stable, musically useful control.
 
 #### Inputs
 - `Source In` (Video) - Video source ID
 
 **Outputs (dynamic/programmatic):**
-- `Pt 1-70 X/Y` (CV) - Landmark positions
+- `Face Center X/Y (Abs)` (CV)
+- `Nose Base X/Y (Rel)` (CV)
+- Right Eye (Rel): `Outer X/Y`, `Top X/Y`, `Inner X/Y`, `Bottom X/Y`
+- Left Eye (Rel): `Inner X/Y`, `Top X/Y`, `Outer X/Y`, `Bottom X/Y`
+- Mouth (Rel): `Corner R X/Y`, `Top Center X/Y`, `Corner L X/Y`, `Bottom Center X/Y`
+- Eyebrows (Rel): `R Outer X/Y`, `R Inner X/Y`, `L Inner X/Y`, `L Outer X/Y`
+- `Red/Green/Blue/Yellow Zone Gate` (Gate) - High if the face center or any detected keypoint is inside any rectangle of the zone color
 - `Video Out` (Video) - Passthrough video output for chaining
 - `Cropped Out` (Video) - Cropped region around detected face
 
@@ -2056,7 +2136,11 @@ Uses OpenPose face model to detect 70 facial landmarks. Outputs 140 CV pins (X/Y
 1. **Setup:** Requires OpenPose face model files in `assets/openpose_models/face/`
 2. **Connect Video Source:** Connect Webcam or Video File Loader's `Source ID` to `Source In`
 3. **Adjust Confidence:** Lower values for sensitive detection, higher for reliable detection
-4. **Map Landmarks:** Connect facial landmark positions to synthesis parameters
+4. **Define Zones (UI Overlay):**
+   - Hold Ctrl and Left-drag to draw zone rectangles for the active color; Right-drag to erase
+   - Click color swatches to pick the active zone (Red/Green/Blue/Yellow)
+   - Zone gates are high if the face center or any detected keypoint is inside a zone area
+5. **Map Landmarks:** Connect expressive outputs to synthesis parameters
 5. **Example Patches:**
    - **Expression Control:** Map mouth width to effect parameters, eyebrow position to filter resonance
    - **Head Tracking:** Use face center for spatial panning
@@ -2077,7 +2161,7 @@ Uses OpenPose face model to detect 70 facial landmarks. Outputs 140 CV pins (X/Y
 ### object_detector
 **YOLOv3 Object Detection**
 
-Uses YOLOv3 deep learning model to detect objects from 80 COCO classes (person, car, bottle, etc.) in real-time video.
+Uses YOLOv3 deep learning model to detect objects from 80 COCO classes (person, car, bottle, etc.) in real-time video. Includes zone drawing UI and 4 zone gates; draws a small red dot at the detected object center on the preview.
 
 #### Inputs
 - `Source In` (Video) - Video source ID
@@ -2088,6 +2172,7 @@ Uses YOLOv3 deep learning model to detect objects from 80 COCO classes (person, 
 - `Width` (CV) - Width (0-1)
 - `Height` (CV) - Height (0-1)
 - `Gate` (Gate) - High when target detected
+- `Red/Green/Blue/Yellow Zone Gate` (Gate) - High if the detected object center is inside any rectangle of the zone color
 - `Video Out` (Video) - Passthrough video output for chaining
 - `Cropped Out` (Video) - Cropped region around detected object
 
@@ -2101,9 +2186,13 @@ Uses YOLOv3 deep learning model to detect objects from 80 COCO classes (person, 
 2. **Connect Video Source:** Connect Webcam or Video File Loader's `Source ID` to `Source In`
 3. **Select Target Class:** Choose which object type to detect
 4. **Adjust Confidence:** Lower for more detections (may include false positives), higher for reliable detection
-5. **Map Coordinates:** Connect X/Y/Width/Height outputs to synthesis parameters
+5. **Define Zones (UI Overlay):**
+   - Hold Ctrl and Left-drag to draw zone rectangles for the active color; Right-drag to erase
+   - Click color swatches to pick the active zone (Red/Green/Blue/Yellow)
+6. **Map Coordinates:** Connect X/Y/Width/Height outputs to synthesis parameters
 6. **Example Patches:**
    - **Person Tracking:** Use person bounding box to trigger events when person enters/exits frame
+   - **Zone Logic:** Use Zone Gates to trigger when detected object enters regions
    - **Object Size Control:** Use Width × Height to control effect amount
    - **Position-Based Effects:** Map center X to panning, center Y to filter cutoff
 7. **Performance Tips:**
@@ -2123,7 +2212,7 @@ Uses YOLOv3 deep learning model to detect objects from 80 COCO classes (person, 
 ### color_tracker
 **Multi-Color HSV Tracking**
 
-Tracks multiple custom colors in video using HSV color space. Outputs are dynamic: each added color creates three CV outputs.
+Tracks multiple custom colors in video using HSV color space. Outputs are dynamic: each added color creates three CV outputs, plus 4 zone gates that go high if any tracked color’s centroid is inside the corresponding zone color.
 
 #### Inputs
 - `Source In` (Video) - Video source ID
@@ -2133,6 +2222,7 @@ Tracks multiple custom colors in video using HSV color space. Outputs are dynami
   - `[Color] X` (CV) - Center X (0-1)
   - `[Color] Y` (CV) - Center Y (0-1)
   - `[Color] Area` (CV) - Covered area (0-1)
+- `Red/Green/Blue/Yellow Zone Gate` (Gate) - High if any tracked color centroid is inside any rectangle of the zone color
 - `Video Out` (Video) - Passthrough video output for chaining
 
 #### Parameters
@@ -2141,9 +2231,13 @@ Tracks multiple custom colors in video using HSV color space. Outputs are dynami
 
 #### How to Use
 1. **Connect Video Source:** Connect Webcam or Video File Loader's `Source ID` to `Source In`
-2. **Pick Colors:** Click "Add Color..." and click on the video preview to sample a color
+2. **Pick Colors:** Click "Add Color..." and click on the video preview to sample a color (Left-click)
 3. **Track Multiple:** Add up to 8 different colors to track simultaneously
 4. **Remove Colors:** Click "Remove" button next to each tracked color
+5. **Define Zones (UI Overlay):**
+   - Hovering shows a live color preview square (always on while hovering)
+   - Hold Ctrl and Left-drag to draw zone rectangles for the active color; Right-drag to erase
+   - Click color swatches to pick the active zone (Red/Green/Blue/Yellow)
 5. **Map Coordinates:** Connect individual color outputs to synthesis parameters
 6. **Example Patches:**
    - **Two-Object Control:** Track two colored objects for stereo panning or dual oscillator control
@@ -2166,7 +2260,7 @@ Tracks multiple custom colors in video using HSV color space. Outputs are dynami
 ### contour_detector
 **Shape Detection via Background Subtraction**
 
-Detects shapes and their properties using background subtraction and contour analysis.
+Detects shapes and their properties using background subtraction and contour analysis. Includes zone drawing UI and 4 zone gates that go high when detected contour centroids enter the corresponding zones.
 
 #### Inputs
 - `Source In` (Video) - Video source ID
@@ -2175,6 +2269,7 @@ Detects shapes and their properties using background subtraction and contour ana
 - `Area` (CV) - Detected shape area (0-1)
 - `Complexity` (CV) - Polygon complexity (0-1)
 - `Aspect Ratio` (CV) - Width/height ratio
+- `Red/Green/Blue/Yellow Zone Gate` (Gate) - High when the detected contour centroid is inside any rectangle of the zone color
 - `Video Out` (Video) - Passthrough video output for chaining
 
 #### Parameters
@@ -2186,6 +2281,9 @@ Detects shapes and their properties using background subtraction and contour ana
 1. **Connect Video Source:** Connect Webcam or Video File Loader's `Source ID` to `Source In`
 2. **Adjust Threshold:** Set threshold to separate foreground from background
 3. **Enable Noise Reduction:** Reduce detection of small, noisy artifacts
+4. **Define Zones (UI Overlay):**
+   - Hold Ctrl and Left-drag to draw zone rectangles for the active color; Right-drag to erase
+   - Click color swatches to pick the active zone (Red/Green/Blue/Yellow)
 4. **Map Shape Properties:** Connect Area, Complexity, and Aspect Ratio to synthesis parameters
 5. **Example Patches:**
    - **Size-Based Filtering:** Use Area to control low-pass filter cutoff
@@ -2203,45 +2301,6 @@ Detects shapes and their properties using background subtraction and contour ana
 - Outputs normalized shape properties
 
 ---
-
-### semantic_segmentation
-**Scene Segmentation via Deep Learning**
-
-Uses semantic segmentation (ENet or DeepLabV3) to identify a target class and output region properties.
-
-#### Inputs
-- `Source In` (Video) - Video source ID
-
-#### Outputs
-- `Area` (CV) - Frame coverage of target class (0-1)
-- `Center X` (CV) - Center X of detected region (0-1)
-- `Center Y` (CV) - Center Y of detected region (0-1)
-- `Gate` (Gate) - High when target detected
-- `Video Out` (Video) - Passthrough video output for chaining
-
-#### Parameters
-- `Target Class` (Choice) - Semantic class to detect (person, road, car, etc.)
-- `Zoom` (+/-) - Adjust preview size: Small (240px), Normal (480px), Large (960px)
-
-#### How to Use
-1. **Setup:** Requires ENet or DeepLabV3 model files in `assets/`
-2. **Connect Video Source:** Connect Webcam or Video File Loader's `Source ID` to `Source In`
-3. **Select Target Class:** Choose which semantic class to track
-4. **Map Region Properties:** Connect Area and Center outputs to synthesis parameters
-5. **Example Patches:**
-   - **Presence Detection:** Use Gate output to trigger events when person enters frame
-   - **Coverage-Based Effects:** Use Area to control reverb size or delay feedback
-   - **Center Tracking:** Use Center X/Y for spatial effects
-6. **Performance Tips:**
-   - Computationally intensive (~10 FPS on CPU)
-   - Best results with scenes that match training data (Cityscapes, etc.)
-   - Works well for large, distinct regions
-
-**Technical Details:**
-- Uses ENet (Efficient Neural Network) or DeepLabV3 segmentation models
-- Supports Cityscapes dataset classes by default
-- Runs at ~10 FPS on CPU
-- Outputs normalized region properties with colored preview overlay
 
 ---
 

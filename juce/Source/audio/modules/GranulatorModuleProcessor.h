@@ -25,6 +25,12 @@ public:
     static constexpr auto paramIdPitchMod     = "pitch_mod";
     static constexpr auto paramIdGateMod      = "gate_mod";
 
+    // Relative modulation mode parameters
+    static constexpr auto paramIdRelativeDensityMod  = "relativeDensityMod";
+    static constexpr auto paramIdRelativeSizeMod     = "relativeSizeMod";
+    static constexpr auto paramIdRelativePositionMod = "relativePositionMod";
+    static constexpr auto paramIdRelativePitchMod    = "relativePitchMod";
+
     GranulatorModuleProcessor();
     ~GranulatorModuleProcessor() override = default;
 
@@ -62,6 +68,12 @@ private:
     std::atomic<float>* pitchRandomParam  { nullptr };
     std::atomic<float>* panRandomParam    { nullptr };
     std::atomic<float>* gateParam         { nullptr };
+    
+    // Relative modulation mode parameters
+    std::atomic<float>* relativeDensityModParam  { nullptr };
+    std::atomic<float>* relativeSizeModParam     { nullptr };
+    std::atomic<float>* relativePositionModParam { nullptr };
+    std::atomic<float>* relativePitchModParam    { nullptr };
 
     // --- Grain State ---
     struct Grain
@@ -80,10 +92,31 @@ private:
     // --- Audio Buffering ---
     juce::AudioBuffer<float> sourceBuffer;
     int sourceWritePos { 0 };
-    int samplesUntilNextGrain { 0 };
+    double densityPhase { 0.0 }; // Phase accumulator for density-based grain spawning
 
     // --- Parameter Smoothing ---
     juce::SmoothedValue<float> smoothedDensity, smoothedSize, smoothedPosition, smoothedPitch, smoothedGate;
+
+    // --- CV De-stepping State (for modules that are block-constant) ---
+    float prevDensityCv { std::numeric_limits<float>::quiet_NaN() };
+    float prevSizeCv    { std::numeric_limits<float>::quiet_NaN() };
+    float prevPositionCv{ std::numeric_limits<float>::quiet_NaN() };
+    float prevPitchCv   { std::numeric_limits<float>::quiet_NaN() };
+    float prevGateCv    { std::numeric_limits<float>::quiet_NaN() };
+
+    // --- Visualization Data (thread-safe, updated from audio thread) ---
+    struct VizData
+    {
+        static constexpr int waveformPoints = 256;
+        std::array<std::atomic<float>, waveformPoints> waveformL;
+        std::array<std::atomic<float>, waveformPoints> waveformR;
+        std::atomic<float> writePosNormalized { 0.0f }; // 0-1 position in buffer
+        std::atomic<float> positionParamNormalized { 0.5f }; // Current position param (0-1)
+        std::atomic<int> activeGrainCount { 0 };
+        std::array<std::atomic<float>, 64> activeGrainPositions; // Normalized read positions (0-1)
+        std::array<std::atomic<float>, 64> activeGrainEnvelopes; // Current envelope values (0-1)
+    };
+    VizData vizData;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(GranulatorModuleProcessor)
 };

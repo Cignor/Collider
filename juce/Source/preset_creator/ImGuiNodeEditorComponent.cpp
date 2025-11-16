@@ -2370,8 +2370,6 @@ void ImGuiNodeEditorComponent::renderImGui()
         // addModuleButton("Outlet", "outlet");
         addModuleButton("Comment", "comment");
         addModuleButton("Recorder", "recorder");
-        ImGui::Separator();
-        addModuleButton("Best Practice", "best_practice");
     }
     
     } // End of Modules collapsing header
@@ -2543,6 +2541,68 @@ void ImGuiNodeEditorComponent::renderImGui()
     // Use the foreground draw list to ensure text is on top of everything
     // Position at bottom-left: canvas_p1.y is bottom edge, subtract text height plus padding
     ImGui::GetForegroundDrawList()->AddText(ImVec2(canvas_p0.x + 10, canvas_p1.y - 25), themeMgr.getMousePositionText(), posStr);
+
+    // --- Cut-by-line gesture (preview) ---
+    {
+        const bool altDown = ImGui::GetIO().KeyAlt;
+        const bool rmbPressed = ImGui::IsMouseClicked(ImGuiMouseButton_Right);
+        const bool rmbDown = ImGui::IsMouseDown(ImGuiMouseButton_Right);
+
+        // Contextual helper near cursor
+        if (ImGui::IsWindowHovered(ImGuiHoveredFlags_RootAndChildWindows))
+        {
+            ImGuiWindowFlags hintFlags = ImGuiWindowFlags_NoDecoration
+                                       | ImGuiWindowFlags_AlwaysAutoResize
+                                       | ImGuiWindowFlags_NoSavedSettings
+                                       | ImGuiWindowFlags_NoFocusOnAppearing
+                                       | ImGuiWindowFlags_NoNav
+                                       | ImGuiWindowFlags_NoInputs;
+            // If a link is hovered (probe tooltip likely shown), bias the hint to top-left
+            const bool linkLikelyHovered = (lastHoveredLinkId != -1);
+            const ImVec2 basePos = ImVec2(mouseScreenPos.x, mouseScreenPos.y);
+            const ImVec2 hintOffset = linkLikelyHovered ? ImVec2(-180.0f, -16.0f) : ImVec2(14.0f, 16.0f);
+            const ImVec2 hintPos = ImVec2(basePos.x + hintOffset.x, basePos.y + hintOffset.y);
+            if (altDown && !rmbDown && !cutModeActive)
+            {
+                ImGui::SetNextWindowPos(hintPos);
+                ImGui::Begin("##CutHintIdle", nullptr, hintFlags);
+                ImGui::TextUnformatted("Alt + Right-drag: cut cables");
+                ImGui::End();
+            }
+            else if (cutModeActive && rmbDown)
+            {
+                ImGui::SetNextWindowPos(hintPos);
+                ImGui::Begin("##CutHintActive", nullptr, hintFlags);
+                ImGui::TextUnformatted("Release to split with reroutes");
+                ImGui::End();
+            }
+            else if (ImGui::GetIO().KeyCtrl)
+            {
+                ImGui::SetNextWindowPos(hintPos);
+                ImGui::Begin("##CtrlHint", nullptr, hintFlags);
+                ImGui::TextUnformatted("Ctrl + Click link: detach\nCtrl + Drag: move cable");
+                ImGui::End();
+            }
+        }
+
+        if (!cutModeActive && altDown && rmbPressed)
+        {
+            cutModeActive = true;
+            cutStartGrid = mouseGridPos;
+            cutEndGrid = mouseGridPos;
+        }
+        if (cutModeActive && rmbDown)
+        {
+            cutEndGrid = mouseGridPos;
+            // Draw preview in screen space (foreground to guarantee visibility)
+            ImDrawList* dl = ImGui::GetForegroundDrawList();
+            ImVec2 a = ImVec2(canvas_p0.x + panning.x + cutStartGrid.x,
+                              canvas_p0.y + panning.y + cutStartGrid.y);
+            ImVec2 b = ImVec2(canvas_p0.x + panning.x + cutEndGrid.x,
+                              canvas_p0.y + panning.y + cutEndGrid.y);
+            dl->AddLine(a, b, IM_COL32(255, 200, 0, 255), 2.0f);
+        }
+    }
     // --- END OF BACKGROUND GRID AND COORDINATE DISPLAY ---
     // Node canvas bound to the underlying model if available
     // Keep ImNodes' background/panning grid visible, but colour-match to theme overrides.
@@ -2646,7 +2706,7 @@ const juce::String& type = mod.second;
             ImU32 optimalTextColor = ThemeUtils::getOptimalTextColor(actualTitleBarColor);
             ImGui::PushStyleColor(ImGuiCol_Text, ImGui::ColorConvertU32ToFloat4(optimalTextColor));
             
-            // Special handling for reroute nodes: show dynamic type in name
+            // Special handling for reroute nodes: show dynamic type only (no 'Reroute' prefix)
             if (type.equalsIgnoreCase("reroute"))
             {
                 if (auto* reroute = dynamic_cast<RerouteModuleProcessor*>(synth->getModuleForLogical(lid)))
@@ -2662,8 +2722,7 @@ const juce::String& type = mod.second;
                         case PinDataType::Video: typeName = "Video"; break;
                         default:                 typeName = "Audio"; break;
                     }
-                    juce::String displayName = "Reroute " + typeName;
-                    ImGui::TextUnformatted(displayName.toRawUTF8());
+                    ImGui::TextUnformatted(typeName.toRawUTF8());
                 }
                 else
                 {
@@ -3510,6 +3569,16 @@ if (auto* mp = synth->getModuleForLogical (lid))
             }
             pendingNodePositions.erase(it);
         }
+        else if ((int)lid == 999)
+        {
+            // BPM Monitor node (999): set default position if not in pending positions
+            ImVec2 currentPos = ImNodes::GetNodeGridSpacePos((int)lid);
+            if (currentPos.x == 0.0f && currentPos.y == 0.0f)
+            {
+                ImNodes::SetNodeGridSpacePos((int)lid, ImVec2(450.0f, 300.0f));
+                juce::Logger::writeToLog("[PositionRestore] Set default position for BPM monitor node: (450.0, 300.0)");
+            }
+        }
             // Apply pending size if queued (for Comment nodes to prevent feedback loop)
             if (auto itSize = pendingNodeSizes.find((int) lid); itSize != pendingNodeSizes.end())
             {
@@ -3817,6 +3886,16 @@ if (auto* mp = synth->getModuleForLogical (lid))
             juce::Logger::writeToLog("[PositionRestore] Applied pending position for output node 0: (" + juce::String(it->second.x) + ", " + juce::String(it->second.y) + ")");
             pendingNodePositions.erase(it);
         }
+        else
+        {
+            // Output node (0): set default position if not in pending positions
+            ImVec2 currentPos = ImNodes::GetNodeGridSpacePos(0);
+            if (currentPos.x == 0.0f && currentPos.y == 0.0f)
+            {
+                ImNodes::SetNodeGridSpacePos(0, ImVec2(1200.0f, 500.0f));
+                juce::Logger::writeToLog("[PositionRestore] Set default position for output node: (1200.0, 500.0)");
+            }
+        }
         drawnNodes.insert(0);
 
         // Use last frame's hovered node id for highlighting (queried after EndNodeEditor)
@@ -4037,6 +4116,141 @@ if (auto* mp = synth->getModuleForLogical (lid))
     // ======================================================
 
     ImNodes::EndNodeEditor();
+
+    // --- Cut-by-line gesture (finalize on release) ---
+    {
+        const bool rmbReleased = ImGui::IsMouseReleased(ImGuiMouseButton_Right);
+        if (cutModeActive && rmbReleased)
+        {
+            cutModeActive = false;
+            cutJustPerformed = true;
+
+            struct Hit { int linkId; float t; ImVec2 posGrid; LinkInfo link; };
+            std::vector<Hit> hits;
+            hits.reserve(linkIdToAttrs.size());
+
+            auto segmentIntersect = [](const ImVec2& p, const ImVec2& p2, const ImVec2& q, const ImVec2& q2, float& tOut, ImVec2& ptOut) -> bool {
+                ImVec2 r{ p2.x - p.x, p2.y - p.y };
+                ImVec2 s{ q2.x - q.x, q2.y - q.y };
+                const float rxs = r.x * s.y - r.y * s.x;
+                const float qmpx = q.x - p.x;
+                const float qmpy = q.y - p.y;
+                const float qmpxr = qmpx * r.y - qmpy * r.x;
+                if (std::abs(rxs) < 1e-6f && std::abs(qmpxr) < 1e-6f) return false; // colinear
+                if (std::abs(rxs) < 1e-6f) return false; // parallel
+                const float t = (qmpx * s.y - qmpy * s.x) / rxs;
+                const float u = (qmpx * r.y - qmpy * r.x) / rxs;
+                if (t >= 0.0f && t <= 1.0f && u >= 0.0f && u <= 1.0f)
+                {
+                    tOut = t;
+                    ptOut = ImVec2(p.x + t * r.x, p.y + t * r.y);
+                    return true;
+                }
+                return false;
+            };
+
+            auto minf = [](float x, float y){ return x < y ? x : y; };
+            auto maxf = [](float x, float y){ return x > y ? x : y; };
+
+            // Build hits
+            for (const auto& kv : linkIdToAttrs)
+            {
+                const int linkId = kv.first;
+                const int srcAttr = kv.second.first;
+                const int dstAttr = kv.second.second;
+                if (srcAttr == 0 || dstAttr == 0) continue;
+
+                LinkInfo li;
+                li.linkId = linkId;
+                li.srcPin = decodePinId(srcAttr);
+                li.dstPin = decodePinId(dstAttr);
+                li.isMod = li.srcPin.isMod || li.dstPin.isMod;
+
+                // Prefer actual pin attribute positions if available; fallback to node centers
+                ImVec2 a, b;
+                auto attrToGrid = [this](int attr)->ImVec2 {
+                    auto it = attrPositions.find(attr);
+                    if (it != attrPositions.end())
+                    {
+                        // attrPositions stores screen-space; convert to grid-space
+                        const ImVec2 scr = it->second;
+                        return ImVec2(scr.x - lastCanvasP0.x - lastEditorPanning.x,
+                                      scr.y - lastCanvasP0.y - lastEditorPanning.y);
+                    }
+                    return ImVec2(FLT_MAX, FLT_MAX);
+                };
+                ImVec2 aGrid = attrToGrid(srcAttr);
+                ImVec2 bGrid = attrToGrid(dstAttr);
+                if (aGrid.x != FLT_MAX && bGrid.x != FLT_MAX)
+                {
+                    a = aGrid;
+                    b = bGrid;
+                }
+                else
+                {
+                    a = ImNodes::GetNodeGridSpacePos((int)li.srcPin.logicalId);
+                    b = ImNodes::GetNodeGridSpacePos((int)li.dstPin.logicalId);
+                }
+                ImVec2 c = cutStartGrid;
+                ImVec2 d = cutEndGrid;
+
+                ImVec2 abMin{ minf(a.x,b.x), minf(a.y,b.y) };
+                ImVec2 abMax{ maxf(a.x,b.x), maxf(a.y,b.y) };
+                ImVec2 cdMin{ minf(c.x,d.x), minf(c.y,d.y) };
+                ImVec2 cdMax{ maxf(c.x,d.x), maxf(c.y,d.y) };
+                if (abMax.x < cdMin.x || cdMax.x < abMin.x || abMax.y < cdMin.y || cdMax.y < abMin.y)
+                    continue;
+
+                float t = 0.0f; ImVec2 pt{};
+                if (segmentIntersect(a, b, c, d, t, pt))
+                {
+                    if (t <= cutEndpointTEpsilon || t >= (1.0f - cutEndpointTEpsilon))
+                        continue;
+                    hits.push_back(Hit{ linkId, t, pt, li });
+                }
+            }
+
+            // Merge per-link
+            std::sort(hits.begin(), hits.end(), [](const Hit& x, const Hit& y){
+                if (x.linkId != y.linkId) return x.linkId < y.linkId;
+                return x.t < y.t;
+            });
+            std::vector<Hit> merged;
+            for (size_t i = 0; i < hits.size(); ++i)
+            {
+                if (merged.empty()) { merged.push_back(hits[i]); continue; }
+                const Hit& prev = merged.back();
+                if (prev.linkId == hits[i].linkId)
+                {
+                    const float dx = hits[i].posGrid.x - prev.posGrid.x;
+                    const float dy = hits[i].posGrid.y - prev.posGrid.y;
+                    const float distSq = dx*dx + dy*dy;
+                    if (distSq < (cutMergeEpsilonPx * cutMergeEpsilonPx))
+                        continue;
+                }
+                merged.push_back(hits[i]);
+            }
+
+            if (!merged.empty())
+            {
+                pushSnapshot();
+                const ImVec2 dir = ImVec2(cutEndGrid.x - cutStartGrid.x, cutEndGrid.y - cutStartGrid.y);
+                float len = std::sqrt(dir.x*dir.x + dir.y*dir.y);
+                ImVec2 n = (len > 1e-6f) ? ImVec2(dir.x/len, dir.y/len) : ImVec2(1.0f, 0.0f);
+                float stagger = 0.0f;
+                for (const auto& h : merged)
+                {
+                    // Place by cursor intersection: convert grid -> screen for positioning API
+                    ImVec2 gridPos = ImVec2(h.posGrid.x + n.x * 12.0f + stagger, h.posGrid.y + n.y * 12.0f + stagger);
+                    ImVec2 screenPos = ImVec2(lastCanvasP0.x + lastEditorPanning.x + gridPos.x,
+                                              lastCanvasP0.y + lastEditorPanning.y + gridPos.y);
+                    insertNodeOnLink("reroute", h.link, screenPos);
+                    stagger += 6.0f;
+                }
+                graphNeedsRebuild = true;
+            }
+        }
+    }
 #if JUCE_DEBUG
     if (gImNodesNodeDepth != 0 || gImNodesInputDepth != 0 || gImNodesOutputDepth != 0)
     {
@@ -4668,10 +4882,15 @@ if (auto* mp = synth->getModuleForLogical (lid))
             && ! ImGui::IsAnyItemHovered()
             && !anyLinkHovered
             && !ImGui::IsPopupOpen("InsertNodeOnLinkPopup")
-            && linkToInsertOn.linkId == -1) // avoid conflict with insert-on-link popup
+            && linkToInsertOn.linkId == -1
+            && !ImGui::GetIO().KeyAlt
+            && !cutJustPerformed) // suppress when cut gesture used
         {
                 ImGui::OpenPopup("AddModulePopup");
         }
+        // Reset suppression flag at end of popup decision
+        if (!ImGui::IsMouseDown(ImGuiMouseButton_Right))
+            cutJustPerformed = false;
         // --- REVISED AND IMPROVED "QUICK ADD" POPUP ---
         if (ImGui::BeginPopup("AddModulePopup"))
         {
@@ -4909,8 +5128,6 @@ if (auto* mp = synth->getModuleForLogical (lid))
                     // if (ImGui::MenuItem("Outlet")) addAtMouse("outlet");
                     if (ImGui::MenuItem("Comment")) addAtMouse("comment");
                     if (ImGui::MenuItem("Recorder")) addAtMouse("recorder");
-                    ImGui::Separator();
-                    if (ImGui::MenuItem("Best Practice")) addAtMouse("best_practice");
                     ImGui::EndMenu();
                 }
             }
@@ -5934,6 +6151,25 @@ void ImGuiNodeEditorComponent::applyUiValueTreeNow (const juce::ValueTree& uiSta
         }
     }
     
+    // Set default positions for output node and BPM monitor node if they weren't loaded from preset
+    // Output node (ID 0): right of center
+    auto outputIt = pendingNodePositions.find(0);
+    if (outputIt == pendingNodePositions.end())
+    {
+        // Position output node on right side but closer to center for better first-time UX
+        pendingNodePositions[0] = ImVec2(1200.0f, 500.0f);
+        juce::Logger::writeToLog("[UI_RESTORE] Set default position for output node: (1200.0, 500.0)");
+    }
+    
+    // BPM Monitor node (ID 999): left of center
+    auto bpmMonitorIt = pendingNodePositions.find(999);
+    if (bpmMonitorIt == pendingNodePositions.end())
+    {
+        // Position BPM monitor node on left side, higher up to match screenshot layout
+        pendingNodePositions[999] = ImVec2(450.0f, 300.0f);
+        juce::Logger::writeToLog("[UI_RESTORE] Set default position for BPM monitor node: (450.0, 300.0)");
+    }
+    
     // Muting/unmuting modifies graph connections, so we must tell the
     // synth to rebuild its processing order.
     graphNeedsRebuild = true;
@@ -6911,15 +7147,46 @@ void ImGuiNodeEditorComponent::handleConnectSelectedToTrackMixer()
     }
     ImVec2 centerPos = ImVec2(totalX / numSelectedNodes, totalY / numSelectedNodes);
     
-    // 3. Create the Value node and set its value to the number of selected nodes.
+    // 3. Compute the TOTAL number of Audio outputs across ALL selected nodes.
+    //    This defines how many mixer tracks we need.
+    struct NodeAudioOut
+    {
+        juce::uint32 logicalId;
+        int numAudioOuts;
+    };
+    std::vector<NodeAudioOut> nodesWithAudio;
+    nodesWithAudio.reserve(selectedNodeLids.size());
+    
+    int totalAudioOutputs = 0;
+    for (int lid : selectedNodeLids)
+    {
+        if (auto* mp = synth->getModuleForLogical((juce::uint32) lid))
+        {
+            // AudioProcessor::getTotalNumOutputChannels() returns AUDIO channel count
+            const int audioCh = mp->getTotalNumOutputChannels();
+            if (audioCh > 0)
+            {
+                nodesWithAudio.push_back({ (juce::uint32) lid, audioCh });
+                totalAudioOutputs += audioCh;
+            }
+        }
+    }
+    
+    if (totalAudioOutputs <= 0)
+    {
+        juce::Logger::writeToLog("[AutoConnect] No audio outputs found on selected nodes.");
+        return;
+    }
+
+    // 4. Create the Value node and set it to the TOTAL number of audio outputs (tracks).
     auto valueNodeId = synth->addModule("value");
     auto valueLid = synth->getLogicalIdForNode(valueNodeId);
     if (auto* valueProc = dynamic_cast<ValueModuleProcessor*>(synth->getModuleForLogical(valueLid)))
     {
         if (auto* p = dynamic_cast<juce::AudioParameterFloat*>(valueProc->getAPVTS().getParameter("value")))
         {
-            *p = (float)numSelectedNodes;
-            juce::Logger::writeToLog("[AutoConnect] Created Value node " + juce::String(valueLid) + " and set its value to " + juce::String(numSelectedNodes));
+            *p = (float) totalAudioOutputs;
+            juce::Logger::writeToLog("[AutoConnect] Created Value node " + juce::String(valueLid) + " and set its value to total audio outputs = " + juce::String(totalAudioOutputs));
         }
     }
     // Position it slightly to the right of the center of the selection.
@@ -6932,28 +7199,48 @@ void ImGuiNodeEditorComponent::handleConnectSelectedToTrackMixer()
     pendingNodePositions[(int)mixerLid] = ImVec2(maxX + 800.0f, centerPos.y);
     juce::Logger::writeToLog("[AutoConnect] Created Track Mixer with logical ID " + juce::String(mixerLid));
 
-    // 5. Connect the Value node to the Track Mixer's "Num Tracks Mod" input.
+    // 6. Connect the Value node to the Track Mixer's "Num Tracks Mod" input.
     // The Value module's "Raw" output is channel 0 (provides the exact value entered by the user).
     // The Track Mixer's "Num Tracks Mod" is on Bus 1, Channel 0, which is absolute channel 64.
     synth->connect(valueNodeId, 0, mixerNodeId, TrackMixerModuleProcessor::MAX_TRACKS);
     juce::Logger::writeToLog("[AutoConnect] Connected Value node 'Raw' output to Track Mixer's Num Tracks Mod input.");
 
-    // 6. Connect the primary audio output of each selected node to a unique input on the Track Mixer.
+    // 7. Connect ALL audio outputs to sequential mixer inputs in a stable order.
+    //    Maintain selection order, and within each node, preserve channel order 0..N-1.
     int mixerInputChannel = 0;
-    for (int lid : selectedNodeLids)
+    for (const auto& entry : nodesWithAudio)
     {
+        auto sourceNodeId = synth->getNodeIdForLogical(entry.logicalId);
+        for (int ch = 0; ch < entry.numAudioOuts; ++ch)
+        {
+            if (mixerInputChannel >= TrackMixerModuleProcessor::MAX_TRACKS)
+            {
+                juce::Logger::writeToLog("[AutoConnect] Reached mixer max tracks while wiring; remaining outputs skipped.");
+                break;
+            }
+            // Skip if this mixer input is already connected (idempotency)
+            bool inputAlreadyConnected = false;
+            for (const auto& c : synth->getConnectionsInfo())
+            {
+                if (c.dstLogicalId == (juce::uint32) mixerLid && c.dstChan == mixerInputChannel)
+                {
+                    inputAlreadyConnected = true;
+                    break;
+                }
+            }
+            if (!inputAlreadyConnected)
+            {
+                synth->connect(sourceNodeId, ch, mixerNodeId, mixerInputChannel);
+                juce::Logger::writeToLog("[AutoConnect] Connected node " + juce::String((int)entry.logicalId) +
+                                         " (Out " + juce::String(ch) + ") -> Mixer In " + juce::String(mixerInputChannel + 1));
+            }
+            mixerInputChannel++;
+            if (mixerInputChannel >= TrackMixerModuleProcessor::MAX_TRACKS) break;
+        }
         if (mixerInputChannel >= TrackMixerModuleProcessor::MAX_TRACKS) break;
-
-        auto sourceNodeId = synth->getNodeIdForLogical((juce::uint32)lid);
-        
-        // We will connect the first audio output (channel 0) of the source to the next available mixer input.
-        synth->connect(sourceNodeId, 0, mixerNodeId, mixerInputChannel);
-        juce::Logger::writeToLog("[AutoConnect] Connected node " + juce::String(lid) + " (Out 0) to Track Mixer (In " + juce::String(mixerInputChannel + 1) + ")");
-        
-        mixerInputChannel++;
     }
 
-    // 7. Flag the graph for a rebuild to apply all changes.
+    // 8. Flag the graph for a rebuild to apply all changes.
     graphNeedsRebuild = true;
     juce::Logger::writeToLog("--- [Connect to Mixer] Routine complete. ---");
 }
@@ -9995,7 +10282,7 @@ ImGuiNodeEditorComponent::ModuleCategory ImGuiNodeEditorComponent::getModuleCate
     if (lower.contains("meta") || lower.contains("inlet") || 
         lower.contains("outlet") || lower.contains("comment") ||
         lower.contains("recorder") || lower.contains("vst_host") ||
-        lower.contains("best_practice") || lower == "bpm_monitor" || lower.contains("bpm monitor"))
+        lower == "bpm_monitor" || lower.contains("bpm monitor"))
         return ModuleCategory::Sys;
     
     // --- 12. PLUGINS (Teal) ---
@@ -10115,7 +10402,6 @@ std::map<juce::String, std::pair<const char*, const char*>> ImGuiNodeEditorCompo
         {"Clock Divider", {"clock_divider", "Clock division and multiplication"}},
         {"Sequential Switch", {"sequential_switch", "Sequential signal router"}},
         {"Comment", {"comment", "Text comment box"}},
-        {"Best Practice", {"best_practice", "Best practice node template"}},
         {"Snapshot Sequencer", {"snapshot_sequencer", "Snapshot sequencer for parameter automation"}},
         {"Timeline", {"timeline", "Transport-synchronized automation recorder for CV, Gate, Trigger, and Raw signals"}},
         {"BPM Monitor", {"bpm_monitor", "Hybrid rhythm detection and BPM reporting from sequencers and audio inputs"}},

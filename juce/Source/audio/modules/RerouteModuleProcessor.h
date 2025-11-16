@@ -32,6 +32,7 @@ public:
 
 #if defined(PRESET_CREATOR_UI)
     void drawIoPins(const NodePinHelpers& helpers) override;
+    ImVec2 getCustomNodeSize() const override { return ImVec2(95.0f, 0.0f); }
 #endif
 
 private:

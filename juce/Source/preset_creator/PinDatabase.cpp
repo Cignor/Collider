@@ -23,7 +23,6 @@ void populateModuleDescriptions()
     descriptions["midi_jog_wheel"]      = "A single MIDI-learnable jog wheel control for expressive modulation.";
     descriptions["value"]               = "Outputs a constant, adjustable numerical value.";
     descriptions["sample_loader"]       = "Loads and plays audio samples with pitch/time control.";
-    descriptions["best_practice"]       = "A template and example node demonstrating best practices.";
     // TTS Family
     descriptions["tts_performer"]       = "Advanced Text-to-Speech engine with word-level sequencing.";
     descriptions["vocal_tract_filter"]  = "A formant filter that simulates human vowel sounds.";
@@ -307,7 +306,7 @@ void populatePinDatabase()
     );
     db["bit_crusher"] = ModulePinInfo(
         NodeWidth::Small,
-        { AudioPin("In L", 0, PinDataType::Audio), AudioPin("In R", 1, PinDataType::Audio), AudioPin("Bit Depth Mod", 2, PinDataType::CV), AudioPin("Sample Rate Mod", 3, PinDataType::CV), AudioPin("Anti-Alias Mod", 4, PinDataType::Gate), AudioPin("Quant Mode Mod", 5, PinDataType::CV) },
+        { AudioPin("In L", 0, PinDataType::Audio), AudioPin("In R", 1, PinDataType::Audio), AudioPin("Bit Depth Mod", 2, PinDataType::CV), AudioPin("Sample Rate Mod", 3, PinDataType::CV), AudioPin("Mix Mod", 4, PinDataType::CV), AudioPin("Anti-Alias Mod", 5, PinDataType::Gate), AudioPin("Quant Mode Mod", 6, PinDataType::CV) },
         { AudioPin("Out L", 0, PinDataType::Audio), AudioPin("Out R", 1, PinDataType::Audio) },
         {}
     );
@@ -469,12 +468,6 @@ db["random"] = ModulePinInfo(
         { AudioPin("Audio In", 0, PinDataType::Audio) },
         { AudioPin("Audio Out", 0, PinDataType::Audio) },
         { ModPin("Vowel", "vowelShape", PinDataType::CV), ModPin("Formant", "formantShift", PinDataType::CV), ModPin("Instability", "instability", PinDataType::CV), ModPin("Gain", "formantGain", PinDataType::CV) }
-    );
-    db["best_practice"] = ModulePinInfo(
-        NodeWidth::Medium,
-        { AudioPin("In L", 0, PinDataType::Audio), AudioPin("In R", 1, PinDataType::Audio), AudioPin("Freq Mod", 2, PinDataType::CV), AudioPin("Wave Mod", 3, PinDataType::CV), AudioPin("Drive Mod", 4, PinDataType::CV) },
-        { AudioPin("Out L", 0, PinDataType::Audio), AudioPin("Out R", 1, PinDataType::Audio) },
-        { ModPin("Frequency", "frequency_mod", PinDataType::CV), ModPin("Waveform", "waveform_mod", PinDataType::CV), ModPin("Drive", "drive_mod", PinDataType::CV) }
     );
     db["shaping_oscillator"] = ModulePinInfo(
         NodeWidth::Medium,
