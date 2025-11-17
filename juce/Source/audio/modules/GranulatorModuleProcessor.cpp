@@ -406,19 +406,6 @@ void GranulatorModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
                 vizData.activeGrainEnvelopes[g].store(0.0f);
             }
         }
-
-        // Lightweight state diagnostics once per block
-        if (i == 0)
-        {
-            int activeCount = 0;
-            for (const auto& g : grainPool) if (g.isActive) ++activeCount;
-            juce::Logger::writeToLog("[Granulator][STATE] gen=" + juce::String((int)isGenerating) +
-                                     " dens=" + juce::String(currentDensity, 3) +
-                                     " sizeMs=" + juce::String(currentSize, 3) +
-                                     " pitch=" + juce::String(currentPitch, 3) +
-                                     " phase=" + juce::String(densityPhase, 3) +
-                                     " activeGrains=" + juce::String(activeCount));
-        }
     }
 
     // Update previous block CV anchors for de-stepping
@@ -651,7 +638,6 @@ void GranulatorModuleProcessor::drawParametersInNode(float itemWidth, const std:
     ImGui::Text("%.0f%%", grainMeter * 100.0f);
     
     ImGui::Spacing();
-    ImGui::Separator();
     ImGui::Spacing();
 
     // === PARAMETERS ===

@@ -147,6 +147,13 @@ private:
     std::atomic<float>* rangeEndModParam { nullptr };
     double readPosition { 0.0 };
     
+    // --- Relative Modulation Parameters ---
+    std::atomic<float>* relativeSpeedModParam { nullptr };
+    std::atomic<float>* relativePitchModParam { nullptr };
+    std::atomic<float>* relativeGateModParam { nullptr };
+    std::atomic<float>* relativeRangeStartModParam { nullptr };
+    std::atomic<float>* relativeRangeEndModParam { nullptr };
+    
     // --- Parameter References ---
     // Parameters are accessed directly via apvts.getRawParameterValue()
     

@@ -1,4 +1,5 @@
 #include "ReverbModuleProcessor.h"
+#include <cmath> // For std::exp, std::sqrt, std::pow
 
 ReverbModuleProcessor::ReverbModuleProcessor()
     : ModuleProcessor (BusesProperties()
@@ -16,6 +17,14 @@ ReverbModuleProcessor::ReverbModuleProcessor()
     // Initialize output value tracking for tooltips
     lastOutputValues.push_back(std::make_unique<std::atomic<float>>(0.0f)); // For Out L
     lastOutputValues.push_back(std::make_unique<std::atomic<float>>(0.0f)); // For Out R
+    
+    // Initialize visualization data
+    for (auto& w : vizData.inputWaveformL) w.store(0.0f);
+    for (auto& w : vizData.inputWaveformR) w.store(0.0f);
+    for (auto& w : vizData.outputWaveformL) w.store(0.0f);
+    for (auto& w : vizData.outputWaveformR) w.store(0.0f);
+    for (auto& d : vizData.decayCurve) d.store(0.0f);
+    for (auto& s : vizData.frequencySpectrum) s.store(0.0f);
 }
 
 juce::AudioProcessorValueTreeState::ParameterLayout ReverbModuleProcessor::createParameterLayout()
@@ -40,6 +49,16 @@ void ReverbModuleProcessor::prepareToPlay (double sampleRate, int samplesPerBloc
     
     // Reset reverb state
     reverb.reset();
+    
+    // Initialize visualization buffers
+    vizInputBuffer.setSize(2, vizBufferSize);
+    vizOutputBuffer.setSize(2, vizBufferSize);
+    vizDryBuffer.setSize(2, vizBufferSize);
+    dryBlockTemp.setSize(2, samplesPerBlock);
+    vizInputBuffer.clear();
+    vizOutputBuffer.clear();
+    vizDryBuffer.clear();
+    vizWritePos = 0;
 }
 
 void ReverbModuleProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midi)
@@ -164,6 +183,16 @@ void ReverbModuleProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce
     damp = juce::jlimit(0.0f, 1.0f, damp);
     mix = juce::jlimit(0.0f, 1.0f, mix);
     
+    // Store dry signal for visualization (before reverb processing)
+    if (dryBlockTemp.getNumSamples() < numSamples)
+        dryBlockTemp.setSize(2, numSamples, false, false, true);
+    dryBlockTemp.clear();
+    const int dryChannelsToCopy = juce::jmin(2, numOutputChannels);
+    for (int ch = 0; ch < dryChannelsToCopy; ++ch)
+        dryBlockTemp.copyFrom(ch, 0, outBus, ch, 0, numSamples);
+    if (dryChannelsToCopy == 1 && dryBlockTemp.getNumChannels() > 1)
+        dryBlockTemp.copyFrom(1, 0, dryBlockTemp, 0, 0, numSamples);
+    
     juce::dsp::Reverb::Parameters par;
     par.roomSize = size;
     par.damping  = damp;
@@ -171,17 +200,77 @@ void ReverbModuleProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce
     par.dryLevel = 1.0f - par.wetLevel;
     reverb.setParameters (par);
     
-    // Debug: Print parameter values occasionally
-    static int debugCounter = 0;
-    if (++debugCounter > 44100) // Print every second at 44.1kHz
-    {
-        debugCounter = 0;
-        juce::Logger::writeToLog("Reverb - Size: " + juce::String(size) + ", Damp: " + juce::String(damp) + ", Mix: " + juce::String(mix));
-    }
     // Now, process the output buffer, which we have just filled with the input signal.
     juce::dsp::AudioBlock<float> block (outBus);
     juce::dsp::ProcessContextReplacing<float> ctx (block);
     reverb.process (ctx);
+    
+    // Record waveforms to visualization buffers (circular)
+    for (int i = 0; i < numSamples; ++i)
+    {
+        // Record input (dry signal before reverb)
+        vizInputBuffer.setSample(0, vizWritePos, dryBlockTemp.getSample(0, i));
+        // Record output (after reverb)
+        vizOutputBuffer.setSample(0, vizWritePos, outBus.getSample(0, i));
+        vizDryBuffer.setSample(0, vizWritePos, dryBlockTemp.getSample(0, i));
+        
+        if (vizInputBuffer.getNumChannels() > 1 && vizOutputBuffer.getNumChannels() > 1)
+        {
+            const float inR = numInputChannels > 1 ? dryBlockTemp.getSample(1, i) : dryBlockTemp.getSample(0, i);
+            vizInputBuffer.setSample(1, vizWritePos, inR);
+            vizOutputBuffer.setSample(1, vizWritePos, outBus.getSample(1, i));
+            vizDryBuffer.setSample(1, vizWritePos, dryBlockTemp.getSample(1, i));
+        }
+        
+        vizWritePos = (vizWritePos + 1) % vizBufferSize;
+        
+        // Update visualization data (throttled - every 64 samples, like BitCrusher/Delay)
+        if ((i & 0x3F) == 0)
+        {
+            // Update current parameter state
+            vizData.currentSize.store(size);
+            vizData.currentDamp.store(damp);
+            vizData.currentMix.store(mix);
+            
+            // Calculate reverb activity (RMS of output - input difference)
+            float activitySum = 0.0f;
+            int activityCount = 0;
+            const int lookback = juce::jmin(256, vizBufferSize);
+            for (int j = 0; j < lookback; ++j)
+            {
+                int idx = (vizWritePos - lookback + j + vizBufferSize) % vizBufferSize;
+                const float diff = std::abs(vizOutputBuffer.getSample(0, idx) - vizInputBuffer.getSample(0, idx));
+                activitySum += diff * diff;
+                activityCount++;
+            }
+            const float rms = activityCount > 0 ? std::sqrt(activitySum / (float)activityCount) : 0.0f;
+            vizData.reverbActivity.store(rms);
+            
+            // Update waveform snapshots (downsampled from circular buffer)
+            const int step = vizBufferSize / VizData::waveformPoints;
+            for (int j = 0; j < VizData::waveformPoints; ++j)
+            {
+                int idx = (vizWritePos - (VizData::waveformPoints - j) * step + vizBufferSize) % vizBufferSize;
+                vizData.inputWaveformL[j].store(vizInputBuffer.getSample(0, idx));
+                vizData.outputWaveformL[j].store(vizOutputBuffer.getSample(0, idx));
+                if (vizInputBuffer.getNumChannels() > 1 && vizOutputBuffer.getNumChannels() > 1)
+                {
+                    vizData.inputWaveformR[j].store(vizInputBuffer.getSample(1, idx));
+                    vizData.outputWaveformR[j].store(vizOutputBuffer.getSample(1, idx));
+                }
+            }
+            
+            // Calculate decay curve based on size and damp
+            const float rt60 = size * 3.0f + 0.5f;  // Decay time in seconds (0.5-3.5s)
+            const float dampFactor = 1.0f - (damp * 0.7f);  // Damping affects decay rate
+            for (int j = 0; j < VizData::decayCurvePoints; ++j)
+            {
+                const float t = (float)j / (float)(VizData::decayCurvePoints - 1);  // 0 to 1
+                const float decay = std::exp(-t * 5.0f / (rt60 * dampFactor));
+                vizData.decayCurve[j].store(juce::jlimit(0.0f, 1.0f, decay));
+            }
+        }
+    }
     
     // Update output values for tooltips
     if (lastOutputValues.size() >= 2)

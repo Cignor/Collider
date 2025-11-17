@@ -1452,7 +1452,6 @@ void PhysicsModuleProcessor::drawParametersInNode(float itemWidth, const std::fu
     ImGui::PopStyleColor(3);
     
     ImGui::Spacing();
-    ImGui::Separator();
     ImGui::Spacing();
 
     // --- Get the drawing canvas area ---

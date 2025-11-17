@@ -30,6 +30,17 @@ void GateModuleProcessor::prepareToPlay(double newSampleRate, int /*samplesPerBl
 {
     currentSampleRate = newSampleRate;
     envelope = 0.0f;
+
+#if defined(PRESET_CREATOR_UI)
+    vizData.gateAmount.store(0.0f);
+    vizData.currentThresholdDb.store(thresholdParam ? thresholdParam->load() : -40.0f);
+    vizData.currentAttackMs.store(attackParam ? attackParam->load() : 1.0f);
+    vizData.currentReleaseMs.store(releaseParam ? releaseParam->load() : 50.0f);
+    vizData.writeIndex.store(0);
+    for (auto& v : vizData.inputHistory) v.store(-80.0f);
+    for (auto& v : vizData.envelopeHistory) v.store(-80.0f);
+    for (auto& v : vizData.gateHistory) v.store(0.0f);
+#endif
 }
 
 void GateModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midi)
@@ -73,20 +84,27 @@ void GateModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::M
     const int numChannels = juce::jmin(numInputChannels, numOutputChannels);
 
     // Get parameters
-    const float thresholdLinear = juce::Decibels::decibelsToGain(thresholdParam->load());
+    const float thresholdDb = thresholdParam != nullptr ? thresholdParam->load() : -40.0f;
+    const float thresholdLinear = juce::Decibels::decibelsToGain(thresholdDb);
     // Convert attack/release times from ms to a per-sample coefficient
-    const float attackCoeff = 1.0f - std::exp(-1.0f / (attackParam->load() * 0.001f * (float)currentSampleRate));
-    const float releaseCoeff = 1.0f - std::exp(-1.0f / (releaseParam->load() * 0.001f * (float)currentSampleRate));
+    const float attackMs = juce::jmax(0.1f, attackParam != nullptr ? attackParam->load() : 1.0f);
+    const float releaseMs = juce::jmax(1.0f, releaseParam != nullptr ? releaseParam->load() : 50.0f);
+    const float attackCoeff = 1.0f - std::exp(-1.0f / (attackMs * 0.001f * (float)currentSampleRate));
+    const float releaseCoeff = 1.0f - std::exp(-1.0f / (releaseMs * 0.001f * (float)currentSampleRate));
 
     auto* leftData = outBus.getWritePointer(0);
     auto* rightData = numChannels > 1 ? outBus.getWritePointer(1) : nullptr;
 
+    float peakInput = 0.0f;
+    float peakEnvelope = 0.0f;
     for (int i = 0; i < numSamples; ++i)
     {
         // Get the magnitude of the input signal (mono or stereo)
         float magnitude = std::abs(leftData[i]);
         if (rightData)
             magnitude = std::max(magnitude, std::abs(rightData[i]));
+
+        peakInput = std::max(peakInput, magnitude);
 
         // Determine if the gate should be open or closed
         float target = (magnitude >= thresholdLinear) ? 1.0f : 0.0f;
@@ -96,12 +114,29 @@ void GateModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::M
             envelope += (target - envelope) * attackCoeff;
         else
             envelope += (target - envelope) * releaseCoeff;
+
+        peakEnvelope = std::max(peakEnvelope, envelope);
         
         // Apply the envelope as a gain to the signal
         leftData[i] *= envelope;
         if (rightData)
             rightData[i] *= envelope;
     }
+
+#if defined(PRESET_CREATOR_UI)
+    const float inputDb = juce::Decibels::gainToDecibels(juce::jmax(peakInput, 1.0e-6f), -80.0f);
+    const float envelopeDb = juce::Decibels::gainToDecibels(juce::jmax(peakEnvelope, 1.0e-6f), -80.0f);
+    int writeIdx = vizData.writeIndex.load();
+    vizData.inputHistory[writeIdx].store(inputDb);
+    vizData.envelopeHistory[writeIdx].store(envelopeDb);
+    vizData.gateHistory[writeIdx].store(peakEnvelope);
+    writeIdx = (writeIdx + 1) % VizData::historyPoints;
+    vizData.writeIndex.store(writeIdx);
+    vizData.currentThresholdDb.store(thresholdDb);
+    vizData.currentAttackMs.store(attackMs);
+    vizData.currentReleaseMs.store(releaseMs);
+    vizData.gateAmount.store(envelope);
+#endif
 
     // Update output values for tooltips
     if (lastOutputValues.size() >= 2)
@@ -135,7 +170,103 @@ juce::String GateModuleProcessor::getAudioOutputLabel(int channel) const
 void GateModuleProcessor::drawParametersInNode(float itemWidth, const std::function<bool(const juce::String&)>&, const std::function<void()>& onModificationEnded)
 {
     auto& ap = getAPVTS();
+    ImGui::PushID(this);
     ImGui::PushItemWidth(itemWidth);
+
+    const auto& theme = ThemeManager::getInstance().getCurrentTheme();
+    auto* drawList = ImGui::GetWindowDrawList();
+
+    ImGui::Spacing();
+    ImGui::Text("Gate Visualizer");
+    ImGui::Spacing();
+
+    const ImU32 bgColor = ThemeManager::getInstance().getCanvasBackground();
+    const ImU32 inputColor = ImGui::ColorConvertFloat4ToU32(theme.modulation.frequency);
+    const ImU32 envelopeColor = ImGui::ColorConvertFloat4ToU32(theme.modulation.timbre);
+    const ImU32 gateColor = ImGui::ColorConvertFloat4ToU32(theme.accent);
+
+    const ImVec2 origin = ImGui::GetCursorScreenPos();
+    const float vizHeight = 90.0f;
+    const ImVec2 rectMax = ImVec2(origin.x + itemWidth, origin.y + vizHeight);
+    drawList->AddRectFilled(origin, rectMax, bgColor, 4.0f);
+    ImGui::PushClipRect(origin, rectMax, true);
+
+    float inputHistory[VizData::historyPoints];
+    float envelopeHistory[VizData::historyPoints];
+    float gateHistory[VizData::historyPoints];
+    const int writeIdx = vizData.writeIndex.load();
+    for (int i = 0; i < VizData::historyPoints; ++i)
+    {
+        const int idx = (writeIdx + i) % VizData::historyPoints;
+        inputHistory[i] = vizData.inputHistory[idx].load();
+        envelopeHistory[i] = vizData.envelopeHistory[idx].load();
+        gateHistory[i] = vizData.gateHistory[idx].load();
+    }
+
+    auto mapDbToNorm = [](float db)
+    {
+        return juce::jlimit(0.0f, 1.0f, (db + 80.0f) / 80.0f);
+    };
+
+    const float stepX = itemWidth / (float)(VizData::historyPoints - 1);
+    float prevX = origin.x;
+    float prevY = rectMax.y;
+    for (int i = 0; i < VizData::historyPoints; ++i)
+    {
+        const float norm = mapDbToNorm(inputHistory[i]);
+        const float y = rectMax.y - norm * (vizHeight - 8.0f) - 4.0f;
+        const float x = origin.x + i * stepX;
+        if (i > 0)
+            drawList->AddLine(ImVec2(prevX, prevY), ImVec2(x, y), inputColor, 2.0f);
+        prevX = x;
+        prevY = y;
+    }
+
+    prevX = origin.x;
+    prevY = rectMax.y;
+    for (int i = 0; i < VizData::historyPoints; ++i)
+    {
+        const float norm = mapDbToNorm(envelopeHistory[i]);
+        const float y = rectMax.y - norm * (vizHeight - 8.0f) - 4.0f;
+        const float x = origin.x + i * stepX;
+        if (i > 0)
+            drawList->AddLine(ImVec2(prevX, prevY), ImVec2(x, y), envelopeColor, 2.2f);
+        prevX = x;
+        prevY = y;
+    }
+
+    for (int i = 0; i < VizData::historyPoints; ++i)
+    {
+        const float state = gateHistory[i];
+        if (state > 0.01f)
+        {
+            const float x = origin.x + i * stepX;
+            const float yTop = origin.y + 4.0f;
+            const float yBottom = origin.y + 12.0f + (1.0f - state) * 10.0f;
+            drawList->AddLine(ImVec2(x, yTop), ImVec2(x, yBottom), gateColor, 1.2f);
+        }
+    }
+
+    const float thresholdDb = vizData.currentThresholdDb.load();
+    const float thresholdNorm = mapDbToNorm(thresholdDb);
+    const float thresholdY = rectMax.y - thresholdNorm * (vizHeight - 8.0f) - 4.0f;
+    drawList->AddLine(ImVec2(origin.x, thresholdY), ImVec2(rectMax.x, thresholdY), IM_COL32(255, 255, 255, 120), 1.5f);
+    const juce::String threshText = juce::String(thresholdDb, 1) + " dB";
+    drawList->AddText(ImVec2(origin.x + 6.0f, thresholdY - ImGui::GetTextLineHeight()), IM_COL32(255, 255, 255, 160), threshText.toRawUTF8());
+
+    ImGui::PopClipRect();
+    ImGui::SetCursorScreenPos(ImVec2(origin.x, rectMax.y));
+    ImGui::Dummy(ImVec2(itemWidth, 0));
+
+    ImGui::Spacing();
+    ImGui::Text("Gate State");
+    const float gateAmt = vizData.gateAmount.load();
+    const char* gateLabel = gateAmt > 0.5f ? "OPEN" : (gateAmt > 0.1f ? "TRANSIENT" : "CLOSED");
+    ImGui::PushStyleColor(ImGuiCol_PlotHistogram, gateColor);
+    ImGui::ProgressBar(gateAmt, ImVec2(itemWidth * 0.6f, 0), gateLabel);
+    ImGui::PopStyleColor();
+
+    ImGui::Spacing();
 
     auto drawSlider = [&](const char* label, const juce::String& paramId, float min, float max, const char* format) {
         float value = ap.getRawParameterValue(paramId)->load();
@@ -150,6 +281,7 @@ void GateModuleProcessor::drawParametersInNode(float itemWidth, const std::funct
     drawSlider("Release", paramIdRelease, 5.0f, 1000.0f, "%.0f ms");
 
     ImGui::PopItemWidth();
+    ImGui::PopID();
 }
 
 void GateModuleProcessor::drawIoPins(const NodePinHelpers& helpers)

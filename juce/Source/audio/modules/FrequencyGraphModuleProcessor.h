@@ -63,6 +63,8 @@ private:
     std::vector<float> latestFftData;
     std::vector<float> peakHoldData;
     bool isFrozen = false;
+    juce::AudioBuffer<float> inputCopyBuffer;
+    std::vector<float> combinedInputBuffer;
 
     struct BandAnalyser
     {

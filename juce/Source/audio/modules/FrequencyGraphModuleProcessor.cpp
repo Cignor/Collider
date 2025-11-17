@@ -19,7 +19,7 @@ juce::AudioProcessorValueTreeState::ParameterLayout FrequencyGraphModuleProcesso
 
 FrequencyGraphModuleProcessor::FrequencyGraphModuleProcessor()
     : ModuleProcessor(BusesProperties()
-          .withInput("In", juce::AudioChannelSet::mono(), true)
+          .withInput("In", juce::AudioChannelSet::stereo(), true)
           .withOutput("Audio Out", juce::AudioChannelSet::stereo(), true)
           .withOutput("CV Out", juce::AudioChannelSet::discreteChannels(TotalCVOutputs), true)),
       apvts(*this, nullptr, "FreqGraphParams", createParameterLayout()),
@@ -80,25 +80,41 @@ void FrequencyGraphModuleProcessor::processBlock(juce::AudioBuffer<float>& buffe
     }
 
     // --- CRITICAL FIX: Capture input audio BEFORE any write operations ---
-    juce::AudioBuffer<float> inputCopy(2, numSamples);
+    if (inputCopyBuffer.getNumSamples() < numSamples)
+        inputCopyBuffer.setSize(2, numSamples, false, false, true);
+    inputCopyBuffer.clear();
     if (inBus.getNumChannels() > 0)
     {
-        inputCopy.copyFrom(0, 0, inBus, 0, 0, numSamples);
+        inputCopyBuffer.copyFrom(0, 0, inBus, 0, 0, numSamples);
         if (inBus.getNumChannels() > 1)
-            inputCopy.copyFrom(1, 0, inBus, 1, 0, numSamples);
+            inputCopyBuffer.copyFrom(1, 0, inBus, 1, 0, numSamples);
         else
-            inputCopy.copyFrom(1, 0, inBus, 0, 0, numSamples); // duplicate mono to R
+            inputCopyBuffer.copyFrom(1, 0, inBus, 0, 0, numSamples); // duplicate mono to R
     }
-    else
-    {
-        inputCopy.clear();
-    }
+    const float* leftData = inputCopyBuffer.getReadPointer(0);
+    const float* rightData = inputCopyBuffer.getReadPointer(1);
     // --- END OF CRITICAL FIX ---
 
     // --- FFT Processing (uses its own safe buffer) ---
     const double sampleRate = getSampleRate();
-    const float* inputData = inputCopy.getReadPointer(0); // Analyze the mono sum from our safe copy
-    if (inputData)
+    // Combine stereo channels for analysis (average L+R)
+    if ((int)combinedInputBuffer.size() < numSamples)
+        combinedInputBuffer.resize(numSamples);
+    std::fill(combinedInputBuffer.begin(), combinedInputBuffer.begin() + numSamples, 0.0f);
+    if (leftData && rightData)
+    {
+        for (int i = 0; i < numSamples; ++i)
+        {
+            combinedInputBuffer[i] = (leftData[i] + rightData[i]) * 0.5f;
+        }
+    }
+    else if (leftData)
+    {
+        std::copy(leftData, leftData + numSamples, combinedInputBuffer.begin());
+    }
+    
+    const float* inputData = combinedInputBuffer.data();
+    if (inputData && abstractFifo.getNumReady() < (int)fifoBuffer.size())
     {
         bandAnalysers[0].thresholdDb = subThresholdParam->load();
         bandAnalysers[1].thresholdDb = bassThresholdParam->load();
@@ -175,9 +191,9 @@ void FrequencyGraphModuleProcessor::processBlock(juce::AudioBuffer<float>& buffe
     // --- Copy Captured Input to AUDIO Output Bus for Passthrough ---
     if (audioOutBus.getNumChannels() > 0)
     {
-        audioOutBus.copyFrom(0, 0, inputCopy, 0, 0, numSamples);
+        audioOutBus.copyFrom(0, 0, inputCopyBuffer, 0, 0, numSamples);
         if (audioOutBus.getNumChannels() > 1)
-            audioOutBus.copyFrom(1, 0, inputCopy, 1, 0, numSamples);
+            audioOutBus.copyFrom(1, 0, inputCopyBuffer, 1, 0, numSamples);
     }
     else
     {
@@ -251,23 +267,32 @@ void FrequencyGraphModuleProcessor::drawParametersInNode(float itemWidth, const 
     // THE FIX: Use itemWidth directly for responsive, stable sizing
     const float graphWidth = itemWidth;
     const float graphHeight = 200.0f;
-    ImGui::Dummy(ImVec2(graphWidth, graphHeight));
-    ImVec2 p0 = ImGui::GetItemRectMin();
-    ImVec2 p1 = ImGui::GetItemRectMax();
-    auto* drawList = ImGui::GetWindowDrawList();
+    ImVec2 graphMin { 0, 0 };
+    ImVec2 graphMax { 0, 0 };
+    bool graphValid = false;
+    ImGui::PushID(this);
+    if (ImGui::BeginChild("FreqGraphViz", ImVec2(graphWidth, graphHeight), false,
+                          ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse))
+    {
+        ImVec2 p0 = ImGui::GetWindowPos();
+        ImVec2 p1 = ImVec2(p0.x + graphWidth, p0.y + graphHeight);
+        auto* drawList = ImGui::GetWindowDrawList();
+        graphMin = p0;
+        graphMax = p1;
+        graphValid = true;
     
     // --- Define the dB range with more headroom ---
     const float minDb = -96.0f;
     const float maxDb = 24.0f;
 
-    // --- FIX 1: Add a clipping rectangle WITHOUT intersecting with parent ---
-    // The 'false' parameter means don't intersect with current clip rect
-    drawList->PushClipRect(p0, p1, false);
+        // --- FIX 1: Add a clipping rectangle limited to the node region ---
+        // Use intersect=true so drawings never leak outside and conflict with other nodes
+        drawList->PushClipRect(p0, p1, true);
 
-    // Draw background and grid lines
-    drawList->AddRectFilled(p0, p1, backgroundColor);
+        // Draw background and grid lines
+        drawList->AddRectFilled(p0, p1, backgroundColor);
     
-    // --- Adjust grid lines for the new range ---
+        // --- Adjust grid lines for the new range ---
     for (int db = 12; db >= (int)minDb; db -= 12)
     {
         float y = juce::jmap((float)db, minDb, maxDb, p1.y, p0.y);
@@ -277,6 +302,19 @@ void FrequencyGraphModuleProcessor::drawParametersInNode(float itemWidth, const 
             drawList->AddText(ImGui::GetFont(), ImGui::GetFontSize() * 0.8f, ImVec2(p0.x + 4, y - 14), labelColor, juce::String(db).toRawUTF8());
         }
     }
+
+        // Draw threshold markers for each band
+        const float thresholdValues[] = {
+            subThresholdParam->load(),
+            bassThresholdParam->load(),
+            midThresholdParam->load(),
+            highThresholdParam->load()
+        };
+        for (float val : thresholdValues)
+        {
+            float y = juce::jmap(val, minDb, maxDb, p1.y, p0.y);
+            drawList->AddLine(ImVec2(p0.x, y), ImVec2(p1.x, y), thresholdColor, 1.5f);
+        }
     const float freqs[] = { 30, 100, 300, 1000, 3000, 10000, 20000 };
     for (float freq : freqs)
     {
@@ -313,10 +351,15 @@ void FrequencyGraphModuleProcessor::drawParametersInNode(float itemWidth, const 
     // Draw the live FFT data line (brighter, on top)
     drawLineGraph(latestFftData, liveColor, 2.0f);
     
-    // Border and clip cleanup
-    drawList->AddRect(p0, p1, borderColor);
-    drawList->PopClipRect(); // Pop the clipping rectangle
+        // Border around the graph
+        drawList->AddRect(p0, p1, borderColor);
 
+        // Done drawing inside the graph, restore clip before other UI widgets
+        drawList->PopClipRect();
+    }
+    ImGui::EndChild();
+    ImGui::PopID();
+    
     ImGui::Checkbox("Freeze", &isFrozen);
     
     auto& ap = getAPVTS();
@@ -338,9 +381,6 @@ void FrequencyGraphModuleProcessor::drawParametersInNode(float itemWidth, const 
             }
         }
         if (ImGui::IsItemDeactivatedAfterEdit()) onModificationEnded();
-        // Use new dB range for threshold line plotting
-        float y = juce::jmap(val, minDb, maxDb, p1.y, p0.y);
-        drawList->AddLine(ImVec2(p0.x, y), ImVec2(p1.x, y), thresholdColor, 1.5f);
     };
 
     drawThresholdSlider("Sub Thr", subThresholdParam, FrequencyGraphModuleProcessor::paramIdSubThreshold);
@@ -348,14 +388,14 @@ void FrequencyGraphModuleProcessor::drawParametersInNode(float itemWidth, const 
     drawThresholdSlider("Mid Thr", midThresholdParam, FrequencyGraphModuleProcessor::paramIdMidThreshold);
     drawThresholdSlider("High Thr", highThresholdParam, FrequencyGraphModuleProcessor::paramIdHighThreshold);
 
-    if (ImGui::IsItemHovered(ImGuiHoveredFlags_RectOnly))
+    if (graphValid && ImGui::IsItemHovered(ImGuiHoveredFlags_RectOnly))
     {
         ImVec2 mousePos = ImGui::GetMousePos();
-        if (ImGui::IsMousePosValid(&mousePos) && mousePos.x >= p0.x && mousePos.x <= p1.x && mousePos.y >= p0.y && mousePos.y <= p1.y)
+        if (ImGui::IsMousePosValid(&mousePos) && mousePos.x >= graphMin.x && mousePos.x <= graphMax.x && mousePos.y >= graphMin.y && mousePos.y <= graphMax.y)
         {
-            float mouseFreq = std::pow(10.0f, juce::jmap(mousePos.x, p0.x, p1.x, std::log10(20.0f), std::log10(22000.0f)));
+            float mouseFreq = std::pow(10.0f, juce::jmap(mousePos.x, graphMin.x, graphMax.x, std::log10(20.0f), std::log10(22000.0f)));
             // Use new dB range for tooltip calculation
-            float mouseDb = juce::jmap(mousePos.y, p1.y, p0.y, minDb, maxDb);
+            float mouseDb = juce::jmap(mousePos.y, graphMax.y, graphMin.y, -96.0f, 24.0f);
             ImGui::BeginTooltip();
             ImGui::Text("%.1f Hz", mouseFreq);
             ImGui::Text("%.1f dB", mouseDb);
@@ -368,8 +408,8 @@ void FrequencyGraphModuleProcessor::drawParametersInNode(float itemWidth, const 
 
 void FrequencyGraphModuleProcessor::drawIoPins(const NodePinHelpers& helpers)
 {
-    helpers.drawParallelPins("In", 0, "Out L", 0);
-    helpers.drawParallelPins(nullptr, -1, "Out R", 1);
+    helpers.drawParallelPins("In L", 0, "Out L", 0);
+    helpers.drawParallelPins("In R", 1, "Out R", 1);
     ImGui::Spacing();
     helpers.drawParallelPins(nullptr, -1, "Sub Gate", 2);
     helpers.drawParallelPins(nullptr, -1, "Sub Trig", 3);
@@ -385,7 +425,8 @@ void FrequencyGraphModuleProcessor::drawIoPins(const NodePinHelpers& helpers)
 
 juce::String FrequencyGraphModuleProcessor::getAudioInputLabel(int channel) const
 {
-    if (channel == 0) return "In";
+    if (channel == 0) return "In L";
+    if (channel == 1) return "In R";
     return {};
 }
 

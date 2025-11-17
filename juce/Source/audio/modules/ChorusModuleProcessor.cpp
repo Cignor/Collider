@@ -1,4 +1,5 @@
 #include "ChorusModuleProcessor.h"
+#include <cmath>
 #if defined(PRESET_CREATOR_UI)
 #include "../../preset_creator/theme/ThemeManager.h"
 #endif
@@ -35,6 +36,13 @@ ChorusModuleProcessor::ChorusModuleProcessor()
     // Initialize output value tracking for tooltips
     lastOutputValues.push_back(std::make_unique<std::atomic<float>>(0.0f)); // Out L
     lastOutputValues.push_back(std::make_unique<std::atomic<float>>(0.0f)); // Out R
+
+    // Initialize visualization data
+    for (auto& v : vizData.inputWaveformL) v.store(0.0f);
+    for (auto& v : vizData.inputWaveformR) v.store(0.0f);
+    for (auto& v : vizData.outputWaveformL) v.store(0.0f);
+    for (auto& v : vizData.outputWaveformR) v.store(0.0f);
+    for (auto& v : vizData.lfoWaveform) v.store(0.0f);
 }
 
 void ChorusModuleProcessor::prepareToPlay(double sampleRate, int samplesPerBlock)
@@ -46,6 +54,15 @@ void ChorusModuleProcessor::prepareToPlay(double sampleRate, int samplesPerBlock
 
     chorus.prepare(spec);
     chorus.reset();
+
+    // Visualization buffers
+    vizInputBuffer.setSize(2, vizBufferSize);
+    vizOutputBuffer.setSize(2, vizBufferSize);
+    vizInputBuffer.clear();
+    vizOutputBuffer.clear();
+    vizLfoBuffer.assign(vizBufferSize, 0.0f);
+    vizWritePos = 0;
+    vizLfoPhase = 0.0f;
 }
 
 void ChorusModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midi)
@@ -149,11 +166,73 @@ void ChorusModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce:
     chorus.setDepth(juce::jlimit(0.0f, 1.0f, finalDepth));
     chorus.setMix(juce::jlimit(0.0f, 1.0f, finalMix));
 
+    // Snapshot dry signal for visualization before processing
+    juce::AudioBuffer<float> drySnapshot;
+    drySnapshot.makeCopyOf(outBus);
+
     // --- Process the Audio ---
-    // The context works on the output buffer, which now contains the dry signal.
     juce::dsp::AudioBlock<float> block(outBus);
     juce::dsp::ProcessContextReplacing<float> context(block);
     chorus.process(context);
+
+    // --- Visualization capture ---
+    const float sampleRate = static_cast<float>(getSampleRate());
+    const float lfoDelta = sampleRate > 0.0f
+        ? juce::MathConstants<float>::twoPi * juce::jlimit(0.05f, 5.0f, finalRate) / sampleRate
+        : 0.0f;
+
+    for (int i = 0; i < numSamples; ++i)
+    {
+        const float dryL = drySnapshot.getNumChannels() > 0 ? drySnapshot.getSample(0, i) : 0.0f;
+        const float wetL = outBus.getNumChannels() > 0 ? outBus.getSample(0, i) : 0.0f;
+        vizInputBuffer.setSample(0, vizWritePos, dryL);
+        vizOutputBuffer.setSample(0, vizWritePos, wetL);
+
+        if (vizInputBuffer.getNumChannels() > 1)
+        {
+            const float dryR = drySnapshot.getNumChannels() > 1 ? drySnapshot.getSample(1, i) : dryL;
+            const float wetR = outBus.getNumChannels() > 1 ? outBus.getSample(1, i) : wetL;
+            vizInputBuffer.setSample(1, vizWritePos, dryR);
+            vizOutputBuffer.setSample(1, vizWritePos, wetR);
+        }
+
+        vizLfoPhase += lfoDelta;
+        if (vizLfoPhase > juce::MathConstants<float>::twoPi)
+            vizLfoPhase -= juce::MathConstants<float>::twoPi;
+        const float lfoValue = std::sin(vizLfoPhase);
+        if (vizLfoBuffer.size() == vizBufferSize)
+            vizLfoBuffer[vizWritePos] = lfoValue;
+
+        vizWritePos = (vizWritePos + 1) % vizBufferSize;
+
+        if ((i & 0x3F) == 0)
+        {
+            vizData.currentRate.store(finalRate);
+            vizData.currentDepth.store(finalDepth);
+            vizData.currentMix.store(finalMix);
+
+            const int step = juce::jmax(1, vizBufferSize / VizData::waveformPoints);
+            for (int j = 0; j < VizData::waveformPoints; ++j)
+            {
+                const int idx = (vizWritePos - (VizData::waveformPoints - j) * step + vizBufferSize) % vizBufferSize;
+                vizData.inputWaveformL[j].store(vizInputBuffer.getSample(0, idx));
+                vizData.outputWaveformL[j].store(vizOutputBuffer.getSample(0, idx));
+                if (vizInputBuffer.getNumChannels() > 1)
+                {
+                    vizData.inputWaveformR[j].store(vizInputBuffer.getSample(1, idx));
+                    vizData.outputWaveformR[j].store(vizOutputBuffer.getSample(1, idx));
+                }
+            }
+
+            const int lfoStep = juce::jmax(1, vizBufferSize / VizData::lfoPoints);
+            for (int j = 0; j < VizData::lfoPoints; ++j)
+            {
+                const int idx = (vizWritePos - (VizData::lfoPoints - j) * lfoStep + vizBufferSize) % vizBufferSize;
+                const float value = (vizLfoBuffer.size() == vizBufferSize) ? vizLfoBuffer[idx] : 0.0f;
+                vizData.lfoWaveform[j].store(value);
+            }
+        }
+    }
 
     // --- Update UI Telemetry ---
     setLiveParamValue("rate_live", finalRate);
@@ -232,10 +311,11 @@ void ChorusModuleProcessor::drawParametersInNode(float itemWidth, const std::fun
     auto& ap = getAPVTS();
     ImGui::PushItemWidth(itemWidth);
 
-    // Helper for tooltips
-    auto HelpMarker = [](const char* desc) {
+    auto HelpMarker = [](const char* desc)
+    {
         ImGui::TextDisabled("(?)");
-        if (ImGui::BeginItemTooltip()) {
+        if (ImGui::BeginItemTooltip())
+        {
             ImGui::PushTextWrapPos(ImGui::GetFontSize() * 35.0f);
             ImGui::TextUnformatted(desc);
             ImGui::PopTextWrapPos();
@@ -243,11 +323,129 @@ void ChorusModuleProcessor::drawParametersInNode(float itemWidth, const std::fun
         }
     };
 
-    // === CHORUS PARAMETERS SECTION ===
+    // === VISUALIZATION ===
+    auto& themeMgr = ThemeManager::getInstance();
+    auto resolveColor = [](ImU32 primary, ImU32 secondary, ImU32 fallback)
+    {
+        if (primary != 0) return primary;
+        if (secondary != 0) return secondary;
+        return fallback;
+    };
+
+    const ImU32 canvasBg = themeMgr.getCanvasBackground();
+    const ImVec4 childBgVec4 = ImGui::GetStyle().Colors[ImGuiCol_ChildBg];
+    const ImU32 childBg = ImGui::ColorConvertFloat4ToU32(childBgVec4);
+    const ImU32 bgColor = resolveColor(theme.modules.scope_plot_bg, canvasBg, childBg);
+    const ImVec4 frequencyColorVec4 = theme.modulation.frequency;
+    const ImVec4 timbreColorVec4 = theme.modulation.timbre;
+    const ImU32 inputColor = resolveColor(theme.modules.scope_plot_fg,
+                                          ImGui::ColorConvertFloat4ToU32(ImVec4(frequencyColorVec4.x, frequencyColorVec4.y, frequencyColorVec4.z, 1.0f)),
+                                          IM_COL32(110, 220, 255, 255));
+    const ImU32 outputColor = resolveColor(0,
+                                           ImGui::ColorConvertFloat4ToU32(ImVec4(timbreColorVec4.x, timbreColorVec4.y, timbreColorVec4.z, 1.0f)),
+                                           IM_COL32(255, 190, 120, 255));
+
+    auto* drawList = ImGui::GetWindowDrawList();
+    float prevX = 0.0f;
+    float prevY = 0.0f;
+
+    // --- Dual Path Visualization ---
+    ImGui::Spacing();
+    ImGui::Text("Stereo Modulation");
+    ImGui::Spacing();
+
+    const float vizHeightStereo = 140.0f;
+    const ImVec2 stereoOrigin = ImGui::GetCursorScreenPos();
+    const ImVec2 stereoRectMax = ImVec2(stereoOrigin.x + itemWidth, stereoOrigin.y + vizHeightStereo);
+    drawList->AddRectFilled(stereoOrigin, stereoRectMax, bgColor, 4.0f);
+    ImGui::PushClipRect(stereoOrigin, stereoRectMax, true);
+
+    // Left and right delay arcs (visual metaphor for modulated delay taps)
+    auto drawDelayArc = [&](bool isLeft, ImU32 color)
+    {
+        const float sideOffset = isLeft ? -itemWidth * 0.35f : itemWidth * 0.35f;
+        const float baseX = stereoOrigin.x + itemWidth * 0.5f + sideOffset * 0.2f;
+        const float baseY = stereoOrigin.y + vizHeightStereo * 0.5f;
+        const float maxRadius = juce::jmin(itemWidth, vizHeightStereo) * 0.4f;
+        const float depthScale = juce::jlimit(0.05f, 1.0f, vizData.currentDepth.load());
+        const float radius = maxRadius * depthScale;
+
+        float prevX = baseX;
+        float prevY = baseY;
+        for (int i = 0; i < VizData::waveformPoints; ++i)
+        {
+            const float norm = (float)i / (float)(VizData::waveformPoints - 1);
+            const float phaseOffset = norm * juce::MathConstants<float>::pi;
+            const float modValue = isLeft ? vizData.outputWaveformL[i].load() : vizData.outputWaveformR[i].load();
+            const float arcX = baseX + std::cos(phaseOffset) * radius;
+            const float arcY = baseY + modValue * radius * 0.6f;
+            if (i > 0)
+            {
+                ImVec4 colorVec4 = ImGui::ColorConvertU32ToFloat4(color);
+                colorVec4.w = 0.4f;
+                drawList->AddLine(ImVec2(prevX, prevY), ImVec2(arcX, arcY), ImGui::ColorConvertFloat4ToU32(colorVec4), 2.2f);
+            }
+            prevX = arcX;
+            prevY = arcY;
+        }
+    };
+
+    drawDelayArc(true, inputColor);
+    drawDelayArc(false, outputColor);
+
+    // Mod depth bars on the sides
+    const float barWidth = 6.0f;
+    const float depthAmount = juce::jlimit(0.0f, 1.0f, vizData.currentDepth.load());
+    const float barHeight = vizHeightStereo * depthAmount;
+
+    auto drawDepthBar = [&](bool isLeft)
+    {
+        const float x = isLeft ? stereoOrigin.x + 8.0f : stereoRectMax.x - 8.0f - barWidth;
+        const float y = stereoOrigin.y + vizHeightStereo - barHeight - 8.0f;
+        drawList->AddRectFilled(ImVec2(x, y), ImVec2(x + barWidth, y + barHeight),
+                                isLeft ? inputColor : outputColor, 2.0f);
+    };
+
+    drawDepthBar(true);
+    drawDepthBar(false);
+
+    ImGui::PopClipRect();
+    ImGui::SetCursorScreenPos(ImVec2(stereoOrigin.x, stereoRectMax.y));
+    ImGui::Dummy(ImVec2(itemWidth, 0));
+
+    ImGui::PopClipRect();
+    ImGui::SetCursorScreenPos(ImVec2(stereoOrigin.x, stereoRectMax.y));
+    ImGui::Dummy(ImVec2(itemWidth, 0));
+
+    // simple modulation summary (to avoid extra clip rects)
+    ImGui::Spacing();
+    ImGui::Text("Depth: %.2f  |  Rate: %.2f Hz", vizData.currentDepth.load(), vizData.currentRate.load());
+
+    ImGui::Spacing();
+    const ImVec4 accentVec4 = theme.accent;
+    const ImU32 accentColor = ImGui::ColorConvertFloat4ToU32(ImVec4(accentVec4.x, accentVec4.y, accentVec4.z, 1.0f));
+
+    auto drawMeter = [&](const char* label, float value, float normalized)
+    {
+        ImGui::Text("%s %.2f", label, value);
+        ImGui::PushStyleColor(ImGuiCol_PlotHistogram, accentColor);
+        ImGui::ProgressBar(juce::jlimit(0.0f, 1.0f, normalized), ImVec2(itemWidth * 0.5f, 0), "");
+        ImGui::PopStyleColor();
+        ImGui::SameLine();
+        ImGui::Text("%.0f%%", juce::jlimit(0.0f, 1.0f, normalized) * 100.0f);
+    };
+
+    drawMeter("Rate:", vizData.currentRate.load(), (vizData.currentRate.load() - 0.05f) / (5.0f - 0.05f));
+    drawMeter("Depth:", vizData.currentDepth.load(), vizData.currentDepth.load());
+    drawMeter("Mix:", vizData.currentMix.load(), vizData.currentMix.load());
+
+    ImGui::Spacing();
+    ImGui::Spacing();
+
+    // === CHORUS PARAMETERS ===
     ThemeText("Chorus Parameters", theme.text.section_header);
     ImGui::Spacing();
 
-    // Rate Slider
     bool isRateMod = isParamModulated(paramIdRateMod);
     float rate = isRateMod ? getLiveParamValueFor(paramIdRateMod, "rate_live", rateParam->load()) : rateParam->load();
     if (isRateMod) ImGui::BeginDisabled();
@@ -259,7 +457,6 @@ void ChorusModuleProcessor::drawParametersInNode(float itemWidth, const std::fun
     ImGui::SameLine();
     HelpMarker("LFO modulation rate (0.05-5 Hz)\nControls how fast the chorus effect sweeps");
 
-    // Depth Slider
     bool isDepthMod = isParamModulated(paramIdDepthMod);
     float depth = isDepthMod ? getLiveParamValueFor(paramIdDepthMod, "depth_live", depthParam->load()) : depthParam->load();
     if (isDepthMod) ImGui::BeginDisabled();
@@ -271,7 +468,6 @@ void ChorusModuleProcessor::drawParametersInNode(float itemWidth, const std::fun
     ImGui::SameLine();
     HelpMarker("Modulation depth (0-1)\nControls intensity of pitch/time variation");
 
-    // Mix Slider
     bool isMixMod = isParamModulated(paramIdMixMod);
     float mix = isMixMod ? getLiveParamValueFor(paramIdMixMod, "mix_live", mixParam->load()) : mixParam->load();
     if (isMixMod) ImGui::BeginDisabled();
@@ -284,51 +480,37 @@ void ChorusModuleProcessor::drawParametersInNode(float itemWidth, const std::fun
     HelpMarker("Dry/wet mix (0-1)\n0 = dry only, 1 = fully chorused");
 
     ImGui::Spacing();
-    ImGui::Separator();
     ImGui::Spacing();
 
-    // === RELATIVE MODULATION SECTION ===
     ThemeText("CV Input Modes", theme.modulation.frequency);
     ImGui::Spacing();
-    
-    // Relative Rate Mod checkbox
+
     bool relativeRateMod = relativeRateModParam != nullptr && relativeRateModParam->load() > 0.5f;
     if (ImGui::Checkbox("Relative Rate Mod", &relativeRateMod))
     {
         if (auto* p = dynamic_cast<juce::AudioParameterBool*>(ap.getParameter("relativeRateMod")))
             *p = relativeRateMod;
-        juce::Logger::writeToLog("[Chorus UI] Relative Rate Mod: " + juce::String(relativeRateMod ? "ON" : "OFF"));
     }
     if (ImGui::IsItemHovered())
-    {
         ImGui::SetTooltip("ON: CV modulates around slider (±2 octaves)\nOFF: CV directly sets rate (0.05-5 Hz)");
-    }
-    
-    // Relative Depth Mod checkbox
+
     bool relativeDepthMod = relativeDepthModParam != nullptr && relativeDepthModParam->load() > 0.5f;
     if (ImGui::Checkbox("Relative Depth Mod", &relativeDepthMod))
     {
         if (auto* p = dynamic_cast<juce::AudioParameterBool*>(ap.getParameter("relativeDepthMod")))
             *p = relativeDepthMod;
-        juce::Logger::writeToLog("[Chorus UI] Relative Depth Mod: " + juce::String(relativeDepthMod ? "ON" : "OFF"));
     }
     if (ImGui::IsItemHovered())
-    {
         ImGui::SetTooltip("ON: CV modulates around slider (±0.5)\nOFF: CV directly sets depth (0-1)");
-    }
-    
-    // Relative Mix Mod checkbox
+
     bool relativeMixMod = relativeMixModParam != nullptr && relativeMixModParam->load() > 0.5f;
     if (ImGui::Checkbox("Relative Mix Mod", &relativeMixMod))
     {
         if (auto* p = dynamic_cast<juce::AudioParameterBool*>(ap.getParameter("relativeMixMod")))
             *p = relativeMixMod;
-        juce::Logger::writeToLog("[Chorus UI] Relative Mix Mod: " + juce::String(relativeMixMod ? "ON" : "OFF"));
     }
     if (ImGui::IsItemHovered())
-    {
         ImGui::SetTooltip("ON: CV modulates around slider (±0.5)\nOFF: CV directly sets mix (0-1)");
-    }
 
     ImGui::PopItemWidth();
 }

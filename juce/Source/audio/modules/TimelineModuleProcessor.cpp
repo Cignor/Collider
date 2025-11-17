@@ -372,7 +372,6 @@ void TimelineModuleProcessor::drawParametersInNode(float itemWidth,
     const ImGuiStyle& style = ImGui::GetStyle();
     
     ThemeText("TIMELINE", theme.text.section_header);
-    ImGui::Separator();
     
     // Record and Play buttons (mutually exclusive)
     bool isRecording = recordParam && recordParam->get();
@@ -419,7 +418,6 @@ void TimelineModuleProcessor::drawParametersInNode(float itemWidth,
     ImGui::PopStyleColor(3);
     
     ImGui::Spacing();
-    ImGui::Separator();
     
     // Channel management
     ThemeText("Channels", theme.text.section_header);
@@ -474,7 +472,6 @@ void TimelineModuleProcessor::drawParametersInNode(float itemWidth,
     }
     
     ImGui::Spacing();
-    ImGui::Separator();
     
     // Automation visualization
     if (m_selectedChannelIndex >= 0)
@@ -498,7 +495,6 @@ void TimelineModuleProcessor::drawParametersInNode(float itemWidth,
     }
     
     ImGui::Spacing();
-    ImGui::Separator();
     
     ThemeText("Transport Status", theme.text.section_header);
     ImGui::Spacing();

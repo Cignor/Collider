@@ -238,7 +238,10 @@ void populatePinDatabase()
     );
     db["frequency_graph"] = ModulePinInfo(
         NodeWidth::ExtraWide,
-        { AudioPin("In", 0, PinDataType::Audio) }, // Mono Audio Input
+        { 
+            AudioPin("In L", 0, PinDataType::Audio),
+            AudioPin("In R", 1, PinDataType::Audio)
+        },
         { // Outputs: Stereo audio pass-through + 8 Gate/Trigger outputs
             AudioPin("Out L", 0, PinDataType::Audio),
             AudioPin("Out R", 1, PinDataType::Audio),

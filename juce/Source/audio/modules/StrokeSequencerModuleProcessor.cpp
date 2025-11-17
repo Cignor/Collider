@@ -536,7 +536,6 @@ void StrokeSequencerModuleProcessor::drawParametersInNode(float itemWidth, const
         if (isRateMod) { ImGui::EndDisabled(); ImGui::SameLine(); ImGui::TextUnformatted("(mod)"); }
     }
     ImGui::PopItemWidth();
-    ImGui::Separator();
 
     // --- Canvas & Controls Layout ---
     ImGui::Spacing();

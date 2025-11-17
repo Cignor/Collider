@@ -813,7 +813,6 @@ void PoseEstimatorModule::drawParametersInNode(float itemWidth,
         ImGui::TextWrapped("Place model files in: assets/openpose_models/pose/mpi/");
     }
 
-    ImGui::Separator();
     
     // Zone color palette (4 colors)
     static const ImVec4 ZONE_COLORS[4] = {
@@ -865,7 +864,6 @@ void PoseEstimatorModule::drawParametersInNode(float itemWidth,
         if (c < 3) ImGui::SameLine();
     }
     
-    ImGui::Separator();
     
     // Video preview with zone overlays
     juce::Image frame = getLatestFrame();

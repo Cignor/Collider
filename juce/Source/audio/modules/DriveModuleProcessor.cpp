@@ -9,7 +9,7 @@ juce::AudioProcessorValueTreeState::ParameterLayout DriveModuleProcessor::create
     std::vector<std::unique_ptr<juce::RangedAudioParameter>> params;
 
     params.push_back(std::make_unique<juce::AudioParameterFloat>(paramIdDrive, "Drive", 0.0f, 2.0f, 0.0f));
-    params.push_back(std::make_unique<juce::AudioParameterFloat>(paramIdMix, "Mix", 0.0f, 1.0f, 1.0f));
+    params.push_back(std::make_unique<juce::AudioParameterFloat>(paramIdMix, "Mix", 0.0f, 1.0f, 0.5f));
     
     params.push_back(std::make_unique<juce::AudioParameterBool>("relativeDriveMod", "Relative Drive Mod", true));
     params.push_back(std::make_unique<juce::AudioParameterBool>("relativeMixMod", "Relative Mix Mod", true));
@@ -35,6 +35,14 @@ DriveModuleProcessor::DriveModuleProcessor()
 void DriveModuleProcessor::prepareToPlay(double /*sampleRate*/, int samplesPerBlock)
 {
     tempBuffer.setSize(2, samplesPerBlock);
+#if defined(PRESET_CREATOR_UI)
+    vizDryBuffer.setSize(2, samplesPerBlock);
+    vizWetBuffer.setSize(2, samplesPerBlock);
+    vizDryBuffer.clear();
+    vizWetBuffer.clear();
+    vizData.harmonicEnergy.store(0.0f);
+    vizData.outputLevelDb.store(-60.0f);
+#endif
 }
 
 void DriveModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midi)
@@ -78,6 +86,10 @@ void DriveModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::
     
     const int numChannels = juce::jmin(numInputChannels, numOutputChannels);
 
+#if defined(PRESET_CREATOR_UI)
+    vizDryBuffer.makeCopyOf(outBus);
+#endif
+
     // If drive is zero and mix is fully dry, we can skip processing entirely.
     if (driveAmount <= 0.001f && mixAmount <= 0.001f)
     {
@@ -116,6 +128,47 @@ void DriveModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::
         // Then, add the scaled wet signal from our temporary buffer.
         outBus.addFrom(ch, 0, tempBuffer, ch, 0, buffer.getNumSamples(), wetLevel);
     }
+
+#if defined(PRESET_CREATOR_UI)
+    vizWetBuffer.makeCopyOf(tempBuffer);
+
+    auto captureWaveform = [&](const juce::AudioBuffer<float>& source, std::array<std::atomic<float>, VizData::waveformPoints>& dest)
+    {
+        const int samples = juce::jmin(source.getNumSamples(), numSamples);
+        if (samples <= 0) return;
+        const int stride = juce::jmax(1, samples / VizData::waveformPoints);
+        for (int i = 0; i < VizData::waveformPoints; ++i)
+        {
+            const int idx = juce::jmin(samples - 1, i * stride);
+            float value = source.getSample(0, idx);
+            if (source.getNumChannels() > 1)
+                value = 0.5f * (value + source.getSample(1, idx));
+            dest[i].store(juce::jlimit(-1.0f, 1.0f, value));
+        }
+    };
+
+    captureWaveform(vizDryBuffer, vizData.dryWaveform);
+    captureWaveform(vizWetBuffer, vizData.wetWaveform);
+    captureWaveform(outBus, vizData.mixWaveform);
+
+    const int visualSamples = juce::jmin(numSamples, vizDryBuffer.getNumSamples());
+    float diffAccum = 0.0f;
+    for (int i = 0; i < visualSamples; ++i)
+    {
+        const float drySample = vizDryBuffer.getSample(0, i);
+        const float wetSample = vizWetBuffer.getSample(0, i);
+        diffAccum += std::abs(wetSample - drySample);
+    }
+    const float harmonicEnergy = (visualSamples > 0) ? juce::jlimit(0.0f, 1.0f, diffAccum / (float)visualSamples) : 0.0f;
+    vizData.harmonicEnergy.store(harmonicEnergy);
+    vizData.currentDrive.store(driveAmount);
+    vizData.currentMix.store(mixAmount);
+
+    float outputPeak = 0.0f;
+    for (int ch = 0; ch < numChannels; ++ch)
+        outputPeak = juce::jmax(outputPeak, outBus.getRMSLevel(ch, 0, numSamples));
+    vizData.outputLevelDb.store(juce::Decibels::gainToDecibels(outputPeak, -60.0f));
+#endif
     
     // Update output values for tooltips
     if (lastOutputValues.size() >= 2)
@@ -150,6 +203,7 @@ void DriveModuleProcessor::drawParametersInNode(float itemWidth, const std::func
 {
     const auto& theme = ThemeManager::getInstance().getCurrentTheme();
     auto& ap = getAPVTS();
+    ImGui::PushID(this);
     ImGui::PushItemWidth(itemWidth);
 
     auto HelpMarker = [](const char* desc) {
@@ -166,6 +220,75 @@ void DriveModuleProcessor::drawParametersInNode(float itemWidth, const std::func
         if (tooltip) { ImGui::SameLine(); HelpMarker(tooltip); }
     };
 
+    ImGui::Spacing();
+    ImGui::Text("Drive Visualizer");
+    ImGui::Spacing();
+
+    auto* drawList = ImGui::GetWindowDrawList();
+    const ImU32 bgColor = ThemeManager::getInstance().getCanvasBackground();
+    const ImU32 dryColor = ImGui::ColorConvertFloat4ToU32(theme.modulation.frequency);
+    const ImU32 wetColor = ImGui::ColorConvertFloat4ToU32(theme.modulation.timbre);
+    const ImU32 mixColor = ImGui::ColorConvertFloat4ToU32(theme.accent);
+
+    const ImVec2 origin = ImGui::GetCursorScreenPos();
+    const float vizHeight = 110.0f;
+    const ImVec2 rectMax = ImVec2(origin.x + itemWidth, origin.y + vizHeight);
+    drawList->AddRectFilled(origin, rectMax, bgColor, 4.0f);
+    ImGui::PushClipRect(origin, rectMax, true);
+
+    float dryWave[VizData::waveformPoints];
+    float wetWave[VizData::waveformPoints];
+    float mixWave[VizData::waveformPoints];
+    for (int i = 0; i < VizData::waveformPoints; ++i)
+    {
+        dryWave[i] = vizData.dryWaveform[i].load();
+        wetWave[i] = vizData.wetWaveform[i].load();
+        mixWave[i] = vizData.mixWaveform[i].load();
+    }
+
+    const float midY = origin.y + vizHeight * 0.5f;
+    const float scaleY = vizHeight * 0.4f;
+    const float stepX = itemWidth / (float)(VizData::waveformPoints - 1);
+
+    auto drawWave = [&](float* data, ImU32 color, float thickness)
+    {
+        float px = origin.x;
+        float py = midY;
+        for (int i = 0; i < VizData::waveformPoints; ++i)
+        {
+            const float x = origin.x + i * stepX;
+            const float y = midY - juce::jlimit(-1.0f, 1.0f, data[i]) * scaleY;
+            if (i > 0)
+                drawList->AddLine(ImVec2(px, py), ImVec2(x, y), color, thickness);
+            px = x;
+            py = y;
+        }
+    };
+
+    drawWave(dryWave, dryColor, 1.6f);
+    drawWave(wetWave, wetColor, 2.6f);
+    drawWave(mixWave, mixColor, 1.2f);
+
+    ImGui::PopClipRect();
+    ImGui::SetCursorScreenPos(ImVec2(origin.x, rectMax.y));
+    ImGui::Dummy(ImVec2(itemWidth, 0));
+
+    const float harmonic = vizData.harmonicEnergy.load();
+    const float outputDb = vizData.outputLevelDb.load();
+    const float driveVal = vizData.currentDrive.load();
+    const float mixVal = vizData.currentMix.load();
+
+    ImGui::Spacing();
+    ImGui::Text("Harmonic Density");
+    ImGui::PushStyleColor(ImGuiCol_PlotHistogram, wetColor);
+    ImGui::ProgressBar(harmonic, ImVec2(itemWidth * 0.5f, 0), juce::String(harmonic * 100.0f, 1).toRawUTF8());
+    ImGui::PopStyleColor();
+    ImGui::SameLine();
+    ImGui::Text("Output: %.1f dB", outputDb);
+
+    ImGui::Text("Drive %.2f  |  Mix %.2f", driveVal, mixVal);
+
+    ImGui::Spacing();
     ThemeText("Drive Parameters", theme.text.section_header);
     ImGui::Spacing();
 
@@ -173,6 +296,7 @@ void DriveModuleProcessor::drawParametersInNode(float itemWidth, const std::func
     drawSlider("Mix", paramIdMix, 0.0f, 1.0f, "%.2f", "Dry/wet mix (0-1)\n0 = clean, 1 = fully driven");
 
     ImGui::PopItemWidth();
+    ImGui::PopID();
 }
 
 void DriveModuleProcessor::drawIoPins(const NodePinHelpers& helpers)

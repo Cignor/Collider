@@ -826,7 +826,6 @@ void ColorTrackerModule::drawParametersInNode(float itemWidth,
         }
     }
 
-    ImGui::Separator();
     
     // Zone color palette (4 colors)
     static const ImVec4 ZONE_COLORS[4] = {
@@ -878,7 +877,6 @@ void ColorTrackerModule::drawParametersInNode(float itemWidth,
         if (c < 3) ImGui::SameLine();
     }
     
-    ImGui::Separator();
     
     // Video preview with zone overlays
     juce::Image frame = getLatestFrame();
@@ -1170,7 +1168,6 @@ void ColorTrackerModule::drawParametersInNode(float itemWidth,
                     // Add zone drawing hint if Ctrl is held
                     if (ctrlHeld)
                     {
-                        ImGui::Separator();
                         ImGui::TextDisabled("Ctrl+Left-drag: Draw zone\nRight-drag: Erase zone");
                     }
                     ImGui::EndTooltip();

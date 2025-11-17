@@ -1,4 +1,5 @@
 #include "CompressorModuleProcessor.h"
+#include <cmath>
 #if defined(PRESET_CREATOR_UI)
 #include "../../preset_creator/theme/ThemeManager.h"
 #endif
@@ -53,6 +54,7 @@ void CompressorModuleProcessor::prepareToPlay(double sampleRate, int samplesPerB
 
     compressor.prepare(spec);
     compressor.reset();
+    dryBuffer.setSize(2, samplesPerBlock);
 }
 
 void CompressorModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midi)
@@ -67,7 +69,23 @@ void CompressorModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
     const int numOutputChannels = outBus.getNumChannels();
     const int numSamples = buffer.getNumSamples();
 
+    float* outL = numOutputChannels > 0 ? outBus.getWritePointer(0) : nullptr;
+    float* outR = numOutputChannels > 1 ? outBus.getWritePointer(1) : outL;
+
+    // Capture dry signal for visualization (only audio channels 0/1)
+    if (numSamples > dryBuffer.getNumSamples())
+        dryBuffer.setSize(2, numSamples, false, false, true);
+    dryBuffer.clear();
     if (numInputChannels > 0)
+        dryBuffer.copyFrom(0, 0, inBus, 0, 0, numSamples);
+    if (numInputChannels > 1)
+        dryBuffer.copyFrom(1, 0, inBus, 1, 0, numSamples);
+    else
+        dryBuffer.copyFrom(1, 0, dryBuffer, 0, 0, numSamples);
+    const float* dryL = dryBuffer.getReadPointer(0);
+    const float* dryR = dryBuffer.getReadPointer(1);
+
+    if (numInputChannels > 0 && outL != nullptr)
     {
         // If input is mono, copy it to both left and right outputs.
         if (numInputChannels == 1 && numOutputChannels > 1)
@@ -184,8 +202,64 @@ void CompressorModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
     juce::dsp::ProcessContextReplacing<float> context(block);
     compressor.process(context);
 
+    // --- Collect visualization metrics before makeup gain ---
+    float inputPeak = 0.0f;
+    float outputPeakPreMakeup = 0.0f;
+    float totalReductionDb = 0.0f;
+    float maxReductionDb = 0.0f;
+    int reductionSamples = 0;
+
+    if (outL != nullptr && dryL != nullptr)
+    {
+        for (int i = 0; i < numSamples; ++i)
+        {
+            const float drySampleL = std::abs(dryL[i]);
+            const float drySampleR = dryR ? std::abs(dryR[i]) : drySampleL;
+            const float wetL = std::abs(outL[i]);
+            const float wetR = outR ? std::abs(outR[i]) : wetL;
+
+            const float dry = 0.5f * (drySampleL + drySampleR);
+            const float wet = 0.5f * (wetL + wetR);
+
+            inputPeak = std::max(inputPeak, dry);
+            outputPeakPreMakeup = std::max(outputPeakPreMakeup, wet);
+
+            if (dry > 1.0e-6f)
+            {
+                const float ratio = juce::jlimit(1.0e-6f, 1.0f, wet / dry);
+                const float reductionDb = -juce::Decibels::gainToDecibels(ratio);
+                if (std::isfinite(reductionDb))
+                {
+                    totalReductionDb += reductionDb;
+                    if (reductionDb > maxReductionDb)
+                        maxReductionDb = reductionDb;
+                    ++reductionSamples;
+                }
+            }
+        }
+    }
+
+    const float averageReductionDb = reductionSamples > 0 ? (totalReductionDb / (float)reductionSamples) : 0.0f;
+    const float blockReductionDb = juce::jmax(averageReductionDb, maxReductionDb);
+
     // Apply makeup gain
-    outBus.applyGain(juce::Decibels::decibelsToGain(finalMakeup));
+    const float makeupGain = juce::Decibels::decibelsToGain(finalMakeup);
+    outBus.applyGain(makeupGain);
+
+    // Update visualization data (input/output levels relative to -60..0 dB)
+    const float inputDb = juce::Decibels::gainToDecibels(inputPeak, -90.0f);
+    const float outputDb = juce::Decibels::gainToDecibels(outputPeakPreMakeup * makeupGain, -90.0f);
+    vizData.inputLevelDb.store(inputDb);
+    vizData.outputLevelDb.store(outputDb);
+    vizData.currentGRDb.store(blockReductionDb);
+
+    const float normalizedGr = juce::jlimit(0.0f, 1.0f, blockReductionDb / 24.0f); // assume up to 24 dB GR
+    int writeIdx = vizData.historyWriteIndex.load();
+    vizData.inputHistoryDb[writeIdx].store(inputDb);
+    vizData.outputHistoryDb[writeIdx].store(outputDb);
+    vizData.grHistory[writeIdx].store(normalizedGr);
+    writeIdx = (writeIdx + 1) % VizData::historyPoints;
+    vizData.historyWriteIndex.store(writeIdx);
 
     // --- Update UI Telemetry & Tooltips ---
     setLiveParamValue("threshold_live", finalThreshold);
@@ -238,6 +312,7 @@ void CompressorModuleProcessor::drawParametersInNode(float itemWidth, const std:
 {
     const auto& theme = ThemeManager::getInstance().getCurrentTheme();
     auto& ap = getAPVTS();
+    ImGui::PushID(this);
     ImGui::PushItemWidth(itemWidth);
 
     // Helper for tooltips
@@ -295,24 +370,81 @@ void CompressorModuleProcessor::drawParametersInNode(float itemWidth, const std:
     ImGui::Spacing();
     ImGui::Spacing();
 
-    // === GAIN REDUCTION METER SECTION ===
-    ThemeText("Gain Reduction", theme.text.section_header);
+    // === Compressor Activity Visualization ===
+    ThemeText("Compressor Activity", theme.text.section_header);
     ImGui::Spacing();
 
-    // Simulated gain reduction meter (would need real GR value from DSP)
-    float threshold = ap.getRawParameterValue(paramIdThreshold)->load();
-    float ratio = ap.getRawParameterValue(paramIdRatio)->load();
+    auto* drawList = ImGui::GetWindowDrawList();
+    const ImU32 bgColor = ThemeManager::getInstance().getCanvasBackground();
+    const ImU32 inputColor = ImGui::ColorConvertFloat4ToU32(theme.modulation.frequency);
+    const ImU32 outputColor = ImGui::ColorConvertFloat4ToU32(theme.modulation.timbre);
+    const ImU32 grColor = ImGui::ColorConvertFloat4ToU32(theme.accent);
+
+    const float timelineHeight = 60.0f;
+    const ImVec2 timelineOrigin = ImGui::GetCursorScreenPos();
+    const ImVec2 timelineRectMax = ImVec2(timelineOrigin.x + itemWidth, timelineOrigin.y + timelineHeight);
+    drawList->AddRectFilled(timelineOrigin, timelineRectMax, bgColor, 4.0f);
+    ImGui::PushClipRect(timelineOrigin, timelineRectMax, true);
+
+    const int writeIdx = vizData.historyWriteIndex.load();
+    const float stepX = itemWidth / static_cast<float>(VizData::historyPoints - 1);
+    auto drawTimeline = [&](const std::array<std::atomic<float>, VizData::historyPoints>& history, ImU32 color)
+    {
+        float prevX = timelineOrigin.x;
+        float prevY = timelineRectMax.y;
+        for (int i = 0; i < VizData::historyPoints; ++i)
+        {
+            const int idx = (writeIdx + i) % VizData::historyPoints;
+            const float val = juce::jlimit(-60.0f, 0.0f, history[idx].load());
+            const float normalized = juce::jmap(val, -60.0f, 0.0f, 0.0f, 1.0f);
+            const float x = timelineOrigin.x + i * stepX;
+            const float y = timelineRectMax.y - normalized * (timelineHeight - 16.0f) - 8.0f;
+            if (i > 0)
+                drawList->AddLine(ImVec2(prevX, prevY), ImVec2(x, y), color, 2.0f);
+            prevX = x;
+            prevY = y;
+        }
+    };
+
+    drawTimeline(vizData.inputHistoryDb, inputColor);
+    drawTimeline(vizData.outputHistoryDb, outputColor);
+
+    ImGui::PopClipRect();
+    ImGui::SetCursorScreenPos(ImVec2(timelineOrigin.x, timelineRectMax.y));
+    ImGui::Dummy(ImVec2(itemWidth, 0));
+
+    const float grHeight = 40.0f;
+    const ImVec2 grOrigin = ImGui::GetCursorScreenPos();
+    const ImVec2 grRectMax = ImVec2(grOrigin.x + itemWidth, grOrigin.y + grHeight);
+    drawList->AddRectFilled(grOrigin, grRectMax, bgColor, 4.0f);
+    ImGui::PushClipRect(grOrigin, grRectMax, true);
+
+    float prevX = grOrigin.x;
+    float prevY = grRectMax.y - 8.0f;
+    for (int i = 0; i < VizData::historyPoints; ++i)
+    {
+        const int idx = (writeIdx + i) % VizData::historyPoints;
+        const float val = vizData.grHistory[idx].load();
+        const float x = grOrigin.x + i * stepX;
+        const float y = grRectMax.y - val * (grHeight - 16.0f) - 8.0f;
+        if (i > 0)
+            drawList->AddLine(ImVec2(prevX, prevY), ImVec2(x, y), grColor, 2.0f);
+        prevX = x;
+        prevY = y;
+    }
+
+    ImGui::PopClipRect();
+    ImGui::SetCursorScreenPos(ImVec2(grOrigin.x, grRectMax.y));
+    ImGui::Dummy(ImVec2(itemWidth, 0));
+
+    const float inputDb = vizData.inputLevelDb.load();
+    const float outputDb = vizData.outputLevelDb.load();
+    const float grDb = vizData.currentGRDb.load();
     
-    // Simulate GR based on threshold and ratio (placeholder)
-    float simulatedGR = juce::jlimit(0.0f, 1.0f, (-threshold / 60.0f) * (ratio / 20.0f));
-    
-    ImGui::PushStyleColor(ImGuiCol_PlotHistogram, theme.meters.clipping);
-    ImGui::ProgressBar(simulatedGR, ImVec2(itemWidth, 0), "");
-    ImGui::PopStyleColor();
-    ThemeText(juce::String::formatted("GR: ~%.1f dB", simulatedGR * -12.0f).toRawUTF8(), theme.text.section_header);
+    ImGui::Text("Input: %.1f dB  |  Output: %.1f dB", inputDb, outputDb);
+    ImGui::Text("Reduction: %.1f dB", grDb);
 
     ImGui::Spacing();
-    ImGui::Separator();
     ImGui::Spacing();
 
     // === RELATIVE MODULATION SECTION ===
@@ -385,6 +517,7 @@ void CompressorModuleProcessor::drawParametersInNode(float itemWidth, const std:
     }
 
     ImGui::PopItemWidth();
+    ImGui::PopID();
 }
 
 void CompressorModuleProcessor::drawIoPins(const NodePinHelpers& helpers)

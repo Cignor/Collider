@@ -43,6 +43,9 @@ PhaserModuleProcessor::PhaserModuleProcessor()
 
     lastOutputValues.push_back(std::make_unique<std::atomic<float>>(0.0f)); // Out L
     lastOutputValues.push_back(std::make_unique<std::atomic<float>>(0.0f)); // Out R
+    
+    // Initialize LFO phase accumulator
+    lfoPhaseAccumulator = 0.0;
 }
 
 void PhaserModuleProcessor::prepareToPlay(double sampleRate, int samplesPerBlock)
@@ -197,6 +200,64 @@ void PhaserModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce:
     phaser.setCentreFrequency(finalCentre);
     phaser.setFeedback(finalFeedback);
     
+    // --- Update LFO Phase for Visualization ---
+    const double sampleRate = getSampleRate();
+    if (sampleRate > 0.0)
+    {
+        const double phaseIncrement = finalRate / sampleRate;
+        lfoPhaseAccumulator += phaseIncrement * numSamples;
+        while (lfoPhaseAccumulator >= 1.0)
+            lfoPhaseAccumulator -= 1.0;
+        
+        // Update visualization data (throttled - every block)
+        vizData.lfoPhase.store((float)lfoPhaseAccumulator);
+        vizData.currentRate.store(finalRate);
+        vizData.currentDepth.store(finalDepth);
+        vizData.currentCentre.store(finalCentre);
+        vizData.currentFeedback.store(finalFeedback);
+        vizData.currentMix.store(finalMix);
+        
+        // Calculate approximate frequency response
+        // Phaser creates notches at frequencies determined by the LFO phase
+        // The centre frequency sweeps based on depth and phase
+        const float lfoPhase = (float)lfoPhaseAccumulator;
+        const float lfoValue = std::sin(lfoPhase * juce::MathConstants<float>::twoPi); // -1 to 1
+        const float sweepRange = finalDepth * 0.5f; // Depth controls sweep range
+        const float currentSweepFreq = finalCentre * std::pow(2.0f, lfoValue * sweepRange * 2.0f);
+        
+        // Calculate frequency response points (logarithmic scale, 20 Hz to 20 kHz)
+        for (int i = 0; i < VizData::frequencyPoints; ++i)
+        {
+            // Logarithmic frequency scale
+            const float freqLin = std::pow(10.0f, std::log10(20.0f) + (std::log10(20000.0f) - std::log10(20.0f)) * (float)i / (float)(VizData::frequencyPoints - 1));
+            
+            // Approximate phaser response: notches near the sweep frequency
+            // Phaser has 6 stages, creating multiple notches
+            float response = 1.0f;
+            const float distFromSweep = std::abs(std::log2(freqLin / currentSweepFreq));
+            
+            // Create notch effect (simplified model)
+            if (distFromSweep < 0.5f) // Within half octave of sweep frequency
+            {
+                const float notchDepth = finalDepth * (1.0f - distFromSweep * 2.0f);
+                response = 1.0f - notchDepth * 0.7f; // Notch reduces magnitude
+            }
+            
+            // Feedback adds resonance peaks
+            if (finalFeedback > 0.0f)
+            {
+                const float resonanceDist = std::abs(std::log2(freqLin / (currentSweepFreq * 1.5f)));
+                if (resonanceDist < 0.3f)
+                {
+                    response += finalFeedback * 0.3f * (1.0f - resonanceDist / 0.3f);
+                }
+            }
+            
+            response = juce::jlimit(0.0f, 2.0f, response); // Clamp to reasonable range
+            vizData.frequencyResponse[i].store(response);
+        }
+    }
+    
     // --- Process the Audio with Dry/Wet Mix ---
     // The JUCE Phaser's built-in mix is not ideal for this use case.
     // We'll implement a manual dry/wet mix for better results, like in VoiceProcessor.cpp
@@ -289,6 +350,116 @@ void PhaserModuleProcessor::drawParametersInNode(float itemWidth, const std::fun
     ThemeText("Phaser Parameters", theme.text.section_header);
     ImGui::Spacing();
 
+    // === VISUALIZATION ===
+    const float vizHeight = 120.0f;
+    const float vizWidth = itemWidth;
+    ImVec2 vizOrigin = ImGui::GetCursorScreenPos();
+    ImVec2 vizRectMax(vizOrigin.x + vizWidth, vizOrigin.y + vizHeight);
+    
+    auto* drawList = ImGui::GetWindowDrawList();
+    
+    // Color resolution helper (from Granulator pattern)
+    auto resolveColor = [](ImU32 primary, ImU32 fallback1, ImU32 fallback2) -> ImU32 {
+        return (primary != 0) ? primary : ((fallback1 != 0) ? fallback1 : fallback2);
+    };
+    
+    // Background: scope_plot_bg -> canvas_background -> ChildBg -> fallback
+    const ImU32 canvasBg = ImGui::ColorConvertFloat4ToU32(ImGui::GetStyle().Colors[ImGuiCol_ChildBg]);
+    const ImU32 bgColor = resolveColor(theme.modules.scope_plot_bg, canvasBg, IM_COL32(20, 20, 25, 255));
+    
+    // Frequency response line (cyan/blue)
+    const ImVec4 frequencyColorVec4 = theme.modulation.frequency;
+    const ImU32 frequencyColor = ImGui::ColorConvertFloat4ToU32(ImVec4(frequencyColorVec4.x, frequencyColorVec4.y, frequencyColorVec4.z, 0.9f));
+    
+    // LFO phase indicator (orange/yellow)
+    const ImVec4 timbreColorVec4 = theme.modulation.timbre;
+    const ImU32 lfoColor = ImGui::ColorConvertFloat4ToU32(ImVec4(timbreColorVec4.x, timbreColorVec4.y, timbreColorVec4.z, 1.0f));
+    
+    // Centre frequency marker (magenta/pink)
+    const ImVec4 amplitudeColorVec4 = theme.modulation.amplitude;
+    const ImU32 centreMarkerColor = ImGui::ColorConvertFloat4ToU32(ImVec4(amplitudeColorVec4.x, amplitudeColorVec4.y, amplitudeColorVec4.z, 0.8f));
+    
+    drawList->AddRectFilled(vizOrigin, vizRectMax, bgColor, 4.0f);
+    ImGui::PushClipRect(vizOrigin, vizRectMax, true);
+    
+    // Read visualization data (thread-safe)
+    float frequencyResponse[VizData::frequencyPoints];
+    for (int i = 0; i < VizData::frequencyPoints; ++i)
+    {
+        frequencyResponse[i] = vizData.frequencyResponse[i].load();
+    }
+    const float lfoPhase = vizData.lfoPhase.load();
+    const float currentCentre = vizData.currentCentre.load();
+    const float currentDepth = vizData.currentDepth.load();
+    
+    // Draw frequency response graph (logarithmic frequency axis)
+    const float midY = vizOrigin.y + vizHeight * 0.5f;
+    const float scaleY = vizHeight * 0.4f;
+    const float stepX = vizWidth / (float)(VizData::frequencyPoints - 1);
+    
+    // Draw center line (0 dB reference)
+    drawList->AddLine(ImVec2(vizOrigin.x, midY), ImVec2(vizRectMax.x, midY), IM_COL32(100, 100, 100, 80), 1.0f);
+    
+    // Draw frequency response curve
+    float prevX = vizOrigin.x, prevY = midY;
+    for (int i = 0; i < VizData::frequencyPoints; ++i)
+    {
+        const float response = frequencyResponse[i];
+        const float x = vizOrigin.x + i * stepX;
+        // Map response: 0.0 = -scaleY, 1.0 = midY, 2.0 = +scaleY
+        const float y = midY - (response - 1.0f) * scaleY;
+        if (i > 0) drawList->AddLine(ImVec2(prevX, prevY), ImVec2(x, y), frequencyColor, 2.0f);
+        prevX = x; prevY = y;
+    }
+    
+    // Draw centre frequency marker (vertical line)
+    const float centreFreqLog = std::log10(juce::jlimit(20.0f, 20000.0f, currentCentre));
+    const float centreFreqNorm = (centreFreqLog - std::log10(20.0f)) / (std::log10(20000.0f) - std::log10(20.0f));
+    const float centreX = vizOrigin.x + centreFreqNorm * vizWidth;
+    drawList->AddLine(ImVec2(centreX, vizOrigin.y), ImVec2(centreX, vizRectMax.y), centreMarkerColor, 1.5f);
+    
+    // Draw LFO phase indicator (circular at top-right)
+    const float lfoRadius = 12.0f;
+    const float lfoCenterX = vizRectMax.x - lfoRadius - 5.0f;
+    const float lfoCenterY = vizOrigin.y + lfoRadius + 5.0f;
+    
+    // Draw LFO circle background
+    drawList->AddCircleFilled(ImVec2(lfoCenterX, lfoCenterY), lfoRadius, IM_COL32(40, 40, 45, 200), 16);
+    drawList->AddCircle(ImVec2(lfoCenterX, lfoCenterY), lfoRadius, IM_COL32(100, 100, 100, 150), 16, 1.5f);
+    
+    // Draw LFO phase dot (rotates around circle)
+    const float lfoAngle = lfoPhase * juce::MathConstants<float>::twoPi - juce::MathConstants<float>::halfPi; // Start at top
+    const float dotX = lfoCenterX + std::cos(lfoAngle) * (lfoRadius - 2.0f);
+    const float dotY = lfoCenterY + std::sin(lfoAngle) * (lfoRadius - 2.0f);
+    drawList->AddCircleFilled(ImVec2(dotX, dotY), 3.0f, lfoColor, 8);
+    
+    // Draw LFO trail (shows recent phase history)
+    const int trailPoints = 8;
+    for (int i = 0; i < trailPoints; ++i)
+    {
+        const float trailPhase = lfoPhase - (float)i * 0.05f;
+        if (trailPhase < 0.0f) continue;
+        const float trailAngle = trailPhase * juce::MathConstants<float>::twoPi - juce::MathConstants<float>::halfPi;
+        const float trailX = lfoCenterX + std::cos(trailAngle) * (lfoRadius - 2.0f);
+        const float trailY = lfoCenterY + std::sin(trailAngle) * (lfoRadius - 2.0f);
+        const float alpha = 1.0f - (float)i / (float)trailPoints;
+        const ImU32 trailColor = ImGui::ColorConvertFloat4ToU32(ImVec4(timbreColorVec4.x, timbreColorVec4.y, timbreColorVec4.z, alpha * 0.5f));
+        drawList->AddCircleFilled(ImVec2(trailX, trailY), 2.0f, trailColor, 6);
+    }
+    
+    ImGui::PopClipRect();
+    
+    // Move cursor past visualization
+    ImGui::SetCursorScreenPos(ImVec2(vizOrigin.x, vizRectMax.y + ImGui::GetStyle().ItemSpacing.y));
+    ImGui::Dummy(ImVec2(vizWidth, 0));
+    ImGui::Spacing();
+    
+    // Info text below visualization
+    const float currentRate = vizData.currentRate.load();
+    ImGui::TextDisabled("LFO: %.2f Hz | Centre: %.0f Hz | Depth: %.0f%%", 
+                        currentRate, currentCentre, currentDepth * 100.0f);
+    ImGui::Spacing();
+
     drawSlider("Rate", paramIdRate, paramIdRateMod, 0.01f, 10.0f, "%.2f Hz", "LFO sweep rate (0.01-10 Hz)", 0);
     drawSlider("Depth", paramIdDepth, paramIdDepthMod, 0.0f, 1.0f, "%.2f", "Modulation depth (0-1)", 0);
     drawSlider("Centre", paramIdCentreHz, paramIdCentreHzMod, 20.0f, 10000.0f, "%.0f Hz", "Center frequency of phase shift", ImGuiSliderFlags_Logarithmic);
@@ -296,7 +467,6 @@ void PhaserModuleProcessor::drawParametersInNode(float itemWidth, const std::fun
     drawSlider("Mix", paramIdMix, paramIdMixMod, 0.0f, 1.0f, "%.2f", "Dry/wet mix (0-1)", 0);
 
     ImGui::Spacing();
-    ImGui::Separator();
     ImGui::Spacing();
 
     // === RELATIVE MODULATION SECTION ===

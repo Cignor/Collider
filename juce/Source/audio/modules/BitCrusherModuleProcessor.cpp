@@ -814,7 +814,6 @@ void BitCrusherModuleProcessor::drawParametersInNode(float itemWidth, const std:
                 currentAntiAlias ? "ON" : "OFF");
     
     ImGui::Spacing();
-    ImGui::Separator();
     ImGui::Spacing();
 
     // Bit Depth
@@ -923,7 +922,6 @@ void BitCrusherModuleProcessor::drawParametersInNode(float itemWidth, const std:
     HelpMarker("Quantization Algorithm:\nLinear: Basic, harsh quantization.\nDither: Adds noise to reduce artifacts.\nNoise Shaping: Pushes quantization noise into higher, less audible frequencies.");
 
     ImGui::Spacing();
-    ImGui::Separator();
     ImGui::Spacing();
 
     // === RELATIVE MODULATION SECTION ===

@@ -172,7 +172,6 @@ void WaveshaperModuleProcessor::drawParametersInNode(float itemWidth, const std:
     HelpMarker("Shaping algorithm:\nSoft Clip = smooth saturation\nHard Clip = digital clipping\nFoldback = wave folding distortion");
 
     ImGui::Spacing();
-    ImGui::Separator();
     ImGui::Spacing();
 
     // === RELATIVE MODULATION SECTION ===

@@ -831,7 +831,6 @@ void MIDIPlayerModuleProcessor::drawParametersInNode(float /*itemWidth*/, const 
             if (showAllSelected)
                 ImGui::SetItemDefaultFocus();
             
-            ImGui::Separator();
             
             // Individual tracks
             for (int i = 0; i < getNumTracks(); ++i)
@@ -949,7 +948,6 @@ void MIDIPlayerModuleProcessor::drawParametersInNode(float /*itemWidth*/, const 
     // --- QUICK CONNECT BUTTONS ---
     if (hasMIDIFileLoaded() && getNumTracks() > 0)
     {
-        ImGui::Separator();
         ImGui::Text("Quick Connect:");
         ImGui::SameLine();
         
@@ -979,7 +977,6 @@ void MIDIPlayerModuleProcessor::drawParametersInNode(float /*itemWidth*/, const 
     if (ImGui::IsItemHovered())
         ImGui::SetTooltip("Connect to both PolyVCO and Sample Loaders");
     
-        ImGui::Separator();
     }
     
         ImGui::Spacing();

@@ -5,6 +5,7 @@
 
 #if defined(PRESET_CREATOR_UI)
 #include "../../preset_creator/ImGuiNodeEditorComponent.h"
+#include "../../preset_creator/theme/ThemeManager.h"
 #endif
 
 SampleLoaderModuleProcessor::SampleLoaderModuleProcessor()
@@ -27,6 +28,13 @@ SampleLoaderModuleProcessor::SampleLoaderModuleProcessor()
     rangeEndParam = apvts.getRawParameterValue("rangeEnd");
     rangeStartModParam = apvts.getRawParameterValue("rangeStart_mod");
     rangeEndModParam = apvts.getRawParameterValue("rangeEnd_mod");
+    
+    // Initialize relative modulation parameter pointers
+    relativeSpeedModParam = apvts.getRawParameterValue("relativeSpeedMod");
+    relativePitchModParam = apvts.getRawParameterValue("relativePitchMod");
+    relativeGateModParam = apvts.getRawParameterValue("relativeGateMod");
+    relativeRangeStartModParam = apvts.getRawParameterValue("relativeRangeStartMod");
+    relativeRangeEndModParam = apvts.getRawParameterValue("relativeRangeEndMod");
 }
 
 
@@ -77,6 +85,13 @@ juce::AudioProcessorValueTreeState::ParameterLayout SampleLoaderModuleProcessor:
     parameters.push_back(std::make_unique<juce::AudioParameterFloat>(
         "rangeEnd", "Range End", 
         juce::NormalisableRange<float>(0.0f, 1.0f), 1.0f));
+    
+    // Relative modulation parameters
+    parameters.push_back(std::make_unique<juce::AudioParameterBool>("relativeSpeedMod", "Relative Speed Mod", true));
+    parameters.push_back(std::make_unique<juce::AudioParameterBool>("relativePitchMod", "Relative Pitch Mod", true));
+    parameters.push_back(std::make_unique<juce::AudioParameterBool>("relativeGateMod", "Relative Gate Mod", false));
+    parameters.push_back(std::make_unique<juce::AudioParameterBool>("relativeRangeStartMod", "Relative Range Start Mod", false));
+    parameters.push_back(std::make_unique<juce::AudioParameterBool>("relativeRangeEndMod", "Relative Range End Mod", false));
     
     return { parameters.begin(), parameters.end() };
 }
@@ -212,15 +227,28 @@ void SampleLoaderModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer,
     
     const int numSamples = buffer.getNumSamples();
 
+    // Read relative modulation mode flags
+    const bool relativeSpeedMode = relativeSpeedModParam != nullptr && relativeSpeedModParam->load() > 0.5f;
+    const bool relativePitchMode = relativePitchModParam != nullptr && relativePitchModParam->load() > 0.5f;
+    const bool relativeGateMode = relativeGateModParam != nullptr && relativeGateModParam->load() > 0.5f;
+    const bool relativeRangeStartMode = relativeRangeStartModParam != nullptr && relativeRangeStartModParam->load() > 0.5f;
+    const bool relativeRangeEndMode = relativeRangeEndModParam != nullptr && relativeRangeEndModParam->load() > 0.5f;
+
     // --- Compute block-rate CV-mapped values for telemetry (even when not playing) ---
     const float baseSpeed = apvts.getRawParameterValue("speed")->load();
     float speedNow = baseSpeed;
     if (isParamInputConnected("speed_mod") && playbackBus.getNumChannels() > 1)
     {
         const float cv = juce::jlimit(0.0f, 1.0f, playbackBus.getReadPointer(1)[0]);
-        const float octaveRange = 4.0f;
-        const float octaveOffset = (cv - 0.5f) * octaveRange;
-        speedNow = juce::jlimit(0.25f, 4.0f, baseSpeed * std::pow(2.0f, octaveOffset));
+        if (relativeSpeedMode) {
+            // RELATIVE: ±4 octaves around base (CV at 0.5 = no change)
+            const float octaveRange = 4.0f;
+            const float octaveOffset = (cv - 0.5f) * octaveRange;
+            speedNow = juce::jlimit(0.25f, 4.0f, baseSpeed * std::pow(2.0f, octaveOffset));
+        } else {
+            // ABSOLUTE: CV directly maps to 0.25-4.0 range
+            speedNow = juce::jmap(cv, 0.25f, 4.0f);
+        }
     }
 
     const float basePitch = apvts.getRawParameterValue("pitch")->load();
@@ -228,18 +256,47 @@ void SampleLoaderModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer,
     if (isParamInputConnected("pitch_mod") && playbackBus.getNumChannels() > 0)
     {
         const float rawCV = playbackBus.getReadPointer(0)[0];
-        const float bipolarCV = (rawCV >= 0.0f && rawCV <= 1.0f) ? (rawCV * 2.0f - 1.0f) : rawCV;
-        const float pitchModulationRange = 24.0f; 
-        pitchNow = juce::jlimit(-24.0f, 24.0f, basePitch + (bipolarCV * pitchModulationRange));
+        const float cv = juce::jlimit(0.0f, 1.0f, rawCV);
+        if (relativePitchMode) {
+            // RELATIVE: ±24 semitones around base (CV treated as bipolar: 0.5 = no change)
+            const float bipolarCV = cv * 2.0f - 1.0f; // 0-1 -> -1 to 1
+            const float pitchModulationRange = 24.0f; 
+            pitchNow = juce::jlimit(-24.0f, 24.0f, basePitch + (bipolarCV * pitchModulationRange));
+        } else {
+            // ABSOLUTE: CV directly maps to -24 to +24 semitones (CV 0.0 = -24, CV 1.0 = +24)
+            pitchNow = juce::jmap(cv, -24.0f, 24.0f);
+        }
     }
 
     float startNorm = rangeStartParam->load();
     if (isParamInputConnected("rangeStart_mod") && rangeBus.getNumChannels() > 0)
-        startNorm = juce::jlimit(0.0f, 1.0f, rangeBus.getReadPointer(0)[0]);
+    {
+        const float cv = juce::jlimit(0.0f, 1.0f, rangeBus.getReadPointer(0)[0]);
+        if (relativeRangeStartMode) {
+            // RELATIVE: ±0.25 around base range start (CV at 0.5 = no change, clamped to 0-1)
+            const float rangeRange = 0.25f;
+            const float rangeOffset = (cv - 0.5f) * (rangeRange * 2.0f);
+            startNorm = juce::jlimit(0.0f, 1.0f, startNorm + rangeOffset);
+        } else {
+            // ABSOLUTE: CV directly sets range start (0-1)
+            startNorm = cv;
+        }
+    }
 
     float endNorm = rangeEndParam->load();
     if (isParamInputConnected("rangeEnd_mod") && rangeBus.getNumChannels() > 1)
-        endNorm = juce::jlimit(0.0f, 1.0f, rangeBus.getReadPointer(1)[0]);
+    {
+        const float cv = juce::jlimit(0.0f, 1.0f, rangeBus.getReadPointer(1)[0]);
+        if (relativeRangeEndMode) {
+            // RELATIVE: ±0.25 around base range end (CV at 0.5 = no change, clamped to 0-1)
+            const float rangeRange = 0.25f;
+            const float rangeOffset = (cv - 0.5f) * (rangeRange * 2.0f);
+            endNorm = juce::jlimit(0.0f, 1.0f, endNorm + rangeOffset);
+        } else {
+            // ABSOLUTE: CV directly sets range end (0-1)
+            endNorm = cv;
+        }
+    }
 
     // Ensure valid range window
     {
@@ -357,6 +414,7 @@ void SampleLoaderModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer,
 
         // --- 3. GATE (VCA) APPLICATION ---
         // If a gate is connected, use it to shape the volume of the audio we just generated.
+        const float baseGate = apvts.getRawParameterValue("gate")->load();
         float lastGateValue = 1.0f;
         if (isParamInputConnected("gate_mod") && controlBus.getNumChannels() > 0)
         {
@@ -366,7 +424,17 @@ void SampleLoaderModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer,
                 float* channelData = outBus.getWritePointer(ch);
                 for (int i = 0; i < numSamples; ++i)
                 {
-                    const float gateValue = juce::jlimit(0.0f, 1.0f, gateCV[i]);
+                    const float cv = juce::jlimit(0.0f, 1.0f, gateCV[i]);
+                    float gateValue;
+                    if (relativeGateMode) {
+                        // RELATIVE: ±0.5 around base gate (CV at 0.5 = no change, clamped to 0-1)
+                        const float gateRange = 0.5f;
+                        const float gateOffset = (cv - 0.5f) * (gateRange * 2.0f);
+                        gateValue = juce::jlimit(0.0f, 1.0f, baseGate + gateOffset);
+                    } else {
+                        // ABSOLUTE: CV directly sets gate (0-1)
+                        gateValue = cv;
+                    }
                     channelData[i] *= gateValue;
                     
                     // Update telemetry (throttled every 64 samples, only once per channel)
@@ -688,6 +756,7 @@ void SampleLoaderModuleProcessor::drawParametersInNode(float itemWidth, const st
 {
     // --- THIS IS THE DEFINITIVE FIX ---
     // 1. Draw all the parameter sliders and buttons FIRST.
+    const auto& theme = ThemeManager::getInstance().getCurrentTheme();
     ImGui::PushItemWidth(itemWidth);
 
     if (ImGui::Button("Load Sample", ImVec2(itemWidth * 0.48f, 0)))
@@ -801,6 +870,76 @@ void SampleLoaderModuleProcessor::drawParametersInNode(float itemWidth, const st
     if (! rangeEndModulated)
         ModuleProcessor::adjustParamOnWheel(apvts.getParameter("rangeEnd"), "rangeEnd", rangeEnd);
     if (rangeEndModulated) { ImGui::PopStyleColor(); ImGui::EndDisabled(); }
+    
+    ImGui::Spacing();
+    ImGui::Spacing();
+    
+    // === CV INPUT MODES SECTION ===
+    ThemeText("CV Input Modes", theme.text.section_header);
+    ImGui::Spacing();
+    
+    // Relative Speed Mod checkbox
+    bool relativeSpeedMod = relativeSpeedModParam != nullptr && relativeSpeedModParam->load() > 0.5f;
+    if (ImGui::Checkbox("Relative Speed Mod", &relativeSpeedMod))
+    {
+        if (auto* p = dynamic_cast<juce::AudioParameterBool*>(apvts.getParameter("relativeSpeedMod")))
+            *p = relativeSpeedMod;
+    }
+    if (ImGui::IsItemHovered())
+    {
+        ImGui::SetTooltip("ON: CV modulates around slider (±4 octaves)\nOFF: CV directly sets speed (0.25x-4.0x)");
+    }
+    
+    // Relative Pitch Mod checkbox
+    bool relativePitchMod = relativePitchModParam != nullptr && relativePitchModParam->load() > 0.5f;
+    if (ImGui::Checkbox("Relative Pitch Mod", &relativePitchMod))
+    {
+        if (auto* p = dynamic_cast<juce::AudioParameterBool*>(apvts.getParameter("relativePitchMod")))
+            *p = relativePitchMod;
+    }
+    if (ImGui::IsItemHovered())
+    {
+        ImGui::SetTooltip("ON: CV modulates around slider (±24 semitones)\nOFF: CV directly sets pitch (-24 to +24 st)");
+    }
+    
+    // Relative Gate Mod checkbox
+    bool relativeGateMod = relativeGateModParam != nullptr && relativeGateModParam->load() > 0.5f;
+    if (ImGui::Checkbox("Relative Gate Mod", &relativeGateMod))
+    {
+        if (auto* p = dynamic_cast<juce::AudioParameterBool*>(apvts.getParameter("relativeGateMod")))
+            *p = relativeGateMod;
+    }
+    if (ImGui::IsItemHovered())
+    {
+        ImGui::SetTooltip("ON: CV modulates around slider (±0.5)\nOFF: CV directly sets gate (0-1)");
+    }
+    
+    // Relative Range Start Mod checkbox
+    bool relativeRangeStartMod = relativeRangeStartModParam != nullptr && relativeRangeStartModParam->load() > 0.5f;
+    if (ImGui::Checkbox("Relative Range Start Mod", &relativeRangeStartMod))
+    {
+        if (auto* p = dynamic_cast<juce::AudioParameterBool*>(apvts.getParameter("relativeRangeStartMod")))
+            *p = relativeRangeStartMod;
+    }
+    if (ImGui::IsItemHovered())
+    {
+        ImGui::SetTooltip("ON: CV modulates around slider (±0.25)\nOFF: CV directly sets range start (0-1)");
+    }
+    
+    // Relative Range End Mod checkbox
+    bool relativeRangeEndMod = relativeRangeEndModParam != nullptr && relativeRangeEndModParam->load() > 0.5f;
+    if (ImGui::Checkbox("Relative Range End Mod", &relativeRangeEndMod))
+    {
+        if (auto* p = dynamic_cast<juce::AudioParameterBool*>(apvts.getParameter("relativeRangeEndMod")))
+            *p = relativeRangeEndMod;
+    }
+    if (ImGui::IsItemHovered())
+    {
+        ImGui::SetTooltip("ON: CV modulates around slider (±0.25)\nOFF: CV directly sets range end (0-1)");
+    }
+    
+    ImGui::Spacing();
+    ImGui::Spacing();
     
     bool loop = apvts.getRawParameterValue("loop")->load() > 0.5f;
     if (ImGui::Checkbox("Loop", &loop))

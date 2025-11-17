@@ -1,95 +1,386 @@
 <?xml version="1.0" encoding="UTF-8"?>
 
-<ModularSynthPreset version="1">
+<ModularSynthPreset version="1" bpm="120.0">
   <modules>
-    <module logicalId="1" type="harmonic shaper">
+    <module logicalId="1" type="granulator">
+      <params>
+        <GranulatorParams>
+          <PARAM id="density" value="32.99999618530273"/>
+          <PARAM id="gate" value="1.0"/>
+          <PARAM id="panRandom" value="0.0"/>
+          <PARAM id="pitch" value="-3.399999618530273"/>
+          <PARAM id="pitchRandom" value="4.099999904632568"/>
+          <PARAM id="position" value="0.0"/>
+          <PARAM id="size" value="346.0"/>
+          <PARAM id="spread" value="0.2599999904632568"/>
+          <PARAM id="relativeDensityMod"/>
+          <PARAM id="relativePitchMod"/>
+          <PARAM id="relativePositionMod"/>
+          <PARAM id="relativeSizeMod"/>
+        </GranulatorParams>
+      </params>
+    </module>
+    <module logicalId="3" type="random">
+      <params>
+        <RandomParams>
+          <PARAM id="cvMax" value="0.699999988079071"/>
+          <PARAM id="cvMin" value="0.4799999892711639"/>
+          <PARAM id="max" value="1.0"/>
+          <PARAM id="min" value="0.0"/>
+          <PARAM id="normMax" value="1.0"/>
+          <PARAM id="normMin" value="0.0"/>
+          <PARAM id="rate" value="0.5099999904632568"/>
+          <PARAM id="rate_division" value="3.0"/>
+          <PARAM id="slew" value="0.1610000133514404"/>
+          <PARAM id="sync" value="0.0"/>
+          <PARAM id="trigThreshold" value="0.5"/>
+        </RandomParams>
+      </params>
+      <extra>
+        <RandomState sync="0.0" rate_division="3.0"/>
+      </extra>
+    </module>
+    <module logicalId="1008" type="sample_loader">
+      <params>
+        <SampleLoaderParameters samplePath="H:\0000_CODE\01_collider_pyo\audio\samples\percussion\KSHMR_Acoustic_Tom_04_Low_D - Copy.wav">
+          <PARAM id="engine" value="1.0"/>
+          <PARAM id="gate" value="0.7999999523162842"/>
+          <PARAM id="gate_mod" value="1.0"/>
+          <PARAM id="loop" value="1.0"/>
+          <PARAM id="pitch" value="-12.80000019073486"/>
+          <PARAM id="pitch_mod" value="0.0"/>
+          <PARAM id="rangeEnd" value="0.3569999933242798"/>
+          <PARAM id="rangeEnd_mod" value="1.0"/>
+          <PARAM id="rangeStart" value="0.0"/>
+          <PARAM id="rangeStart_mod" value="0.0"/>
+          <PARAM id="rbPhaseInd" value="1.0"/>
+          <PARAM id="rbWindowShort" value="1.0"/>
+          <PARAM id="speed" value="1.429999947547913"/>
+          <PARAM id="speed_mod" value="1.0"/>
+          <PARAM id="trigger_mod" value="0.0"/>
+          <PARAM id="relativeGateMod"/>
+          <PARAM id="relativePitchMod"/>
+          <PARAM id="relativeRangeEndMod" value="1.0"/>
+          <PARAM id="relativeRangeStartMod"/>
+          <PARAM id="relativeSpeedMod"/>
+        </SampleLoaderParameters>
+      </params>
+    </module>
+    <module logicalId="1017" type="8bandshaper">
+      <params>
+        <MultiBandShaperParams>
+          <PARAM id="drive_1" value="1.0"/>
+          <PARAM id="drive_2" value="6.039999961853027"/>
+          <PARAM id="drive_3" value="1.429999947547913"/>
+          <PARAM id="drive_4" value="0.2899999916553497"/>
+          <PARAM id="drive_5" value="0.1700000017881393"/>
+          <PARAM id="drive_6" value="0.07000000029802322"/>
+          <PARAM id="drive_7" value="3.519999980926514"/>
+          <PARAM id="drive_8" value="0.0"/>
+          <PARAM id="outputGain" value="0.0"/>
+          <PARAM id="relativeDriveMod_1" value="1.0"/>
+          <PARAM id="relativeDriveMod_2" value="1.0"/>
+          <PARAM id="relativeDriveMod_3" value="1.0"/>
+          <PARAM id="relativeDriveMod_4" value="1.0"/>
+          <PARAM id="relativeDriveMod_5" value="1.0"/>
+          <PARAM id="relativeDriveMod_6" value="1.0"/>
+          <PARAM id="relativeDriveMod_7" value="1.0"/>
+          <PARAM id="relativeDriveMod_8" value="1.0"/>
+          <PARAM id="relativeGainMod" value="1.0"/>
+        </MultiBandShaperParams>
+      </params>
+    </module>
+    <module logicalId="1019" type="bit_crusher">
+      <params>
+        <BitCrusherParams>
+          <PARAM id="antiAlias" value="1.0"/>
+          <PARAM id="bit_depth" value="5.489999771118164"/>
+          <PARAM id="mix" value="0.8700000047683716"/>
+          <PARAM id="quant_mode" value="0.0"/>
+          <PARAM id="relativeBitDepthMod" value="1.0"/>
+          <PARAM id="relativeSampleRateMod" value="1.0"/>
+          <PARAM id="sample_rate" value="0.2240000069141388"/>
+          <PARAM id="relativeMixMod" value="1.0"/>
+        </BitCrusherParams>
+      </params>
+    </module>
+    <module logicalId="1051" type="delay">
+      <params>
+        <DelayParams>
+          <PARAM id="feedback" value="0.6869999766349792"/>
+          <PARAM id="mix" value="0.3709999918937683"/>
+          <PARAM id="relativeFeedbackMod" value="1.0"/>
+          <PARAM id="relativeMixMod" value="1.0"/>
+          <PARAM id="relativeTimeMod" value="1.0"/>
+          <PARAM id="timeMs" value="482.8999938964844"/>
+        </DelayParams>
+      </params>
+    </module>
+    <module logicalId="1070" type="harmonic_shaper">
       <params>
         <HarmonicShaperParams>
-          <PARAM id="detune_1" value="-33.02999877929688"/>
-          <PARAM id="detune_2" value="5.360000610351562"/>
-          <PARAM id="detune_3" value="-47.31999969482422"/>
-          <PARAM id="detune_4" value="-29.45999908447266"/>
-          <PARAM id="detune_5" value="-18.75"/>
+          <PARAM id="character" value="0.7100000381469727"/>
+          <PARAM id="detune_1" value="0.0"/>
+          <PARAM id="detune_2" value="0.0"/>
+          <PARAM id="detune_3" value="0.0"/>
+          <PARAM id="detune_4" value="0.0"/>
+          <PARAM id="detune_5" value="0.0"/>
           <PARAM id="detune_6" value="0.0"/>
-          <PARAM id="detune_7" value="18.75"/>
-          <PARAM id="detune_8" value="46.42999267578125"/>
+          <PARAM id="detune_7" value="0.0"/>
+          <PARAM id="detune_8" value="0.0"/>
           <PARAM id="drive_1" value="0.5"/>
-          <PARAM id="drive_2" value="0.75"/>
-          <PARAM id="drive_3" value="0.2699999809265137"/>
-          <PARAM id="drive_4" value="1.0"/>
+          <PARAM id="drive_2" value="0.5"/>
+          <PARAM id="drive_3" value="0.5"/>
+          <PARAM id="drive_4" value="0.5"/>
           <PARAM id="drive_5" value="0.5"/>
           <PARAM id="drive_6" value="0.5"/>
-          <PARAM id="drive_7" value="0.6699999570846558"/>
-          <PARAM id="drive_8" value="0.0"/>
-          <PARAM id="level_1" value="1.0"/>
-          <PARAM id="level_2" value="1.0"/>
-          <PARAM id="level_3" value="1.0"/>
-          <PARAM id="level_4" value="1.0"/>
-          <PARAM id="level_5" value="1.0"/>
-          <PARAM id="level_6" value="0.0"/>
-          <PARAM id="level_7" value="0.0"/>
-          <PARAM id="level_8" value="0.0"/>
-          <PARAM id="masterDrive" value="0.0"/>
-          <PARAM id="masterFrequency" value="2275.0"/>
-          <PARAM id="outputGain" value="0.7500000596046448"/>
-          <PARAM id="ratio_1" value="0.4390000104904175"/>
-          <PARAM id="ratio_2" value="5.781000137329102"/>
-          <PARAM id="ratio_3" value="0.6770000457763672"/>
-          <PARAM id="ratio_4" value="0.1850000023841858"/>
-          <PARAM id="ratio_5" value="1.269000053405762"/>
-          <PARAM id="ratio_6" value="7.497000217437744"/>
-          <PARAM id="ratio_7" value="4.269000053405762"/>
-          <PARAM id="ratio_8" value="5.657000064849854"/>
+          <PARAM id="drive_7" value="0.5"/>
+          <PARAM id="drive_8" value="0.5"/>
+          <PARAM id="level_1" value="0.8499999642372131"/>
+          <PARAM id="level_2" value="0.699999988079071"/>
+          <PARAM id="level_3" value="0.9099999666213989"/>
+          <PARAM id="level_4" value="0.75"/>
+          <PARAM id="level_5" value="0.85999995470047"/>
+          <PARAM id="level_6" value="1.0"/>
+          <PARAM id="level_7" value="0.8799999952316284"/>
+          <PARAM id="level_8" value="0.7400000095367432"/>
+          <PARAM id="masterDrive" value="1.0"/>
+          <PARAM id="masterFrequency" value="20.0"/>
+          <PARAM id="mix" value="0.08999999612569809"/>
+          <PARAM id="outputGain" value="1.0"/>
+          <PARAM id="ratio_1" value="1.00000011920929"/>
+          <PARAM id="ratio_2" value="1.999999761581421"/>
+          <PARAM id="ratio_3" value="3.000000238418579"/>
+          <PARAM id="ratio_4" value="4.0"/>
+          <PARAM id="ratio_5" value="4.999999523162842"/>
+          <PARAM id="ratio_6" value="6.000000953674316"/>
+          <PARAM id="ratio_7" value="7.000000953674316"/>
+          <PARAM id="ratio_8" value="8.0"/>
+          <PARAM id="relativeDriveMod" value="1.0"/>
+          <PARAM id="relativeFreqMod" value="1.0"/>
+          <PARAM id="smoothness" value="0.2100000083446503"/>
           <PARAM id="waveform_1" value="0.0"/>
-          <PARAM id="waveform_2" value="0.0"/>
+          <PARAM id="waveform_2" value="3.0"/>
           <PARAM id="waveform_3" value="0.0"/>
-          <PARAM id="waveform_4" value="3.0"/>
-          <PARAM id="waveform_5" value="1.0"/>
+          <PARAM id="waveform_4" value="2.0"/>
+          <PARAM id="waveform_5" value="3.0"/>
           <PARAM id="waveform_6" value="0.0"/>
           <PARAM id="waveform_7" value="0.0"/>
-          <PARAM id="waveform_8" value="1.0"/>
+          <PARAM id="waveform_8" value="3.0"/>
+          <PARAM id="relativeCharacterMod" value="1.0"/>
+          <PARAM id="relativeGainMod"/>
+          <PARAM id="relativeMixMod" value="1.0"/>
+          <PARAM id="relativeSmoothnessMod" value="1.0"/>
         </HarmonicShaperParams>
       </params>
     </module>
-    <module logicalId="3" type="Random">
+    <module logicalId="1089" type="random">
       <params>
         <RandomParams>
-          <PARAM id="boolThreshold" value="0.5"/>
-          <PARAM id="cvMax" value="0.1299999952316284"/>
-          <PARAM id="cvMin" value="0.3499999940395355"/>
+          <PARAM id="cvMax" value="1.0"/>
+          <PARAM id="cvMin" value="0.0"/>
           <PARAM id="max" value="1.0"/>
           <PARAM id="min" value="0.0"/>
-          <PARAM id="normMax" value="0.25"/>
-          <PARAM id="normMin" value="0.1099999994039536"/>
-          <PARAM id="rate" value="15.59000015258789"/>
+          <PARAM id="normMax" value="1.0"/>
+          <PARAM id="normMin" value="0.0"/>
+          <PARAM id="rate" value="1.00000011920929"/>
+          <PARAM id="rate_division" value="3.0"/>
           <PARAM id="slew" value="0.0"/>
+          <PARAM id="sync" value="0.0"/>
+          <PARAM id="trigThreshold" value="0.5"/>
         </RandomParams>
       </params>
+      <extra>
+        <RandomState sync="0.0" rate_division="3.0"/>
+      </extra>
     </module>
-    <module logicalId="4" type="TTS Performer">
+    <module logicalId="1108" type="reverb">
       <params>
-        <TTSPerformerParams>
-          <PARAM id="engine" value="1.0"/>
-          <PARAM id="gate" value="1.0"/>
-          <PARAM id="pitch" value="-19.5"/>
-          <PARAM id="rate" value="1.259999990463257"/>
-          <PARAM id="speed" value="0.3700000047683716"/>
-          <PARAM id="trimEnd" value="1.0"/>
-          <PARAM id="trimStart" value="0.0"/>
-          <PARAM id="volume" value="1.0"/>
-        </TTSPerformerParams>
+        <ReverbParams>
+          <PARAM id="damp" value="0.7590000033378601"/>
+          <PARAM id="mix" value="0.8880000114440918"/>
+          <PARAM id="relativeDampMod" value="1.0"/>
+          <PARAM id="relativeMixMod" value="1.0"/>
+          <PARAM id="relativeSizeMod" value="1.0"/>
+          <PARAM id="size" value="0.5979999899864197"/>
+        </ReverbParams>
+      </params>
+    </module>
+    <module logicalId="1199" type="reverb">
+      <params>
+        <ReverbParams>
+          <PARAM id="damp" value="0.300000011920929"/>
+          <PARAM id="mix" value="0.800000011920929"/>
+          <PARAM id="relativeDampMod" value="1.0"/>
+          <PARAM id="relativeMixMod" value="1.0"/>
+          <PARAM id="relativeSizeMod" value="1.0"/>
+          <PARAM id="size" value="0.5"/>
+        </ReverbParams>
+      </params>
+    </module>
+    <module logicalId="1201" type="reverb">
+      <params>
+        <ReverbParams>
+          <PARAM id="damp" value="0.300000011920929"/>
+          <PARAM id="mix" value="0.800000011920929"/>
+          <PARAM id="relativeDampMod" value="1.0"/>
+          <PARAM id="relativeMixMod" value="1.0"/>
+          <PARAM id="relativeSizeMod" value="1.0"/>
+          <PARAM id="size" value="0.5"/>
+        </ReverbParams>
+      </params>
+    </module>
+    <module logicalId="1234" type="map_range">
+      <params>
+        <MapRangeParams>
+          <PARAM id="cvMax" value="0.6610000133514404"/>
+          <PARAM id="cvMin" value="0.0"/>
+          <PARAM id="inMax" value="1.0"/>
+          <PARAM id="inMin" value="0.0"/>
+          <PARAM id="normMax" value="0.6606999635696411"/>
+          <PARAM id="normMin" value="-0.6071000099182129"/>
+          <PARAM id="outMax" value="1.0"/>
+          <PARAM id="outMin" value="0.0"/>
+        </MapRangeParams>
+      </params>
+    </module>
+    <module logicalId="1236" type="map_range">
+      <params>
+        <MapRangeParams>
+          <PARAM id="cvMax" value="1.0"/>
+          <PARAM id="cvMin" value="0.0"/>
+          <PARAM id="inMax" value="1.0"/>
+          <PARAM id="inMin" value="0.0"/>
+          <PARAM id="normMax" value="1.0"/>
+          <PARAM id="normMin" value="0.3928999900817871"/>
+          <PARAM id="outMax" value="1.0"/>
+          <PARAM id="outMin" value="0.0"/>
+        </MapRangeParams>
+      </params>
+    </module>
+    <module logicalId="1267" type="compressor">
+      <params>
+        <CompressorParams>
+          <PARAM id="attack" value="78.59999847412109"/>
+          <PARAM id="makeup" value="0.7999992370605469"/>
+          <PARAM id="ratio" value="6.599999904632568"/>
+          <PARAM id="relativeAttackMod" value="1.0"/>
+          <PARAM id="relativeMakeupMod" value="1.0"/>
+          <PARAM id="relativeRatioMod" value="1.0"/>
+          <PARAM id="relativeReleaseMod" value="1.0"/>
+          <PARAM id="relativeThresholdMod" value="1.0"/>
+          <PARAM id="release" value="290.0"/>
+          <PARAM id="threshold" value="0.0"/>
+        </CompressorParams>
+      </params>
+    </module>
+    <module logicalId="1275" type="random">
+      <params>
+        <RandomParams>
+          <PARAM id="cvMax" value="1.0"/>
+          <PARAM id="cvMin" value="0.0"/>
+          <PARAM id="max" value="1.0"/>
+          <PARAM id="min" value="0.0"/>
+          <PARAM id="normMax" value="1.0"/>
+          <PARAM id="normMin" value="0.0"/>
+          <PARAM id="rate" value="3.679999828338623"/>
+          <PARAM id="rate_division" value="3.0"/>
+          <PARAM id="slew" value="0.7900000214576721"/>
+          <PARAM id="sync" value="0.0"/>
+          <PARAM id="trigThreshold" value="0.5"/>
+        </RandomParams>
+      </params>
+      <extra>
+        <RandomState sync="0.0" rate_division="3.0"/>
+      </extra>
+    </module>
+    <module logicalId="1312" type="limiter">
+      <params>
+        <LimiterParams>
+          <PARAM id="relativeReleaseMod" value="1.0"/>
+          <PARAM id="relativeThresholdMod" value="1.0"/>
+          <PARAM id="release" value="120.0"/>
+          <PARAM id="threshold" value="-4.800000190734863"/>
+        </LimiterParams>
+      </params>
+    </module>
+    <module logicalId="1345" type="frequency_graph">
+      <params>
+        <FreqGraphParams>
+          <PARAM id="bassThreshold" value="-24.0"/>
+          <PARAM id="decay" value="0.9799999594688416"/>
+          <PARAM id="highThreshold" value="-24.0"/>
+          <PARAM id="midThreshold" value="-24.0"/>
+          <PARAM id="subThreshold" value="-24.0"/>
+        </FreqGraphParams>
       </params>
     </module>
   </modules>
   <connections>
-    <connection srcId="1" srcChan="0" dstId="output" dstChan="0"/>
-    <connection srcId="1" srcChan="1" dstId="output" dstChan="1"/>
-    <connection srcId="4" srcChan="0" dstId="1" dstChan="0"/>
-    <connection srcId="4" srcChan="0" dstId="1" dstChan="1"/>
+    <connection srcId="1" srcChan="0" dstId="1019" dstChan="0"/>
+    <connection srcId="1" srcChan="1" dstId="1019" dstChan="1"/>
+    <connection srcId="3" srcChan="0" dstId="1" dstChan="3"/>
+    <connection srcId="3" srcChan="2" dstId="1008" dstChan="0"/>
+    <connection srcId="3" srcChan="2" dstId="1008" dstChan="1"/>
+    <connection srcId="3" srcChan="4" dstId="1008" dstChan="6"/>
+    <connection srcId="3" srcChan="0" dstId="1017" dstChan="6"/>
+    <connection srcId="3" srcChan="2" dstId="1017" dstChan="2"/>
+    <connection srcId="3" srcChan="2" dstId="1017" dstChan="3"/>
+    <connection srcId="3" srcChan="2" dstId="1017" dstChan="4"/>
+    <connection srcId="3" srcChan="2" dstId="1017" dstChan="8"/>
+    <connection srcId="3" srcChan="2" dstId="1019" dstChan="2"/>
+    <connection srcId="3" srcChan="2" dstId="1019" dstChan="4"/>
+    <connection srcId="1008" srcChan="0" dstId="1" dstChan="0"/>
+    <connection srcId="1008" srcChan="1" dstId="1" dstChan="1"/>
+    <connection srcId="1017" srcChan="0" dstId="1267" dstChan="0"/>
+    <connection srcId="1017" srcChan="1" dstId="1267" dstChan="1"/>
+    <connection srcId="1019" srcChan="0" dstId="1017" dstChan="0"/>
+    <connection srcId="1019" srcChan="1" dstId="1017" dstChan="1"/>
+    <connection srcId="1051" srcChan="0" dstId="1070" dstChan="0"/>
+    <connection srcId="1051" srcChan="1" dstId="1070" dstChan="1"/>
+    <connection srcId="1070" srcChan="0" dstId="1108" dstChan="0"/>
+    <connection srcId="1070" srcChan="1" dstId="1108" dstChan="1"/>
+    <connection srcId="1089" srcChan="0" dstId="1070" dstChan="2"/>
+    <connection srcId="1089" srcChan="0" dstId="1070" dstChan="3"/>
+    <connection srcId="1089" srcChan="0" dstId="1070" dstChan="4"/>
+    <connection srcId="1089" srcChan="0" dstId="1070" dstChan="5"/>
+    <connection srcId="1089" srcChan="0" dstId="1070" dstChan="6"/>
+    <connection srcId="1089" srcChan="0" dstId="1070" dstChan="7"/>
+    <connection srcId="1108" srcChan="0" dstId="1345" dstChan="0"/>
+    <connection srcId="1108" srcChan="1" dstId="1345" dstChan="1"/>
+    <connection srcId="1199" srcChan="0" dstId="1051" dstChan="0"/>
+    <connection srcId="1199" srcChan="1" dstId="1051" dstChan="1"/>
+    <connection srcId="1201" srcChan="0" dstId="1199" dstChan="0"/>
+    <connection srcId="1201" srcChan="1" dstId="1199" dstChan="1"/>
+    <connection srcId="1234" srcChan="0" dstId="1008" dstChan="4"/>
+    <connection srcId="1236" srcChan="0" dstId="1008" dstChan="5"/>
+    <connection srcId="1267" srcChan="0" dstId="1312" dstChan="0"/>
+    <connection srcId="1267" srcChan="1" dstId="1312" dstChan="1"/>
+    <connection srcId="1275" srcChan="0" dstId="1234" dstChan="0"/>
+    <connection srcId="1275" srcChan="0" dstId="1236" dstChan="0"/>
+    <connection srcId="1312" srcChan="0" dstId="1201" dstChan="0"/>
+    <connection srcId="1312" srcChan="1" dstId="1201" dstChan="1"/>
+    <connection srcId="1345" srcChan="0" dstId="output" dstChan="0"/>
+    <connection srcId="1345" srcChan="1" dstId="output" dstChan="1"/>
   </connections>
   <NodeEditorUI>
-    <node id="1" x="463.0" y="813.9999389648438"/>
-    <node id="3" x="-248.484375" y="1206.410400390625"/>
-    <node id="4" x="-340.484375" y="885.4104614257812"/>
+    <node id="1" x="-1107.0" y="-309.0"/>
+    <node id="3" x="-3143.0" y="-331.0"/>
+    <node id="1008" x="-1605.0" y="-561.0"/>
+    <node id="1017" x="-231.05859375" y="275.3648681640625"/>
+    <node id="1019" x="-693.0" y="-160.0"/>
+    <node id="1051" x="2302.0" y="4.0"/>
+    <node id="1070" x="2755.0" y="177.0"/>
+    <node id="1089" x="2342.0" y="651.0"/>
+    <node id="1108" x="3480.27880859375" y="349.6602783203125"/>
+    <node id="1199" x="1927.0" y="230.0"/>
+    <node id="1201" x="1473.0" y="239.0"/>
+    <node id="1234" x="-2573.0" y="269.0"/>
+    <node id="1236" x="-2558.0" y="627.0"/>
+    <node id="1267" x="413.0" y="270.0"/>
+    <node id="1275" x="-3113.0" y="300.0"/>
+    <node id="1312" x="879.0" y="411.0"/>
+    <node id="1345" x="4215.0" y="534.0"/>
+    <node id="0" x="5548.0" y="631.0"/>
   </NodeEditorUI>
 </ModularSynthPreset>

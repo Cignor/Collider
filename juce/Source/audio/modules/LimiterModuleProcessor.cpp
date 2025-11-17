@@ -30,6 +30,9 @@ LimiterModuleProcessor::LimiterModuleProcessor()
 
     lastOutputValues.push_back(std::make_unique<std::atomic<float>>(0.0f)); // Out L
     lastOutputValues.push_back(std::make_unique<std::atomic<float>>(0.0f)); // Out R
+
+    for (auto& v : vizData.inputHistory) v.store(-60.0f);
+    for (auto& v : vizData.outputHistory) v.store(-60.0f);
 }
 
 void LimiterModuleProcessor::prepareToPlay(double sampleRate, int samplesPerBlock)
@@ -41,6 +44,15 @@ void LimiterModuleProcessor::prepareToPlay(double sampleRate, int samplesPerBloc
 
     limiter.prepare(spec);
     limiter.reset();
+
+    vizHistoryIndex = 0;
+    for (auto& v : vizData.inputHistory) v.store(-60.0f);
+    for (auto& v : vizData.outputHistory) v.store(-60.0f);
+    vizData.currentReduction.store(0.0f);
+    vizData.currentThreshold.store(thresholdParam ? thresholdParam->load() : 0.0f);
+    vizData.currentRelease.store(releaseParam ? releaseParam->load() : 10.0f);
+    vizData.currentInputDb.store(-60.0f);
+    vizData.currentOutputDb.store(-60.0f);
 }
 
 void LimiterModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midi)
@@ -122,6 +134,31 @@ void LimiterModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce
     juce::dsp::ProcessContextReplacing<float> context(block);
     limiter.process(context);
 
+    // Visualization capture (simple peak levels and gain reduction)
+    float inputPeak = -60.0f;
+    float outputPeak = -60.0f;
+    for (int ch = 0; ch < outBus.getNumChannels(); ++ch)
+    {
+        inputPeak = juce::jmax(inputPeak, inBus.getRMSLevel(ch, 0, numSamples));
+        outputPeak = juce::jmax(outputPeak, outBus.getRMSLevel(ch, 0, numSamples));
+    }
+    auto toDb = [](float v) { return juce::Decibels::gainToDecibels(v, -60.0f); };
+    const float inputDb = toDb(inputPeak);
+    const float outputDb = toDb(outputPeak);
+    const float reduction = juce::jmax(0.0f, inputDb - outputDb);
+
+    vizData.inputHistory[vizHistoryIndex].store(inputDb);
+    vizData.outputHistory[vizHistoryIndex].store(outputDb);
+    const float normalizedReduction = juce::jlimit(0.0f, 1.0f, reduction / 24.0f);
+    vizData.reductionHistory[vizHistoryIndex].store(normalizedReduction);
+    vizData.currentReduction.store(reduction);
+    vizData.currentThreshold.store(finalThreshold);
+    vizData.currentRelease.store(finalRelease);
+    vizData.currentInputDb.store(inputDb);
+    vizData.currentOutputDb.store(outputDb);
+    vizHistoryIndex = (vizHistoryIndex + 1) % VizData::historyPoints;
+    vizData.historyWriteIndex.store(vizHistoryIndex);
+
     // --- Update UI Telemetry & Tooltips ---
     setLiveParamValue("threshold_live", finalThreshold);
     setLiveParamValue("release_live", finalRelease);
@@ -163,6 +200,7 @@ void LimiterModuleProcessor::drawParametersInNode(float itemWidth, const std::fu
 {
     const auto& theme = ThemeManager::getInstance().getCurrentTheme();
     auto& ap = getAPVTS();
+    ImGui::PushID(this);
     ImGui::PushItemWidth(itemWidth);
 
     auto HelpMarker = [](const char* desc) {
@@ -184,6 +222,128 @@ void LimiterModuleProcessor::drawParametersInNode(float itemWidth, const std::fu
         if (tooltip) { ImGui::SameLine(); HelpMarker(tooltip); }
     };
 
+    // Visualization section
+    ImGui::Spacing();
+    ImGui::Text("Limiter Activity");
+    ImGui::Spacing();
+
+    const int writeIdx = vizData.historyWriteIndex.load();
+    const ImU32 freqColor = ImGui::ColorConvertFloat4ToU32(theme.modulation.frequency);
+    const ImU32 timbreColor = ImGui::ColorConvertFloat4ToU32(theme.modulation.timbre);
+    const ImU32 accentColor = ImGui::ColorConvertFloat4ToU32(theme.accent);
+    const float currentThresholdDb = vizData.currentThreshold.load();
+    const float currentReleaseMs = vizData.currentRelease.load();
+    const float currentReductionDb = vizData.currentReduction.load();
+    const float currentInputDb = vizData.currentInputDb.load();
+    const float currentOutputDb = vizData.currentOutputDb.load();
+    const ImVec4 childBgVec4 = ImGui::ColorConvertU32ToFloat4(ThemeManager::getInstance().getCanvasBackground());
+
+    auto drawHistoryChild = [&](const char* childId, float height,
+                                const std::function<void(ImDrawList*, const ImVec2&, const ImVec2&, float)>& drawFn)
+    {
+        ImGui::PushStyleColor(ImGuiCol_ChildBg, childBgVec4);
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(6.0f, 6.0f));
+        if (ImGui::BeginChild(childId, ImVec2(itemWidth, height), false,
+                              ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse))
+        {
+            auto* childDrawList = ImGui::GetWindowDrawList();
+            const ImVec2 childPos = ImGui::GetWindowPos();
+            const ImVec2 childSize = ImGui::GetWindowSize();
+            const ImVec2 pad = ImGui::GetStyle().WindowPadding;
+            const ImVec2 contentOrigin(childPos.x + pad.x, childPos.y + pad.y);
+            const ImVec2 contentMax(childPos.x + childSize.x - pad.x, childPos.y + childSize.y - pad.y);
+            const float contentWidth = contentMax.x - contentOrigin.x;
+            drawFn(childDrawList, contentOrigin, contentMax, contentWidth);
+        }
+        ImGui::EndChild();
+        ImGui::PopStyleVar();
+        ImGui::PopStyleColor();
+    };
+
+    drawHistoryChild("LimiterLevelHistory", 70.0f,
+        [&](ImDrawList* dl, const ImVec2& origin, const ImVec2& max, float width)
+        {
+            const float plotHeight = max.y - origin.y;
+            const float stepX = width / (float)(VizData::historyPoints - 1);
+
+            auto drawLine = [&](const std::array<std::atomic<float>, VizData::historyPoints>& history, ImU32 color)
+            {
+                float prevX = origin.x;
+                float prevY = max.y;
+                for (int i = 0; i < VizData::historyPoints; ++i)
+                {
+                    const int idx = (writeIdx + i) % VizData::historyPoints;
+                    const float val = juce::jlimit(-60.0f, 0.0f, history[idx].load());
+                    const float normalized = juce::jmap(val, -60.0f, 0.0f, 0.0f, 1.0f);
+                    const float x = origin.x + i * stepX;
+                    const float y = max.y - normalized * (plotHeight - 4.0f) - 2.0f;
+                    if (i > 0)
+                        dl->AddLine(ImVec2(prevX, prevY), ImVec2(x, y), color, 2.0f);
+                    prevX = x;
+                    prevY = y;
+                }
+            };
+
+            drawLine(vizData.inputHistory, freqColor);
+            drawLine(vizData.outputHistory, timbreColor);
+
+            // Threshold line overlay (shows slider feedback even without signal)
+            const float thresholdNorm = juce::jmap(currentThresholdDb, -60.0f, 0.0f, 0.0f, 1.0f);
+            const float threshY = juce::jlimit(origin.y, max.y, max.y - thresholdNorm * (plotHeight - 4.0f) - 2.0f);
+            const ImU32 threshColor = IM_COL32(255, 255, 255, 120);
+            dl->AddLine(ImVec2(origin.x, threshY), ImVec2(max.x, threshY), threshColor, 1.5f);
+
+            const juce::String threshLabel = juce::String(currentThresholdDb, 1) + " dB";
+            dl->AddText(ImVec2(origin.x + 4.0f, threshY - ImGui::GetTextLineHeight()), threshColor, threshLabel.toRawUTF8());
+        });
+
+    ImGui::Spacing();
+
+    drawHistoryChild("LimiterReductionHistory", 55.0f,
+        [&](ImDrawList* dl, const ImVec2& origin, const ImVec2& max, float width)
+        {
+            const float plotHeight = max.y - origin.y;
+            const float stepX = width / (float)(VizData::historyPoints - 1);
+            float prevX = origin.x;
+            float prevY = max.y - 2.0f;
+            for (int i = 0; i < VizData::historyPoints; ++i)
+            {
+                const int idx = (writeIdx + i) % VizData::historyPoints;
+                const float val = juce::jlimit(0.0f, 1.0f, vizData.reductionHistory[idx].load());
+                const float x = origin.x + i * stepX;
+                const float y = max.y - val * (plotHeight - 4.0f) - 2.0f;
+                if (i > 0)
+                    dl->AddLine(ImVec2(prevX, prevY), ImVec2(x, y), accentColor, 2.0f);
+                prevX = x;
+                prevY = y;
+            }
+
+            const juce::String text = juce::String("Reduction: ") + juce::String(currentReductionDb, 1) + " dB";
+            dl->AddText(ImVec2(origin.x + 2.0f, origin.y + 2.0f), IM_COL32(220, 220, 220, 255), text.toRawUTF8());
+
+            const juce::String releaseText = juce::String("Release: ") + juce::String(currentReleaseMs, 0) + " ms";
+            dl->AddText(ImVec2(origin.x + 2.0f, origin.y + 18.0f), IM_COL32(200, 200, 200, 200), releaseText.toRawUTF8());
+        });
+
+    ImGui::Spacing();
+
+    auto levelToNorm = [](float db) -> float
+    {
+        return juce::jlimit(0.0f, 1.0f, (db + 60.0f) / 60.0f);
+    };
+
+    ImGui::PushStyleColor(ImGuiCol_PlotHistogram, freqColor);
+    ImGui::Text("Input Level");
+    ImGui::ProgressBar(levelToNorm(currentInputDb), ImVec2(itemWidth * 0.5f, 0), juce::String(currentInputDb, 1).toRawUTF8());
+    ImGui::PopStyleColor();
+    ImGui::SameLine();
+    ImGui::PushStyleColor(ImGuiCol_PlotHistogram, timbreColor);
+    ImGui::Text("Output Level");
+    ImGui::ProgressBar(levelToNorm(currentOutputDb), ImVec2(itemWidth * 0.5f, 0), juce::String(currentOutputDb, 1).toRawUTF8());
+    ImGui::PopStyleColor();
+
+    ImGui::Spacing();
+
     ThemeText("Limiter Parameters", theme.text.section_header);
     ImGui::Spacing();
 
@@ -191,7 +351,6 @@ void LimiterModuleProcessor::drawParametersInNode(float itemWidth, const std::fu
     drawSlider("Release", paramIdRelease, paramIdReleaseMod, 1.0f, 200.0f, "%.0f ms", "Release time (1-200 ms)\nHow fast the limiter recovers");
 
     ImGui::Spacing();
-    ImGui::Separator();
     ImGui::Spacing();
 
     // === RELATIVE MODULATION SECTION ===
@@ -225,6 +384,7 @@ void LimiterModuleProcessor::drawParametersInNode(float itemWidth, const std::fu
     }
 
     ImGui::PopItemWidth();
+    ImGui::PopID();
 }
 
 void LimiterModuleProcessor::drawIoPins(const NodePinHelpers& helpers)

@@ -504,7 +504,6 @@ void FaceTrackerModule::drawParametersInNode(float itemWidth,
     if(atMin) ImGui::EndDisabled(); ImGui::SameLine(); if(atMax) ImGui::BeginDisabled(); if(ImGui::Button("+", ImVec2(bw,0))){ int nl=juce::jmin(2,level+1); if(auto* p=apvts.getParameter("zoomLevel")) p->setValueNotifyingHost((float)nl/2.0f); onModificationEnded(); }
     if(atMax) ImGui::EndDisabled();
 
-    ImGui::Separator();
     
     // Zone color palette (4 colors)
     static const ImVec4 ZONE_COLORS[4] = {
@@ -556,7 +555,6 @@ void FaceTrackerModule::drawParametersInNode(float itemWidth,
         if (c < 3) ImGui::SameLine();
     }
     
-    ImGui::Separator();
     
     // Video preview with zone overlays
     juce::Image frame = getLatestFrame();

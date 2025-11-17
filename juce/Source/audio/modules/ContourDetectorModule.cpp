@@ -445,7 +445,6 @@ void ContourDetectorModule::drawParametersInNode(float itemWidth,
     }
     if (atMax) ImGui::EndDisabled();
 
-    ImGui::Separator();
     
     // Zone color palette (4 colors)
     static const ImVec4 ZONE_COLORS[4] = {
@@ -491,7 +490,6 @@ void ContourDetectorModule::drawParametersInNode(float itemWidth,
         if (c < 3) ImGui::SameLine();
     }
     
-    ImGui::Separator();
     
     // Video preview with zone overlays
     juce::Image frame = getLatestFrame();

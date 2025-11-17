@@ -720,7 +720,6 @@ void ObjectDetectorModule::drawParametersInNode(float itemWidth,
         ImGui::TextWrapped("Place files in assets/: yolov3.cfg, yolov3.weights, coco.names");
     }
 
-    ImGui::Separator();
     
     // Zone color palette (4 colors)
     static const ImVec4 ZONE_COLORS[4] = {
@@ -772,7 +771,6 @@ void ObjectDetectorModule::drawParametersInNode(float itemWidth,
         if (c < 3) ImGui::SameLine();
     }
     
-    ImGui::Separator();
     
     // Video preview with zone overlays
     juce::Image frame = getLatestFrame();

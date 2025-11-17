@@ -2,6 +2,8 @@
 
 #include "ModuleProcessor.h"
 #include <juce_dsp/juce_dsp.h>
+#include <array>
+#include <atomic>
 
 class CompressorModuleProcessor : public ModuleProcessor
 {
@@ -50,6 +52,7 @@ private:
 
     // The core JUCE DSP Compressor object
     juce::dsp::Compressor<float> compressor;
+    juce::AudioBuffer<float> dryBuffer;
 
     // Cached atomic pointers to parameters
     std::atomic<float>* thresholdParam { nullptr };
@@ -64,5 +67,24 @@ private:
     std::atomic<float>* relativeAttackModParam { nullptr };
     std::atomic<float>* relativeReleaseModParam { nullptr };
     std::atomic<float>* relativeMakeupModParam { nullptr };
+
+    struct VizData
+    {
+        static constexpr int historyPoints = 128;
+        std::array<std::atomic<float>, historyPoints> inputHistoryDb;
+        std::array<std::atomic<float>, historyPoints> outputHistoryDb;
+        std::array<std::atomic<float>, historyPoints> grHistory;
+        std::atomic<int> historyWriteIndex { 0 };
+        std::atomic<float> currentGRDb { 0.0f };
+        std::atomic<float> inputLevelDb { -90.0f };
+        std::atomic<float> outputLevelDb { -90.0f };
+
+        VizData()
+        {
+            for (auto& v : inputHistoryDb) v.store(-90.0f);
+            for (auto& v : outputHistoryDb) v.store(-90.0f);
+            for (auto& v : grHistory) v.store(0.0f);
+        }
+    } vizData;
 };
 

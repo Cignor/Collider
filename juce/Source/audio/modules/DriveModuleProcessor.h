@@ -1,6 +1,11 @@
 #pragma once
 
 #include "ModuleProcessor.h"
+#include <array>
+#include <atomic>
+#if defined(PRESET_CREATOR_UI)
+#include "../../preset_creator/theme/ThemeManager.h"
+#endif
 
 class DriveModuleProcessor : public ModuleProcessor
 {
@@ -42,5 +47,30 @@ private:
     std::atomic<float>* mixParam { nullptr };
     std::atomic<float>* relativeDriveModParam { nullptr };
     std::atomic<float>* relativeMixModParam { nullptr };
+
+#if defined(PRESET_CREATOR_UI)
+    struct VizData
+    {
+        static constexpr int waveformPoints = 256;
+        std::array<std::atomic<float>, waveformPoints> dryWaveform;
+        std::array<std::atomic<float>, waveformPoints> wetWaveform;
+        std::array<std::atomic<float>, waveformPoints> mixWaveform;
+        std::atomic<float> currentDrive { 0.0f };
+        std::atomic<float> currentMix { 1.0f };
+        std::atomic<float> harmonicEnergy { 0.0f };
+        std::atomic<float> outputLevelDb { -60.0f };
+
+        VizData()
+        {
+            for (auto& v : dryWaveform) v.store(0.0f);
+            for (auto& v : wetWaveform) v.store(0.0f);
+            for (auto& v : mixWaveform) v.store(0.0f);
+        }
+    };
+
+    VizData vizData;
+    juce::AudioBuffer<float> vizDryBuffer;
+    juce::AudioBuffer<float> vizWetBuffer;
+#endif
 };
 

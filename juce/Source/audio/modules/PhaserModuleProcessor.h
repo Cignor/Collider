@@ -2,6 +2,8 @@
 
 #include "ModuleProcessor.h"
 #include <juce_dsp/juce_dsp.h>
+#include <array>
+#include <atomic>
 
 class PhaserModuleProcessor : public ModuleProcessor
 {
@@ -67,5 +69,33 @@ private:
     std::atomic<float>* relativeCentreModParam { nullptr };
     std::atomic<float>* relativeFeedbackModParam { nullptr };
     std::atomic<float>* relativeMixModParam { nullptr };
+    
+    // Visualization data (thread-safe for UI updates)
+    struct VizData
+    {
+        static constexpr int frequencyPoints = 128;
+        
+        // LFO phase (0.0 to 1.0, represents one cycle)
+        std::atomic<float> lfoPhase { 0.0f };
+        
+        // Current parameter values (for display)
+        std::atomic<float> currentRate { 0.0f };
+        std::atomic<float> currentDepth { 0.0f };
+        std::atomic<float> currentCentre { 0.0f };
+        std::atomic<float> currentFeedback { 0.0f };
+        std::atomic<float> currentMix { 0.0f };
+        
+        // Frequency response visualization (magnitude at each frequency point)
+        std::array<std::atomic<float>, frequencyPoints> frequencyResponse;
+        
+        VizData()
+        {
+            for (auto& val : frequencyResponse)
+                val.store(0.0f);
+        }
+    } vizData;
+    
+    // LFO phase accumulator (for visualization)
+    double lfoPhaseAccumulator { 0.0 };
 };
 

@@ -2,6 +2,8 @@
 
 #include "ModuleProcessor.h"
 #include <juce_dsp/juce_dsp.h>
+#include <array>
+#include <vector>
 
 class ChorusModuleProcessor : public ModuleProcessor
 {
@@ -56,5 +58,28 @@ private:
     std::atomic<float>* relativeRateModParam { nullptr };
     std::atomic<float>* relativeDepthModParam { nullptr };
     std::atomic<float>* relativeMixModParam { nullptr };
+
+    // --- Visualization Data ---
+    struct VizData
+    {
+        static constexpr int waveformPoints = 256;
+        static constexpr int lfoPoints = 128;
+        std::array<std::atomic<float>, waveformPoints> inputWaveformL;
+        std::array<std::atomic<float>, waveformPoints> outputWaveformL;
+        std::array<std::atomic<float>, waveformPoints> inputWaveformR;
+        std::array<std::atomic<float>, waveformPoints> outputWaveformR;
+        std::array<std::atomic<float>, lfoPoints> lfoWaveform;
+        std::atomic<float> currentRate { 1.0f };
+        std::atomic<float> currentDepth { 0.25f };
+        std::atomic<float> currentMix { 0.5f };
+    };
+    VizData vizData;
+
+    juce::AudioBuffer<float> vizInputBuffer;
+    juce::AudioBuffer<float> vizOutputBuffer;
+    std::vector<float> vizLfoBuffer;
+    int vizWritePos { 0 };
+    static constexpr int vizBufferSize = 2048;
+    float vizLfoPhase { 0.0f };
 };
 

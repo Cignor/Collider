@@ -1,6 +1,11 @@
 #pragma once
 
 #include "ModuleProcessor.h"
+#include <array>
+#include <atomic>
+#if defined(PRESET_CREATOR_UI)
+#include "../../preset_creator/theme/ThemeManager.h"
+#endif
 
 class GateModuleProcessor : public ModuleProcessor
 {
@@ -43,5 +48,29 @@ private:
     // DSP state for the envelope follower
     float envelope { 0.0f };
     double currentSampleRate { 48000.0 };
+
+#if defined(PRESET_CREATOR_UI)
+    struct VizData
+    {
+        static constexpr int historyPoints = 128;
+        std::array<std::atomic<float>, historyPoints> inputHistory;
+        std::array<std::atomic<float>, historyPoints> envelopeHistory;
+        std::array<std::atomic<float>, historyPoints> gateHistory;
+        std::atomic<int> writeIndex { 0 };
+        std::atomic<float> currentThresholdDb { -40.0f };
+        std::atomic<float> currentAttackMs { 1.0f };
+        std::atomic<float> currentReleaseMs { 50.0f };
+        std::atomic<float> gateAmount { 0.0f };
+
+        VizData()
+        {
+            for (auto& v : inputHistory) v.store(-80.0f);
+            for (auto& v : envelopeHistory) v.store(-80.0f);
+            for (auto& v : gateHistory) v.store(0.0f);
+        }
+    };
+
+    VizData vizData;
+#endif
 };
 

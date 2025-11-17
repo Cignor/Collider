@@ -2,6 +2,8 @@
 
 #include "ModuleProcessor.h"
 #include <juce_dsp/juce_dsp.h>
+#include <array>
+#include <atomic>
 
 class LimiterModuleProcessor : public ModuleProcessor
 {
@@ -52,5 +54,28 @@ private:
     // Relative modulation parameters
     std::atomic<float>* relativeThresholdModParam { nullptr };
     std::atomic<float>* relativeReleaseModParam { nullptr };
+
+    struct VizData
+    {
+        static constexpr int historyPoints = 128;
+        std::array<std::atomic<float>, historyPoints> inputHistory;
+        std::array<std::atomic<float>, historyPoints> outputHistory;
+        std::array<std::atomic<float>, historyPoints> reductionHistory;
+        std::atomic<int> historyWriteIndex { 0 };
+        std::atomic<float> currentReduction { 0.0f };
+        std::atomic<float> currentThreshold { 0.0f };
+        std::atomic<float> currentRelease { 10.0f };
+        std::atomic<float> currentInputDb { -60.0f };
+        std::atomic<float> currentOutputDb { -60.0f };
+
+        VizData()
+        {
+            for (auto& v : inputHistory) v.store(-60.0f);
+            for (auto& v : outputHistory) v.store(-60.0f);
+            for (auto& v : reductionHistory) v.store(0.0f);
+        }
+    };
+    VizData vizData;
+    int vizHistoryIndex { 0 };
 };
 

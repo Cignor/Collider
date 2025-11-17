@@ -24,6 +24,14 @@ DelayModuleProcessor::DelayModuleProcessor()
     timeSm.reset(400.0f);
     feedbackSm.reset(0.4f);
     mixSm.reset(0.3f);
+    
+    // Initialize visualization data
+    for (auto& w : vizData.inputWaveformL) w.store(0.0f);
+    for (auto& w : vizData.inputWaveformR) w.store(0.0f);
+    for (auto& w : vizData.outputWaveformL) w.store(0.0f);
+    for (auto& w : vizData.outputWaveformR) w.store(0.0f);
+    for (auto& p : vizData.tapPositions) p.store(-1.0f); // -1 = inactive
+    for (auto& l : vizData.tapLevels) l.store(0.0f);
 }
 
 juce::AudioProcessorValueTreeState::ParameterLayout DelayModuleProcessor::createParameterLayout()
@@ -57,12 +65,24 @@ void DelayModuleProcessor::prepareToPlay (double sampleRate, int samplesPerBlock
     feedbackSm.reset(sampleRate, 0.01);
     mixSm.reset(sampleRate, 0.01);
     
+    // Initialize visualization buffers
+    vizInputBuffer.setSize(2, vizBufferSize);
+    vizOutputBuffer.setSize(2, vizBufferSize);
+    vizDryBuffer.setSize(2, vizBufferSize);
+    vizInputBuffer.clear();
+    vizOutputBuffer.clear();
+    vizDryBuffer.clear();
+    vizWritePos = 0;
+    
     juce::Logger::writeToLog ("[Delay] prepare sr=" + juce::String (sr) + " maxSamps=" + juce::String (maxDelaySamples));
 }
 
 void DelayModuleProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midi)
 {
     juce::ignoreUnused (midi);
+    
+    auto inBus = getBusBuffer(buffer, true, 0);
+    auto outBus = getBusBuffer(buffer, false, 0);
     
     // PER-SAMPLE FIX: Get pointers to modulation CV inputs, if they are connected
     const bool isTimeMod = isParamInputConnected("timeMs");
@@ -85,6 +105,10 @@ void DelayModuleProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce:
     float lastTimeMs = baseTimeMs;
     float lastFeedback = baseFeedback;
     float lastMix = baseMix;
+    
+    // Store dry signal for visualization (before processing)
+    juce::AudioBuffer<float> dryBuffer;
+    dryBuffer.makeCopyOf(outBus);
 
     auto processChannel = [&] (int ch)
     {
@@ -173,6 +197,77 @@ void DelayModuleProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce:
             const float delayed = (ch == 0 ? dlL.popSample (0, delaySamps) : dlR.popSample (0, delaySamps));
             if (ch == 0) dlL.pushSample (0, in + delayed * fb); else dlR.pushSample (0, in + delayed * fb);
             d[i] = in * (1.0f - mix) + delayed * mix;
+            
+            // Record to visualization buffers (circular, only left channel to avoid redundancy)
+            if (ch == 0)
+            {
+                // Record input (before delay processing)
+                vizInputBuffer.setSample(0, vizWritePos, in);
+                // Record output (after delay + mix)
+                vizOutputBuffer.setSample(0, vizWritePos, d[i]);
+                // Record dry signal (original input)
+                vizDryBuffer.setSample(0, vizWritePos, dryBuffer.getSample(0, i));
+                if (vizInputBuffer.getNumChannels() > 1 && vizOutputBuffer.getNumChannels() > 1 && dryBuffer.getNumChannels() > 1)
+                {
+                    // Right channel
+                    const float inR = inBus.getNumChannels() > 1 ? inBus.getSample(1, i) : 0.0f;
+                    vizInputBuffer.setSample(1, vizWritePos, inR);
+                    vizOutputBuffer.setSample(1, vizWritePos, outBus.getSample(1, i));
+                    vizDryBuffer.setSample(1, vizWritePos, dryBuffer.getSample(1, i));
+                }
+                vizWritePos = (vizWritePos + 1) % vizBufferSize;
+                
+                // Update visualization data (throttled - every 64 samples, like BitCrusher)
+                if ((i & 0x3F) == 0)
+                {
+                    // Update current parameter state
+                    vizData.currentTimeMs.store(timeMs);
+                    vizData.currentFeedback.store(fb);
+                    vizData.currentMix.store(mix);
+                    
+                    // Update waveform snapshots (downsampled from circular buffer)
+                    const int step = vizBufferSize / VizData::waveformPoints;
+                    for (int j = 0; j < VizData::waveformPoints; ++j)
+                    {
+                        int idx = (vizWritePos - (VizData::waveformPoints - j) * step + vizBufferSize) % vizBufferSize;
+                        vizData.inputWaveformL[j].store(vizInputBuffer.getSample(0, idx));
+                        vizData.outputWaveformL[j].store(vizOutputBuffer.getSample(0, idx));
+                        if (vizInputBuffer.getNumChannels() > 1 && vizOutputBuffer.getNumChannels() > 1)
+                        {
+                            vizData.inputWaveformR[j].store(vizInputBuffer.getSample(1, idx));
+                            vizData.outputWaveformR[j].store(vizOutputBuffer.getSample(1, idx));
+                        }
+                    }
+                    
+                    // Calculate delay tap positions and levels
+                    // Taps occur at multiples of delay time, with exponential decay
+                    const float delayTimeNorm = timeMs / 2000.0f; // Normalize to 0-1 (max 2000ms)
+                    int activeTapCount = 0;
+                    for (int tap = 0; tap < 8 && activeTapCount < 8; ++tap)
+                    {
+                        const float tapLevel = fb * std::pow(fb, (float)tap);
+                        if (tapLevel > 0.01f) // Only show taps above 1% level
+                        {
+                            // Position: each tap is offset by delay time
+                            const float tapPosition = 1.0f - (delayTimeNorm * (float)(tap + 1));
+                            if (tapPosition >= 0.0f && tapPosition <= 1.0f)
+                            {
+                                vizData.tapPositions[activeTapCount].store(tapPosition);
+                                vizData.tapLevels[activeTapCount].store(tapLevel);
+                                activeTapCount++;
+                            }
+                        }
+                    }
+                    vizData.activeTapCount.store(activeTapCount);
+                    
+                    // Clear inactive tap slots
+                    for (int j = activeTapCount; j < 8; ++j)
+                    {
+                        vizData.tapPositions[j].store(-1.0f);
+                        vizData.tapLevels[j].store(0.0f);
+                    }
+                }
+            }
         }
     };
     processChannel (0);
