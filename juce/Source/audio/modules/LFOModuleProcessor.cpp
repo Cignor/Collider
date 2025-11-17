@@ -2,6 +2,7 @@
 
 #if defined(PRESET_CREATOR_UI)
 #include "../../preset_creator/theme/ThemeManager.h"
+#include <imgui.h>
 #endif
 #include "../graph/ModularSynthProcessor.h"
 
@@ -43,6 +44,18 @@ void LFOModuleProcessor::prepareToPlay(double sampleRate, int samplesPerBlock)
 {
     juce::dsp::ProcessSpec spec{ sampleRate, (juce::uint32)samplesPerBlock, 2 };
     osc.prepare(spec);
+
+#if defined(PRESET_CREATOR_UI)
+    vizLfoBuffer.setSize(1, vizBufferSize, false, true, true);
+    vizWritePos = 0;
+    for (auto& v : vizData.lfoWaveform) v.store(0.0f);
+    vizData.currentValue.store(0.0f);
+    vizData.currentRate.store(1.0f);
+    vizData.currentDepth.store(0.5f);
+    vizData.currentWave.store(0);
+    vizData.isBipolar.store(true);
+    vizData.isSynced.store(false);
+#endif
 }
 
 void LFOModuleProcessor::setTimingInfo(const TransportState& state)
@@ -197,6 +210,15 @@ void LFOModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::Mi
         const float finalSample = (bipolar ? lfoSample : (lfoSample * 0.5f + 0.5f)) * depth;
 
         out.setSample(0, i, finalSample);
+
+#if defined(PRESET_CREATOR_UI)
+        // Capture LFO into circular buffer
+        if (vizLfoBuffer.getNumSamples() > 0)
+        {
+            vizLfoBuffer.setSample(0, vizWritePos, finalSample);
+            vizWritePos = (vizWritePos + 1) % vizBufferSize;
+        }
+#endif
     }
     
     // Update inspector values
@@ -206,6 +228,27 @@ void LFOModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::Mi
     setLiveParamValue("rate_live", lastRate);
     setLiveParamValue("depth_live", lastDepth);
     setLiveParamValue("wave_live", (float)lastWave);
+
+#if defined(PRESET_CREATOR_UI)
+    // Update visualization data (thread-safe)
+    // Downsample LFO waveform from circular buffer
+    const int stride = vizBufferSize / VizData::waveformPoints;
+    for (int i = 0; i < VizData::waveformPoints; ++i)
+    {
+        const int readIdx = (vizWritePos - VizData::waveformPoints * stride + i * stride + vizBufferSize) % vizBufferSize;
+        const float sample = vizLfoBuffer.getSample(0, readIdx);
+        vizData.lfoWaveform[i].store(sample);
+    }
+
+    // Update current state
+    const float lastSample = out.getNumSamples() > 0 ? out.getSample(0, out.getNumSamples() - 1) : 0.0f;
+    vizData.currentValue.store(lastSample);
+    vizData.currentRate.store(lastRate);
+    vizData.currentDepth.store(lastDepth);
+    vizData.currentWave.store(lastWave);
+    vizData.isBipolar.store(bipolar);
+    vizData.isSynced.store(syncEnabled);
+#endif
 }
 
 // CORRECTED: Clean, unambiguous routing for a single multi-channel input bus
@@ -356,20 +399,114 @@ void LFOModuleProcessor::drawParametersInNode(float itemWidth, const std::functi
     ImGui::Spacing();
     ImGui::Spacing();
 
-    // === LIVE OUTPUT SECTION ===
-    ThemeText("Live Output", theme.text.section_header);
+    // === LFO WAVEFORM VISUALIZATION ===
+    ThemeText("LFO Output", theme.text.section_header);
     ImGui::Spacing();
 
-    // Visual LFO output indicator
-    float currentValue = lastOutputValues.size() > 0 ? lastOutputValues[0]->load() : 0.0f;
+    ImGui::PushID(this); // Unique ID for this node's UI
+    auto* drawList = ImGui::GetWindowDrawList();
+    const ImU32 bgColor = ThemeManager::getInstance().getCanvasBackground();
+    const ImU32 lfoColor = ImGui::ColorConvertFloat4ToU32(theme.accent);
+    const ImU32 centerLineColor = IM_COL32(150, 150, 150, 100);
+
+    // Real-time LFO waveform
+    const ImVec2 waveOrigin = ImGui::GetCursorScreenPos();
+    const float waveHeight = 120.0f;
+    const ImVec2 waveMax = ImVec2(waveOrigin.x + itemWidth, waveOrigin.y + waveHeight);
+    drawList->AddRectFilled(waveOrigin, waveMax, bgColor, 4.0f);
+    ImGui::PushClipRect(waveOrigin, waveMax, true);
+
+    // Read visualization data (thread-safe)
+    float lfoWaveform[VizData::waveformPoints];
+    for (int i = 0; i < VizData::waveformPoints; ++i)
+        lfoWaveform[i] = vizData.lfoWaveform[i].load();
+
+    const bool isBipolar = vizData.isBipolar.load();
+    const float currentValue = vizData.currentValue.load();
+    const float currentRate = vizData.currentRate.load();
+    const float currentDepth = vizData.currentDepth.load();
+    const int currentWave = vizData.currentWave.load();
+
+    // Calculate Y range based on bipolar/unipolar
+    const float midY = waveOrigin.y + waveHeight * 0.5f;
+    const float scaleY = waveHeight * 0.45f;
+    const float stepX = itemWidth / (float)(VizData::waveformPoints - 1);
+
+    // Draw center line (zero reference for bipolar, or bottom for unipolar)
+    if (isBipolar)
+    {
+        drawList->AddLine(ImVec2(waveOrigin.x, midY), ImVec2(waveMax.x, midY), centerLineColor, 1.0f);
+    }
+    else
+    {
+        // For unipolar, draw bottom line
+        drawList->AddLine(ImVec2(waveOrigin.x, waveMax.y - 4.0f), ImVec2(waveMax.x, waveMax.y - 4.0f), centerLineColor, 1.0f);
+    }
+
+    // Draw LFO waveform
+    float prevX = waveOrigin.x;
+    float prevY = isBipolar ? midY : (waveMax.y - 4.0f);
+    for (int i = 0; i < VizData::waveformPoints; ++i)
+    {
+        float sample = juce::jlimit(-1.0f, 1.0f, lfoWaveform[i]);
+        const float x = waveOrigin.x + i * stepX;
+        float y;
+        if (isBipolar)
+        {
+            y = midY - sample * scaleY;
+        }
+        else
+        {
+            // Unipolar: map 0-1 to bottom-top
+            sample = juce::jmax(0.0f, sample); // Clamp to positive
+            y = waveMax.y - 4.0f - sample * scaleY * 2.0f;
+        }
+        if (i > 0)
+            drawList->AddLine(ImVec2(prevX, prevY), ImVec2(x, y), lfoColor, 2.5f);
+        prevX = x;
+        prevY = y;
+    }
+
+    // Draw current value indicator (vertical line at the end)
+    float indicatorY;
+    if (isBipolar)
+    {
+        indicatorY = midY - currentValue * scaleY;
+    }
+    else
+    {
+        const float clampedValue = juce::jmax(0.0f, currentValue);
+        indicatorY = waveMax.y - 4.0f - clampedValue * scaleY * 2.0f;
+    }
+    drawList->AddLine(ImVec2(waveMax.x - 2.0f, waveOrigin.y), ImVec2(waveMax.x - 2.0f, waveMax.y), 
+                     IM_COL32(255, 255, 255, 120), 2.0f);
+
+    ImGui::PopClipRect();
+    ImGui::SetCursorScreenPos(ImVec2(waveOrigin.x, waveMax.y));
+    ImGui::Dummy(ImVec2(itemWidth, 0));
+
+    ImGui::Spacing();
+
+    // Live parameter readouts
+    const char* waveNames[] = { "Sine", "Tri", "Saw" };
+    const char* waveName = (currentWave >= 0 && currentWave < 3) ? waveNames[currentWave] : "Unknown";
+    
     ImGui::Text("Output: %.3f", currentValue);
+    ImGui::SameLine();
+    ImGui::Text("| Rate: %.2f Hz", currentRate);
+    ImGui::SameLine();
+    ImGui::Text("| %s", waveName);
 
-    // Progress bar showing current LFO position
-    float normalizedValue = bipolar ? (currentValue + 1.0f) / 2.0f : currentValue;
-    ImGui::PushStyleColor(ImGuiCol_PlotHistogram, theme.accent);
-    ImGui::ProgressBar(normalizedValue, ImVec2(itemWidth, 0), "");
+    // Progress bar showing current LFO position (normalized)
+    float normalizedValue = isBipolar ? (currentValue + 1.0f) / 2.0f : currentValue;
+    normalizedValue = juce::jlimit(0.0f, 1.0f, normalizedValue);
+    ImGui::PushStyleColor(ImGuiCol_PlotHistogram, lfoColor);
+    ImGui::ProgressBar(normalizedValue, ImVec2(itemWidth * 0.6f, 0), "");
     ImGui::PopStyleColor();
+    ImGui::SameLine();
+    ImGui::Text("%.0f%%", normalizedValue * 100.0f);
 
+    ImGui::PopID(); // End unique ID
     ImGui::PopItemWidth();
 }
 

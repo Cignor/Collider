@@ -3,6 +3,7 @@
 #include "ModuleProcessor.h"
 #include <juce_core/juce_core.h>
 #include <juce_dsp/juce_dsp.h>
+#include <array>
 #include "../dsp/TimePitchProcessor.h"
 
 class TimePitchModuleProcessor : public ModuleProcessor
@@ -14,6 +15,7 @@ public:
     static constexpr const char* paramIdEngine    = "engine";
     static constexpr const char* paramIdSpeedMod  = "speed_mod";
     static constexpr const char* paramIdPitchMod  = "pitch_mod";
+    static constexpr const char* paramIdBufferSeconds = "buffer_seconds";
 
     TimePitchModuleProcessor();
     ~TimePitchModuleProcessor() override = default;
@@ -67,8 +69,20 @@ private:
     std::atomic<float>* pitchParam { nullptr };
     std::atomic<float>* speedModParam { nullptr };
     std::atomic<float>* pitchModParam { nullptr };
+    std::atomic<float>* bufferSecondsParam { nullptr };
     juce::AudioParameterChoice* engineParam { nullptr };
     double sr { 48000.0 };
+    
+    // Buffer management
+    std::atomic<bool> flushRequested { false };
+    double lastBufferSeconds { 5.0 };
+    int autoDropCooldownSamples { 0 };
+    int autoDropCooldownRemaining { 0 };
+    int autoDropOverlapSamples { 0 };
+    bool pendingAutoDrop { false };
+    int pendingAutoDropAmount { 0 };
+    juce::HeapBlock<float> overlapBefore;
+    juce::HeapBlock<float> overlapAfter;
 
     // --- Streaming FIFO for live input buffering ---
     juce::AudioBuffer<float> inputFifo; // stereo FIFO storage
@@ -79,6 +93,27 @@ private:
     juce::SmoothedValue<float> speedSm;
     juce::SmoothedValue<float> pitchSm;
     TimePitchProcessor::Mode lastMode { TimePitchProcessor::Mode::RubberBand };
+
+#if defined(PRESET_CREATOR_UI)
+    struct VizData
+    {
+        static constexpr int historyPoints = 120;
+        std::array<std::atomic<float>, historyPoints> speedHistory;
+        std::array<std::atomic<float>, historyPoints> pitchHistory;
+        std::array<std::atomic<float>, historyPoints> fifoHistory;
+        std::atomic<float> currentSpeed { 1.0f };
+        std::atomic<float> currentPitch { 0.0f };
+        std::atomic<float> fifoFill { 0.0f };
+        std::atomic<int> engineMode { 0 };
+        std::atomic<int> historyHead { 0 };
+        std::atomic<int> autoflushActive { 0 }; // 0=stable, 1=dropping, -1=draining
+    };
+
+    VizData vizData;
+    int vizSampleAccumulator { 0 };
+    int vizUpdateSamples { 512 };
+    int vizHistoryWrite { 0 };
+#endif
 };
 
 

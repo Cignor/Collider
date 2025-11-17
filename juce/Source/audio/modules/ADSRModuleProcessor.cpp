@@ -2,6 +2,7 @@
 
 #if defined(PRESET_CREATOR_UI)
 #include "../../preset_creator/theme/ThemeManager.h"
+#include <imgui.h>
 #endif
 
 ADSRModuleProcessor::ADSRModuleProcessor()
@@ -59,6 +60,16 @@ void ADSRModuleProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
     juce::ignoreUnused (samplesPerBlock);
     sr = sampleRate > 0.0 ? sampleRate : 44100.0;
     eorPending = eocPending = 0; envLevel = 0.0f; lastGate = false; lastTrigger = false; stage = Stage::Idle;
+
+#if defined(PRESET_CREATOR_UI)
+    vizEnvelopeBuffer.setSize(1, vizBufferSize, false, true, true);
+    vizWritePos = 0;
+    for (auto& v : vizData.envelopeWaveform) v.store(0.0f);
+    vizData.currentEnvelope.store(0.0f);
+    vizData.currentStage.store(0);
+    vizData.gateActive.store(false);
+    vizData.triggerActive.store(false);
+#endif
 }
 
 void ADSRModuleProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midi)
@@ -208,6 +219,15 @@ void ADSRModuleProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::
         invOut[i] = 1.0f - envLevel;
         if (eorGate != nullptr) eorGate[i] = eorValue;
         if (eocGate != nullptr) eocGate[i] = eocValue;
+
+#if defined(PRESET_CREATOR_UI)
+        // Capture envelope into circular buffer
+        if (vizEnvelopeBuffer.getNumSamples() > 0)
+        {
+            vizEnvelopeBuffer.setSample(0, vizWritePos, envLevel);
+            vizWritePos = (vizWritePos + 1) % vizBufferSize;
+        }
+#endif
     }
 
     // Inspector values: use block peak magnitude to capture fast changes
@@ -225,6 +245,28 @@ void ADSRModuleProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::
     setLiveParamValue("decay_live", dEff);
     setLiveParamValue("sustain_live", sEff);
     setLiveParamValue("release_live", rEff);
+
+#if defined(PRESET_CREATOR_UI)
+    // Update visualization data (thread-safe)
+    // Downsample envelope waveform from circular buffer
+    const int stride = vizBufferSize / VizData::waveformPoints;
+    for (int i = 0; i < VizData::waveformPoints; ++i)
+    {
+        const int readIdx = (vizWritePos - VizData::waveformPoints * stride + i * stride + vizBufferSize) % vizBufferSize;
+        const float sample = vizEnvelopeBuffer.getSample(0, readIdx);
+        vizData.envelopeWaveform[i].store(sample);
+    }
+
+    // Update current state
+    vizData.currentEnvelope.store(envLevel);
+    vizData.currentStage.store(static_cast<int>(stage));
+    vizData.gateActive.store(gateIn != nullptr && gateIn[n-1] > 0.5f);
+    vizData.triggerActive.store(trigIn != nullptr && trigIn[n-1] > 0.5f);
+    vizData.currentAttack.store(aEff);
+    vizData.currentDecay.store(dEff);
+    vizData.currentSustain.store(sEff);
+    vizData.currentRelease.store(rEff);
+#endif
 }
 
 // Parameter bus contract implementation
@@ -372,7 +414,100 @@ void ADSRModuleProcessor::drawParametersInNode(float itemWidth, const std::funct
     ImGui::Spacing();
     ImGui::Spacing();
 
-    // === VISUAL ENVELOPE PREVIEW SECTION ===
+    // === REAL-TIME ENVELOPE VISUALIZATION ===
+    ThemeText("Envelope Output", theme.text.section_header);
+    ImGui::Spacing();
+
+    ImGui::PushID(this); // Unique ID for this node's UI
+    auto* drawList = ImGui::GetWindowDrawList();
+    const ImU32 bgColor = ThemeManager::getInstance().getCanvasBackground();
+    const ImU32 envelopeColor = ImGui::ColorConvertFloat4ToU32(theme.accent);
+    const ImU32 gateColor = ImGui::ColorConvertFloat4ToU32(theme.modulation.frequency);
+    const ImU32 triggerColor = ImGui::ColorConvertFloat4ToU32(theme.modulation.timbre);
+
+    // Real-time envelope waveform
+    const ImVec2 waveOrigin = ImGui::GetCursorScreenPos();
+    const float waveHeight = 100.0f;
+    const ImVec2 waveMax = ImVec2(waveOrigin.x + itemWidth, waveOrigin.y + waveHeight);
+    drawList->AddRectFilled(waveOrigin, waveMax, bgColor, 4.0f);
+    ImGui::PushClipRect(waveOrigin, waveMax, true);
+
+    // Read visualization data (thread-safe)
+    float envelopeWaveform[VizData::waveformPoints];
+    for (int i = 0; i < VizData::waveformPoints; ++i)
+        envelopeWaveform[i] = vizData.envelopeWaveform[i].load();
+
+    const float midY = waveOrigin.y + waveHeight * 0.5f;
+    const float scaleY = waveHeight * 0.45f;
+    const float stepX = itemWidth / (float)(VizData::waveformPoints - 1);
+
+    // Draw center line
+    drawList->AddLine(ImVec2(waveOrigin.x, midY), ImVec2(waveMax.x, midY), IM_COL32(150, 150, 150, 100), 1.0f);
+
+    // Draw envelope waveform
+    float prevX = waveOrigin.x;
+    float prevY = midY;
+    for (int i = 0; i < VizData::waveformPoints; ++i)
+    {
+        const float sample = juce::jlimit(0.0f, 1.0f, envelopeWaveform[i]);
+        const float x = waveOrigin.x + i * stepX;
+        const float y = midY - sample * scaleY;
+        if (i > 0)
+            drawList->AddLine(ImVec2(prevX, prevY), ImVec2(x, y), envelopeColor, 2.5f);
+        prevX = x;
+        prevY = y;
+    }
+
+    // Draw sustain level line
+    const float sustainLevel = vizData.currentSustain.load();
+    const float sustainY = midY - sustainLevel * scaleY;
+    drawList->AddLine(ImVec2(waveOrigin.x, sustainY), ImVec2(waveMax.x, sustainY), 
+                     IM_COL32(255, 255, 255, 80), 1.0f);
+
+    ImGui::PopClipRect();
+    ImGui::SetCursorScreenPos(ImVec2(waveOrigin.x, waveMax.y));
+    ImGui::Dummy(ImVec2(itemWidth, 0));
+
+    ImGui::Spacing();
+
+    // Gate/Trigger status indicators
+    const bool gateActive = vizData.gateActive.load();
+    const bool triggerActive = vizData.triggerActive.load();
+    auto drawStatus = [&](const char* label, bool isActive, ImU32 color)
+    {
+        const ImVec2 pos = ImGui::GetCursorScreenPos();
+        const float radius = 6.0f;
+        const ImU32 indicatorColor = isActive ? color : IM_COL32(90, 90, 90, 160);
+        drawList->AddCircleFilled(ImVec2(pos.x + radius, pos.y + radius), radius, indicatorColor, 24);
+        ImGui::Dummy(ImVec2(radius * 2.0f, radius * 2.0f));
+        ImGui::SameLine();
+        ImGui::TextUnformatted(label);
+    };
+
+    ImGui::BeginGroup();
+    drawStatus("Gate", gateActive, gateColor);
+    ImGui::SameLine(0.0f, ImGui::GetStyle().ItemSpacing.x * 4.0f);
+    drawStatus("Trigger", triggerActive, triggerColor);
+    ImGui::EndGroup();
+
+    ImGui::Spacing();
+
+    // Current envelope value and stage
+    const float currentEnvValue = vizData.currentEnvelope.load();
+    const int currentStageIdx = vizData.currentStage.load();
+    const char* stageNames[] = { "Idle", "Attack", "Decay", "Sustain", "Release" };
+    const char* stageName = (currentStageIdx >= 0 && currentStageIdx < 5) ? stageNames[currentStageIdx] : "Unknown";
+    
+    ImGui::Text("Current: %.3f", currentEnvValue);
+    ImGui::SameLine();
+    ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.5f, 1.0f, 0.7f, 1.0f));
+    ImGui::Text("Stage: %s", stageName);
+    ImGui::PopStyleColor();
+
+    ImGui::Spacing();
+    ImGui::Spacing();
+
+    // === ENVELOPE PREVIEW (Reference Shape) ===
     ThemeText("Envelope Preview", theme.text.section_header);
     ImGui::Spacing();
 
@@ -409,24 +544,11 @@ void ADSRModuleProcessor::drawParametersInNode(float itemWidth, const std::funct
         adsrCurve[i] = juce::jlimit(0.0f, 1.0f, adsrCurve[i]);
     }
 
-    ImGui::PushStyleColor(ImGuiCol_PlotLines, theme.accent);
-    ImGui::PlotLines("##envelope", adsrCurve, 100, 0, nullptr, 0.0f, 1.0f, ImVec2(itemWidth, 60));
+    ImGui::PushStyleColor(ImGuiCol_PlotLines, envelopeColor);
+    ImGui::PlotLines("##envelopePreview", adsrCurve, 100, 0, nullptr, 0.0f, 1.0f, ImVec2(itemWidth, 60));
     ImGui::PopStyleColor();
 
-    // Show current envelope value and stage
-    float currentEnvValue = lastOutputValues.size() > 0 ? lastOutputValues[0]->load() : 0.0f;
-    ImGui::Text("Current: %.3f", currentEnvValue);
-    
-    // Color-coded stage indicator
-    const char* stageNames[] = { "Idle", "Attack", "Decay", "Sustain", "Release" };
-    int stageIndex = static_cast<int>(stage);
-    if (stageIndex >= 0 && stageIndex < 5)
-    {
-        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.5f, 1.0f, 0.7f, 1.0f));
-        ImGui::Text("Stage: %s", stageNames[stageIndex]);
-        ImGui::PopStyleColor();
-    }
-
+    ImGui::PopID(); // End unique ID
     ImGui::PopItemWidth();
 }
 #endif

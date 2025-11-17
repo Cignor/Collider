@@ -1,0 +1,113 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<ModularSynthPreset version="1" bpm="120.0">
+  <modules>
+    <module logicalId="5" type="graphic_eq">
+      <params>
+        <GraphicEQParams>
+          <PARAM id="gainBand1" value="12.0"/>
+          <PARAM id="gainBand2" value="11.37999725341797"/>
+          <PARAM id="gainBand3" value="12.0"/>
+          <PARAM id="gainBand4" value="-35.79000091552734"/>
+          <PARAM id="gainBand5" value="-38.27999877929688"/>
+          <PARAM id="gainBand6" value="-60.0"/>
+          <PARAM id="gainBand7" value="-60.0"/>
+          <PARAM id="gainBand8" value="-60.0"/>
+          <PARAM id="gateThreshold" value="-23.0"/>
+          <PARAM id="outputLevel" value="19.20000076293945"/>
+          <PARAM id="triggerThreshold" value="-8.799999237060547"/>
+        </GraphicEQParams>
+      </params>
+    </module>
+    <module logicalId="7" type="sample_loader">
+      <params>
+        <SampleLoaderParameters samplePath="H:\0000_CODE\01_collider_pyo\audio\samples\melodic\KSHMR_Instrumental_Fill_05_105_Kemenche_G#m.wav">
+          <PARAM id="engine" value="1.0"/>
+          <PARAM id="gate" value="0.7999999523162842"/>
+          <PARAM id="gate_mod" value="1.0"/>
+          <PARAM id="loop" value="1.0"/>
+          <PARAM id="pitch" value="0.0"/>
+          <PARAM id="pitch_mod" value="0.0"/>
+          <PARAM id="rangeEnd" value="1.0"/>
+          <PARAM id="rangeEnd_mod" value="1.0"/>
+          <PARAM id="rangeStart" value="0.0"/>
+          <PARAM id="rangeStart_mod" value="0.0"/>
+          <PARAM id="rbPhaseInd" value="1.0"/>
+          <PARAM id="rbWindowShort" value="1.0"/>
+          <PARAM id="relativeGateMod" value="0.0"/>
+          <PARAM id="relativePitchMod" value="1.0"/>
+          <PARAM id="relativeRangeEndMod" value="0.0"/>
+          <PARAM id="relativeRangeStartMod" value="0.0"/>
+          <PARAM id="relativeSpeedMod" value="1.0"/>
+          <PARAM id="speed" value="1.0"/>
+          <PARAM id="speed_mod" value="1.0"/>
+          <PARAM id="trigger_mod" value="0.0"/>
+        </SampleLoaderParameters>
+      </params>
+    </module>
+    <module logicalId="1017" type="waveshaper">
+      <params>
+        <WaveshaperParams>
+          <PARAM id="drive" value="2.179999828338623"/>
+          <PARAM id="relativeDriveMod" value="1.0"/>
+          <PARAM id="type" value="0.0"/>
+        </WaveshaperParams>
+      </params>
+    </module>
+    <module logicalId="1030" type="8bandshaper">
+      <params>
+        <MultiBandShaperParams>
+          <PARAM id="drive_1" value="89.61000061035156"/>
+          <PARAM id="drive_2" value="74.68000030517578"/>
+          <PARAM id="drive_3" value="89.61000061035156"/>
+          <PARAM id="drive_4" value="85.70999908447266"/>
+          <PARAM id="drive_5" value="51.94999694824219"/>
+          <PARAM id="drive_6" value="51.29999923706055"/>
+          <PARAM id="drive_7" value="33.77000045776367"/>
+          <PARAM id="drive_8" value="26.61999893188477"/>
+          <PARAM id="outputGain" value="13.70000076293945"/>
+          <PARAM id="relativeDriveMod_1" value="1.0"/>
+          <PARAM id="relativeDriveMod_2" value="1.0"/>
+          <PARAM id="relativeDriveMod_3" value="1.0"/>
+          <PARAM id="relativeDriveMod_4" value="1.0"/>
+          <PARAM id="relativeDriveMod_5" value="1.0"/>
+          <PARAM id="relativeDriveMod_6" value="1.0"/>
+          <PARAM id="relativeDriveMod_7" value="1.0"/>
+          <PARAM id="relativeDriveMod_8" value="1.0"/>
+          <PARAM id="relativeGainMod" value="1.0"/>
+        </MultiBandShaperParams>
+      </params>
+    </module>
+    <module logicalId="1041" type="timepitch">
+      <params>
+        <TimePitchParams>
+          <PARAM id="engine" value="0.0"/>
+          <PARAM id="pitch" value="-10.90000057220459"/>
+          <PARAM id="pitch_mod" value="0.0"/>
+          <PARAM id="speed" value="0.5299999713897705"/>
+          <PARAM id="speed_mod" value="0.9999999403953552"/>
+        </TimePitchParams>
+      </params>
+    </module>
+  </modules>
+  <connections>
+    <connection srcId="5" srcChan="0" dstId="1030" dstChan="0"/>
+    <connection srcId="5" srcChan="1" dstId="1030" dstChan="1"/>
+    <connection srcId="7" srcChan="0" dstId="1017" dstChan="0"/>
+    <connection srcId="7" srcChan="1" dstId="1017" dstChan="1"/>
+    <connection srcId="1017" srcChan="0" dstId="5" dstChan="0"/>
+    <connection srcId="1017" srcChan="1" dstId="5" dstChan="1"/>
+    <connection srcId="1030" srcChan="0" dstId="1041" dstChan="0"/>
+    <connection srcId="1030" srcChan="1" dstId="1041" dstChan="1"/>
+    <connection srcId="1041" srcChan="0" dstId="output" dstChan="0"/>
+    <connection srcId="1041" srcChan="1" dstId="output" dstChan="1"/>
+  </connections>
+  <NodeEditorUI>
+    <node id="5" x="1321.999877929688" y="321.0"/>
+    <node id="7" x="-420.0" y="-255.0"/>
+    <node id="1017" x="23.5831298828125" y="152.9615173339844"/>
+    <node id="1030" x="1828.0" y="350.0"/>
+    <node id="1041" x="2264.0" y="544.0"/>
+    <node id="0" x="2649.5732421875" y="792.5494995117188"/>
+  </NodeEditorUI>
+</ModularSynthPreset>

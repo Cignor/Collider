@@ -1,6 +1,11 @@
 #pragma once
 
 #include "ModuleProcessor.h"
+#if defined(PRESET_CREATOR_UI)
+#include <array>
+#include <atomic>
+#include <vector>
+#endif
 
 class WaveshaperModuleProcessor : public ModuleProcessor
 {
@@ -10,7 +15,7 @@ public:
 
     const juce::String getName() const override { return "waveshaper"; }
 
-    void prepareToPlay(double sampleRate, int samplesPerBlock) override {}
+    void prepareToPlay(double sampleRate, int samplesPerBlock) override;
     void releaseResources() override {}
     void processBlock(juce::AudioBuffer<float>&, juce::MidiBuffer&) override;
 
@@ -58,4 +63,26 @@ private:
     
     // Relative modulation parameters
     std::atomic<float>* relativeDriveModParam { nullptr };
+
+#if defined(PRESET_CREATOR_UI)
+    struct VizData
+    {
+        static constexpr int curvePoints = 128;
+        static constexpr int historySize = 64;
+        std::array<std::atomic<float>, curvePoints> transferCurve {};
+        std::array<std::atomic<float>, historySize> driveHistory {};
+        std::atomic<float> inputRms { 0.0f };
+        std::atomic<float> outputRms { 0.0f };
+        std::atomic<float> liveDrive { 1.0f };
+        std::atomic<int> liveType { 0 };
+        std::atomic<int> historyWriteIndex { 0 };
+    };
+
+    VizData vizData;
+    juce::AudioBuffer<float> dryBlockTemp;
+    std::vector<float> curveScratch;
+    std::vector<float> driveHistoryScratch;
+#endif
+
+    int driveHistoryWriteIndex = 0;
 };

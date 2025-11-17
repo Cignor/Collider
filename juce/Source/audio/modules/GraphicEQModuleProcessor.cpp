@@ -18,7 +18,6 @@ juce::AudioProcessorValueTreeState::ParameterLayout GraphicEQModuleProcessor::cr
     // FIX: Ensure correct default values are set for all parameters.
     params.push_back(std::make_unique<juce::AudioParameterFloat>("outputLevel", "Output Level", -24.0f, 24.0f, 0.0f));
 
-    // --- NEW PARAMETERS ---
     params.push_back(std::make_unique<juce::AudioParameterFloat>(
         "gateThreshold", "Gate Threshold",
         juce::NormalisableRange<float>(-60.0f, 0.0f, 0.1f), -30.0f));
@@ -26,7 +25,17 @@ juce::AudioProcessorValueTreeState::ParameterLayout GraphicEQModuleProcessor::cr
     params.push_back(std::make_unique<juce::AudioParameterFloat>(
         "triggerThreshold", "Trigger Threshold",
         juce::NormalisableRange<float>(-60.0f, 0.0f, 0.1f), -6.0f));
-    // --- END OF NEW PARAMETERS ---
+
+    // Relative/absolute modulation switches
+    for (int i = 0; i < 8; ++i)
+    {
+        params.push_back(std::make_unique<juce::AudioParameterBool>(
+            "relativeBandMod_" + juce::String(i + 1),
+            "Relative Band " + juce::String(centerFrequencies[i], 0) + " Hz Mod",
+            true));
+    }
+    params.push_back(std::make_unique<juce::AudioParameterBool>("relativeGateThresholdMod", "Relative Gate Threshold Mod", true));
+    params.push_back(std::make_unique<juce::AudioParameterBool>("relativeTriggerThresholdMod", "Relative Trigger Threshold Mod", true));
 
     return { params.begin(), params.end() };
 }
@@ -43,10 +52,13 @@ GraphicEQModuleProcessor::GraphicEQModuleProcessor()
     for (int i = 0; i < 8; ++i)
     {
         bandGainParams[i] = apvts.getRawParameterValue("gainBand" + juce::String(i + 1));
+        relativeBandModParams[i] = apvts.getRawParameterValue("relativeBandMod_" + juce::String(i + 1));
     }
     outputLevelParam = apvts.getRawParameterValue("outputLevel");
     gateThresholdParam = apvts.getRawParameterValue("gateThreshold");
     triggerThresholdParam = apvts.getRawParameterValue("triggerThreshold");
+    relativeGateThresholdModParam = apvts.getRawParameterValue("relativeGateThresholdMod");
+    relativeTriggerThresholdModParam = apvts.getRawParameterValue("relativeTriggerThresholdMod");
 
     // Initialize output value tracking for tooltips
     lastOutputValues.push_back(std::make_unique<std::atomic<float>>(0.0f));
@@ -77,6 +89,26 @@ void GraphicEQModuleProcessor::prepareToPlay(double sampleRate, int samplesPerBl
     // Reset gate/trigger state
     lastTriggerState = false;
     triggerPulseSamplesRemaining = 0;
+
+#if defined(PRESET_CREATOR_UI)
+    const float vizQ = 1.0f;
+    for (int i = 0; i < 8; ++i)
+    {
+        if (i == 0)
+            vizBandFilters[i].coefficients = juce::dsp::IIR::Coefficients<float>::makeLowShelf(sampleRate, centerFrequencies[i], vizQ, 1.0f);
+        else if (i == 7)
+            vizBandFilters[i].coefficients = juce::dsp::IIR::Coefficients<float>::makeHighShelf(sampleRate, centerFrequencies[i], vizQ, 1.0f);
+        else
+            vizBandFilters[i].coefficients = juce::dsp::IIR::Coefficients<float>::makeBandPass(sampleRate, centerFrequencies[i], vizQ);
+        vizBandFilters[i].reset();
+        vizBandAccum[i] = 0.0f;
+        vizData.bandGainDb[i].store(0.0f);
+        vizData.bandLevelDb[i].store(-60.0f);
+    }
+    vizData.outputLevelDb.store(-60.0f);
+    vizData.gateActive.store(0);
+    vizData.triggerActive.store(0);
+#endif
 }
 
 void GraphicEQModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffer&)
@@ -148,21 +180,43 @@ void GraphicEQModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, ju
     // --- 1. CRITICAL: Read ALL CV modulation inputs BEFORE any output writes ---
     // Cache threshold parameters first
     float gateThreshDb = gateThresholdParam->load();
+    const float baseGateThreshDb = gateThreshDb;
+    const bool relativeGateThreshMode = relativeGateThresholdModParam != nullptr && relativeGateThresholdModParam->load() > 0.5f;
     float trigThreshDb = triggerThresholdParam->load();
+    const float baseTrigThreshDb = trigThreshDb;
+    const bool relativeTrigThreshMode = relativeTriggerThresholdModParam != nullptr && relativeTriggerThresholdModParam->load() > 0.5f;
 
     // Check for modulation on gate threshold (channel 10)
     if (isParamInputConnected("gateThreshold") && inBus.getNumChannels() > 10)
     {
-        float modCV = inBus.getSample(10, 0);
-        gateThreshDb = juce::jmap(modCV, 0.0f, 1.0f, -60.0f, 0.0f);
+        const float modCV = juce::jlimit(0.0f, 1.0f, inBus.getSample(10, 0));
+        if (relativeGateThreshMode)
+        {
+            const float offset = (modCV - 0.5f) * 60.0f;
+            gateThreshDb = baseGateThreshDb + offset;
+        }
+        else
+        {
+            gateThreshDb = juce::jmap(modCV, 0.0f, 1.0f, -60.0f, 0.0f);
+        }
+        gateThreshDb = juce::jlimit(-60.0f, 0.0f, gateThreshDb);
         setLiveParamValue("gateThreshold_live", gateThreshDb);
     }
 
     // Check for modulation on trigger threshold (channel 11)
     if (isParamInputConnected("triggerThreshold") && inBus.getNumChannels() > 11)
     {
-        float modCV = inBus.getSample(11, 0);
-        trigThreshDb = juce::jmap(modCV, 0.0f, 1.0f, -60.0f, 0.0f);
+        const float modCV = juce::jlimit(0.0f, 1.0f, inBus.getSample(11, 0));
+        if (relativeTrigThreshMode)
+        {
+            const float offset = (modCV - 0.5f) * 60.0f;
+            trigThreshDb = baseTrigThreshDb + offset;
+        }
+        else
+        {
+            trigThreshDb = juce::jmap(modCV, 0.0f, 1.0f, -60.0f, 0.0f);
+        }
+        trigThreshDb = juce::jlimit(-60.0f, 0.0f, trigThreshDb);
         setLiveParamValue("triggerThreshold_live", trigThreshDb);
     }
 
@@ -176,6 +230,8 @@ void GraphicEQModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, ju
     for (int bandIndex = 0; bandIndex < 8; ++bandIndex)
     {
         float gainDb = bandGainParams[bandIndex]->load();
+        const float baseGainDb = gainDb;
+        const bool relativeBandMode = relativeBandModParams[bandIndex] != nullptr && relativeBandModParams[bandIndex]->load() > 0.5f;
         juce::String paramId = "gainBand" + juce::String(bandIndex + 1);
 
         // Check for modulation CV on this band (channels 2-9)
@@ -196,8 +252,17 @@ void GraphicEQModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, ju
         
         if (isConnected && hasChannels)
         {
-            float modCV = inBus.getSample(modChannel, 0);
-            gainDb = juce::jmap(modCV, 0.0f, 1.0f, -60.0f, 12.0f);
+            const float modCV = juce::jlimit(0.0f, 1.0f, inBus.getSample(modChannel, 0));
+            if (relativeBandMode)
+            {
+                const float offset = (modCV - 0.5f) * 72.0f;
+                gainDb = baseGainDb + offset;
+            }
+            else
+            {
+                gainDb = juce::jmap(modCV, 0.0f, 1.0f, -60.0f, 12.0f);
+            }
+            gainDb = juce::jlimit(-60.0f, 12.0f, gainDb);
             setLiveParamValue(paramId + "_live", gainDb);
             
             // DEBUG LOGGING
@@ -230,32 +295,70 @@ void GraphicEQModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, ju
     auto audioOutBus = getBusBuffer(buffer, false, 0);
     auto cvOutBus = getBusBuffer(buffer, false, 1);
     
-    // --- 4. Write Gate/Trigger CVs (now SAFE - all input CVs are cached) ---
-    
-    if (cvOutBus.getNumChannels() >= 2)
+    const bool hasCvOutputs = cvOutBus.getNumChannels() >= 2;
+    float* gateOut = hasCvOutputs ? cvOutBus.getWritePointer(GateOut) : nullptr;
+    float* trigOut = hasCvOutputs ? cvOutBus.getWritePointer(TrigOut) : nullptr;
+#if defined(PRESET_CREATOR_UI)
+    bool gateActive = false;
+    bool triggerActive = false;
+#endif
+
+#if defined(PRESET_CREATOR_UI)
+    for (auto& acc : vizBandAccum) acc = 0.0f;
+#endif
+
+    for (int i = 0; i < numSamples; ++i)
     {
-        float* gateOut = cvOutBus.getWritePointer(GateOut);
-        float* trigOut = cvOutBus.getWritePointer(TrigOut);
+        float monoSample = 0.5f * (inputCopy.getSample(0, i) + inputCopy.getSample(1, i));
 
-        for (int i = 0; i < numSamples; ++i)
+#if defined(PRESET_CREATOR_UI)
+        for (int band = 0; band < 8; ++band)
         {
-            float monoSample = 0.5f * (inputCopy.getSample(0, i) + inputCopy.getSample(1, i));
+            float filtered = vizBandFilters[band].processSample(monoSample);
+            vizBandAccum[band] += filtered * filtered;
+        }
+#endif
+
+        if (hasCvOutputs)
+        {
             float sampleAbs = std::abs(monoSample);
+            const float gateValue = sampleAbs > gateThreshLin ? 1.0f : 0.0f;
+            gateOut[i] = gateValue;
+#if defined(PRESET_CREATOR_UI)
+            if (gateValue > 0.5f) gateActive = true;
+#endif
 
-            // Gate output
-            gateOut[i] = sampleAbs > gateThreshLin ? 1.0f : 0.0f;
-
-            // Trigger output (edge detection with pulse)
             bool isAboveTrig = sampleAbs > trigThreshLin;
             if (isAboveTrig && !lastTriggerState) {
                 triggerPulseSamplesRemaining = (int)(getSampleRate() * 0.001); // 1ms pulse
             }
             lastTriggerState = isAboveTrig;
 
-            trigOut[i] = (triggerPulseSamplesRemaining > 0) ? 1.0f : 0.0f;
+            const float trigValue = (triggerPulseSamplesRemaining > 0) ? 1.0f : 0.0f;
+            trigOut[i] = trigValue;
+#if defined(PRESET_CREATOR_UI)
+            if (trigValue > 0.5f) triggerActive = true;
+#endif
             if (triggerPulseSamplesRemaining > 0) triggerPulseSamplesRemaining--;
         }
     }
+
+#if defined(PRESET_CREATOR_UI)
+    if (numSamples > 0)
+    {
+        for (int band = 0; band < 8; ++band)
+        {
+            const float rms = std::sqrt(vizBandAccum[band] / (float)numSamples);
+            const float db = juce::Decibels::gainToDecibels(rms, -60.0f);
+            vizData.bandLevelDb[band].store(db);
+            vizData.bandGainDb[band].store(bandGainValues[band]);
+        }
+    }
+    vizData.gateThresholdDb.store(gateThreshDb);
+    vizData.triggerThresholdDb.store(trigThreshDb);
+    vizData.gateActive.store(gateActive ? 1 : 0);
+    vizData.triggerActive.store(triggerActive ? 1 : 0);
+#endif
 
     // --- 5. Copy Captured Input to AUDIO Output Bus ---
     if (audioOutBus.getNumChannels() >= 2)
@@ -334,10 +437,15 @@ void GraphicEQModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, ju
         if (audioOutBus.getNumChannels() > 1)
             audioOutBus.applyGain(1, 0, numSamples, outputGain);
 
+        float finalRms = audioOutBus.getRMSLevel(0, 0, numSamples);
+
+#if defined(PRESET_CREATOR_UI)
+        vizData.outputLevelDb.store(juce::Decibels::gainToDecibels(juce::jmax(finalRms, 1.0e-6f), -60.0f));
+#endif
+
         // LOG POINT 5: Check final signal after output gain
         if (shouldLog)
         {
-            float finalRms = audioOutBus.getRMSLevel(0, 0, numSamples);
             float outputGainDb = outputLevelParam->load();
             juce::Logger::writeToLog("[GraphicEQ Debug] After Output Gain - Audio Out RMS: " + juce::String(finalRms, 6) + 
                                    ", Output Gain (dB): " + juce::String(outputGainDb, 2));
@@ -395,52 +503,178 @@ juce::String GraphicEQModuleProcessor::getAudioOutputLabel(int channel) const
 void GraphicEQModuleProcessor::drawParametersInNode(float itemWidth, const std::function<bool(const juce::String&)>& isParamModulated, const std::function<void()>& onModificationEnded)
 {
     auto& ap = getAPVTS();
+    const auto& theme = ThemeManager::getInstance().getCurrentTheme();
+    auto* drawList = ImGui::GetWindowDrawList();
 
-    // --- 1. Draw EQ Band Sliders ---
-    const int numBands = 8;
-    const float sliderWidth = itemWidth / (float)numBands * 0.9f;
-    const float sliderHeight = 100.0f;
+    ImGui::PushID(this);
 
-    ImGui::PushItemWidth(sliderWidth);
+    // === Visualization Section ===
+    ImGui::Spacing();
+    ImGui::Text("Band Activity");
+    ImGui::Spacing();
+
+    const ImU32 bgColor = ThemeManager::getInstance().getCanvasBackground();
+    const ImU32 barColorA = ImGui::ColorConvertFloat4ToU32(theme.modulation.frequency);
+    const ImU32 barColorB = ImGui::ColorConvertFloat4ToU32(theme.modulation.timbre);
+    const ImU32 accentColor = ImGui::ColorConvertFloat4ToU32(theme.accent);
+
+    const ImVec2 vizOrigin = ImGui::GetCursorScreenPos();
+    const float vizHeight = 150.0f;
+    const ImVec2 vizMax = ImVec2(vizOrigin.x + itemWidth, vizOrigin.y + vizHeight);
+    drawList->AddRectFilled(vizOrigin, vizMax, bgColor, 4.0f);
+    ImGui::PushClipRect(vizOrigin, vizMax, true);
+
+    constexpr int numBands = 8;
+    const float padding = 6.0f;
+    const float barWidth = juce::jmax(8.0f, (itemWidth - padding * (numBands + 1)) / (float)numBands);
+    const float usableHeight = vizHeight - 34.0f;
+    ImVec2 skylinePoints[numBands];
+
     for (int i = 0; i < numBands; ++i)
     {
-        if (i > 0) ImGui::SameLine();
         ImGui::PushID(i);
-        ImGui::BeginGroup();
+        const float levelDb = vizData.bandLevelDb[i].load();
+        const float gainDb = vizData.bandGainDb[i].load();
+        const float levelNorm = juce::jlimit(0.0f, 1.0f, (levelDb + 60.0f) / 60.0f);
+        const float gainNorm = juce::jlimit(0.0f, 1.0f, (gainDb + 60.0f) / 72.0f);
+        const float x0 = vizOrigin.x + padding + i * (barWidth + padding);
+        const float x1 = x0 + barWidth;
+        const float barTopBase = vizOrigin.y + 12.0f;
+        const float barBottom = barTopBase + usableHeight;
+        const float barTop = barBottom - levelNorm * usableHeight;
+        const ImU32 bandColor = (i % 2 == 0) ? barColorA : barColorB;
 
+        drawList->AddRect(ImVec2(x0, barTopBase), ImVec2(x1, barBottom), IM_COL32(255, 255, 255, 35), 3.0f);
+        drawList->AddRectFilled(ImVec2(x0 + 1.5f, barTop), ImVec2(x1 - 1.5f, barBottom), bandColor, 3.0f);
+        drawList->AddLine(ImVec2(x0 + 2.0f, barBottom - 6.0f), ImVec2(x1 - 2.0f, barBottom - 6.0f), IM_COL32(255, 255, 255, 30), 1.0f);
+
+        const float gainY = barBottom - gainNorm * usableHeight;
+        drawList->AddLine(ImVec2(x0, gainY), ImVec2(x1, gainY), IM_COL32(255, 255, 255, 140), 1.2f);
+
+        ImGui::SetCursorScreenPos(ImVec2(x0, barTopBase));
+        const ImVec2 buttonSize(barWidth, usableHeight);
         juce::String paramId = "gainBand" + juce::String(i + 1);
         const bool isMod = isParamModulated(paramId);
-        float gainDb = isMod ? getLiveParamValueFor(paramId, "gainBand" + juce::String(i + 1) + "_live", bandGainParams[i]->load())
-                             : bandGainParams[i]->load();
-
-        if (isMod) ImGui::BeginDisabled();
-        if (ImGui::VSliderFloat("##eq", ImVec2(sliderWidth, sliderHeight), &gainDb, -60.0f, 12.0f, ""))
+        if (!isMod)
         {
-            if (!isMod)
+            ImGui::InvisibleButton("bandDrag", buttonSize, ImGuiButtonFlags_MouseButtonLeft);
+            if (ImGui::IsItemActive())
             {
+                const float mouseY = ImGui::GetIO().MousePos.y;
+                const float clamped = juce::jlimit(barTopBase, barTopBase + usableHeight, mouseY);
+                const float normalized = 1.0f - (clamped - barTopBase) / usableHeight;
+                const float newGain = juce::jlimit(-60.0f, 12.0f, juce::jmap(normalized, 0.0f, 1.0f, -60.0f, 12.0f));
                 if (auto* p = dynamic_cast<juce::AudioParameterFloat*>(ap.getParameter(paramId)))
-                {
-                    *p = gainDb;
-                }
+                    *p = newGain;
+                vizData.bandGainDb[i].store(newGain);
+            }
+            if (ImGui::IsItemDeactivated())
+                onModificationEnded();
+            if (ImGui::IsItemHovered())
+            {
+                adjustParamOnWheel(ap.getParameter(paramId), paramId, bandGainParams[i]->load());
+                juce::String freqLabel = (centerFrequencies[i] < 1000) ? juce::String(centerFrequencies[i], 0) + " Hz"
+                                                                       : juce::String(centerFrequencies[i] / 1000.0f, 1) + " kHz";
+                juce::String valueLabel = juce::String(vizData.bandGainDb[i].load(), 1) + " dB";
+                ImGui::SetTooltip("%s\n%s", freqLabel.toRawUTF8(), valueLabel.toRawUTF8());
             }
         }
-        if (!isMod) adjustParamOnWheel(apvts.getParameter(paramId), paramId, gainDb);
-        if (ImGui::IsItemDeactivatedAfterEdit()) { onModificationEnded(); }
-        if (isMod) ImGui::EndDisabled();
+        else
+        {
+            ImGui::InvisibleButton("bandDragDisabled", buttonSize, ImGuiButtonFlags_MouseButtonLeft);
+            if (ImGui::IsItemHovered())
+            {
+                juce::String freqLabel = (centerFrequencies[i] < 1000) ? juce::String(centerFrequencies[i], 0) + " Hz"
+                                                                       : juce::String(centerFrequencies[i] / 1000.0f, 1) + " kHz";
+                ImGui::SetTooltip("%s\n(modulated)", freqLabel.toRawUTF8());
+            }
+        }
 
-        juce::String label = (centerFrequencies[i] < 1000) ? juce::String(centerFrequencies[i], 0) : juce::String(centerFrequencies[i] / 1000.0f, 1) + "k";
-        float labelWidth = ImGui::CalcTextSize(label.toRawUTF8()).x;
-        float offset = (sliderWidth - labelWidth) * 0.5f;
-        if (offset > 0) ImGui::SetCursorPosX(ImGui::GetCursorPosX() + offset);
-        ImGui::TextUnformatted(label.toRawUTF8());
+        skylinePoints[i] = ImVec2((x0 + x1) * 0.5f, barTop);
 
-        ImGui::EndGroup();
+        const bool itemHovered = !isMod && ImGui::IsItemHovered();
+        const bool itemActive = !isMod && ImGui::IsItemActive();
+        if (itemHovered || itemActive)
+        {
+            const ImVec4 col = ImGui::ColorConvertU32ToFloat4(accentColor);
+            const float alpha = itemActive ? 0.6f : 0.35f;
+            const ImU32 overlay = ImGui::ColorConvertFloat4ToU32(ImVec4(col.x, col.y, col.z, alpha));
+            drawList->AddRect(ImVec2(x0 - 2.0f, barTopBase - 2.0f),
+                              ImVec2(x1 + 2.0f, barBottom + 2.0f), overlay, 4.0f, 0, 2.2f);
+            // Draw handle at the gain line position
+            const float handleY = gainY;
+            drawList->AddRectFilled(ImVec2(x0 + 3.0f, handleY - 7.0f),
+                                    ImVec2(x1 - 3.0f, handleY + 7.0f), overlay, 3.0f);
+        }
+
         ImGui::PopID();
     }
-    ImGui::PopItemWidth();
 
-    // --- 2. Draw Control Parameters ---
+    for (int i = 1; i < numBands; ++i)
+        drawList->AddLine(skylinePoints[i - 1], skylinePoints[i], accentColor, 1.8f);
+
+    const auto drawThresholdLine = [&](float dbValue, ImU32 color, const char* label)
+    {
+        const float norm = juce::jlimit(0.0f, 1.0f, (dbValue + 60.0f) / 60.0f);
+        const float y = (vizMax.y - 12.0f) - norm * (vizHeight - 24.0f);
+        const ImVec4 colorVec = ImGui::ColorConvertU32ToFloat4(color);
+        const ImU32 fadedColor = ImGui::ColorConvertFloat4ToU32(ImVec4(colorVec.x, colorVec.y, colorVec.z, 0.5f));
+        drawList->AddLine(ImVec2(vizOrigin.x + 4.0f, y), ImVec2(vizMax.x - 4.0f, y), fadedColor, 1.2f);
+        drawList->AddText(ImVec2(vizMax.x - 60.0f, y - ImGui::GetTextLineHeight() * 0.5f),
+                          color, label);
+    };
+
+    drawThresholdLine(vizData.gateThresholdDb.load(), barColorA, "Gate Thr");
+    drawThresholdLine(vizData.triggerThresholdDb.load(), barColorB, "Trig Thr");
+
+    ImGui::PopClipRect();
+    ImGui::SetCursorScreenPos(ImVec2(vizOrigin.x, vizMax.y));
+    ImGui::Dummy(ImVec2(itemWidth, 18.0f));
+
+    for (int i = 0; i < numBands; ++i)
+    {
+        const float xCenter = vizOrigin.x + padding + i * (barWidth + padding) + barWidth * 0.5f;
+        juce::String label = (centerFrequencies[i] < 1000) ? juce::String(centerFrequencies[i], 0)
+                                                           : juce::String(centerFrequencies[i] / 1000.0f, 1) + "k";
+        const ImVec2 textSize = ImGui::CalcTextSize(label.toRawUTF8());
+        drawList->AddText(ImVec2(xCenter - textSize.x * 0.5f, vizMax.y + 2.0f), IM_COL32(200, 200, 200, 200), label.toRawUTF8());
+    }
+
+    ImGui::SetCursorScreenPos(ImVec2(vizOrigin.x, vizMax.y + 20.0f));
+    ImGui::Spacing();
+
+    const bool gateActive = vizData.gateActive.load() > 0;
+    const bool trigActive = vizData.triggerActive.load() > 0;
+    const float indicatorRadius = 6.0f;
+    ImGui::BeginGroup();
+    auto drawStatus = [&](const char* label, bool isActive, ImU32 color)
+    {
+        const ImVec2 pos = ImGui::GetCursorScreenPos();
+        const ImU32 indicatorColor = isActive ? color : IM_COL32(90, 90, 90, 160);
+        drawList->AddCircleFilled(ImVec2(pos.x + indicatorRadius, pos.y + indicatorRadius), indicatorRadius, indicatorColor, 24);
+        ImGui::Dummy(ImVec2(indicatorRadius * 2.0f, indicatorRadius * 2.0f));
+        ImGui::SameLine();
+        ImGui::TextUnformatted(label);
+    };
+
+    drawStatus("Gate", gateActive, barColorA);
+    drawStatus("Trigger", trigActive, barColorB);
+    ImGui::EndGroup();
+
+    const float outputDb = vizData.outputLevelDb.load();
+    const float outputNorm = juce::jlimit(0.0f, 1.0f, (outputDb + 60.0f) / 60.0f);
+    ImGui::PushStyleColor(ImGuiCol_PlotHistogram, accentColor);
+    ImGui::ProgressBar(outputNorm, ImVec2(itemWidth * 0.5f, 0), (juce::String(outputDb, 1) + " dB").toRawUTF8());
+    ImGui::PopStyleColor();
+
+    ImGui::Spacing();
+
+    // --- Control Parameters ---
     ImGui::PushItemWidth(itemWidth);
+    ImGui::PushItemWidth(itemWidth);
+    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(14.0f, 9.0f));
+    ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 1.0f);
+    ImGui::PushStyleVar(ImGuiStyleVar_GrabMinSize, 18.0f);
 
     // Gate Threshold (modulatable)
     const bool isGateMod = isParamModulated("gateThreshold");
@@ -485,7 +719,49 @@ void GraphicEQModuleProcessor::drawParametersInNode(float itemWidth, const std::
     }
     if (ImGui::IsItemDeactivatedAfterEdit()) { onModificationEnded(); }
 
+    ImGui::Spacing();
+    ThemeText("CV Input Modes", theme.modulation.frequency);
+    ImGui::Spacing();
+
+    const int numColumns = 2;
+    for (int i = 0; i < numBands; ++i)
+    {
+        auto paramId = "relativeBandMod_" + juce::String(i + 1);
+        bool relative = relativeBandModParams[i] != nullptr && relativeBandModParams[i]->load() > 0.5f;
+        juce::String label = "Band " + juce::String(i + 1) + " Rel##rel" + juce::String(i);
+        if (ImGui::Checkbox(label.toRawUTF8(), &relative))
+        {
+            if (auto* p = dynamic_cast<juce::AudioParameterBool*>(ap.getParameter(paramId)))
+                *p = relative;
+        }
+        if (ImGui::IsItemHovered())
+            ImGui::SetTooltip("ON: CV modulates around slider (±36 dB)\nOFF: CV sets band directly (-60 to +12 dB)");
+        if ((i + 1) % numColumns != 0 && i < numBands - 1)
+            ImGui::SameLine();
+    }
+
+    ImGui::Spacing();
+    bool relativeGateMod = relativeGateThresholdModParam != nullptr && relativeGateThresholdModParam->load() > 0.5f;
+    if (ImGui::Checkbox("Relative Gate Thr Mod", &relativeGateMod))
+    {
+        if (auto* p = dynamic_cast<juce::AudioParameterBool*>(ap.getParameter("relativeGateThresholdMod")))
+            *p = relativeGateMod;
+    }
+    if (ImGui::IsItemHovered())
+        ImGui::SetTooltip("ON: CV modulates gate threshold around slider (±30 dB)\nOFF: CV sets it directly (-60 to 0 dB)");
+
+    bool relativeTrigMod = relativeTriggerThresholdModParam != nullptr && relativeTriggerThresholdModParam->load() > 0.5f;
+    if (ImGui::Checkbox("Relative Trigger Thr Mod", &relativeTrigMod))
+    {
+        if (auto* p = dynamic_cast<juce::AudioParameterBool*>(ap.getParameter("relativeTriggerThresholdMod")))
+            *p = relativeTrigMod;
+    }
+    if (ImGui::IsItemHovered())
+        ImGui::SetTooltip("ON: CV modulates trigger threshold around slider (±30 dB)\nOFF: CV sets it directly (-60 to 0 dB)");
+
+    ImGui::PopStyleVar(3);
     ImGui::PopItemWidth();
+    ImGui::PopID();
 }
 
 void GraphicEQModuleProcessor::drawIoPins(const NodePinHelpers& helpers)

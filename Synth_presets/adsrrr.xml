@@ -1,0 +1,100 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<ModularSynthPreset version="1" bpm="120.0">
+  <modules>
+    <module logicalId="1" type="adsr">
+      <params>
+        <ADSRParams>
+          <PARAM id="attack" value="0.001000000047497451"/>
+          <PARAM id="attack_mod" value="0.0"/>
+          <PARAM id="decay" value="1.291000008583069"/>
+          <PARAM id="decay_mod" value="0.0"/>
+          <PARAM id="relativeAttackMod" value="1.0"/>
+          <PARAM id="relativeDecayMod" value="1.0"/>
+          <PARAM id="relativeReleaseMod" value="1.0"/>
+          <PARAM id="relativeSustainMod" value="1.0"/>
+          <PARAM id="release" value="0.4209999740123749"/>
+          <PARAM id="release_mod" value="0.0"/>
+          <PARAM id="sustain" value="0.0"/>
+          <PARAM id="sustain_mod" value="0.0"/>
+        </ADSRParams>
+      </params>
+    </module>
+    <module logicalId="7" type="scope">
+      <params>
+        <ScopeParams>
+          <PARAM id="monitorSeconds" value="5.0"/>
+        </ScopeParams>
+      </params>
+    </module>
+    <module logicalId="9" type="vco">
+      <params>
+        <VCOParams>
+          <PARAM id="frequency" value="440.0"/>
+          <PARAM id="portamento" value="0.0"/>
+          <PARAM id="relative_freq_mod" value="1.0"/>
+          <PARAM id="waveform" value="0.0"/>
+        </VCOParams>
+      </params>
+    </module>
+    <module logicalId="13" type="lfo">
+      <params>
+        <LFOParams>
+          <PARAM id="bipolar" value="1.0"/>
+          <PARAM id="depth" value="0.4460000097751617"/>
+          <PARAM id="rate" value="0.7099999785423279"/>
+          <PARAM id="rate_division" value="3.0"/>
+          <PARAM id="relative_mode" value="1.0"/>
+          <PARAM id="sync" value="0.0"/>
+          <PARAM id="wave" value="2.0"/>
+        </LFOParams>
+      </params>
+    </module>
+    <module logicalId="15" type="comparator">
+      <params>
+        <ComparatorParams>
+          <PARAM id="threshold" value="0.5"/>
+        </ComparatorParams>
+      </params>
+    </module>
+    <module logicalId="19" type="math">
+      <params>
+        <MathParams>
+          <PARAM id="operation" value="2.0"/>
+          <PARAM id="valueA" value="0.0"/>
+          <PARAM id="valueB" value="3.570999145507812"/>
+        </MathParams>
+      </params>
+    </module>
+    <module logicalId="21" type="comparator">
+      <params>
+        <ComparatorParams>
+          <PARAM id="threshold" value="0.5"/>
+        </ComparatorParams>
+      </params>
+    </module>
+  </modules>
+  <connections>
+    <connection srcId="1" srcChan="0" dstId="7" dstChan="0"/>
+    <connection srcId="1" srcChan="0" dstId="9" dstChan="1"/>
+    <connection srcId="1" srcChan="1" dstId="9" dstChan="0"/>
+    <connection srcId="1" srcChan="1" dstId="21" dstChan="0"/>
+    <connection srcId="9" srcChan="0" dstId="output" dstChan="0"/>
+    <connection srcId="13" srcChan="0" dstId="1" dstChan="3"/>
+    <connection srcId="13" srcChan="0" dstId="15" dstChan="0"/>
+    <connection srcId="13" srcChan="0" dstId="19" dstChan="0"/>
+    <connection srcId="15" srcChan="0" dstId="1" dstChan="0"/>
+    <connection srcId="19" srcChan="0" dstId="1" dstChan="2"/>
+    <connection srcId="21" srcChan="0" dstId="9" dstChan="2"/>
+  </connections>
+  <NodeEditorUI>
+    <node id="1" x="909.0000610351562" y="25.0"/>
+    <node id="7" x="1453.77685546875" y="671.4883422851562"/>
+    <node id="9" x="1461.77685546875" y="16.48834228515625"/>
+    <node id="13" x="395.672607421875" y="164.3444976806641"/>
+    <node id="15" x="334.8362731933594" y="-89.32774353027344"/>
+    <node id="19" x="410.672607421875" y="631.344482421875"/>
+    <node id="21" x="1410.388427734375" y="533.744140625"/>
+    <node id="0" x="1958.0" y="173.0"/>
+  </NodeEditorUI>
+</ModularSynthPreset>

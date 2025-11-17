@@ -2,6 +2,7 @@
 #if defined(PRESET_CREATOR_UI)
 #include "../../preset_creator/theme/ThemeManager.h"
 #endif
+#include <array>
 #include <cmath> // For std::tanh
 
 juce::AudioProcessorValueTreeState::ParameterLayout WaveshaperModuleProcessor::createParameterLayout()
@@ -31,6 +32,27 @@ WaveshaperModuleProcessor::WaveshaperModuleProcessor()
     // Initialize output value tracking for tooltips
     lastOutputValues.push_back(std::make_unique<std::atomic<float>>(0.0f)); // For Out L
     lastOutputValues.push_back(std::make_unique<std::atomic<float>>(0.0f)); // For Out R
+
+#if defined(PRESET_CREATOR_UI)
+    for (auto& sample : vizData.transferCurve) sample.store(0.0f);
+    for (auto& sample : vizData.driveHistory) sample.store(0.0f);
+    curveScratch.resize(VizData::curvePoints, 0.0f);
+    driveHistoryScratch.resize(VizData::historySize, 0.0f);
+    vizData.historyWriteIndex.store(0);
+#endif
+}
+
+void WaveshaperModuleProcessor::prepareToPlay(double sampleRate, int samplesPerBlock)
+{
+    juce::ignoreUnused(sampleRate);
+#if defined(PRESET_CREATOR_UI)
+    dryBlockTemp.setSize(2, samplesPerBlock);
+    dryBlockTemp.clear();
+    curveScratch.assign(VizData::curvePoints, 0.0f);
+    driveHistoryScratch.assign(VizData::historySize, 0.0f);
+    vizData.historyWriteIndex.store(0);
+    driveHistoryWriteIndex = 0;
+#endif
 }
 
 void WaveshaperModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midi)
@@ -49,6 +71,17 @@ void WaveshaperModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
     const int baseType = typeParam != nullptr ? typeParam->getIndex() : 0;
     const bool relativeDriveMode = relativeDriveModParam && relativeDriveModParam->load() > 0.5f;
     
+    const int numSamples = buffer.getNumSamples();
+
+#if defined(PRESET_CREATOR_UI)
+    const int dryChannels = juce::jmin(2, buffer.getNumChannels());
+    if (dryBlockTemp.getNumChannels() < dryChannels || dryBlockTemp.getNumSamples() < numSamples)
+        dryBlockTemp.setSize(juce::jmax(2, dryChannels), numSamples, false, false, true);
+    dryBlockTemp.clear();
+    for (int ch = 0; ch < dryChannels; ++ch)
+        dryBlockTemp.copyFrom(ch, 0, buffer, ch, 0, numSamples);
+#endif
+
     for (int ch = 0; ch < buffer.getNumChannels(); ++ch)
     {
         float* data = buffer.getWritePointer(ch);
@@ -119,6 +152,51 @@ void WaveshaperModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
     }
     setLiveParamValue("type_live", static_cast<float>(finalType));
 
+#if defined(PRESET_CREATOR_UI)
+    vizData.liveDrive.store(finalDrive);
+    vizData.liveType.store(finalType);
+
+    auto computeRms = [numSamples](juce::AudioBuffer<float>& buf)
+    {
+        if (buf.getNumChannels() == 0 || numSamples <= 0)
+            return 0.0f;
+        const int channels = juce::jmin(2, buf.getNumChannels());
+        float sum = 0.0f;
+        for (int ch = 0; ch < channels; ++ch)
+            sum += buf.getRMSLevel(ch, 0, numSamples);
+        return sum / (float)channels;
+    };
+
+    vizData.inputRms.store(computeRms(dryBlockTemp));
+    vizData.outputRms.store(computeRms(buffer));
+
+    const auto applyTransfer = [](float input, float drive, int type)
+    {
+        const float s = input * drive;
+        switch (type)
+        {
+            case 0: return std::tanh(s);
+            case 1: return juce::jlimit(-1.0f, 1.0f, s);
+            case 2:
+            default: return std::abs(std::abs(std::fmod(s - 1.0f, 4.0f)) - 2.0f) - 1.0f;
+        }
+    };
+
+    if ((int)curveScratch.size() != VizData::curvePoints)
+        curveScratch.resize(VizData::curvePoints);
+    for (int i = 0; i < VizData::curvePoints; ++i)
+    {
+        const float x = juce::jmap((float)i / (float)(VizData::curvePoints - 1), 0.0f, 1.0f, -1.0f, 1.0f);
+        const float y = applyTransfer(x, finalDrive, finalType);
+        vizData.transferCurve[i].store(y);
+    }
+
+    const float normalizedDrive = juce::jlimit(0.0f, 1.0f, (finalDrive - 1.0f) / 99.0f);
+    vizData.driveHistory[driveHistoryWriteIndex].store(normalizedDrive);
+    driveHistoryWriteIndex = (driveHistoryWriteIndex + 1) % VizData::historySize;
+    vizData.historyWriteIndex.store(driveHistoryWriteIndex);
+#endif
+
     // Update output values for tooltips
     if (lastOutputValues.size() >= 2)
     {
@@ -132,16 +210,214 @@ void WaveshaperModuleProcessor::drawParametersInNode(float itemWidth, const std:
 {
     const auto& theme = ThemeManager::getInstance().getCurrentTheme();
     auto& ap = getAPVTS();
+    const auto& freqColors = theme.modules.frequency_graph;
+    const auto resolveColor = [](ImU32 value, ImU32 fallback) { return value != 0 ? value : fallback; };
+    const ImU32 curveBg   = resolveColor(freqColors.background, IM_COL32(18, 20, 24, 255));
+    const ImU32 curveGrid = resolveColor(freqColors.grid, IM_COL32(50, 55, 65, 255));
+    const ImU32 curveLine = resolveColor(freqColors.live_line, IM_COL32(255, 140, 90, 255));
+    const ImU32 diagLine  = resolveColor(freqColors.peak_line, IM_COL32(90, 140, 255, 180));
+    const ImU32 meterBg   = resolveColor(freqColors.background, IM_COL32(25, 27, 32, 255));
+    const ImU32 meterFill = resolveColor(freqColors.peak_line, IM_COL32(255, 120, 60, 200));
+    const ImU32 meterFillB = resolveColor(freqColors.live_line, IM_COL32(120, 200, 255, 200));
+    const ImU32 driveActive = ImGui::ColorConvertFloat4ToU32(theme.modulation.frequency);
+    const ImU32 driveInactive = IM_COL32(70, 75, 85, 255);
     
     auto HelpMarker = [](const char* desc) {
         ImGui::TextDisabled("(?)");
         if (ImGui::BeginItemTooltip()) { ImGui::PushTextWrapPos(ImGui::GetFontSize() * 35.0f); ImGui::TextUnformatted(desc); ImGui::PopTextWrapPos(); ImGui::EndTooltip(); }
     };
     
+    static constexpr std::array<const char*, 3> typeNames { "Soft Clip", "Hard Clip", "Foldback" };
+    
     float drive = 1.0f; if (auto* p = dynamic_cast<juce::AudioParameterFloat*>(ap.getParameter("drive"))) drive = *p;
     int type = 0; if (auto* p = dynamic_cast<juce::AudioParameterChoice*>(ap.getParameter("type"))) type = p->getIndex();
 
+    std::array<float, VizData::curvePoints> curvePoints {};
+    for (int i = 0; i < VizData::curvePoints; ++i)
+        curvePoints[i] = vizData.transferCurve[i].load();
+    std::array<float, VizData::historySize> driveHistory {};
+    for (int i = 0; i < VizData::historySize; ++i)
+        driveHistory[i] = vizData.driveHistory[i].load();
+    const int historyWriteIdx = vizData.historyWriteIndex.load();
+    const float liveDrive = vizData.liveDrive.load();
+    const int liveType = vizData.liveType.load();
+    const float inputRms = vizData.inputRms.load();
+    const float outputRms = vizData.outputRms.load();
+
+    ImGui::PushID(this);
     ImGui::PushItemWidth(itemWidth);
+
+    if (ImGui::BeginChild("WaveshaperCurveViz", ImVec2(itemWidth, 170.0f), false,
+                          ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse))
+    {
+        auto* drawList = ImGui::GetWindowDrawList();
+        const ImVec2 p0 = ImGui::GetWindowPos();
+        const ImVec2 p1 { p0.x + itemWidth, p0.y + 170.0f };
+        drawList->AddRectFilled(p0, p1, curveBg);
+        drawList->PushClipRect(p0, p1, true);
+
+        auto xToScreen = [&](float x) { return juce::jmap(x, -1.0f, 1.0f, p0.x + 6.0f, p1.x - 6.0f); };
+        auto yToScreen = [&](float y) { return juce::jmap(y, 1.2f, -1.2f, p0.y + 6.0f, p1.y - 6.0f); };
+
+        // Axes
+        drawList->AddLine(ImVec2(p0.x, yToScreen(0.0f)), ImVec2(p1.x, yToScreen(0.0f)), curveGrid, 1.0f);
+        drawList->AddLine(ImVec2(xToScreen(0.0f), p0.y), ImVec2(xToScreen(0.0f), p1.y), curveGrid, 1.0f);
+
+        // Diagonal reference
+        drawList->AddLine(ImVec2(xToScreen(-1.0f), yToScreen(-1.0f)), ImVec2(xToScreen(1.0f), yToScreen(1.0f)), diagLine, 1.5f);
+
+        // Active transfer curve
+        for (int i = 1; i < VizData::curvePoints; ++i)
+        {
+            const float prevX = juce::jmap((float)(i - 1) / (VizData::curvePoints - 1), 0.0f, 1.0f, -1.0f, 1.0f);
+            const float currX = juce::jmap((float)i / (VizData::curvePoints - 1), 0.0f, 1.0f, -1.0f, 1.0f);
+            drawList->AddLine(ImVec2(xToScreen(prevX), yToScreen(curvePoints[i - 1])),
+                              ImVec2(xToScreen(currX), yToScreen(curvePoints[i])),
+                              curveLine,
+                              liveType == 2 ? 2.5f : 2.0f);
+        }
+
+        drawList->PopClipRect();
+        const ImVec2 childSize = ImGui::GetWindowSize();
+        ImGui::SetCursorPos(ImVec2(0.0f, 0.0f));
+        ImGui::InvisibleButton("CurveDragBlocker", childSize, ImGuiButtonFlags_MouseButtonLeft | ImGuiButtonFlags_MouseButtonRight);
+        ImGui::SetCursorPos(ImVec2(0.0f, 0.0f));
+        drawList->AddText(ImVec2(p0.x + 8.0f, p0.y + 8.0f), IM_COL32(220, 220, 230, 255),
+                          (juce::String("Transfer: ") + typeNames[(size_t)liveType] + "  |  Drive " + juce::String(liveDrive, 2)).toRawUTF8());
+    }
+    ImGui::EndChild();
+
+    ImGui::Spacing();
+
+    if (ImGui::BeginChild("WaveshaperEnergy", ImVec2(itemWidth, 80.0f), false,
+                          ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse))
+    {
+        auto* drawList = ImGui::GetWindowDrawList();
+        const ImVec2 start = ImGui::GetWindowPos();
+        const ImVec2 end { start.x + itemWidth, start.y + 80.0f };
+        drawList->AddRectFilled(start, end, meterBg);
+        drawList->PushClipRect(start, end, true);
+
+        const float meterWidth = (itemWidth - 40.0f) * 0.5f;
+        auto drawMeter = [&](float value, float xOffset, ImU32 fill)
+        {
+            const float clamped = juce::jlimit(0.0f, 1.0f, value);
+            const float height = (end.y - start.y - 25.0f) * clamped;
+            const ImVec2 base { start.x + xOffset, end.y - 10.0f };
+            const ImVec2 top { base.x + meterWidth, base.y - height };
+            drawList->AddRectFilled(ImVec2(base.x, top.y), ImVec2(top.x, base.y), fill, 2.0f);
+            drawList->AddRect(ImVec2(base.x, top.y), ImVec2(top.x, base.y), IM_COL32(0, 0, 0, 100));
+        };
+
+        drawMeter(inputRms, 12.0f, meterFillB);
+        drawMeter(outputRms, 24.0f + meterWidth, meterFill);
+
+        drawList->PopClipRect();
+
+        const ImVec2 childSize = ImGui::GetWindowSize();
+        ImGui::SetCursorPos(ImVec2(0.0f, 0.0f));
+        ImGui::InvisibleButton("EnergyDragBlocker", childSize, ImGuiButtonFlags_MouseButtonLeft | ImGuiButtonFlags_MouseButtonRight);
+        ImGui::SetCursorPos(ImVec2(0.0f, 0.0f));
+
+        drawList->AddText(ImVec2(start.x + 12.0f, start.y + 6.0f), IM_COL32(200, 200, 210, 255), "Energy");
+        drawList->AddText(ImVec2(start.x + 12.0f, start.y + 60.0f), IM_COL32(150, 150, 160, 255),
+                          (juce::String("Dry ") + juce::String(juce::Decibels::gainToDecibels(inputRms + 1.0e-5f), 1) + " dB").toRawUTF8());
+        drawList->AddText(ImVec2(start.x + meterWidth + 36.0f, start.y + 60.0f), IM_COL32(150, 150, 160, 255),
+                          (juce::String("Wet ") + juce::String(juce::Decibels::gainToDecibels(outputRms + 1.0e-5f), 1) + " dB").toRawUTF8());
+    }
+    ImGui::EndChild();
+
+    ImGui::Spacing();
+
+    if (ImGui::BeginChild("WaveshaperDriveHistory", ImVec2(itemWidth, 60.0f), false,
+                          ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse))
+    {
+        auto* drawList = ImGui::GetWindowDrawList();
+        const ImVec2 p0 = ImGui::GetWindowPos();
+        const ImVec2 p1 { p0.x + itemWidth, p0.y + 60.0f };
+        drawList->AddRectFilled(p0, p1, meterBg);
+        drawList->PushClipRect(p0, p1, true);
+
+        auto idxToValue = [&](int visualIndex)
+        {
+            const int histSize = VizData::historySize;
+            const int absolute = (historyWriteIdx + visualIndex) % histSize;
+            return driveHistory[absolute];
+        };
+
+        float prevX = p0.x;
+        float prevY = p1.y;
+        for (int i = 0; i < VizData::historySize; ++i)
+        {
+            const float value = idxToValue(i);
+            const float x = juce::jmap((float)i, 0.0f, (float)(VizData::historySize - 1), p0.x + 4.0f, p1.x - 4.0f);
+            const float y = juce::jmap(value, 0.0f, 1.0f, p1.y - 6.0f, p0.y + 6.0f);
+            if (i > 0)
+                drawList->AddLine(ImVec2(prevX, prevY), ImVec2(x, y), driveActive, 2.0f);
+            prevX = x;
+            prevY = y;
+        }
+
+        drawList->PopClipRect();
+        const ImVec2 childSize = ImGui::GetWindowSize();
+        ImGui::SetCursorPos(ImVec2(0.0f, 0.0f));
+        ImGui::InvisibleButton("DriveHistoryDragBlocker", childSize, ImGuiButtonFlags_MouseButtonLeft | ImGuiButtonFlags_MouseButtonRight);
+        ImGui::SetCursorPos(ImVec2(0.0f, 0.0f));
+        drawList->AddText(ImVec2(p0.x + 8.0f, p0.y + 4.0f), IM_COL32(200, 200, 210, 255),
+                          (juce::String("Drive History ") + juce::String(liveDrive, 2)).toRawUTF8());
+    }
+    ImGui::EndChild();
+
+    ImGui::Spacing();
+
+    // Type selector bars
+    const bool isTypeModulated = isParamModulated("type");
+    int displayedType = type;
+    if (isTypeModulated)
+        displayedType = static_cast<int>(getLiveParamValueFor("type", "type_live", static_cast<float>(type)));
+    const float barHeight = 32.0f;
+    const float spacing = ImGui::GetStyle().ItemSpacing.x;
+    const float totalSpacing = 2.0f * spacing;
+    const float barWidth = (itemWidth - totalSpacing) / 3.0f;
+    ImGui::TextUnformatted("Waveshape Selector");
+    if (isTypeModulated) ImGui::SameLine(), ImGui::TextUnformatted("(mod)");
+    ImGui::BeginDisabled(isTypeModulated);
+    for (int i = 0; i < 3; ++i)
+    {
+        if (i > 0) ImGui::SameLine();
+        ImGui::PushID(i);
+        const ImVec2 size { barWidth, barHeight };
+        const ImVec2 pos = ImGui::GetCursorScreenPos();
+        const bool pressed = ImGui::InvisibleButton("TypeBar", size);
+        auto* drawList = ImGui::GetWindowDrawList();
+        const bool hovered = ImGui::IsItemHovered();
+        const bool active = displayedType == i;
+        const ImU32 fill = active ? driveActive : driveInactive;
+        drawList->AddRectFilled(pos, ImVec2(pos.x + barWidth, pos.y + barHeight), fill, 4.0f);
+        drawList->AddRect(pos, ImVec2(pos.x + barWidth, pos.y + barHeight), IM_COL32(0, 0, 0, 180), 4.0f, 0, hovered ? 2.0f : 1.0f);
+        drawList->AddText(ImVec2(pos.x + 8.0f, pos.y + 8.0f), IM_COL32(15, 15, 20, 255), typeNames[(size_t)i]);
+
+        if (hovered && ImGui::BeginItemTooltip())
+        {
+            ImGui::Text("%s\nCtrl+Click cycles to next type.", typeNames[(size_t)i]);
+            ImGui::EndTooltip();
+        }
+
+        if (pressed)
+        {
+            int newType = i;
+            if (ImGui::GetIO().KeyCtrl)
+                newType = (displayedType + 1) % 3;
+            if (auto* p = dynamic_cast<juce::AudioParameterChoice*>(ap.getParameter("type")))
+                *p = newType;
+            displayedType = newType;
+            onModificationEnded();
+        }
+        ImGui::PopID();
+    }
+    ImGui::EndDisabled();
+
+    ImGui::Spacing();
 
     ThemeText("Waveshaper Parameters", theme.text.section_header);
     ImGui::Spacing();
@@ -159,19 +435,6 @@ void WaveshaperModuleProcessor::drawParametersInNode(float itemWidth, const std:
     ImGui::SameLine();
     HelpMarker("Drive amount (1-100)\nLogarithmic scale for fine control");
 
-    // Type
-    bool isTypeModulated = isParamModulated("type");
-    if (isTypeModulated) {
-        type = static_cast<int>(getLiveParamValueFor("type", "type_live", static_cast<float>(type)));
-        ImGui::BeginDisabled();
-    }
-    if (ImGui::Combo("Type", &type, "Soft Clip\0Hard Clip\0Foldback\0\0")) if (!isTypeModulated) if (auto* p = dynamic_cast<juce::AudioParameterChoice*>(ap.getParameter("type"))) *p = type;
-    if (ImGui::IsItemDeactivatedAfterEdit()) { onModificationEnded(); }
-    if (isTypeModulated) { ImGui::EndDisabled(); ImGui::SameLine(); ImGui::TextUnformatted("(mod)"); }
-    ImGui::SameLine();
-    HelpMarker("Shaping algorithm:\nSoft Clip = smooth saturation\nHard Clip = digital clipping\nFoldback = wave folding distortion");
-
-    ImGui::Spacing();
     ImGui::Spacing();
 
     // === RELATIVE MODULATION SECTION ===
@@ -192,6 +455,7 @@ void WaveshaperModuleProcessor::drawParametersInNode(float itemWidth, const std:
     }
 
     ImGui::PopItemWidth();
+    ImGui::PopID();
 }
 
 void WaveshaperModuleProcessor::drawIoPins(const NodePinHelpers& helpers)

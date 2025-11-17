@@ -2,6 +2,11 @@
 
 #include "ModuleProcessor.h"
 #include <juce_dsp/juce_dsp.h>
+#include <array>
+#include <atomic>
+#if defined(PRESET_CREATOR_UI)
+#include "../../preset_creator/theme/ThemeManager.h"
+#endif
 
 class LFOModuleProcessor : public ModuleProcessor
 {
@@ -59,4 +64,30 @@ private:
     
     int currentWaveform = -1;
     TransportState m_currentTransport;
+
+#if defined(PRESET_CREATOR_UI)
+    // --- Visualization Data (thread-safe, updated from audio thread) ---
+    struct VizData
+    {
+        static constexpr int waveformPoints = 256;
+        std::array<std::atomic<float>, waveformPoints> lfoWaveform;
+        std::atomic<float> currentValue { 0.0f };
+        std::atomic<float> currentRate { 1.0f };
+        std::atomic<float> currentDepth { 0.5f };
+        std::atomic<int> currentWave { 0 };
+        std::atomic<bool> isBipolar { true };
+        std::atomic<bool> isSynced { false };
+
+        VizData()
+        {
+            for (auto& v : lfoWaveform) v.store(0.0f);
+        }
+    };
+    VizData vizData;
+
+    // Circular buffer for LFO waveform capture
+    juce::AudioBuffer<float> vizLfoBuffer;
+    int vizWritePos { 0 };
+    static constexpr int vizBufferSize = 2048; // ~43ms at 48kHz
+#endif
 };

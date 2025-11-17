@@ -3,6 +3,10 @@
 #include "ModuleProcessor.h"
 #include <juce_dsp/juce_dsp.h>
 #include <array>
+#include <atomic>
+#if defined(PRESET_CREATOR_UI)
+#include "../../preset_creator/theme/ThemeManager.h"
+#endif
 
 class MultiBandShaperModuleProcessor : public ModuleProcessor
 {
@@ -52,6 +56,27 @@ private:
     juce::AudioBuffer<float> bandBuffer;
     juce::AudioBuffer<float> sumBuffer;
     
+#if defined(PRESET_CREATOR_UI)
+    struct VizData
+    {
+        std::array<std::atomic<float>, NUM_BANDS> bandInputDb;
+        std::array<std::atomic<float>, NUM_BANDS> bandOutputDb;
+        std::array<std::atomic<float>, NUM_BANDS> bandDriveValue;
+        std::atomic<float> outputLevelDb { -60.0f };
+
+        VizData()
+        {
+            for (auto& v : bandInputDb) v.store(-60.0f);
+            for (auto& v : bandOutputDb) v.store(-60.0f);
+            for (auto& v : bandDriveValue) v.store(0.0f);
+        }
+    };
+
+    VizData vizData;
+    std::array<double, NUM_BANDS> vizAccumInput {};
+    std::array<double, NUM_BANDS> vizAccumOutput {};
+#endif
+
     // Center frequencies for the 8 bands
     static constexpr float centerFreqs[NUM_BANDS] = { 
         60.0f, 150.0f, 400.0f, 1000.0f, 2400.0f, 5000.0f, 10000.0f, 16000.0f 

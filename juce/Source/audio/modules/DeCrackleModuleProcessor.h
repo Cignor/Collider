@@ -2,6 +2,11 @@
 
 #include "ModuleProcessor.h"
 #include <juce_dsp/juce_dsp.h>
+#if defined(PRESET_CREATOR_UI)
+#include <array>
+#include <atomic>
+#include <vector>
+#endif
 
 class DeCrackleModuleProcessor : public ModuleProcessor
 {
@@ -18,39 +23,7 @@ public:
     juce::AudioProcessorValueTreeState& getAPVTS() override { return apvts; }
 
 #if defined(PRESET_CREATOR_UI)
-    void drawParametersInNode (float itemWidth, const std::function<bool(const juce::String& paramId)>& isParamModulated, const std::function<void()>& onModificationEnded) override
-    {
-        auto& ap = getAPVTS();
-        
-        float threshold = thresholdParam != nullptr ? thresholdParam->load() : 0.1f;
-        float smoothingMs = smoothingTimeMsParam != nullptr ? smoothingTimeMsParam->load() : 5.0f;
-        float amount = amountParam != nullptr ? amountParam->load() : 1.0f;
-        
-        ImGui::PushItemWidth(itemWidth);
-        
-        // Threshold slider
-        if (ImGui::SliderFloat("Threshold", &threshold, 0.01f, 1.0f, "%.3f")) {
-            if (auto* p = dynamic_cast<juce::AudioParameterFloat*>(ap.getParameter("threshold"))) *p = threshold;
-        }
-        adjustParamOnWheel(ap.getParameter("threshold"), "threshold", threshold);
-        if (ImGui::IsItemDeactivatedAfterEdit()) { onModificationEnded(); }
-        
-        // Smoothing time slider
-        if (ImGui::SliderFloat("Smoothing (ms)", &smoothingMs, 0.1f, 20.0f, "%.2f", ImGuiSliderFlags_Logarithmic)) {
-            if (auto* p = dynamic_cast<juce::AudioParameterFloat*>(ap.getParameter("smoothing_time"))) *p = smoothingMs;
-        }
-        adjustParamOnWheel(ap.getParameter("smoothing_time"), "smoothing_time", smoothingMs);
-        if (ImGui::IsItemDeactivatedAfterEdit()) { onModificationEnded(); }
-        
-        // Amount (dry/wet) slider
-        if (ImGui::SliderFloat("Amount", &amount, 0.0f, 1.0f, "%.2f")) {
-            if (auto* p = dynamic_cast<juce::AudioParameterFloat*>(ap.getParameter("amount"))) *p = amount;
-        }
-        adjustParamOnWheel(ap.getParameter("amount"), "amount", amount);
-        if (ImGui::IsItemDeactivatedAfterEdit()) { onModificationEnded(); }
-        
-        ImGui::PopItemWidth();
-    }
+    void drawParametersInNode (float itemWidth, const std::function<bool(const juce::String& paramId)>& isParamModulated, const std::function<void()>& onModificationEnded) override;
 
     void drawIoPins(const NodePinHelpers& helpers) override
     {
@@ -97,5 +70,28 @@ private:
     int smoothingSamplesRemaining[2] { 0, 0 };
     
     double currentSampleRate { 44100.0 };
+
+#if defined(PRESET_CREATOR_UI)
+    struct VizData
+    {
+        static constexpr int waveformPoints = 256;
+        static constexpr int historySize = 64;
+        std::array<std::atomic<float>, waveformPoints> dryWave {};
+        std::array<std::atomic<float>, waveformPoints> wetWave {};
+        std::array<std::atomic<float>, waveformPoints> crackleMask {};
+        std::array<std::atomic<float>, historySize> crackleHistory {};
+        std::atomic<int> historyWriteIndex { 0 };
+        std::atomic<float> crackleRatePerSec { 0.0f };
+        std::atomic<float> smoothingMsLive { 0.0f };
+        std::atomic<float> amountLive { 0.0f };
+        std::atomic<float> smoothingActiveRatio { 0.0f };
+    };
+
+    VizData vizData;
+    juce::AudioBuffer<float> dryCapture;
+    juce::AudioBuffer<float> wetCapture;
+    std::vector<int> crackleBinScratch;
+    int crackleHistoryWrite = 0;
+#endif
 };
 

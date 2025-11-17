@@ -276,7 +276,7 @@ void FrequencyGraphModuleProcessor::drawParametersInNode(float itemWidth, const 
     {
         ImVec2 p0 = ImGui::GetWindowPos();
         ImVec2 p1 = ImVec2(p0.x + graphWidth, p0.y + graphHeight);
-        auto* drawList = ImGui::GetWindowDrawList();
+    auto* drawList = ImGui::GetWindowDrawList();
         graphMin = p0;
         graphMax = p1;
         graphValid = true;
@@ -289,10 +289,10 @@ void FrequencyGraphModuleProcessor::drawParametersInNode(float itemWidth, const 
         // Use intersect=true so drawings never leak outside and conflict with other nodes
         drawList->PushClipRect(p0, p1, true);
 
-        // Draw background and grid lines
-        drawList->AddRectFilled(p0, p1, backgroundColor);
+    // Draw background and grid lines
+    drawList->AddRectFilled(p0, p1, backgroundColor);
     
-        // --- Adjust grid lines for the new range ---
+    // --- Adjust grid lines for the new range ---
     for (int db = 12; db >= (int)minDb; db -= 12)
     {
         float y = juce::jmap((float)db, minDb, maxDb, p1.y, p0.y);
@@ -314,7 +314,7 @@ void FrequencyGraphModuleProcessor::drawParametersInNode(float itemWidth, const 
         {
             float y = juce::jmap(val, minDb, maxDb, p1.y, p0.y);
             drawList->AddLine(ImVec2(p0.x, y), ImVec2(p1.x, y), thresholdColor, 1.5f);
-        }
+    }
     const float freqs[] = { 30, 100, 300, 1000, 3000, 10000, 20000 };
     for (float freq : freqs)
     {
@@ -352,14 +352,14 @@ void FrequencyGraphModuleProcessor::drawParametersInNode(float itemWidth, const 
     drawLineGraph(latestFftData, liveColor, 2.0f);
     
         // Border around the graph
-        drawList->AddRect(p0, p1, borderColor);
+    drawList->AddRect(p0, p1, borderColor);
 
         // Done drawing inside the graph, restore clip before other UI widgets
         drawList->PopClipRect();
     }
     ImGui::EndChild();
     ImGui::PopID();
-    
+
     ImGui::Checkbox("Freeze", &isFrozen);
     
     auto& ap = getAPVTS();

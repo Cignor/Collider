@@ -3,6 +3,11 @@
 #include "ModuleProcessor.h"
 #include <juce_dsp/juce_dsp.h>
 #include <cmath>
+#include <array>
+#include <atomic>
+#if defined(PRESET_CREATOR_UI)
+#include "../../preset_creator/theme/ThemeManager.h"
+#endif
 
 class ShapingOscillatorModuleProcessor : public ModuleProcessor
 {
@@ -56,5 +61,32 @@ private:
     juce::SmoothedValue<float> smoothedDrive;
 
     int currentWaveform = -1;
+
+#if defined(PRESET_CREATOR_UI)
+    // --- Visualization Data (thread-safe, updated from audio thread) ---
+    struct VizData
+    {
+        static constexpr int waveformPoints = 256;
+        std::array<std::atomic<float>, waveformPoints> rawOscWaveform;    // Before shaping
+        std::array<std::atomic<float>, waveformPoints> shapedWaveform;    // After tanh shaping
+        std::atomic<float> currentFrequency { 440.0f };
+        std::atomic<float> currentDrive { 1.0f };
+        std::atomic<int> currentWaveform { 0 };
+        std::atomic<float> outputLevel { 0.0f };
+
+        VizData()
+        {
+            for (auto& v : rawOscWaveform) v.store(0.0f);
+            for (auto& v : shapedWaveform) v.store(0.0f);
+        }
+    };
+    VizData vizData;
+
+    // Circular buffers for waveform capture
+    juce::AudioBuffer<float> vizRawOscBuffer;
+    juce::AudioBuffer<float> vizShapedBuffer;
+    int vizWritePos { 0 };
+    static constexpr int vizBufferSize = 2048; // ~43ms at 48kHz
+#endif
 };
 
