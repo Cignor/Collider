@@ -248,6 +248,7 @@ std::vector<DynamicPinInfo> MidiLoggerModuleProcessor::getDynamicOutputPins() co
 #if defined(PRESET_CREATOR_UI)
 void MidiLoggerModuleProcessor::drawParametersInNode(float /*itemWidth*/, const std::function<bool(const juce::String&)>&, const std::function<void()>& onModificationEnded)
 {
+    ImGui::PushID(this);
     // --- Invisible Scaffolding ---
     ImGui::Dummy(ImVec2(nodeWidth, 0.0f));
     
@@ -425,7 +426,7 @@ void MidiLoggerModuleProcessor::drawParametersInNode(float /*itemWidth*/, const 
         ImGui::SameLine();
         if (ImGui::SmallButton("S")) { tracks[i]->isSoloed = !tracks[i]->isSoloed; }
         
-        ImGui::PopID();
+        ImGui::PopID(); // Pop loop PushID(i)
         ImGui::EndGroup();
         
         // FIX: Use Dummy() to properly reserve space for the track height
@@ -795,5 +796,6 @@ void MidiLoggerModuleProcessor::exportToMidiFile()
             juce::Logger::writeToLog("[MIDI Logger] ERROR: Failed to open file for writing");
         }
     });
+    ImGui::PopID();
 }
 

@@ -1,6 +1,11 @@
 #pragma once
 
 #include "ModuleProcessor.h"
+#include <array>
+#include <atomic>
+#if defined(PRESET_CREATOR_UI)
+#include "../../preset_creator/theme/ThemeManager.h"
+#endif
 
 class MixerModuleProcessor : public ModuleProcessor
 {
@@ -56,5 +61,44 @@ private:
     juce::AudioProcessorValueTreeState apvts;
     std::atomic<float>* gainParam { nullptr };       // dB
     std::atomic<float>* panParam { nullptr };        // -1..1
-    std::atomic<float>* crossfadeParam { nullptr };  // <<< ADD THIS LINE
+    std::atomic<float>* crossfadeParam { nullptr };
+
+#if defined(PRESET_CREATOR_UI)
+    // --- Visualization Data (thread-safe, updated from audio thread) ---
+    struct VizData
+    {
+        static constexpr int waveformPoints = 256;
+        std::array<std::atomic<float>, waveformPoints> inputAWaveformL;
+        std::array<std::atomic<float>, waveformPoints> inputAWaveformR;
+        std::array<std::atomic<float>, waveformPoints> inputBWaveformL;
+        std::array<std::atomic<float>, waveformPoints> inputBWaveformR;
+        std::array<std::atomic<float>, waveformPoints> outputWaveformL;
+        std::array<std::atomic<float>, waveformPoints> outputWaveformR;
+        std::atomic<float> currentCrossfade { 0.0f };
+        std::atomic<float> currentGainDb { 0.0f };
+        std::atomic<float> currentPan { 0.0f };
+        std::atomic<float> inputALevelDb { -60.0f };
+        std::atomic<float> inputBLevelDb { -60.0f };
+        std::atomic<float> outputLevelDbL { -60.0f };
+        std::atomic<float> outputLevelDbR { -60.0f };
+
+        VizData()
+        {
+            for (auto& v : inputAWaveformL) v.store(0.0f);
+            for (auto& v : inputAWaveformR) v.store(0.0f);
+            for (auto& v : inputBWaveformL) v.store(0.0f);
+            for (auto& v : inputBWaveformR) v.store(0.0f);
+            for (auto& v : outputWaveformL) v.store(0.0f);
+            for (auto& v : outputWaveformR) v.store(0.0f);
+        }
+    };
+    VizData vizData;
+
+    // Circular buffers for waveform capture
+    juce::AudioBuffer<float> vizInputABuffer;
+    juce::AudioBuffer<float> vizInputBBuffer;
+    juce::AudioBuffer<float> vizOutputBuffer;
+    int vizWritePos { 0 };
+    static constexpr int vizBufferSize = 2048; // ~43ms at 48kHz
+#endif
 };

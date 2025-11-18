@@ -455,6 +455,7 @@ void HarmonicShaperModuleProcessor::drawParametersInNode(float itemWidth, const 
 {
     const auto& theme = ThemeManager::getInstance().getCurrentTheme();
     auto& ap = getAPVTS();
+    ImGui::PushID(this);
     
     auto HelpMarker = [](const char* desc) {
         ImGui::TextDisabled("(?)");
@@ -802,6 +803,7 @@ void HarmonicShaperModuleProcessor::drawParametersInNode(float itemWidth, const 
         }
         ImGui::Columns(1);
     }
+    ImGui::PopID();
 }
 
 void HarmonicShaperModuleProcessor::drawIoPins(const NodePinHelpers& helpers)

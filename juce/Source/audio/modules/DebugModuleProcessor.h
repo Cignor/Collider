@@ -52,6 +52,32 @@ private:
     std::array<PinStats, 8> stats;
     std::vector<DebugEvent> uiEvents; // bounded list
     bool uiPaused { false };
+
+#if defined(PRESET_CREATOR_UI)
+    struct VizData
+    {
+        static constexpr int waveformPoints = 256;
+        static constexpr int maxEventMarkers = 64;
+        std::array<std::array<std::atomic<float>, waveformPoints>, 8> inputWaveforms;
+        std::array<std::atomic<int>, 8> eventMarkerCounts;
+        std::array<std::array<std::atomic<int>, maxEventMarkers>, 8> eventMarkerPositions; // Position in waveform (0-255)
+        std::array<std::atomic<float>, 8> inputRms;
+        std::atomic<int> writeIndex { 0 };
+
+        VizData()
+        {
+            for (auto& ch : inputWaveforms)
+                for (auto& v : ch) v.store(0.0f);
+            for (auto& c : eventMarkerCounts) c.store(0);
+            for (auto& ch : eventMarkerPositions)
+                for (auto& p : ch) p.store(-1);
+            for (auto& r : inputRms) r.store(0.0f);
+        }
+    };
+
+    VizData vizData;
+    juce::AudioBuffer<float> captureBuffer;
+#endif
 };
 
 

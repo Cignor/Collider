@@ -304,8 +304,6 @@ void MultiBandShaperModuleProcessor::drawParametersInNode(
 {
     const auto& theme = ThemeManager::getInstance().getCurrentTheme();
     auto& ap = getAPVTS();
-    auto* drawList = ImGui::GetWindowDrawList();
-
     ImGui::PushID(this);
 
     const ImU32 panelBg = ThemeManager::getInstance().getCanvasBackground();
@@ -317,100 +315,109 @@ void MultiBandShaperModuleProcessor::drawParametersInNode(
     ThemeText("Band Sculpting", theme.text.section_header);
     ImGui::Spacing();
 
-    const ImVec2 vizOrigin = ImGui::GetCursorScreenPos();
     const float laneHeight = 160.0f;
-    const ImVec2 vizMax = ImVec2(vizOrigin.x + itemWidth, vizOrigin.y + laneHeight + 36.0f);
-    drawList->AddRectFilled(vizOrigin, vizMax, panelBg, 4.0f);
-    ImGui::PushClipRect(vizOrigin, vizMax, true);
+    const float childHeight = laneHeight + 36.0f;
+    const ImGuiWindowFlags childFlags = ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse;
 
-    const float padding = 8.0f;
-    const float laneWidth = juce::jmax(12.0f, (itemWidth - padding * (NUM_BANDS + 1)) / (float)NUM_BANDS);
-    const float laneBottom = vizMax.y - 30.0f;
-    const float laneTop = vizOrigin.y + 12.0f;
-    const float laneUsable = laneBottom - laneTop;
-
-    float inputLineXs[NUM_BANDS];
-    float inputLineYs[NUM_BANDS];
-    float outputLineYs[NUM_BANDS];
-
-    for (int band = 0; band < NUM_BANDS; ++band)
+    if (ImGui::BeginChild("MultiBandViz", ImVec2(itemWidth, childHeight), false, childFlags))
     {
-        ImGui::PushID(band);
-        const float x0 = vizOrigin.x + padding + band * (laneWidth + padding);
-        const float x1 = x0 + laneWidth;
-        const float centerX = (x0 + x1) * 0.5f;
-        const float driveValue = vizData.bandDriveValue[band].load();
-        const float driveNorm = juce::jlimit(0.0f, 1.0f, driveValue / 100.0f);
-        const float inputDb = vizData.bandInputDb[band].load();
-        const float outputDb = vizData.bandOutputDb[band].load();
-        const float inputNorm = juce::jlimit(0.0f, 1.0f, (inputDb + 60.0f) / 60.0f);
-        const float outputNorm = juce::jlimit(0.0f, 1.0f, (outputDb + 60.0f) / 60.0f);
+        auto* drawList = ImGui::GetWindowDrawList();
+        const ImVec2 childPos = ImGui::GetWindowPos();
+        const ImVec2 childSize = ImGui::GetWindowSize();
+        const ImVec2 rectMax = ImVec2(childPos.x + childSize.x, childPos.y + childSize.y);
+        drawList->AddRectFilled(childPos, rectMax, panelBg, 4.0f);
+        ImGui::PushClipRect(childPos, rectMax, true);
 
-        const float driveTop = laneBottom - driveNorm * laneUsable;
-        drawList->AddRect(ImVec2(x0, laneTop), ImVec2(x1, laneBottom), IM_COL32(255, 255, 255, 35), 3.0f);
-        drawList->AddRectFilled(ImVec2(x0 + 1.5f, driveTop), ImVec2(x1 - 1.5f, laneBottom), driveColor, 3.0f);
+        const float padding = 8.0f;
+        const float laneWidth = juce::jmax(12.0f, (childSize.x - padding * (NUM_BANDS + 1)) / (float)NUM_BANDS);
+        const float laneTop = childPos.y + 12.0f;
+        const float laneBottom = childPos.y + laneHeight;
+        const float laneUsable = laneBottom - laneTop;
 
-        const float inputY = laneBottom - inputNorm * laneUsable;
-        const float outputY = laneBottom - outputNorm * laneUsable;
-        inputLineXs[band] = centerX;
-        inputLineYs[band] = inputY;
-        outputLineYs[band] = outputY;
+        float inputLineXs[NUM_BANDS];
+        float inputLineYs[NUM_BANDS];
+        float outputLineYs[NUM_BANDS];
 
-        ImGui::SetCursorScreenPos(ImVec2(x0, laneTop));
-        const ImVec2 buttonSize(laneWidth, laneUsable);
-        const juce::String paramId = "drive_" + juce::String(band + 1);
-        const bool isMod = isParamModulated(paramId);
-        if (!isMod)
+        for (int band = 0; band < NUM_BANDS; ++band)
         {
-            ImGui::InvisibleButton("DriveDrag", buttonSize, ImGuiButtonFlags_MouseButtonLeft);
-            if (ImGui::IsItemActive())
+            ImGui::PushID(band);
+            const float x0 = childPos.x + padding + band * (laneWidth + padding);
+            const float x1 = x0 + laneWidth;
+            const float centerX = (x0 + x1) * 0.5f;
+            const float driveValue = vizData.bandDriveValue[band].load();
+            const float driveNorm = juce::jlimit(0.0f, 1.0f, driveValue / 100.0f);
+            const float inputDb = vizData.bandInputDb[band].load();
+            const float outputDb = vizData.bandOutputDb[band].load();
+            const float inputNorm = juce::jlimit(0.0f, 1.0f, (inputDb + 60.0f) / 60.0f);
+            const float outputNorm = juce::jlimit(0.0f, 1.0f, (outputDb + 60.0f) / 60.0f);
+
+            const float driveTop = laneBottom - driveNorm * laneUsable;
+            drawList->AddRect(ImVec2(x0, laneTop), ImVec2(x1, laneBottom), IM_COL32(255, 255, 255, 35), 3.0f);
+            drawList->AddRectFilled(ImVec2(x0 + 1.5f, driveTop), ImVec2(x1 - 1.5f, laneBottom), driveColor, 3.0f);
+
+            const float inputY = laneBottom - inputNorm * laneUsable;
+            const float outputY = laneBottom - outputNorm * laneUsable;
+            inputLineXs[band] = centerX;
+            inputLineYs[band] = inputY;
+            outputLineYs[band] = outputY;
+
+            ImGui::SetCursorScreenPos(ImVec2(x0, laneTop));
+            const ImVec2 buttonSize(laneWidth, laneUsable);
+            const juce::String paramId = "drive_" + juce::String(band + 1);
+            const bool isMod = isParamModulated(paramId);
+            if (!isMod)
             {
-                const float mouseY = ImGui::GetIO().MousePos.y;
-                const float clamped = juce::jlimit(laneTop, laneBottom, mouseY);
-                const float normalized = 1.0f - (clamped - laneTop) / laneUsable;
-                const float newDrive = juce::jlimit(0.0f, 100.0f, normalized * 100.0f);
-                if (auto* p = dynamic_cast<juce::AudioParameterFloat*>(ap.getParameter(paramId)))
-                    *p = newDrive;
-                vizData.bandDriveValue[band].store(newDrive);
+                ImGui::InvisibleButton("DriveDrag", buttonSize, ImGuiButtonFlags_MouseButtonLeft);
+                if (ImGui::IsItemActive())
+                {
+                    const float mouseY = ImGui::GetIO().MousePos.y;
+                    const float clamped = juce::jlimit(laneTop, laneBottom, mouseY);
+                    const float normalized = 1.0f - (clamped - laneTop) / laneUsable;
+                    const float newDrive = juce::jlimit(0.0f, 100.0f, normalized * 100.0f);
+                    if (auto* p = dynamic_cast<juce::AudioParameterFloat*>(ap.getParameter(paramId)))
+                        *p = newDrive;
+                    vizData.bandDriveValue[band].store(newDrive);
+                }
+                if (ImGui::IsItemDeactivated())
+                    onModificationEnded();
+                if (ImGui::IsItemHovered())
+                {
+                    const juce::String tooltip = juce::String((int)centerFreqs[band]) + " Hz\nDrive: " + juce::String(vizData.bandDriveValue[band].load(), 1) + "\nIn: " + juce::String(inputDb, 1) + " dB\nOut: " + juce::String(outputDb, 1) + " dB";
+                    ImGui::SetTooltip("%s", tooltip.toRawUTF8());
+                }
             }
-            if (ImGui::IsItemDeactivated())
-                onModificationEnded();
-            if (ImGui::IsItemHovered())
+            else
             {
-                const juce::String tooltip = juce::String((int)centerFreqs[band]) + " Hz\nDrive: " + juce::String(vizData.bandDriveValue[band].load(), 1) + "\nIn: " + juce::String(inputDb, 1) + " dB\nOut: " + juce::String(outputDb, 1) + " dB";
-                ImGui::SetTooltip("%s", tooltip.toRawUTF8());
+                ImGui::InvisibleButton("DriveDragDisabled", buttonSize, ImGuiButtonFlags_MouseButtonLeft);
+                if (ImGui::IsItemHovered())
+                {
+                    const juce::String tooltip = juce::String((int)centerFreqs[band]) + " Hz (modulated)";
+                    ImGui::SetTooltip("%s", tooltip.toRawUTF8());
+                }
             }
+
+            const juce::String driveLabel = juce::String(vizData.bandDriveValue[band].load(), 1);
+            const float driveLabelWidth = ImGui::CalcTextSize(driveLabel.toRawUTF8()).x;
+            drawList->AddText(ImVec2(centerX - driveLabelWidth * 0.5f, laneBottom + 2.0f),
+                              IM_COL32(200, 200, 200, 200), driveLabel.toRawUTF8());
+            const juce::String freqLabel = (centerFreqs[band] < 1000.0f) ? juce::String((int)centerFreqs[band]) : juce::String(centerFreqs[band] / 1000.0f, 1) + "k";
+            const float freqLabelWidth = ImGui::CalcTextSize(freqLabel.toRawUTF8()).x;
+            drawList->AddText(ImVec2(centerX - freqLabelWidth * 0.5f, laneBottom + 16.0f),
+                              IM_COL32(180, 180, 180, 200), freqLabel.toRawUTF8());
+            ImGui::PopID();
         }
-        else
+
+        for (int band = 1; band < NUM_BANDS; ++band)
         {
-            ImGui::InvisibleButton("DriveDragDisabled", buttonSize, ImGuiButtonFlags_MouseButtonLeft);
-            if (ImGui::IsItemHovered())
-            {
-                const juce::String tooltip = juce::String((int)centerFreqs[band]) + " Hz (modulated)";
-                ImGui::SetTooltip("%s", tooltip.toRawUTF8());
-            }
+            drawList->AddLine(ImVec2(inputLineXs[band - 1], inputLineYs[band - 1]),
+                              ImVec2(inputLineXs[band], inputLineYs[band]), inputColor, 1.8f);
+            drawList->AddLine(ImVec2(inputLineXs[band - 1], outputLineYs[band - 1]),
+                              ImVec2(inputLineXs[band], outputLineYs[band]), outputColor, 2.0f);
         }
 
-        const juce::String driveLabel = juce::String(vizData.bandDriveValue[band].load(), 1);
-        drawList->AddText(ImVec2(centerX - ImGui::CalcTextSize(driveLabel.toRawUTF8()).x * 0.5f, laneBottom + 2.0f),
-                          IM_COL32(200, 200, 200, 200), driveLabel.toRawUTF8());
-        const juce::String freqLabel = (centerFreqs[band] < 1000.0f) ? juce::String((int)centerFreqs[band]) : juce::String(centerFreqs[band] / 1000.0f, 1) + "k";
-        drawList->AddText(ImVec2(centerX - ImGui::CalcTextSize(freqLabel.toRawUTF8()).x * 0.5f, laneBottom + 16.0f),
-                          IM_COL32(180, 180, 180, 200), freqLabel.toRawUTF8());
-        ImGui::PopID();
+        ImGui::PopClipRect();
     }
-
-    for (int band = 1; band < NUM_BANDS; ++band)
-    {
-        drawList->AddLine(ImVec2(inputLineXs[band - 1], inputLineYs[band - 1]),
-                          ImVec2(inputLineXs[band], inputLineYs[band]), inputColor, 1.8f);
-        drawList->AddLine(ImVec2(inputLineXs[band - 1], outputLineYs[band - 1]),
-                          ImVec2(inputLineXs[band], outputLineYs[band]), outputColor, 2.0f);
-    }
-
-    ImGui::PopClipRect();
-    ImGui::SetCursorScreenPos(ImVec2(vizOrigin.x, vizMax.y));
-    ImGui::Dummy(ImVec2(itemWidth, 0));
+    ImGui::EndChild();
 
     ImGui::Spacing();
     const float outputDb = vizData.outputLevelDb.load();

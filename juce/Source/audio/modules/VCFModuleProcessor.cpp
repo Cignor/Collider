@@ -61,6 +61,13 @@ void VCFModuleProcessor::prepareToPlay(double sampleRate, int samplesPerBlock)
     // Set smoothing time for parameters (10ms)
     cutoffSm.reset(sampleRate, 0.01);
     resonanceSm.reset(sampleRate, 0.01);
+
+#if defined(PRESET_CREATOR_UI)
+    vizInputBuffer.setSize(2, samplesPerBlock);
+    vizOutputBuffer.setSize(2, samplesPerBlock);
+    vizInputBuffer.clear();
+    vizOutputBuffer.clear();
+#endif
 }
 
 void VCFModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midi)
@@ -77,6 +84,21 @@ void VCFModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::Mi
         for (int ch = 0; ch < nCh; ++ch)
             outBus.copyFrom(ch, 0, inBus, ch, 0, nSm);
     }
+
+#if defined(PRESET_CREATOR_UI)
+    const int vizSamples = buffer.getNumSamples();
+    if (vizInputBuffer.getNumSamples() < vizSamples)
+    {
+        vizInputBuffer.setSize(2, vizSamples, false, false, true);
+        vizOutputBuffer.setSize(2, vizSamples, false, false, true);
+    }
+    vizInputBuffer.clear();
+    vizOutputBuffer.clear();
+
+    const int inCopyCh = juce::jmin(2, inBus.getNumChannels());
+    for (int ch = 0; ch < inCopyCh; ++ch)
+        vizInputBuffer.copyFrom(ch, 0, inBus, ch, 0, vizSamples);
+#endif
     
     // PER-SAMPLE FIX: Get pointers to modulation CV inputs, if they are connected
     const bool isCutoffMod = isParamInputConnected(paramIdCutoff);
@@ -104,6 +126,10 @@ void VCFModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::Mi
 
     // PER-SAMPLE FIX: Process each sample individually to respond to changing modulation
     const int numSamples = buffer.getNumSamples();
+    float cutoffDeviationAccum = 0.0f;
+    float resonanceDeviationAccum = 0.0f;
+    float lastCutoffValue = baseCutoff;
+    float lastResonanceValue = baseResonance;
     for (int i = 0; i < numSamples; ++i)
     {
         // --- Calculate effective parameters FOR THIS SAMPLE ---
@@ -132,6 +158,8 @@ void VCFModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::Mi
         // Apply smoothing to cutoff to prevent zipper noise
         cutoffSm.setTargetValue(cutoff);
         cutoff = cutoffSm.getNextValue();
+        cutoffDeviationAccum += std::abs(cutoff - baseCutoff);
+        lastCutoffValue = cutoff;
 
         float resonance = baseResonance;
         if (isResoMod && resoCV != nullptr) {
@@ -155,6 +183,8 @@ void VCFModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::Mi
         // Apply smoothing to resonance to prevent zipper noise
         resonanceSm.setTargetValue(resonance);
         resonance = resonanceSm.getNextValue();
+        resonanceDeviationAccum += std::abs(resonance - baseResonance);
+        lastResonanceValue = resonance;
 
         int type = baseType;
         if (isTypeMod && typeCV != nullptr) {
@@ -243,6 +273,37 @@ void VCFModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::Mi
         if (lastOutputValues[0]) lastOutputValues[0]->store(outBus.getNumChannels() > 0 ? outBus.getSample(0, numSamples - 1) : 0.0f);
         if (lastOutputValues[1]) lastOutputValues[1]->store(outBus.getNumChannels() > 1 ? outBus.getSample(1, numSamples - 1) : 0.0f);
     }
+
+#if defined(PRESET_CREATOR_UI)
+    const int outCopyCh = juce::jmin(2, outBus.getNumChannels());
+    for (int ch = 0; ch < outCopyCh; ++ch)
+        vizOutputBuffer.copyFrom(ch, 0, outBus, ch, 0, vizSamples);
+
+    auto captureWaveform = [&](const juce::AudioBuffer<float>& source, std::array<std::atomic<float>, VizData::waveformPoints>& dest)
+    {
+        const int samples = juce::jmin(source.getNumSamples(), vizSamples);
+        if (samples <= 0) return;
+        const int stride = juce::jmax(1, samples / VizData::waveformPoints);
+        for (int i = 0; i < VizData::waveformPoints; ++i)
+        {
+            const int idx = juce::jmin(samples - 1, i * stride);
+            float value = source.getSample(0, idx);
+            if (source.getNumChannels() > 1)
+                value = 0.5f * (value + source.getSample(1, idx));
+            dest[i].store(juce::jlimit(-1.0f, 1.0f, value));
+        }
+    };
+
+    captureWaveform(vizInputBuffer, vizData.inputWaveform);
+    captureWaveform(vizOutputBuffer, vizData.outputWaveform);
+
+    const float invSamples = numSamples > 0 ? 1.0f / (float) numSamples : 0.0f;
+    vizData.cutoffModAmount.store(cutoffDeviationAccum * invSamples);
+    vizData.resonanceModAmount.store(resonanceDeviationAccum * invSamples);
+    vizData.currentCutoffHz.store(lastCutoffValue);
+    vizData.currentResonance.store(lastResonanceValue);
+    vizData.currentType.store(activeType);
+#endif
 }
 
 // Parameter bus contract implementation

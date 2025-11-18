@@ -468,8 +468,8 @@ db["random"] = ModulePinInfo(
     );
     db["vocal_tract_filter"] = ModulePinInfo(
         NodeWidth::Medium,
-        { AudioPin("Audio In", 0, PinDataType::Audio) },
-        { AudioPin("Audio Out", 0, PinDataType::Audio) },
+        { AudioPin("Audio In L", 0, PinDataType::Audio), AudioPin("Audio In R", 1, PinDataType::Audio) },
+        { AudioPin("Audio Out L", 0, PinDataType::Audio), AudioPin("Audio Out R", 1, PinDataType::Audio) },
         { ModPin("Vowel", "vowelShape", PinDataType::CV), ModPin("Formant", "formantShift", PinDataType::CV), ModPin("Instability", "instability", PinDataType::CV), ModPin("Gain", "formantGain", PinDataType::CV) }
     );
     db["shaping_oscillator"] = ModulePinInfo(
@@ -764,8 +764,8 @@ db["random"] = ModulePinInfo(
         { 
             AudioPin("Signal In L", 0, PinDataType::Audio),
             AudioPin("Signal In R", 1, PinDataType::Audio),
-            AudioPin("Trig In L", 2, PinDataType::Gate),
-            AudioPin("Trig In R", 3, PinDataType::Gate),
+            AudioPin("Gate In L", 2, PinDataType::Gate),
+            AudioPin("Gate In R", 3, PinDataType::Gate),
             AudioPin("Threshold Mod", 4, PinDataType::CV),
             AudioPin("Edge Mod", 5, PinDataType::CV),
             AudioPin("Slew Mod", 6, PinDataType::CV)

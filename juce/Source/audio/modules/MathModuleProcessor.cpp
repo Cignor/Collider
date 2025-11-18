@@ -1,4 +1,7 @@
 #include "MathModuleProcessor.h"
+#if defined(PRESET_CREATOR_UI)
+#include "../../preset_creator/theme/ThemeManager.h"
+#endif
 
 MathModuleProcessor::MathModuleProcessor()
     : ModuleProcessor (BusesProperties()
@@ -36,7 +39,18 @@ juce::AudioProcessorValueTreeState::ParameterLayout MathModuleProcessor::createP
 
 void MathModuleProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
 {
-    juce::ignoreUnused (sampleRate, samplesPerBlock);
+    juce::ignoreUnused (sampleRate);
+#if defined(PRESET_CREATOR_UI)
+    captureBuffer.setSize(3, samplesPerBlock); // 0=In A, 1=In B, 2=Out
+    captureBuffer.clear();
+    for (auto& v : vizData.inputAWaveform) v.store(0.0f);
+    for (auto& v : vizData.inputBWaveform) v.store(0.0f);
+    for (auto& v : vizData.outputWaveform) v.store(0.0f);
+    vizData.writeIndex.store(0);
+    vizData.inputARms.store(0.0f);
+    vizData.inputBRms.store(0.0f);
+    vizData.outputRms.store(0.0f);
+#endif
 }
 
 void MathModuleProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midi)
@@ -63,35 +77,61 @@ void MathModuleProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::
     float sum = 0.0f;
     float sumA = 0.0f;
     float sumB = 0.0f;
+    
+#if defined(PRESET_CREATOR_UI)
+    // Capture audio for visualization
+    const int numSamples = buffer.getNumSamples();
+    if (captureBuffer.getNumSamples() < numSamples)
+        captureBuffer.setSize(3, numSamples, false, false, true);
+    
+    float rmsA = 0.0f;
+    float rmsB = 0.0f;
+    float rmsOut = 0.0f;
+#endif
+    
     for (int i = 0; i < buffer.getNumSamples(); ++i)
     {
         float valA = inAConnected && srcA != nullptr ? srcA[i] : valueA;
         float valB = inBConnected ? srcB[i] : valueB;
 
         // Enhanced mathematical operations with 17 different functions
+        float result = 0.0f;
         switch (operation)
         {
-            case 0:  dst[i] = valA + valB; break; // Add
-            case 1:  dst[i] = valA - valB; break; // Subtract
-            case 2:  dst[i] = valA * valB; break; // Multiply
-            case 3:  dst[i] = (std::abs(valB) < 1e-9f) ? 0.0f : (valA / valB); break; // Divide (safe)
-            case 4:  dst[i] = std::min(valA, valB); break; // Min
-            case 5:  dst[i] = std::max(valA, valB); break; // Max
-            case 6:  dst[i] = std::pow(valA, valB); break; // Power
-            case 7:  dst[i] = std::sqrt(std::abs(valA)); break; // Sqrt(A) - only on A
-            case 8:  dst[i] = std::sin(valA * juce::MathConstants<float>::twoPi); break; // Sin(A) - only on A
-            case 9:  dst[i] = std::cos(valA * juce::MathConstants<float>::twoPi); break; // Cos(A) - only on A
-            case 10: dst[i] = std::tan(valA * juce::MathConstants<float>::pi); break; // Tan(A) - only on A
-            case 11: dst[i] = std::abs(valA); break; // Abs(A) - only on A
-            case 12: dst[i] = (std::abs(valB) < 1e-9f) ? 0.0f : std::fmod(valA, valB); break; // Modulo (safe)
-            case 13: dst[i] = valA - std::trunc(valA); break; // Fract(A) - only on A
-            case 14: dst[i] = std::trunc(valA); break; // Int(A) - only on A
-            case 15: dst[i] = (valA > valB) ? 1.0f : 0.0f; break; // A > B
-            case 16: dst[i] = (valA < valB) ? 1.0f : 0.0f; break; // A < B
+            case 0:  result = valA + valB; break; // Add
+            case 1:  result = valA - valB; break; // Subtract
+            case 2:  result = valA * valB; break; // Multiply
+            case 3:  result = (std::abs(valB) < 1e-9f) ? 0.0f : (valA / valB); break; // Divide (safe)
+            case 4:  result = std::min(valA, valB); break; // Min
+            case 5:  result = std::max(valA, valB); break; // Max
+            case 6:  result = std::pow(valA, valB); break; // Power
+            case 7:  result = std::sqrt(std::abs(valA)); break; // Sqrt(A) - only on A
+            case 8:  result = std::sin(valA * juce::MathConstants<float>::twoPi); break; // Sin(A) - only on A
+            case 9:  result = std::cos(valA * juce::MathConstants<float>::twoPi); break; // Cos(A) - only on A
+            case 10: result = std::tan(valA * juce::MathConstants<float>::pi); break; // Tan(A) - only on A
+            case 11: result = std::abs(valA); break; // Abs(A) - only on A
+            case 12: result = (std::abs(valB) < 1e-9f) ? 0.0f : std::fmod(valA, valB); break; // Modulo (safe)
+            case 13: result = valA - std::trunc(valA); break; // Fract(A) - only on A
+            case 14: result = std::trunc(valA); break; // Int(A) - only on A
+            case 15: result = (valA > valB) ? 1.0f : 0.0f; break; // A > B
+            case 16: result = (valA < valB) ? 1.0f : 0.0f; break; // A < B
         }
-        sum += dst[i];
+        dst[i] = result;
+        
+        sum += result;
         sumA += valA;
         sumB += valB;
+        
+#if defined(PRESET_CREATOR_UI)
+        // Capture for visualization
+        captureBuffer.setSample(0, i, valA);
+        captureBuffer.setSample(1, i, valB);
+        captureBuffer.setSample(2, i, result);
+        
+        rmsA += valA * valA;
+        rmsB += valB * valB;
+        rmsOut += result * result;
+#endif
         
         // Update telemetry for live UI feedback (throttled to every 64 samples)
         if ((i & 0x3F) == 0) {
@@ -100,6 +140,34 @@ void MathModuleProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::
             setLiveParamValue("operation_live", static_cast<float>(operation));
         }
     }
+    
+#if defined(PRESET_CREATOR_UI)
+    // Calculate RMS and update visualization data
+    const int numSamplesForRms = buffer.getNumSamples();
+    rmsA = std::sqrt(rmsA / numSamplesForRms);
+    rmsB = std::sqrt(rmsB / numSamplesForRms);
+    rmsOut = std::sqrt(rmsOut / numSamplesForRms);
+    
+    vizData.inputARms.store(rmsA);
+    vizData.inputBRms.store(rmsB);
+    vizData.outputRms.store(rmsOut);
+    vizData.currentOperation.store(operation);
+    
+    // Down-sample waveforms
+    const int stride = juce::jmax(1, numSamplesForRms / VizData::waveformPoints);
+    int writeIdx = vizData.writeIndex.load();
+    
+    for (int i = 0; i < VizData::waveformPoints && (i * stride) < numSamplesForRms; ++i)
+    {
+        const int sampleIdx = i * stride;
+        vizData.inputAWaveform[i].store(captureBuffer.getSample(0, sampleIdx));
+        vizData.inputBWaveform[i].store(captureBuffer.getSample(1, sampleIdx));
+        vizData.outputWaveform[i].store(captureBuffer.getSample(2, sampleIdx));
+    }
+    
+    writeIdx = (writeIdx + 1) % VizData::waveformPoints;
+    vizData.writeIndex.store(writeIdx);
+#endif
     lastValue.store(sum / (float) buffer.getNumSamples());
     lastValueA.store(sumA / (float) buffer.getNumSamples());
     lastValueB.store(sumB / (float) buffer.getNumSamples());
@@ -114,12 +182,14 @@ void MathModuleProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::
 #if defined(PRESET_CREATOR_UI)
 void MathModuleProcessor::drawParametersInNode (float itemWidth, const std::function<bool(const juce::String& paramId)>& isParamModulated, const std::function<void()>& onModificationEnded)
 {
+    const auto& theme = ThemeManager::getInstance().getCurrentTheme();
     auto& ap = getAPVTS();
+    ImGui::PushID(this);
+    ImGui::PushItemWidth (itemWidth);
+    
     int op = 0; if (auto* p = dynamic_cast<juce::AudioParameterChoice*>(ap.getParameter("operation"))) op = p->getIndex();
     float valA = valueAParam != nullptr ? valueAParam->load() : 0.0f;
     float valB = valueBParam != nullptr ? valueBParam->load() : 0.0f;
-    
-    ImGui::PushItemWidth (itemWidth);
     
     // Operation combo box (no modulation input, so no live feedback needed)
     if (ImGui::Combo ("Operation", &op, 
@@ -161,11 +231,124 @@ void MathModuleProcessor::drawParametersInNode (float itemWidth, const std::func
     if (ImGui::IsItemDeactivatedAfterEdit()) onModificationEnded();
     if (isValueBModulated) { ImGui::EndDisabled(); ImGui::SameLine(); ImGui::TextUnformatted("(mod)"); }
 
-    ImGui::Text("In A: %.2f", getLastValueA());
-    ImGui::Text("In B: %.2f", getLastValueB());
-    ImGui::Text("Out: %.2f", getLastValue());
+    ImGui::Spacing();
+    
+    // Waveform Visualization
+    const float graphHeight = 120.0f;
+    const ImVec2 graphSize(itemWidth, graphHeight);
+    
+    // Use unique ID for child window to avoid conflicts with multiple instances
+    if (ImGui::BeginChild("MathWaveformViz", graphSize, false, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse))
+    {
+        ImDrawList* drawList = ImGui::GetWindowDrawList();
+        const ImVec2 p0 = ImGui::GetWindowPos();
+        const ImVec2 p1 = ImVec2(p0.x + graphSize.x, p0.y + graphSize.y);
+        
+        // Background
+        const auto& freqColors = theme.modules.frequency_graph;
+        const auto resolveColor = [](ImU32 value, ImU32 fallback) { return value != 0 ? value : fallback; };
+        const ImU32 bgColor = resolveColor(freqColors.background, IM_COL32(18, 20, 24, 255));
+        drawList->AddRectFilled(p0, p1, bgColor);
+        
+        // Grid lines
+        const ImU32 gridColor = resolveColor(freqColors.grid, IM_COL32(50, 55, 65, 255));
+        const float centerY = p0.y + graphSize.y * 0.5f;
+        drawList->AddLine(ImVec2(p0.x, centerY), ImVec2(p1.x, centerY), gridColor, 1.0f);
+        drawList->AddLine(ImVec2(p0.x, p0.y), ImVec2(p1.x, p0.y), gridColor, 1.0f);
+        drawList->AddLine(ImVec2(p0.x, p1.y), ImVec2(p1.x, p1.y), gridColor, 1.0f);
+        
+        // Clip to graph area
+        drawList->PushClipRect(p0, p1, true);
+        
+        // Read waveform data
+        std::array<float, VizData::waveformPoints> inputA, inputB, output;
+        for (int i = 0; i < VizData::waveformPoints; ++i)
+        {
+            inputA[i] = vizData.inputAWaveform[i].load();
+            inputB[i] = vizData.inputBWaveform[i].load();
+            output[i] = vizData.outputWaveform[i].load();
+        }
+        
+        // Draw waveforms
+        const float halfHeight = graphSize.y * 0.5f;
+        const float scale = halfHeight * 0.9f; // Leave 10% margin
+        
+        // Input A waveform (cyan/blue)
+        ImU32 colorA = ImGui::ColorConvertFloat4ToU32(ImVec4(0.0f, 0.8f, 1.0f, 0.8f));
+        for (int i = 1; i < VizData::waveformPoints; ++i)
+        {
+            float x0 = p0.x + (float)(i - 1) / (float)(VizData::waveformPoints - 1) * graphSize.x;
+            float x1 = p0.x + (float)i / (float)(VizData::waveformPoints - 1) * graphSize.x;
+            float y0 = juce::jlimit(p0.y, p1.y, centerY - inputA[i - 1] * scale);
+            float y1 = juce::jlimit(p0.y, p1.y, centerY - inputA[i] * scale);
+            drawList->AddLine(ImVec2(x0, y0), ImVec2(x1, y1), colorA, 1.5f);
+        }
+        
+        // Input B waveform (magenta/pink)
+        ImU32 colorB = ImGui::ColorConvertFloat4ToU32(ImVec4(1.0f, 0.3f, 0.8f, 0.8f));
+        for (int i = 1; i < VizData::waveformPoints; ++i)
+        {
+            float x0 = p0.x + (float)(i - 1) / (float)(VizData::waveformPoints - 1) * graphSize.x;
+            float x1 = p0.x + (float)i / (float)(VizData::waveformPoints - 1) * graphSize.x;
+            float y0 = juce::jlimit(p0.y, p1.y, centerY - inputB[i - 1] * scale);
+            float y1 = juce::jlimit(p0.y, p1.y, centerY - inputB[i] * scale);
+            drawList->AddLine(ImVec2(x0, y0), ImVec2(x1, y1), colorB, 1.5f);
+        }
+        
+        // Output waveform (white/yellow)
+        ImU32 colorOut = ImGui::ColorConvertFloat4ToU32(ImVec4(1.0f, 1.0f, 0.6f, 1.0f));
+        for (int i = 1; i < VizData::waveformPoints; ++i)
+        {
+            float x0 = p0.x + (float)(i - 1) / (float)(VizData::waveformPoints - 1) * graphSize.x;
+            float x1 = p0.x + (float)i / (float)(VizData::waveformPoints - 1) * graphSize.x;
+            float y0 = juce::jlimit(p0.y, p1.y, centerY - output[i - 1] * scale);
+            float y1 = juce::jlimit(p0.y, p1.y, centerY - output[i] * scale);
+            drawList->AddLine(ImVec2(x0, y0), ImVec2(x1, y1), colorOut, 2.0f);
+        }
+        
+        drawList->PopClipRect();
+        
+        // Operation label and RMS values
+        const char* opNames[] = {
+            "Add", "Subtract", "Multiply", "Divide", "Min", "Max", "Power",
+            "Sqrt(A)", "Sin(A)", "Cos(A)", "Tan(A)", "Abs(A)", "Modulo",
+            "Fract(A)", "Int(A)", "A > B", "A < B"
+        };
+        int currentOp = vizData.currentOperation.load();
+        if (currentOp >= 0 && currentOp < 17)
+        {
+            ImGui::SetCursorPos(ImVec2(4, 4));
+            ImGui::TextColored(ImVec4(1.0f, 1.0f, 0.6f, 1.0f), "%s", opNames[currentOp]);
+        }
+        
+        // RMS values
+        float rmsA = vizData.inputARms.load();
+        float rmsB = vizData.inputBRms.load();
+        float rmsOut = vizData.outputRms.load();
+        
+        ImGui::SetCursorPos(ImVec2(4, graphHeight - 60));
+        ImGui::TextColored(ImVec4(0.0f, 0.8f, 1.0f, 1.0f), "A: %.3f", rmsA);
+        ImGui::SetCursorPos(ImVec2(4, graphHeight - 45));
+        ImGui::TextColored(ImVec4(1.0f, 0.3f, 0.8f, 1.0f), "B: %.3f", rmsB);
+        ImGui::SetCursorPos(ImVec2(4, graphHeight - 30));
+        ImGui::TextColored(ImVec4(1.0f, 1.0f, 0.6f, 1.0f), "Out: %.3f", rmsOut);
+        
+        // Legend
+        ImGui::SetCursorPos(ImVec2(itemWidth - 80, graphHeight - 60));
+        ImGui::TextColored(ImVec4(0.0f, 0.8f, 1.0f, 1.0f), "In A");
+        ImGui::SetCursorPos(ImVec2(itemWidth - 80, graphHeight - 45));
+        ImGui::TextColored(ImVec4(1.0f, 0.3f, 0.8f, 1.0f), "In B");
+        ImGui::SetCursorPos(ImVec2(itemWidth - 80, graphHeight - 30));
+        ImGui::TextColored(ImVec4(1.0f, 1.0f, 0.6f, 1.0f), "Out");
+        
+        // Invisible drag blocker
+        ImGui::SetCursorPos(ImVec2(0, 0));
+        ImGui::InvisibleButton("##mathWaveformDrag", graphSize);
+    }
+    ImGui::EndChild();
 
     ImGui::PopItemWidth();
+    ImGui::PopID();
 }
 
 void MathModuleProcessor::drawIoPins(const NodePinHelpers& helpers)

@@ -2,6 +2,8 @@
 
 #include "ModuleProcessor.h"
 #include <juce_dsp/juce_dsp.h>
+#include <array>
+#include <atomic>
 #if defined(PRESET_CREATOR_UI)
 #include "../../preset_creator/theme/ThemeManager.h"
 #endif
@@ -36,6 +38,7 @@ public:
     {
         auto& ap = getAPVTS();
         const auto& theme = ThemeManager::getInstance().getCurrentTheme();
+        ImGui::PushID(this);
         
         // Helper for tooltips
         auto HelpMarkerVCF = [](const char* desc) {
@@ -53,6 +56,75 @@ public:
         int ftype = 0; if (auto* p = dynamic_cast<juce::AudioParameterChoice*>(ap.getParameter(paramIdType))) ftype = p->getIndex();
 
         ImGui::PushItemWidth(itemWidth);
+
+        // === FILTER ACTIVITY VISUALIZATION ===
+        ImGui::Spacing();
+        ThemeText("Filter Activity", theme.text.section_header);
+        ImGui::Spacing();
+
+        auto* drawList = ImGui::GetWindowDrawList();
+        const ImU32 bgColor = ThemeManager::getInstance().getCanvasBackground();
+        const ImU32 inputColor = ImGui::ColorConvertFloat4ToU32(theme.modulation.frequency);
+        const ImU32 outputColor = ImGui::ColorConvertFloat4ToU32(theme.modulation.timbre);
+        const ImVec2 origin = ImGui::GetCursorScreenPos();
+        const float vizHeight = 110.0f;
+        const ImVec2 rectMax { origin.x + itemWidth, origin.y + vizHeight };
+        drawList->AddRectFilled(origin, rectMax, bgColor, 4.0f);
+        ImGui::PushClipRect(origin, rectMax, true);
+
+        float inputWave[VizData::waveformPoints];
+        float outputWave[VizData::waveformPoints];
+        for (int i = 0; i < VizData::waveformPoints; ++i)
+        {
+            inputWave[i] = vizData.inputWaveform[i].load();
+            outputWave[i] = vizData.outputWaveform[i].load();
+        }
+
+        const float midY = origin.y + vizHeight * 0.5f;
+        const float scaleY = vizHeight * 0.45f;
+        const float stepX = itemWidth / (float)(VizData::waveformPoints - 1);
+
+        auto drawWave = [&](float* data, ImU32 color, float thickness)
+        {
+            float px = origin.x;
+            float py = midY;
+            for (int i = 0; i < VizData::waveformPoints; ++i)
+            {
+                const float x = origin.x + i * stepX;
+                const float y = midY - juce::jlimit(-1.0f, 1.0f, data[i]) * scaleY;
+                const float clampedY = juce::jlimit(origin.y, rectMax.y, y);
+                if (i > 0)
+                    drawList->AddLine(ImVec2(px, py), ImVec2(x, clampedY), color, thickness);
+                px = x;
+                py = clampedY;
+            }
+        };
+
+        drawWave(inputWave, inputColor, 1.3f);
+        drawWave(outputWave, outputColor, 2.0f);
+        drawList->AddLine(ImVec2(origin.x, midY), ImVec2(rectMax.x, midY), IM_COL32(255, 255, 255, 30), 1.0f);
+
+        ImGui::PopClipRect();
+        ImGui::SetCursorScreenPos(ImVec2(origin.x, rectMax.y));
+        ImGui::Dummy(ImVec2(itemWidth, 0));
+
+        const float liveCutoff = vizData.currentCutoffHz.load();
+        const float liveResonance = vizData.currentResonance.load();
+        const int liveType = vizData.currentType.load();
+        const float cutoffModDepth = vizData.cutoffModAmount.load();
+        const float resonanceModDepth = vizData.resonanceModAmount.load();
+        const char* typeNamesVerbose[] = { "Low-pass", "High-pass", "Band-pass" };
+
+        ImGui::Text("Cutoff: %.1f Hz  |  Resonance: %.2f  |  Type: %s",
+                    liveCutoff,
+                    liveResonance,
+                    typeNamesVerbose[juce::jlimit(0, 2, liveType)]);
+
+        ImGui::Text("Cutoff Mod Δ: %.0f Hz   |   Resonance Mod Δ: %.2f",
+                    cutoffModDepth,
+                    resonanceModDepth);
+
+        ImGui::Spacing();
 
         // === FILTER PARAMETERS SECTION ===
         ThemeText("Filter Parameters", theme.text.section_header);
@@ -185,6 +257,7 @@ public:
         ImGui::PopStyleColor();
 
         ImGui::PopItemWidth();
+        ImGui::PopID();
     }
 
     void drawIoPins(const NodePinHelpers& helpers) override
@@ -258,6 +331,30 @@ private:
             default: f.setType(juce::dsp::StateVariableTPTFilterType::bandpass); break;
         }
     }
+
+#if defined(PRESET_CREATOR_UI)
+    struct VizData
+    {
+        static constexpr int waveformPoints = 256;
+        std::array<std::atomic<float>, waveformPoints> inputWaveform;
+        std::array<std::atomic<float>, waveformPoints> outputWaveform;
+        std::atomic<float> currentCutoffHz { 1000.0f };
+        std::atomic<float> currentResonance { 1.0f };
+        std::atomic<int> currentType { 0 };
+        std::atomic<float> cutoffModAmount { 0.0f };
+        std::atomic<float> resonanceModAmount { 0.0f };
+
+        VizData()
+        {
+            for (auto& v : inputWaveform) v.store(0.0f);
+            for (auto& v : outputWaveform) v.store(0.0f);
+        }
+    };
+
+    VizData vizData;
+    juce::AudioBuffer<float> vizInputBuffer;
+    juce::AudioBuffer<float> vizOutputBuffer;
+#endif
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (VCFModuleProcessor)
 };

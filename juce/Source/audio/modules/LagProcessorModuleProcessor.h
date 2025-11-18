@@ -2,6 +2,11 @@
 
 #include "ModuleProcessor.h"
 #include <juce_dsp/juce_dsp.h>
+#include <array>
+#include <atomic>
+#if defined(PRESET_CREATOR_UI)
+#include "../../preset_creator/theme/ThemeManager.h"
+#endif
 
 class LagProcessorModuleProcessor : public ModuleProcessor
 {
@@ -18,63 +23,7 @@ public:
     juce::AudioProcessorValueTreeState& getAPVTS() override { return apvts; }
 
 #if defined(PRESET_CREATOR_UI)
-    void drawParametersInNode (float itemWidth, const std::function<bool(const juce::String& paramId)>& isParamModulated, const std::function<void()>& onModificationEnded) override
-    {
-        auto& ap = getAPVTS();
-        
-        // Get current parameter values
-        float riseMs = riseTimeParam != nullptr ? riseTimeParam->load() : 10.0f;
-        float fallMs = fallTimeParam != nullptr ? fallTimeParam->load() : 10.0f;
-        int modeIdx = modeParam != nullptr ? modeParam->getIndex() : 0;
-        
-        // Check for modulation
-        bool isRiseModulated = isParamModulated("rise_time_mod");
-        bool isFallModulated = isParamModulated("fall_time_mod");
-        
-        if (isRiseModulated) {
-            riseMs = getLiveParamValueFor("rise_time_mod", "rise_time_live", riseMs);
-        }
-        if (isFallModulated) {
-            fallMs = getLiveParamValueFor("fall_time_mod", "fall_time_live", fallMs);
-        }
-        
-        ImGui::PushItemWidth(itemWidth);
-        
-        // Mode selector
-        const char* modeNames[] = { "Slew Limiter", "Envelope Follower" };
-        if (ImGui::Combo("Mode", &modeIdx, modeNames, 2)) {
-            if (auto* p = dynamic_cast<juce::AudioParameterChoice*>(ap.getParameter("mode"))) {
-                *p = modeIdx;
-            }
-        }
-        if (ImGui::IsItemDeactivatedAfterEdit()) { onModificationEnded(); }
-        
-        // Rise Time (or Attack in Envelope Follower mode)
-        const char* riseLabel = (modeIdx == 0) ? "Rise Time (ms)" : "Attack (ms)";
-        if (isRiseModulated) ImGui::BeginDisabled();
-        if (ImGui::SliderFloat(riseLabel, &riseMs, 0.1f, 4000.0f, "%.2f", ImGuiSliderFlags_Logarithmic)) {
-            if (!isRiseModulated) {
-                if (auto* p = dynamic_cast<juce::AudioParameterFloat*>(ap.getParameter("rise_time"))) *p = riseMs;
-            }
-        }
-        if (!isRiseModulated) adjustParamOnWheel(ap.getParameter("rise_time"), "rise_time", riseMs);
-        if (ImGui::IsItemDeactivatedAfterEdit()) { onModificationEnded(); }
-        if (isRiseModulated) { ImGui::EndDisabled(); ImGui::SameLine(); ImGui::TextUnformatted("(mod)"); }
-        
-        // Fall Time (or Release in Envelope Follower mode)
-        const char* fallLabel = (modeIdx == 0) ? "Fall Time (ms)" : "Release (ms)";
-        if (isFallModulated) ImGui::BeginDisabled();
-        if (ImGui::SliderFloat(fallLabel, &fallMs, 0.1f, 4000.0f, "%.2f", ImGuiSliderFlags_Logarithmic)) {
-            if (!isFallModulated) {
-                if (auto* p = dynamic_cast<juce::AudioParameterFloat*>(ap.getParameter("fall_time"))) *p = fallMs;
-            }
-        }
-        if (!isFallModulated) adjustParamOnWheel(ap.getParameter("fall_time"), "fall_time", fallMs);
-        if (ImGui::IsItemDeactivatedAfterEdit()) { onModificationEnded(); }
-        if (isFallModulated) { ImGui::EndDisabled(); ImGui::SameLine(); ImGui::TextUnformatted("(mod)"); }
-        
-        ImGui::PopItemWidth();
-    }
+    void drawParametersInNode (float itemWidth, const std::function<bool(const juce::String& paramId)>& isParamModulated, const std::function<void()>& onModificationEnded) override;
 
     void drawIoPins(const NodePinHelpers& helpers) override
     {
@@ -115,5 +64,29 @@ private:
     // State variables for smoothing algorithm
     float currentOutput { 0.0f };
     double currentSampleRate { 44100.0 };
+
+#if defined(PRESET_CREATOR_UI)
+    struct VizData
+    {
+        static constexpr int waveformPoints = 256;
+        std::array<std::atomic<float>, waveformPoints> inputWaveform;
+        std::array<std::atomic<float>, waveformPoints> outputWaveform;
+        std::array<std::atomic<float>, waveformPoints> targetWaveform; // For envelope follower mode
+        std::atomic<float> currentRiseMs { 10.0f };
+        std::atomic<float> currentFallMs { 10.0f };
+        std::atomic<int> currentMode { 0 }; // 0 = Slew Limiter, 1 = Envelope Follower
+
+        VizData()
+        {
+            for (auto& v : inputWaveform) v.store(0.0f);
+            for (auto& v : outputWaveform) v.store(0.0f);
+            for (auto& v : targetWaveform) v.store(0.0f);
+        }
+    };
+
+    VizData vizData;
+    juce::AudioBuffer<float> vizInputBuffer;
+    juce::AudioBuffer<float> vizOutputBuffer;
+#endif
 };
 

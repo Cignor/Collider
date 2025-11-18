@@ -19,6 +19,25 @@ SAndHModuleProcessor::SAndHModuleProcessor()
     lastOutputValues.push_back(std::make_unique<std::atomic<float>>(0.0f)); // For Out R
 }
 
+bool SAndHModuleProcessor::isBusesLayoutSupported(const BusesLayout& layouts) const
+{
+    // We require exactly 1 input bus and 1 output bus
+    if (layouts.inputBuses.size() != 1 || layouts.outputBuses.size() != 1)
+        return false;
+
+    // Input MUST be exactly 7 discrete channels (Signal L/R + Gate L/R + 3 CV mods)
+    // This strict check prevents the host from aliasing channels, which would cause
+    // all modulation inputs to read the same value (critical fix for CV routing)
+    if (layouts.inputBuses[0] != juce::AudioChannelSet::discreteChannels(7))
+        return false;
+
+    // Output MUST be Stereo
+    if (layouts.outputBuses[0] != juce::AudioChannelSet::stereo())
+        return false;
+
+    return true;
+}
+
 juce::AudioProcessorValueTreeState::ParameterLayout SAndHModuleProcessor::createParameterLayout()
 {
     std::vector<std::unique_ptr<juce::RangedAudioParameter>> params;
@@ -413,7 +432,8 @@ void SAndHModuleProcessor::drawParametersInNode(float itemWidth, const std::func
     {
         auto* drawList = ImGui::GetWindowDrawList();
         const ImVec2 p0 = ImGui::GetWindowPos();
-        const ImVec2 p1 { p0.x + itemWidth, p0.y + 170.0f };
+        const ImVec2 childSize = ImGui::GetWindowSize();
+        const ImVec2 p1 { p0.x + childSize.x, p0.y + childSize.y };
         drawList->AddRectFilled(p0, p1, bgColor, 4.0f);
         drawList->PushClipRect(p0, p1, true);
 
@@ -483,7 +503,6 @@ void SAndHModuleProcessor::drawParametersInNode(float itemWidth, const std::func
         drawList->PopClipRect();
         drawList->AddText(ImVec2(p0.x + 8.0f, p0.y + 6.0f), IM_COL32(220, 220, 230, 255), "Signal / Gate Monitor");
 
-        const ImVec2 childSize = ImGui::GetWindowSize();
         ImGui::SetCursorPos(ImVec2(0.0f, 0.0f));
         ImGui::InvisibleButton("ScopeDragBlocker", childSize, ImGuiButtonFlags_MouseButtonLeft | ImGuiButtonFlags_MouseButtonRight);
         ImGui::SetCursorPos(ImVec2(0.0f, 0.0f));
@@ -496,12 +515,13 @@ void SAndHModuleProcessor::drawParametersInNode(float itemWidth, const std::func
     {
         auto* drawList = ImGui::GetWindowDrawList();
         const ImVec2 p0 = ImGui::GetWindowPos();
-        const ImVec2 p1 { p0.x + itemWidth, p0.y + 90.0f };
+        const ImVec2 childSize = ImGui::GetWindowSize();
+        const ImVec2 p1 { p0.x + childSize.x, p0.y + childSize.y };
         drawList->AddRectFilled(p0, p1, bgColor, 4.0f);
 
         auto drawMeter = [&](float xStart, float peak, const char* label)
         {
-            const float meterWidth = (itemWidth - 80.0f) * 0.5f;
+            const float meterWidth = (childSize.x - 80.0f) * 0.5f;
             const float meterHeight = 60.0f;
             const ImVec2 base { xStart, p0.y + 20.0f };
             const ImVec2 rectMax { base.x + meterWidth, base.y + meterHeight };
@@ -518,13 +538,12 @@ void SAndHModuleProcessor::drawParametersInNode(float itemWidth, const std::func
         };
 
         drawMeter(p0.x + 12.0f, gatePeakL, "Gate L");
-        drawMeter(p0.x + itemWidth * 0.5f + 8.0f, gatePeakR, "Gate R");
+        drawMeter(p0.x + childSize.x * 0.5f + 8.0f, gatePeakR, "Gate R");
 
         const char* edgeLabels[] = { "Rising", "Falling", "Both" };
         drawList->AddText(ImVec2(p1.x - 120.0f, p0.y + 8.0f), IM_COL32(180, 180, 190, 255), "Edge Mode");
         drawList->AddText(ImVec2(p1.x - 120.0f, p0.y + 28.0f), IM_COL32(230, 230, 240, 255), edgeLabels[juce::jlimit(0, 2, liveEdge)]);
 
-        const ImVec2 childSize = ImGui::GetWindowSize();
         ImGui::SetCursorPos(ImVec2(0.0f, 0.0f));
         ImGui::InvisibleButton("MetersDragBlocker", childSize, ImGuiButtonFlags_MouseButtonLeft | ImGuiButtonFlags_MouseButtonRight);
         ImGui::SetCursorPos(ImVec2(0.0f, 0.0f));
@@ -537,7 +556,8 @@ void SAndHModuleProcessor::drawParametersInNode(float itemWidth, const std::func
     {
         auto* drawList = ImGui::GetWindowDrawList();
         const ImVec2 p0 = ImGui::GetWindowPos();
-        const ImVec2 p1 { p0.x + itemWidth, p0.y + 110.0f };
+        const ImVec2 childSize = ImGui::GetWindowSize();
+        const ImVec2 p1 { p0.x + childSize.x, p0.y + childSize.y };
         drawList->AddRectFilled(p0, p1, bgColor, 4.0f);
         drawList->PushClipRect(p0, p1, true);
 
@@ -574,7 +594,6 @@ void SAndHModuleProcessor::drawParametersInNode(float itemWidth, const std::func
         ImGui::Text("Last L latch: %.3f (%.1f ms ago)", latchValueL, latchAgeL);
         ImGui::Text("Last R latch: %.3f (%.1f ms ago)", latchValueR, latchAgeR);
 
-        const ImVec2 childSize = ImGui::GetWindowSize();
         ImGui::SetCursorPos(ImVec2(0.0f, 0.0f));
         ImGui::InvisibleButton("TimelineDragBlocker", childSize, ImGuiButtonFlags_MouseButtonLeft | ImGuiButtonFlags_MouseButtonRight);
         ImGui::SetCursorPos(ImVec2(0.0f, 0.0f));
@@ -611,12 +630,12 @@ void SAndHModuleProcessor::drawParametersInNode(float itemWidth, const std::func
     ThemeText("SAMPLE SETTINGS", theme.modulation.frequency);
     ImGui::Spacing();
 
-    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(12.0f, 8.0f));
+    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(4.0f, 3.0f));
     ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 1.0f);
-    ImGui::PushStyleVar(ImGuiStyleVar_GrabMinSize, 18.0f);
+    ImGui::PushStyleVar(ImGuiStyleVar_GrabMinSize, 10.0f);
 
     const bool threshMod = isParamModulated("threshold_mod");
-    float thresholdDisplay = threshMod ? getLiveParamValueFor("threshold", "threshold_live", threshold) : threshold;
+    float thresholdDisplay = threshMod ? getLiveParamValueFor("threshold_mod", "threshold_live", threshold) : threshold;
     if (threshMod) ImGui::BeginDisabled();
     if (ImGui::SliderFloat("Threshold", &thresholdDisplay, 0.0f, 1.0f, "%.3f"))
         if (!threshMod)
@@ -632,7 +651,7 @@ void SAndHModuleProcessor::drawParametersInNode(float itemWidth, const std::func
     int edgeDisplay = edge;
     if (edgeMod)
     {
-        edgeDisplay = static_cast<int>(getLiveParamValueFor("edge", "edge_live", (float)edge));
+        edgeDisplay = static_cast<int>(getLiveParamValueFor("edge_mod", "edge_live", (float)edge));
         ImGui::BeginDisabled();
     }
     const char* edgeItems = "Rising\0Falling\0Both\0\0";
@@ -644,7 +663,7 @@ void SAndHModuleProcessor::drawParametersInNode(float itemWidth, const std::func
     if (edgeMod) { ImGui::EndDisabled(); ImGui::SameLine(); ImGui::TextUnformatted("(mod)"); }
 
     const bool slewMod = isParamModulated("slewMs_mod");
-    float slewDisplay = slewMod ? getLiveParamValueFor("slewMs", "slewMs_live", slew) : slew;
+    float slewDisplay = slewMod ? getLiveParamValueFor("slewMs_mod", "slewMs_live", slew) : slew;
     if (slewMod) ImGui::BeginDisabled();
     if (ImGui::SliderFloat("Slew", &slewDisplay, 0.0f, 2000.0f, "%.1f ms", ImGuiSliderFlags_Logarithmic))
         if (!slewMod)

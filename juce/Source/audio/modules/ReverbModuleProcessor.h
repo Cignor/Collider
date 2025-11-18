@@ -35,6 +35,7 @@ public:
         auto& ap = getAPVTS();
         const auto& theme = ThemeManager::getInstance().getCurrentTheme();
         
+        ImGui::PushID(this);
         ImGui::PushItemWidth(itemWidth);
         
         // Helper for tooltips
@@ -85,7 +86,8 @@ public:
         {
             auto* drawList = ImGui::GetWindowDrawList();
             const ImVec2 origin = ImGui::GetWindowPos();
-            const ImVec2 rectMax = ImVec2(origin.x + vizWidth, origin.y + vizHeight);
+            const ImVec2 childSize = ImGui::GetWindowSize();
+            const ImVec2 rectMax = ImVec2(origin.x + childSize.x, origin.y + childSize.y);
             ImGui::PushClipRect(origin, rectMax, true);
         
         // Read visualization data (thread-safe)
@@ -97,9 +99,9 @@ public:
             outputWaveform[i] = vizData.outputWaveformL[i].load();
         }
         
-        const float midY = origin.y + vizHeight * 0.5f;
-        const float scaleY = vizHeight * 0.4f;
-        const float stepX = vizWidth / (float)(VizData::waveformPoints - 1);
+        const float midY = origin.y + childSize.y * 0.5f;
+        const float scaleY = childSize.y * 0.4f;
+        const float stepX = childSize.x / (float)(VizData::waveformPoints - 1);
         float prevX = origin.x;
         float prevY = midY;
         
@@ -459,6 +461,7 @@ public:
         }
         
         ImGui::PopItemWidth();
+        ImGui::PopID();
     }
 
     void drawIoPins(const NodePinHelpers& helpers) override

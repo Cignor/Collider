@@ -423,6 +423,7 @@ void MIDIPadModuleProcessor::drawParametersInNode(float itemWidth,
                                                    const std::function<bool(const juce::String&)>&, 
                                                    const std::function<void()>& onModificationEnded)
 {
+    ImGui::PushID(this);
     // HelpMarker helper function
     auto HelpMarker = [](const char* desc)
     {
@@ -703,6 +704,7 @@ void MIDIPadModuleProcessor::drawParametersInNode(float itemWidth,
     HelpMarker("Most recently triggered pad and its velocity");
     
     ImGui::PopItemWidth();
+    ImGui::PopID();
 }
 
 void MIDIPadModuleProcessor::drawIoPins(const NodePinHelpers& helpers)

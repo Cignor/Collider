@@ -1,6 +1,11 @@
 #pragma once
 
 #include "ModuleProcessor.h"
+#include <array>
+#include <atomic>
+#if defined(PRESET_CREATOR_UI)
+#include "../../preset_creator/theme/ThemeManager.h"
+#endif
 
 class RandomModuleProcessor : public ModuleProcessor
 {
@@ -85,4 +90,37 @@ private:
     std::atomic<float> lastCvOutputValue{ 0.0f };
     std::atomic<float> lastBoolOutputValue{ 0.0f };
     std::atomic<float> lastTrigOutputValue { 0.0f };
+
+#if defined(PRESET_CREATOR_UI)
+    // --- Visualization Data (thread-safe, updated from audio thread) ---
+    struct VizData
+    {
+        static constexpr int waveformPoints = 256;
+        std::array<std::atomic<float>, waveformPoints> rawWaveform;
+        std::array<std::atomic<float>, waveformPoints> cvWaveform;
+        std::array<std::atomic<float>, waveformPoints> triggerMarkers; // 1.0 = trigger active, 0.0 = inactive
+        std::atomic<float> currentMin { 0.0f };
+        std::atomic<float> currentMax { 1.0f };
+        std::atomic<float> currentCvMin { 0.0f };
+        std::atomic<float> currentCvMax { 1.0f };
+        std::atomic<float> currentTrigThreshold { 0.5f };
+        std::atomic<float> currentRate { 1.0f };
+        std::atomic<float> currentSlew { 0.0f };
+
+        VizData()
+        {
+            for (auto& v : rawWaveform) v.store(0.0f);
+            for (auto& v : cvWaveform) v.store(0.0f);
+            for (auto& v : triggerMarkers) v.store(0.0f);
+        }
+    };
+    VizData vizData;
+
+    // Circular buffer for waveform capture
+    juce::AudioBuffer<float> vizRawBuffer;
+    juce::AudioBuffer<float> vizCvBuffer;
+    juce::AudioBuffer<float> vizTrigBuffer;
+    int vizWritePos { 0 };
+    static constexpr int vizBufferSize = 2048; // ~43ms at 48kHz
+#endif
 };

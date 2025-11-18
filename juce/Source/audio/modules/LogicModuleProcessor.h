@@ -1,6 +1,11 @@
 #pragma once
 
 #include "ModuleProcessor.h"
+#include <array>
+#include <atomic>
+#if defined(PRESET_CREATOR_UI)
+#include "../../preset_creator/theme/ThemeManager.h"
+#endif
 
 /**
     A logic utility module that performs boolean operations on Gate signals.
@@ -49,4 +54,47 @@ private:
     // Parameters
     std::atomic<float>* operationParam { nullptr };
     std::atomic<float>* gateThresholdParam { nullptr };
+
+#if defined(PRESET_CREATOR_UI)
+    // --- Visualization Data (thread-safe, updated from audio thread) ---
+    struct VizData
+    {
+        static constexpr int waveformPoints = 256;
+        std::array<std::atomic<float>, waveformPoints> inputAWaveform;
+        std::array<std::atomic<float>, waveformPoints> inputBWaveform;
+        std::array<std::atomic<float>, waveformPoints> andOutputWaveform;
+        std::array<std::atomic<float>, waveformPoints> orOutputWaveform;
+        std::array<std::atomic<float>, waveformPoints> xorOutputWaveform;
+        std::array<std::atomic<float>, waveformPoints> notAOutputWaveform;
+        std::atomic<float> currentGateThreshold { 0.5f };
+        std::atomic<int> currentOperation { 0 };
+        std::atomic<bool> inputAState { false };
+        std::atomic<bool> inputBState { false };
+        std::atomic<bool> andState { false };
+        std::atomic<bool> orState { false };
+        std::atomic<bool> xorState { false };
+        std::atomic<bool> notAState { false };
+
+        VizData()
+        {
+            for (auto& v : inputAWaveform) v.store(0.0f);
+            for (auto& v : inputBWaveform) v.store(0.0f);
+            for (auto& v : andOutputWaveform) v.store(0.0f);
+            for (auto& v : orOutputWaveform) v.store(0.0f);
+            for (auto& v : xorOutputWaveform) v.store(0.0f);
+            for (auto& v : notAOutputWaveform) v.store(0.0f);
+        }
+    };
+    VizData vizData;
+
+    // Circular buffers for waveform capture
+    juce::AudioBuffer<float> vizInputABuffer;
+    juce::AudioBuffer<float> vizInputBBuffer;
+    juce::AudioBuffer<float> vizAndOutputBuffer;
+    juce::AudioBuffer<float> vizOrOutputBuffer;
+    juce::AudioBuffer<float> vizXorOutputBuffer;
+    juce::AudioBuffer<float> vizNotAOutputBuffer;
+    int vizWritePos { 0 };
+    static constexpr int vizBufferSize = 2048; // ~43ms at 48kHz
+#endif
 };

@@ -1,5 +1,10 @@
 #include "CVMixerModuleProcessor.h"
 
+#if defined(PRESET_CREATOR_UI)
+#include "../../preset_creator/theme/ThemeManager.h"
+#include <imgui.h>
+#endif
+
 CVMixerModuleProcessor::CVMixerModuleProcessor()
     : ModuleProcessor (BusesProperties()
         .withInput ("CV Inputs", juce::AudioChannelSet::discreteChannels(4), true)  // Bus 0: A, B, C, D
@@ -50,6 +55,32 @@ juce::AudioProcessorValueTreeState::ParameterLayout CVMixerModuleProcessor::crea
 void CVMixerModuleProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
 {
     juce::ignoreUnused (sampleRate, samplesPerBlock);
+
+#if defined(PRESET_CREATOR_UI)
+    vizInputABuffer.setSize(1, vizBufferSize, false, true, true);
+    vizInputBBuffer.setSize(1, vizBufferSize, false, true, true);
+    vizInputCBuffer.setSize(1, vizBufferSize, false, true, true);
+    vizInputDBuffer.setSize(1, vizBufferSize, false, true, true);
+    vizMixOutputBuffer.setSize(1, vizBufferSize, false, true, true);
+    vizInvOutputBuffer.setSize(1, vizBufferSize, false, true, true);
+    vizWritePos = 0;
+    for (auto& v : vizData.inputAWaveform) v.store(0.0f);
+    for (auto& v : vizData.inputBWaveform) v.store(0.0f);
+    for (auto& v : vizData.inputCWaveform) v.store(0.0f);
+    for (auto& v : vizData.inputDWaveform) v.store(0.0f);
+    for (auto& v : vizData.mixOutputWaveform) v.store(0.0f);
+    for (auto& v : vizData.invOutputWaveform) v.store(0.0f);
+    vizData.currentCrossfade.store(0.0f);
+    vizData.currentLevelA.store(1.0f);
+    vizData.currentLevelC.store(0.0f);
+    vizData.currentLevelD.store(0.0f);
+    vizData.inputALevel.store(0.0f);
+    vizData.inputBLevel.store(0.0f);
+    vizData.inputCLevel.store(0.0f);
+    vizData.inputDLevel.store(0.0f);
+    vizData.mixOutputLevel.store(0.0f);
+    vizData.invOutputLevel.store(0.0f);
+#endif
 }
 
 void CVMixerModuleProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midi)
@@ -61,6 +92,47 @@ void CVMixerModuleProcessor::processBlock (juce::AudioBuffer<float>& buffer, juc
     auto outputs = getBusBuffer(buffer, false, 0);  // 2 discrete channels: Mix Out, Inv Out
     
     const int numSamples = buffer.getNumSamples();
+
+#if defined(PRESET_CREATOR_UI)
+    // Capture input audio for visualization (before processing)
+    const int samplesToCopy = juce::jmin(numSamples, vizBufferSize);
+    if (vizInputABuffer.getNumSamples() > 0 && cvInputs.getNumChannels() > 0)
+    {
+        const float* inputData = cvInputs.getReadPointer(0);
+        for (int i = 0; i < samplesToCopy; ++i)
+        {
+            const int writeIdx = (vizWritePos + i) % vizBufferSize;
+            vizInputABuffer.setSample(0, writeIdx, inputData[i]);
+        }
+    }
+    if (vizInputBBuffer.getNumSamples() > 0 && cvInputs.getNumChannels() > 1)
+    {
+        const float* inputData = cvInputs.getReadPointer(1);
+        for (int i = 0; i < samplesToCopy; ++i)
+        {
+            const int writeIdx = (vizWritePos + i) % vizBufferSize;
+            vizInputBBuffer.setSample(0, writeIdx, inputData[i]);
+        }
+    }
+    if (vizInputCBuffer.getNumSamples() > 0 && cvInputs.getNumChannels() > 2)
+    {
+        const float* inputData = cvInputs.getReadPointer(2);
+        for (int i = 0; i < samplesToCopy; ++i)
+        {
+            const int writeIdx = (vizWritePos + i) % vizBufferSize;
+            vizInputCBuffer.setSample(0, writeIdx, inputData[i]);
+        }
+    }
+    if (vizInputDBuffer.getNumSamples() > 0 && cvInputs.getNumChannels() > 3)
+    {
+        const float* inputData = cvInputs.getReadPointer(3);
+        for (int i = 0; i < samplesToCopy; ++i)
+        {
+            const int writeIdx = (vizWritePos + i) % vizBufferSize;
+            vizInputDBuffer.setSample(0, writeIdx, inputData[i]);
+        }
+    }
+#endif
     
     // Read modulation CV values (first sample of each mod bus)
     float crossfadeMod = 0.0f;
@@ -174,6 +246,20 @@ void CVMixerModuleProcessor::processBlock (juce::AudioBuffer<float>& buffer, juc
         // 4. Write to outputs
         if (mixOut) mixOut[i] = finalMix;
         if (invOut) invOut[i] = -finalMix;
+
+#if defined(PRESET_CREATOR_UI)
+        // Capture output audio for visualization (after processing)
+        if (vizMixOutputBuffer.getNumSamples() > 0 && mixOut)
+        {
+            const int writeIdx = (vizWritePos + i) % vizBufferSize;
+            vizMixOutputBuffer.setSample(0, writeIdx, mixOut[i]);
+        }
+        if (vizInvOutputBuffer.getNumSamples() > 0 && invOut)
+        {
+            const int writeIdx = (vizWritePos + i) % vizBufferSize;
+            vizInvOutputBuffer.setSample(0, writeIdx, invOut[i]);
+        }
+#endif
     }
     
     // Store live modulated values for UI display
@@ -188,18 +274,222 @@ void CVMixerModuleProcessor::processBlock (juce::AudioBuffer<float>& buffer, juc
         if (lastOutputValues[0] && mixOut) lastOutputValues[0]->store(mixOut[numSamples - 1]);
         if (lastOutputValues[1] && invOut) lastOutputValues[1]->store(invOut[numSamples - 1]);
     }
+
+#if defined(PRESET_CREATOR_UI)
+    vizWritePos = (vizWritePos + numSamples) % vizBufferSize;
+
+    // Update visualization data (thread-safe)
+    // Downsample waveforms from circular buffers
+    const int stride = vizBufferSize / VizData::waveformPoints;
+    for (int i = 0; i < VizData::waveformPoints; ++i)
+    {
+        const int readIdx = (vizWritePos - VizData::waveformPoints * stride + i * stride + vizBufferSize) % vizBufferSize;
+        if (vizInputABuffer.getNumSamples() > 0)
+            vizData.inputAWaveform[i].store(vizInputABuffer.getSample(0, readIdx));
+        if (vizInputBBuffer.getNumSamples() > 0)
+            vizData.inputBWaveform[i].store(vizInputBBuffer.getSample(0, readIdx));
+        if (vizInputCBuffer.getNumSamples() > 0)
+            vizData.inputCWaveform[i].store(vizInputCBuffer.getSample(0, readIdx));
+        if (vizInputDBuffer.getNumSamples() > 0)
+            vizData.inputDWaveform[i].store(vizInputDBuffer.getSample(0, readIdx));
+        if (vizMixOutputBuffer.getNumSamples() > 0)
+            vizData.mixOutputWaveform[i].store(vizMixOutputBuffer.getSample(0, readIdx));
+        if (vizInvOutputBuffer.getNumSamples() > 0)
+            vizData.invOutputWaveform[i].store(vizInvOutputBuffer.getSample(0, readIdx));
+    }
+
+    // Calculate input/output levels (RMS)
+    float inputARms = 0.0f;
+    float inputBRms = 0.0f;
+    float inputCRms = 0.0f;
+    float inputDRms = 0.0f;
+    float mixOutputRms = 0.0f;
+    float invOutputRms = 0.0f;
+    if (numSamples > 0)
+    {
+        if (cvInputs.getNumChannels() > 0)
+            inputARms = cvInputs.getRMSLevel(0, 0, numSamples);
+        if (cvInputs.getNumChannels() > 1)
+            inputBRms = cvInputs.getRMSLevel(1, 0, numSamples);
+        if (cvInputs.getNumChannels() > 2)
+            inputCRms = cvInputs.getRMSLevel(2, 0, numSamples);
+        if (cvInputs.getNumChannels() > 3)
+            inputDRms = cvInputs.getRMSLevel(3, 0, numSamples);
+        if (outputs.getNumChannels() > 0 && mixOut)
+            mixOutputRms = outputs.getRMSLevel(0, 0, numSamples);
+        if (outputs.getNumChannels() > 1 && invOut)
+            invOutputRms = outputs.getRMSLevel(1, 0, numSamples);
+    }
+    vizData.inputALevel.store(inputARms);
+    vizData.inputBLevel.store(inputBRms);
+    vizData.inputCLevel.store(inputCRms);
+    vizData.inputDLevel.store(inputDRms);
+    vizData.mixOutputLevel.store(mixOutputRms);
+    vizData.invOutputLevel.store(invOutputRms);
+    vizData.currentCrossfade.store(crossfade);
+    vizData.currentLevelA.store(levelA);
+    vizData.currentLevelC.store(levelC);
+    vizData.currentLevelD.store(levelD);
+#endif
 }
 
 #if defined(PRESET_CREATOR_UI)
 void CVMixerModuleProcessor::drawParametersInNode (float itemWidth, const std::function<bool(const juce::String& paramId)>& isParamModulated, const std::function<void()>& onModificationEnded)
 {
     auto& ap = getAPVTS();
+    const auto& theme = ThemeManager::getInstance().getCurrentTheme();
     float crossfade = crossfadeParam != nullptr ? crossfadeParam->load() : 0.0f;
     float levelA = levelAParam != nullptr ? levelAParam->load() : 1.0f;
     float levelC = levelCParam != nullptr ? levelCParam->load() : 0.0f;
     float levelD = levelDParam != nullptr ? levelDParam->load() : 0.0f;
 
+    ImGui::PushID(this); // Unique ID for this node's UI - must be at start
     ImGui::PushItemWidth (itemWidth);
+
+    // === SECTION: CV Mixer Visualization ===
+    ThemeText("CV Mixer Activity", theme.text.section_header);
+    ImGui::Spacing();
+
+    // Read visualization data (thread-safe) - BEFORE BeginChild
+    float inputAWaveform[VizData::waveformPoints];
+    float inputBWaveform[VizData::waveformPoints];
+    float inputCWaveform[VizData::waveformPoints];
+    float inputDWaveform[VizData::waveformPoints];
+    float mixOutputWaveform[VizData::waveformPoints];
+    float invOutputWaveform[VizData::waveformPoints];
+    for (int i = 0; i < VizData::waveformPoints; ++i)
+    {
+        inputAWaveform[i] = vizData.inputAWaveform[i].load();
+        inputBWaveform[i] = vizData.inputBWaveform[i].load();
+        inputCWaveform[i] = vizData.inputCWaveform[i].load();
+        inputDWaveform[i] = vizData.inputDWaveform[i].load();
+        mixOutputWaveform[i] = vizData.mixOutputWaveform[i].load();
+        invOutputWaveform[i] = vizData.invOutputWaveform[i].load();
+    }
+    const float currentCrossfade = vizData.currentCrossfade.load();
+    const float currentLevelA = vizData.currentLevelA.load();
+    const float currentLevelC = vizData.currentLevelC.load();
+    const float currentLevelD = vizData.currentLevelD.load();
+    const float inputALevel = vizData.inputALevel.load();
+    const float inputBLevel = vizData.inputBLevel.load();
+    const float inputCLevel = vizData.inputCLevel.load();
+    const float inputDLevel = vizData.inputDLevel.load();
+    const float mixOutputLevel = vizData.mixOutputLevel.load();
+    const float invOutputLevel = vizData.invOutputLevel.load();
+
+    // Waveform visualization in child window
+    const float waveHeight = 140.0f;
+    const ImVec2 graphSize(itemWidth, waveHeight);
+    const ImGuiWindowFlags childFlags = ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse;
+    if (ImGui::BeginChild("CVMixerViz", graphSize, false, childFlags))
+    {
+        ImDrawList* drawList = ImGui::GetWindowDrawList();
+        const ImVec2 p0 = ImGui::GetWindowPos();
+        const ImVec2 p1 = ImVec2(p0.x + graphSize.x, p0.y + graphSize.y);
+        
+        // Background
+        const ImU32 bgColor = ThemeManager::getInstance().getCanvasBackground();
+        drawList->AddRectFilled(p0, p1, bgColor, 4.0f);
+        
+        // Clip to graph area
+        drawList->PushClipRect(p0, p1, true);
+        
+        const ImU32 inputAColor = ImGui::ColorConvertFloat4ToU32(theme.modulation.frequency);  // Cyan
+        const ImU32 inputBColor = ImGui::ColorConvertFloat4ToU32(theme.modulation.timbre);      // Orange/Yellow
+        const ImU32 inputCColor = ImGui::ColorConvertFloat4ToU32(theme.modulation.amplitude);   // Magenta/Pink
+        const ImU32 inputDColor = ImGui::ColorConvertFloat4ToU32(theme.modulation.filter);     // Green
+        const ImU32 mixOutputColor = ImGui::ColorConvertFloat4ToU32(theme.accent);              // Accent color
+        const ImU32 invOutputColor = IM_COL32(180, 180, 255, 255);  // Light blue for inverted output
+        const ImU32 centerLineColor = IM_COL32(150, 150, 150, 100);
+
+        // Draw output waveforms
+        const float midY = p0.y + graphSize.y * 0.5f;
+        const float scaleY = graphSize.y * 0.45f;
+        const float stepX = graphSize.x / (float)(VizData::waveformPoints - 1);
+
+        // Draw center line (zero reference)
+        drawList->AddLine(ImVec2(p0.x, midY), ImVec2(p1.x, midY), centerLineColor, 1.0f);
+
+        // Draw input waveforms (background layers, more subtle)
+        auto drawWaveform = [&](const float* waveform, ImU32 color, float alpha, float thickness)
+        {
+            float prevX = p0.x;
+            float prevY = midY;
+            for (int i = 0; i < VizData::waveformPoints; ++i)
+            {
+                const float sample = juce::jlimit(-1.0f, 1.0f, waveform[i]);
+                const float x = p0.x + i * stepX;
+                const float y = midY - sample * scaleY;
+                if (i > 0)
+                {
+                    ImVec4 colorVec4 = ImGui::ColorConvertU32ToFloat4(color);
+                    colorVec4.w = alpha;
+                    drawList->AddLine(ImVec2(prevX, prevY), ImVec2(x, y), ImGui::ColorConvertFloat4ToU32(colorVec4), thickness);
+                }
+                prevX = x;
+                prevY = y;
+            }
+        };
+
+        // Draw inputs in order (most subtle first)
+        drawWaveform(inputAWaveform, inputAColor, 0.25f, 1.2f);
+        drawWaveform(inputBWaveform, inputBColor, 0.3f, 1.4f);
+        drawWaveform(inputCWaveform, inputCColor, 0.25f, 1.2f);
+        drawWaveform(inputDWaveform, inputDColor, 0.25f, 1.2f);
+
+        // Draw inverted output (middle layer, shows polarity flip)
+        drawWaveform(invOutputWaveform, invOutputColor, 0.4f, 1.6f);
+
+        // Draw mix output (foreground, most prominent - shows final result)
+        float prevX = p0.x;
+        float prevY = midY;
+        for (int i = 0; i < VizData::waveformPoints; ++i)
+        {
+            const float sample = juce::jlimit(-1.0f, 1.0f, mixOutputWaveform[i]);
+            const float x = p0.x + i * stepX;
+            const float y = midY - sample * scaleY;
+            if (i > 0)
+                drawList->AddLine(ImVec2(prevX, prevY), ImVec2(x, y), mixOutputColor, 2.8f);
+            prevX = x;
+            prevY = y;
+        }
+
+        drawList->PopClipRect();
+        
+        // Level meters overlay
+        ImGui::SetCursorPos(ImVec2(4, waveHeight + 4));
+        auto drawLevelMeter = [&](const char* label, float level, ImU32 color, float maxWidth)
+        {
+            const float norm = juce::jlimit(0.0f, 1.0f, level);
+            ImGui::Text("%s: %.3f", label, level);
+            ImGui::SameLine();
+            ImGui::PushStyleColor(ImGuiCol_PlotHistogram, color);
+            ImGui::ProgressBar(norm, ImVec2(maxWidth, 0), "");
+            ImGui::PopStyleColor();
+            ImGui::SameLine();
+            ImGui::Text("%.0f%%", norm * 100.0f);
+        };
+
+        const float meterWidth = graphSize.x * 0.35f;
+        drawLevelMeter("In A", inputALevel, inputAColor, meterWidth);
+        drawLevelMeter("In B", inputBLevel, inputBColor, meterWidth);
+        drawLevelMeter("In C", inputCLevel, inputCColor, meterWidth);
+        drawLevelMeter("In D", inputDLevel, inputDColor, meterWidth);
+        drawLevelMeter("Mix", mixOutputLevel, mixOutputColor, meterWidth);
+        drawLevelMeter("Inv", invOutputLevel, invOutputColor, meterWidth);
+
+        // Parameter readouts
+        ImGui::Text("Crossfade: %.2f  |  Level A: %.2f  |  C: %.2f  |  D: %.2f", 
+                    currentCrossfade, currentLevelA, currentLevelC, currentLevelD);
+        
+        // Invisible drag blocker
+        ImGui::SetCursorPos(ImVec2(0, 0));
+        ImGui::InvisibleButton("##cvMixerVizDrag", graphSize);
+    }
+    ImGui::EndChild();
+    
+    ImGui::Spacing();
+    ImGui::Spacing();
 
     // Crossfade A/B (horizontal slider)
     bool isCrossfadeModulated = isParamModulated("crossfade");
@@ -264,6 +554,7 @@ void CVMixerModuleProcessor::drawParametersInNode (float itemWidth, const std::f
     if (isLevelDModulated) { ImGui::EndDisabled(); ImGui::SameLine(); ImGui::TextUnformatted("(mod)"); }
 
     ImGui::PopItemWidth();
+    ImGui::PopID(); // End unique ID
 }
 #endif
 

@@ -199,6 +199,7 @@ static void HelpMarker(const char* desc)
 
 void MIDIKnobsModuleProcessor::drawParametersInNode(float itemWidth, const std::function<bool(const juce::String&)>&, const std::function<void()>& onModificationEnded)
 {
+    ImGui::PushID(this);
     ImGui::PushItemWidth(itemWidth);
     
     // === MULTI-MIDI DEVICE FILTERING ===
@@ -359,6 +360,7 @@ void MIDIKnobsModuleProcessor::drawParametersInNode(float itemWidth, const std::
     }
     
     ImGui::PopItemWidth();
+    ImGui::PopID();
 }
 
 void MIDIKnobsModuleProcessor::drawVisualKnobs(int numActive, const std::function<void()>& onModificationEnded)

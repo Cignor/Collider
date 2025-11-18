@@ -1,6 +1,11 @@
 #pragma once
 
 #include "ModuleProcessor.h"
+#include <array>
+#include <atomic>
+#if defined(PRESET_CREATOR_UI)
+#include "../../preset_creator/theme/ThemeManager.h"
+#endif
 
 class QuantizerModuleProcessor : public ModuleProcessor
 {
@@ -58,4 +63,26 @@ private:
 
     // Scale definitions
     std::vector<std::vector<float>> scales;
+
+#if defined(PRESET_CREATOR_UI)
+    struct VizData
+    {
+        static constexpr int waveformPoints = 256;
+        std::array<std::atomic<float>, waveformPoints> inputWaveform;
+        std::array<std::atomic<float>, waveformPoints> outputWaveform;
+        std::atomic<int> currentScaleIdx { 0 };
+        std::atomic<int> currentRootNote { 0 };
+        std::atomic<float> quantizationAmount { 0.0f }; // How much quantization is happening
+
+        VizData()
+        {
+            for (auto& v : inputWaveform) v.store(0.0f);
+            for (auto& v : outputWaveform) v.store(0.0f);
+        }
+    };
+
+    VizData vizData;
+    juce::AudioBuffer<float> vizInputBuffer;
+    juce::AudioBuffer<float> vizOutputBuffer;
+#endif
 };

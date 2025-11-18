@@ -2,6 +2,11 @@
 
 #include "ModuleProcessor.h"
 #include <juce_dsp/juce_dsp.h>
+#include <array>
+#include <atomic>
+#if defined(PRESET_CREATOR_UI)
+#include "../../preset_creator/theme/ThemeManager.h"
+#endif
 
 /**
  * @class NoiseModuleProcessor
@@ -58,6 +63,25 @@ private:
     juce::Random random;
     juce::dsp::IIR::Filter<float> pinkFilter;  // Simple filter to approximate pink noise
     juce::dsp::IIR::Filter<float> brownFilter; // Simple filter to approximate brown noise
+
+#if defined(PRESET_CREATOR_UI)
+    struct VizData
+    {
+        static constexpr int waveformPoints = 256;
+        std::array<std::atomic<float>, waveformPoints> outputWaveform;
+        std::atomic<float> currentLevelDb { -12.0f };
+        std::atomic<int> currentColour { 0 }; // 0=White, 1=Pink, 2=Brown
+        std::atomic<float> outputRms { 0.0f };
+
+        VizData()
+        {
+            for (auto& v : outputWaveform) v.store(0.0f);
+        }
+    };
+
+    VizData vizData;
+    juce::AudioBuffer<float> vizOutputBuffer;
+#endif
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(NoiseModuleProcessor)
 };

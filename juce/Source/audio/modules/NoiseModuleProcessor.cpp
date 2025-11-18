@@ -47,6 +47,13 @@ void NoiseModuleProcessor::prepareToPlay(double sampleRate, int samplesPerBlock)
     brownFilter.prepare(spec);
     pinkFilter.reset();
     brownFilter.reset();
+
+#if defined(PRESET_CREATOR_UI)
+    vizOutputBuffer.setSize(1, samplesPerBlock);
+    vizOutputBuffer.clear();
+    for (auto& v : vizData.outputWaveform) v.store(0.0f);
+    vizData.outputRms.store(0.0f);
+#endif
 }
 
 // --- Main Audio Processing Block ---
@@ -114,6 +121,49 @@ void NoiseModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::
 
     // --- Update Inspector Values (peak magnitude) ---
     updateOutputTelemetry(buffer);
+
+#if defined(PRESET_CREATOR_UI)
+    // Capture waveform for visualization
+    if (numSamples > 0)
+    {
+        vizOutputBuffer.makeCopyOf(outBus);
+        
+        // Track last computed values for visualization
+        float lastLevelDb = baseLevelDb;
+        int lastColour = baseColour;
+        
+        // Calculate RMS
+        float rmsSum = 0.0f;
+        for (int i = 0; i < numSamples; ++i)
+        {
+            float sample = outBus.getSample(0, i);
+            rmsSum += sample * sample;
+            
+            // Track last effective values
+            if (isLevelModulated && levelCV != nullptr) {
+                lastLevelDb = juce::jmap(levelCV[i], 0.0f, 1.0f, -60.0f, 6.0f);
+            }
+            if (isColourModulated && colourCV != nullptr) {
+                lastColour = static_cast<int>(juce::jlimit(0.0f, 1.0f, colourCV[i]) * 2.99f);
+            }
+        }
+        float rms = std::sqrt(rmsSum / (float)numSamples);
+        vizData.outputRms.store(rms);
+        
+        // Down-sample waveform
+        const int stride = juce::jmax(1, numSamples / VizData::waveformPoints);
+        for (int i = 0; i < VizData::waveformPoints; ++i)
+        {
+            const int idx = juce::jmin(numSamples - 1, i * stride);
+            float value = outBus.getSample(0, idx);
+            vizData.outputWaveform[i].store(juce::jlimit(-1.0f, 1.0f, value));
+        }
+        
+        // Update live parameter values
+        vizData.currentLevelDb.store(lastLevelDb);
+        vizData.currentColour.store(lastColour);
+    }
+#endif
 }
 
 bool NoiseModuleProcessor::getParamRouting(const juce::String& paramId, int& outBusIndex, int& outChannelIndexInBus) const
@@ -132,16 +182,15 @@ bool NoiseModuleProcessor::getParamRouting(const juce::String& paramId, int& out
 
 void NoiseModuleProcessor::drawParametersInNode(float itemWidth, const std::function<bool(const juce::String& paramId)>& isParamModulated, const std::function<void()>& onModificationEnded)
 {
-    auto& ap = getAPVTS();
     const auto& theme = ThemeManager::getInstance().getCurrentTheme();
+    auto& ap = getAPVTS();
+    ImGui::PushItemWidth(itemWidth);
 
     bool levelIsModulated = isParamModulated(paramIdLevelMod);
     float levelDb = levelIsModulated ? getLiveParamValueFor(paramIdLevelMod, "level_live", levelDbParam->load()) : levelDbParam->load();
 
     bool colourIsModulated = isParamModulated(paramIdColourMod);
     int colourIndex = colourIsModulated ? (int)getLiveParamValueFor(paramIdColourMod, "colour_live", (float)colourParam->getIndex()) : colourParam->getIndex();
-
-    ImGui::PushItemWidth(itemWidth);
 
     // === SECTION: Noise Type ===
     ThemeText("NOISE TYPE", theme.text.section_header);
@@ -170,6 +219,96 @@ void NoiseModuleProcessor::drawParametersInNode(float itemWidth, const std::func
     if (!levelIsModulated) adjustParamOnWheel(ap.getParameter(paramIdLevel), "level", levelDb);
     if (levelIsModulated) { ImGui::EndDisabled(); ImGui::SameLine(); ThemeText("(mod)", theme.text.active); }
     if (ImGui::IsItemHovered()) ImGui::SetTooltip("Output amplitude in decibels");
+
+    ImGui::Spacing();
+    
+    // === SECTION: Noise Visualizer ===
+    ThemeText("Noise Visualizer", theme.text.section_header);
+    ImGui::Spacing();
+
+    ImGui::PushID(this); // Unique ID for this node's UI
+    
+    // Read visualization data (thread-safe)
+    float outputWave[VizData::waveformPoints];
+    for (int i = 0; i < VizData::waveformPoints; ++i)
+    {
+        outputWave[i] = vizData.outputWaveform[i].load();
+    }
+    const float liveLevelDb = vizData.currentLevelDb.load();
+    const float liveRms = vizData.outputRms.load();
+    const int currentColour = vizData.currentColour.load();
+
+    // Waveform visualization in child window
+    const float waveHeight = 110.0f;
+    const ImVec2 graphSize(itemWidth, waveHeight);
+    
+    if (ImGui::BeginChild("NoiseViz", graphSize, false, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse))
+    {
+        ImDrawList* drawList = ImGui::GetWindowDrawList();
+        const ImVec2 p0 = ImGui::GetWindowPos();
+        const ImVec2 p1 = ImVec2(p0.x + graphSize.x, p0.y + graphSize.y);
+        
+        // Background
+        const ImU32 bgColor = ThemeManager::getInstance().getCanvasBackground();
+        drawList->AddRectFilled(p0, p1, bgColor, 4.0f);
+        
+        // Clip to graph area
+        drawList->PushClipRect(p0, p1, true);
+        
+        // Color based on noise type (using theme colors)
+        ImU32 noiseColor;
+        switch (currentColour)
+        {
+            case 1: // Pink
+                noiseColor = ImGui::ColorConvertFloat4ToU32(theme.modulation.timbre);
+                break;
+            case 2: // Brown
+                noiseColor = ImGui::ColorConvertFloat4ToU32(theme.modulation.filter);
+                break;
+            default: // White
+                noiseColor = ImGui::ColorConvertFloat4ToU32(theme.accent);
+                break;
+        }
+
+        // Draw output waveform
+        const float scaleY = graphSize.y * 0.4f;
+        const float stepX = graphSize.x / (float)(VizData::waveformPoints - 1);
+        const float midY = p0.y + graphSize.y * 0.5f;
+        
+        // Draw center line (zero reference)
+        const ImU32 centerLineColor = IM_COL32(150, 150, 150, 100);
+        drawList->AddLine(ImVec2(p0.x, midY), ImVec2(p1.x, midY), centerLineColor, 1.0f);
+
+        // Draw noise waveform
+        float prevX = p0.x;
+        float prevY = midY;
+        for (int i = 0; i < VizData::waveformPoints; ++i)
+        {
+            const float sample = juce::jlimit(-1.0f, 1.0f, outputWave[i]);
+            const float x = p0.x + i * stepX;
+            const float y = juce::jlimit(p0.y, p1.y, midY - sample * scaleY);
+            if (i > 0)
+                drawList->AddLine(ImVec2(prevX, prevY), ImVec2(x, y), noiseColor, 1.5f);
+            prevX = x;
+            prevY = y;
+        }
+
+        drawList->PopClipRect();
+        
+        // Live parameter values overlay
+        const char* colourNames[] = { "White", "Pink", "Brown" };
+        const char* currentColourName = (currentColour >= 0 && currentColour < 3) ? colourNames[currentColour] : "Unknown";
+        
+        ImGui::SetCursorPos(ImVec2(4, 4));
+        ImGui::TextColored(ImVec4(1.0f, 1.0f, 1.0f, 0.9f), "%s Noise  |  Level: %.1f dB  |  RMS: %.3f", currentColourName, liveLevelDb, liveRms);
+        
+        // Invisible drag blocker
+        ImGui::SetCursorPos(ImVec2(0, 0));
+        ImGui::InvisibleButton("##noiseVizDrag", graphSize);
+    }
+    ImGui::EndChild();
+
+    ImGui::PopID(); // End unique ID
 
     ImGui::Spacing();
     ImGui::Spacing();

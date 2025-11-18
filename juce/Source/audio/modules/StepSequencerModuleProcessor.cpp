@@ -487,6 +487,7 @@ void StepSequencerModuleProcessor::processBlock (juce::AudioBuffer<float>& buffe
 void StepSequencerModuleProcessor::drawParametersInNode (float itemWidth, const std::function<bool(const juce::String& paramId)>& isParamModulated, const std::function<void()>& onModificationEnded)
 {
     const auto& theme = ThemeManager::getInstance().getCurrentTheme();
+    ImGui::PushID(this);
     const ImVec4& stepActiveFrame = theme.modules.sequencer_step_active_frame;
     const ImVec4& stepActiveGrab = theme.modules.sequencer_step_active_grab;
     const ImVec4& gateActiveFrame = theme.modules.sequencer_gate_active_frame;
@@ -821,6 +822,7 @@ void StepSequencerModuleProcessor::drawParametersInNode (float itemWidth, const 
         }
         if (anyTrigMod) { ImGui::SameLine(); ImGui::TextUnformatted("(mod)"); }
     }
+    ImGui::PopID();
 }
 
 void StepSequencerModuleProcessor::drawIoPins(const NodePinHelpers& helpers)

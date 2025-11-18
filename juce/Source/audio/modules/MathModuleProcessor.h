@@ -1,6 +1,7 @@
 #pragma once
 
 #include "ModuleProcessor.h"
+#include <array>
 
 class MathModuleProcessor : public ModuleProcessor
 {
@@ -57,4 +58,29 @@ private:
     std::atomic<float> lastValue { 0.0f };
     std::atomic<float> lastValueA { 0.0f };
     std::atomic<float> lastValueB { 0.0f };
+
+#if defined(PRESET_CREATOR_UI)
+    struct VizData
+    {
+        static constexpr int waveformPoints = 256;
+        std::array<std::atomic<float>, waveformPoints> inputAWaveform;
+        std::array<std::atomic<float>, waveformPoints> inputBWaveform;
+        std::array<std::atomic<float>, waveformPoints> outputWaveform;
+        std::atomic<int> writeIndex { 0 };
+        std::atomic<float> inputARms { 0.0f };
+        std::atomic<float> inputBRms { 0.0f };
+        std::atomic<float> outputRms { 0.0f };
+        std::atomic<int> currentOperation { 0 };
+
+        VizData()
+        {
+            for (auto& v : inputAWaveform) v.store(0.0f);
+            for (auto& v : inputBWaveform) v.store(0.0f);
+            for (auto& v : outputWaveform) v.store(0.0f);
+        }
+    };
+
+    VizData vizData;
+    juce::AudioBuffer<float> captureBuffer;
+#endif
 };

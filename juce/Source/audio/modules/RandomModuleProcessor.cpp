@@ -2,6 +2,7 @@
 
 #if defined(PRESET_CREATOR_UI)
 #include "../../preset_creator/theme/ThemeManager.h"
+#include <imgui.h>
 #endif
 #include "../graph/ModularSynthProcessor.h"
 #include <cmath>
@@ -61,6 +62,23 @@ void RandomModuleProcessor::prepareToPlay(double newSampleRate, int)
     const float cvMinVal = cvMinParam->load();
     const float cvMaxVal = cvMaxParam->load();
     targetValueCV = currentValueCV = cvMinVal + rng.nextFloat() * (cvMaxVal - cvMinVal);
+
+#if defined(PRESET_CREATOR_UI)
+    vizRawBuffer.setSize(1, vizBufferSize, false, true, true);
+    vizCvBuffer.setSize(1, vizBufferSize, false, true, true);
+    vizTrigBuffer.setSize(1, vizBufferSize, false, true, true);
+    vizWritePos = 0;
+    for (auto& v : vizData.rawWaveform) v.store(0.0f);
+    for (auto& v : vizData.cvWaveform) v.store(0.0f);
+    for (auto& v : vizData.triggerMarkers) v.store(0.0f);
+    vizData.currentMin.store(minVal);
+    vizData.currentMax.store(maxVal);
+    vizData.currentCvMin.store(cvMinVal);
+    vizData.currentCvMax.store(cvMaxVal);
+    vizData.currentTrigThreshold.store(trigThresholdParam->load());
+    vizData.currentRate.store(rateParam->load());
+    vizData.currentSlew.store(slewParam->load());
+#endif
 }
 
 void RandomModuleProcessor::setTimingInfo(const TransportState& state)
@@ -160,6 +178,17 @@ void RandomModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce:
         
         trigOut[i] = (trigPulseRemaining > 0) ? 1.0f : 0.0f;
         if (trigPulseRemaining > 0) --trigPulseRemaining;
+
+#if defined(PRESET_CREATOR_UI)
+        // Capture waveforms into circular buffers
+        if (vizRawBuffer.getNumSamples() > 0 && vizCvBuffer.getNumSamples() > 0 && vizTrigBuffer.getNumSamples() > 0)
+        {
+            vizRawBuffer.setSample(0, vizWritePos, currentValue);
+            vizCvBuffer.setSample(0, vizWritePos, currentValueCV);
+            vizTrigBuffer.setSample(0, vizWritePos, trigOut[i]);
+            vizWritePos = (vizWritePos + 1) % vizBufferSize;
+        }
+#endif
     }
     
     lastNormalizedOutputValue.store(normOut[numSamples - 1]);
@@ -167,6 +196,31 @@ void RandomModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce:
     lastCvOutputValue.store(cvOut[numSamples - 1]);
     lastBoolOutputValue.store(boolOut[numSamples - 1]);
     lastTrigOutputValue.store(trigOut[numSamples - 1]);
+
+#if defined(PRESET_CREATOR_UI)
+    // Update visualization data (thread-safe)
+    // Downsample waveforms from circular buffers
+    const int stride = vizBufferSize / VizData::waveformPoints;
+    for (int i = 0; i < VizData::waveformPoints; ++i)
+    {
+        const int readIdx = (vizWritePos - VizData::waveformPoints * stride + i * stride + vizBufferSize) % vizBufferSize;
+        const float rawSample = vizRawBuffer.getSample(0, readIdx);
+        const float cvSample = vizCvBuffer.getSample(0, readIdx);
+        const float trigSample = vizTrigBuffer.getSample(0, readIdx);
+        vizData.rawWaveform[i].store(rawSample);
+        vizData.cvWaveform[i].store(cvSample);
+        vizData.triggerMarkers[i].store(trigSample);
+    }
+
+    // Update current parameter states
+    vizData.currentMin.store(minVal);
+    vizData.currentMax.store(maxVal);
+    vizData.currentCvMin.store(cvMinVal);
+    vizData.currentCvMax.store(cvMaxVal);
+    vizData.currentTrigThreshold.store(trigThreshold);
+    vizData.currentRate.store(baseRate);
+    vizData.currentSlew.store(baseSlew);
+#endif
     
     // Update lastOutputValues for cable inspector
     if (lastOutputValues.size() >= 5)
@@ -216,6 +270,7 @@ void RandomModuleProcessor::drawParametersInNode(float itemWidth, const std::fun
     float trigThreshold = trigThresholdParam->load();
 
     ImGui::PushItemWidth(itemWidth);
+    // Note: Parent already manages ID scope with PushID(lid), so we don't push another ID here
 
     // === SECTION: Timing ===
     ThemeText("TIMING", theme.text.section_header);
@@ -349,6 +404,137 @@ void RandomModuleProcessor::drawParametersInNode(float itemWidth, const std::fun
     adjustParamOnWheel(ap.getParameter(paramIdTrigThreshold), "trigThreshold", trigThreshold);
     if (ImGui::IsItemHovered()) ImGui::SetTooltip("Threshold for trigger/gate outputs");
 
+    ImGui::Spacing();
+    ImGui::Spacing();
+    
+    // === SECTION: Random Value Visualization ===
+    ThemeText("RANDOM OUTPUT", theme.text.section_header);
+    ImGui::Spacing();
+
+    ImGui::PushID(this); // Unique ID for this node's UI
+    
+    // Read visualization data (thread-safe) - BEFORE BeginChild
+    float rawWaveform[VizData::waveformPoints];
+    float cvWaveform[VizData::waveformPoints];
+    float triggerMarkers[VizData::waveformPoints];
+    for (int i = 0; i < VizData::waveformPoints; ++i)
+    {
+        rawWaveform[i] = vizData.rawWaveform[i].load();
+        cvWaveform[i] = vizData.cvWaveform[i].load();
+        triggerMarkers[i] = vizData.triggerMarkers[i].load();
+    }
+    const float currentMin = vizData.currentMin.load();
+    const float currentMax = vizData.currentMax.load();
+    const float currentCvMin = vizData.currentCvMin.load();
+    const float currentCvMax = vizData.currentCvMax.load();
+    const float currentTrigThreshold = vizData.currentTrigThreshold.load();
+    const float currentRate = vizData.currentRate.load();
+    const float currentSlew = vizData.currentSlew.load();
+
+    // Calculate scaling for Raw output (normalize to 0-1 range for display)
+    const float rawRange = currentMax - currentMin;
+    const float rawScale = (std::abs(rawRange) < 1e-6f) ? 1.0f : 1.0f / rawRange;
+
+    // Calculate scaling for CV output (already 0-1, but we'll show it normalized)
+    const float cvRange = currentCvMax - currentCvMin;
+    const float cvScale = (std::abs(cvRange) < 1e-6f) ? 1.0f : 1.0f / cvRange;
+
+    // Waveform visualization in child window
+    const float waveHeight = 120.0f;
+    const ImVec2 graphSize(itemWidth, waveHeight);
+    
+    if (ImGui::BeginChild("RandomViz", graphSize, false, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse))
+    {
+        ImDrawList* drawList = ImGui::GetWindowDrawList();
+        const ImVec2 p0 = ImGui::GetWindowPos();
+        const ImVec2 p1 = ImVec2(p0.x + graphSize.x, p0.y + graphSize.y);
+        
+        // Background
+        const ImU32 bgColor = ThemeManager::getInstance().getCanvasBackground();
+        drawList->AddRectFilled(p0, p1, bgColor, 4.0f);
+        
+        // Clip to graph area
+        drawList->PushClipRect(p0, p1, true);
+        
+        const ImU32 rawColor = ImGui::ColorConvertFloat4ToU32(theme.modulation.frequency);
+        const ImU32 cvColor = ImGui::ColorConvertFloat4ToU32(theme.modulation.timbre);
+        const ImU32 triggerColor = ImGui::ColorConvertFloat4ToU32(theme.accent);
+        const ImU32 centerLineColor = IM_COL32(150, 150, 150, 100);
+        const ImU32 thresholdLineColor = IM_COL32(255, 255, 255, 120);
+
+        // Draw output waveforms
+        const float midY = p0.y + graphSize.y * 0.5f;
+        const float scaleY = graphSize.y * 0.45f;
+        const float stepX = graphSize.x / (float)(VizData::waveformPoints - 1);
+
+        // Draw center line (zero reference for normalized view)
+        drawList->AddLine(ImVec2(p0.x, midY), ImVec2(p1.x, midY), centerLineColor, 1.0f);
+
+        // Draw trigger threshold line (for CV output)
+        const float trigThresholdNorm = (currentTrigThreshold - currentCvMin) * cvScale;
+        const float trigY = midY - (trigThresholdNorm - 0.5f) * scaleY * 2.0f;
+        const float clampedTrigY = juce::jlimit(p0.y + 2.0f, p1.y - 2.0f, trigY);
+        drawList->AddLine(ImVec2(p0.x, clampedTrigY), ImVec2(p1.x, clampedTrigY), thresholdLineColor, 1.0f);
+        drawList->AddText(ImVec2(p0.x + 4.0f, clampedTrigY - 14.0f), thresholdLineColor, "Trig Thr");
+
+        // Draw CV waveform (background, shows normalized 0-1 range)
+        float prevX = p0.x;
+        float prevY = midY;
+        for (int i = 0; i < VizData::waveformPoints; ++i)
+        {
+            const float cvNormalized = (cvWaveform[i] - currentCvMin) * cvScale;
+            const float sample = juce::jlimit(0.0f, 1.0f, cvNormalized);
+            const float x = p0.x + i * stepX;
+            const float y = midY - (sample - 0.5f) * scaleY * 2.0f;
+            if (i > 0)
+            {
+                ImVec4 colorVec4 = ImGui::ColorConvertU32ToFloat4(cvColor);
+                colorVec4.w = 0.4f; // More transparent for background
+                drawList->AddLine(ImVec2(prevX, prevY), ImVec2(x, y), ImGui::ColorConvertFloat4ToU32(colorVec4), 1.8f);
+            }
+            prevX = x;
+            prevY = y;
+        }
+
+        // Draw Raw waveform (foreground, shows actual value range with slew smoothing visible)
+        prevX = p0.x;
+        prevY = midY;
+        for (int i = 0; i < VizData::waveformPoints; ++i)
+        {
+            const float rawNormalized = (rawWaveform[i] - currentMin) * rawScale;
+            const float sample = juce::jlimit(0.0f, 1.0f, rawNormalized);
+            const float x = p0.x + i * stepX;
+            const float y = midY - (sample - 0.5f) * scaleY * 2.0f;
+            if (i > 0)
+                drawList->AddLine(ImVec2(prevX, prevY), ImVec2(x, y), rawColor, 2.5f);
+            prevX = x;
+            prevY = y;
+        }
+
+        // Draw trigger markers (vertical lines where triggers occur)
+        for (int i = 0; i < VizData::waveformPoints; ++i)
+        {
+            if (triggerMarkers[i] > 0.5f)
+            {
+                const float x = p0.x + i * stepX;
+                drawList->AddLine(ImVec2(x, p0.y + 2.0f), ImVec2(x, p0.y + 8.0f), triggerColor, 2.0f);
+            }
+        }
+
+        drawList->PopClipRect();
+        
+        // Live parameter values overlay
+        ImGui::SetCursorPos(ImVec2(4, 4));
+        ImGui::TextColored(ImVec4(1.0f, 1.0f, 1.0f, 0.9f), "Rate: %.2f Hz | Slew: %.3f | Range: [%.2f, %.2f]", currentRate, currentSlew, currentMin, currentMax);
+        
+        // Invisible drag blocker
+        ImGui::SetCursorPos(ImVec2(0, 0));
+        ImGui::InvisibleButton("##randomVizDrag", graphSize);
+    }
+    ImGui::EndChild();
+
+    ImGui::PopID(); // End unique ID
+    
     ImGui::Spacing();
     ImGui::Spacing();
     

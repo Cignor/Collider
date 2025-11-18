@@ -1,4 +1,7 @@
 #include "MapRangeModuleProcessor.h"
+#if defined(PRESET_CREATOR_UI)
+#include "../../preset_creator/theme/ThemeManager.h"
+#endif
 
 MapRangeModuleProcessor::MapRangeModuleProcessor()
     : ModuleProcessor(BusesProperties()
@@ -43,7 +46,13 @@ juce::AudioProcessorValueTreeState::ParameterLayout MapRangeModuleProcessor::cre
 
 void MapRangeModuleProcessor::prepareToPlay(double sampleRate, int samplesPerBlock)
 {
-    juce::ignoreUnused(sampleRate, samplesPerBlock);
+    juce::ignoreUnused(sampleRate);
+#if defined(PRESET_CREATOR_UI)
+    vizInputBuffer.setSize(1, samplesPerBlock);
+    vizOutputBuffer.setSize(3, samplesPerBlock);
+    vizInputBuffer.clear();
+    vizOutputBuffer.clear();
+#endif
 }
 
 void MapRangeModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midi)
@@ -72,6 +81,14 @@ void MapRangeModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, juc
     float* normDst = out.getWritePointer(0);
     float* rawDst = out.getNumChannels() > 1 ? out.getWritePointer(1) : nullptr;
     float* cvDst = out.getNumChannels() > 2 ? out.getWritePointer(2) : nullptr;
+
+#if defined(PRESET_CREATOR_UI)
+    // Capture input for visualization
+    if (in.getNumChannels() > 0)
+    {
+        vizInputBuffer.copyFrom(0, 0, in, 0, 0, buffer.getNumSamples());
+    }
+#endif
 
     if (std::abs(inRange) < 0.0001f)
     {
@@ -132,6 +149,53 @@ void MapRangeModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, juc
     setLiveParamValue("outMax_live", outMax);
     setLiveParamValue("cvMin_live", cvMin);
     setLiveParamValue("cvMax_live", cvMax);
+
+#if defined(PRESET_CREATOR_UI)
+    // Capture output waveforms for visualization
+    if (out.getNumChannels() >= 3)
+    {
+        vizOutputBuffer.copyFrom(0, 0, out, 0, 0, buffer.getNumSamples()); // Norm Out
+        vizOutputBuffer.copyFrom(1, 0, out, 1, 0, buffer.getNumSamples()); // Raw Out
+        vizOutputBuffer.copyFrom(2, 0, out, 2, 0, buffer.getNumSamples()); // CV Out
+    }
+
+    // Down-sample and store waveforms
+    auto captureWaveform = [&](const juce::AudioBuffer<float>& source, int channel, std::array<std::atomic<float>, VizData::waveformPoints>& dest, bool normalizeRaw = false)
+    {
+        const int samples = juce::jmin(source.getNumSamples(), buffer.getNumSamples());
+        if (samples <= 0 || channel >= source.getNumChannels()) return;
+        const int stride = juce::jmax(1, samples / VizData::waveformPoints);
+        for (int i = 0; i < VizData::waveformPoints; ++i)
+        {
+            const int idx = juce::jmin(samples - 1, i * stride);
+            float value = source.getSample(channel, idx);
+            if (normalizeRaw && std::abs(outRange) > 1e-6f)
+            {
+                // Normalize raw output to [-1, 1] range for visualization
+                value = (value - outMin) / outRange * 2.0f - 1.0f;
+            }
+            dest[i].store(juce::jlimit(-1.0f, 1.0f, value));
+        }
+    };
+
+    captureWaveform(vizInputBuffer, 0, vizData.inputWaveform);
+    if (out.getNumChannels() >= 3)
+    {
+        captureWaveform(vizOutputBuffer, 0, vizData.normWaveform);
+        captureWaveform(vizOutputBuffer, 1, vizData.rawWaveform, true); // Normalize raw output
+        captureWaveform(vizOutputBuffer, 2, vizData.cvWaveform);
+    }
+
+    // Store current parameter values for visualization
+    vizData.currentInMin.store(inMin);
+    vizData.currentInMax.store(inMax);
+    vizData.currentNormMin.store(normMin);
+    vizData.currentNormMax.store(normMax);
+    vizData.currentOutMin.store(outMin);
+    vizData.currentOutMax.store(outMax);
+    vizData.currentCvMin.store(cvMin);
+    vizData.currentCvMax.store(cvMax);
+#endif
     }
 
     // Update the hover-value display for all three output pins
@@ -146,71 +210,158 @@ void MapRangeModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, juc
 #if defined(PRESET_CREATOR_UI)
 void MapRangeModuleProcessor::drawParametersInNode(float itemWidth, const std::function<bool(const juce::String& paramId)>& isParamModulated, const std::function<void()>& onModificationEnded)
 {
+    const auto& theme = ThemeManager::getInstance().getCurrentTheme();
     auto& ap = getAPVTS();
-    float inMin = inMinParam->load();
-    float inMax = inMaxParam->load();
-    float normMin = normMinParam->load();
-    float normMax = normMaxParam->load();
-    float outMin = outMinParam->load();
-    float outMax = outMaxParam->load();
-    float cvMin = cvMinParam->load();
-    float cvMax = cvMaxParam->load();
+    ImGui::PushID(this);
+
+    // Visualization section
+    ImGui::Spacing();
+    ImGui::Text("Range Mapping Visualizer");
+    ImGui::Spacing();
+
+    auto* drawList = ImGui::GetWindowDrawList();
+    const ImU32 bgColor = ThemeManager::getInstance().getCanvasBackground();
+    const ImU32 inputColor = ImGui::ColorConvertFloat4ToU32(theme.modulation.frequency);
+    const ImU32 normColor = ImGui::ColorConvertFloat4ToU32(theme.modulation.timbre);
+    const ImU32 rawColor = ImGui::ColorConvertFloat4ToU32(theme.accent);
+    const ImU32 cvColor = ImGui::ColorConvertFloat4ToU32(theme.modulation.amplitude);
+
+    // Waveform visualization area
+    const float waveHeight = 140.0f;
+    const ImVec2 origin = ImGui::GetCursorScreenPos();
+    const ImVec2 rectMax = ImVec2(origin.x + itemWidth, origin.y + waveHeight);
+    drawList->AddRectFilled(origin, rectMax, bgColor, 4.0f);
+    ImGui::PushClipRect(origin, rectMax, true);
+
+    // Load waveform data from atomics
+    float inputWave[VizData::waveformPoints];
+    float normWave[VizData::waveformPoints];
+    float rawWave[VizData::waveformPoints];
+    float cvWave[VizData::waveformPoints];
+    for (int i = 0; i < VizData::waveformPoints; ++i)
+    {
+        inputWave[i] = vizData.inputWaveform[i].load();
+        normWave[i] = vizData.normWaveform[i].load();
+        rawWave[i] = vizData.rawWaveform[i].load();
+        cvWave[i] = vizData.cvWaveform[i].load();
+    }
+
+    const float midY = origin.y + waveHeight * 0.5f;
+    const float scaleY = waveHeight * 0.35f;
+    const float stepX = itemWidth / (float)(VizData::waveformPoints - 1);
+
+    auto drawWave = [&](float* data, ImU32 color, float thickness)
+    {
+        float px = origin.x;
+        float py = midY;
+        for (int i = 0; i < VizData::waveformPoints; ++i)
+        {
+            const float x = origin.x + i * stepX;
+            const float y = midY - juce::jlimit(-1.0f, 1.0f, data[i]) * scaleY;
+            const float clampedY = juce::jlimit(origin.y, rectMax.y, y);
+            if (i > 0)
+                drawList->AddLine(ImVec2(px, py), ImVec2(x, clampedY), color, thickness);
+            px = x;
+            py = clampedY;
+        }
+    };
+
+    // Draw waveforms (input first, then outputs)
+    drawWave(inputWave, inputColor, 1.5f);
+    drawWave(normWave, normColor, 1.8f);
+    drawWave(rawWave, rawColor, 1.6f);
+    drawWave(cvWave, cvColor, 1.4f);
+
+    // Draw center line
+    drawList->AddLine(ImVec2(origin.x, midY), ImVec2(rectMax.x, midY), ImGui::ColorConvertFloat4ToU32(ImVec4(0.5f, 0.5f, 0.5f, 0.3f)), 1.0f);
+
+    ImGui::PopClipRect();
+    ImGui::SetCursorScreenPos(ImVec2(origin.x, rectMax.y));
+    ImGui::Dummy(ImVec2(itemWidth, 0));
+
+    // Display current parameter values - positioned below waveform
+    const float inMin = vizData.currentInMin.load();
+    const float inMax = vizData.currentInMax.load();
+    const float normMin = vizData.currentNormMin.load();
+    const float normMax = vizData.currentNormMax.load();
+    const float outMin = vizData.currentOutMin.load();
+    const float outMax = vizData.currentOutMax.load();
+    const float cvMin = vizData.currentCvMin.load();
+    const float cvMax = vizData.currentCvMax.load();
+
+    ImGui::Text("Input: [%.2f, %.2f] -> Norm: [%.4f, %.4f]", inMin, inMax, normMin, normMax);
+    ImGui::Text("Raw: [%.2f, %.2f]  |  CV: [%.2f, %.2f]", outMin, outMax, cvMin, cvMax);
+
+    ImGui::Spacing();
+    ThemeText("Range Mapping Parameters", theme.text.section_header);
+    ImGui::Spacing();
 
     ImGui::PushItemWidth(itemWidth);
+    float inMinEdit = inMinParam->load();
+    float inMaxEdit = inMaxParam->load();
+    float normMinEdit = normMinParam->load();
+    float normMaxEdit = normMaxParam->load();
+    float outMinEdit = outMinParam->load();
+    float outMaxEdit = outMaxParam->load();
+    float cvMinEdit = cvMinParam->load();
+    float cvMaxEdit = cvMaxParam->load();
     
     // Input Range Sliders
-    if (ImGui::SliderFloat("Input Min", &inMin, -100.0f, 100.0f))
-        if (auto* p = dynamic_cast<juce::AudioParameterFloat*>(ap.getParameter("inMin"))) *p = inMin;
+    if (ImGui::SliderFloat("Input Min", &inMinEdit, -100.0f, 100.0f))
+        if (auto* p = dynamic_cast<juce::AudioParameterFloat*>(ap.getParameter("inMin"))) *p = inMinEdit;
     if (ImGui::IsItemDeactivatedAfterEdit()) onModificationEnded();
-    adjustParamOnWheel(ap.getParameter("inMin"), "inMin", inMin);
+    adjustParamOnWheel(ap.getParameter("inMin"), "inMin", inMinEdit);
     
-    if (ImGui::SliderFloat("Input Max", &inMax, -100.0f, 100.0f))
-        if (auto* p = dynamic_cast<juce::AudioParameterFloat*>(ap.getParameter("inMax"))) *p = inMax;
+    if (ImGui::SliderFloat("Input Max", &inMaxEdit, -100.0f, 100.0f))
+        if (auto* p = dynamic_cast<juce::AudioParameterFloat*>(ap.getParameter("inMax"))) *p = inMaxEdit;
     if (ImGui::IsItemDeactivatedAfterEdit()) onModificationEnded();
-    adjustParamOnWheel(ap.getParameter("inMax"), "inMax", inMax);
+    adjustParamOnWheel(ap.getParameter("inMax"), "inMax", inMaxEdit);
     
 
     // Norm Out precise bipolar range [-1, 1]
-    if (ImGui::SliderFloat("Norm Min", &normMin, -1.0f, 1.0f, "%.4f"))
-        if (auto* p = dynamic_cast<juce::AudioParameterFloat*>(ap.getParameter("normMin"))) *p = normMin;
+    if (ImGui::SliderFloat("Norm Min", &normMinEdit, -1.0f, 1.0f, "%.4f"))
+        if (auto* p = dynamic_cast<juce::AudioParameterFloat*>(ap.getParameter("normMin"))) *p = normMinEdit;
     if (ImGui::IsItemDeactivatedAfterEdit()) onModificationEnded();
-    adjustParamOnWheel(ap.getParameter("normMin"), "normMin", normMin);
+    adjustParamOnWheel(ap.getParameter("normMin"), "normMin", normMinEdit);
 
-    if (ImGui::SliderFloat("Norm Max", &normMax, -1.0f, 1.0f, "%.4f"))
-        if (auto* p = dynamic_cast<juce::AudioParameterFloat*>(ap.getParameter("normMax"))) *p = normMax;
+    if (ImGui::SliderFloat("Norm Max", &normMaxEdit, -1.0f, 1.0f, "%.4f"))
+        if (auto* p = dynamic_cast<juce::AudioParameterFloat*>(ap.getParameter("normMax"))) *p = normMaxEdit;
     if (ImGui::IsItemDeactivatedAfterEdit()) onModificationEnded();
-    adjustParamOnWheel(ap.getParameter("normMax"), "normMax", normMax);
+    adjustParamOnWheel(ap.getParameter("normMax"), "normMax", normMaxEdit);
 
     // CV Output Range Sliders (0.0-1.0 range)
-    if (ImGui::SliderFloat("CV Min", &cvMin, 0.0f, 1.0f))
-        if (auto* p = dynamic_cast<juce::AudioParameterFloat*>(ap.getParameter("cvMin"))) *p = cvMin;
+    if (ImGui::SliderFloat("CV Min", &cvMinEdit, 0.0f, 1.0f))
+        if (auto* p = dynamic_cast<juce::AudioParameterFloat*>(ap.getParameter("cvMin"))) *p = cvMinEdit;
     if (ImGui::IsItemDeactivatedAfterEdit()) onModificationEnded();
-    adjustParamOnWheel(ap.getParameter("cvMin"), "cvMin", cvMin);
+    adjustParamOnWheel(ap.getParameter("cvMin"), "cvMin", cvMinEdit);
     
-    if (ImGui::SliderFloat("CV Max", &cvMax, 0.0f, 1.0f))
-        if (auto* p = dynamic_cast<juce::AudioParameterFloat*>(ap.getParameter("cvMax"))) *p = cvMax;
+    if (ImGui::SliderFloat("CV Max", &cvMaxEdit, 0.0f, 1.0f))
+        if (auto* p = dynamic_cast<juce::AudioParameterFloat*>(ap.getParameter("cvMax"))) *p = cvMaxEdit;
     if (ImGui::IsItemDeactivatedAfterEdit()) onModificationEnded();
-    adjustParamOnWheel(ap.getParameter("cvMax"), "cvMax", cvMax);
+    adjustParamOnWheel(ap.getParameter("cvMax"), "cvMax", cvMaxEdit);
 
 
     // Raw Output Range Sliders (wide range)
-    if (ImGui::SliderFloat("Output Min", &outMin, -10000.0f, 10000.0f, "%.1f", ImGuiSliderFlags_Logarithmic))
-        if (auto* p = dynamic_cast<juce::AudioParameterFloat*>(ap.getParameter("outMin"))) *p = outMin;
+    if (ImGui::SliderFloat("Output Min", &outMinEdit, -10000.0f, 10000.0f, "%.1f", ImGuiSliderFlags_Logarithmic))
+        if (auto* p = dynamic_cast<juce::AudioParameterFloat*>(ap.getParameter("outMin"))) *p = outMinEdit;
     if (ImGui::IsItemDeactivatedAfterEdit()) onModificationEnded();
-    adjustParamOnWheel(ap.getParameter("outMin"), "outMin", outMin);
+    adjustParamOnWheel(ap.getParameter("outMin"), "outMin", outMinEdit);
     
-    if (ImGui::SliderFloat("Output Max", &outMax, -10000.0f, 10000.0f, "%.1f", ImGuiSliderFlags_Logarithmic))
-        if (auto* p = dynamic_cast<juce::AudioParameterFloat*>(ap.getParameter("outMax"))) *p = outMax;
+    if (ImGui::SliderFloat("Output Max", &outMaxEdit, -10000.0f, 10000.0f, "%.1f", ImGuiSliderFlags_Logarithmic))
+        if (auto* p = dynamic_cast<juce::AudioParameterFloat*>(ap.getParameter("outMax"))) *p = outMaxEdit;
     if (ImGui::IsItemDeactivatedAfterEdit()) onModificationEnded();
-    adjustParamOnWheel(ap.getParameter("outMax"), "outMax", outMax);
+    adjustParamOnWheel(ap.getParameter("outMax"), "outMax", outMaxEdit);
 
 
     // Output value displays
+    ImGui::Spacing();
+    ImGui::Text("Live Values:");
     ImGui::Text("Input:     %.2f", getLastInputValue());
     ImGui::Text("Raw Out:   %.2f", getLastOutputValue());
     ImGui::Text("CV Out:    %.2f", getLastCvOutputValue());
 
     ImGui::PopItemWidth();
+    ImGui::PopID();
 }
 
 void MapRangeModuleProcessor::drawIoPins(const NodePinHelpers& helpers)

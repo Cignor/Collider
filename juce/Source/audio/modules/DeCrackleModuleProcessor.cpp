@@ -285,13 +285,14 @@ void DeCrackleModuleProcessor::drawParametersInNode(float itemWidth, const std::
     {
         auto* drawList = ImGui::GetWindowDrawList();
         const ImVec2 p0 = ImGui::GetWindowPos();
-        const ImVec2 p1 { p0.x + itemWidth, p0.y + 160.0f };
+        const ImVec2 childSize = ImGui::GetWindowSize();
+        const ImVec2 p1 { p0.x + childSize.x, p0.y + childSize.y };
         drawList->AddRectFilled(p0, p1, bgColor, 4.0f);
         drawList->PushClipRect(p0, p1, true);
 
         auto xToScreen = [&](int index)
         {
-            return p0.x + juce::jmap((float)index, 0.0f, (float)(VizData::waveformPoints - 1), 8.0f, itemWidth - 8.0f);
+            return p0.x + juce::jmap((float)index, 0.0f, (float)(VizData::waveformPoints - 1), 8.0f, childSize.x - 8.0f);
         };
         auto yToScreen = [&](float sample)
         {
@@ -331,7 +332,6 @@ void DeCrackleModuleProcessor::drawParametersInNode(float itemWidth, const std::
         drawList->AddText(ImVec2(p0.x + 10.0f, p0.y + 8.0f), IM_COL32(220, 220, 230, 255),
                           (juce::String("Dry vs Processed  |  Crackle Rate ") + juce::String(crackleRate, 1) + " /s").toRawUTF8());
 
-        const ImVec2 childSize = ImGui::GetWindowSize();
         ImGui::SetCursorPos(ImVec2(0.0f, 0.0f));
         ImGui::InvisibleButton("WaveformDragBlocker", childSize, ImGuiButtonFlags_MouseButtonLeft | ImGuiButtonFlags_MouseButtonRight);
         ImGui::SetCursorPos(ImVec2(0.0f, 0.0f));
@@ -344,7 +344,8 @@ void DeCrackleModuleProcessor::drawParametersInNode(float itemWidth, const std::
     {
         auto* drawList = ImGui::GetWindowDrawList();
         const ImVec2 p0 = ImGui::GetWindowPos();
-        const ImVec2 p1 { p0.x + itemWidth, p0.y + 70.0f };
+        const ImVec2 childSize = ImGui::GetWindowSize();
+        const ImVec2 p1 { p0.x + childSize.x, p0.y + childSize.y };
         drawList->AddRectFilled(p0, p1, historyBg, 3.0f);
         drawList->PushClipRect(p0, p1, true);
 
@@ -370,7 +371,6 @@ void DeCrackleModuleProcessor::drawParametersInNode(float itemWidth, const std::
         drawList->PopClipRect();
         drawList->AddText(ImVec2(p0.x + 8.0f, p0.y + 4.0f), IM_COL32(210, 210, 220, 255), "Crackle Activity");
 
-        const ImVec2 childSize = ImGui::GetWindowSize();
         ImGui::SetCursorPos(ImVec2(0.0f, 0.0f));
         ImGui::InvisibleButton("HistoryDragBlocker", childSize, ImGuiButtonFlags_MouseButtonLeft | ImGuiButtonFlags_MouseButtonRight);
         ImGui::SetCursorPos(ImVec2(0.0f, 0.0f));
@@ -383,9 +383,10 @@ void DeCrackleModuleProcessor::drawParametersInNode(float itemWidth, const std::
     {
         auto* drawList = ImGui::GetWindowDrawList();
         const ImVec2 p0 = ImGui::GetWindowPos();
-        const ImVec2 p1 { p0.x + itemWidth, p0.y + 60.0f };
+        const ImVec2 childSize = ImGui::GetWindowSize();
+        const ImVec2 p1 { p0.x + childSize.x, p0.y + childSize.y };
         drawList->AddRectFilled(p0, p1, bgColor, 3.0f);
-        const float barWidth = itemWidth - 20.0f;
+        const float barWidth = juce::jmax(20.0f, childSize.x - 20.0f);
         const float ratio = juce::jlimit(0.0f, 1.0f, smoothingRatio);
         drawList->AddRectFilled(ImVec2(p0.x + 10.0f, p0.y + 30.0f),
                                 ImVec2(p0.x + 10.0f + barWidth * ratio, p0.y + 46.0f),
@@ -398,7 +399,6 @@ void DeCrackleModuleProcessor::drawParametersInNode(float itemWidth, const std::
         drawList->AddText(ImVec2(p0.x + 12.0f, p0.y + 36.0f), IM_COL32(190, 190, 200, 255),
                           (juce::String("Live smoothing: ") + juce::String(smoothingMs, 2) + " ms    Mix: " + juce::String(amountLive * 100.0f, 0) + "%").toRawUTF8());
 
-        const ImVec2 childSize = ImGui::GetWindowSize();
         ImGui::SetCursorPos(ImVec2(0.0f, 0.0f));
         ImGui::InvisibleButton("StatsDragBlocker", childSize, ImGuiButtonFlags_MouseButtonLeft | ImGuiButtonFlags_MouseButtonRight);
         ImGui::SetCursorPos(ImVec2(0.0f, 0.0f));

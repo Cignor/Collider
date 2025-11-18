@@ -567,6 +567,7 @@ void AnimationModuleProcessor::drawParametersInNode(float itemWidth,
                                                      const std::function<bool(const juce::String& paramId)>& isParamModulated,
                                                      const std::function<void()>& onModificationEnded)
 {
+    ImGui::PushID(this);
     ImGui::PushItemWidth(itemWidth);
     const auto& theme = ThemeManager::getInstance().getCurrentTheme();
     
@@ -760,7 +761,6 @@ void AnimationModuleProcessor::drawParametersInNode(float itemWidth,
         if (ImGui::Button("Rot Y")) { m_viewRotationY += glm::radians(90.0f); }
         ImGui::SameLine();
         if (ImGui::Button("Rot Z")) { m_viewRotationZ += glm::radians(90.0f); }
-        ImGui::PopItemWidth();
 
         // Reset view button - resets rotation and frames the animation
         if (ImGui::Button("Reset View", ImVec2(itemWidth, 0)))
@@ -1024,6 +1024,7 @@ void AnimationModuleProcessor::drawParametersInNode(float itemWidth,
     }
     
     ImGui::PopItemWidth();
+    ImGui::PopID();
 }
 #endif
 

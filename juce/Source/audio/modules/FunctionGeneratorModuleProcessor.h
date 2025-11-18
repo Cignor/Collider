@@ -56,23 +56,30 @@ public:
     // --- REFACTORED drawIoPins ---
     void drawIoPins(const NodePinHelpers& helpers) override
     {
-        // Group global inputs with primary outputs
+        // Primary signal inputs/outputs
         helpers.drawParallelPins("Gate In", 0, "Value", 0);
         helpers.drawParallelPins("Trigger In", 1, "Inverted", 1);
         helpers.drawParallelPins("Sync In", 2, "Bipolar", 2);
+        
+        ImGui::Spacing(); // Small gap between signal and modulation groups
+        
+        // Modulation inputs with corresponding outputs
         helpers.drawParallelPins("Rate Mod", 3, "Pitch", 3);
         helpers.drawParallelPins("Slew Mod", 4, "Gate", 4);
         helpers.drawParallelPins("Gate Thresh Mod", 5, "Trigger", 5);
         helpers.drawParallelPins("Trig Thresh Mod", 6, "End of Cycle", 6);
         
-        // Remaining global inputs
+        ImGui::Spacing(); // Small gap before remaining modulation inputs
+        
+        // Remaining modulation inputs
         helpers.drawAudioInputPin("Pitch Base Mod", 7);
         helpers.drawAudioInputPin("Value Mult Mod", 8);
         helpers.drawAudioInputPin("Curve Select Mod", 9);
 
-        ImGui::Spacing(); // Add a visual separator
+        ImGui::Spacing(); // Visual separator before curve outputs
+        ImGui::Spacing();
 
-        // Dedicated curve outputs
+        // Dedicated curve outputs (grouped by color for clarity)
         helpers.drawAudioOutputPin("Blue Value", 7);
         helpers.drawAudioOutputPin("Blue Pitch", 8);
         helpers.drawAudioOutputPin("Red Value", 9);

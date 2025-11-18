@@ -2,6 +2,7 @@
 
 #if defined(PRESET_CREATOR_UI)
 #include "../../preset_creator/theme/ThemeManager.h"
+#include <imgui.h>
 #endif
 
 // Corrected constructor with two separate stereo inputs
@@ -37,6 +38,26 @@ juce::AudioProcessorValueTreeState::ParameterLayout MixerModuleProcessor::create
 void MixerModuleProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
 {
     juce::ignoreUnused (sampleRate, samplesPerBlock);
+
+#if defined(PRESET_CREATOR_UI)
+    vizInputABuffer.setSize(2, vizBufferSize, false, true, true);
+    vizInputBBuffer.setSize(2, vizBufferSize, false, true, true);
+    vizOutputBuffer.setSize(2, vizBufferSize, false, true, true);
+    vizWritePos = 0;
+    for (auto& v : vizData.inputAWaveformL) v.store(0.0f);
+    for (auto& v : vizData.inputAWaveformR) v.store(0.0f);
+    for (auto& v : vizData.inputBWaveformL) v.store(0.0f);
+    for (auto& v : vizData.inputBWaveformR) v.store(0.0f);
+    for (auto& v : vizData.outputWaveformL) v.store(0.0f);
+    for (auto& v : vizData.outputWaveformR) v.store(0.0f);
+    vizData.currentCrossfade.store(0.0f);
+    vizData.currentGainDb.store(0.0f);
+    vizData.currentPan.store(0.0f);
+    vizData.inputALevelDb.store(-60.0f);
+    vizData.inputBLevelDb.store(-60.0f);
+    vizData.outputLevelDbL.store(-60.0f);
+    vizData.outputLevelDbR.store(-60.0f);
+#endif
 }
 
 // Completely rewritten processBlock for crossfading
@@ -50,6 +71,42 @@ void MixerModuleProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce:
 
     const int numSamples = buffer.getNumSamples();
     const int numChannels = out.getNumChannels();
+
+#if defined(PRESET_CREATOR_UI)
+    // Capture input audio for visualization (before processing)
+    if (vizInputABuffer.getNumSamples() > 0 && inA.getNumChannels() >= 2)
+    {
+        const int samplesToCopy = juce::jmin(numSamples, vizBufferSize);
+        for (int ch = 0; ch < 2; ++ch)
+        {
+            if (inA.getNumChannels() > ch)
+            {
+                const float* inputData = inA.getReadPointer(ch);
+                for (int i = 0; i < samplesToCopy; ++i)
+                {
+                    const int writeIdx = (vizWritePos + i) % vizBufferSize;
+                    vizInputABuffer.setSample(ch, writeIdx, inputData[i]);
+                }
+            }
+        }
+    }
+    if (vizInputBBuffer.getNumSamples() > 0 && inB.getNumChannels() >= 2)
+    {
+        const int samplesToCopy = juce::jmin(numSamples, vizBufferSize);
+        for (int ch = 0; ch < 2; ++ch)
+        {
+            if (inB.getNumChannels() > ch)
+            {
+                const float* inputData = inB.getReadPointer(ch);
+                for (int i = 0; i < samplesToCopy; ++i)
+                {
+                    const int writeIdx = (vizWritePos + i) % vizBufferSize;
+                    vizInputBBuffer.setSample(ch, writeIdx, inputData[i]);
+                }
+            }
+        }
+    }
+#endif
 
     // Read CV from input buses (if connected)
     float gainModCV = 0.0f;
@@ -154,6 +211,68 @@ void MixerModuleProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce:
         if (lastOutputValues[0]) lastOutputValues[0]->store(out.getSample(0, numSamples - 1));
         if (lastOutputValues[1]) lastOutputValues[1]->store(out.getSample(1, numSamples - 1));
     }
+
+#if defined(PRESET_CREATOR_UI)
+    // Capture output audio for visualization (after processing)
+    if (vizOutputBuffer.getNumSamples() > 0 && out.getNumChannels() >= 2)
+    {
+        const int samplesToCopy = juce::jmin(numSamples, vizBufferSize);
+        for (int ch = 0; ch < 2; ++ch)
+        {
+            if (out.getNumChannels() > ch)
+            {
+                const float* outputData = out.getReadPointer(ch);
+                for (int i = 0; i < samplesToCopy; ++i)
+                {
+                    const int writeIdx = (vizWritePos + i) % vizBufferSize;
+                    vizOutputBuffer.setSample(ch, writeIdx, outputData[i]);
+                }
+            }
+        }
+        vizWritePos = (vizWritePos + samplesToCopy) % vizBufferSize;
+    }
+
+    // Update visualization data (thread-safe)
+    // Downsample waveforms from circular buffers
+    const int stride = vizBufferSize / VizData::waveformPoints;
+    for (int i = 0; i < VizData::waveformPoints; ++i)
+    {
+        const int readIdx = (vizWritePos - VizData::waveformPoints * stride + i * stride + vizBufferSize) % vizBufferSize;
+        if (vizInputABuffer.getNumChannels() > 0 && vizInputBBuffer.getNumChannels() > 0 && vizOutputBuffer.getNumChannels() > 0)
+        {
+            vizData.inputAWaveformL[i].store(vizInputABuffer.getSample(0, readIdx));
+            vizData.inputAWaveformR[i].store(vizInputABuffer.getNumChannels() > 1 ? vizInputABuffer.getSample(1, readIdx) : vizInputABuffer.getSample(0, readIdx));
+            vizData.inputBWaveformL[i].store(vizInputBBuffer.getSample(0, readIdx));
+            vizData.inputBWaveformR[i].store(vizInputBBuffer.getNumChannels() > 1 ? vizInputBBuffer.getSample(1, readIdx) : vizInputBBuffer.getSample(0, readIdx));
+            vizData.outputWaveformL[i].store(vizOutputBuffer.getSample(0, readIdx));
+            vizData.outputWaveformR[i].store(vizOutputBuffer.getNumChannels() > 1 ? vizOutputBuffer.getSample(1, readIdx) : vizOutputBuffer.getSample(0, readIdx));
+        }
+    }
+
+    // Calculate input/output levels (RMS)
+    float inputARms = 0.0f;
+    float inputBRms = 0.0f;
+    float outputRmsL = 0.0f;
+    float outputRmsR = 0.0f;
+    if (numSamples > 0)
+    {
+        if (inA.getNumChannels() > 0)
+            inputARms = inA.getRMSLevel(0, 0, numSamples);
+        if (inB.getNumChannels() > 0)
+            inputBRms = inB.getRMSLevel(0, 0, numSamples);
+        if (out.getNumChannels() > 0)
+            outputRmsL = out.getRMSLevel(0, 0, numSamples);
+        if (out.getNumChannels() > 1)
+            outputRmsR = out.getRMSLevel(1, 0, numSamples);
+    }
+    vizData.inputALevelDb.store(juce::Decibels::gainToDecibels(inputARms, -60.0f));
+    vizData.inputBLevelDb.store(juce::Decibels::gainToDecibels(inputBRms, -60.0f));
+    vizData.outputLevelDbL.store(juce::Decibels::gainToDecibels(outputRmsL, -60.0f));
+    vizData.outputLevelDbR.store(juce::Decibels::gainToDecibels(outputRmsR, -60.0f));
+    vizData.currentCrossfade.store(crossfade);
+    vizData.currentGainDb.store(isParamInputConnected("gain") ? (-60.0f + gainModCV * 66.0f) : (gainParam != nullptr ? gainParam->load() : 0.0f));
+    vizData.currentPan.store(pan);
+#endif
 }
 
 // Updated UI drawing code
@@ -162,6 +281,8 @@ void MixerModuleProcessor::drawParametersInNode (float itemWidth, const std::fun
 {
     auto& ap = getAPVTS();
     const auto& theme = ThemeManager::getInstance().getCurrentTheme();
+    
+    ImGui::PushID(this); // Unique ID for this node's UI - must be at start
     
     // Helper for tooltips
     auto HelpMarkerMixer = [](const char* desc) {
@@ -207,6 +328,153 @@ void MixerModuleProcessor::drawParametersInNode (float itemWidth, const std::fun
     ImGui::Spacing();
     ImGui::Spacing();
 
+    // === SECTION: Mixer Visualization ===
+    ThemeText("Mixer Activity", theme.text.section_header);
+    ImGui::Spacing();
+
+    // Read visualization data (thread-safe) - BEFORE BeginChild
+    float inputAWaveform[VizData::waveformPoints];
+    float inputBWaveform[VizData::waveformPoints];
+    float outputWaveform[VizData::waveformPoints];
+    for (int i = 0; i < VizData::waveformPoints; ++i)
+    {
+        inputAWaveform[i] = vizData.inputAWaveformL[i].load();
+        inputBWaveform[i] = vizData.inputBWaveformL[i].load();
+        outputWaveform[i] = vizData.outputWaveformL[i].load();
+    }
+    const float currentCrossfade = vizData.currentCrossfade.load();
+    const float currentGainDb = vizData.currentGainDb.load();
+    const float currentPan = vizData.currentPan.load();
+    const float inputALevelDb = vizData.inputALevelDb.load();
+    const float inputBLevelDb = vizData.inputBLevelDb.load();
+    const float outputLevelDbL = vizData.outputLevelDbL.load();
+    const float outputLevelDbR = vizData.outputLevelDbR.load();
+
+    // Waveform visualization in child window
+    const float waveHeight = 140.0f;
+    const ImVec2 graphSize(itemWidth, waveHeight);
+    const ImGuiWindowFlags childFlags = ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse;
+    if (ImGui::BeginChild("MixerViz", graphSize, false, childFlags))
+    {
+        ImDrawList* drawList = ImGui::GetWindowDrawList();
+        const ImVec2 p0 = ImGui::GetWindowPos();
+        const ImVec2 p1 = ImVec2(p0.x + graphSize.x, p0.y + graphSize.y);
+        
+        // Background
+        const ImU32 bgColor = ThemeManager::getInstance().getCanvasBackground();
+        drawList->AddRectFilled(p0, p1, bgColor, 4.0f);
+        
+        // Clip to graph area
+        drawList->PushClipRect(p0, p1, true);
+        
+        const ImU32 inputAColor = ImGui::ColorConvertFloat4ToU32(theme.modulation.frequency);  // Cyan
+        const ImU32 inputBColor = ImGui::ColorConvertFloat4ToU32(theme.modulation.timbre);    // Orange/Yellow
+        const ImU32 outputColor = ImGui::ColorConvertFloat4ToU32(theme.modulation.amplitude);  // Magenta/Pink - distinct from both inputs
+        const ImU32 centerLineColor = IM_COL32(150, 150, 150, 100);
+
+        // Draw output waveforms
+        const float midY = p0.y + graphSize.y * 0.5f;
+        const float scaleY = graphSize.y * 0.45f;
+        const float stepX = graphSize.x / (float)(VizData::waveformPoints - 1);
+
+        // Draw center line (zero reference)
+        drawList->AddLine(ImVec2(p0.x, midY), ImVec2(p1.x, midY), centerLineColor, 1.0f);
+
+        // Draw input A waveform (background, most subtle)
+        float prevX = p0.x;
+        float prevY = midY;
+        for (int i = 0; i < VizData::waveformPoints; ++i)
+        {
+            const float sample = juce::jlimit(-1.0f, 1.0f, inputAWaveform[i]);
+            const float x = p0.x + i * stepX;
+            const float y = midY - sample * scaleY;
+            if (i > 0)
+            {
+                ImVec4 colorVec4 = ImGui::ColorConvertU32ToFloat4(inputAColor);
+                colorVec4.w = 0.3f; // Very transparent for background
+                drawList->AddLine(ImVec2(prevX, prevY), ImVec2(x, y), ImGui::ColorConvertFloat4ToU32(colorVec4), 1.5f);
+            }
+            prevX = x;
+            prevY = y;
+        }
+
+        // Draw input B waveform (middle layer)
+        prevX = p0.x;
+        prevY = midY;
+        for (int i = 0; i < VizData::waveformPoints; ++i)
+        {
+            const float sample = juce::jlimit(-1.0f, 1.0f, inputBWaveform[i]);
+            const float x = p0.x + i * stepX;
+            const float y = midY - sample * scaleY;
+            if (i > 0)
+            {
+                ImVec4 colorVec4 = ImGui::ColorConvertU32ToFloat4(inputBColor);
+                colorVec4.w = 0.35f; // Slightly more visible than A
+                drawList->AddLine(ImVec2(prevX, prevY), ImVec2(x, y), ImGui::ColorConvertFloat4ToU32(colorVec4), 1.8f);
+            }
+            prevX = x;
+            prevY = y;
+        }
+
+        // Draw output waveform (foreground, shows crossfade result)
+        prevX = p0.x;
+        prevY = midY;
+        for (int i = 0; i < VizData::waveformPoints; ++i)
+        {
+            const float sample = juce::jlimit(-1.0f, 1.0f, outputWaveform[i]);
+            const float x = p0.x + i * stepX;
+            const float y = midY - sample * scaleY;
+            if (i > 0)
+                drawList->AddLine(ImVec2(prevX, prevY), ImVec2(x, y), outputColor, 2.8f);
+            prevX = x;
+            prevY = y;
+        }
+
+        drawList->PopClipRect();
+        
+        // Level meters overlay
+        ImGui::SetCursorPos(ImVec2(4, waveHeight + 4));
+        const float inputANorm = juce::jlimit(0.0f, 1.0f, (inputALevelDb + 60.0f) / 60.0f);
+        const float inputBNorm = juce::jlimit(0.0f, 1.0f, (inputBLevelDb + 60.0f) / 60.0f);
+        const float outputLNorm = juce::jlimit(0.0f, 1.0f, (outputLevelDbL + 60.0f) / 60.0f);
+        const float outputRNorm = juce::jlimit(0.0f, 1.0f, (outputLevelDbR + 60.0f) / 60.0f);
+
+        ImGui::Text("In A: %.1f dB", inputALevelDb);
+        ImGui::PushStyleColor(ImGuiCol_PlotHistogram, inputAColor);
+        ImGui::ProgressBar(inputANorm, ImVec2(graphSize.x * 0.4f, 0), "");
+        ImGui::PopStyleColor();
+        ImGui::SameLine(); ImGui::Text("%.0f%%", inputANorm * 100.0f);
+
+        ImGui::Text("In B: %.1f dB", inputBLevelDb);
+        ImGui::PushStyleColor(ImGuiCol_PlotHistogram, inputBColor);
+        ImGui::ProgressBar(inputBNorm, ImVec2(graphSize.x * 0.4f, 0), "");
+        ImGui::PopStyleColor();
+        ImGui::SameLine(); ImGui::Text("%.0f%%", inputBNorm * 100.0f);
+
+        ImGui::Text("Out L: %.1f dB", outputLevelDbL);
+        ImGui::PushStyleColor(ImGuiCol_PlotHistogram, outputColor);
+        ImGui::ProgressBar(outputLNorm, ImVec2(graphSize.x * 0.4f, 0), "");
+        ImGui::PopStyleColor();
+        ImGui::SameLine(); ImGui::Text("%.0f%%", outputLNorm * 100.0f);
+
+        ImGui::Text("Out R: %.1f dB", outputLevelDbR);
+        ImGui::PushStyleColor(ImGuiCol_PlotHistogram, outputColor);
+        ImGui::ProgressBar(outputRNorm, ImVec2(graphSize.x * 0.4f, 0), "");
+        ImGui::PopStyleColor();
+        ImGui::SameLine(); ImGui::Text("%.0f%%", outputRNorm * 100.0f);
+
+        // Parameter readouts
+        ImGui::Text("Crossfade: %.2f  |  Gain: %.1f dB  |  Pan: %.2f", currentCrossfade, currentGainDb, currentPan);
+        
+        // Invisible drag blocker
+        ImGui::SetCursorPos(ImVec2(0, 0));
+        ImGui::InvisibleButton("##mixerVizDrag", graphSize);
+    }
+    ImGui::EndChild();
+    
+    ImGui::Spacing();
+    ImGui::Spacing();
+
     // === MASTER CONTROLS SECTION ===
     ThemeText("Master Controls", theme.text.section_header);
     ImGui::Spacing();
@@ -242,6 +510,7 @@ void MixerModuleProcessor::drawParametersInNode (float itemWidth, const std::fun
     ImGui::Text("Position: %s (%.2f)", panLabel, pan);
 
     ImGui::PopItemWidth();
+    ImGui::PopID(); // End unique ID
 }
 #endif
 

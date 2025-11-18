@@ -421,6 +421,7 @@ void MultiSequencerModuleProcessor::drawParametersInNode (float itemWidth, const
 {
     auto& ap = getAPVTS();
     const auto& theme = ThemeManager::getInstance().getCurrentTheme();
+    ImGui::PushID(this);
     const ImVec4& stepActiveFrame = theme.modules.sequencer_step_active_frame;
     const ImVec4& stepActiveGrab = theme.modules.sequencer_step_active_grab;
     const ImVec4& gateActiveFrame = theme.modules.sequencer_gate_active_frame;
@@ -630,6 +631,8 @@ void MultiSequencerModuleProcessor::drawParametersInNode (float itemWidth, const
     // ADDED: Auto-connect buttons
     if (ImGui::Button("Connect to Samplers", ImVec2(itemWidth, 0))) { autoConnectSamplersTriggered = true; }
     if (ImGui::Button("Connect to PolyVCO", ImVec2(itemWidth, 0))) { autoConnectVCOTriggered = true; }
+    
+    ImGui::PopID(); // Match PushID(this) at function start
 }
 
 void MultiSequencerModuleProcessor::drawIoPins(const NodePinHelpers& helpers)

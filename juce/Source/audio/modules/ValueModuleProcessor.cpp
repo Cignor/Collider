@@ -1,4 +1,7 @@
 #include "ValueModuleProcessor.h"
+#if defined(PRESET_CREATOR_UI)
+#include "../../preset_creator/theme/ThemeManager.h"
+#endif
 
 ValueModuleProcessor::ValueModuleProcessor()
     : ModuleProcessor(BusesProperties()
@@ -67,4 +70,16 @@ void ValueModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::
         if (lastOutputValues[3]) lastOutputValues[3]->store(outInt[buffer.getNumSamples() - 1]);
         if (lastOutputValues[4]) lastOutputValues[4]->store(outCV[buffer.getNumSamples() - 1]); // Update new tooltip
     }
+
+#if defined(PRESET_CREATOR_UI)
+    // Store values for visualization
+    vizData.rawValue.store(rawValue);
+    vizData.normalizedValue.store(normalizedValue);
+    vizData.invertedValue.store(-rawValue);
+    vizData.integerValue.store(std::round(rawValue));
+    vizData.cvValue.store(cvOutputValue);
+    vizData.currentValue.store(rawValue);
+    vizData.currentCvMin.store(cvMin);
+    vizData.currentCvMax.store(cvMax);
+#endif
 }

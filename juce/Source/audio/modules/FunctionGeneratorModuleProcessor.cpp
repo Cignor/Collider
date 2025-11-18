@@ -326,6 +326,7 @@ void FunctionGeneratorModuleProcessor::drawParametersInNode(float itemWidth, con
 {
     auto& ap = getAPVTS();
     const auto& theme = ThemeManager::getInstance().getCurrentTheme();
+    
     ImGui::PushItemWidth(itemWidth);
 
     // === SECTION: Timing ===
@@ -446,68 +447,86 @@ void FunctionGeneratorModuleProcessor::drawParametersInNode(float itemWidth, con
     
     // Canvas Setup
     ImGui::Dummy(ImVec2(0.0f, 5.0f));
-    ImVec2 canvas_p0 = ImGui::GetCursorScreenPos();
-    ImVec2 canvas_sz = ImVec2(itemWidth, 150.0f);
-    ImVec2 canvas_p1 = ImVec2(canvas_p0.x + canvas_sz.x, canvas_p0.y + canvas_sz.y);
-    ImDrawList* draw_list = ImGui::GetWindowDrawList();
-    draw_list->AddRectFilled(canvas_p0, canvas_p1, theme.canvas.canvas_background == 0 ? IM_COL32(30, 30, 30, 255) : theme.canvas.canvas_background);
-    draw_list->AddRect(canvas_p0, canvas_p1, theme.canvas.node_frame == 0 ? IM_COL32(150, 150, 150, 255) : theme.canvas.node_frame);
+    const float canvasHeight = 150.0f;
+    const ImVec2 graphSize(itemWidth, canvasHeight);
+    const ImGuiWindowFlags childFlags = ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse;
     
-    // Mouse interaction for drawing on the canvas
-    ImGui::InvisibleButton("canvas", canvas_sz, ImGuiButtonFlags_MouseButtonLeft);
-    const bool is_hovered = ImGui::IsItemHovered();
-    const bool is_active = ImGui::IsItemActive();
-    if (is_hovered && ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
-        isDragging = true;
-        lastMousePosInCanvas = ImVec2(ImGui::GetIO().MousePos.x - canvas_p0.x, ImGui::GetIO().MousePos.y - canvas_p0.y);
-    }
-    if (ImGui::IsMouseReleased(ImGuiMouseButton_Left)) {
-        if (isDragging) onModificationEnded();
-        isDragging = false;
-        lastMousePosInCanvas = ImVec2(-1, -1);
-    }
-    if (isDragging && is_active) {
-        ImVec2 current_pos = ImVec2(ImGui::GetIO().MousePos.x - canvas_p0.x, ImGui::GetIO().MousePos.y - canvas_p0.y);
-        int idx0 = static_cast<int>((lastMousePosInCanvas.x / canvas_sz.x) * CURVE_RESOLUTION);
-        int idx1 = static_cast<int>((current_pos.x / canvas_sz.x) * CURVE_RESOLUTION);
-        idx0 = juce::jlimit(0, CURVE_RESOLUTION - 1, idx0);
-        idx1 = juce::jlimit(0, CURVE_RESOLUTION - 1, idx1);
-        if (idx0 > idx1) std::swap(idx0, idx1);
-        for (int i = idx0; i <= idx1; ++i) {
-            float t = (idx1 == idx0) ? 1.0f : (float)(i - idx0) / (float)(idx1 - idx0);
-            float y_pos = juce::jmap(t, lastMousePosInCanvas.y, current_pos.y);
-            curves[activeEditorCurve][i] = 1.0f - juce::jlimit(0.0f, 1.0f, y_pos / canvas_sz.y);
+    ImGui::PushID(this); // Unique ID for this node's UI
+    
+    // Read visualization data (thread-safe) - BEFORE BeginChild
+    // Note: phase is a non-atomic member variable - reading it is a data race,
+    // but necessary for visualization. For production, this should be atomic.
+    const double currentPhase = phase;
+    
+    if (ImGui::BeginChild("FunctionGenCanvas", graphSize, false, childFlags))
+    {
+        ImDrawList* draw_list = ImGui::GetWindowDrawList();
+        const ImVec2 canvas_p0 = ImGui::GetWindowPos();
+        const ImVec2 canvas_p1 = ImVec2(canvas_p0.x + graphSize.x, canvas_p0.y + graphSize.y);
+        draw_list->AddRectFilled(canvas_p0, canvas_p1, theme.canvas.canvas_background == 0 ? IM_COL32(30, 30, 30, 255) : theme.canvas.canvas_background);
+        draw_list->AddRect(canvas_p0, canvas_p1, theme.canvas.node_frame == 0 ? IM_COL32(150, 150, 150, 255) : theme.canvas.node_frame);
+        draw_list->PushClipRect(canvas_p0, canvas_p1, true);
+        
+        // Draw curves first
+        const ImU32 colors[] = { IM_COL32(100, 150, 255, 255), IM_COL32(255, 100, 100, 255), IM_COL32(100, 255, 150, 255) };
+        for (int c = 0; c < 3; ++c) {
+            ImU32 color = colors[c];
+            if (c != activeEditorCurve) color = (color & 0x00FFFFFF) | (100 << 24);
+            for (int i = 0; i < CURVE_RESOLUTION - 1; ++i) {
+                ImVec2 p1 = ImVec2(canvas_p0.x + ((float)i / (CURVE_RESOLUTION - 1)) * graphSize.x, canvas_p0.y + (1.0f - curves[c][i]) * graphSize.y);
+                ImVec2 p2 = ImVec2(canvas_p0.x + ((float)(i + 1) / (CURVE_RESOLUTION - 1)) * graphSize.x, canvas_p0.y + (1.0f - curves[c][i+1]) * graphSize.y);
+                draw_list->AddLine(p1, p2, color, 2.0f);
+            }
         }
-        lastMousePosInCanvas = current_pos;
-    }
-    
-    // Draw curves
-    const ImU32 colors[] = { IM_COL32(100, 150, 255, 255), IM_COL32(255, 100, 100, 255), IM_COL32(100, 255, 150, 255) };
-    for (int c = 0; c < 3; ++c) {
-        ImU32 color = colors[c];
-        if (c != activeEditorCurve) color = (color & 0x00FFFFFF) | (100 << 24);
-        for (int i = 0; i < CURVE_RESOLUTION - 1; ++i) {
-            ImVec2 p1 = ImVec2(canvas_p0.x + ((float)i / (CURVE_RESOLUTION - 1)) * canvas_sz.x, canvas_p0.y + (1.0f - curves[c][i]) * canvas_sz.y);
-            ImVec2 p2 = ImVec2(canvas_p0.x + ((float)(i + 1) / (CURVE_RESOLUTION - 1)) * canvas_sz.x, canvas_p0.y + (1.0f - curves[c][i+1]) * canvas_sz.y);
-            draw_list->AddLine(p1, p2, color, 2.0f);
+        
+        // Draw Gate Threshold line (Yellow)
+        const float gate_line_y = canvas_p0.y + (1.0f - gateThresh) * graphSize.y;
+        draw_list->AddLine(ImVec2(canvas_p0.x, gate_line_y), ImVec2(canvas_p1.x, gate_line_y), IM_COL32(255, 255, 0, 200), 2.0f);
+
+        // Draw Trigger Threshold line (Red)
+        const float trig_line_y = canvas_p0.y + (1.0f - trigThresh) * graphSize.y;
+        draw_list->AddLine(ImVec2(canvas_p0.x, trig_line_y), ImVec2(canvas_p1.x, trig_line_y), IM_COL32(255, 0, 0, 200), 2.0f);
+        
+        // Draw playhead
+        float playhead_x = canvas_p0.x + static_cast<float>(currentPhase) * graphSize.x;
+        draw_list->AddLine(ImVec2(playhead_x, canvas_p0.y), ImVec2(playhead_x, canvas_p1.y), IM_COL32(255, 255, 0, 200));
+        
+        draw_list->PopClipRect();
+        
+        // Mouse interaction for drawing on the canvas - AFTER drawing to ensure proper layout
+        ImGui::SetCursorPos(ImVec2(0, 0));
+        ImGui::InvisibleButton("##functionGenCanvasDrag", graphSize, ImGuiButtonFlags_MouseButtonLeft);
+        const bool is_hovered = ImGui::IsItemHovered();
+        const bool is_active = ImGui::IsItemActive();
+        if (is_hovered && ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
+            isDragging = true;
+            lastMousePosInCanvas = ImVec2(ImGui::GetIO().MousePos.x - canvas_p0.x, ImGui::GetIO().MousePos.y - canvas_p0.y);
+        }
+        if (ImGui::IsMouseReleased(ImGuiMouseButton_Left)) {
+            if (isDragging) onModificationEnded();
+            isDragging = false;
+            lastMousePosInCanvas = ImVec2(-1, -1);
+        }
+        if (isDragging && is_active) {
+            ImVec2 current_pos = ImVec2(ImGui::GetIO().MousePos.x - canvas_p0.x, ImGui::GetIO().MousePos.y - canvas_p0.y);
+            int idx0 = static_cast<int>((lastMousePosInCanvas.x / graphSize.x) * CURVE_RESOLUTION);
+            int idx1 = static_cast<int>((current_pos.x / graphSize.x) * CURVE_RESOLUTION);
+            idx0 = juce::jlimit(0, CURVE_RESOLUTION - 1, idx0);
+            idx1 = juce::jlimit(0, CURVE_RESOLUTION - 1, idx1);
+            if (idx0 > idx1) std::swap(idx0, idx1);
+            for (int i = idx0; i <= idx1; ++i) {
+                float t = (idx1 == idx0) ? 1.0f : (float)(i - idx0) / (float)(idx1 - idx0);
+                float y_pos = juce::jmap(t, lastMousePosInCanvas.y, current_pos.y);
+                curves[activeEditorCurve][i] = 1.0f - juce::jlimit(0.0f, 1.0f, y_pos / graphSize.y);
+            }
+            lastMousePosInCanvas = current_pos;
         }
     }
+    ImGui::EndChild();
     
-    // Draw Gate Threshold line (Yellow)
-    const float gate_line_y = canvas_p0.y + (1.0f - gateThresh) * canvas_sz.y;
-    draw_list->AddLine(ImVec2(canvas_p0.x, gate_line_y), ImVec2(canvas_p1.x, gate_line_y), IM_COL32(255, 255, 0, 200), 2.0f);
-
-    // Draw Trigger Threshold line (Red)
-    const float trig_line_y = canvas_p0.y + (1.0f - trigThresh) * canvas_sz.y;
-    draw_list->AddLine(ImVec2(canvas_p0.x, trig_line_y), ImVec2(canvas_p1.x, trig_line_y), IM_COL32(255, 0, 0, 200), 2.0f);
+    ImGui::PopID(); // End unique ID
     
-    // Draw playhead
-    float playhead_x = canvas_p0.x + phase * canvas_sz.x;
-    draw_list->AddLine(ImVec2(playhead_x, canvas_p0.y), ImVec2(playhead_x, canvas_p1.y), IM_COL32(255, 255, 0, 200));
-
-    ImGui::Dummy(canvas_sz);
-    
-    ImGui::PopItemWidth(); // <<< FIX: Added to match the PushItemWidth at the top.
+    ImGui::PopItemWidth();
 }
 
 

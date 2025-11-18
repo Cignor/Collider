@@ -246,6 +246,7 @@ ImVec4 MIDIButtonsModuleProcessor::getModeColor(ButtonMode mode, float brightnes
 
 void MIDIButtonsModuleProcessor::drawParametersInNode(float itemWidth, const std::function<bool(const juce::String&)>&, const std::function<void()>& onModificationEnded)
 {
+    ImGui::PushID(this);
     ImGui::PushItemWidth(itemWidth);
     
     // === MULTI-MIDI DEVICE FILTERING ===
@@ -405,6 +406,7 @@ void MIDIButtonsModuleProcessor::drawParametersInNode(float itemWidth, const std
     }
     
     ImGui::PopItemWidth();
+    ImGui::PopID();
 }
 
 void MIDIButtonsModuleProcessor::drawVisualButtons(int numActive, const std::function<void()>& onModificationEnded)

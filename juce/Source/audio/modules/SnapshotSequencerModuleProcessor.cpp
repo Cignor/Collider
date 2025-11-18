@@ -209,6 +209,7 @@ void SnapshotSequencerModuleProcessor::drawParametersInNode (float itemWidth, co
 {
     juce::ignoreUnused(isParamModulated, onModificationEnded);
     const auto& theme = ThemeManager::getInstance().getCurrentTheme();
+    ImGui::PushID(this);
     
     ImGui::PushItemWidth(itemWidth);
     
@@ -223,8 +224,6 @@ void SnapshotSequencerModuleProcessor::drawParametersInNode (float itemWidth, co
             param->endChangeGesture();
         }
     }
-    
-    ImGui::PopItemWidth();
     
     ThemeText("Snapshots:", theme.modules.sequencer_section_header);
     
@@ -267,6 +266,8 @@ void SnapshotSequencerModuleProcessor::drawParametersInNode (float itemWidth, co
     }
     
     ImGui::TextWrapped("Connect a clock to advance steps. Each step can store a complete patch state.");
+    ImGui::PopItemWidth();
+    ImGui::PopID();
 }
 #endif
 

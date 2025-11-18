@@ -1,6 +1,10 @@
 #pragma once
 
 #include "ModuleProcessor.h"
+#include <atomic>
+#if defined(PRESET_CREATOR_UI)
+#include "../../preset_creator/theme/ThemeManager.h"
+#endif
 
 class ValueModuleProcessor : public ModuleProcessor
 {
@@ -28,11 +32,91 @@ public:
 #if defined(PRESET_CREATOR_UI)
     void drawParametersInNode(float itemWidth, const std::function<bool(const juce::String& paramId)>& isParamModulated, const std::function<void()>& onModificationEnded) override
     {
+        const auto& theme = ThemeManager::getInstance().getCurrentTheme();
         auto& ap = getAPVTS();
+        ImGui::PushID(this);
         auto* p = dynamic_cast<juce::AudioParameterFloat*>(ap.getParameter("value"));
-        if (!p) return;
+        if (!p) { ImGui::PopID(); return; }
 
         float currentValue = *p;
+
+        // Visualization section
+        ImGui::Spacing();
+        ImGui::Text("Output Values");
+        ImGui::Spacing();
+
+        auto* drawList = ImGui::GetWindowDrawList();
+        const ImU32 bgColor = ThemeManager::getInstance().getCanvasBackground();
+        const ImU32 rawColor = ImGui::ColorConvertFloat4ToU32(theme.modulation.frequency);
+        const ImU32 normColor = ImGui::ColorConvertFloat4ToU32(theme.modulation.timbre);
+        const ImU32 invColor = ImGui::ColorConvertFloat4ToU32(theme.modulation.amplitude);
+        const ImU32 intColor = ImGui::ColorConvertFloat4ToU32(theme.modulation.filter);
+        const ImU32 cvColor = ImGui::ColorConvertFloat4ToU32(theme.accent);
+
+        const ImVec2 origin = ImGui::GetCursorScreenPos();
+        const float vizHeight = 120.0f;
+        const float barWidth = (itemWidth - 20.0f) / 5.0f; // 5 bars with spacing
+        const float barSpacing = 4.0f;
+        const ImVec2 rectMax = ImVec2(origin.x + itemWidth, origin.y + vizHeight);
+        
+        drawList->AddRectFilled(origin, rectMax, bgColor, 4.0f);
+        ImGui::PushClipRect(origin, rectMax, true);
+
+        // Load values from atomics
+        const float rawVal = vizData.rawValue.load();
+        const float normVal = vizData.normalizedValue.load();
+        const float invVal = vizData.invertedValue.load();
+        const float intVal = vizData.integerValue.load();
+        const float cvVal = vizData.cvValue.load();
+
+        // Normalize values for display (0-1 range for bars)
+        const float paramMin = p->range.start;
+        const float paramMax = p->range.end;
+        const float rawNorm = juce::jlimit(0.0f, 1.0f, (rawVal - paramMin) / (paramMax - paramMin));
+        const float invNorm = juce::jlimit(0.0f, 1.0f, (-invVal - paramMin) / (paramMax - paramMin));
+
+        // Draw bars for each output
+        auto drawBar = [&](float normalizedValue, ImU32 color, float xOffset, const char* label)
+        {
+            const float barX = origin.x + xOffset;
+            const float barHeight = normalizedValue * (vizHeight - 30.0f); // Leave space for labels
+            const float barY = origin.y + (vizHeight - 30.0f) - barHeight;
+            
+            // Draw bar
+            drawList->AddRectFilled(
+                ImVec2(barX, barY),
+                ImVec2(barX + barWidth - barSpacing, origin.y + vizHeight - 30.0f),
+                color, 2.0f);
+            
+            // Draw label
+            const ImVec2 textPos(barX + (barWidth - barSpacing) * 0.5f, origin.y + vizHeight - 25.0f);
+            drawList->AddText(textPos, ImGui::ColorConvertFloat4ToU32(ImVec4(1.0f, 1.0f, 1.0f, 0.9f)), label);
+        };
+
+        drawBar(rawNorm, rawColor, 0.0f, "Raw");
+        drawBar(normVal, normColor, barWidth, "Norm");
+        drawBar(invNorm, invColor, barWidth * 2.0f, "Inv");
+        drawBar(juce::jlimit(0.0f, 1.0f, (intVal - paramMin) / (paramMax - paramMin)), intColor, barWidth * 3.0f, "Int");
+        drawBar(cvVal, cvColor, barWidth * 4.0f, "CV");
+
+        // Draw center line
+        drawList->AddLine(
+            ImVec2(origin.x, origin.y + (vizHeight - 30.0f) * 0.5f),
+            ImVec2(rectMax.x, origin.y + (vizHeight - 30.0f) * 0.5f),
+            ImGui::ColorConvertFloat4ToU32(ImVec4(0.5f, 0.5f, 0.5f, 0.3f)), 1.0f);
+
+        ImGui::PopClipRect();
+        ImGui::SetCursorScreenPos(ImVec2(origin.x, rectMax.y));
+        ImGui::Dummy(ImVec2(itemWidth, 0));
+
+        // Display current values
+        ImGui::Spacing();
+        ImGui::Text("Raw: %.2f  |  Norm: %.3f  |  Inv: %.2f  |  Int: %.0f  |  CV: %.3f",
+            rawVal, normVal, invVal, intVal, cvVal);
+
+        ImGui::Spacing();
+        ThemeText("Value Parameters", theme.text.section_header);
+        ImGui::Spacing();
 
         ImGui::PushItemWidth(itemWidth);
         // Compact draggable number field without visible label
@@ -103,6 +187,7 @@ public:
             onModificationEnded();
         }
         ImGui::PopItemWidth();
+        ImGui::PopID();
     }
 
     void drawIoPins(const NodePinHelpers& helpers) override
@@ -146,4 +231,20 @@ private:
     // Add these two state variables for the new scroll logic
     double lastScrollTime { 0.0 };
     float scrollMomentum { 1.0f };
+
+#if defined(PRESET_CREATOR_UI)
+    struct VizData
+    {
+        std::atomic<float> rawValue { 0.0f };
+        std::atomic<float> normalizedValue { 0.0f };
+        std::atomic<float> invertedValue { 0.0f };
+        std::atomic<float> integerValue { 0.0f };
+        std::atomic<float> cvValue { 0.0f };
+        std::atomic<float> currentValue { 0.0f };
+        std::atomic<float> currentCvMin { 0.0f };
+        std::atomic<float> currentCvMax { 1.0f };
+    };
+
+    VizData vizData;
+#endif
 };

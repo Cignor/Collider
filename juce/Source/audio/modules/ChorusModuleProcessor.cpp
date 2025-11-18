@@ -309,6 +309,7 @@ void ChorusModuleProcessor::drawParametersInNode(float itemWidth, const std::fun
 {
     const auto& theme = ThemeManager::getInstance().getCurrentTheme();
     auto& ap = getAPVTS();
+    ImGui::PushID(this);
     ImGui::PushItemWidth(itemWidth);
 
     auto HelpMarker = [](const char* desc)
@@ -345,77 +346,74 @@ void ChorusModuleProcessor::drawParametersInNode(float itemWidth, const std::fun
                                            ImGui::ColorConvertFloat4ToU32(ImVec4(timbreColorVec4.x, timbreColorVec4.y, timbreColorVec4.z, 1.0f)),
                                            IM_COL32(255, 190, 120, 255));
 
-    auto* drawList = ImGui::GetWindowDrawList();
-    float prevX = 0.0f;
-    float prevY = 0.0f;
-
     // --- Dual Path Visualization ---
     ImGui::Spacing();
     ImGui::Text("Stereo Modulation");
     ImGui::Spacing();
 
     const float vizHeightStereo = 140.0f;
-    const ImVec2 stereoOrigin = ImGui::GetCursorScreenPos();
-    const ImVec2 stereoRectMax = ImVec2(stereoOrigin.x + itemWidth, stereoOrigin.y + vizHeightStereo);
-    drawList->AddRectFilled(stereoOrigin, stereoRectMax, bgColor, 4.0f);
-    ImGui::PushClipRect(stereoOrigin, stereoRectMax, true);
-
-    // Left and right delay arcs (visual metaphor for modulated delay taps)
-    auto drawDelayArc = [&](bool isLeft, ImU32 color)
+    const ImGuiWindowFlags childFlags = ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse;
+    if (ImGui::BeginChild("ChorusStereoViz", ImVec2(itemWidth, vizHeightStereo), false, childFlags))
     {
-        const float sideOffset = isLeft ? -itemWidth * 0.35f : itemWidth * 0.35f;
-        const float baseX = stereoOrigin.x + itemWidth * 0.5f + sideOffset * 0.2f;
-        const float baseY = stereoOrigin.y + vizHeightStereo * 0.5f;
-        const float maxRadius = juce::jmin(itemWidth, vizHeightStereo) * 0.4f;
-        const float depthScale = juce::jlimit(0.05f, 1.0f, vizData.currentDepth.load());
-        const float radius = maxRadius * depthScale;
+        auto* drawList = ImGui::GetWindowDrawList();
+        const ImVec2 stereoOrigin = ImGui::GetWindowPos();
+        const ImVec2 stereoSize = ImGui::GetWindowSize();
+        const ImVec2 stereoRectMax = ImVec2(stereoOrigin.x + stereoSize.x, stereoOrigin.y + stereoSize.y);
+        drawList->AddRectFilled(stereoOrigin, stereoRectMax, bgColor, 4.0f);
+        ImGui::PushClipRect(stereoOrigin, stereoRectMax, true);
 
-        float prevX = baseX;
-        float prevY = baseY;
-        for (int i = 0; i < VizData::waveformPoints; ++i)
+        // Left and right delay arcs (visual metaphor for modulated delay taps)
+        auto drawDelayArc = [&](bool isLeft, ImU32 color)
         {
-            const float norm = (float)i / (float)(VizData::waveformPoints - 1);
-            const float phaseOffset = norm * juce::MathConstants<float>::pi;
-            const float modValue = isLeft ? vizData.outputWaveformL[i].load() : vizData.outputWaveformR[i].load();
-            const float arcX = baseX + std::cos(phaseOffset) * radius;
-            const float arcY = baseY + modValue * radius * 0.6f;
-            if (i > 0)
+            const float sideOffset = isLeft ? -stereoSize.x * 0.35f : stereoSize.x * 0.35f;
+            const float baseX = stereoOrigin.x + stereoSize.x * 0.5f + sideOffset * 0.2f;
+            const float baseY = stereoOrigin.y + stereoSize.y * 0.5f;
+            const float maxRadius = juce::jmin(stereoSize.x, stereoSize.y) * 0.4f;
+            const float depthScale = juce::jlimit(0.05f, 1.0f, vizData.currentDepth.load());
+            const float radius = maxRadius * depthScale;
+
+            float prevX = baseX;
+            float prevY = baseY;
+            for (int i = 0; i < VizData::waveformPoints; ++i)
             {
-                ImVec4 colorVec4 = ImGui::ColorConvertU32ToFloat4(color);
-                colorVec4.w = 0.4f;
-                drawList->AddLine(ImVec2(prevX, prevY), ImVec2(arcX, arcY), ImGui::ColorConvertFloat4ToU32(colorVec4), 2.2f);
+                const float norm = (float)i / (float)(VizData::waveformPoints - 1);
+                const float phaseOffset = norm * juce::MathConstants<float>::pi;
+                const float modValue = isLeft ? vizData.outputWaveformL[i].load() : vizData.outputWaveformR[i].load();
+                const float arcX = baseX + std::cos(phaseOffset) * radius;
+                const float arcY = baseY + modValue * radius * 0.6f;
+                if (i > 0)
+                {
+                    ImVec4 colorVec4 = ImGui::ColorConvertU32ToFloat4(color);
+                    colorVec4.w = 0.4f;
+                    drawList->AddLine(ImVec2(prevX, prevY), ImVec2(arcX, arcY), ImGui::ColorConvertFloat4ToU32(colorVec4), 2.2f);
+                }
+                prevX = arcX;
+                prevY = arcY;
             }
-            prevX = arcX;
-            prevY = arcY;
-        }
-    };
+        };
 
-    drawDelayArc(true, inputColor);
-    drawDelayArc(false, outputColor);
+        drawDelayArc(true, inputColor);
+        drawDelayArc(false, outputColor);
 
-    // Mod depth bars on the sides
-    const float barWidth = 6.0f;
-    const float depthAmount = juce::jlimit(0.0f, 1.0f, vizData.currentDepth.load());
-    const float barHeight = vizHeightStereo * depthAmount;
+        // Mod depth bars on the sides
+        const float barWidth = 6.0f;
+        const float depthAmount = juce::jlimit(0.0f, 1.0f, vizData.currentDepth.load());
+        const float barHeight = stereoSize.y * depthAmount * 0.8f;
 
-    auto drawDepthBar = [&](bool isLeft)
-    {
-        const float x = isLeft ? stereoOrigin.x + 8.0f : stereoRectMax.x - 8.0f - barWidth;
-        const float y = stereoOrigin.y + vizHeightStereo - barHeight - 8.0f;
-        drawList->AddRectFilled(ImVec2(x, y), ImVec2(x + barWidth, y + barHeight),
-                                isLeft ? inputColor : outputColor, 2.0f);
-    };
+        auto drawDepthBar = [&](bool isLeft)
+        {
+            const float x = isLeft ? stereoOrigin.x + 8.0f : stereoRectMax.x - 8.0f - barWidth;
+            const float y = stereoOrigin.y + stereoSize.y - barHeight - 8.0f;
+            drawList->AddRectFilled(ImVec2(x, y), ImVec2(x + barWidth, y + barHeight),
+                                    isLeft ? inputColor : outputColor, 2.0f);
+        };
 
-    drawDepthBar(true);
-    drawDepthBar(false);
+        drawDepthBar(true);
+        drawDepthBar(false);
 
-    ImGui::PopClipRect();
-    ImGui::SetCursorScreenPos(ImVec2(stereoOrigin.x, stereoRectMax.y));
-    ImGui::Dummy(ImVec2(itemWidth, 0));
-
-    ImGui::PopClipRect();
-    ImGui::SetCursorScreenPos(ImVec2(stereoOrigin.x, stereoRectMax.y));
-    ImGui::Dummy(ImVec2(itemWidth, 0));
+        ImGui::PopClipRect();
+    }
+    ImGui::EndChild();
 
     // simple modulation summary (to avoid extra clip rects)
     ImGui::Spacing();
@@ -513,6 +511,7 @@ void ChorusModuleProcessor::drawParametersInNode(float itemWidth, const std::fun
         ImGui::SetTooltip("ON: CV modulates around slider (±0.5)\nOFF: CV directly sets mix (0-1)");
 
     ImGui::PopItemWidth();
+    ImGui::PopID();
 }
 
 void ChorusModuleProcessor::drawIoPins(const NodePinHelpers& helpers)

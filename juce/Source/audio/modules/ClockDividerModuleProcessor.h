@@ -1,6 +1,7 @@
 #pragma once
 
 #include "ModuleProcessor.h"
+#include <array>
 
 class ClockDividerModuleProcessor : public ModuleProcessor
 {
@@ -73,4 +74,38 @@ private:
     // Schmitt trigger state for clock and reset
     bool schmittStateClock { false };
     bool schmittStateReset { false };
+
+#if defined(PRESET_CREATOR_UI)
+    struct VizData
+    {
+        static constexpr int waveformPoints = 256;
+        std::array<std::atomic<float>, waveformPoints> clockInputWaveform;
+        std::array<std::atomic<float>, waveformPoints> resetInputWaveform;
+        std::array<std::atomic<float>, waveformPoints> div2Waveform;
+        std::array<std::atomic<float>, waveformPoints> div4Waveform;
+        std::array<std::atomic<float>, waveformPoints> div8Waveform;
+        std::array<std::atomic<float>, waveformPoints> mul2Waveform;
+        std::array<std::atomic<float>, waveformPoints> mul3Waveform;
+        std::array<std::atomic<float>, waveformPoints> mul4Waveform;
+        std::atomic<int> writeIndex { 0 };
+        std::atomic<double> currentBpm { 0.0 };
+        std::atomic<double> clockInterval { 0.0 };
+        std::atomic<int> clockCountLive { 0 };
+
+        VizData()
+        {
+            for (auto& v : clockInputWaveform) v.store(0.0f);
+            for (auto& v : resetInputWaveform) v.store(0.0f);
+            for (auto& v : div2Waveform) v.store(0.0f);
+            for (auto& v : div4Waveform) v.store(0.0f);
+            for (auto& v : div8Waveform) v.store(0.0f);
+            for (auto& v : mul2Waveform) v.store(0.0f);
+            for (auto& v : mul3Waveform) v.store(0.0f);
+            for (auto& v : mul4Waveform) v.store(0.0f);
+        }
+    };
+
+    VizData vizData;
+    juce::AudioBuffer<float> captureBuffer;
+#endif
 };

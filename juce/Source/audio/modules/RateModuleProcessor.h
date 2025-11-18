@@ -1,6 +1,11 @@
 #pragma once
 
 #include "ModuleProcessor.h"
+#include <array>
+#include <atomic>
+#if defined(PRESET_CREATOR_UI)
+#include "../../preset_creator/theme/ThemeManager.h"
+#endif
 
 class RateModuleProcessor : public ModuleProcessor
 {
@@ -50,4 +55,28 @@ private:
     std::atomic<float>* multiplierParam { nullptr };
     
     std::atomic<float> lastOutputValue { 0.0f };
+
+#if defined(PRESET_CREATOR_UI)
+    struct VizData
+    {
+        static constexpr int waveformPoints = 256;
+        std::array<std::atomic<float>, waveformPoints> inputWaveform;
+        std::array<std::atomic<float>, waveformPoints> outputWaveform;
+        std::array<std::atomic<float>, waveformPoints> finalRateWaveform; // Final rate in Hz
+        std::atomic<float> currentBaseRate { 1.0f };
+        std::atomic<float> currentMultiplier { 1.0f };
+        std::atomic<float> currentFinalRate { 1.0f };
+
+        VizData()
+        {
+            for (auto& v : inputWaveform) v.store(0.0f);
+            for (auto& v : outputWaveform) v.store(0.0f);
+            for (auto& v : finalRateWaveform) v.store(1.0f);
+        }
+    };
+
+    VizData vizData;
+    juce::AudioBuffer<float> vizInputBuffer;
+    juce::AudioBuffer<float> vizOutputBuffer;
+#endif
 };

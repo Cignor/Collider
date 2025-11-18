@@ -671,10 +671,9 @@ void GraphicEQModuleProcessor::drawParametersInNode(float itemWidth, const std::
 
     // --- Control Parameters ---
     ImGui::PushItemWidth(itemWidth);
-    ImGui::PushItemWidth(itemWidth);
-    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(14.0f, 9.0f));
+    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(4.0f, 3.0f));
     ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 1.0f);
-    ImGui::PushStyleVar(ImGuiStyleVar_GrabMinSize, 18.0f);
+    ImGui::PushStyleVar(ImGuiStyleVar_GrabMinSize, 10.0f);
 
     // Gate Threshold (modulatable)
     const bool isGateMod = isParamModulated("gateThreshold");

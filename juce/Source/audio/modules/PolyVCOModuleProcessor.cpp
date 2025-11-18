@@ -322,6 +322,7 @@ void PolyVCOModuleProcessor::drawParametersInNode(float itemWidth, const std::fu
                                                  const std::function<void()>& onModificationEnded)
 {
     auto& ap = getAPVTS();
+    ImGui::PushID(this);
     const auto& theme = ThemeManager::getInstance().getCurrentTheme();
 
     // Helper for tooltips
@@ -558,6 +559,7 @@ void PolyVCOModuleProcessor::drawParametersInNode(float itemWidth, const std::fu
         
         ImGui::EndTable();
     }
+    ImGui::PopID();
 }
 #endif
 

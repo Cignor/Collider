@@ -39,6 +39,16 @@ void VCOModuleProcessor::prepareToPlay(double sr, int samplesPerBlock)
     juce::dsp::ProcessSpec spec { sampleRate, (juce::uint32) samplesPerBlock, 1 };
     oscillator.prepare(spec);
     currentFrequency = frequencyParam != nullptr ? frequencyParam->load() : 440.0f;
+
+#if defined(PRESET_CREATOR_UI)
+    vizOutputBuffer.setSize(1, vizBufferSize, false, true, true);
+    vizWritePos = 0;
+    for (auto& v : vizData.outputWaveform) v.store(0.0f);
+    vizData.currentFrequency.store(440.0f);
+    vizData.currentWaveform.store(0);
+    vizData.gateLevel.store(0.0f);
+    vizData.outputLevel.store(0.0f);
+#endif
 }
 
 void VCOModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midi)
@@ -183,6 +193,24 @@ void VCOModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::Mi
         
         outBus.setSample(0, i, finalSample);
 
+#if defined(PRESET_CREATOR_UI)
+        // Capture output audio for visualization
+        if (vizOutputBuffer.getNumSamples() > 0)
+        {
+            const int writeIdx = (vizWritePos + i) % vizBufferSize;
+            vizOutputBuffer.setSample(0, writeIdx, finalSample);
+        }
+
+        // Track current state (use last sample for live display)
+        if (i == buffer.getNumSamples() - 1)
+        {
+            vizData.currentFrequency.store(currentFrequency);
+            vizData.currentWaveform.store(currentWaveform);
+            vizData.gateLevel.store(smoothedGate);
+            vizData.outputLevel.store(finalSample);
+        }
+#endif
+
         if ((i & 0x3F) == 0)
         {
             setLiveParamValue(paramIdFrequency, freq);
@@ -192,6 +220,20 @@ void VCOModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::Mi
     
     // Update inspector value for visualization (peak magnitude)
     updateOutputTelemetry(buffer);
+
+#if defined(PRESET_CREATOR_UI)
+    vizWritePos = (vizWritePos + buffer.getNumSamples()) % vizBufferSize;
+
+    // Update visualization data (thread-safe)
+    // Downsample waveform from circular buffer
+    const int stride = vizBufferSize / VizData::waveformPoints;
+    for (int i = 0; i < VizData::waveformPoints; ++i)
+    {
+        const int readIdx = (vizWritePos - VizData::waveformPoints * stride + i * stride + vizBufferSize) % vizBufferSize;
+        if (vizOutputBuffer.getNumSamples() > 0)
+            vizData.outputWaveform[i].store(vizOutputBuffer.getSample(0, readIdx));
+    }
+#endif
 }
 
 bool VCOModuleProcessor::getParamRouting(const juce::String& paramId, int& outBusIndex, int& outChannelIndexInBus) const

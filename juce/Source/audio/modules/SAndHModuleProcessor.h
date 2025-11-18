@@ -20,6 +20,8 @@ public:
     void releaseResources() override {}
     void processBlock (juce::AudioBuffer<float>&, juce::MidiBuffer&) override;
 
+    bool isBusesLayoutSupported (const BusesLayout& layouts) const override;
+
     juce::AudioProcessorValueTreeState& getAPVTS() override { return apvts; }
 
     bool getParamRouting(const juce::String& paramId, int& outBusIndex, int& outChannelIndexInBus) const override;

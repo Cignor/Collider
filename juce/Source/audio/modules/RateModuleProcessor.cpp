@@ -28,6 +28,12 @@ juce::AudioProcessorValueTreeState::ParameterLayout RateModuleProcessor::createP
 void RateModuleProcessor::prepareToPlay(double sampleRate, int samplesPerBlock)
 {
     juce::ignoreUnused(sampleRate, samplesPerBlock);
+#if defined(PRESET_CREATOR_UI)
+    vizInputBuffer.setSize(1, samplesPerBlock);
+    vizOutputBuffer.setSize(1, samplesPerBlock);
+    vizInputBuffer.clear();
+    vizOutputBuffer.clear();
+#endif
 }
 
 void RateModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midi)
@@ -78,20 +84,171 @@ void RateModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::M
     {
         lastOutputValues[0]->store(out.getSample(0, buffer.getNumSamples() - 1));
     }
+
+#if defined(PRESET_CREATOR_UI)
+    // Capture waveforms for visualization
+    const int nSamps = buffer.getNumSamples();
+    if (nSamps > 0)
+    {
+        vizInputBuffer.makeCopyOf(in);
+        vizOutputBuffer.makeCopyOf(out);
+        
+        auto captureWaveform = [&](const juce::AudioBuffer<float>& source, std::array<std::atomic<float>, VizData::waveformPoints>& dest)
+        {
+            const int samples = juce::jmin(source.getNumSamples(), nSamps);
+            if (samples <= 0) return;
+            const int stride = juce::jmax(1, samples / VizData::waveformPoints);
+            for (int i = 0; i < VizData::waveformPoints; ++i)
+            {
+                const int idx = juce::jmin(samples - 1, i * stride);
+                float value = source.getSample(0, idx);
+                dest[i].store(juce::jlimit(-1.0f, 1.0f, value));
+            }
+        };
+        
+        captureWaveform(vizInputBuffer, vizData.inputWaveform);
+        captureWaveform(vizOutputBuffer, vizData.outputWaveform);
+        
+        // Capture final rate waveform (in Hz, normalized to 0..1 for display)
+        const float rateMin = 0.01f;
+        const float rateMax = 50.0f;
+        for (int i = 0; i < VizData::waveformPoints; ++i)
+        {
+            const int idx = juce::jmin(nSamps - 1, (i * nSamps) / VizData::waveformPoints);
+            float modulation = 0.0f;
+            if (src != nullptr)
+            {
+                modulation = src[idx] * 0.5f;
+            }
+            float finalRate = baseRate * multiplier * (1.0f + modulation);
+            finalRate = juce::jlimit(rateMin, rateMax, finalRate);
+            // Normalize to 0..1 for visualization
+            float normalizedRate = (finalRate - rateMin) / (rateMax - rateMin);
+            vizData.finalRateWaveform[i].store(juce::jlimit(0.0f, 1.0f, normalizedRate));
+        }
+        
+        // Update live parameter values
+        vizData.currentBaseRate.store(baseRate);
+        vizData.currentMultiplier.store(multiplier);
+        // Calculate average final rate for display
+        float avgFinalRate = sumOutput / (float)nSamps;
+        vizData.currentFinalRate.store(avgFinalRate);
+    }
+#endif
 }
 
 #if defined(PRESET_CREATOR_UI)
 void RateModuleProcessor::drawParametersInNode(float itemWidth, const std::function<bool(const juce::String& paramId)>& isParamModulated, const std::function<void()>& onModificationEnded)
 {
-    auto& ap = getAPVTS();
-    float baseRate = baseRateParam->load();
-    float multiplier = multiplierParam->load();
     const auto& theme = ThemeManager::getInstance().getCurrentTheme();
-
+    auto& ap = getAPVTS();
+    ImGui::PushID(this);
     ImGui::PushItemWidth(itemWidth);
     
-    // === SECTION: Rate Control ===
+    float baseRate = baseRateParam->load();
+    float multiplier = multiplierParam->load();
+
+    // Draw visualization
+    ImGui::Spacing();
+    ThemeText("Rate Visualizer", theme.text.section_header);
+    ImGui::Spacing();
+
+    // Read waveform data from atomics - BEFORE BeginChild
+    float inputWave[VizData::waveformPoints];
+    float outputWave[VizData::waveformPoints];
+    float rateWave[VizData::waveformPoints];
+    for (int i = 0; i < VizData::waveformPoints; ++i)
+    {
+        inputWave[i] = vizData.inputWaveform[i].load();
+        outputWave[i] = vizData.outputWaveform[i].load();
+        rateWave[i] = vizData.finalRateWaveform[i].load();
+    }
+    const float liveBaseRate = vizData.currentBaseRate.load();
+    const float liveMultiplier = vizData.currentMultiplier.load();
+    const float liveFinalRate = vizData.currentFinalRate.load();
+
+    // Waveform visualization in child window
+    const float waveHeight = 110.0f;
+    const ImVec2 graphSize(itemWidth, waveHeight);
+    const ImGuiWindowFlags childFlags = ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse;
+    if (ImGui::BeginChild("RateViz", graphSize, false, childFlags))
+    {
+        ImDrawList* drawList = ImGui::GetWindowDrawList();
+        const ImVec2 p0 = ImGui::GetWindowPos();
+        const ImVec2 p1 = ImVec2(p0.x + graphSize.x, p0.y + graphSize.y);
+        
+        // Background
+        const ImU32 bgColor = ThemeManager::getInstance().getCanvasBackground();
+        drawList->AddRectFilled(p0, p1, bgColor, 4.0f);
+        
+        // Clip to graph area
+        drawList->PushClipRect(p0, p1, true);
+        
+        const ImU32 inputColor = ImGui::ColorConvertFloat4ToU32(theme.modulation.frequency);
+        const ImU32 outputColor = ImGui::ColorConvertFloat4ToU32(theme.accent);
+        const ImU32 rateColor = ImGui::ColorConvertFloat4ToU32(theme.modulation.timbre);
+
+        // Draw output waveforms
+        const float midY = p0.y + graphSize.y * 0.5f;
+        const float scaleY = graphSize.y * 0.4f;
+        const float stepX = graphSize.x / (float)(VizData::waveformPoints - 1);
+
+        // Draw center line (zero reference)
+        const ImU32 centerLineColor = IM_COL32(150, 150, 150, 100);
+        drawList->AddLine(ImVec2(p0.x, midY), ImVec2(p1.x, midY), centerLineColor, 1.0f);
+
+        auto drawWave = [&](float* data, ImU32 color, float thickness, float offsetY = 0.0f)
+        {
+            float px = p0.x;
+            float py = midY + offsetY;
+            for (int i = 0; i < VizData::waveformPoints; ++i)
+            {
+                const float x = p0.x + i * stepX;
+                const float clampedY = juce::jlimit(p0.y, p1.y, midY + offsetY - juce::jlimit(-1.0f, 1.0f, data[i]) * scaleY);
+                const float y = clampedY;
+                if (i > 0)
+                    drawList->AddLine(ImVec2(px, py), ImVec2(x, y), color, thickness);
+                px = x;
+                py = y;
+            }
+        };
+
+        // Draw input modulation (if present) - show as bipolar waveform
+        drawWave(inputWave, inputColor, 1.2f);
+        
+        // Draw output (normalized rate 0..1) - show as unipolar from center
+        drawWave(outputWave, outputColor, 2.0f);
+        
+        // Draw final rate (normalized 0..1) - show as unipolar from bottom
+        const float rateBaseY = p1.y;
+        float prevX = p0.x;
+        float prevY = rateBaseY;
+        for (int i = 0; i < VizData::waveformPoints; ++i)
+        {
+            const float x = p0.x + i * stepX;
+            const float rateValue = juce::jlimit(0.0f, 1.0f, rateWave[i]);
+            const float y = juce::jlimit(p0.y, p1.y, rateBaseY - rateValue * scaleY * 2.0f);
+            if (i > 0)
+                drawList->AddLine(ImVec2(prevX, prevY), ImVec2(x, y), rateColor, 1.8f);
+            prevX = x;
+            prevY = y;
+        }
+
+        drawList->PopClipRect();
+        
+        // Live parameter values overlay
+        ImGui::SetCursorPos(ImVec2(4, waveHeight + 4));
+        ImGui::TextColored(ImVec4(1.0f, 1.0f, 1.0f, 0.9f), "Base: %.2f Hz  |  Mult: %.2fx  |  Final: %.2f Hz", liveBaseRate, liveMultiplier, liveFinalRate);
+        
+        // Invisible drag blocker
+        ImGui::SetCursorPos(ImVec2(0, 0));
+        ImGui::InvisibleButton("##rateVizDrag", graphSize);
+    }
+    ImGui::EndChild();
+
+    ImGui::Spacing();
     ThemeText("RATE CONTROL", theme.text.section_header);
+    ImGui::Spacing();
     
     bool isBaseRateModulated = isParamModulated("baseRate");
     if (isBaseRateModulated) {
@@ -124,15 +281,13 @@ void RateModuleProcessor::drawParametersInNode(float itemWidth, const std::funct
     if (ImGui::IsItemHovered()) ImGui::SetTooltip("Rate multiplier");
 
     ImGui::Spacing();
-    ImGui::Spacing();
-    
-    // === SECTION: Output ===
     ThemeText("OUTPUT", theme.text.section_header);
     
     float outputHz = getLastOutputValue();
     ImGui::Text("Frequency: %.2f Hz", outputHz);
     
     ImGui::PopItemWidth();
+    ImGui::PopID();
 }
 #endif
 

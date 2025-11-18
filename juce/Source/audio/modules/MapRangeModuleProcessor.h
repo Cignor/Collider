@@ -1,6 +1,11 @@
 #pragma once
 
 #include "ModuleProcessor.h"
+#include <array>
+#include <atomic>
+#if defined(PRESET_CREATOR_UI)
+#include "../../preset_creator/theme/ThemeManager.h"
+#endif
 
 class MapRangeModuleProcessor : public ModuleProcessor
 {
@@ -64,4 +69,35 @@ private:
     std::atomic<float> lastInputValue { 0.0f };
     std::atomic<float> lastOutputValue { 0.0f };
     std::atomic<float> lastCvOutputValue { 0.0f };
+
+#if defined(PRESET_CREATOR_UI)
+    struct VizData
+    {
+        static constexpr int waveformPoints = 256;
+        std::array<std::atomic<float>, waveformPoints> inputWaveform;
+        std::array<std::atomic<float>, waveformPoints> normWaveform;
+        std::array<std::atomic<float>, waveformPoints> rawWaveform;
+        std::array<std::atomic<float>, waveformPoints> cvWaveform;
+        std::atomic<float> currentInMin { 0.0f };
+        std::atomic<float> currentInMax { 1.0f };
+        std::atomic<float> currentNormMin { -1.0f };
+        std::atomic<float> currentNormMax { 1.0f };
+        std::atomic<float> currentOutMin { 0.0f };
+        std::atomic<float> currentOutMax { 1.0f };
+        std::atomic<float> currentCvMin { 0.0f };
+        std::atomic<float> currentCvMax { 1.0f };
+
+        VizData()
+        {
+            for (auto& v : inputWaveform) v.store(0.0f);
+            for (auto& v : normWaveform) v.store(0.0f);
+            for (auto& v : rawWaveform) v.store(0.0f);
+            for (auto& v : cvWaveform) v.store(0.0f);
+        }
+    };
+
+    VizData vizData;
+    juce::AudioBuffer<float> vizInputBuffer;
+    juce::AudioBuffer<float> vizOutputBuffer;
+#endif
 };

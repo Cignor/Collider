@@ -2,9 +2,11 @@
 
 #include "ModuleProcessor.h"
 #include <juce_dsp/juce_dsp.h>
-
+#include <array>
+#include <atomic>
 #if defined(PRESET_CREATOR_UI)
 #include "../../preset_creator/theme/ThemeManager.h"
+#include <imgui.h>
 #endif
 
 class VCOModuleProcessor : public ModuleProcessor
@@ -295,6 +297,103 @@ public:
         ImGui::Spacing();
         ImGui::Spacing();
 
+        // === OSCILLOSCOPE VISUALIZATION ===
+        ThemeText("Oscilloscope", theme.text.section_header);
+        ImGui::Spacing();
+
+        ImGui::PushID(this); // Unique ID for this node's UI
+        
+        // Read visualization data (thread-safe)
+        float outputWaveform[VizData::waveformPoints];
+        for (int i = 0; i < VizData::waveformPoints; ++i)
+        {
+            outputWaveform[i] = vizData.outputWaveform[i].load();
+        }
+        const float currentFreq = vizData.currentFrequency.load();
+        const int currentWave = vizData.currentWaveform.load();
+        const float gateLevel = vizData.gateLevel.load();
+
+        // Waveform visualization in child window
+        const auto& freqColors = theme.modules.frequency_graph;
+        const auto resolveColor = [](ImU32 value, ImU32 fallback) { return value != 0 ? value : fallback; };
+        const float waveHeight = 140.0f;
+        const ImVec2 graphSize(itemWidth, waveHeight);
+        
+        if (ImGui::BeginChild("VCOOscilloscope", graphSize, false, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse))
+        {
+            ImDrawList* drawList = ImGui::GetWindowDrawList();
+            const ImVec2 p0 = ImGui::GetWindowPos();
+            const ImVec2 p1 = ImVec2(p0.x + graphSize.x, p0.y + graphSize.y);
+            
+            // Background
+            const ImU32 bgColor = resolveColor(freqColors.background, IM_COL32(18, 20, 24, 255));
+            drawList->AddRectFilled(p0, p1, bgColor);
+            
+            // Grid lines
+            const ImU32 gridColor = resolveColor(freqColors.grid, IM_COL32(50, 55, 65, 255));
+            const float midY = p0.y + graphSize.y * 0.5f;
+            drawList->AddLine(ImVec2(p0.x, midY), ImVec2(p1.x, midY), gridColor, 1.0f);
+            drawList->AddLine(ImVec2(p0.x, p0.y), ImVec2(p1.x, p0.y), gridColor, 1.0f);
+            drawList->AddLine(ImVec2(p0.x, p1.y), ImVec2(p1.x, p1.y), gridColor, 1.0f);
+            
+            // Clip to graph area
+            drawList->PushClipRect(p0, p1, true);
+            
+            // Draw output waveform
+            const float scaleY = graphSize.y * 0.45f;
+            const float stepX = graphSize.x / (float)(VizData::waveformPoints - 1);
+            
+            const ImU32 waveformColor = ImGui::ColorConvertFloat4ToU32(theme.accent);
+            float prevX = p0.x;
+            float prevY = midY;
+            for (int i = 0; i < VizData::waveformPoints; ++i)
+            {
+                const float sample = juce::jlimit(-1.0f, 1.0f, outputWaveform[i]);
+                const float x = p0.x + i * stepX;
+                const float y = juce::jlimit(p0.y, p1.y, midY - sample * scaleY);
+                if (i > 0)
+                    drawList->AddLine(ImVec2(prevX, prevY), ImVec2(x, y), waveformColor, 2.5f);
+                prevX = x;
+                prevY = y;
+            }
+
+            // Draw gate level indicator (horizontal line showing gate amount)
+            if (gateLevel < 1.0f)
+            {
+                const ImU32 gateIndicatorColor = ImGui::ColorConvertFloat4ToU32(theme.modulation.amplitude);
+                const float gateY = p0.y + graphSize.y - (gateLevel * graphSize.y * 0.3f);
+                const float clampedGateY = juce::jlimit(p0.y + 2.0f, p1.y - 2.0f, gateY);
+                drawList->AddLine(ImVec2(p0.x, clampedGateY), ImVec2(p1.x, clampedGateY), gateIndicatorColor, 1.5f);
+                
+                // Gate label using drawList
+                const ImU32 textColor = gateIndicatorColor;
+                drawList->AddText(ImVec2(p0.x + 4.0f, clampedGateY - 12.0f), textColor, "Gate");
+            }
+            
+            drawList->PopClipRect();
+            
+            // Frequency and waveform info overlay
+            const char* waveNames[] = { "Sine", "Sawtooth", "Square" };
+            const char* waveName = (currentWave >= 0 && currentWave < 3) ? waveNames[currentWave] : "Unknown";
+            
+            ImGui::SetCursorPos(ImVec2(4, 4));
+            ImGui::TextColored(ImVec4(1.0f, 1.0f, 1.0f, 0.9f), "%.1f Hz | %s", currentFreq, waveName);
+            if (gateLevel < 1.0f)
+            {
+                ImGui::SetCursorPos(ImVec2(4, graphSize.y - 20));
+                ImGui::TextColored(ImVec4(1.0f, 0.6f, 0.2f, 1.0f), "Gate: %.2f", gateLevel);
+            }
+            
+            // Invisible drag blocker
+            ImGui::SetCursorPos(ImVec2(0, 0));
+            ImGui::InvisibleButton("##vcoOscilloscopeDrag", graphSize);
+        }
+        ImGui::EndChild();
+
+        ImGui::PopID(); // End unique ID
+        ImGui::Spacing();
+        ImGui::Spacing();
+
         // === OUTPUT SECTION ===
         ThemeText("Output", theme.text.section_header);
         ImGui::Spacing();
@@ -372,6 +471,30 @@ private:
     // Portamento/glide
     float currentFrequency { 440.0f };
     double sampleRate { 44100.0 };
+
+#if defined(PRESET_CREATOR_UI)
+    // --- Visualization Data (thread-safe, updated from audio thread) ---
+    struct VizData
+    {
+        static constexpr int waveformPoints = 256;
+        std::array<std::atomic<float>, waveformPoints> outputWaveform;
+        std::atomic<float> currentFrequency { 440.0f };
+        std::atomic<int> currentWaveform { 0 };
+        std::atomic<float> gateLevel { 0.0f };
+        std::atomic<float> outputLevel { 0.0f };
+
+        VizData()
+        {
+            for (auto& v : outputWaveform) v.store(0.0f);
+        }
+    };
+    VizData vizData;
+
+    // Circular buffers for waveform capture
+    juce::AudioBuffer<float> vizOutputBuffer;
+    int vizWritePos { 0 };
+    static constexpr int vizBufferSize = 2048; // ~43ms at 48kHz
+#endif
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (VCOModuleProcessor)
 };

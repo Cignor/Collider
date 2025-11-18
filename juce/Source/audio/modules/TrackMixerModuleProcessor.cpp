@@ -168,6 +168,7 @@ void TrackMixerModuleProcessor::setStateInformation(const void* data, int sizeIn
 void TrackMixerModuleProcessor::drawParametersInNode(float itemWidth, const std::function<bool(const juce::String& paramId)>& isParamModulated, const std::function<void()>& onModificationEnded)
 {
     auto& ap = getAPVTS();
+    ImGui::PushID(this);
     const int activeTracks = getEffectiveNumTracks();
 
     // --- Master "Tracks" Slider with correct modulation detection ---
@@ -276,6 +277,7 @@ void TrackMixerModuleProcessor::drawParametersInNode(float itemWidth, const std:
         
         ImGui::PopID();
     }
+    ImGui::PopID();
 }
 #endif
 
