@@ -14,6 +14,7 @@ SampleLoaderModuleProcessor::SampleLoaderModuleProcessor()
         .withInput("Control Mods", juce::AudioChannelSet::discreteChannels(2), true)   // Bus 1: Gate, Trigger (flat ch 2-3)
         .withInput("Range Mods", juce::AudioChannelSet::discreteChannels(2), true)     // Bus 2: Range Start, Range End (flat ch 4-5)
         .withInput("Randomize", juce::AudioChannelSet::discreteChannels(1), true)      // Bus 3: Randomize (flat ch 6)
+        .withInput("Position Mod", juce::AudioChannelSet::discreteChannels(1), true)    // Bus 4: Position Mod (flat ch 7)
         .withOutput("Audio Output", juce::AudioChannelSet::stereo(), true)),
       apvts(*this, nullptr, "SampleLoaderParameters", createParameterLayout())
 {
@@ -35,6 +36,11 @@ SampleLoaderModuleProcessor::SampleLoaderModuleProcessor()
     relativeGateModParam = apvts.getRawParameterValue("relativeGateMod");
     relativeRangeStartModParam = apvts.getRawParameterValue("relativeRangeStartMod");
     relativeRangeEndModParam = apvts.getRawParameterValue("relativeRangeEndMod");
+    
+    // Initialize position parameter pointers
+    positionParam = apvts.getRawParameterValue(paramIdPosition);
+    positionModParam = apvts.getRawParameterValue(paramIdPositionMod);
+    relativePositionModParam = apvts.getRawParameterValue(paramIdRelPosMod);
 }
 
 
@@ -57,7 +63,7 @@ juce::AudioProcessorValueTreeState::ParameterLayout SampleLoaderModuleProcessor:
     parameters.push_back(std::make_unique<juce::AudioParameterBool>(
         "rbPhaseInd", "RB Phase Independent", true));
     parameters.push_back(std::make_unique<juce::AudioParameterBool>(
-         "loop", "Loop", false));
+         "loop", "Loop", true)); // Default to true for continuous playback
     
     // (Removed legacy SoundTouch tuning parameters)
 
@@ -86,12 +92,21 @@ juce::AudioProcessorValueTreeState::ParameterLayout SampleLoaderModuleProcessor:
         "rangeEnd", "Range End", 
         juce::NormalisableRange<float>(0.0f, 1.0f), 1.0f));
     
+    // --- Position Parameter ---
+    parameters.push_back(std::make_unique<juce::AudioParameterFloat>(
+        paramIdPosition, "Position", 0.0f, 1.0f, 0.0f));
+    
+    // --- Position Parameters ---
+    parameters.push_back(std::make_unique<juce::AudioParameterFloat>(paramIdPosition, "Position", 0.0f, 1.0f, 0.0f));
+    parameters.push_back(std::make_unique<juce::AudioParameterFloat>(paramIdPositionMod, "Position Mod", 0.0f, 1.0f, 0.0f));
+    
     // Relative modulation parameters
     parameters.push_back(std::make_unique<juce::AudioParameterBool>("relativeSpeedMod", "Relative Speed Mod", true));
     parameters.push_back(std::make_unique<juce::AudioParameterBool>("relativePitchMod", "Relative Pitch Mod", true));
     parameters.push_back(std::make_unique<juce::AudioParameterBool>("relativeGateMod", "Relative Gate Mod", false));
     parameters.push_back(std::make_unique<juce::AudioParameterBool>("relativeRangeStartMod", "Relative Range Start Mod", false));
     parameters.push_back(std::make_unique<juce::AudioParameterBool>("relativeRangeEndMod", "Relative Range End Mod", false));
+    parameters.push_back(std::make_unique<juce::AudioParameterBool>(paramIdRelPosMod, "Relative Position Mod", false));
     
     return { parameters.begin(), parameters.end() };
 }
@@ -209,6 +224,7 @@ void SampleLoaderModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer,
     auto controlBus = getBusBuffer(buffer, true, 1);   // Bus 1: Gate, Trigger (flat ch 2-3)
     auto rangeBus = getBusBuffer(buffer, true, 2);     // Bus 2: Range Start, Range End (flat ch 4-5)
     auto randomizeBus = getBusBuffer(buffer, true, 3); // Bus 3: Randomize (flat ch 6)
+    auto positionModBus = getBusBuffer(buffer, true, 4); // Bus 4: Position Mod (flat ch 7)
     
     // DEBUG: Check buses after splitting
     if (rawDebugCounter == 0 || rawDebugCounter % 240 == 0)
@@ -226,13 +242,233 @@ void SampleLoaderModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer,
     rawDebugCounter++;
     
     const int numSamples = buffer.getNumSamples();
+    
+    // --- 0. CALCULATE RANGE VALUES (needed for position scrubbing) ---
+    // Calculate range start/end early so we can use them for position scrubbing
+    float startNorm = rangeStartParam ? rangeStartParam->load() : 0.0f;
+    float endNorm = rangeEndParam ? rangeEndParam->load() : 1.0f;
+    
+    // Apply range modulation if connected
+    const bool relativeRangeStartMode = relativeRangeStartModParam != nullptr && relativeRangeStartModParam->load() > 0.5f;
+    const bool relativeRangeEndMode = relativeRangeEndModParam != nullptr && relativeRangeEndModParam->load() > 0.5f;
+    
+    if (isParamInputConnected("rangeStart_mod") && rangeBus.getNumChannels() > 0)
+    {
+        const float cv = juce::jlimit(0.0f, 1.0f, rangeBus.getReadPointer(0)[0]);
+        if (relativeRangeStartMode) {
+            const float rangeRange = 0.25f;
+            const float rangeOffset = (cv - 0.5f) * (rangeRange * 2.0f);
+            startNorm = juce::jlimit(0.0f, 1.0f, startNorm + rangeOffset);
+        } else {
+            startNorm = cv;
+        }
+    }
+    
+    if (isParamInputConnected("rangeEnd_mod") && rangeBus.getNumChannels() > 1)
+    {
+        const float cv = juce::jlimit(0.0f, 1.0f, rangeBus.getReadPointer(1)[0]);
+        if (relativeRangeEndMode) {
+            const float rangeRange = 0.25f;
+            const float rangeOffset = (cv - 0.5f) * (rangeRange * 2.0f);
+            endNorm = juce::jlimit(0.0f, 1.0f, endNorm + rangeOffset);
+        } else {
+            endNorm = cv;
+        }
+    }
+    
+    // Ensure valid range window
+    {
+        const float minGap = 0.001f;
+        if (startNorm >= endNorm)
+        {
+            const float midpoint = (startNorm + endNorm) * 0.5f;
+            startNorm = juce::jlimit(0.0f, 1.0f - minGap, midpoint - minGap * 0.5f);
+            endNorm   = juce::jlimit(minGap, 1.0f, startNorm + minGap);
+        }
+    }
+    
+    // --- 1. POSITION LOGIC (ANTI-FREEZE FIX) ---
+    float currentPosParam = positionParam ? positionParam->load() : 0.0f;
+    float targetPosNorm = currentPosParam;
+    bool isScrubbing = false;
+    
+    // A. Check for CV Modulation (Highest Priority)
+    if (isParamInputConnected(paramIdPositionMod) && positionModBus.getNumChannels() > 0)
+    {
+        float cv = juce::jlimit(0.0f, 1.0f, positionModBus.getReadPointer(0)[0]);
+        if (relativePositionModParam && relativePositionModParam->load() > 0.5f)
+        {
+            // Relative Mode: CV adds to slider value
+            targetPosNorm = juce::jlimit(0.0f, 1.0f, currentPosParam + (cv - 0.5f));
+        }
+        else
+        {
+            // Absolute Mode: CV controls position directly
+            targetPosNorm = cv;
+        }
+        // Clamp to range start/end
+        targetPosNorm = juce::jlimit(startNorm, endNorm, targetPosNorm);
+        
+        // Only scrub if CV-derived position changed significantly from last CV position
+        // This prevents constant time stretcher resets while allowing smooth CV control
+        // Use a threshold that allows smooth movement but prevents micro-movements from resetting
+        if (std::abs(targetPosNorm - lastCvPosition) > 0.001f)
+        {
+            isScrubbing = true;
+            lastCvPosition = targetPosNorm; // Track CV-derived position
+        }
+    }
+    // B. Check for Manual Slider Movement (User Dragging UI)
+    // We detect this by checking if the parameter value changed significantly 
+    // from what we *last set it to* in the audio thread.
+    // Use a more lenient threshold to catch all user interactions
+    else if (positionParam && std::abs(currentPosParam - lastUiPosition) > 0.00001f)
+    {
+        targetPosNorm = currentPosParam;
+        // Clamp to range start/end
+        targetPosNorm = juce::jlimit(startNorm, endNorm, targetPosNorm);
+        isScrubbing = true;
+    }
+    
+    // Apply Position to Engine
+    if (currentSample && sampleProcessor && positionParam)
+    {
+        const double totalSamples = (double)currentSample->stereo.getNumSamples();
+        
+        if (totalSamples > 0)
+        {
+            if (isScrubbing)
+            {
+                // FORCE read head to target position (scrubbing)
+                // Map normalized position (0-1) to sample range (startNorm-endNorm)
+                // Position slider 0.0 = rangeStart, Position slider 1.0 = rangeEnd
+                double rangeStartSamples = startNorm * totalSamples;
+                double rangeEndSamples = endNorm * totalSamples;
+                double rangeLength = rangeEndSamples - rangeStartSamples;
+                
+                // Map targetPosNorm (0-1 slider value, already clamped to startNorm-endNorm) to sample position
+                // Linear mapping: slider 0.0 -> rangeStart, slider 1.0 -> rangeEnd
+                // Since targetPosNorm is already clamped to [startNorm, endNorm], we need to remap it
+                // to [0, 1] relative to the range, then scale to sample position
+                double normalizedInRange = (targetPosNorm - startNorm) / (endNorm - startNorm);
+                double newSamplePos = rangeStartSamples + normalizedInRange * rangeLength;
+                newSamplePos = juce::jlimit(rangeStartSamples, rangeEndSamples, newSamplePos);
+                
+                // CRITICAL: Preserve playback state when scrubbing
+                // If playing, continue playing from new position. If stopped, remain stopped.
+                bool wasPlaying = sampleProcessor->isPlaying;
+                
+                // Move the playhead to the new position (this resets time stretcher buffers)
+                sampleProcessor->setCurrentPosition(newSamplePos);
+                
+                // Ensure playback state is preserved (setCurrentPosition doesn't affect isPlaying, but be explicit)
+                // If it was playing, it should continue playing from the new position
+                if (wasPlaying)
+                {
+                    // Ensure playback continues from the new position
+                    sampleProcessor->isPlaying = true;
+                }
+                // If it was stopped, leave it stopped (isPlaying remains false)
+                
+                // Sync tracking vars to this new forced position
+                lastReadPosition = newSamplePos;
+                readPosition = newSamplePos; // Keep readPosition in sync for timeline reporting
+                lastUiPosition = targetPosNorm;
+                
+                // If we're the timeline master and was playing, update transport immediately
+                // This ensures transport syncs immediately, not waiting for TempoClock to read
+                if (wasPlaying)
+                {
+                    auto* parentSynth = getParent();
+                    if (parentSynth && parentSynth->isModuleTimelineMaster(getLogicalId()))
+                    {
+                        double newPosSeconds = newSamplePos / sampleSampleRate;
+                        parentSynth->setTransportPositionSeconds(newPosSeconds);
+                    }
+                }
+                
+                // Update the parameter so the UI slider snaps to the CV if CV driven
+                // (We don't notify host here to avoid automation loops)
+                positionParam->store(targetPosNorm);
+            }
+            else
+            {
+                // NORMAL PLAYBACK
+                // We must UPDATE the position parameter to match the audio engine.
+                // This prevents the "Manual Slider Movement" check from triggering falsely in the next block.
+                
+                double currentSamplePos = sampleProcessor->getCurrentPosition();
+                targetPosNorm = (float)(currentSamplePos / totalSamples);
+                
+                // 1. Update the atomic parameter so the UI draws the correct playhead
+                positionParam->store(targetPosNorm);
+                
+                // 2. Update our tracker so we know this value came from US, not the user
+                lastUiPosition = targetPosNorm;
+                
+                // --- GLOBAL RESET LOGIC ---
+                if (sampleProcessor->isPlaying && currentSamplePos < lastReadPosition)
+                {
+                    // If jumped back significantly (loop wrap), trigger global reset
+                    if (lastReadPosition > totalSamples * 0.5)
+                    {
+                        auto* parentSynth = getParent();
+                        // Only trigger if this module is the timeline master (driving transport)
+                        if (parentSynth && parentSynth->isModuleTimelineMaster(getLogicalId()))
+                        {
+                            parentSynth->triggerGlobalReset();
+                        }
+                    }
+                }
+                lastReadPosition = currentSamplePos;
+                readPosition = currentSamplePos; // Keep readPosition in sync for any other uses
+            }
+        }
+    }
+    
+    // Telemetry for UI (Standard practice)
+    setLiveParamValue("position_live", targetPosNorm);
+    
+    // === TIMELINE REPORTING (at END of block, after position updates) ===
+    // Update atomic state for timeline sync feature
+    // CRITICAL: Use actual playhead position, not stale readPosition variable
+    if (currentSample && sampleProcessor && sampleSampleRate > 0)
+    {
+        // Get actual playhead position from the audio engine (reflects scrubbing immediately)
+        double currentSamplePos = sampleProcessor->getCurrentPosition();
+        double currentPosSeconds = currentSamplePos / sampleSampleRate;
+        double durationSeconds = sampleDurationSeconds;
+        
+        // Edge case: Validate duration > 0 before reporting
+        if (durationSeconds <= 0.0)
+        {
+            reportActive.store(false, std::memory_order_relaxed);
+        }
+        else
+        {
+            // Edge case: Clamp position to valid range
+            currentPosSeconds = juce::jlimit(0.0, durationSeconds, currentPosSeconds);
+            
+            // Check if playing and within duration
+            bool isActive = sampleProcessor->isPlaying && (currentSamplePos < durationSeconds * sampleSampleRate);
+            
+            // Store atomically (using relaxed memory order - sufficient for this use case)
+            reportPosition.store(currentPosSeconds, std::memory_order_relaxed);
+            reportDuration.store(durationSeconds, std::memory_order_relaxed);
+            reportActive.store(isActive, std::memory_order_relaxed);
+        }
+    }
+    else
+    {
+        // No sample loaded or invalid state
+        reportActive.store(false, std::memory_order_relaxed);
+    }
 
     // Read relative modulation mode flags
+    // Note: relativeRangeStartMode and relativeRangeEndMode are already declared earlier for range calculation
     const bool relativeSpeedMode = relativeSpeedModParam != nullptr && relativeSpeedModParam->load() > 0.5f;
     const bool relativePitchMode = relativePitchModParam != nullptr && relativePitchModParam->load() > 0.5f;
     const bool relativeGateMode = relativeGateModParam != nullptr && relativeGateModParam->load() > 0.5f;
-    const bool relativeRangeStartMode = relativeRangeStartModParam != nullptr && relativeRangeStartModParam->load() > 0.5f;
-    const bool relativeRangeEndMode = relativeRangeEndModParam != nullptr && relativeRangeEndModParam->load() > 0.5f;
 
     // --- Compute block-rate CV-mapped values for telemetry (even when not playing) ---
     const float baseSpeed = apvts.getRawParameterValue("speed")->load();
@@ -268,46 +504,8 @@ void SampleLoaderModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer,
         }
     }
 
-    float startNorm = rangeStartParam->load();
-    if (isParamInputConnected("rangeStart_mod") && rangeBus.getNumChannels() > 0)
-    {
-        const float cv = juce::jlimit(0.0f, 1.0f, rangeBus.getReadPointer(0)[0]);
-        if (relativeRangeStartMode) {
-            // RELATIVE: ±0.25 around base range start (CV at 0.5 = no change, clamped to 0-1)
-            const float rangeRange = 0.25f;
-            const float rangeOffset = (cv - 0.5f) * (rangeRange * 2.0f);
-            startNorm = juce::jlimit(0.0f, 1.0f, startNorm + rangeOffset);
-        } else {
-            // ABSOLUTE: CV directly sets range start (0-1)
-            startNorm = cv;
-        }
-    }
-
-    float endNorm = rangeEndParam->load();
-    if (isParamInputConnected("rangeEnd_mod") && rangeBus.getNumChannels() > 1)
-    {
-        const float cv = juce::jlimit(0.0f, 1.0f, rangeBus.getReadPointer(1)[0]);
-        if (relativeRangeEndMode) {
-            // RELATIVE: ±0.25 around base range end (CV at 0.5 = no change, clamped to 0-1)
-            const float rangeRange = 0.25f;
-            const float rangeOffset = (cv - 0.5f) * (rangeRange * 2.0f);
-            endNorm = juce::jlimit(0.0f, 1.0f, endNorm + rangeOffset);
-        } else {
-            // ABSOLUTE: CV directly sets range end (0-1)
-            endNorm = cv;
-        }
-    }
-
-    // Ensure valid range window
-    {
-        const float minGap = 0.001f;
-        if (startNorm >= endNorm)
-        {
-            const float midpoint = (startNorm + endNorm) * 0.5f;
-            startNorm = juce::jlimit(0.0f, 1.0f - minGap, midpoint - minGap * 0.5f);
-            endNorm   = juce::jlimit(minGap, 1.0f, startNorm + minGap);
-        }
-    }
+    // Range values already calculated earlier for position scrubbing - reuse them here
+    // (startNorm and endNorm are already set above)
 
     // Update live telemetry regardless of play state (matches TTS pattern)
     setLiveParamValue("speed_live", speedNow);
@@ -701,6 +899,28 @@ void SampleLoaderModuleProcessor::createSampleProcessor()
     DBG("[Sample Loader] Created sample processor for: " + currentSampleName);
 }
 
+// === TIMELINE REPORTING INTERFACE IMPLEMENTATION ===
+
+bool SampleLoaderModuleProcessor::canProvideTimeline() const
+{
+    return hasSampleLoaded();
+}
+
+double SampleLoaderModuleProcessor::getTimelinePositionSeconds() const
+{
+    return reportPosition.load(std::memory_order_relaxed);
+}
+
+double SampleLoaderModuleProcessor::getTimelineDurationSeconds() const
+{
+    return reportDuration.load(std::memory_order_relaxed);
+}
+
+bool SampleLoaderModuleProcessor::isTimelineActive() const
+{
+    return reportActive.load(std::memory_order_relaxed);
+}
+
 void SampleLoaderModuleProcessor::generateSpectrogram()
 {
     const juce::ScopedLock lock(imageLock);
@@ -874,6 +1094,57 @@ void SampleLoaderModuleProcessor::drawParametersInNode(float itemWidth, const st
     ImGui::Spacing();
     ImGui::Spacing();
     
+    // === POSITION SLIDER ===
+    bool posMod = isParamModulated(paramIdPositionMod);
+    
+    // Get value: Always use live telemetry if available (shows playback position moving)
+    // If modulated, use live value. If not, use parameter but prefer live for visual feedback
+    float posVal = getLiveParamValue("position_live", positionParam ? positionParam->load() : 0.0f);
+    
+    if (posMod)
+    {
+        ImGui::BeginDisabled(); // Lock if CV controlled
+        ImGui::PushStyleColor(ImGuiCol_FrameBg, ImVec4(0.2f, 0.6f, 0.2f, 0.3f)); // Green tint for CV control
+    }
+    
+    if (ImGui::SliderFloat("Position", &posVal, 0.0f, 1.0f, "%.3f"))
+    {
+        // Only allow updates if not modulated
+        if (!posMod && positionParam)
+        {
+            posVal = juce::jlimit(0.0f, 1.0f, posVal);
+            // Update parameter using setValueNotifyingHost so audio thread detects the change
+            // The audio thread will detect this change and scrub the playhead
+            if (auto* p = apvts.getParameter(paramIdPosition))
+            {
+                p->setValueNotifyingHost(apvts.getParameterRange(paramIdPosition).convertTo0to1(posVal));
+            }
+            onModificationEnded();
+        }
+    }
+    
+    // Don't use adjustParamOnWheel here - it would fight with playback updates
+    // The slider shows live position during playback, and allows scrubbing when not playing
+    
+    if (posMod)
+    {
+        ImGui::PopStyleColor();
+        ImGui::EndDisabled();
+        ImGui::SameLine();
+        ImGui::Text("(mod)");
+    }
+    
+    if (ImGui::IsItemHovered())
+    {
+        ImGui::SetTooltip("Sample playback position (0.0 = start, 1.0 = end)\n"
+                          "Moves automatically during playback\n"
+                          "Drag to scrub/seek manually\n"
+                          "CV modulation overrides when connected");
+    }
+    
+    ImGui::Spacing();
+    ImGui::Spacing();
+    
     // === CV INPUT MODES SECTION ===
     ThemeText("CV Input Modes", theme.text.section_header);
     ImGui::Spacing();
@@ -936,6 +1207,18 @@ void SampleLoaderModuleProcessor::drawParametersInNode(float itemWidth, const st
     if (ImGui::IsItemHovered())
     {
         ImGui::SetTooltip("ON: CV modulates around slider (±0.25)\nOFF: CV directly sets range end (0-1)");
+    }
+    
+    // Relative Position Mod checkbox
+    bool relativePosMod = relativePositionModParam != nullptr && relativePositionModParam->load() > 0.5f;
+    if (ImGui::Checkbox("Relative Position Mod", &relativePosMod))
+    {
+        if (auto* p = dynamic_cast<juce::AudioParameterBool*>(apvts.getParameter(paramIdRelPosMod)))
+            *p = relativePosMod;
+    }
+    if (ImGui::IsItemHovered())
+    {
+        ImGui::SetTooltip("ON: CV modulates around slider (bipolar: 0.5 = no change)\nOFF: CV directly sets position (0-1)");
     }
     
     ImGui::Spacing();
@@ -1113,6 +1396,7 @@ void SampleLoaderModuleProcessor::drawIoPins(const NodePinHelpers& helpers)
     helpers.drawAudioInputPin("Range Start Mod", 4);
     helpers.drawAudioInputPin("Range End Mod", 5);
     helpers.drawAudioInputPin("Randomize Trig", 6);
+    helpers.drawAudioInputPin("Position Mod", 7);
     // Audio outputs (stereo)
     helpers.drawAudioOutputPin("Out L", 0);
     helpers.drawAudioOutputPin("Out R", 1);
@@ -1136,6 +1420,9 @@ bool SampleLoaderModuleProcessor::getParamRouting(const juce::String& paramId, i
     
     // Bus 3: Randomize - flat channel 6
     if (paramId == "randomize_mod") { outBusIndex = 3; outChannelIndexInBus = 0; return true; }
+    
+    // Bus 4: Position Mod - flat channel 7
+    if (paramId == paramIdPositionMod) { outBusIndex = 4; outChannelIndexInBus = 0; return true; }
     
     return false;
 }

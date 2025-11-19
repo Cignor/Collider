@@ -10,6 +10,11 @@
 class SampleLoaderModuleProcessor : public ModuleProcessor
 {
 public:
+    // --- Position Parameter IDs ---
+    static constexpr auto paramIdPosition = "position";
+    static constexpr auto paramIdPositionMod = "position_mod";
+    static constexpr auto paramIdRelPosMod = "relativePositionMod";
+    
     SampleLoaderModuleProcessor();
     ~SampleLoaderModuleProcessor() override = default;
 
@@ -61,6 +66,7 @@ public:
             case 4: return "Range Start Mod";
             case 5: return "Range End Mod";
             case 6: return "Randomize Trig";
+            case 7: return "Position Mod";
             default: return juce::String("In ") + juce::String(channel + 1);
         }
     }
@@ -122,6 +128,11 @@ private:
     double sampleDurationSeconds = 0.0;
     int sampleSampleRate = 0;
     
+    // Timeline reporting state (atomic for thread-safe access)
+    std::atomic<double> reportPosition { 0.0 };
+    std::atomic<double> reportDuration { 0.0 };
+    std::atomic<bool>   reportActive { false };
+    
     // Trigger edge detection for trigger_mod
     bool lastTriggerHigh { false };
     bool lastRandomizeTriggerHigh { false };
@@ -154,6 +165,16 @@ private:
     std::atomic<float>* relativeRangeStartModParam { nullptr };
     std::atomic<float>* relativeRangeEndModParam { nullptr };
     
+    // --- Position Parameters ---
+    std::atomic<float>* positionParam { nullptr };
+    std::atomic<float>* positionModParam { nullptr };
+    std::atomic<float>* relativePositionModParam { nullptr };
+    
+    // For detecting manual slider movement vs playback update
+    float lastUiPosition { 0.0f };
+    float lastCvPosition { 0.0f }; // Track last CV value to detect changes
+    double lastReadPosition { 0.0 }; // To detect loops for global reset
+    
     // --- Parameter References ---
     // Parameters are accessed directly via apvts.getRawParameterValue()
     
@@ -161,4 +182,10 @@ private:
     void updateSoundTouchSettings();
     void createSampleProcessor();
     void generateSpectrogram();
+    
+    // Timeline reporting interface (for Timeline Sync feature)
+    bool canProvideTimeline() const override;
+    double getTimelinePositionSeconds() const override;
+    double getTimelineDurationSeconds() const override;
+    bool isTimelineActive() const override;
 };

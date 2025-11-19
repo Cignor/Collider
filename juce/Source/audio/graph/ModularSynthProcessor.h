@@ -77,6 +77,12 @@ public:
     // Access a module processor for UI parameter editing
     ModuleProcessor* getModuleForLogical (juce::uint32 logicalId) const;
     
+    // Thread-safe access to active audio processors snapshot (for timeline sync)
+    std::shared_ptr<const std::vector<std::shared_ptr<ModuleProcessor>>> getActiveAudioProcessors() const
+    {
+        return activeAudioProcessors.load();
+    }
+    
     // === GLOBAL TRANSPORT & TIMING ===
     // (TransportState struct is defined in ModuleProcessor.h)
     
@@ -95,9 +101,19 @@ public:
     void setGlobalDivisionIndex(int idx) { m_transportState.globalDivisionIndex.store(idx); }
     void setTempoControlledByModule(bool controlled) { m_transportState.isTempoControlledByModule.store(controlled); }
     
+    // Set transport position from timeline sync (called by TempoClock)
+    void setTransportPositionSeconds(double positionSeconds);
+    
+    // Timeline master management (prevents circular dependency)
+    void setTimelineMaster(juce::uint32 logicalId) { timelineMasterLogicalId.store(logicalId); }
+    bool isModuleTimelineMaster(juce::uint32 logicalId) const { return timelineMasterLogicalId.load() == logicalId; }
+    
     // MIDI activity indicator
     bool hasMidiActivity() const { return m_midiActivityFlag.exchange(false); }
     void resetTransportPosition() { m_samplePosition = 0; m_transportState.songPositionBeats = 0.0; m_transportState.songPositionSeconds = 0.0; }
+    
+    // Call this when a Timeline Master (SampleLoader) loops
+    void triggerGlobalReset() { m_globalResetRequest.store(true); }
     
     // === MULTI-MIDI DEVICE SUPPORT ===
     
@@ -235,6 +251,13 @@ private:
     // Transport state
     TransportState m_transportState;
     juce::uint64 m_samplePosition { 0 };
+    
+    // Timeline master flag (prevents circular dependency)
+    // When a module is the timeline master, it ignores transport and drives it instead
+    std::atomic<juce::uint32> timelineMasterLogicalId { 0 };  // 0 = no master
+    
+    // Global reset request flag (set by Timeline Master when it loops)
+    std::atomic<bool> m_globalResetRequest { false };
     
     // Voice management state
     std::vector<Voice> m_voices;

@@ -40,6 +40,12 @@ public:
     // For UI
     juce::Image getLatestFrame();
     void chooseVideoFile();
+    
+    // Timeline reporting interface (for Timeline Sync feature)
+    bool canProvideTimeline() const override;
+    double getTimelinePositionSeconds() const override;
+    double getTimelineDurationSeconds() const override;
+    bool isTimelineActive() const override;
 
 #if defined(PRESET_CREATOR_UI)
     void drawParametersInNode(float itemWidth,

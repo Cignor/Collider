@@ -152,4 +152,20 @@ void SampleVoiceProcessor::renderBlock(juce::AudioBuffer<float>& buffer, juce::M
     }
 }
 
+void SampleVoiceProcessor::setCurrentPosition(double newSamplePosition)
+{
+    if (sourceSample == nullptr) return;
+    
+    // 1. Clamp to valid range of the actual sample data
+    // We don't clamp to rangeStart/rangeEnd here because a scrub might
+    // intentionally go outside the loop points temporarily.
+    double maxSample = (double)sourceSample->stereo.getNumSamples();
+    readPosition = juce::jlimit(0.0, maxSample, newSamplePosition);
+    
+    // 2. Reset Time Stretcher
+    // If we jump the read head, the time stretcher's internal buffers are now invalid.
+    // We must flush them to prevent "ghost" audio from the previous location.
+    timePitch.reset();
+}
+
 

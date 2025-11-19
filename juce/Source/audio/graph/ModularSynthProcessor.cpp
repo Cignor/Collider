@@ -234,6 +234,21 @@ void ModularSynthProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce:
             m_transportState.songPositionBeats = (m_transportState.songPositionSeconds / 60.0) * m_transportState.bpm;
         }
 
+        // Handle Global Reset Pulse
+        // When a Timeline Master (e.g., SampleLoader) loops, it calls triggerGlobalReset()
+        // This sets the flag for one block, resetting all time-based modules (LFOs, Sequencers)
+        if (m_globalResetRequest.exchange(false)) // Atomic read-and-clear
+        {
+            m_transportState.forceGlobalReset.store(true);
+            m_samplePosition = 0; // Reset internal counter
+            m_transportState.songPositionSeconds = 0.0;
+            m_transportState.songPositionBeats = 0.0;
+        }
+        else
+        {
+            m_transportState.forceGlobalReset.store(false);
+        }
+
         // --- FINAL THREAD-SAFE FIX ---
         auto currentProcessors = activeAudioProcessors.load();
         if (currentProcessors)
@@ -1642,4 +1657,45 @@ ScopeModuleProcessor* ModularSynthProcessor::getProbeScopeProcessor() const
         return nullptr;
     
     return dynamic_cast<ScopeModuleProcessor*>(probeScopeNode->getProcessor());
+}
+
+void ModularSynthProcessor::setTransportPositionSeconds(double positionSeconds)
+{
+    // Clamp position to valid range (edge case: negative or extreme values)
+    positionSeconds = juce::jmax(0.0, positionSeconds);
+    
+    // Edge case: Prevent extreme position values (sanity check)
+    const double maxReasonablePosition = 3600.0 * 24.0; // 24 hours max
+    if (positionSeconds > maxReasonablePosition)
+    {
+        juce::Logger::writeToLog("[ModularSynth] WARNING: Clamping extreme transport position: " + 
+            juce::String(positionSeconds, 1) + "s -> " + juce::String(maxReasonablePosition, 1) + "s");
+        positionSeconds = maxReasonablePosition;
+    }
+    
+    m_transportState.songPositionSeconds = positionSeconds;
+    
+    // Derive beats from position if BPM is set
+    if (m_transportState.bpm > 0.0)
+    {
+        m_transportState.songPositionBeats = 
+            (positionSeconds * m_transportState.bpm) / 60.0;
+    }
+    
+    // Update sample position for consistency
+    double sampleRate = getSampleRate();
+    if (sampleRate > 0.0)
+    {
+        m_samplePosition = (juce::uint64)(positionSeconds * sampleRate);
+    }
+    
+    // Broadcast to all modules (for NEXT block or immediate, depending on call order)
+    // Note: If called from TempoClock::processBlock, this update will apply to the next block
+    // This is standard and acceptable latency (one-block delay)
+    if (auto processors = activeAudioProcessors.load())
+    {
+        for (const auto& modulePtr : *processors)
+            if (modulePtr)
+                modulePtr->setTimingInfo(m_transportState);
+    }
 }

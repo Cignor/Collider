@@ -313,6 +313,14 @@ void StepSequencerModuleProcessor::processBlock (juce::AudioBuffer<float>& buffe
         
         // --- Transport Sync Logic ---
         const bool syncEnabled = apvts.getRawParameterValue("sync")->load() > 0.5f;
+        
+        // Check Global Reset (pulse from Timeline Master loop)
+        if (m_currentTransport.forceGlobalReset.load())
+        {
+            // Reset sequencer to step 0 and phase to 0
+            currentStep.store(0);
+            phase = 0.0;
+        }
 
         if (syncEnabled && m_currentTransport.isPlaying)
         {

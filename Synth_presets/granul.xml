@@ -58,6 +58,11 @@
           <PARAM id="speed" value="3.159999847412109"/>
           <PARAM id="speed_mod" value="1.0"/>
           <PARAM id="trigger_mod" value="0.0"/>
+          <PARAM id="relativeGateMod"/>
+          <PARAM id="relativePitchMod"/>
+          <PARAM id="relativeRangeEndMod"/>
+          <PARAM id="relativeRangeStartMod"/>
+          <PARAM id="relativeSpeedMod"/>
         </SampleLoaderParameters>
       </params>
     </module>
@@ -95,6 +100,7 @@
           <PARAM id="relativeBitDepthMod" value="1.0"/>
           <PARAM id="relativeSampleRateMod" value="1.0"/>
           <PARAM id="sample_rate" value="0.624000072479248"/>
+          <PARAM id="relativeMixMod"/>
         </BitCrusherParams>
       </params>
     </module>

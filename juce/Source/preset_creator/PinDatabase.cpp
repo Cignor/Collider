@@ -138,7 +138,7 @@ void populatePinDatabase()
         NodeWidth::Big,
         { AudioPin("Pitch Mod", 0, PinDataType::CV), AudioPin("Speed Mod", 1, PinDataType::CV), AudioPin("Gate Mod", 2, PinDataType::CV),
           AudioPin("Trigger Mod", 3, PinDataType::Gate), AudioPin("Range Start Mod", 4, PinDataType::CV), AudioPin("Range End Mod", 5, PinDataType::CV),
-          AudioPin("Randomize Trig", 6, PinDataType::Gate) },
+          AudioPin("Randomize Trig", 6, PinDataType::Gate), AudioPin("Position Mod", 7, PinDataType::CV) },
         { AudioPin("Out L", 0, PinDataType::Audio), AudioPin("Out R", 1, PinDataType::Audio) },
         {}
     );
@@ -593,7 +593,8 @@ db["random"] = ModulePinInfo(
             AudioPin("Trigger Mod", 3, PinDataType::Gate),
             AudioPin("Range Start Mod", 4, PinDataType::CV),
             AudioPin("Range End Mod", 5, PinDataType::CV),
-            AudioPin("Randomize Trig", 6, PinDataType::Gate)
+            AudioPin("Randomize Trig", 6, PinDataType::Gate),
+            AudioPin("Position Mod", 7, PinDataType::CV)
         },
         {
             AudioPin("Out L", 0, PinDataType::Audio),

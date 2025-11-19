@@ -15,6 +15,12 @@ public:
     static constexpr auto paramIdGateWidth        = "gateWidth";
     static constexpr auto paramIdSyncToHost       = "syncToHost";
     static constexpr auto paramIdDivisionOverride = "divisionOverride";
+    
+    // Timeline sync parameters
+    static constexpr auto paramIdSyncToTimeline      = "syncToTimeline";
+    static constexpr auto paramIdTimelineSourceId    = "timelineSourceId";
+    static constexpr auto paramIdEnableBPMDerivation = "enableBPMDerivation";
+    static constexpr auto paramIdBeatsPerTimeline    = "beatsPerTimeline";
 
     // Virtual modulation/control input IDs (no APVTS parameters required)
     static constexpr auto paramIdBpmMod       = "bpm_mod";
@@ -85,6 +91,12 @@ private:
     std::atomic<float>* gateWidthParam { nullptr };
     std::atomic<float>* syncToHostParam { nullptr };
     std::atomic<float>* divisionOverrideParam { nullptr };
+    
+    // Timeline sync parameters
+    std::atomic<float>* syncToTimelineParam { nullptr };
+    std::atomic<float>* timelineSourceIdParam { nullptr };  // Note: JUCE AudioParameterInt returns atomic<float>*
+    std::atomic<float>* enableBPMDerivationParam { nullptr };
+    std::atomic<float>* beatsPerTimelineParam { nullptr };
 
     // Transport cache for per-block start
     TransportState m_currentTransport;

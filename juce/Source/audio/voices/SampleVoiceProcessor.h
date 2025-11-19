@@ -43,6 +43,18 @@ public:
         startSamplePos = startSample;
         endSamplePos = endSample;
     }
+    
+    // Set read position for scrubbing/seek (legacy method, use setCurrentPosition)
+    void setReadPosition(double position) { setCurrentPosition(position); }
+    
+    // Get current read position
+    double getReadPosition() const { return readPosition; }
+    
+    // Alias for getReadPosition (for consistency with setCurrentPosition)
+    double getCurrentPosition() const { return readPosition; }
+    
+    // Set current position with TimePitchProcessor reset (for scrubbing)
+    void setCurrentPosition(double newSamplePosition);
 
 public:
     bool isLooping { true };

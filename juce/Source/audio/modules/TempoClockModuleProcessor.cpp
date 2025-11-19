@@ -17,6 +17,12 @@ TempoClockModuleProcessor::TempoClockModuleProcessor()
     gateWidthParam = apvts.getRawParameterValue(paramIdGateWidth);
     syncToHostParam = apvts.getRawParameterValue(paramIdSyncToHost);
     divisionOverrideParam = apvts.getRawParameterValue(paramIdDivisionOverride);
+    
+    // Timeline sync parameters
+    syncToTimelineParam = apvts.getRawParameterValue(paramIdSyncToTimeline);
+    timelineSourceIdParam = apvts.getRawParameterValue(paramIdTimelineSourceId);
+    enableBPMDerivationParam = apvts.getRawParameterValue(paramIdEnableBPMDerivation);
+    beatsPerTimelineParam = apvts.getRawParameterValue(paramIdBeatsPerTimeline);
 }
 
 juce::AudioProcessorValueTreeState::ParameterLayout TempoClockModuleProcessor::createParameterLayout()
@@ -28,6 +34,14 @@ juce::AudioProcessorValueTreeState::ParameterLayout TempoClockModuleProcessor::c
     params.push_back(std::make_unique<juce::AudioParameterFloat>(paramIdGateWidth, "Gate Width", juce::NormalisableRange<float>(0.01f, 0.99f, 0.0f, 1.0f), 0.5f));
     params.push_back(std::make_unique<juce::AudioParameterBool>(paramIdSyncToHost, "Sync to Host", false));
     params.push_back(std::make_unique<juce::AudioParameterBool>(paramIdDivisionOverride, "Division Override", false));
+    
+    // Timeline sync parameters
+    params.push_back(std::make_unique<juce::AudioParameterBool>(paramIdSyncToTimeline, "Sync to Timeline", false));
+    params.push_back(std::make_unique<juce::AudioParameterInt>(paramIdTimelineSourceId, "Timeline Source", 0, 9999, 0));
+    params.push_back(std::make_unique<juce::AudioParameterBool>(paramIdEnableBPMDerivation, "Derive BPM from Timeline", true));
+    params.push_back(std::make_unique<juce::AudioParameterFloat>(paramIdBeatsPerTimeline, "Beats per Timeline", 
+        juce::NormalisableRange<float>(1.0f, 32.0f, 0.1f), 4.0f));
+    
     return { params.begin(), params.end() };
 }
 
@@ -160,21 +174,184 @@ void TempoClockModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
         if (edge(nudgeDownCV, lastNudgeDownHigh)) { bpm = juce::jlimit(20.0f, 300.0f, bpm - 0.5f); }
     }
 
+    // === TIMELINE SYNC (HIGHEST PRIORITY for position, can also set BPM) ===
+    // Timeline sync controls transport position (always) and optionally BPM (if derivation enabled)
+    bool syncToTimeline = syncToTimelineParam && syncToTimelineParam->load() > 0.5f;
+    bool timelineSyncActive = false;
+    
+    // Static counter for throttled logging (log every 44100 samples = ~1 second at 44.1kHz)
+    static int timelineSyncLogCounter = 0;
+    const int logThrottleSamples = 44100; // Log once per second
+    
+    if (syncToTimeline)
+    {
+        juce::uint32 targetId = timelineSourceIdParam ? (juce::uint32)timelineSourceIdParam->load() : 0;
+        auto* parent = getParent();
+        if (targetId > 0 && parent != nullptr)
+        {
+            // Get snapshot (thread-safe, lock-free)
+            auto currentProcessors = parent->getActiveAudioProcessors();
+            bool found = false;
+            bool wasActive = false;
+            
+            if (currentProcessors)
+            {
+                // Iterate snapshot (lock-free, thread-safe)
+                for (const auto& mod : *currentProcessors)
+                {
+                    if (mod && mod->getLogicalId() == targetId)
+                    {
+                        found = true;
+                        wasActive = mod->canProvideTimeline() && mod->isTimelineActive();
+                        
+                        if (wasActive)
+                        {
+                            // Read atomic values directly (zero overhead)
+                            double pos = mod->getTimelinePositionSeconds();
+                            double dur = mod->getTimelineDurationSeconds();
+                            
+                            // Validate duration (edge case: zero or negative duration)
+                            if (dur <= 0.0)
+                            {
+                                if (timelineSyncLogCounter % logThrottleSamples == 0)
+                                {
+                                    juce::Logger::writeToLog("[TempoClock] Timeline sync: Invalid duration (" + 
+                                        juce::String(dur) + "s) for module #" + juce::String(targetId));
+                                }
+                                break; // Skip this block
+                            }
+                            
+                            // Clamp position to valid range (edge case: position out of bounds)
+                            double originalPos = pos;
+                            pos = juce::jlimit(0.0, dur, pos);
+                            if (pos != originalPos && timelineSyncLogCounter % logThrottleSamples == 0)
+                            {
+                                juce::Logger::writeToLog("[TempoClock] Timeline sync: Clamped position from " + 
+                                    juce::String(originalPos, 3) + "s to " + juce::String(pos, 3) + "s (duration: " + 
+                                    juce::String(dur, 3) + "s)");
+                            }
+                            
+                            // Update transport position (ALWAYS, every block)
+                            parent->setTransportPositionSeconds(pos);
+                            
+                            // Set this module as timeline master (prevents circular dependency)
+                            parent->setTimelineMaster(targetId);
+                            
+                            // Optional: Derive BPM from timeline (only if BPM CV not connected)
+                            if (!bpmFromCV && enableBPMDerivationParam && 
+                                enableBPMDerivationParam->load() > 0.5f)
+                            {
+                                double beatsPerTimeline = beatsPerTimelineParam ? 
+                                    beatsPerTimelineParam->load() : 4.0;
+                                double derivedBPM = (beatsPerTimeline * 60.0) / dur;
+                                derivedBPM = juce::jlimit(20.0, 300.0, derivedBPM);
+                                
+                                parent->setBPM(derivedBPM);
+                                parent->setTempoControlledByModule(true);
+                                
+                                // Use derived BPM for this block
+                                bpm = (float)derivedBPM;
+                                bpmFromCV = false; // Prevent other sources from overriding
+                                
+                                // Log BPM derivation (throttled)
+                                if (timelineSyncLogCounter % logThrottleSamples == 0)
+                                {
+                                    juce::Logger::writeToLog("[TempoClock] Timeline sync: Derived BPM " + 
+                                        juce::String(derivedBPM, 1) + " from timeline (duration: " + 
+                                        juce::String(dur, 3) + "s, beats: " + juce::String(beatsPerTimeline, 1) + ")");
+                                }
+                            }
+                            
+                            timelineSyncActive = true;
+                            
+                            // Log position update (throttled to once per second)
+                            if (timelineSyncLogCounter % logThrottleSamples == 0)
+                            {
+                                juce::Logger::writeToLog("[TempoClock] Timeline sync: Position " + 
+                                    juce::String(pos, 3) + "s / " + juce::String(dur, 3) + "s from module #" + 
+                                    juce::String(targetId));
+                            }
+                        }
+                        break;
+                    }
+                }
+            }
+            
+            // Module was deleted or not found - handle gracefully
+            if (!found && targetId != 0)
+            {
+                // Log only once to avoid spam
+                static juce::uint32 lastLoggedDeletedId = 0;
+                if (lastLoggedDeletedId != targetId)
+                {
+                    juce::Logger::writeToLog("[TempoClock] Timeline sync: Module #" + juce::String(targetId) + 
+                        " not found (deleted), resetting to None");
+                    lastLoggedDeletedId = targetId;
+                }
+                
+                // Reset to "None" (atomic, safe in audio thread)
+                if (timelineSourceIdParam)
+                    timelineSourceIdParam->store(0.0f);
+                
+                // Clear timeline master flag
+                parent->setTimelineMaster(0);
+                
+                // Queue UI update (async, safe)
+                juce::MessageManager::callAsync([this]() {
+                    if (auto* p = apvts.getParameter(paramIdTimelineSourceId))
+                        p->setValueNotifyingHost(0.0f);
+                });
+            }
+            else if (!timelineSyncActive && targetId > 0 && found)
+            {
+                // Source exists but is inactive - clear master flag
+                parent->setTimelineMaster(0);
+                
+                // Log inactive state (throttled)
+                static bool lastLoggedInactive = false;
+                if (timelineSyncLogCounter % logThrottleSamples == 0 && !lastLoggedInactive)
+                {
+                    juce::Logger::writeToLog("[TempoClock] Timeline sync: Module #" + juce::String(targetId) + 
+                        " exists but is inactive (no media loaded or not playing)");
+                    lastLoggedInactive = true;
+                }
+                if (wasActive) lastLoggedInactive = false; // Reset when becomes active again
+            }
+        }
+        else if (targetId == 0)
+        {
+            // No source selected - clear master flag
+            if (auto* parent = getParent())
+                parent->setTimelineMaster(0);
+        }
+    }
+    else
+    {
+        // Timeline sync disabled - clear master flag
+        if (auto* parent = getParent())
+            parent->setTimelineMaster(0);
+    }
+    
+    // Increment log counter (wrap at throttle limit to avoid overflow)
+    timelineSyncLogCounter = (timelineSyncLogCounter + numSamples) % (logThrottleSamples * 2);
+
     // Sync to Host: Use host transport tempo OR control it
     // FIX: BPM CV always takes priority over sync-to-host
+    // NOTE: Timeline sync (if active) has already set BPM, so this won't override it
     bool syncToHost = syncToHostParam && syncToHostParam->load() > 0.5f;
     if (auto* parent = getParent())
     {
-        if (syncToHost && !bpmFromCV)  // FIX: Only sync from host if BPM CV is NOT connected
+        if (syncToHost && !bpmFromCV && !timelineSyncActive)  // FIX: Only sync from host if BPM CV and Timeline sync are NOT active
         {
             // Pull tempo FROM host transport (Tempo Clock follows)
             bpm = (float)m_currentTransport.bpm;
             parent->setTempoControlledByModule(false);  // Not controlling
         }
-        else
+        else if (!timelineSyncActive)  // Only push BPM if timeline sync didn't set it
         {
             // Push tempo TO host transport (Tempo Clock controls the global BPM)
             // This includes: manual BPM, BPM CV, tap tempo, and nudge
+            // NOTE: Timeline sync (if active) has already set BPM, so this is skipped
             parent->setBPM(bpm);
             parent->setTempoControlledByModule(true);  // Controlling - UI should be greyed
         }
@@ -448,6 +625,161 @@ void TempoClockModuleProcessor::drawParametersInNode(float itemWidth, const std:
     if (divOverride)
     {
         ThemeText("⚡ MASTER DIVISION SOURCE", theme.text.warning);
+    }
+
+    ImGui::Spacing();
+    ImGui::Spacing();
+    
+    // === TIMELINE SYNC SECTION ===
+    ThemeText("Timeline Sync", sectionHeader);
+    ImGui::Spacing();
+    
+    // Sync to Timeline checkbox
+    bool syncToTimeline = syncToTimelineParam && syncToTimelineParam->load() > 0.5f;
+    if (ImGui::Checkbox("Sync to Timeline", &syncToTimeline))
+    {
+        if (auto* p = dynamic_cast<juce::AudioParameterBool*>(apvts.getParameter(paramIdSyncToTimeline)))
+            *p = syncToTimeline;
+        onModificationEnded();
+    }
+    ImGui::SameLine();
+    HelpMarkerClock("Sync transport position to a timeline source (SampleLoader/VideoLoader)\nTransport position follows the selected source");
+    
+    if (syncToTimeline)
+    {
+        // Timeline Source Dropdown
+        auto* parent = getParent();
+        juce::StringArray items;
+        std::vector<juce::uint32> logicalIds;
+        items.add("None");
+        logicalIds.push_back(0); // "None" option
+        
+        if (parent)
+        {
+            // Get snapshot (thread-safe, lock-free)
+            auto currentProcessors = parent->getActiveAudioProcessors();
+            if (currentProcessors)
+            {
+                for (const auto& mod : *currentProcessors)
+                {
+                    if (mod && mod->canProvideTimeline())
+                    {
+                        double dur = mod->getTimelineDurationSeconds();
+                        bool active = mod->isTimelineActive();
+                        juce::uint32 id = mod->getLogicalId();
+                        
+                        // Build display name
+                        juce::String displayName = mod->getName() + " #" + juce::String(id);
+                        if (dur > 0.0)
+                            displayName += " (" + juce::String(dur, 1) + "s)";
+                        if (active)
+                            displayName += " [Active]";
+                        
+                        items.add(displayName);
+                        logicalIds.push_back(id);
+                    }
+                }
+            }
+        }
+        
+        // Find current selection index
+        int currentSelection = 0;
+        juce::uint32 currentId = timelineSourceIdParam ? (juce::uint32)timelineSourceIdParam->load() : 0;
+        for (size_t i = 0; i < logicalIds.size(); ++i)
+        {
+            if (logicalIds[i] == currentId)
+            {
+                currentSelection = (int)i;
+                break;
+            }
+        }
+        
+        // Display dropdown
+        // Convert StringArray to const char* array for ImGui
+        std::vector<const char*> itemsCStr;
+        itemsCStr.reserve(items.size());
+        std::vector<juce::String> itemsStorage; // Keep strings alive
+        itemsStorage.reserve(items.size());
+        for (const auto& item : items)
+        {
+            itemsStorage.push_back(item);
+            itemsCStr.push_back(itemsStorage.back().toRawUTF8());
+        }
+        
+        ImGui::SetNextItemWidth(itemWidth);
+        if (ImGui::Combo("Timeline Source", &currentSelection, itemsCStr.data(), (int)itemsCStr.size()))
+        {
+            if (currentSelection >= 0 && currentSelection < (int)logicalIds.size())
+            {
+                juce::uint32 selectedId = logicalIds[currentSelection];
+                if (auto* p = dynamic_cast<juce::AudioParameterInt*>(apvts.getParameter(paramIdTimelineSourceId)))
+                    *p = (int)selectedId;
+                onModificationEnded();
+            }
+        }
+        ImGui::SameLine();
+        HelpMarkerClock("Select which timeline source to sync to\nOnly modules with loaded media appear here");
+        
+        // BPM Derivation controls (only show if timeline sync is enabled)
+        bool enableBPMDeriv = enableBPMDerivationParam && enableBPMDerivationParam->load() > 0.5f;
+        if (ImGui::Checkbox("Derive BPM from Timeline", &enableBPMDeriv))
+        {
+            if (auto* p = dynamic_cast<juce::AudioParameterBool*>(apvts.getParameter(paramIdEnableBPMDerivation)))
+                *p = enableBPMDeriv;
+            onModificationEnded();
+        }
+        ImGui::SameLine();
+        HelpMarkerClock("Calculate BPM from timeline duration\nBPM = (beats per timeline * 60) / duration");
+        
+        if (enableBPMDeriv)
+        {
+            float beatsPerTimeline = beatsPerTimelineParam ? beatsPerTimelineParam->load() : 4.0f;
+            if (ImGui::SliderFloat("Beats per Timeline", &beatsPerTimeline, 1.0f, 32.0f, "%.1f"))
+            {
+                if (auto* p = dynamic_cast<juce::AudioParameterFloat*>(apvts.getParameter(paramIdBeatsPerTimeline)))
+                    *p = beatsPerTimeline;
+                onModificationEnded();
+            }
+            ImGui::SameLine();
+            HelpMarkerClock("Number of beats in the timeline loop\nUsed to calculate BPM from timeline duration");
+        }
+        
+        // Status indicator
+        if (currentId > 0)
+        {
+            bool sourceFound = false;
+            bool sourceActive = false;
+            if (parent)
+            {
+                auto currentProcessors = parent->getActiveAudioProcessors();
+                if (currentProcessors)
+                {
+                    for (const auto& mod : *currentProcessors)
+                    {
+                        if (mod && mod->getLogicalId() == currentId)
+                        {
+                            sourceFound = true;
+                            if (mod->canProvideTimeline())
+                                sourceActive = mod->isTimelineActive();
+                            break;
+                        }
+                    }
+                }
+            }
+            
+            if (sourceFound && sourceActive)
+            {
+                ThemeText("⚡ SYNCED TO TIMELINE", theme.text.success);
+            }
+            else if (sourceFound && !sourceActive)
+            {
+                ThemeText("⚠ Timeline source inactive", theme.text.warning);
+            }
+            else
+            {
+                ThemeText("⚠ Timeline source not found", theme.text.error);
+            }
+        }
     }
 
     ImGui::PopItemWidth();

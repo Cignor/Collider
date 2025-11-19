@@ -24,6 +24,11 @@ struct TransportState {
     // Flag to indicate if a Tempo Clock module is controlling the BPM (for UI feedback)
     std::atomic<bool> isTempoControlledByModule { false };
     
+    // Global reset flag (Pulse)
+    // When true, all time-based modules (LFOs, Sequencers) must reset phase to 0
+    // This is set to true for one block when a Timeline Master (e.g., SampleLoader) loops
+    std::atomic<bool> forceGlobalReset { false };
+    
     // Custom copy constructor (atomics are not copyable by default)
     TransportState() = default;
     TransportState(const TransportState& other)
@@ -33,6 +38,7 @@ struct TransportState {
         , songPositionSeconds(other.songPositionSeconds)
         , globalDivisionIndex(other.globalDivisionIndex.load())
         , isTempoControlledByModule(other.isTempoControlledByModule.load())
+        , forceGlobalReset(other.forceGlobalReset.load())
     {}
     
     // Custom copy assignment operator
@@ -46,6 +52,7 @@ struct TransportState {
             songPositionSeconds = other.songPositionSeconds;
             globalDivisionIndex.store(other.globalDivisionIndex.load());
             isTempoControlledByModule.store(other.isTempoControlledByModule.load());
+            forceGlobalReset.store(other.forceGlobalReset.load());
         }
         return *this;
     }
@@ -395,6 +402,16 @@ public:
     // Modules that produce rhythmic patterns can implement this to report their BPM
     // Default: return empty (module doesn't produce rhythm)
     virtual std::optional<RhythmInfo> getRhythmInfo() const { return std::nullopt; }
+    
+    // === TIMELINE REPORTING INTERFACE (for Timeline Sync feature) ===
+    // Modules that can provide timeline position/duration (e.g., SampleLoader, VideoLoader)
+    // should override these methods to report their state atomically.
+    // Default: module does not provide timeline (returns false/0)
+    
+    virtual bool canProvideTimeline() const { return false; }
+    virtual double getTimelinePositionSeconds() const { return 0.0; }
+    virtual double getTimelineDurationSeconds() const { return 0.0; }
+    virtual bool isTimelineActive() const { return false; }
     
     // Optional dynamic pin interface for modules with variable I/O (e.g., polyphonic modules)
     // Default: return empty vector (no dynamic pins)

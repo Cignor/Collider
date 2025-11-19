@@ -186,6 +186,13 @@ void LFOModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::Mi
         
         float lfoSample = 0.0f;
         
+        // Check Global Reset (pulse from Timeline Master loop)
+        if (m_currentTransport.forceGlobalReset.load())
+        {
+            // Reset oscillator phase to 0
+            osc.reset();
+        }
+        
         if (syncEnabled && m_currentTransport.isPlaying)
         {
             // Transport-synced mode: calculate phase directly from song position

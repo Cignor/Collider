@@ -867,6 +867,34 @@ void VideoFileLoaderModule::drawParametersInNode(float itemWidth,
     ImGui::PopItemWidth();
 }
 
+// === TIMELINE REPORTING INTERFACE IMPLEMENTATION ===
+
+bool VideoFileLoaderModule::canProvideTimeline() const
+{
+    // Check if video file is loaded (sourceIsOpen would be better, but it's private)
+    // We can check if totalDurationMs > 0 as a proxy
+    return totalDurationMs.load() > 0.0;
+}
+
+double VideoFileLoaderModule::getTimelinePositionSeconds() const
+{
+    const juce::int64 audioPos = currentAudioSamplePosition.load();
+    const double sourceRate = sourceAudioSampleRate.load();
+    if (sourceRate > 0.0)
+        return (double)audioPos / sourceRate;
+    return 0.0;
+}
+
+double VideoFileLoaderModule::getTimelineDurationSeconds() const
+{
+    return totalDurationMs.load() / 1000.0;
+}
+
+bool VideoFileLoaderModule::isTimelineActive() const
+{
+    return playing.load();
+}
+
 void VideoFileLoaderModule::drawIoPins(const NodePinHelpers& helpers)
 {
     // Although getDynamicOutputPins takes precedence, this ensures correctness if it's ever used as a fallback.
