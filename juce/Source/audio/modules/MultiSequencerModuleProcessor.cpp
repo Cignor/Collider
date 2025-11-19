@@ -245,6 +245,15 @@ void MultiSequencerModuleProcessor::processBlock (juce::AudioBuffer<float>& buff
         
         // --- Transport Sync Logic ---
         const bool syncEnabled = apvts.getRawParameterValue("sync")->load() > 0.5f;
+        
+        // Check Global Reset (pulse from Timeline Master loop)
+        // When SampleLoader/VideoLoader loops and is timeline master, all synced modules reset
+        if (m_currentTransport.forceGlobalReset.load())
+        {
+            // Reset sequencer to step 0 and phase to 0
+            currentStep.store(0);
+            phase = 0.0;
+        }
 
         if (syncEnabled && m_currentTransport.isPlaying)
         {

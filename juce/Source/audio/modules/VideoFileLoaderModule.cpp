@@ -252,6 +252,22 @@ void VideoFileLoaderModule::run()
                     audioReader->resetPosition(); // Force seek on next read
                     abstractFifo.reset(); // Clear FIFO on seek
                     timePitch.reset(); // Reset time stretcher state after seek
+                    
+                    // If we're the timeline master and playing, update transport immediately
+                    // This ensures transport syncs immediately, not waiting for TempoClock to read
+                    if (playing.load())
+                    {
+                        auto* parentSynth = getParent();
+                        if (parentSynth && parentSynth->isModuleTimelineMaster(getLogicalId()))
+                        {
+                            const double sourceRate = sourceAudioSampleRate.load();
+                            if (sourceRate > 0.0)
+                            {
+                                double newPosSeconds = (double)audioReadPosition / sourceRate;
+                                parentSynth->setTransportPositionSeconds(newPosSeconds);
+                            }
+                        }
+                    }
                 }
             }
             // Fallback to ratio seek if duration is not known
@@ -663,6 +679,23 @@ void VideoFileLoaderModule::processBlock(juce::AudioBuffer<float>& buffer, juce:
             
             // THIS IS THE FIX: Advance the master clock by the number of samples consumed
             currentAudioSamplePosition.store(currentAudioSamplePosition.load() + readCount);
+            
+            // If we're the timeline master and playing, update transport position continuously
+            // This ensures transport stays in sync regardless of processing order
+            if (playing.load())
+            {
+                auto* parentSynth = getParent();
+                if (parentSynth && parentSynth->isModuleTimelineMaster(getLogicalId()))
+                {
+                    const double sourceRate = sourceAudioSampleRate.load();
+                    if (sourceRate > 0.0)
+                    {
+                        const juce::int64 currentPos = currentAudioSamplePosition.load();
+                        double newPosSeconds = (double)currentPos / sourceRate;
+                        parentSynth->setTransportPositionSeconds(newPosSeconds);
+                    }
+                }
+            }
         }
     }
 }
@@ -893,6 +926,63 @@ double VideoFileLoaderModule::getTimelineDurationSeconds() const
 bool VideoFileLoaderModule::isTimelineActive() const
 {
     return playing.load();
+}
+
+void VideoFileLoaderModule::setTimingInfo(const TransportState& state)
+{
+    // CRITICAL: If this module is the timeline master, ignore transport updates
+    // This prevents feedback loops where:
+    // 1. VideoLoader scrubs → updates transport
+    // 2. Transport broadcasts → VideoLoader receives update
+    // 3. VideoLoader reacts → creates feedback loop
+    auto* parentSynth = getParent();
+    if (parentSynth && parentSynth->isModuleTimelineMaster(getLogicalId()))
+    {
+        // We're the timeline master - ignore transport (we drive it, not follow it)
+        return;
+    }
+    
+    // Not the timeline master - accept transport updates normally
+    lastTransportPlaying.store(state.isPlaying);
+    if (syncToTransport.load())
+    {
+        playing.store(state.isPlaying);
+        
+        // CRITICAL: Sync playback position to transport when following timeline
+        // This ensures VideoFileLoaderModule stays in sync with TempoClock
+        if (state.isPlaying && audioLoaded.load() && audioReader)
+        {
+            const double sourceRate = sourceAudioSampleRate.load();
+            if (sourceRate > 0.0 && state.songPositionSeconds >= 0.0)
+            {
+                // Calculate target sample position from transport
+                const juce::int64 targetSamplePos = (juce::int64)(state.songPositionSeconds * sourceRate);
+                
+                // Only update if position has changed significantly (avoid constant seeks)
+                const juce::int64 currentPos = currentAudioSamplePosition.load();
+                const juce::int64 diff = std::abs(targetSamplePos - currentPos);
+                
+                // Update if difference is more than 1 block of samples (prevents micro-seeks)
+                if (diff > 512) // ~10ms at 48kHz
+                {
+                    const juce::ScopedLock audioLk(audioLock);
+                    if (audioReader)
+                    {
+                        // Update master clock to match transport
+                        currentAudioSamplePosition.store(targetSamplePos);
+                        // Update decoder read position
+                        audioReadPosition = (double)targetSamplePos;
+                        // Reset position for next read
+                        audioReader->resetPosition();
+                        // Clear FIFO to prevent stale audio
+                        abstractFifo.reset();
+                        // Reset time stretcher to prevent artifacts
+                        timePitch.reset();
+                    }
+                }
+            }
+        }
+    }
 }
 
 void VideoFileLoaderModule::drawIoPins(const NodePinHelpers& helpers)

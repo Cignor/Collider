@@ -26,7 +26,7 @@ public:
     void prepareToPlay(double sampleRate, int samplesPerBlock) override;
     void releaseResources() override;
     void processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midi) override;
-    void setTimingInfo(const TransportState& state) override { lastTransportPlaying.store(state.isPlaying); if (syncToTransport.load()) playing.store(state.isPlaying); }
+    void setTimingInfo(const TransportState& state) override;
     
     juce::AudioProcessorValueTreeState& getAPVTS() override { return apvts; }
     

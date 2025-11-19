@@ -72,6 +72,18 @@ void TimelineModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, juc
     setLiveParamValue("is_recording_live", isRecording ? 1.0f : 0.0f);
     setLiveParamValue("is_playing_live", isPlayingBack ? 1.0f : 0.0f);
     
+    // Check Global Reset (pulse from Timeline Master loop)
+    // When SampleLoader/VideoLoader loops and is timeline master, all synced modules reset
+    if (m_currentTransport.forceGlobalReset.load())
+    {
+        // Reset internal position tracking
+        m_internalPositionBeats = 0.0;
+        m_lastPositionBeats = 0.0;
+        // Clear keyframe search hints (will be recalculated from start)
+        for (auto& hint : m_lastKeyframeIndexHints)
+            hint = 0;
+    }
+    
     // Calculate timing information
     double blockStartBeats = m_currentTransport.songPositionBeats;
     double samplesPerBeat = (60.0 / m_currentTransport.bpm) * m_sampleRate;
@@ -367,6 +379,7 @@ void TimelineModuleProcessor::drawParametersInNode(float itemWidth,
 {
     juce::ignoreUnused(isParamModulated, onModificationEnded);
     
+    ImGui::PushID(this);
     ImGui::PushItemWidth(itemWidth);
     const auto& theme = ThemeManager::getInstance().getCurrentTheme();
     const ImGuiStyle& style = ImGui::GetStyle();
@@ -473,7 +486,7 @@ void TimelineModuleProcessor::drawParametersInNode(float itemWidth,
     
     ImGui::Spacing();
     
-    // Automation visualization
+    // Automation visualization - wrapped in child window for proper clipping and state management
     if (m_selectedChannelIndex >= 0)
     {
         const juce::ScopedLock lock(automationLock);
@@ -482,6 +495,7 @@ void TimelineModuleProcessor::drawParametersInNode(float itemWidth,
             const auto& channel = m_automationChannels[m_selectedChannelIndex];
             if (!channel.keyframes.empty())
             {
+                // Read data before BeginChild (per guide)
                 std::vector<float> plotData;
                 plotData.reserve(channel.keyframes.size());
                 for (const auto& kf : channel.keyframes)
@@ -489,7 +503,31 @@ void TimelineModuleProcessor::drawParametersInNode(float itemWidth,
                     plotData.push_back(kf.value);
                 }
                 
-                ImGui::PlotLines("##automation", plotData.data(), (int)plotData.size(), 0, nullptr, -1.0f, 1.0f, ImVec2(itemWidth, 80));
+                // Use graphSize pattern from guide
+                const float vizHeight = 80.0f;
+                const ImVec2 graphSize(itemWidth, vizHeight);
+                const ImGuiWindowFlags childFlags = ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse;
+                
+                if (ImGui::BeginChild("TimelineAutomationViz", graphSize, false, childFlags))
+                {
+                    ImDrawList* drawList = ImGui::GetWindowDrawList();
+                    const ImVec2 p0 = ImGui::GetWindowPos();
+                    const ImVec2 p1 = ImVec2(p0.x + graphSize.x, p0.y + graphSize.y);
+                    
+                    // Background
+                    const ImU32 bgColor = ThemeManager::getInstance().getCanvasBackground();
+                    drawList->AddRectFilled(p0, p1, bgColor, 4.0f);
+                    
+                    // Clip rect for drawing
+                    ImGui::PushClipRect(p0, p1, true);
+                    
+                    // Draw automation plot using ImGui::PlotLines
+                    // PlotLines handles its own positioning within the child window
+                    ImGui::PlotLines("##automation", plotData.data(), (int)plotData.size(), 0, nullptr, -1.0f, 1.0f, graphSize);
+                    
+                    ImGui::PopClipRect();
+                }
+                ImGui::EndChild();
             }
         }
     }
@@ -499,16 +537,26 @@ void TimelineModuleProcessor::drawParametersInNode(float itemWidth,
     ThemeText("Transport Status", theme.text.section_header);
     ImGui::Spacing();
     
-    float currentPos = getLiveParamValue("song_position_beats_live", 0.0f);
-    int bar = static_cast<int>(currentPos / 4.0) + 1;
-    int beat = static_cast<int>(currentPos) % 4 + 1;
-    int tick = static_cast<int>((currentPos - std::floor(currentPos)) * 960.0); // Standard MIDI ticks
+    // Use transport position directly for display (more accurate than internal tracking)
+    // This ensures position updates correctly even if internal tracking has issues
+    double displayPositionBeats = m_currentTransport.songPositionBeats;
+    
+    // Fallback to live param if transport position is 0 and we're playing
+    if (displayPositionBeats == 0.0 && m_currentTransport.isPlaying)
+    {
+        displayPositionBeats = getLiveParamValue("song_position_beats_live", 0.0f);
+    }
+    
+    int bar = static_cast<int>(displayPositionBeats / 4.0) + 1;
+    int beat = static_cast<int>(displayPositionBeats) % 4 + 1;
+    int tick = static_cast<int>((displayPositionBeats - std::floor(displayPositionBeats)) * 960.0); // Standard MIDI ticks
     
     ImGui::Text("Position: %04d:%02d:%03d", bar, beat, tick);
-    ImGui::Text("Beats: %.4f", currentPos);
+    ImGui::Text("Beats: %.4f", displayPositionBeats);
     ImGui::Text("BPM: %.2f", m_currentTransport.bpm);
     
     ImGui::PopItemWidth();
+    ImGui::PopID();
 }
 
 void TimelineModuleProcessor::drawIoPins(const NodePinHelpers& helpers)

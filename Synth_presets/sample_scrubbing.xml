@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 
-<ModularSynthPreset version="1" bpm="120.0000076293945">
+<ModularSynthPreset version="1" bpm="127.9976780466567">
   <modules>
     <module logicalId="1" type="sample_loader">
       <params>
@@ -9,7 +9,7 @@
           <PARAM id="gate" value="0.5299999713897705"/>
           <PARAM id="gate_mod" value="1.0"/>
           <PARAM id="loop" value="1.0"/>
-          <PARAM id="pitch" value="-13.30000019073486"/>
+          <PARAM id="pitch" value="-24.0"/>
           <PARAM id="pitch_mod" value="0.0"/>
           <PARAM id="position" value="0.1700000017881393"/>
           <PARAM id="position_mod" value="0.0"/>
@@ -25,7 +25,7 @@
           <PARAM id="relativeRangeEndMod" value="0.0"/>
           <PARAM id="relativeRangeStartMod" value="0.0"/>
           <PARAM id="relativeSpeedMod" value="1.0"/>
-          <PARAM id="speed" value="1.689999938011169"/>
+          <PARAM id="speed" value="4.0"/>
           <PARAM id="speed_mod" value="1.0"/>
           <PARAM id="trigger_mod" value="0.0"/>
         </SampleLoaderParameters>
@@ -102,6 +102,22 @@
         </BitCrusherParams>
       </params>
     </module>
+    <module logicalId="1027" type="video_file_loader">
+      <params>
+        <VideoFileLoaderParams>
+          <PARAM id="engine" value="1.0"/>
+          <PARAM id="in" value="0.0"/>
+          <PARAM id="loop" value="1.0"/>
+          <PARAM id="out" value="1.0"/>
+          <PARAM id="speed" value="1.0"/>
+          <PARAM id="sync" value="1.0"/>
+          <PARAM id="zoomLevel" value="1.0"/>
+        </VideoFileLoaderParams>
+      </params>
+      <extra>
+        <VideoFileLoaderState videoFilePath="C:\Users\PIMP-TOWERPRIMUS\Downloads\Rover. Shuffle_cuttingshapes.mp4"/>
+      </extra>
+    </module>
   </modules>
   <connections>
     <connection srcId="1" srcChan="0" dstId="1014" dstChan="0"/>
@@ -116,12 +132,13 @@
     <connection srcId="1014" srcChan="1" dstId="9" dstChan="1"/>
   </connections>
   <NodeEditorUI>
-    <node id="1" x="-426.0" y="228.0"/>
+    <node id="1" x="-496.0" y="828.0"/>
     <node id="3" x="-1163.0" y="156.0"/>
-    <node id="5" x="-925.0" y="955.0"/>
+    <node id="5" x="-1237.0" y="1027.0"/>
     <node id="7" x="-1714.0" y="169.0"/>
     <node id="9" x="538.0" y="449.0000610351562"/>
     <node id="1014" x="98.036376953125" y="672.0704345703125"/>
+    <node id="1027" x="87.0" y="920.0"/>
     <node id="0" x="1200.0" y="500.0"/>
   </NodeEditorUI>
 </ModularSynthPreset>

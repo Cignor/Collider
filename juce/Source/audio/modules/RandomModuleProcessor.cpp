@@ -128,6 +128,14 @@ void RandomModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce:
         bool triggerNewValue = false;
         if (syncEnabled && m_currentTransport.isPlaying)
         {
+            // Check Global Reset (pulse from Timeline Master loop)
+            // When SampleLoader/VideoLoader loops and is timeline master, all synced modules reset
+            if (m_currentTransport.forceGlobalReset.load())
+            {
+                // Reset lastScaledBeats to 0 (will trigger new value on next beat)
+                lastScaledBeats = 0.0;
+            }
+            
             // SYNC MODE
             double beatsNow = m_currentTransport.songPositionBeats + (i / sampleRate / 60.0 * m_currentTransport.bpm);
             double scaledBeats = beatsNow * beatDivision;

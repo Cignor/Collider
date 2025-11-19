@@ -686,6 +686,24 @@ void SampleLoaderModuleProcessor::reset()
     }
 }
 
+void SampleLoaderModuleProcessor::setTimingInfo(const TransportState& state)
+{
+    // CRITICAL: If this module is the timeline master, ignore transport updates
+    // This prevents feedback loops where:
+    // 1. SampleLoader scrubs → updates transport
+    // 2. Transport broadcasts → SampleLoader receives update
+    // 3. SampleLoader reacts → creates feedback loop
+    auto* parentSynth = getParent();
+    if (parentSynth && parentSynth->isModuleTimelineMaster(getLogicalId()))
+    {
+        // We're the timeline master - ignore transport (we drive it, not follow it)
+        return;
+    }
+    
+    // Not the timeline master - accept transport updates normally
+    ModuleProcessor::setTimingInfo(state);
+}
+
 void SampleLoaderModuleProcessor::loadSample(const juce::File& file)
 {
     if (!file.existsAsFile())

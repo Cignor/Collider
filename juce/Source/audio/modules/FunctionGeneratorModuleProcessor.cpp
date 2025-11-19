@@ -143,6 +143,16 @@ void FunctionGeneratorModuleProcessor::processBlock(juce::AudioBuffer<float>& bu
     const float basePitchBase = pitchBaseParam->load();
     const float baseValueMult = valueMultParam->load();
     const int baseCurveSelect = static_cast<int>(curveSelectParam->load());
+    
+    // Check Global Reset (pulse from Timeline Master loop)
+    // When SampleLoader/VideoLoader loops and is timeline master, all synced modules reset
+    // Only check if in sync mode (baseMode == 1) and playing
+    if (baseMode == 1 && m_currentTransport.isPlaying && m_currentTransport.forceGlobalReset.load())
+    {
+        // Reset phase state to 0
+        phase = 0.0;
+        lastPhase = 0.0;
+    }
 
     for (int i = 0; i < buffer.getNumSamples(); ++i)
     {

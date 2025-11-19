@@ -25,6 +25,10 @@ public:
     void releaseResources() override {}
     void processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midiMessages) override;
     void reset() override;
+    
+    // --- Transport Sync ---
+    // Override to ignore transport when this module is the timeline master (prevents feedback loops)
+    void setTimingInfo(const TransportState& state) override;
     void getStateInformation (juce::MemoryBlock& destData) override;
     void setStateInformation (const void* data, int sizeInBytes) override;
 

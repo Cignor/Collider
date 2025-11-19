@@ -218,6 +218,14 @@ void StrokeSequencerModuleProcessor::processBlock(juce::AudioBuffer<float>& buff
     
     if (sync && m_currentTransport.isPlaying)
     {
+        // Check Global Reset (pulse from Timeline Master loop)
+        // When SampleLoader/VideoLoader loops and is timeline master, all synced modules reset
+        if (m_currentTransport.forceGlobalReset.load())
+        {
+            // Reset playhead position to 0
+            playheadPosition = 0.0;
+        }
+        
         // SYNC MODE: Use the global beat position
         int divisionIndex = (int)apvts.getRawParameterValue(paramIdRateDivision)->load();
         
