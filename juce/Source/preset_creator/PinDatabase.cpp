@@ -123,7 +123,11 @@ void populatePinDatabase()
     );
     db["noise"] = ModulePinInfo(
         NodeWidth::Small,
-        { AudioPin("Level Mod", 0, PinDataType::CV), AudioPin("Colour Mod", 1, PinDataType::CV) },
+        {
+            AudioPin("Level Mod", 0, PinDataType::CV),
+            AudioPin("Colour Mod", 1, PinDataType::CV),
+            AudioPin("Rate Mod", 2, PinDataType::CV)
+        },
         { AudioPin("Out L", 0, PinDataType::Audio), AudioPin("Out R", 1, PinDataType::Audio) }, // Stereo output to match actual implementation
         {}
     );

@@ -705,10 +705,21 @@ double MidiLoggerModuleProcessor::samplesToMidiTicks(int64_t samples) const
 // This is the main export function.
 void MidiLoggerModuleProcessor::exportToMidiFile()
 {
+    // Default to exe/midi/ directory, create if it doesn't exist
+    juce::File startDir;
+    auto exeDir = juce::File::getSpecialLocation(juce::File::currentExecutableFile).getParentDirectory();
+    auto midiDir = exeDir.getChildFile("midi");
+    if (midiDir.exists() && midiDir.isDirectory())
+        startDir = midiDir;
+    else if (midiDir.createDirectory())
+        startDir = midiDir;
+    else
+        startDir = juce::File::getSpecialLocation(juce::File::userDocumentsDirectory); // Fallback to user documents
+    
     // Use a native file chooser to ask the user where to save the file.
     fileChooser = std::make_unique<juce::FileChooser>(
         "Save MIDI File",
-        juce::File::getSpecialLocation(juce::File::userDocumentsDirectory),
+        startDir,
         "*.mid"
     );
 

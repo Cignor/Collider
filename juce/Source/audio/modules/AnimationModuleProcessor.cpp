@@ -175,11 +175,22 @@ void AnimationModuleProcessor::openAnimationFile()
         return;
     }
 
+    // Default to exe/animation/ directory, create if it doesn't exist
+    juce::File startDir;
+    auto exeDir = juce::File::getSpecialLocation(juce::File::currentExecutableFile).getParentDirectory();
+    auto animationDir = exeDir.getChildFile("animation");
+    if (animationDir.exists() && animationDir.isDirectory())
+        startDir = animationDir;
+    else if (animationDir.createDirectory())
+        startDir = animationDir;
+    else
+        startDir = exeDir; // Fallback to exe folder if animation directory can't be created
+    
     // Create a file chooser to let the user select an animation file
     // Store it as a member to keep it alive during the async operation
     m_FileChooser = std::make_unique<juce::FileChooser>(
         "Select an animation file (glTF/FBX)...",
-        juce::File{},
+        startDir,
         "*.gltf;*.glb;*.fbx");
 
     auto flags = juce::FileBrowserComponent::openMode | juce::FileBrowserComponent::canSelectFiles;

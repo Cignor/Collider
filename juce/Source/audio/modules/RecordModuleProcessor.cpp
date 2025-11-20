@@ -154,7 +154,15 @@ RecordModuleProcessor::RecordModuleProcessor()
     writerThread.startThread();
     
 #if defined(PRESET_CREATOR_UI)
-    saveDirectory = juce::File::getSpecialLocation(juce::File::userMusicDirectory);
+    // Default to exe/record/ directory, create if it doesn't exist
+    auto exeDir = juce::File::getSpecialLocation(juce::File::currentExecutableFile).getParentDirectory();
+    auto recordDir = exeDir.getChildFile("record");
+    if (recordDir.exists() && recordDir.isDirectory())
+        saveDirectory = recordDir;
+    else if (recordDir.createDirectory())
+        saveDirectory = recordDir;
+    else
+        saveDirectory = juce::File::getSpecialLocation(juce::File::userMusicDirectory); // Fallback to user music directory
 #endif
     
     waveformFifo.setTotalSize(4096);
@@ -362,14 +370,26 @@ void RecordModuleProcessor::drawParametersInNode(float /*itemWidth*/, const std:
     }
     else // --- NEW, SIMPLIFIED IDLE STATE UI ---
     {
-        // Load the last saved directory if available
-        if (propertiesFile && saveDirectory == juce::File::getSpecialLocation(juce::File::userMusicDirectory))
+        // Load the last saved directory if available, but prefer exe/record/ if it doesn't exist
+        auto exeDir = juce::File::getSpecialLocation(juce::File::currentExecutableFile).getParentDirectory();
+        auto defaultRecordDir = exeDir.getChildFile("record");
+        
+        // If saveDirectory is still at default location, try to load from properties or use exe/record/
+        if (propertiesFile)
         {
             juce::String lastPath = propertiesFile->getValue("lastRecorderPath");
             if (lastPath.isNotEmpty() && juce::File(lastPath).isDirectory())
             {
                 saveDirectory = juce::File(lastPath);
             }
+            else if (defaultRecordDir.exists() && defaultRecordDir.isDirectory())
+            {
+                saveDirectory = defaultRecordDir;
+            }
+        }
+        else if (defaultRecordDir.exists() && defaultRecordDir.isDirectory())
+        {
+            saveDirectory = defaultRecordDir;
         }
         
         // This layout provides more space as requested

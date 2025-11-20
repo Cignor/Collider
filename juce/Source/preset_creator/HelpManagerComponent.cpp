@@ -5,6 +5,7 @@
 #include "PresetCreatorApplication.h"  // For app properties
 #include "NotificationManager.h"     // For notification posting
 #include "../audio/modules/ModuleProcessor.h" // For PinDataType
+#include "../utils/VersionInfo.h"
 #include <juce_gui_basics/juce_gui_basics.h>
 #include <imgui_internal.h> // For IsKeyPressed
 #include <vector>
@@ -410,18 +411,31 @@ void HelpManagerComponent::renderFaqTab()
 
 void HelpManagerComponent::renderAboutTab()
 {
-    ImGui::Text("Collider Modular Synthesizer");
-    ImGui::Text("Version 1.2 (Hypothetical)"); // TODO: Pull this from a central version header
+    const auto name = VersionInfo::getApplicationName();
+    const auto version = VersionInfo::getFullVersionString();
+    const auto buildType = VersionInfo::getBuildTypeString();
+    const auto author = VersionInfo::getAuthorString();
+    const auto buildInfo = VersionInfo::getBuildInfoString();
+    
+    ImGui::Text("%s", name.toRawUTF8());
+    ImGui::Text("Version %s", version.toRawUTF8());
+    ImGui::Text("%s", buildType.toRawUTF8());
+    
     ImGui::Separator();
-    ImGui::TextWrapped("Built with JUCE, Dear ImGui, imnodes, and the Collider Core audio engine.");
+    ImGui::Spacing();
+    
+    ImGui::TextWrapped("By %s", author.toRawUTF8());
+    ImGui::Spacing();
+    ImGui::TextWrapped("%s", buildInfo.toRawUTF8());
+    ImGui::Spacing();
+    ImGui::TextWrapped("Built with JUCE, Dear ImGui, ImNodes, and the Collider Core audio engine.");
     
     ImGui::Spacing();
     ImGui::Spacing();
     
-    // Use dummy buttons for link look-and-feel
     if (ImGui::Button("GitHub Repository"))
     {
-        juce::URL("https://github.com/Moof-Moof/Collider").launchInDefaultBrowser();
+        juce::URL("https://github.com/Cignor/Pikon-Raditsz").launchInDefaultBrowser();
     }
     ImGui::SameLine();
     if (ImGui::Button("Full Documentation"))
@@ -458,7 +472,7 @@ void HelpManagerComponent::renderShortcutsTab()
     char searchBuffer[128] = {};
     std::strncpy(searchBuffer, shortcutsSearchTerm.toRawUTF8(), sizeof(searchBuffer) - 1);
     ImGui::SetNextItemWidth(300.0f);
-    if (ImGui::InputTextWithHint("##shortcut-search", "Search actions…", searchBuffer, sizeof(searchBuffer)))
+    if (ImGui::InputTextWithHint("##shortcut-search", "Search actions...", searchBuffer, sizeof(searchBuffer)))
     {
         shortcutsSearchTerm = juce::String(searchBuffer).trim();
     }
@@ -595,7 +609,7 @@ void HelpManagerComponent::renderShortcutCapturePanel()
                     contextDisplayName(shortcutCaptureState.context).toRawUTF8());
         
         ImGui::Separator();
-        ImGui::TextUnformatted("Press a key combination… (Esc to cancel)");
+        ImGui::TextUnformatted("Press a key combination... (Esc to cancel)");
         
         ImGui::End();
     }

@@ -81,8 +81,19 @@ void VideoFileLoaderModule::releaseResources()
 
 void VideoFileLoaderModule::chooseVideoFile()
 {
+    // Default to exe/video/ directory, create if it doesn't exist
+    juce::File startDir;
+    auto exeDir = juce::File::getSpecialLocation(juce::File::currentExecutableFile).getParentDirectory();
+    auto videoDir = exeDir.getChildFile("video");
+    if (videoDir.exists() && videoDir.isDirectory())
+        startDir = videoDir;
+    else if (videoDir.createDirectory())
+        startDir = videoDir;
+    else
+        startDir = exeDir; // Fallback to exe folder if video directory can't be created
+    
     fileChooser = std::make_unique<juce::FileChooser>("Select a video file...", 
-                                                       juce::File{}, 
+                                                       startDir, 
                                                        "*.mp4;*.mov;*.avi;*.mkv;*.wmv");
     auto chooserFlags = juce::FileBrowserComponent::openMode | juce::FileBrowserComponent::canSelectFiles;
     

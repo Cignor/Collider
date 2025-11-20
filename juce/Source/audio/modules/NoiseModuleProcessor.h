@@ -21,9 +21,14 @@ public:
     // Parameter ID constants for APVTS and modulation routing
     static constexpr auto paramIdLevel = "level";
     static constexpr auto paramIdColour = "colour";
+    static constexpr auto paramIdRate = "rate";
     // ADDED: Virtual parameter IDs for modulation inputs
     static constexpr auto paramIdLevelMod = "level_mod";
     static constexpr auto paramIdColourMod = "colour_mod";
+    static constexpr auto paramIdRateMod = "rate_mod";
+
+    static constexpr float minRateHz = 0.1f;
+    static constexpr float maxRateHz = 200.0f;
 
     NoiseModuleProcessor();
     ~NoiseModuleProcessor() override = default;
@@ -58,11 +63,14 @@ private:
     // --- Parameters ---
     std::atomic<float>* levelDbParam{ nullptr };
     juce::AudioParameterChoice* colourParam{ nullptr };
+    std::atomic<float>* rateHzParam{ nullptr };
 
     // --- DSP State ---
     juce::Random random;
     juce::dsp::IIR::Filter<float> pinkFilter;  // Simple filter to approximate pink noise
     juce::dsp::IIR::Filter<float> brownFilter; // Simple filter to approximate brown noise
+    double currentSampleRate { 44100.0 };
+    float slowNoiseState { 0.0f };
 
 #if defined(PRESET_CREATOR_UI)
     struct VizData
@@ -72,6 +80,7 @@ private:
         std::atomic<float> currentLevelDb { -12.0f };
         std::atomic<int> currentColour { 0 }; // 0=White, 1=Pink, 2=Brown
         std::atomic<float> outputRms { 0.0f };
+        std::atomic<float> currentRateHz { 20.0f };
 
         VizData()
         {

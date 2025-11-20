@@ -4,6 +4,7 @@
 #include "NotificationManager.h"
 #include "PresetValidator.h"
 #include "PresetAutoHealer.h"
+#include "../utils/VersionInfo.h"
 
 #include <imgui.h>
 #include <imgui_internal.h>
@@ -372,7 +373,7 @@ void ImGuiNodeEditorComponent::registerShortcuts()
                    shortcutFileSaveRequested);
 
     registerAction(ShortcutActionIds::fileSaveAs,
-                   "Save Preset As…",
+                   "Save Preset As...",
                    "Save the current patch to a new file.",
                    "File",
                    { ImGuiKey_S, true, false, true, false },
@@ -531,7 +532,9 @@ void ImGuiNodeEditorComponent::registerShortcuts()
             m_helpManager.setActiveTab(0); // 0 = Shortcuts tab
         }
     );
-    shortcutManager.setDefaultBinding(ShortcutActionIds::viewToggleShortcutsWindow, nodeEditorContextId, { ImGuiKey_F1, false, false, false, false });
+    // F1 now shows About dialog instead of Help Manager
+    // Help Manager is accessible via Settings menu or Help menu
+    // shortcutManager.setDefaultBinding(ShortcutActionIds::viewToggleShortcutsWindow, nodeEditorContextId, { ImGuiKey_F1, false, false, false, false });
 
     registerAction(ShortcutActionIds::historyUndo,
                    "Undo",
@@ -892,7 +895,7 @@ void ImGuiNodeEditorComponent::renderImGui()
     // Basic docking-like two-panels layout
     ImGui::SetNextWindowPos (ImVec2 (0, 0), ImGuiCond_Always);
     ImGui::SetNextWindowSize (ImVec2 ((float) getWidth(), (float) getHeight()), ImGuiCond_Always);
-    ImGui::Begin ("Preset Creator", nullptr,
+    ImGui::Begin (VersionInfo::APPLICATION_NAME, nullptr,
                   ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoBringToFrontOnFocus | ImGuiWindowFlags_MenuBar);
 
     const auto& theme = ThemeManager::getInstance().getCurrentTheme();
@@ -1133,7 +1136,7 @@ void ImGuiNodeEditorComponent::renderImGui()
                 showMidiDeviceManager = !showMidiDeviceManager;
             }
 
-            if (ImGui::MenuItem("Help Manager...", "F1"))
+            if (ImGui::MenuItem("Help Manager..."))
             {
                 m_helpManager.open();
                 m_helpManager.setActiveTab(0); // Open to Shortcuts tab
@@ -1521,6 +1524,18 @@ void ImGuiNodeEditorComponent::renderImGui()
                 }
             }
             
+            bool requestedLogViewerToggle = false;
+            if (ImGui::MenuItem("Show Log Viewer", nullptr, showLogViewer))
+            {
+                showLogViewer = !showLogViewer;
+                requestedLogViewerToggle = showLogViewer;
+            }
+            if (requestedLogViewerToggle)
+            {
+                refreshLogViewerContent();
+                logViewerAutoScroll = true;
+            }
+            
             ImGui::EndMenu();
         }
         
@@ -1691,7 +1706,91 @@ void ImGuiNodeEditorComponent::renderImGui()
 #endif
         // --- END ZOOM DISPLAY ---
 
+        // === HELP MENU ===
+        if (ImGui::BeginMenu("Help"))
+        {
+            if (ImGui::MenuItem("About"))
+            {
+                showAboutDialog = true;
+            }
+            
+            ImGui::Separator();
+            
+            if (ImGui::MenuItem("Help Manager...", "F1"))
+            {
+                m_helpManager.open();
+                m_helpManager.setActiveTab(0); // Open to Shortcuts tab
+            }
+            
+            ImGui::EndMenu();
+        }
+
         ImGui::EndMainMenuBar();
+    }
+    
+    // === ABOUT DIALOG ===
+    if (showAboutDialog)
+    {
+        ImGui::OpenPopup("About");
+    }
+    
+    // Track if popup is open to handle F1 key correctly
+    bool aboutPopupOpen = ImGui::BeginPopupModal("About", &showAboutDialog, 
+                                ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoMove);
+    
+    if (aboutPopupOpen)
+    {
+        ImGui::Spacing();
+        
+        // Application name (large, centered)
+        ImGui::SetWindowFontScale(1.5f);
+        ImGui::Text("%s", VersionInfo::APPLICATION_NAME);
+        ImGui::SetWindowFontScale(1.0f);
+        
+        ImGui::Spacing();
+        ImGui::Separator();
+        ImGui::Spacing();
+        
+        // Version info
+        ImGui::Text("Version %s", VersionInfo::VERSION_FULL);
+        ImGui::Text("%s", VersionInfo::BUILD_TYPE);
+        
+        ImGui::Spacing();
+        
+        // Author
+        ImGui::Text("By %s", VersionInfo::AUTHOR);
+        
+        ImGui::Spacing();
+        ImGui::Separator();
+        ImGui::Spacing();
+        
+        // Close button
+        bool shouldClose = false;
+        if (ImGui::Button("Close", ImVec2(120, 0)))
+        {
+            shouldClose = true;
+        }
+        
+        // Handle escape/enter to close, but not F1 when dialog is already open
+        if (ImGui::IsKeyPressed(ImGuiKey_Escape, false) || 
+            (ImGui::IsKeyPressed(ImGuiKey_Enter, false) || ImGui::IsKeyPressed(ImGuiKey_KeypadEnter, false)))
+        {
+            shouldClose = true;
+        }
+        
+        if (shouldClose)
+        {
+            showAboutDialog = false;
+            ImGui::CloseCurrentPopup();
+        }
+        
+        ImGui::EndPopup();
+    }
+    
+    if (ImGui::IsKeyPressed(ImGuiKey_F1, false))
+    {
+        m_helpManager.open();
+        m_helpManager.setActiveTab(0); // Shortcuts tab
     }
 
     // --- PRESET STATUS OVERLAY ---
@@ -2911,8 +3010,30 @@ if (auto* mp = synth->getModuleForLogical (lid))
             float endX = rectMin.x + endNorm * nodeContentWidth;
             drawList->AddRectFilled(rectMin, ImVec2(startX, rectMax.y), IM_COL32(0, 0, 0, 120));
             drawList->AddRectFilled(ImVec2(endX, rectMin.y), rectMax, IM_COL32(0, 0, 0, 120));
+            
+            // Draw range handles (yellow lines)
             drawList->AddLine(ImVec2(startX, rectMin.y), ImVec2(startX, rectMax.y), IM_COL32(255, 255, 0, 255), 3.0f);
             drawList->AddLine(ImVec2(endX, rectMin.y), ImVec2(endX, rectMax.y), IM_COL32(255, 255, 0, 255), 3.0f);
+            
+            // === PLAYHEAD INDICATOR (red line) ===
+            // Get current playhead position (absolute 0-1 across full sample)
+            float positionAbs = sampleLoader->getAPVTS().getRawParameterValue("position")->load();
+            
+            // Use live telemetry value if available (shows real-time playback position)
+            positionAbs = sampleLoader->getLiveParamValueFor("position_mod", "position_live", positionAbs);
+            
+            // CRITICAL: Playhead must ALWAYS be clamped to range boundaries [startNorm, endNorm]
+            // Position is stored as absolute (0-1 across full sample), but playhead cannot be outside range
+            positionAbs = juce::jlimit(startNorm, endNorm, positionAbs);
+            
+            // Convert absolute position to spectrogram position
+            float positionInSpectrogram = positionAbs; // Direct mapping: absolute position in sample = position in spectrogram
+            
+            // Calculate playhead X position
+            float playheadX = rectMin.x + positionInSpectrogram * nodeContentWidth;
+            
+            // Draw red playhead line (2px width for visibility)
+            drawList->AddLine(ImVec2(playheadX, rectMin.y), ImVec2(playheadX, rectMax.y), IM_COL32(255, 0, 0, 255), 2.0f);
         }
     }
     // --- SPECIAL RENDERING FOR AUDIO INPUT (MULTI-CHANNEL) ---
@@ -5877,7 +5998,7 @@ if (auto* mp = synth->getModuleForLogical (lid))
                     static int selectedModuleIndex = 0;
                     if (selectedModuleIndex >= (int)modules.size()) selectedModuleIndex = 0;
                     
-                    juce::String moduleList = "";
+                    juce::String moduleList;
                     for (size_t i = 0; i < modules.size(); ++i)
                     {
                         if (i > 0) moduleList += "\0";
@@ -5885,13 +6006,15 @@ if (auto* mp = synth->getModuleForLogical (lid))
                     }
                     moduleList += "\0";
                     
-                    if (ImGui::Combo("Select Module", &selectedModuleIndex, moduleList.toUTF8()))
+                    ImGui::Combo("Select Module", &selectedModuleIndex, moduleList.toUTF8());
+                    
+                    if (selectedModuleIndex >= 0 && selectedModuleIndex < (int)modules.size())
                     {
-                        if (selectedModuleIndex < (int)modules.size())
-                        {
-                            juce::String moduleDiag = synth->getModuleDiagnostics(modules[selectedModuleIndex].first);
+                        juce::String moduleDiag = synth->getModuleDiagnostics(modules[selectedModuleIndex].first);
+                        if (moduleDiag.isNotEmpty())
                             ImGui::TextWrapped("%s", moduleDiag.toUTF8());
-                        }
+                        else
+                            ImGui::TextDisabled("No diagnostics available for this module.");
                     }
                 }
                 else
@@ -5903,6 +6026,35 @@ if (auto* mp = synth->getModuleForLogical (lid))
             {
                 ImGui::Text("No synth processor available.");
             }
+        }
+        ImGui::End();
+    }
+    
+    if (showLogViewer)
+    {
+        if (ImGui::Begin("Log Viewer", &showLogViewer))
+        {
+            if (ImGui::Button("Refresh"))
+            {
+                refreshLogViewerContent();
+            }
+            ImGui::SameLine();
+            if (ImGui::Button("Copy All"))
+            {
+                ImGui::SetClipboardText(logViewerContent.toRawUTF8());
+            }
+            ImGui::SameLine();
+            ImGui::Checkbox("Auto-scroll", &logViewerAutoScroll);
+            
+            ImGui::Separator();
+            
+            ImGui::BeginChild("LogViewerScroll", ImVec2(0, 0), true, ImGuiWindowFlags_HorizontalScrollbar);
+            ImGui::TextUnformatted(logViewerContent.toRawUTF8());
+            if (logViewerAutoScroll && ImGui::GetScrollY() >= ImGui::GetScrollMaxY() - 5.0f)
+            {
+                ImGui::SetScrollHereY(1.0f);
+            }
+            ImGui::EndChild();
         }
         ImGui::End();
     }
@@ -5938,6 +6090,31 @@ if (auto* mp = synth->getModuleForLogical (lid))
     }
 
     // No deferred snapshots; unified pre-state strategy
+}
+
+void ImGuiNodeEditorComponent::refreshLogViewerContent()
+{
+    logViewerContent = "File logger is not active.";
+    
+    if (auto* currentLogger = juce::Logger::getCurrentLogger())
+    {
+        if (auto* fileLogger = dynamic_cast<juce::FileLogger*>(currentLogger))
+        {
+            auto logFile = fileLogger->getLogFile();
+            if (logFile.existsAsFile())
+            {
+                auto logText = logFile.loadFileAsString();
+                constexpr int maxChars = 200000;
+                if (logText.length() > maxChars)
+                    logText = logText.substring(logText.length() - maxChars);
+                logViewerContent = logText;
+            }
+            else
+            {
+                logViewerContent = "Log file not found:\n" + logFile.getFullPathName();
+            }
+        }
+    }
 }
 
 void ImGuiNodeEditorComponent::rebuildFontAtlas()
@@ -9758,9 +9935,22 @@ void ImGuiNodeEditorComponent::expandMetaModule(juce::uint32 metaLogicalId)
 
 juce::File ImGuiNodeEditorComponent::findPresetsDirectory()
 {
-    // Search upwards from the executable's location for a sibling directory
+    // First, check exe/presets/ directory (preferred location)
+    auto exeDir = juce::File::getSpecialLocation(juce::File::currentExecutableFile).getParentDirectory();
+    auto presetsDir = exeDir.getChildFile("presets");
+    if (presetsDir.exists() && presetsDir.isDirectory())
+    {
+        return presetsDir;
+    }
+    // Create exe/presets/ if it doesn't exist
+    if (presetsDir.createDirectory())
+    {
+        return presetsDir;
+    }
+    
+    // Fallback: Search upwards from the executable's location for a sibling directory
     // named "Synth_presets". This is robust to different build configurations.
-    juce::File dir = juce::File::getSpecialLocation(juce::File::currentExecutableFile);
+    juce::File dir = exeDir;
 
     for (int i = 0; i < 8; ++i) // Limit search depth to 8 levels
     {
@@ -9774,8 +9964,8 @@ juce::File ImGuiNodeEditorComponent::findPresetsDirectory()
         }
     }
     
-    // Fallback to an empty file (system default) if not found
-    return {};
+    // Final fallback: return exe directory if nothing found
+    return exeDir;
 }
 // Helper function implementations
 PinDataType ImGuiNodeEditorComponent::getPinDataTypeForPin(const PinID& pin)

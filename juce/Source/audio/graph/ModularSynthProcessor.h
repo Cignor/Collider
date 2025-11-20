@@ -107,6 +107,7 @@ public:
     // Timeline master management (prevents circular dependency)
     void setTimelineMaster(juce::uint32 logicalId) { timelineMasterLogicalId.store(logicalId); }
     bool isModuleTimelineMaster(juce::uint32 logicalId) const { return timelineMasterLogicalId.load() == logicalId; }
+    juce::uint32 getTimelineMasterLogicalId() const { return timelineMasterLogicalId.load(); }
     
     // MIDI activity indicator
     bool hasMidiActivity() const { return m_midiActivityFlag.exchange(false); }

@@ -488,7 +488,12 @@ public:
     bool insertNodeShortcutCooldown { false };
     bool showInsertNodePopup { false };
     bool showDebugMenu { false };
+    bool showLogViewer { false };
+    bool logViewerAutoScroll { true };
+    juce::String logViewerContent;
+    void refreshLogViewerContent();
     bool showMidiDeviceManager { false };
+    bool showAboutDialog { false };
     ThemeEditorComponent themeEditor { this };
     int pendingInsertLinkId { -1 };
     

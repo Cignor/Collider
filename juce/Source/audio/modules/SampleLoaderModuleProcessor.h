@@ -120,6 +120,8 @@ private:
     std::atomic<float>* engineParam { nullptr }; // 0: rubberband, 1: naive
     
     // --- Sample Management ---
+    // CRITICAL: All sample-related data must be protected by processorSwapLock
+    // This lock protects: currentSample, sampleProcessor, sampleSampleRate, sampleDurationSeconds
     std::shared_ptr<SampleBank::Sample> currentSample;
     std::unique_ptr<SampleVoiceProcessor> sampleProcessor;
     std::atomic<SampleVoiceProcessor*> newSampleProcessor { nullptr };
@@ -128,9 +130,9 @@ private:
     juce::String currentSampleName;
     juce::String currentSamplePath;
     
-    // ADD THESE TWO LINES
-    double sampleDurationSeconds = 0.0;
-    int sampleSampleRate = 0;
+    // Thread-safe sample metadata (protected by processorSwapLock, but atomic for quick reads)
+    std::atomic<double> sampleDurationSeconds { 0.0 };
+    std::atomic<int> sampleSampleRate { 0 };
     
     // Timeline reporting state (atomic for thread-safe access)
     std::atomic<double> reportPosition { 0.0 };
@@ -174,10 +176,20 @@ private:
     std::atomic<float>* positionModParam { nullptr };
     std::atomic<float>* relativePositionModParam { nullptr };
     
+    // --- Transport Sync ---
+    std::atomic<float>* syncParam { nullptr };
+    juce::AudioParameterChoice* syncModeParam { nullptr }; // 0 = Relative (range-based), 1 = Absolute (1:1 time)
+    std::atomic<bool> syncToTransport { true };
+    
     // For detecting manual slider movement vs playback update
     float lastUiPosition { 0.0f };
     float lastCvPosition { 0.0f }; // Track last CV value to detect changes
     double lastReadPosition { 0.0 }; // To detect loops for global reset
+    double lastSyncedTransportPosition { -1.0 }; // Track last synced position to avoid constant seeks
+    
+    // Manual scrubbing state (for sync override)
+    std::atomic<bool> manualScrubPending { false }; // True when user manually scrubbed and sync should be temporarily ignored
+    std::atomic<int> manualScrubBlocksRemaining { 0 }; // Number of blocks to skip sync after manual scrub
     
     // --- Parameter References ---
     // Parameters are accessed directly via apvts.getRawParameterValue()
@@ -186,6 +198,7 @@ private:
     void updateSoundTouchSettings();
     void createSampleProcessor();
     void generateSpectrogram();
+    void generateSpectrogram(std::shared_ptr<SampleBank::Sample> sample); // Thread-safe version that takes sample directly
     
     // Timeline reporting interface (for Timeline Sync feature)
     bool canProvideTimeline() const override;

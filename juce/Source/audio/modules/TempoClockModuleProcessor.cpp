@@ -1,5 +1,6 @@
 #include "TempoClockModuleProcessor.h"
 #include "../graph/ModularSynthProcessor.h"
+#include <limits>
 
 #if defined(PRESET_CREATOR_UI)
 #include "../../preset_creator/theme/ThemeManager.h"
@@ -320,9 +321,14 @@ void TempoClockModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
         }
         else if (targetId == 0)
         {
-            // No source selected - clear master flag
+            // No source selected - but timeline sync is enabled
+            // Set a special marker to prevent ModularSynthProcessor from advancing transport
+            // (TempoClock will control transport position based on BPM instead)
             if (auto* parent = getParent())
-                parent->setTimelineMaster(0);
+            {
+                // Use UINT32_MAX as a special value meaning "TempoClock controls transport, don't advance by sample count"
+                parent->setTimelineMaster(std::numeric_limits<juce::uint32>::max());
+            }
         }
     }
     else
@@ -335,12 +341,19 @@ void TempoClockModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
     // Increment log counter (wrap at throttle limit to avoid overflow)
     timelineSyncLogCounter = (timelineSyncLogCounter + numSamples) % (logThrottleSamples * 2);
 
+    // FIX: When timeline sync is enabled but no source is selected,
+    // DO NOT update transport position at all. This prevents SampleLoader from
+    // constantly seeking when synced to transport. Transport stays at its current
+    // position until a timeline source is selected or timeline sync is disabled.
+    // The UINT32_MAX marker prevents ModularSynthProcessor from advancing it by sample count.
+    // (We do NOT update transport position here - this prevents SampleLoader scrubbing)
+    
     // Sync to Host: Use host transport tempo OR control it
     // FIX: BPM CV always takes priority over sync-to-host
     // NOTE: Timeline sync (if active) has already set BPM, so this won't override it
-    bool syncToHost = syncToHostParam && syncToHostParam->load() > 0.5f;
     if (auto* parent = getParent())
     {
+        bool syncToHost = syncToHostParam && syncToHostParam->load() > 0.5f;
         if (syncToHost && !bpmFromCV && !timelineSyncActive)  // FIX: Only sync from host if BPM CV and Timeline sync are NOT active
         {
             // Pull tempo FROM host transport (Tempo Clock follows)

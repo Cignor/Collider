@@ -381,6 +381,9 @@ void TimelineModuleProcessor::drawParametersInNode(float itemWidth,
     
     ImGui::PushID(this);
     ImGui::PushItemWidth(itemWidth);
+    // Ensure node content width is clamped to itemWidth (per ImGui node design guide)
+    ImGui::Dummy(ImVec2(itemWidth, 0.0f));
+    ImGui::Spacing();
     const auto& theme = ThemeManager::getInstance().getCurrentTheme();
     const ImGuiStyle& style = ImGui::GetStyle();
     
@@ -468,20 +471,45 @@ void TimelineModuleProcessor::drawParametersInNode(float itemWidth,
     
     ImGui::Spacing();
     
-    // Channel list
+    // Channel list with custom rendering to avoid default ImGui separators
     {
         const juce::ScopedLock lock(automationLock);
-        for (size_t i = 0; i < m_automationChannels.size(); ++i)
+        const float channelListHeight = 100.0f;
+        const ImVec2 channelListSize(itemWidth, channelListHeight);
+        const ImGuiWindowFlags childFlags = ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse | ImGuiWindowFlags_NoBackground;
+        if (ImGui::BeginChild("TimelineChannelList", channelListSize, false, childFlags))
         {
-            int keyframeCount = (int)m_automationChannels[i].keyframes.size();
-            juce::String label = juce::String(m_automationChannels[i].name) + " (" + juce::String(keyframeCount) + " keys)";
-            
-            bool isSelected = (m_selectedChannelIndex == (int)i);
-            if (ImGui::Selectable(label.toRawUTF8(), isSelected))
+            auto* drawList = ImGui::GetWindowDrawList();
+            const float rowHeight = ImGui::GetTextLineHeight() + ImGui::GetStyle().FramePadding.y * 2.0f;
+            const ImVec4 selectionColor = ImVec4(theme.text.active.x, theme.text.active.y, theme.text.active.z, 0.25f);
+            const ImVec4 selectedTextColor = theme.text.active;
+            const ImVec4 normalTextColor = ImGui::GetStyle().Colors[ImGuiCol_Text];
+
+            for (size_t i = 0; i < m_automationChannels.size(); ++i)
             {
-                m_selectedChannelIndex = (int)i;
+                int keyframeCount = (int)m_automationChannels[i].keyframes.size();
+                juce::String label = juce::String(m_automationChannels[i].name) + " (" + juce::String(keyframeCount) + " keys)";
+                
+                const bool isSelected = (m_selectedChannelIndex == (int)i);
+                const ImVec2 rowMin = ImGui::GetCursorScreenPos();
+                const ImVec2 rowMax = ImVec2(rowMin.x + itemWidth, rowMin.y + rowHeight);
+
+                if (isSelected)
+                    drawList->AddRectFilled(rowMin, rowMax, ImGui::ColorConvertFloat4ToU32(selectionColor), 4.0f);
+
+                ImGui::PushID((int)i);
+                if (ImGui::InvisibleButton("channelRow", ImVec2(itemWidth, rowHeight)))
+                {
+                    m_selectedChannelIndex = (int)i;
+                }
+                ImGui::PopID();
+
+                const ImVec2 textPos = rowMin + ImVec2(6.0f, ImGui::GetStyle().FramePadding.y);
+                const ImU32 textColor = ImGui::ColorConvertFloat4ToU32(isSelected ? selectedTextColor : normalTextColor);
+                drawList->AddText(textPos, textColor, label.toRawUTF8());
             }
         }
+        ImGui::EndChild();
     }
     
     ImGui::Spacing();

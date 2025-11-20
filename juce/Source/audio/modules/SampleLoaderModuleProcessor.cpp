@@ -2,6 +2,8 @@
 #include <juce_audio_formats/juce_audio_formats.h>
 #include <juce_gui_basics/juce_gui_basics.h>
 #include "../../utils/RtLogger.h"
+#include <cmath> // For std::fmod
+#include <cstring> // For std::strlen
 
 #if defined(PRESET_CREATOR_UI)
 #include "../../preset_creator/ImGuiNodeEditorComponent.h"
@@ -41,6 +43,11 @@ SampleLoaderModuleProcessor::SampleLoaderModuleProcessor()
     positionParam = apvts.getRawParameterValue(paramIdPosition);
     positionModParam = apvts.getRawParameterValue(paramIdPositionMod);
     relativePositionModParam = apvts.getRawParameterValue(paramIdRelPosMod);
+    
+    // Initialize sync parameters
+    syncParam = apvts.getRawParameterValue("sync");
+    syncModeParam = dynamic_cast<juce::AudioParameterChoice*>(apvts.getParameter("syncMode"));
+    syncToTransport.store(syncParam && (*syncParam > 0.5f));
 }
 
 
@@ -64,6 +71,10 @@ juce::AudioProcessorValueTreeState::ParameterLayout SampleLoaderModuleProcessor:
         "rbPhaseInd", "RB Phase Independent", true));
     parameters.push_back(std::make_unique<juce::AudioParameterBool>(
          "loop", "Loop", true)); // Default to true for continuous playback
+    parameters.push_back(std::make_unique<juce::AudioParameterBool>(
+        "sync", "Sync to Transport", false)); // Default to false - manual control by default
+    parameters.push_back(std::make_unique<juce::AudioParameterChoice>(
+        "syncMode", "Sync Mode", juce::StringArray{ "Relative", "Absolute" }, 0)); // Default to Relative (range-based)
     
     // (Removed legacy SoundTouch tuning parameters)
 
@@ -243,6 +254,12 @@ void SampleLoaderModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer,
     
     const int numSamples = buffer.getNumSamples();
     
+    // Keep syncToTransport in sync with syncParam (for preset loading)
+    if (syncParam)
+    {
+        syncToTransport.store(*syncParam > 0.5f);
+    }
+    
     // --- 0. CALCULATE RANGE VALUES (needed for position scrubbing) ---
     // Calculate range start/end early so we can use them for position scrubbing
     float startNorm = rangeStartParam ? rangeStartParam->load() : 0.0f;
@@ -306,8 +323,9 @@ void SampleLoaderModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer,
             // Absolute Mode: CV controls position directly
             targetPosNorm = cv;
         }
-        // Clamp to range start/end
-        targetPosNorm = juce::jlimit(startNorm, endNorm, targetPosNorm);
+        // CRITICAL: Don't clamp to range here - allow position to be outside range
+        // Range should only cap/limit playback boundaries, not restrict where playhead can be positioned
+        // The setPlaybackRange() call later will handle limiting actual playback to the range
         
         // Only scrub if CV-derived position changed significantly from last CV position
         // This prevents constant time stretcher resets while allowing smooth CV control
@@ -325,8 +343,9 @@ void SampleLoaderModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer,
     else if (positionParam && std::abs(currentPosParam - lastUiPosition) > 0.00001f)
     {
         targetPosNorm = currentPosParam;
-        // Clamp to range start/end
-        targetPosNorm = juce::jlimit(startNorm, endNorm, targetPosNorm);
+        // CRITICAL: Don't clamp to range here - allow position to be outside range
+        // Range should only cap/limit playback boundaries, not restrict where playhead can be positioned
+        // The setPlaybackRange() call later will handle limiting actual playback to the range
         isScrubbing = true;
     }
     
@@ -346,12 +365,14 @@ void SampleLoaderModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer,
                 double rangeEndSamples = endNorm * totalSamples;
                 double rangeLength = rangeEndSamples - rangeStartSamples;
                 
-                // Map targetPosNorm (0-1 slider value, already clamped to startNorm-endNorm) to sample position
-                // Linear mapping: slider 0.0 -> rangeStart, slider 1.0 -> rangeEnd
-                // Since targetPosNorm is already clamped to [startNorm, endNorm], we need to remap it
-                // to [0, 1] relative to the range, then scale to sample position
-                double normalizedInRange = (targetPosNorm - startNorm) / (endNorm - startNorm);
-                double newSamplePos = rangeStartSamples + normalizedInRange * rangeLength;
+                // CRITICAL: Position parameter is absolute (0-1 across full sample)
+                // Map absolute position (0-1 across full sample) directly to sample position
+                double newSamplePos = targetPosNorm * totalSamples;
+                
+                // CRITICAL: Playhead must ALWAYS be clamped to range boundaries [rangeStart, rangeEnd]
+                // Range defines the valid playback zone - playhead can never be outside it
+                // This ensures that when range changes, if playhead is outside new range, it gets clamped
+                // Note: rangeStartSamples and rangeEndSamples already declared above
                 newSamplePos = juce::jlimit(rangeStartSamples, rangeEndSamples, newSamplePos);
                 
                 // CRITICAL: Preserve playback state when scrubbing
@@ -367,6 +388,15 @@ void SampleLoaderModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer,
                 {
                     // Ensure playback continues from the new position
                     sampleProcessor->isPlaying = true;
+                    
+                    // CRITICAL: If synced to transport, temporarily disable sync position updates
+                    // This allows playback to continue from the scrubbed position for a short time
+                    // (~250ms = ~11 blocks at 44.1kHz, ~12 blocks at 48kHz)
+                    if (syncToTransport.load())
+                    {
+                        manualScrubPending.store(true);
+                        manualScrubBlocksRemaining.store(12); // Skip sync for ~12 blocks (~250ms)
+                    }
                 }
                 // If it was stopped, leave it stopped (isPlaying remains false)
                 
@@ -398,13 +428,35 @@ void SampleLoaderModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer,
                 // This prevents the "Manual Slider Movement" check from triggering falsely in the next block.
                 
                 double currentSamplePos = sampleProcessor->getCurrentPosition();
+                
+                // CRITICAL: Position is stored as absolute (0-1 across full sample)
+                // But playhead must ALWAYS be clamped to range boundaries [rangeStart, rangeEnd]
+                // This ensures that when range changes, if playhead is outside new range, it gets clamped
+                double rangeStartSamples = startNorm * totalSamples;
+                double rangeEndSamples = endNorm * totalSamples;
+                
+                // Clamp playhead position to range boundaries if it's outside
+                if (currentSamplePos < rangeStartSamples || currentSamplePos > rangeEndSamples)
+                {
+                    currentSamplePos = juce::jlimit(rangeStartSamples, rangeEndSamples, currentSamplePos);
+                    sampleProcessor->setCurrentPosition(currentSamplePos);
+                }
+                
+                // Convert clamped sample position to absolute position (0-1 across full sample)
                 targetPosNorm = (float)(currentSamplePos / totalSamples);
                 
-                // 1. Update the atomic parameter so the UI draws the correct playhead
-                positionParam->store(targetPosNorm);
-                
-                // 2. Update our tracker so we know this value came from US, not the user
-                lastUiPosition = targetPosNorm;
+                // CRITICAL: When synced to transport, setTimingInfo() handles position updates
+                // Only update position parameter if NOT synced to avoid conflicts
+                if (!syncToTransport.load())
+                {
+                    // 1. Update the atomic parameter so the UI draws the correct playhead
+                    // Store as absolute position (0-1 across full sample)
+                    positionParam->store(targetPosNorm);
+                    
+                    // 2. Update our tracker so we know this value came from US, not the user
+                    lastUiPosition = targetPosNorm;
+                }
+                // If synced, setTimingInfo() will update positionParam and lastUiPosition
                 
                 // --- GLOBAL RESET LOGIC ---
                 if (sampleProcessor->isPlaying && currentSamplePos < lastReadPosition)
@@ -702,13 +754,222 @@ void SampleLoaderModuleProcessor::setTimingInfo(const TransportState& state)
     
     // Not the timeline master - accept transport updates normally
     ModuleProcessor::setTimingInfo(state);
+    
+    // If sync to transport is enabled, sync playback state and position to transport
+    // CRITICAL: Match VideoFileLoaderModule pattern exactly
+    if (syncToTransport.load())
+    {
+        // CRITICAL: Sync isPlaying state from transport (like VideoFileLoaderModule)
+        // This ensures SampleLoader's playback state follows transport
+        SampleVoiceProcessor* safeProcessor = nullptr;
+        {
+            const juce::ScopedLock lock(processorSwapLock);
+            safeProcessor = sampleProcessor.get();
+        }
+        if (safeProcessor)
+        {
+            safeProcessor->isPlaying = state.isPlaying;
+        }
+        
+        // CRITICAL: Sync playback position to transport when following timeline
+        // This ensures SampleLoader stays in sync with TempoClock
+        // BUT: If user manually scrubbed, temporarily ignore sync position updates to allow playback from new position
+        if (state.isPlaying && safeProcessor)
+        {
+            // Check if manual scrub is pending - if so, skip position sync and decrement counter
+            if (manualScrubPending.load())
+            {
+                int blocksRemaining = manualScrubBlocksRemaining.load();
+                if (blocksRemaining > 0)
+                {
+                    // Still waiting - skip position sync, allow playback to continue from scrubbed position
+                    manualScrubBlocksRemaining.store(blocksRemaining - 1);
+                    return;
+                }
+                else
+                {
+                    // Timeout expired - resume normal sync
+                    manualScrubPending.store(false);
+                }
+            }
+            
+            std::shared_ptr<SampleBank::Sample> safeSample;
+            double safeRate = 0.0;
+            
+            {
+                const juce::ScopedLock lock(processorSwapLock);
+                safeSample = currentSample;
+                safeRate = sampleSampleRate.load();
+            }
+            
+            if (safeSample && safeRate > 0.0 && state.songPositionSeconds >= 0.0)
+            {
+                const double totalSamples = (double)safeSample->stereo.getNumSamples();
+                double targetSamplePos = 0.0;
+                float normalizedInRange = 0.0f;
+                
+                // Determine sync mode: 0 = Relative (range-based), 1 = Absolute (1:1 time)
+                const bool isAbsoluteMode = syncModeParam && (syncModeParam->getIndex() == 1);
+                
+                if (isAbsoluteMode)
+                {
+                    // ABSOLUTE MODE: Transport time maps 1:1 to sample time
+                    // Transport at 2.0s → Sample at 2.0s position (ignoring range/length)
+                    // Example: Transport at 2s, Sample is 10s → Sample plays at 2s mark
+                    
+                    targetSamplePos = state.songPositionSeconds * safeRate;
+                    
+                    // Clamp to valid sample range (0 to totalSamples)
+                    targetSamplePos = juce::jlimit(0.0, totalSamples, targetSamplePos);
+                    
+                    // For UI: Calculate normalized position relative to range (for display only)
+                    if (positionParam)
+                    {
+                        float startNorm = rangeStartParam ? rangeStartParam->load() : 0.0f;
+                        float endNorm = rangeEndParam ? rangeEndParam->load() : 1.0f;
+                        
+                        // Ensure valid range window
+                        {
+                            const float minGap = 0.001f;
+                            if (startNorm >= endNorm)
+                            {
+                                const float midpoint = (startNorm + endNorm) * 0.5f;
+                                startNorm = juce::jlimit(0.0f, 1.0f - minGap, midpoint - minGap * 0.5f);
+                                endNorm   = juce::jlimit(minGap, 1.0f, startNorm + minGap);
+                            }
+                        }
+                        
+                        const double rangeStartSamples = startNorm * totalSamples;
+                        const double rangeEndSamples = endNorm * totalSamples;
+                        const double rangeLengthSamples = rangeEndSamples - rangeStartSamples;
+                        
+                        // If position is outside range, clamp UI display to range boundaries
+                        if (targetSamplePos < rangeStartSamples)
+                            normalizedInRange = 0.0f;
+                        else if (targetSamplePos > rangeEndSamples)
+                            normalizedInRange = 1.0f;
+                        else if (rangeLengthSamples > 0.0)
+                            normalizedInRange = (float)((targetSamplePos - rangeStartSamples) / rangeLengthSamples);
+                    }
+                }
+                else
+                {
+                    // RELATIVE MODE: Transport time maps to the range window
+                    // Transport 0s → Range Start | Transport at range duration → Range End
+                    // Example: Range is 2-8s (6s window), Transport at 3s → Sample at 5s (2s + 3s)
+                    
+                    // Get range values
+                    float startNorm = rangeStartParam ? rangeStartParam->load() : 0.0f;
+                    float endNorm = rangeEndParam ? rangeEndParam->load() : 1.0f;
+                    
+                    // Ensure valid range window
+                    {
+                        const float minGap = 0.001f;
+                        if (startNorm >= endNorm)
+                        {
+                            const float midpoint = (startNorm + endNorm) * 0.5f;
+                            startNorm = juce::jlimit(0.0f, 1.0f - minGap, midpoint - minGap * 0.5f);
+                            endNorm   = juce::jlimit(minGap, 1.0f, startNorm + minGap);
+                        }
+                    }
+                    
+                    // Calculate range bounds in samples
+                    const double rangeStartSamples = startNorm * totalSamples;
+                    const double rangeEndSamples = endNorm * totalSamples;
+                    const double rangeLengthSamples = rangeEndSamples - rangeStartSamples;
+                    
+                    // Calculate range duration in seconds (the "time window" for transport)
+                    const double rangeDurationSeconds = rangeLengthSamples / safeRate;
+                    
+                    // Map transport position to range progress (0.0 = rangeStart, 1.0 = rangeEnd)
+                    // Handle looping: wrap transport time within range duration
+                    double transportProgress = 0.0;
+                    if (rangeDurationSeconds > 0.0)
+                    {
+                        const bool isLooping = apvts.getRawParameterValue("loop") ? 
+                                               (apvts.getRawParameterValue("loop")->load() > 0.5f) : true;
+                        
+                        if (isLooping && rangeDurationSeconds > 0.0)
+                        {
+                            // Wrap transport time to range duration (loop within range)
+                            transportProgress = std::fmod(state.songPositionSeconds, rangeDurationSeconds) / rangeDurationSeconds;
+                        }
+                        else
+                        {
+                            // Clamp to 0-1 (don't loop, stop at range end)
+                            transportProgress = juce::jlimit(0.0, 1.0, state.songPositionSeconds / rangeDurationSeconds);
+                        }
+                    }
+                    
+                    // Convert range progress to absolute sample position
+                    targetSamplePos = rangeStartSamples + transportProgress * rangeLengthSamples;
+                    normalizedInRange = (float)transportProgress;
+                }
+                
+                // CRITICAL: Clamp targetSamplePos to range boundaries before updating
+                // Playhead must ALWAYS be within range boundaries [rangeStart, rangeEnd]
+                float startNorm = rangeStartParam ? rangeStartParam->load() : 0.0f;
+                float endNorm = rangeEndParam ? rangeEndParam->load() : 1.0f;
+                double rangeStartSamples = startNorm * totalSamples;
+                double rangeEndSamples = endNorm * totalSamples;
+                targetSamplePos = juce::jlimit(rangeStartSamples, rangeEndSamples, targetSamplePos);
+                
+                // Only update if position has changed significantly (avoid constant seeks)
+                const double currentPos = safeProcessor->getCurrentPosition();
+                const double diff = std::abs(targetSamplePos - currentPos);
+                
+                // Update if difference is more than 1 block of samples (prevents micro-seeks)
+                // Match VideoFileLoaderModule threshold: 512 samples (~10ms at 48kHz, ~11.6ms at 44.1kHz)
+                if (diff > 512.0)
+                {
+                    // Update playhead position (this resets time stretcher buffers)
+                    safeProcessor->setCurrentPosition(targetSamplePos);
+                    
+                    // Update position parameter for UI feedback
+                    // CRITICAL: Position parameter is absolute (0-1 across full sample), not relative to range
+                    if (positionParam)
+                    {
+                        const float absolutePos = (float)(targetSamplePos / totalSamples);
+                        positionParam->store(absolutePos);
+                        // Update lastUiPosition to prevent manual scrubbing detection
+                        lastUiPosition = absolutePos;
+                    }
+                    
+                    // Update tracking variables
+                    readPosition = targetSamplePos;
+                    lastReadPosition = targetSamplePos;
+                }
+            }
+        }
+    }
 }
 
 void SampleLoaderModuleProcessor::loadSample(const juce::File& file)
 {
-    if (!file.existsAsFile())
-    {
-        DBG("[Sample Loader] File does not exist: " + file.getFullPathName());
+    // CRASH PROTECTION: Validate file path safely
+    juce::String filePath;
+    try {
+        filePath = file.getFullPathName();
+        // CRASH PROTECTION: Validate path string is not empty
+        if (filePath.isEmpty())
+        {
+            juce::Logger::writeToLog("[Sample Loader] Empty file path");
+            return;
+        }
+    } catch (...) {
+        juce::Logger::writeToLog("[Sample Loader][FATAL] Exception getting file path");
+        return;
+    }
+    
+    // CRASH PROTECTION: Validate file exists before processing
+    try {
+        if (!file.existsAsFile())
+        {
+            DBG("[Sample Loader] File does not exist: " + filePath);
+            return;
+        }
+    } catch (...) {
+        juce::Logger::writeToLog("[Sample Loader][FATAL] Exception checking file existence: " + filePath);
         return;
     }
 
@@ -716,16 +977,39 @@ void SampleLoaderModuleProcessor::loadSample(const juce::File& file)
     SampleBank sampleBank;
     std::shared_ptr<SampleBank::Sample> original;
     try {
+        juce::Logger::writeToLog("[Sample Loader] Attempting to load: " + filePath + 
+                                 " (" + juce::String(file.getSize() / 1024) + " KB)");
         original = sampleBank.getOrLoad(file);
+    } catch (const std::bad_alloc& e) {
+        juce::Logger::writeToLog("[Sample Loader][FATAL] Memory allocation failed in SampleBank::getOrLoad: " + 
+                                 juce::String(e.what()) + " (file: " + filePath + ")");
+        return;
+    } catch (const std::exception& e) {
+        juce::Logger::writeToLog("[Sample Loader][FATAL] Exception in SampleBank::getOrLoad: " + 
+                                 juce::String(e.what()) + " (file: " + filePath + ")");
+        return;
     } catch (...) {
-        DBG("[Sample Loader][FATAL] Exception in SampleBank::getOrLoad");
+        juce::Logger::writeToLog("[Sample Loader][FATAL] Unknown exception in SampleBank::getOrLoad (file: " + filePath + ")");
         return;
     }
     if (original == nullptr || original->stereo.getNumSamples() <= 0)
     {
-        DBG("[Sample Loader] Failed to load sample or empty: " + file.getFullPathName());
+        juce::Logger::writeToLog("[Sample Loader] Failed to load sample or empty: " + filePath + 
+                                 (original == nullptr ? " (nullptr)" : 
+                                 " (samples: " + juce::String(original->stereo.getNumSamples()) + ")"));
         return;
     }
+    
+    // CRASH PROTECTION: Log sample info for debugging
+    const int numChannels = original->stereo.getNumChannels();
+    const int numSamples = original->stereo.getNumSamples();
+    const double sampleRate = original->sampleRate;
+    const double duration = numSamples / sampleRate;
+    juce::Logger::writeToLog("[Sample Loader] Loaded sample: " + file.getFileName() + 
+                             " (channels: " + juce::String(numChannels) + 
+                             ", samples: " + juce::String(numSamples) + 
+                             ", rate: " + juce::String(sampleRate, 1) + " Hz" +
+                             ", duration: " + juce::String(duration, 2) + " s)");
 
     currentSampleName = file.getFileName();
     currentSamplePath = file.getFullPathName();
@@ -738,29 +1022,74 @@ void SampleLoaderModuleProcessor::loadSample(const juce::File& file)
     // --- END OF FIX ---
 
     // 2) Create a private STEREO copy (preserve stereo or duplicate mono)
+    // CRASH PROTECTION: Validate sample size before copying
+    // Note: numSamples already defined above at line 943
+    const juce::int64 totalSizeBytes = static_cast<juce::int64>(numSamples) * 2 * sizeof(float); // Stereo = 2 channels
+    const juce::int64 maxSizeBytes = 1LL * 1024 * 1024 * 1024; // 1 GB limit
+    
+    if (totalSizeBytes > maxSizeBytes)
+    {
+        juce::Logger::writeToLog("[Sample Loader] Sample too large to copy (" + 
+                                 juce::String(totalSizeBytes / 1024 / 1024) + " MB): " + filePath);
+        return;
+    }
+    
     auto privateCopy = std::make_shared<SampleBank::Sample>();
     privateCopy->sampleRate = original->sampleRate;
-    const int numSamples = original->stereo.getNumSamples();
-    privateCopy->stereo.setSize(2, numSamples); // Always stereo output
-
-    if (original->stereo.getNumChannels() <= 1)
-    {
-        // Mono source: duplicate to both L and R channels
-        privateCopy->stereo.copyFrom(0, 0, original->stereo, 0, 0, numSamples); // L = Mono
-        privateCopy->stereo.copyFrom(1, 0, original->stereo, 0, 0, numSamples); // R = Mono
-        DBG("[Sample Loader] Loaded mono sample and duplicated to stereo: " << file.getFileName());
+    
+    try {
+        privateCopy->stereo.setSize(2, numSamples); // Always stereo output
+        if (privateCopy->stereo.getNumSamples() != numSamples || privateCopy->stereo.getNumChannels() != 2)
+        {
+            juce::Logger::writeToLog("[Sample Loader] Failed to allocate stereo buffer (" + 
+                                     juce::String(numSamples) + " samples)");
+            return;
+        }
+    } catch (const std::bad_alloc& e) {
+        juce::Logger::writeToLog("[Sample Loader][FATAL] Memory allocation failed for stereo copy: " + 
+                                 juce::String(e.what()) + " (samples: " + juce::String(numSamples) + ")");
+        return;
+    } catch (...) {
+        juce::Logger::writeToLog("[Sample Loader][FATAL] Exception allocating stereo buffer (samples: " + 
+                                 juce::String(numSamples) + ")");
+        return;
     }
-    else
-    {
-        // Stereo (or multi-channel) source: copy L and R channels
-        privateCopy->stereo.copyFrom(0, 0, original->stereo, 0, 0, numSamples); // L channel
-        privateCopy->stereo.copyFrom(1, 0, original->stereo, 1, 0, numSamples); // R channel
-        DBG("[Sample Loader] Loaded stereo sample: " << file.getFileName());
+
+    try {
+        if (original->stereo.getNumChannels() <= 1)
+        {
+            // Mono source: duplicate to both L and R channels
+            privateCopy->stereo.copyFrom(0, 0, original->stereo, 0, 0, numSamples); // L = Mono
+            privateCopy->stereo.copyFrom(1, 0, original->stereo, 0, 0, numSamples); // R = Mono
+            juce::Logger::writeToLog("[Sample Loader] Loaded mono sample and duplicated to stereo: " + file.getFileName());
+        }
+        else
+        {
+            // Stereo (or multi-channel) source: copy L and R channels
+            privateCopy->stereo.copyFrom(0, 0, original->stereo, 0, 0, numSamples); // L channel
+            privateCopy->stereo.copyFrom(1, 0, original->stereo, 1, 0, numSamples); // R channel
+            juce::Logger::writeToLog("[Sample Loader] Loaded stereo sample: " + file.getFileName());
+        }
+    } catch (...) {
+        juce::Logger::writeToLog("[Sample Loader][FATAL] Exception copying audio data (samples: " + 
+                                 juce::String(numSamples) + ", channels: " + 
+                                 juce::String(original->stereo.getNumChannels()) + ")");
+        return;
     }
 
     // 3) Atomically assign our private copy for this module
     currentSample = privateCopy;
-    generateSpectrogram();
+    
+    // CRASH PROTECTION: Generate spectrogram with exception handling
+    try {
+        generateSpectrogram();
+    } catch (const std::exception& e) {
+        juce::Logger::writeToLog("[Sample Loader][FATAL] Exception in generateSpectrogram: " + juce::String(e.what()));
+        // Continue without spectrogram - sample is still loaded
+    } catch (...) {
+        juce::Logger::writeToLog("[Sample Loader][FATAL] Unknown exception in generateSpectrogram");
+        // Continue without spectrogram - sample is still loaded
+    }
 
     // 4) If the module is prepared, stage a new processor
     if (getSampleRate() > 0.0 && getBlockSize() > 0)
@@ -944,47 +1273,204 @@ void SampleLoaderModuleProcessor::generateSpectrogram()
     const juce::ScopedLock lock(imageLock);
     spectrogramImage = juce::Image(); // Clear previous image
 
-    if (currentSample == nullptr || currentSample->stereo.getNumSamples() == 0)
+    // CRASH PROTECTION: Validate sample data before processing
+    if (currentSample == nullptr)
+        return;
+    
+    // Get a safe reference to the sample (may be swapped during processing)
+    std::shared_ptr<SampleBank::Sample> safeSample = currentSample;
+    if (safeSample == nullptr || safeSample->stereo.getNumSamples() == 0)
         return;
 
     const int fftOrder = 10;
     const int fftSize = 1 << fftOrder;
     const int hopSize = fftSize / 4;
-    const int numHops = (currentSample->stereo.getNumSamples() - fftSize) / hopSize;
+    const int totalSamples = safeSample->stereo.getNumSamples();
+    
+    // CRASH PROTECTION: Check for integer overflow in numHops calculation
+    if (totalSamples < fftSize)
+        return;
+    
+    // CRASH PROTECTION: Safe numHops calculation with overflow protection
+    // Use int64 to prevent overflow for very large files
+    const juce::int64 totalSamples64 = static_cast<juce::int64>(totalSamples);
+    const juce::int64 fftSize64 = static_cast<juce::int64>(fftSize);
+    const juce::int64 hopSize64 = static_cast<juce::int64>(hopSize);
+    const juce::int64 numHops64 = (totalSamples64 - fftSize64) / hopSize64;
+    
+    // CRASH PROTECTION: Limit spectrogram size to prevent memory issues (max 32k width)
+    const int maxHops = 32768;
+    const int numHops = static_cast<int>(juce::jlimit(1LL, static_cast<juce::int64>(maxHops), numHops64));
+    
+    if (numHops <= 0) 
+    {
+        juce::Logger::writeToLog("[Sample Loader] Spectrogram: Invalid numHops (" + juce::String(numHops64) + 
+                                 ") for file with " + juce::String(totalSamples) + " samples");
+        return;
+    }
+    
+    // CRASH PROTECTION: Validate image dimensions won't cause memory issues
+    const int imageHeight = fftSize / 2;
+    const juce::int64 imageSizeBytes = static_cast<juce::int64>(numHops) * static_cast<juce::int64>(imageHeight) * 3LL; // RGB = 3 bytes per pixel
+    const juce::int64 maxImageSizeBytes = 100 * 1024 * 1024; // 100 MB limit
+    
+    if (imageSizeBytes > maxImageSizeBytes)
+    {
+        juce::Logger::writeToLog("[Sample Loader] Spectrogram: Image too large (" + 
+                                 juce::String(imageSizeBytes / 1024 / 1024) + " MB), skipping generation");
+        return;
+    }
 
-    if (numHops <= 0) return;
+    // CRASH PROTECTION: Validate buffer access
+    if (safeSample->stereo.getNumChannels() == 0)
+        return;
 
     // Create a mono version for analysis if necessary
     juce::AudioBuffer<float> monoBuffer;
-    if (currentSample->stereo.getNumChannels() > 1)
-    {
-        monoBuffer.setSize(1, currentSample->stereo.getNumSamples());
-        monoBuffer.copyFrom(0, 0, currentSample->stereo, 0, 0, currentSample->stereo.getNumSamples());
-        monoBuffer.addFrom(0, 0, currentSample->stereo, 1, 0, currentSample->stereo.getNumSamples(), 0.5f);
-        monoBuffer.applyGain(0.5f);
+    const float* audioData = nullptr;
+    
+    try {
+        // CRASH PROTECTION: Validate total samples won't cause memory issues
+        const juce::int64 monoBufferSizeBytes = static_cast<juce::int64>(totalSamples) * sizeof(float);
+        const juce::int64 maxMonoBufferSizeBytes = 500 * 1024 * 1024; // 500 MB limit
+        
+        if (monoBufferSizeBytes > maxMonoBufferSizeBytes)
+        {
+            juce::Logger::writeToLog("[Sample Loader] Spectrogram: Sample too large (" + 
+                                     juce::String(monoBufferSizeBytes / 1024 / 1024) + " MB), skipping generation");
+            return;
+        }
+        
+        if (safeSample->stereo.getNumChannels() > 1)
+        {
+            monoBuffer.setSize(1, totalSamples);
+            if (monoBuffer.getNumSamples() != totalSamples)
+            {
+                juce::Logger::writeToLog("[Sample Loader] Spectrogram: Failed to allocate mono buffer (" + 
+                                         juce::String(totalSamples) + " samples)");
+                return; // Allocation failed
+            }
+            
+            // CRASH PROTECTION: Validate source pointers before copy
+            const float* srcL = safeSample->stereo.getReadPointer(0);
+            const float* srcR = safeSample->stereo.getReadPointer(1);
+            if (srcL == nullptr || srcR == nullptr)
+            {
+                juce::Logger::writeToLog("[Sample Loader] Spectrogram: Invalid source pointers");
+                return;
+            }
+            
+            monoBuffer.copyFrom(0, 0, safeSample->stereo, 0, 0, totalSamples);
+            monoBuffer.addFrom(0, 0, safeSample->stereo, 1, 0, totalSamples, 0.5f);
+            monoBuffer.applyGain(0.5f);
+            audioData = monoBuffer.getReadPointer(0);
+        }
+        else
+        {
+            audioData = safeSample->stereo.getReadPointer(0);
+        }
+        
+        // CRASH PROTECTION: Validate audio data pointer
+        if (audioData == nullptr)
+        {
+            juce::Logger::writeToLog("[Sample Loader] Spectrogram: Audio data pointer is null");
+            return;
+        }
+    } catch (const std::bad_alloc& e) {
+        juce::Logger::writeToLog("[Sample Loader][FATAL] Memory allocation failed in spectrogram generation: " + 
+                                 juce::String(e.what()) + " (file: " + currentSampleName + ", samples: " + 
+                                 juce::String(totalSamples) + ")");
+        return;
+    } catch (...) {
+        juce::Logger::writeToLog("[Sample Loader][FATAL] Exception preparing spectrogram audio data (file: " + 
+                                 currentSampleName + ", samples: " + juce::String(totalSamples) + ")");
+        return;
     }
-    const float* audioData = (currentSample->stereo.getNumChannels() > 1) ? monoBuffer.getReadPointer(0) : currentSample->stereo.getReadPointer(0);
 
     // Use RGB so JUCE's OpenGLTexture uploads with expected format
-    spectrogramImage = juce::Image(juce::Image::RGB, numHops, fftSize / 2, true);
+    try {
+        const int imageWidth = numHops;
+        const int imageHeight = fftSize / 2;
+        
+        // CRASH PROTECTION: Final validation of image dimensions
+        if (imageWidth <= 0 || imageHeight <= 0 || imageWidth > maxHops || imageHeight > 10000)
+        {
+            juce::Logger::writeToLog("[Sample Loader] Spectrogram: Invalid image dimensions (" + 
+                                     juce::String(imageWidth) + "x" + juce::String(imageHeight) + ")");
+            return;
+        }
+        
+        spectrogramImage = juce::Image(juce::Image::RGB, imageWidth, imageHeight, true);
+        if (spectrogramImage.isNull())
+        {
+            juce::Logger::writeToLog("[Sample Loader] Spectrogram: Image allocation failed (" + 
+                                     juce::String(imageWidth) + "x" + juce::String(imageHeight) + ")");
+            return; // Image allocation failed
+        }
+        
+        juce::Logger::writeToLog("[Sample Loader] Spectrogram: Allocated " + 
+                                 juce::String(imageWidth) + "x" + juce::String(imageHeight) + 
+                                 " for " + currentSampleName + " (" + juce::String(totalSamples) + " samples)");
+    } catch (const std::bad_alloc& e) {
+        juce::Logger::writeToLog("[Sample Loader][FATAL] Memory allocation failed for spectrogram image: " + 
+                                 juce::String(e.what()) + " (file: " + currentSampleName + ")");
+        return;
+    } catch (...) {
+        juce::Logger::writeToLog("[Sample Loader][FATAL] Exception allocating spectrogram image (file: " + 
+                                 currentSampleName + ", numHops: " + juce::String(numHops) + ")");
+        return;
+    }
+    
     juce::dsp::FFT fft(fftOrder);
     juce::dsp::WindowingFunction<float> window(fftSize, juce::dsp::WindowingFunction<float>::hann);
     std::vector<float> fftData(fftSize * 2);
 
     for (int i = 0; i < numHops; ++i)
     {
+        // CRASH PROTECTION: Bounds checking before memcpy
+        const int sourceOffset = i * hopSize;
+        if (sourceOffset < 0 || sourceOffset + fftSize > totalSamples)
+            continue; // Skip invalid hop
+        
         std::fill(fftData.begin(), fftData.end(), 0.0f);
-        memcpy(fftData.data(), audioData + (i * hopSize), fftSize * sizeof(float));
+        
+        // CRASH PROTECTION: Safe memcpy with bounds validation
+        const float* sourcePtr = audioData + sourceOffset;
+        if (sourcePtr != nullptr)
+        {
+            memcpy(fftData.data(), sourcePtr, fftSize * sizeof(float));
+        }
+        else
+        {
+            continue; // Skip if pointer is invalid
+        }
 
-        window.multiplyWithWindowingTable(fftData.data(), fftSize);
-        fft.performFrequencyOnlyForwardTransform(fftData.data());
+        try {
+            window.multiplyWithWindowingTable(fftData.data(), fftSize);
+            fft.performFrequencyOnlyForwardTransform(fftData.data());
+        } catch (...) {
+            juce::Logger::writeToLog("[Sample Loader][FATAL] Exception in FFT processing at hop " + juce::String(i));
+            continue; // Skip this hop, continue with next
+        }
 
         for (int j = 0; j < fftSize / 2; ++j)
         {
-            const float db = juce::Decibels::gainToDecibels(juce::jmax(fftData[j], 1.0e-9f), -100.0f);
-            float level = juce::jmap(db, -100.0f, 0.0f, 0.0f, 1.0f);
-            level = juce::jlimit(0.0f, 1.0f, level);
-            spectrogramImage.setPixelAt(i, (fftSize / 2) - 1 - j, juce::Colour::fromFloatRGBA(level, level, level, 1.0f));
+            try {
+                const float db = juce::Decibels::gainToDecibels(juce::jmax(fftData[j], 1.0e-9f), -100.0f);
+                float level = juce::jmap(db, -100.0f, 0.0f, 0.0f, 1.0f);
+                level = juce::jlimit(0.0f, 1.0f, level);
+                
+                // CRASH PROTECTION: Validate pixel coordinates
+                const int x = i;
+                const int y = (fftSize / 2) - 1 - j;
+                if (x >= 0 && x < numHops && y >= 0 && y < (fftSize / 2))
+                {
+                    spectrogramImage.setPixelAt(x, y, juce::Colour::fromFloatRGBA(level, level, level, 1.0f));
+                }
+            } catch (...) {
+                // Skip this pixel, continue with next
+                continue;
+            }
         }
     }
 }
@@ -1112,23 +1598,54 @@ void SampleLoaderModuleProcessor::drawParametersInNode(float itemWidth, const st
     ImGui::Spacing();
     ImGui::Spacing();
     
+    // === SYNC TO TRANSPORT CHECKBOX ===
+    bool sync = syncParam ? (*syncParam > 0.5f) : false;
+    if (ImGui::Checkbox("Sync to Transport", &sync))
+    {
+        syncToTransport.store(sync);
+        if (auto* p = dynamic_cast<juce::AudioParameterBool*>(apvts.getParameter("sync")))
+            *p = sync;
+        onModificationEnded();
+    }
+    
+    // === SYNC MODE SELECTOR (only shown when synced) ===
+    if (sync)
+    {
+        int syncModeIdx = syncModeParam ? syncModeParam->getIndex() : 0;
+        const char* syncModeItems[] = { "Relative (Range-Based)", "Absolute (1:1 Time)" };
+        if (ImGui::Combo("Sync Mode", &syncModeIdx, syncModeItems, 2))
+        {
+            if (syncModeParam)
+                *syncModeParam = syncModeIdx;
+            onModificationEnded();
+        }
+    }
+    ImGui::Spacing();
+    
     // === POSITION SLIDER ===
+    // Use _mod suffix for virtual routing ID check (per debuginput.md)
     bool posMod = isParamModulated(paramIdPositionMod);
     
-    // Get value: Always use live telemetry if available (shows playback position moving)
+    // Get value: Always use _live telemetry if available (shows playback position moving)
     // If modulated, use live value. If not, use parameter but prefer live for visual feedback
     float posVal = getLiveParamValue("position_live", positionParam ? positionParam->load() : 0.0f);
     
-    if (posMod)
+    // Grey out position slider if CV connected OR synced to transport
+    bool positionLocked = posMod || syncToTransport.load();
+    
+    if (positionLocked)
     {
-        ImGui::BeginDisabled(); // Lock if CV controlled
-        ImGui::PushStyleColor(ImGuiCol_FrameBg, ImVec4(0.2f, 0.6f, 0.2f, 0.3f)); // Green tint for CV control
+        ImGui::BeginDisabled(); // Lock if CV controlled or synced to transport
+        if (posMod)
+            ImGui::PushStyleColor(ImGuiCol_FrameBg, ImVec4(0.2f, 0.6f, 0.2f, 0.3f)); // Green tint for CV control
+        else if (syncToTransport.load())
+            ImGui::PushStyleColor(ImGuiCol_FrameBg, ImVec4(0.4f, 0.4f, 0.4f, 0.3f)); // Grey tint for transport sync
     }
     
     if (ImGui::SliderFloat("Position", &posVal, 0.0f, 1.0f, "%.3f"))
     {
-        // Only allow updates if not modulated
-        if (!posMod && positionParam)
+        // Only allow updates if not modulated AND not synced to transport
+        if (!positionLocked && positionParam)
         {
             posVal = juce::jlimit(0.0f, 1.0f, posVal);
             // Update parameter using setValueNotifyingHost so audio thread detects the change
@@ -1144,12 +1661,21 @@ void SampleLoaderModuleProcessor::drawParametersInNode(float itemWidth, const st
     // Don't use adjustParamOnWheel here - it would fight with playback updates
     // The slider shows live position during playback, and allows scrubbing when not playing
     
-    if (posMod)
+    if (positionLocked)
     {
-        ImGui::PopStyleColor();
+        if (posMod || syncToTransport.load()) // Pop style color if it was pushed
+            ImGui::PopStyleColor();
         ImGui::EndDisabled();
-        ImGui::SameLine();
-        ImGui::Text("(mod)");
+        if (posMod)
+        {
+            ImGui::SameLine();
+            ImGui::Text("(mod)");
+        }
+        else if (syncToTransport.load())
+        {
+            ImGui::SameLine();
+            ImGui::Text("(synced)");
+        }
     }
     
     if (ImGui::IsItemHovered())
@@ -1284,8 +1810,8 @@ void SampleLoaderModuleProcessor::drawParametersInNode(float itemWidth, const st
     if (hasSampleLoaded())
     {
         ImGui::Text("Sample: %s", currentSampleName.toRawUTF8());
-        ImGui::Text("Duration: %.2f s", sampleDurationSeconds);
-        ImGui::Text("Rate: %d Hz", sampleSampleRate);
+        ImGui::Text("Duration: %.2f s", sampleDurationSeconds.load());
+        ImGui::Text("Rate: %d Hz", sampleSampleRate.load());
 
         // Draw a drop zone for hot-swapping with visual feedback
         ImVec2 swapZoneSize = ImVec2(itemWidth, 100.0f);
@@ -1336,9 +1862,53 @@ void SampleLoaderModuleProcessor::drawParametersInNode(float itemWidth, const st
         {
             if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("DND_SAMPLE_PATH"))
             {
-                const char* path = (const char*)payload->Data;
-                loadSample(juce::File(path));
-                onModificationEnded();
+                // CRASH PROTECTION: Validate payload data before use
+                if (payload->Data != nullptr && payload->DataSize > 0)
+                {
+                    // ImGui guarantees null-terminated strings, so we can safely use the data
+                    const char* path = (const char*)payload->Data;
+                    
+                    // Verify null-termination exists (should be at end)
+                    if (path[payload->DataSize - 1] == '\0')
+                    {
+                        // Create safe string copy (handles special characters)
+                        // Use strlen to get actual string length (stops at first null)
+                        size_t pathLen = std::strlen(path);
+                        
+                        if (pathLen > 0 && pathLen < payload->DataSize)
+                        {
+                            juce::String safePath(path, pathLen);
+                            juce::File file(safePath);
+                            
+                            // Validate file exists before loading
+                            if (file.existsAsFile())
+                            {
+                                try {
+                                    loadSample(file);
+                                    onModificationEnded();
+                                } catch (...) {
+                                    juce::Logger::writeToLog("[Sample Loader][FATAL] Exception during drag-drop load: " + safePath);
+                                }
+                            }
+                            else
+                            {
+                                juce::Logger::writeToLog("[Sample Loader] Drag-drop file does not exist: " + safePath);
+                            }
+                        }
+                        else
+                        {
+                            juce::Logger::writeToLog("[Sample Loader] Invalid drag-drop payload: invalid string length");
+                        }
+                    }
+                    else
+                    {
+                        juce::Logger::writeToLog("[Sample Loader] Invalid drag-drop payload: not null-terminated");
+                    }
+                }
+                else
+                {
+                    juce::Logger::writeToLog("[Sample Loader] Invalid drag-drop payload: null or empty data");
+                }
             }
             ImGui::EndDragDropTarget();
         }
@@ -1394,9 +1964,53 @@ void SampleLoaderModuleProcessor::drawParametersInNode(float itemWidth, const st
         {
             if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("DND_SAMPLE_PATH"))
             {
-                const char* path = (const char*)payload->Data;
-                loadSample(juce::File(path));
-                onModificationEnded();
+                // CRASH PROTECTION: Validate payload data before use
+                if (payload->Data != nullptr && payload->DataSize > 0)
+                {
+                    // ImGui guarantees null-terminated strings, so we can safely use the data
+                    const char* path = (const char*)payload->Data;
+                    
+                    // Verify null-termination exists (should be at end)
+                    if (path[payload->DataSize - 1] == '\0')
+                    {
+                        // Create safe string copy (handles special characters)
+                        // Use strlen to get actual string length (stops at first null)
+                        size_t pathLen = std::strlen(path);
+                        
+                        if (pathLen > 0 && pathLen < payload->DataSize)
+                        {
+                            juce::String safePath(path, pathLen);
+                            juce::File file(safePath);
+                            
+                            // Validate file exists before loading
+                            if (file.existsAsFile())
+                            {
+                                try {
+                                    loadSample(file);
+                                    onModificationEnded();
+                                } catch (...) {
+                                    juce::Logger::writeToLog("[Sample Loader][FATAL] Exception during drag-drop load: " + safePath);
+                                }
+                            }
+                            else
+                            {
+                                juce::Logger::writeToLog("[Sample Loader] Drag-drop file does not exist: " + safePath);
+                            }
+                        }
+                        else
+                        {
+                            juce::Logger::writeToLog("[Sample Loader] Invalid drag-drop payload: invalid string length");
+                        }
+                    }
+                    else
+                    {
+                        juce::Logger::writeToLog("[Sample Loader] Invalid drag-drop payload: not null-terminated");
+                    }
+                }
+                else
+                {
+                    juce::Logger::writeToLog("[Sample Loader] Invalid drag-drop payload: null or empty data");
+                }
             }
             ImGui::EndDragDropTarget();
         }

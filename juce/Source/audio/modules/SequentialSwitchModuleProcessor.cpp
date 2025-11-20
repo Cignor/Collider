@@ -323,76 +323,76 @@ void SequentialSwitchModuleProcessor::drawParametersInNode(
         const float outputBottomY = outputTopY + outputSectionHeight;
         const float stepX = graphSize.x / (float)(VizData::waveformPoints - 1);
 
-        // Draw center separator line
+    // Draw center separator line
         drawList->AddLine(ImVec2(p0.x, midY), ImVec2(p1.x, midY), centerLineColor, 1.5f);
 
-        // Draw threshold lines (in input section)
-        auto drawThresholdLine = [&](float threshold, ImU32 color, const char* label)
-        {
-            const float thresholdY = inputTopY + (1.0f - threshold) * inputSectionHeight;
-            const float clampedY = juce::jlimit(inputTopY + 2.0f, inputBottomY - 2.0f, thresholdY);
+    // Draw threshold lines (in input section)
+    auto drawThresholdLine = [&](float threshold, ImU32 color, const char* label)
+    {
+        const float thresholdY = inputTopY + (1.0f - threshold) * inputSectionHeight;
+        const float clampedY = juce::jlimit(inputTopY + 2.0f, inputBottomY - 2.0f, thresholdY);
             drawList->AddLine(ImVec2(p0.x, clampedY), ImVec2(p1.x, clampedY), color, 1.5f);
             drawList->AddText(ImVec2(p0.x + 4.0f, clampedY - 12.0f), color, label);
-        };
+    };
 
-        drawThresholdLine(currentThreshold1, output1Color, "T1");
-        drawThresholdLine(currentThreshold2, output2Color, "T2");
-        drawThresholdLine(currentThreshold3, output3Color, "T3");
-        drawThresholdLine(currentThreshold4, output4Color, "T4");
+    drawThresholdLine(currentThreshold1, output1Color, "T1");
+    drawThresholdLine(currentThreshold2, output2Color, "T2");
+    drawThresholdLine(currentThreshold3, output3Color, "T3");
+    drawThresholdLine(currentThreshold4, output4Color, "T4");
 
-        // Draw input waveform (in input section, behind threshold lines)
+    // Draw input waveform (in input section, behind threshold lines)
         float prevX = p0.x;
-        float prevY = inputBottomY;
+    float prevY = inputBottomY;
+    for (int i = 0; i < VizData::waveformPoints; ++i)
+    {
+        const float sample = juce::jlimit(0.0f, 1.0f, inputWaveform[i]);
+            const float x = p0.x + i * stepX;
+        const float y = inputBottomY - sample * inputSectionHeight;
+        if (i > 0)
+        {
+            ImVec4 colorVec4 = ImGui::ColorConvertU32ToFloat4(inputColor);
+            colorVec4.w = 0.5f; // More transparent for background
+            drawList->AddLine(ImVec2(prevX, prevY), ImVec2(x, y), ImGui::ColorConvertFloat4ToU32(colorVec4), 2.0f);
+        }
+        prevX = x;
+        prevY = y;
+    }
+
+    // Draw output waveforms (in output section, stacked)
+    const float outputRowHeight = outputSectionHeight / 4.0f;
+    auto drawOutputWaveform = [&](const float* waveform, ImU32 color, float topY, float bottomY, float alpha)
+    {
+            float prevX = p0.x;
+        float prevY = bottomY;
         for (int i = 0; i < VizData::waveformPoints; ++i)
         {
-            const float sample = juce::jlimit(0.0f, 1.0f, inputWaveform[i]);
-            const float x = p0.x + i * stepX;
-            const float y = inputBottomY - sample * inputSectionHeight;
+            const float sample = juce::jlimit(0.0f, 1.0f, waveform[i]);
+                const float x = p0.x + i * stepX;
+            const float y = bottomY - sample * (bottomY - topY);
             if (i > 0)
             {
-                ImVec4 colorVec4 = ImGui::ColorConvertU32ToFloat4(inputColor);
-                colorVec4.w = 0.5f; // More transparent for background
-                drawList->AddLine(ImVec2(prevX, prevY), ImVec2(x, y), ImGui::ColorConvertFloat4ToU32(colorVec4), 2.0f);
+                ImVec4 colorVec4 = ImGui::ColorConvertU32ToFloat4(color);
+                colorVec4.w = alpha;
+                drawList->AddLine(ImVec2(prevX, prevY), ImVec2(x, y), ImGui::ColorConvertFloat4ToU32(colorVec4), 2.5f);
             }
             prevX = x;
             prevY = y;
         }
+    };
 
-        // Draw output waveforms (in output section, stacked)
-        const float outputRowHeight = outputSectionHeight / 4.0f;
-        auto drawOutputWaveform = [&](const float* waveform, ImU32 color, float topY, float bottomY, float alpha)
-        {
-            float prevX = p0.x;
-            float prevY = bottomY;
-            for (int i = 0; i < VizData::waveformPoints; ++i)
-            {
-                const float sample = juce::jlimit(0.0f, 1.0f, waveform[i]);
-                const float x = p0.x + i * stepX;
-                const float y = bottomY - sample * (bottomY - topY);
-                if (i > 0)
-                {
-                    ImVec4 colorVec4 = ImGui::ColorConvertU32ToFloat4(color);
-                    colorVec4.w = alpha;
-                    drawList->AddLine(ImVec2(prevX, prevY), ImVec2(x, y), ImGui::ColorConvertFloat4ToU32(colorVec4), 2.5f);
-                }
-                prevX = x;
-                prevY = y;
-            }
-        };
+    drawOutputWaveform(output1Waveform, output1Color, outputTopY, outputTopY + outputRowHeight, 0.8f);
+    drawOutputWaveform(output2Waveform, output2Color, outputTopY + outputRowHeight, outputTopY + outputRowHeight * 2.0f, 0.8f);
+    drawOutputWaveform(output3Waveform, output3Color, outputTopY + outputRowHeight * 2.0f, outputTopY + outputRowHeight * 3.0f, 0.8f);
+    drawOutputWaveform(output4Waveform, output4Color, outputTopY + outputRowHeight * 3.0f, outputBottomY, 0.8f);
 
-        drawOutputWaveform(output1Waveform, output1Color, outputTopY, outputTopY + outputRowHeight, 0.8f);
-        drawOutputWaveform(output2Waveform, output2Color, outputTopY + outputRowHeight, outputTopY + outputRowHeight * 2.0f, 0.8f);
-        drawOutputWaveform(output3Waveform, output3Color, outputTopY + outputRowHeight * 2.0f, outputTopY + outputRowHeight * 3.0f, 0.8f);
-        drawOutputWaveform(output4Waveform, output4Color, outputTopY + outputRowHeight * 3.0f, outputBottomY, 0.8f);
-
-        // Add labels for outputs
-        const char* outputLabels[] = {"Out 1", "Out 2", "Out 3", "Out 4"};
-        ImU32 outputColors[] = {output1Color, output2Color, output3Color, output4Color};
-        for (int i = 0; i < 4; ++i)
-        {
-            const float labelY = outputTopY + outputRowHeight * i + outputRowHeight * 0.5f - 8.0f;
+    // Add labels for outputs
+    const char* outputLabels[] = {"Out 1", "Out 2", "Out 3", "Out 4"};
+    ImU32 outputColors[] = {output1Color, output2Color, output3Color, output4Color};
+    for (int i = 0; i < 4; ++i)
+    {
+        const float labelY = outputTopY + outputRowHeight * i + outputRowHeight * 0.5f - 8.0f;
             drawList->AddText(ImVec2(p0.x + 4.0f, labelY), outputColors[i], outputLabels[i]);
-        }
+    }
 
         drawList->PopClipRect();
 
@@ -411,7 +411,7 @@ void SequentialSwitchModuleProcessor::drawParametersInNode(
             ImGui::SameLine();
             ImGui::TextUnformatted(label);
         };
-        
+
         drawStateLED("Out 1", output1Active, output1Color);
         ImGui::SameLine();
         drawStateLED("Out 2", output2Active, output2Color);
@@ -423,7 +423,7 @@ void SequentialSwitchModuleProcessor::drawParametersInNode(
         ImGui::SetCursorPos(ImVec2(4, waveHeight + 28));
         ImGui::TextColored(ImVec4(1.0f, 1.0f, 1.0f, 0.9f), "Thresholds: T1=%.3f  T2=%.3f  T3=%.3f  T4=%.3f",
                     currentThreshold1, currentThreshold2, currentThreshold3, currentThreshold4);
-        
+
         // Invisible drag blocker
         ImGui::SetCursorPos(ImVec2(0, 0));
         ImGui::InvisibleButton("##sequentialSwitchVizDrag", graphSize);

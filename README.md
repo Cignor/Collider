@@ -1,8 +1,8 @@
-# Collider Modular Synthesizer
+# Pikon Raditsz
 
-**A real-time modular synthesizer that bridges computer vision, physics simulation, and 3D animation with traditional synthesis.**
+**Pikon Raditsz is a real-time modular synthesizer that bridges computer vision, physics simulation, and 3D animation with traditional synthesis.**
 
-Collider is a node-based modular synthesizer built on JUCE, featuring **100+ synthesis modules** and unique integrations that set it apart from traditional modular environments.
+Built on JUCE and Dear ImGui, Pikon Raditsz ships with **100+ synthesis modules** plus experimental integrations (OpenCV, FBX/GLB animation, physics, drawing, etc.). The current public build is `0.5.0-beta – Beta Test Release`.
 
 ---
 
@@ -38,8 +38,8 @@ Load and use VST2/VST3 plugins within your patches, combining modular synthesis 
 
 ```bash
 # Clone and build
-git clone https://github.com/yourusername/collider-pyo.git
-cd collider-pyo/juce
+git clone https://github.com/Cignor/Pikon-Raditsz.git
+cd Pikon-Raditsz/juce
 cmake -B build -S .
 cmake --build build --config Release
 
@@ -48,7 +48,7 @@ cmake --build build --config Release
 ./build/ColliderApp              # macOS/Linux
 ```
 
-**Requirements:** CMake 3.22+, C++20 compiler, CUDA Toolkit (optional), FFmpeg
+**Requirements:** CMake 3.22+, C++20 compiler, CUDA Toolkit (optional), FFmpeg, JUCE dependencies.
 
 ---
 
@@ -73,8 +73,8 @@ Animation Loader → Joint Positions → LFO Rate/CV Mixer
 
 ## Documentation
 
-- **[Complete Nodes Dictionary](USER_MANUAL/Nodes_Dictionary.md)** - Full documentation for all 100+ nodes
-- **[User Manual](USER_MANUAL/)** - Comprehensive guides and tutorials
+- **[Complete Nodes Dictionary](USER_MANUAL/Nodes_Dictionary.md)** – Full documentation for all nodes
+- **[User Manual](USER_MANUAL/)** – Guides, tutorials, and reference material
 
 ---
 
@@ -110,5 +110,5 @@ Animation Loader → Joint Positions → LFO Rate/CV Mixer
 
 ## License
 
-[Specify your license]
+Pikon Raditsz is currently distributed for beta testing; see repository history for license discussions. A formal license will be published alongside the first stable release.
 

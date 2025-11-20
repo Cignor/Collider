@@ -1,5 +1,6 @@
 #include "PresetCreatorApplication.h"
 #include "PresetCreatorComponent.h"
+#include "SplashScreenComponent.h"
 #include "../utils/RtLogger.h"
 
 void PresetCreatorApplication::initialise(const juce::String&)
@@ -79,6 +80,109 @@ void PresetCreatorApplication::initialise(const juce::String&)
                                          pluginFormatManager,
                                          knownPluginList));
         juce::Logger::writeToLog("MainWindow created successfully");
+        
+        // Always ensure main window is visible
+        if (mainWindow != nullptr)
+        {
+            mainWindow->setVisible(true);
+            mainWindow->toFront(true);
+            juce::Logger::writeToLog("MainWindow made visible");
+        }
+        
+        // Show splash screen if enabled (non-blocking, on top)
+        // Use callAsync to show splash after main window is fully initialized
+        if (SplashScreenComponent::shouldShowSplashScreen(appProperties.get()))
+        {
+            juce::MessageManager::callAsync([this]()
+            {
+                showSplashScreen();
+            });
+        }
+}
+
+void PresetCreatorApplication::showSplashScreen()
+{
+    try
+    {
+        if (mainWindow == nullptr)
+        {
+            juce::Logger::writeToLog("[Splash] Cannot show splash - main window is null");
+            return;
+        }
+        
+        // Ensure main window is visible first
+        mainWindow->setVisible(true);
+        
+        // Create splash screen component
+        auto splash = std::make_unique<SplashScreenComponent>();
+        
+        // Get bounds before moving ownership
+        auto splashBounds = splash->getBounds();
+        
+        // Create a dialog window for the splash screen (non-modal)
+        splashWindowPtr = std::make_unique<juce::DialogWindow>(
+            VersionInfo::getApplicationName(),
+            juce::Colours::transparentBlack,
+            false,  // Not modal - don't block
+            true     // Add to desktop
+        );
+        
+        // Set up dismiss callback
+        auto* splashPtr = splash.get();
+        splashPtr->onDismiss = [this]()
+        {
+            // Dismiss splash window
+            if (splashWindowPtr != nullptr)
+            {
+                splashWindowPtr->setVisible(false);
+                splashWindowPtr.reset();
+            }
+            
+            // Ensure main window is focused
+            if (mainWindow != nullptr)
+            {
+                mainWindow->setVisible(true);
+                mainWindow->toFront(true);
+            }
+        };
+        
+        // Set splash as content and configure window
+        splashWindowPtr->setContentOwned(splash.release(), true);
+        splashWindowPtr->setTitleBarHeight(0); // No title bar
+        splashWindowPtr->setResizable(false, false);
+        splashWindowPtr->setUsingNativeTitleBar(false);
+        splashWindowPtr->setAlwaysOnTop(true);
+        
+        // Center splash on screen
+        auto screenBounds = juce::Desktop::getInstance().getDisplays().getPrimaryDisplay()->userArea;
+        splashBounds.setPosition(
+            screenBounds.getCentreX() - splashBounds.getWidth() / 2,
+            screenBounds.getCentreY() - splashBounds.getHeight() / 2
+        );
+        splashWindowPtr->setBounds(splashBounds);
+        
+        // Show splash (non-modal, won't block)
+        splashWindowPtr->setVisible(true);
+        splashWindowPtr->toFront(true);
+        
+        // Focus splash component to receive keyboard events
+        if (auto* content = splashWindowPtr->getContentComponent())
+        {
+            content->grabKeyboardFocus();
+        }
+        
+        juce::Logger::writeToLog("[Splash] Splash screen shown successfully");
+    }
+    catch (const std::exception& e)
+    {
+        juce::Logger::writeToLog("[Splash] Error showing splash screen: " + juce::String(e.what()));
+        // Ensure main window is visible even if splash fails
+        if (mainWindow != nullptr)
+        {
+            mainWindow->setVisible(true);
+            mainWindow->toFront(true);
+        }
+    }
 }
 
 void PresetCreatorApplication::shutdown()

@@ -972,6 +972,7 @@ juce_add_gui_app(PresetCreatorApp
 target_sources(PresetCreatorApp PRIVATE
     # Your application sources
     Source/preset_creator/PresetCreatorMain.cpp
+    Source/preset_creator/PresetCreatorApplication.h
     Source/preset_creator/PinDatabase.h
     Source/preset_creator/PinDatabase.cpp
     Source/preset_creator/NotificationManager.h
@@ -990,6 +991,11 @@ target_sources(PresetCreatorApp PRIVATE
     Source/preset_creator/PresetCreatorComponent.cpp
     Source/preset_creator/ControllerPresetManager.h
     Source/preset_creator/ControllerPresetManager.cpp
+    Source/preset_creator/SplashScreenComponent.h
+    Source/preset_creator/SplashScreenComponent.cpp
+    
+    # Version and utilities
+    Source/utils/VersionInfo.h
     
     # Theme system
     Source/preset_creator/theme/Theme.h

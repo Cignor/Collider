@@ -3,12 +3,16 @@
 #include <juce_gui_extra/juce_gui_extra.h>
 #include <juce_audio_devices/juce_audio_devices.h>
 #include <juce_audio_processors/juce_audio_processors.h>
+#include "../utils/VersionInfo.h"
+
+// Forward declaration
+class SplashScreenComponent;
 
 class PresetCreatorApplication : public juce::JUCEApplication
 {
 public:
-    const juce::String getApplicationName() override { return "Preset Creator"; }
-    const juce::String getApplicationVersion() override { return "0.1.0"; }
+    const juce::String getApplicationName() override { return VersionInfo::getApplicationName(); }
+    const juce::String getApplicationVersion() override { return VersionInfo::getFullVersionString(); }
     
     // Accessors for shared components
     juce::AudioDeviceManager& getAudioDeviceManager() { return audioDeviceManager; }
@@ -25,6 +29,9 @@ public:
     
     void initialise(const juce::String&) override;
     void shutdown() override;
+    
+    // Show splash screen on startup
+    void showSplashScreen();
 
     class MainWindow : public juce::DocumentWindow
     {
@@ -58,5 +65,6 @@ private:
     std::unique_ptr<MainWindow> mainWindow;
     std::unique_ptr<juce::FileLogger> fileLogger;
     std::unique_ptr<juce::PropertiesFile> appProperties;
+    std::unique_ptr<juce::DialogWindow> splashWindowPtr;
 };
 

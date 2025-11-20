@@ -1,4 +1,5 @@
 #include "ModularSynthProcessor.h"
+#include <limits>
 #if defined(PRESET_CREATOR_UI)
 #include "../../preset_creator/NotificationManager.h"
 #endif
@@ -227,7 +228,13 @@ void ModularSynthProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce:
         }
         // --- END OF BLOCK ---
         
-        if (m_transportState.isPlaying)
+        // Only advance transport when NO timeline master is active
+        //  - timelineMasterId == 0          → advance normally (no master)
+        //  - timelineMasterId == UINT32_MAX → TempoClock is holding transport (no auto advance)
+        //  - timelineMasterId > 0           → a module (SampleLoader/Video) is the master
+        const juce::uint32 timelineMasterId = timelineMasterLogicalId.load();
+        const bool shouldAdvanceTransport = (timelineMasterId == 0);
+        if (m_transportState.isPlaying && shouldAdvanceTransport)
         {
             m_samplePosition += buffer.getNumSamples();
             m_transportState.songPositionSeconds = m_samplePosition / getSampleRate();

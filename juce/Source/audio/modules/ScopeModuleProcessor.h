@@ -1,6 +1,10 @@
 #pragma once
 
 #include "ModuleProcessor.h"
+#include <array>
+#include <deque>
+#include <cstdint>
+#include <utility>
 
 class ScopeModuleProcessor : public ModuleProcessor
 {
@@ -50,7 +54,19 @@ public:
     void getStatistics(float& outMin, float& outMax) const;
 
 private:
+    struct VizData
+    {
+        static constexpr int waveformPoints = 256;
+        std::array<std::atomic<float>, waveformPoints> waveform{};
+        std::atomic<float> peakMin { 0.0f };
+        std::atomic<float> peakMax { 0.0f };
+    };
+
     static juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout();
+    int computeHistoryCapacity() const;
+    void resetHistoryState (int newCapacity);
+    void pushDecimatedSample (float sample);
+    void refreshVizWaveform();
 
     juce::AudioProcessorValueTreeState apvts;
 
@@ -61,12 +77,11 @@ private:
     double currentSampleRate { 44100.0 };
     int decimation { 48 };           // ~1 kHz at 48 kHz
     int decimCounter { 0 };
-    std::vector<float> history;      // ring buffer of decimated samples
-    int histWrite { 0 };
-    int histCount { 0 };
     int histCapacity { 5000 };       // seconds * (sr/decimation)
-    float rollMin { 0.0f };
-    float rollMax { 0.0f };
+    std::int64_t histSampleCounter { -1 };
+    std::deque<std::pair<std::int64_t, float>> historyMinDeque;
+    std::deque<std::pair<std::int64_t, float>> historyMaxDeque;
+    VizData vizData;
     std::atomic<float>* monitorSecondsParam { nullptr };
 };
 

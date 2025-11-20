@@ -15,18 +15,25 @@ juce::AudioProcessorValueTreeState::ParameterLayout NoiseModuleProcessor::create
     params.push_back(std::make_unique<juce::AudioParameterFloat>(
         paramIdLevel, "Level dB", juce::NormalisableRange<float>(-60.0f, 6.0f, 0.1f), -12.0f));
 
+    auto rateRange = juce::NormalisableRange<float>(minRateHz, maxRateHz, 0.001f);
+    rateRange.setSkewForCentre(4.0f);
+    params.push_back(std::make_unique<juce::AudioParameterFloat>(
+        paramIdRate, "Rate Hz", rateRange, 20.0f));
+
     return { params.begin(), params.end() };
 }
 
 // --- Constructor ---
 NoiseModuleProcessor::NoiseModuleProcessor()
     : ModuleProcessor(BusesProperties()
-        .withInput("Modulation", juce::AudioChannelSet::discreteChannels(2), true) // ch0: Level, ch1: Colour
+        .withInput("Modulation", juce::AudioChannelSet::discreteChannels(3), true) // ch0: Level, ch1: Colour, ch2: Rate
         .withOutput("Output", juce::AudioChannelSet::mono(), true)),
       apvts(*this, nullptr, "NoiseParams", createParameterLayout())
 {
     levelDbParam = apvts.getRawParameterValue(paramIdLevel);
     colourParam = dynamic_cast<juce::AudioParameterChoice*>(apvts.getParameter(paramIdColour));
+    rateHzParam = apvts.getRawParameterValue(paramIdRate);
+    slowNoiseState = 0.0f;
 
     // Initialize output value tracking for tooltips
     lastOutputValues.push_back(std::make_unique<std::atomic<float>>(0.0f));
@@ -35,6 +42,9 @@ NoiseModuleProcessor::NoiseModuleProcessor()
 // --- Audio Processing Setup ---
 void NoiseModuleProcessor::prepareToPlay(double sampleRate, int samplesPerBlock)
 {
+    currentSampleRate = juce::jmax(1.0, sampleRate);
+    slowNoiseState = 0.0f;
+
     juce::dsp::ProcessSpec spec{ sampleRate, (juce::uint32)samplesPerBlock, 2 };
 
     // Pink noise is ~-3dB/octave. A simple 1-pole low-pass can approximate this.
@@ -70,13 +80,16 @@ void NoiseModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::
     // CORRECTED: Use the _mod parameter IDs to check for connections
     const bool isLevelModulated = isParamInputConnected(paramIdLevelMod);
     const bool isColourModulated = isParamInputConnected(paramIdColourMod);
+    const bool isRateModulated = isParamInputConnected(paramIdRateMod);
 
     const float* levelCV = isLevelModulated && modInBus.getNumChannels() > 0 ? modInBus.getReadPointer(0) : nullptr;
     const float* colourCV = isColourModulated && modInBus.getNumChannels() > 1 ? modInBus.getReadPointer(1) : nullptr;
+    const float* rateCV = isRateModulated && modInBus.getNumChannels() > 2 ? modInBus.getReadPointer(2) : nullptr;
 
     // --- Get Base Parameter Values ---
     const float baseLevelDb = levelDbParam->load();
     const int baseColour = colourParam->getIndex();
+    const float baseRateHz = rateHzParam ? rateHzParam->load() : 20.0f;
 
     // --- Per-Sample Processing for Responsive Modulation ---
     for (int i = 0; i < numSamples; ++i)
@@ -94,6 +107,12 @@ void NoiseModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::
             effectiveColour = static_cast<int>(juce::jlimit(0.0f, 1.0f, colourCV[i]) * 2.99f);
         }
 
+        float effectiveRateHz = baseRateHz;
+        if (isRateModulated && rateCV != nullptr) {
+            effectiveRateHz = juce::jmap(rateCV[i], 0.0f, 1.0f, minRateHz, maxRateHz);
+        }
+        effectiveRateHz = juce::jlimit(minRateHz, maxRateHz, effectiveRateHz);
+
         // 2. Generate raw white noise
         float sample = random.nextFloat() * 2.0f - 1.0f;
 
@@ -108,14 +127,20 @@ void NoiseModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::
         // 4. Apply gain
         sample *= juce::Decibels::decibelsToGain(effectiveLevelDb);
 
-        // 5. Write to mono output
+        // 5. Rate smoothing: higher rate -> faster tracking, lower rate -> slower movement
+        const float smoothingAmount = juce::jlimit(0.0001f, 1.0f, effectiveRateHz / maxRateHz);
+        slowNoiseState += smoothingAmount * (sample - slowNoiseState);
+        sample = slowNoiseState;
+
+        // 6. Write to mono output
         outBus.setSample(0, i, sample);
 
-        // 6. Update telemetry for UI (throttled)
+        // 7. Update telemetry for UI (throttled)
         if ((i & 0x3F) == 0) // Every 64 samples
         {
             setLiveParamValue("level_live", effectiveLevelDb);
             setLiveParamValue("colour_live", (float)effectiveColour);
+            setLiveParamValue("rate_live", effectiveRateHz);
         }
     }
 
@@ -131,6 +156,7 @@ void NoiseModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::
         // Track last computed values for visualization
         float lastLevelDb = baseLevelDb;
         int lastColour = baseColour;
+        float lastRate = baseRateHz;
         
         // Calculate RMS
         float rmsSum = 0.0f;
@@ -145,6 +171,9 @@ void NoiseModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::
             }
             if (isColourModulated && colourCV != nullptr) {
                 lastColour = static_cast<int>(juce::jlimit(0.0f, 1.0f, colourCV[i]) * 2.99f);
+            }
+            if (isRateModulated && rateCV != nullptr) {
+                lastRate = juce::jmap(rateCV[i], 0.0f, 1.0f, minRateHz, maxRateHz);
             }
         }
         float rms = std::sqrt(rmsSum / (float)numSamples);
@@ -162,6 +191,7 @@ void NoiseModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::
         // Update live parameter values
         vizData.currentLevelDb.store(lastLevelDb);
         vizData.currentColour.store(lastColour);
+        vizData.currentRateHz.store(lastRate);
     }
 #endif
 }
@@ -173,6 +203,7 @@ bool NoiseModuleProcessor::getParamRouting(const juce::String& paramId, int& out
     // CORRECTED: Map the virtual _mod IDs to physical channels
     if (paramId == paramIdLevelMod)  { outChannelIndexInBus = 0; return true; }
     if (paramId == paramIdColourMod) { outChannelIndexInBus = 1; return true; }
+    if (paramId == paramIdRateMod)   { outChannelIndexInBus = 2; return true; }
     
     return false;
 }
@@ -192,6 +223,10 @@ void NoiseModuleProcessor::drawParametersInNode(float itemWidth, const std::func
     bool colourIsModulated = isParamModulated(paramIdColourMod);
     int colourIndex = colourIsModulated ? (int)getLiveParamValueFor(paramIdColourMod, "colour_live", (float)colourParam->getIndex()) : colourParam->getIndex();
 
+    bool rateIsModulated = isParamModulated(paramIdRateMod);
+    float rateHz = rateIsModulated ? getLiveParamValueFor(paramIdRateMod, "rate_live", rateHzParam ? rateHzParam->load() : 20.0f)
+                                   : (rateHzParam ? rateHzParam->load() : 20.0f);
+
     // === SECTION: Noise Type ===
     ThemeText("NOISE TYPE", theme.text.section_header);
 
@@ -203,6 +238,22 @@ void NoiseModuleProcessor::drawParametersInNode(float itemWidth, const std::func
     if (ImGui::IsItemDeactivatedAfterEdit() && !colourIsModulated) { onModificationEnded(); }
     if (colourIsModulated) { ImGui::EndDisabled(); ImGui::SameLine(); ThemeText("(mod)", theme.text.active); }
     if (ImGui::IsItemHovered()) ImGui::SetTooltip("White=flat spectrum, Pink=-3dB/oct, Brown=-6dB/oct");
+
+    ImGui::Spacing();
+    ImGui::Spacing();
+
+    // === SECTION: Rate ===
+    ThemeText("RATE", theme.text.section_header);
+
+    if (rateIsModulated) ImGui::BeginDisabled();
+    if (ImGui::SliderFloat("Rate", &rateHz, minRateHz, maxRateHz, "%.2f Hz", ImGuiSliderFlags_Logarithmic))
+    {
+        if (!rateIsModulated && rateHzParam != nullptr) *rateHzParam = rateHz;
+    }
+    if (ImGui::IsItemDeactivatedAfterEdit() && !rateIsModulated) { onModificationEnded(); }
+    if (!rateIsModulated && rateHzParam != nullptr) adjustParamOnWheel(ap.getParameter(paramIdRate), "rate", rateHz);
+    if (rateIsModulated) { ImGui::EndDisabled(); ImGui::SameLine(); ThemeText("(mod)", theme.text.active); }
+    if (ImGui::IsItemHovered()) ImGui::SetTooltip("Controls how often the noise updates. Lower values slow it down.");
 
     ImGui::Spacing();
     ImGui::Spacing();
@@ -237,6 +288,7 @@ void NoiseModuleProcessor::drawParametersInNode(float itemWidth, const std::func
     const float liveLevelDb = vizData.currentLevelDb.load();
     const float liveRms = vizData.outputRms.load();
     const int currentColour = vizData.currentColour.load();
+    const float liveRateHz = vizData.currentRateHz.load();
 
     // Waveform visualization in child window
     const float waveHeight = 110.0f;
@@ -300,7 +352,8 @@ void NoiseModuleProcessor::drawParametersInNode(float itemWidth, const std::func
         const char* currentColourName = (currentColour >= 0 && currentColour < 3) ? colourNames[currentColour] : "Unknown";
         
         ImGui::SetCursorPos(ImVec2(4, 4));
-        ImGui::TextColored(ImVec4(1.0f, 1.0f, 1.0f, 0.9f), "%s Noise  |  Level: %.1f dB  |  RMS: %.3f", currentColourName, liveLevelDb, liveRms);
+        ImGui::TextColored(ImVec4(1.0f, 1.0f, 1.0f, 0.9f), "%s Noise  |  Rate: %.2f Hz  |  Level: %.1f dB  |  RMS: %.3f",
+                           currentColourName, liveRateHz, liveLevelDb, liveRms);
         
         // Invisible drag blocker
         ImGui::SetCursorPos(ImVec2(0, 0));
@@ -320,6 +373,7 @@ void NoiseModuleProcessor::drawParametersInNode(float itemWidth, const std::func
     if (lastOutputValues.size() >= 1 && lastOutputValues[0]) {
         currentOut = lastOutputValues[0]->load();
     }
+    const float vizRateHz = vizData.currentRateHz.load();
 
     // Calculate fixed width for progress bar using actual text measurements
     const float labelTextWidth = ImGui::CalcTextSize("Level:").x;
@@ -335,6 +389,10 @@ void NoiseModuleProcessor::drawParametersInNode(float itemWidth, const std::func
     ImGui::SameLine();
     ImGui::Text("%.3f", currentOut);
 
+    ImGui::Text("Rate:");
+    ImGui::SameLine();
+    ImGui::Text("%.2f Hz", vizRateHz);
+
     ImGui::PopItemWidth();
 }
 
@@ -342,6 +400,7 @@ void NoiseModuleProcessor::drawIoPins(const NodePinHelpers& helpers)
 {
     helpers.drawAudioInputPin("Level Mod", 0);
     helpers.drawAudioInputPin("Colour Mod", 1);
+    helpers.drawAudioInputPin("Rate Mod", 2);
     helpers.drawAudioOutputPin("Out", 0);
 }
 
@@ -353,6 +412,7 @@ juce::String NoiseModuleProcessor::getAudioInputLabel(int channel) const
     {
         case 0: return "Level Mod";
         case 1: return "Colour Mod";
+        case 2: return "Rate Mod";
         default: return {};
     }
 }

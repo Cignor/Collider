@@ -4,6 +4,7 @@
 #include "TapTempo.h"
 #include <vector>
 #include <array>
+#include <atomic>
 
 /**
  * BPM Monitor Node - Hybrid Smart System
@@ -98,11 +99,12 @@ private:
     // === BEAT DETECTION ENGINE ===
     
     std::array<TapTempo, MAX_DETECTION_INPUTS> m_tapAnalyzers;
+    std::array<double, MAX_DETECTION_INPUTS> m_channelTime {};  // Current time per channel
     std::vector<DetectedRhythmSource> m_detectedSources;
     
     /**
      * Process beat detection on all active input channels
-     * Updates m_detectedSources
+     * Simple: detect edges, measure intervals, calculate median BPM
      */
     void processDetection(const juce::AudioBuffer<float>& buffer);
     
@@ -116,5 +118,20 @@ private:
     // === PERFORMANCE OPTIMIZATION ===
     
     int m_scanCounter { 0 };  // Counter to reduce graph scan frequency
+
+#if defined(PRESET_CREATOR_UI)
+    // Simple visualization data - no atomic overhead needed
+    struct VizSource
+    {
+        juce::String name;
+        float bpm { 0.0f };
+        float confidence { 0.0f };
+        bool isActive { false };
+    };
+    
+    mutable juce::CriticalSection m_vizLock;
+    std::vector<VizSource> m_vizIntrospected;
+    std::vector<VizSource> m_vizDetected;
+#endif
 };
 
