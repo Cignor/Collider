@@ -40,6 +40,7 @@ public:
     void releaseResources() override {}
     
     void setTimingInfo(const TransportState& state) override;
+    void forceStop() override; // Force stop (used after patch load)
     
     void processBlock(juce::AudioBuffer<float>&, juce::MidiBuffer&) override;
 

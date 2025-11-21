@@ -752,9 +752,38 @@ void ModularSynthProcessor::setStateInformation(const void* data, int sizeInByte
     }
 
 
+    // CRITICAL: Stop transport BEFORE commitChanges() to prevent auto-start during load
+    // This ensures processBlock() sees transport as stopped and doesn't auto-start modules
+    juce::Logger::writeToLog("[STATE] Stopping transport before commitChanges()...");
+    setPlaying(false); // Stop transport and broadcast to all modules
+    
     juce::Logger::writeToLog("[STATE] Calling commitChanges()...");
     commitChanges();
-    juce::Logger::writeToLog("[STATE] Restore complete.");
+    
+    // CRITICAL: Broadcast stopped transport state to all newly created modules
+    // This ensures modules created during commitChanges() receive the stopped state
+    juce::Logger::writeToLog("[STATE] Broadcasting stopped transport state to all modules...");
+    setPlaying(false); // Broadcast again to ensure all modules receive stopped state
+    
+    // CRITICAL: Force stop all modules after patch load (safety net)
+    // This ensures no modules are playing even if they auto-started during load
+    juce::Logger::writeToLog("[STATE] Forcing stop all modules after patch load...");
+    
+    // Force stop ALL modules that have playback state (unified behavior)
+    // This ensures all modules start in a stopped state, matching the top bar status
+    if (auto processors = activeAudioProcessors.load())
+    {
+        for (const auto& modulePtr : *processors)
+        {
+            if (!modulePtr) continue;
+            
+            // Call forceStop() on all modules (virtual method, modules override if needed)
+            // This ensures unified behavior: all modules stopped after patch load
+            modulePtr->forceStop();
+        }
+    }
+    
+    juce::Logger::writeToLog("[STATE] Restore complete - all modules stopped.");
 }
 
 namespace {

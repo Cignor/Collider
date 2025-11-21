@@ -93,6 +93,11 @@ void TTSPerformerModuleProcessor::stopPlayback()
     isPlaying = false;
 }
 
+void TTSPerformerModuleProcessor::forceStop()
+{
+    isPlaying = false;
+}
+
 bool TTSPerformerModuleProcessor::deleteSelectedClipFromDisk()
 {
     if (!selectedClip) return false;

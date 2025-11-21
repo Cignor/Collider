@@ -476,6 +476,14 @@ void VideoFileLoaderModule::run()
                     
                     // The new target is now the start frame
                     targetVideoFrame = startFrame; 
+                    
+                    // CRITICAL: If synced to transport, ensure playing state is maintained
+                    // This prevents setTimingInfo() from stopping playback after loop
+                    if (syncToTransport.load() && !playing.load())
+                    {
+                        // If we're synced but playing was false, restore it from transport state
+                        playing.store(lastTransportPlaying.load());
+                    }
                 }
                 else 
                 {
@@ -939,6 +947,13 @@ bool VideoFileLoaderModule::isTimelineActive() const
     return playing.load();
 }
 
+void VideoFileLoaderModule::forceStop()
+{
+    // Force stop playback regardless of sync settings
+    playing.store(false);
+    lastTransportPlaying.store(false);
+}
+
 void VideoFileLoaderModule::setTimingInfo(const TransportState& state)
 {
     // CRITICAL: If this module is the timeline master, ignore transport updates
@@ -961,6 +976,7 @@ void VideoFileLoaderModule::setTimingInfo(const TransportState& state)
         
         // CRITICAL: Sync playback position to transport when following timeline
         // This ensures VideoFileLoaderModule stays in sync with TempoClock
+        // BUT: Don't override position if we just looped (let loop reset take priority)
         if (state.isPlaying && audioLoaded.load() && audioReader)
         {
             const double sourceRate = sourceAudioSampleRate.load();
@@ -973,24 +989,38 @@ void VideoFileLoaderModule::setTimingInfo(const TransportState& state)
                 const juce::int64 currentPos = currentAudioSamplePosition.load();
                 const juce::int64 diff = std::abs(targetSamplePos - currentPos);
                 
-                // Update if difference is more than 1 block of samples (prevents micro-seeks)
-                if (diff > 512) // ~10ms at 48kHz
+                // CRITICAL FIX: Don't sync position if transport position is past the end
+                // This prevents transport from overriding loop reset
+                // Calculate end position to check bounds
+                const float startNormalized = inNormParam ? inNormParam->load() : 0.0f;
+                const float endNormalized = outNormParam ? outNormParam->load() : 1.0f;
+                const juce::int64 startSample = (juce::int64)(startNormalized * audioReader->lengthInSamples);
+                const juce::int64 endSample = (juce::int64)(endNormalized * audioReader->lengthInSamples);
+                
+                // Only sync if transport position is within valid range
+                // If transport is past the end, let the loop detection handle it
+                if (targetSamplePos >= startSample && targetSamplePos < endSample)
                 {
-                    const juce::ScopedLock audioLk(audioLock);
-                    if (audioReader)
+                    // Update if difference is more than 1 block of samples (prevents micro-seeks)
+                    if (diff > 512) // ~10ms at 48kHz
                     {
-                        // Update master clock to match transport
-                        currentAudioSamplePosition.store(targetSamplePos);
-                        // Update decoder read position
-                        audioReadPosition = (double)targetSamplePos;
-                        // Reset position for next read
-                        audioReader->resetPosition();
-                        // Clear FIFO to prevent stale audio
-                        abstractFifo.reset();
-                        // Reset time stretcher to prevent artifacts
-                        timePitch.reset();
+                        const juce::ScopedLock audioLk(audioLock);
+                        if (audioReader)
+                        {
+                            // Update master clock to match transport
+                            currentAudioSamplePosition.store(targetSamplePos);
+                            // Update decoder read position
+                            audioReadPosition = (double)targetSamplePos;
+                            // Reset position for next read
+                            audioReader->resetPosition();
+                            // Clear FIFO to prevent stale audio
+                            abstractFifo.reset();
+                            // Reset time stretcher to prevent artifacts
+                            timePitch.reset();
+                        }
                     }
                 }
+                // If transport position is past the end, don't sync - let loop detection handle it
             }
         }
     }

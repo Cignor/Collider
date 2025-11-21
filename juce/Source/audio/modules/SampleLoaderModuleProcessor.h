@@ -25,6 +25,7 @@ public:
     void releaseResources() override {}
     void processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midiMessages) override;
     void reset() override;
+    void forceStop(); // Force stop playback (used after patch load)
     
     // --- Transport Sync ---
     // Override to ignore transport when this module is the timeline master (prevents feedback loops)

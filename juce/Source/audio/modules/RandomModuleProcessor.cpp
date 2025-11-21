@@ -86,6 +86,13 @@ void RandomModuleProcessor::setTimingInfo(const TransportState& state)
     m_currentTransport = state;
 }
 
+void RandomModuleProcessor::forceStop()
+{
+    // Reset phase to 0 on patch load to ensure clean start
+    phase = 1.0; // Set to 1.0 so next trigger will fire immediately when transport starts
+    lastScaledBeats = 0.0;
+}
+
 void RandomModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midi)
 {
     juce::ignoreUnused(midi);
@@ -148,12 +155,18 @@ void RandomModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce:
         else
         {
             // FREE-RUNNING MODE
-            phase += (double)baseRate / sampleRate;
-            if (phase >= 1.0)
+            // BUT: Only advance if transport is playing (prevents auto-start on patch load)
+            // This ensures free-running modules respect transport state
+            if (m_currentTransport.isPlaying)
             {
-                phase -= 1.0;
-                triggerNewValue = true;
+                phase += (double)baseRate / sampleRate;
+                if (phase >= 1.0)
+                {
+                    phase -= 1.0;
+                    triggerNewValue = true;
+                }
             }
+            // If transport is stopped, don't advance phase (pauses free-running mode)
         }
 
         if (triggerNewValue)

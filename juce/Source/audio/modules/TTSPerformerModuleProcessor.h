@@ -163,6 +163,7 @@ private:
     // Clip actions
     void playSelectedClipFromTrim();
     void stopPlayback();
+    void forceStop() override; // Force stop (used after patch load)
     bool deleteSelectedClipFromDisk();
     bool renameSelectedClipOnDisk(const juce::String& newName);
 

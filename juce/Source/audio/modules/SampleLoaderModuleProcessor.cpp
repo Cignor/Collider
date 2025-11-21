@@ -579,9 +579,21 @@ void SampleLoaderModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer,
     const bool looping = apvts.getRawParameterValue("loop")->load() > 0.5f;
     
     // If loop is enabled and not playing, start playing
+    // BUT: Only auto-start if transport is playing (prevents auto-start during patch load)
     if (looping && !currentProcessor->isPlaying)
     {
-        currentProcessor->reset();
+        // Check transport state - don't auto-start if transport is stopped
+        bool transportIsPlaying = false;
+        if (auto* parent = getParent())
+        {
+            transportIsPlaying = parent->getTransportState().isPlaying;
+        }
+        
+        // Only auto-start if transport is playing (user has explicitly started playback)
+        if (transportIsPlaying)
+        {
+            currentProcessor->reset();
+        }
     }
     
     // Check for a rising edge on the trigger input to start playback.
@@ -735,6 +747,18 @@ void SampleLoaderModuleProcessor::reset()
     else
     {
         readPosition = 0.0;
+    }
+}
+
+void SampleLoaderModuleProcessor::forceStop()
+{
+    // Force stop the module's playback state
+    isPlaying.store(false);
+    
+    // Also stop the internal voice if it exists
+    if (sampleProcessor != nullptr)
+    {
+        sampleProcessor->isPlaying = false;
     }
 }
 

@@ -77,6 +77,18 @@ void StrokeSequencerModuleProcessor::setTimingInfo(const TransportState& state)
     m_currentTransport = state;
 }
 
+void StrokeSequencerModuleProcessor::forceStop()
+{
+    // Reset playhead to 0 on patch load to ensure clean start
+    playheadPosition = 0.0;
+    phase = 0.0;
+    previousPlayheadPos = 0.0;
+    previousStrokeY = 0.5f; // Center
+    m_hasTriggeredThisSegment = { false, false, false };
+    m_activeStrokeIndex = -1;
+    m_isPrimed = false;
+}
+
 std::vector<DynamicPinInfo> StrokeSequencerModuleProcessor::getDynamicInputPins() const
 {
     return {
@@ -246,7 +258,16 @@ void StrokeSequencerModuleProcessor::processBlock(juce::AudioBuffer<float>& buff
     else
     {
         // FREE-RUNNING MODE: Calculate increment per sample
-        increment = (sampleRate > 0.0 ? (double)finalRate / sampleRate : 0.0);
+        // BUT: Only advance if transport is playing (prevents auto-start on patch load)
+        // This ensures free-running modules respect transport state
+        if (m_currentTransport.isPlaying)
+        {
+            increment = (sampleRate > 0.0 ? (double)finalRate / sampleRate : 0.0);
+        }
+        else
+        {
+            increment = 0.0; // Don't advance if transport is stopped
+        }
     }
 
     // --- Main processing loop ---

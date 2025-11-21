@@ -33,6 +33,7 @@ public:
     // --- State Management ---
     juce::ValueTree getExtraStateTree() const override;
     void setExtraStateTree(const juce::ValueTree& state) override;
+    void forceStop() override; // Force stop (used after patch load)
 
 private:
     void timerCallback() override; // For UI updates

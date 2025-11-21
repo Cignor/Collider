@@ -107,6 +107,13 @@ void FunctionGeneratorModuleProcessor::setTimingInfo(const TransportState& state
     m_currentTransport = state;
 }
 
+void FunctionGeneratorModuleProcessor::forceStop()
+{
+    // Reset phase to 0 on patch load to ensure clean start
+    phase = 0.0;
+    lastPhase = 0.0;
+}
+
 void FunctionGeneratorModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midi)
 {
     juce::ignoreUnused(midi);
@@ -226,7 +233,9 @@ void FunctionGeneratorModuleProcessor::processBlock(juce::AudioBuffer<float>& bu
         }
         else // Free (Hz) mode or not playing
         {
-            if (currentGateState) {
+            // Only advance if transport is playing (prevents auto-start on patch load)
+            // This ensures free-running modules respect transport state
+            if (currentGateState && m_currentTransport.isPlaying) {
                 phase += smoothedRateValue / sampleRate;
             }
             if (syncRising) {

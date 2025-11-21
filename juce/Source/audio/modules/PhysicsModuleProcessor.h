@@ -187,10 +187,12 @@ public:
     // --- State Management ---
     juce::ValueTree getExtraStateTree() const override;
     void setExtraStateTree(const juce::ValueTree& state) override;
+    void forceStop() override; // Force stop (used after patch load)
 
 private:
     // --- Physics ---
     void timerCallback() override;
+    void setTimingInfo(const TransportState& state) override;
     void createStrokeBody(Stroke& stroke);
     void spawnObject(ShapeType type, float mass = 1.0f, b2Vec2 position = {0, 0}, b2Vec2 velocity = {0, 0}, Polarity polarity = Polarity::None);
     
@@ -236,6 +238,9 @@ private:
     // --- Inertia Simulation ---
     juce::Point<float> previousNodePos { 0.0f, 0.0f };
     b2Vec2 inertialForce { 0.0f, 0.0f };
+    
+    // --- Transport State ---
+    TransportState m_currentTransport;
     
     // --- Thread-Safe Spawning ---
     juce::AbstractFifo spawnQueue { 32 }; // Lock-free queue for spawn requests

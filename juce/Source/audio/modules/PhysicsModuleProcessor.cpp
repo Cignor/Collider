@@ -830,7 +830,13 @@ void PhysicsModuleProcessor::timerCallback()
     }
 
     // 1. Step the physics world forward in time
-    world->Step(1.0f / 60.0f, 8, 3); // (timeStep, velocityIterations, positionIterations)
+    // BUT: Only step if transport is playing (prevents auto-start on patch load)
+    // This ensures physics simulation respects transport state
+    if (m_currentTransport.isPlaying)
+    {
+        world->Step(1.0f / 60.0f, 8, 3); // (timeStep, velocityIterations, positionIterations)
+    }
+    // If transport is stopped, don't step the physics world (pauses simulation)
 
     // 2. Clear the list of collisions ready for the next physics step
     contactListener->clearNewCollisions();
@@ -2186,6 +2192,28 @@ juce::ValueTree PhysicsModuleProcessor::getExtraStateTree() const
     state.setProperty("spawnPointY", manualSpawnPoint.y, nullptr);
 
     return state;
+}
+
+void PhysicsModuleProcessor::setTimingInfo(const TransportState& state)
+{
+    m_currentTransport = state;
+}
+
+void PhysicsModuleProcessor::forceStop()
+{
+    // Pause physics simulation by freezing all objects
+    // Zero out velocities so objects don't move even if world steps once
+    for (auto& objPtr : physicsObjects)
+    {
+        if (objPtr && objPtr->physicsBody && objPtr->physicsBody->GetType() == b2_dynamicBody)
+        {
+            objPtr->physicsBody->SetLinearVelocity({ 0.0f, 0.0f });
+            objPtr->physicsBody->SetAngularVelocity(0.0f);
+        }
+    }
+    
+    // The timerCallback() will also check m_currentTransport.isPlaying before stepping
+    // This double protection ensures objects are frozen when transport is stopped
 }
 
 void PhysicsModuleProcessor::setExtraStateTree(const juce::ValueTree& state)

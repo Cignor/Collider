@@ -31,6 +31,10 @@ PresetCreatorComponent::PresetCreatorComponent(juce::AudioDeviceManager& adm,
     juce::Logger::writeToLog("Plugin managers set on ModularSynthProcessor.");
     // --- END OF FIX ---
     
+    // CRITICAL: Ensure transport starts in stopped state (synchronized with UI)
+    synth->setPlaying(false);
+    juce::Logger::writeToLog("[Transport] Initialized in stopped state");
+    
     juce::Logger::writeToLog("Setting model on editor...");
     if (editor != nullptr)
     {
@@ -64,9 +68,12 @@ PresetCreatorComponent::PresetCreatorComponent(juce::AudioDeviceManager& adm,
     
     // === CRITICAL FIX: Audio callback must ALWAYS be active for MIDI processing ===
     // Without this, processBlock never runs and MIDI learn doesn't work!
+    // NOTE: Audio callback is active, but transport is STOPPED (set above).
+    // This allows MIDI processing while keeping playback stopped.
+    // Modules should check transport state and not generate audio when stopped.
     deviceManager.addAudioCallback(&processorPlayer);
-    auditioning = true;  // Set flag to indicate audio is active
-    juce::Logger::writeToLog("[Audio] Audio callback started - synth is now processing");
+    auditioning = true;  // Set flag to indicate audio callback is active (for MIDI)
+    juce::Logger::writeToLog("[Audio] Audio callback started - transport is STOPPED, MIDI processing active");
     // === END FIX ===
     
     setWantsKeyboardFocus (true);

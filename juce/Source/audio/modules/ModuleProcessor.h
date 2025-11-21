@@ -398,6 +398,11 @@ public:
     // Default: ignore (modules that don't need timing can skip implementing this)
     virtual void setTimingInfo(const TransportState& state) { juce::ignoreUnused(state); }
     
+    // Optional force stop hook for modules with playback state
+    // Called after patch load to ensure all modules are stopped
+    // Default: no-op (modules without playback state don't need this)
+    virtual void forceStop() {}
+    
     // Optional rhythm reporting hook for BPM Monitor node
     // Modules that produce rhythmic patterns can implement this to report their BPM
     // Default: return empty (module doesn't produce rhythm)

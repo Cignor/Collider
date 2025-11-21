@@ -109,10 +109,12 @@ public:
         ImGui::SetCursorScreenPos(ImVec2(origin.x, rectMax.y));
         ImGui::Dummy(ImVec2(itemWidth, 0));
 
-        // Display current values
+        // Display current values (compact format, two lines to save width)
         ImGui::Spacing();
-        ImGui::Text("Raw: %.2f  |  Norm: %.3f  |  Inv: %.2f  |  Int: %.0f  |  CV: %.3f",
-            rawVal, normVal, invVal, intVal, cvVal);
+        ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1.0f), "R:%.2f  N:%.3f  I:%.2f",
+            rawVal, normVal, invVal);
+        ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1.0f), "Int:%.0f  CV:%.3f",
+            intVal, cvVal);
 
         ImGui::Spacing();
         ThemeText("Value Parameters", theme.text.section_header);

@@ -58,6 +58,7 @@ private:
     static juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout();
 
     void setTimingInfo(const TransportState& state) override;
+    void forceStop() override; // Force stop (used after patch load)
     
     juce::AudioProcessorValueTreeState apvts;
     juce::Random rng;
