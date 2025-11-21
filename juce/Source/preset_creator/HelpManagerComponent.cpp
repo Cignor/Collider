@@ -254,6 +254,24 @@ void HelpManagerComponent::render()
                 ImGui::EndTabItem();
             }
 
+            // --- Tab 6: UI Tips ---
+            bool selectUiTips = m_shouldSetTab && m_currentTab == 5;
+            if (ImGui::BeginTabItem("UI Tips", nullptr, (selectUiTips ? ImGuiTabItemFlags_SetSelected : 0)))
+            {
+                // Only update state on user click
+                if (ImGui::IsItemClicked())
+                {
+                    m_currentTab = 5;
+                    m_shouldSetTab = false;
+                }
+                
+                if (selectUiTips)
+                    m_shouldSetTab = false;
+                
+                renderUiTipsTab();
+                ImGui::EndTabItem();
+            }
+
             ImGui::EndTabBar();
         }
     }
@@ -441,6 +459,253 @@ void HelpManagerComponent::renderAboutTab()
     if (ImGui::Button("Full Documentation"))
     {
         // TODO: Add link to documentation website
+    }
+}
+
+void HelpManagerComponent::renderUiTipsTab()
+{
+    // Introduction text
+    ImGui::Spacing();
+    ImGui::TextWrapped("This section covers quality-of-life features and shortcuts available in the ImGui and ImNodes interface.");
+    ImGui::Spacing();
+    ImGui::Separator();
+    ImGui::Spacing();
+
+    // Helper function to render a formatted bullet point with bold shortcuts
+    auto renderBulletWithShortcut = [](const char* shortcut, const char* description) {
+        ImGui::Bullet();
+        ImGui::SameLine();
+        // Render shortcut in bold/accent color
+        ImVec4 accentColor = ImGui::GetStyleColorVec4(ImGuiCol_HeaderHovered);
+        accentColor.w = 1.0f;
+        ImGui::PushStyleColor(ImGuiCol_Text, accentColor);
+        ImGui::SetWindowFontScale(1.05f);
+        ImGui::TextUnformatted(shortcut);
+        ImGui::SetWindowFontScale(1.0f);
+        ImGui::PopStyleColor();
+        ImGui::SameLine();
+        ImGui::TextUnformatted(": ");
+        ImGui::SameLine();
+        ImGui::TextWrapped("%s", description);
+    };
+
+    // === ImGui Widget Features ===
+    ImVec4 imguiHeaderColor = ImGui::GetStyleColorVec4(ImGuiCol_HeaderHovered);
+    imguiHeaderColor.w = 1.0f;
+    ImGui::PushStyleColor(ImGuiCol_Header, ImGui::ColorConvertFloat4ToU32(imguiHeaderColor));
+    ImGui::PushStyleColor(ImGuiCol_HeaderHovered, ImGui::ColorConvertFloat4ToU32(ImVec4(imguiHeaderColor.x*1.2f, imguiHeaderColor.y*1.2f, imguiHeaderColor.z*1.2f, 1.0f)));
+    ImGui::PushStyleColor(ImGuiCol_HeaderActive, ImGui::ColorConvertFloat4ToU32(ImVec4(imguiHeaderColor.x*1.4f, imguiHeaderColor.y*1.4f, imguiHeaderColor.z*1.4f, 1.0f)));
+    bool imguiExpanded = ImGui::CollapsingHeader("ImGui Widget Features", ImGuiTreeNodeFlags_DefaultOpen);
+    ImGui::PopStyleColor(3);
+    
+    if (imguiExpanded)
+    {
+        ImGui::Indent(15.0f);
+        ImGui::Spacing();
+        
+        // Sliders section
+        ImGui::SetWindowFontScale(1.15f);
+        ImVec4 sectionColor = ImGui::GetStyleColorVec4(ImGuiCol_HeaderHovered);
+        sectionColor.w = 1.0f;
+        ImGui::PushStyleColor(ImGuiCol_Text, sectionColor);
+        ImGui::TextUnformatted("Sliders");
+        ImGui::PopStyleColor();
+        ImGui::SetWindowFontScale(1.0f);
+        ImGui::Spacing();
+        
+        renderBulletWithShortcut("Ctrl + Click", "Click while holding Ctrl on any slider to open a text input field for precise value entry.");
+        renderBulletWithShortcut("Mouse Wheel", "Hover over a slider and scroll the mouse wheel to adjust the value in small increments.");
+        renderBulletWithShortcut("Drag", "Click and drag to adjust values smoothly.");
+        
+        ImGui::Spacing();
+        ImGui::Separator();
+        ImGui::Spacing();
+        
+        // Text Inputs section
+        ImGui::SetWindowFontScale(1.15f);
+        ImGui::PushStyleColor(ImGuiCol_Text, sectionColor);
+        ImGui::TextUnformatted("Text Input Fields");
+        ImGui::PopStyleColor();
+        ImGui::SetWindowFontScale(1.0f);
+        ImGui::Spacing();
+        
+        renderBulletWithShortcut("Double-Click", "Double-click on any text input to select all text.");
+        renderBulletWithShortcut("Ctrl + A", "Select all text in the current input field.");
+        renderBulletWithShortcut("Arrow Keys", "Use Left/Right arrow keys to navigate within text.");
+        renderBulletWithShortcut("Tab / Shift+Tab", "Navigate between input fields and buttons.");
+        
+        ImGui::Spacing();
+        ImGui::Separator();
+        ImGui::Spacing();
+        
+        // Tooltips section
+        ImGui::SetWindowFontScale(1.15f);
+        ImGui::PushStyleColor(ImGuiCol_Text, sectionColor);
+        ImGui::TextUnformatted("Tooltips");
+        ImGui::PopStyleColor();
+        ImGui::SetWindowFontScale(1.0f);
+        ImGui::Spacing();
+        
+        renderBulletWithShortcut("Hover", "Hover your mouse over many widgets to see helpful tooltips with additional information.");
+        renderBulletWithShortcut("Help Markers (?)", "Look for (?) icons next to parameters - hover over them for detailed explanations.");
+        
+        ImGui::Spacing();
+        ImGui::Separator();
+        ImGui::Spacing();
+        
+        // General Navigation section
+        ImGui::SetWindowFontScale(1.15f);
+        ImGui::PushStyleColor(ImGuiCol_Text, sectionColor);
+        ImGui::TextUnformatted("General Navigation");
+        ImGui::PopStyleColor();
+        ImGui::SetWindowFontScale(1.0f);
+        ImGui::Spacing();
+        
+        renderBulletWithShortcut("Tab", "Move focus to the next widget.");
+        renderBulletWithShortcut("Shift + Tab", "Move focus to the previous widget.");
+        renderBulletWithShortcut("Enter / Return", "Activate buttons or confirm input.");
+        renderBulletWithShortcut("Escape", "Cancel input or close popups.");
+        
+        ImGui::Unindent(15.0f);
+        ImGui::Spacing();
+    }
+    
+    ImGui::Spacing();
+    ImGui::Separator();
+    ImGui::Spacing();
+    
+    // === ImNodes (Node Editor) Features ===
+    ImVec4 imnodesHeaderColor = ImGui::GetStyleColorVec4(ImGuiCol_HeaderHovered);
+    imnodesHeaderColor.w = 1.0f;
+    // Make it slightly different color (more blue/cyan tint)
+    imnodesHeaderColor.z = std::min(1.0f, imnodesHeaderColor.z * 1.15f);
+    ImGui::PushStyleColor(ImGuiCol_Header, ImGui::ColorConvertFloat4ToU32(imnodesHeaderColor));
+    ImGui::PushStyleColor(ImGuiCol_HeaderHovered, ImGui::ColorConvertFloat4ToU32(ImVec4(imnodesHeaderColor.x*1.2f, imnodesHeaderColor.y*1.2f, imnodesHeaderColor.z*1.2f, 1.0f)));
+    ImGui::PushStyleColor(ImGuiCol_HeaderActive, ImGui::ColorConvertFloat4ToU32(ImVec4(imnodesHeaderColor.x*1.4f, imnodesHeaderColor.y*1.4f, imnodesHeaderColor.z*1.4f, 1.0f)));
+    bool imnodesExpanded = ImGui::CollapsingHeader("Node Editor (ImNodes) Features", ImGuiTreeNodeFlags_DefaultOpen);
+    ImGui::PopStyleColor(3);
+    
+    if (imnodesExpanded)
+    {
+        ImGui::Indent(15.0f);
+        ImGui::Spacing();
+        
+        // Node Selection section
+        ImGui::SetWindowFontScale(1.15f);
+        ImVec4 sectionColor = ImGui::GetStyleColorVec4(ImGuiCol_HeaderHovered);
+        sectionColor.w = 1.0f;
+        ImGui::PushStyleColor(ImGuiCol_Text, sectionColor);
+        ImGui::TextUnformatted("Node Selection");
+        ImGui::PopStyleColor();
+        ImGui::SetWindowFontScale(1.0f);
+        ImGui::Spacing();
+        
+        renderBulletWithShortcut("Click", "Click on a node to select it.");
+        renderBulletWithShortcut("Ctrl + Click", "Hold Ctrl and click multiple nodes to toggle their selection (multi-select).");
+        renderBulletWithShortcut("Click + Drag", "Click and drag on empty space to create a selection box.");
+        
+        ImGui::Spacing();
+        ImGui::Separator();
+        ImGui::Spacing();
+        
+        // Cable/Link Operations section
+        ImGui::SetWindowFontScale(1.15f);
+        ImGui::PushStyleColor(ImGuiCol_Text, sectionColor);
+        ImGui::TextUnformatted("Cable Operations");
+        ImGui::PopStyleColor();
+        ImGui::SetWindowFontScale(1.0f);
+        ImGui::Spacing();
+        
+        renderBulletWithShortcut("Ctrl + Click on Link", "Detach a cable connection by holding Ctrl and clicking on the link.");
+        renderBulletWithShortcut("Ctrl + Drag", "Move a cable connection by holding Ctrl and dragging the link.");
+        renderBulletWithShortcut("Ctrl + Middle-Click on Link", "Duplicate a cable by holding Ctrl and middle-clicking on the link.");
+        renderBulletWithShortcut("Click Pin", "Click on an input or output pin to start/complete a connection.");
+        
+        ImGui::Spacing();
+        ImGui::Separator();
+        ImGui::Spacing();
+        
+        // Canvas Navigation section
+        ImGui::SetWindowFontScale(1.15f);
+        ImGui::PushStyleColor(ImGuiCol_Text, sectionColor);
+        ImGui::TextUnformatted("Canvas Navigation");
+        ImGui::PopStyleColor();
+        ImGui::SetWindowFontScale(1.0f);
+        ImGui::Spacing();
+        
+        renderBulletWithShortcut("Click + Drag (Empty Space)", "Pan the canvas by clicking and dragging on empty space.");
+        renderBulletWithShortcut("Scroll Wheel", "Scroll vertically to pan the canvas up and down.");
+        renderBulletWithShortcut("Shift + Scroll Wheel", "Scroll horizontally to pan the canvas left and right.");
+        renderBulletWithShortcut("Ctrl + Scroll Wheel", "Zoom in and out of the node editor canvas.");
+        
+        ImGui::Spacing();
+        ImGui::Separator();
+        ImGui::Spacing();
+        
+        // Node Operations section
+        ImGui::SetWindowFontScale(1.15f);
+        ImGui::PushStyleColor(ImGuiCol_Text, sectionColor);
+        ImGui::TextUnformatted("Node Operations");
+        ImGui::PopStyleColor();
+        ImGui::SetWindowFontScale(1.0f);
+        ImGui::Spacing();
+        
+        renderBulletWithShortcut("Drag Node", "Click and drag a node to reposition it.");
+        renderBulletWithShortcut("Right-Click Node", "Open context menu for node-specific actions.");
+        renderBulletWithShortcut("Double-Click Node", "Some nodes may have special double-click behavior (check node documentation).");
+        
+        ImGui::Unindent(15.0f);
+        ImGui::Spacing();
+    }
+    
+    ImGui::Spacing();
+    ImGui::Separator();
+    ImGui::Spacing();
+    
+    // === Pro Tips Section ===
+    ImVec4 tipsHeaderColor = ImGui::GetStyleColorVec4(ImGuiCol_HeaderHovered);
+    tipsHeaderColor.w = 1.0f;
+    // Make it slightly warmer (more yellow/orange tint)
+    tipsHeaderColor.x = std::min(1.0f, tipsHeaderColor.x * 1.1f);
+    tipsHeaderColor.y = std::min(1.0f, tipsHeaderColor.y * 1.05f);
+    ImGui::PushStyleColor(ImGuiCol_Header, ImGui::ColorConvertFloat4ToU32(tipsHeaderColor));
+    ImGui::PushStyleColor(ImGuiCol_HeaderHovered, ImGui::ColorConvertFloat4ToU32(ImVec4(tipsHeaderColor.x*1.2f, tipsHeaderColor.y*1.2f, tipsHeaderColor.z*1.2f, 1.0f)));
+    ImGui::PushStyleColor(ImGuiCol_HeaderActive, ImGui::ColorConvertFloat4ToU32(ImVec4(tipsHeaderColor.x*1.4f, tipsHeaderColor.y*1.4f, tipsHeaderColor.z*1.4f, 1.0f)));
+    bool tipsExpanded = ImGui::CollapsingHeader("Pro Tips");
+    ImGui::PopStyleColor(3);
+    
+    if (tipsExpanded)
+    {
+        ImGui::Indent(15.0f);
+        ImGui::Spacing();
+        
+        // Helper to render tip with highlighted shortcuts
+        auto renderTip = [](const char* shortcut, const char* restOfText) {
+            ImGui::Bullet();
+            ImGui::SameLine();
+            ImGui::TextUnformatted("Use ");
+            ImGui::SameLine();
+            ImVec4 accentColor = ImGui::GetStyleColorVec4(ImGuiCol_HeaderHovered);
+            accentColor.w = 1.0f;
+            ImGui::PushStyleColor(ImGuiCol_Text, accentColor);
+            ImGui::SetWindowFontScale(1.05f);
+            ImGui::TextUnformatted(shortcut);
+            ImGui::SetWindowFontScale(1.0f);
+            ImGui::PopStyleColor();
+            ImGui::SameLine();
+            ImGui::TextWrapped(" %s", restOfText);
+        };
+        
+        renderTip("Ctrl + Click", "on sliders for precise parameter values - especially useful for frequency settings, BPM, and other numeric parameters.");
+        ImGui::BulletText("Mouse wheel adjustment works on most sliders - hover and scroll for fine-tuning without dragging.");
+        renderTip("Ctrl + Scroll Wheel", "to zoom out for an overview when working with complex node graphs, then zoom back in for detailed work.");
+        renderTip("Ctrl + Click", "to multi-select nodes and move or delete multiple nodes at once.");
+        renderTip("Ctrl + Middle-Click", "on cables to quickly duplicate signal paths.");
+        ImGui::BulletText("Hover over parameters and look for (?) help markers to learn more about what each control does.");
+        ImGui::BulletText("Double-click text inputs to quickly select all text before typing a new value.");
+        
+        ImGui::Unindent(15.0f);
+        ImGui::Spacing();
     }
 }
 

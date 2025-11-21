@@ -751,10 +751,19 @@ std::optional<RhythmInfo> MultiSequencerModuleProcessor::getRhythmInfo() const
     const bool syncEnabled = apvts.getRawParameterValue("sync")->load() > 0.5f;
     info.isSynced = syncEnabled;
     
+    // Read LIVE transport state from parent (not cached copy)
+    TransportState transport;
+    bool hasTransport = false;
+    if (getParent())
+    {
+        transport = getParent()->getTransportState();
+        hasTransport = true;
+    }
+    
     // Check if active
     if (syncEnabled)
     {
-        info.isActive = m_currentTransport.isPlaying;
+        info.isActive = hasTransport ? transport.isPlaying : false;
     }
     else
     {
@@ -762,22 +771,19 @@ std::optional<RhythmInfo> MultiSequencerModuleProcessor::getRhythmInfo() const
     }
     
     // Calculate effective BPM (same logic as StepSequencer)
-    if (syncEnabled && info.isActive)
+    if (syncEnabled && info.isActive && hasTransport)
     {
         int divisionIndex = (int)apvts.getRawParameterValue("rate_division")->load();
         
-        if (getParent())
-        {
-            int globalDiv = getParent()->getTransportState().globalDivisionIndex.load();
-            if (globalDiv >= 0)
-                divisionIndex = globalDiv;
-        }
+        int globalDiv = transport.globalDivisionIndex.load();
+        if (globalDiv >= 0)
+            divisionIndex = globalDiv;
         
         static const double divisions[] = { 1.0/32.0, 1.0/16.0, 1.0/8.0, 1.0/4.0, 1.0/2.0, 1.0, 2.0, 4.0, 8.0 };
         const double beatDivision = divisions[juce::jlimit(0, 8, divisionIndex)];
         
         const int numSteps = numStepsParam ? (int)numStepsParam->load() : 8;
-        info.bpm = static_cast<float>(m_currentTransport.bpm * beatDivision * numSteps);
+        info.bpm = static_cast<float>(transport.bpm * beatDivision * numSteps);
     }
     else if (!syncEnabled)
     {

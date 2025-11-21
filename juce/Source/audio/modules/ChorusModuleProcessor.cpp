@@ -535,3 +535,27 @@ void ChorusModuleProcessor::drawIoPins(const NodePinHelpers& helpers)
 }
 #endif
 
+std::optional<RhythmInfo> ChorusModuleProcessor::getRhythmInfo() const
+{
+    RhythmInfo info;
+    
+    // Build display name with logical ID
+    info.displayName = "Chorus #" + juce::String(getLogicalId());
+    info.sourceType = "chorus";
+    
+    // Chorus LFO is free-running (not synced to transport)
+    info.isSynced = false;
+    info.isActive = true; // Always active when processing
+    
+    // Convert LFO rate (Hz) to BPM
+    // Rate is in cycles per second (Hz), one cycle = one "beat"
+    const float rate = rateParam ? rateParam->load() : 1.0f;
+    info.bpm = rate * 60.0f; // Convert Hz to BPM
+    
+    // Validate BPM before returning
+    if (!std::isfinite(info.bpm))
+        info.bpm = 0.0f;
+    
+    return info;
+}
+

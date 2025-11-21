@@ -639,3 +639,54 @@ void FunctionGeneratorModuleProcessor::setExtraStateTree(const juce::ValueTree& 
         }
     }
 }
+
+std::optional<RhythmInfo> FunctionGeneratorModuleProcessor::getRhythmInfo() const
+{
+    RhythmInfo info;
+    
+    // Build display name with logical ID
+    info.displayName = "Function Gen #" + juce::String(getLogicalId());
+    info.sourceType = "function_generator";
+    
+    // Check if synced to transport
+    const int mode = modeParam ? static_cast<int>(modeParam->load()) : 0;
+    const bool syncEnabled = (mode == 1); // Mode 1 = "Sync"
+    info.isSynced = syncEnabled;
+    
+    // Read LIVE transport state from parent (not cached copy)
+    TransportState transport;
+    bool hasTransport = false;
+    if (getParent())
+    {
+        transport = getParent()->getTransportState();
+        hasTransport = true;
+    }
+    
+    // Function Generator is always active when running
+    info.isActive = true;
+    
+    // Calculate effective BPM
+    if (syncEnabled && hasTransport && transport.isPlaying)
+    {
+        // In sync mode: BPM = transport BPM (one cycle per beat)
+        info.bpm = static_cast<float>(transport.bpm);
+    }
+    else if (!syncEnabled)
+    {
+        // Free-running mode: convert Hz rate to BPM
+        // Rate is in cycles per second (Hz), one cycle = one "beat"
+        const float rate = rateParam ? rateParam->load() : 1.0f;
+        info.bpm = rate * 60.0f; // Convert Hz to BPM
+    }
+    else
+    {
+        // Synced but transport stopped
+        info.bpm = 0.0f;
+    }
+    
+    // Validate BPM before returning
+    if (!std::isfinite(info.bpm))
+        info.bpm = 0.0f;
+    
+    return info;
+}

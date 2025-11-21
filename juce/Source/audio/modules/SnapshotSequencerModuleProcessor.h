@@ -18,6 +18,9 @@ public:
 
     juce::AudioProcessorValueTreeState& getAPVTS() override { return apvts; }
 
+    // Rhythm introspection for BPM Monitor
+    std::optional<RhythmInfo> getRhythmInfo() const override;
+
     // Public API for UI to capture and manage snapshots
     void setSnapshotForStep(int stepIndex, const juce::MemoryBlock& state);
     const juce::MemoryBlock& getSnapshotForStep(int stepIndex) const;
@@ -83,6 +86,19 @@ private:
     // Command bus for triggering patch loads
     CommandBus* commandBus { nullptr };
     juce::uint64 parentVoiceId { 0 };
+
+#if defined(PRESET_CREATOR_UI)
+    // --- Visualization Data (thread-safe, updated from audio thread) ---
+    struct VizData
+    {
+        std::atomic<int> currentStep { 0 };
+        std::atomic<bool> clockActive { false };
+        std::atomic<bool> resetActive { false };
+        
+        VizData() = default;
+    };
+    VizData vizData;
+#endif
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (SnapshotSequencerModuleProcessor)
 };

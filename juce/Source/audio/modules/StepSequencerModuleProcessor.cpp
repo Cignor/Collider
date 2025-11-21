@@ -951,10 +951,19 @@ std::optional<RhythmInfo> StepSequencerModuleProcessor::getRhythmInfo() const
     const bool syncEnabled = apvts.getRawParameterValue("sync")->load() > 0.5f;
     info.isSynced = syncEnabled;
     
+    // Read LIVE transport state from parent (not cached copy)
+    TransportState transport;
+    bool hasTransport = false;
+    if (getParent())
+    {
+        transport = getParent()->getTransportState();
+        hasTransport = true;
+    }
+    
     // Check if active (transport playing in sync mode, or always active in free-running)
     if (syncEnabled)
     {
-        info.isActive = m_currentTransport.isPlaying;
+        info.isActive = hasTransport ? transport.isPlaying : false;
     }
     else
     {
@@ -962,18 +971,15 @@ std::optional<RhythmInfo> StepSequencerModuleProcessor::getRhythmInfo() const
     }
     
     // Calculate effective BPM
-    if (syncEnabled && info.isActive)
+    if (syncEnabled && info.isActive && hasTransport)
     {
         // In sync mode: calculate effective BPM from transport + division
         int divisionIndex = (int)apvts.getRawParameterValue("rate_division")->load();
         
         // Check for global division override from Tempo Clock
-        if (getParent())
-        {
-            int globalDiv = getParent()->getTransportState().globalDivisionIndex.load();
-            if (globalDiv >= 0)
-                divisionIndex = globalDiv;
-        }
+        int globalDiv = transport.globalDivisionIndex.load();
+        if (globalDiv >= 0)
+            divisionIndex = globalDiv;
         
         // Division multipliers: 1/32, 1/16, 1/8, 1/4, 1/2, 1, 2, 4, 8
         static const double divisions[] = { 1.0/32.0, 1.0/16.0, 1.0/8.0, 1.0/4.0, 1.0/2.0, 1.0, 2.0, 4.0, 8.0 };
@@ -982,7 +988,7 @@ std::optional<RhythmInfo> StepSequencerModuleProcessor::getRhythmInfo() const
         // Effective BPM = transport BPM * division * num_steps
         // (Each complete cycle through all steps = one "measure" in BPM terms)
         const int numSteps = numStepsParam ? (int)numStepsParam->load() : 8;
-        info.bpm = static_cast<float>(m_currentTransport.bpm * beatDivision * numSteps);
+        info.bpm = static_cast<float>(transport.bpm * beatDivision * numSteps);
     }
     else if (!syncEnabled)
     {
@@ -998,7 +1004,7 @@ std::optional<RhythmInfo> StepSequencerModuleProcessor::getRhythmInfo() const
     }
     else
     {
-        // Synced but transport stopped
+        // Synced but transport stopped or no parent
         info.bpm = 0.0f;
     }
     

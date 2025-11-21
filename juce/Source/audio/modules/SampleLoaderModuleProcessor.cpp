@@ -2058,3 +2058,58 @@ bool SampleLoaderModuleProcessor::getParamRouting(const juce::String& paramId, i
     
     return false;
 }
+
+std::optional<RhythmInfo> SampleLoaderModuleProcessor::getRhythmInfo() const
+{
+    RhythmInfo info;
+    
+    // Build display name with logical ID
+    info.displayName = "Sample Loader #" + juce::String(getLogicalId());
+    info.sourceType = "sample_loader";
+    
+    // Check if synced to transport
+    const bool syncEnabled = syncParam && syncParam->load() > 0.5f;
+    info.isSynced = syncEnabled;
+    
+    // Check if looping (BPM only meaningful when looping)
+    const bool isLooping = apvts.getRawParameterValue("loop") && apvts.getRawParameterValue("loop")->load() > 0.5f;
+    
+    // Read LIVE transport state from parent (not cached copy)
+    TransportState transport;
+    bool hasTransport = false;
+    if (getParent())
+    {
+        transport = getParent()->getTransportState();
+        hasTransport = true;
+    }
+    
+    // Sample Loader is active when playing and sample is loaded
+    const bool sampleLoaded = hasSampleLoaded();
+    info.isActive = sampleLoaded && isPlaying.load();
+    
+    // Calculate effective BPM
+    if (syncEnabled && isLooping && info.isActive && hasTransport && transport.isPlaying)
+    {
+        // In sync mode with looping: effective BPM = transport BPM * speed multiplier
+        const float speed = apvts.getRawParameterValue("speed") ? apvts.getRawParameterValue("speed")->load() : 1.0f;
+        info.bpm = static_cast<float>(transport.bpm * speed);
+    }
+    else if (!syncEnabled && isLooping && info.isActive)
+    {
+        // Free-running with looping: calculate from sample duration and speed
+        // This would require sample duration, which might not be easily accessible
+        // For now, return 0.0f (unknown) - could be enhanced to calculate from sample length
+        info.bpm = 0.0f; // Unknown - would need sample duration to calculate
+    }
+    else
+    {
+        // Not looping, not synced, or not active
+        info.bpm = 0.0f;
+    }
+    
+    // Validate BPM before returning
+    if (!std::isfinite(info.bpm))
+        info.bpm = 0.0f;
+    
+    return info;
+}

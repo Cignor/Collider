@@ -36,6 +36,9 @@ public:
     void setTimingInfo(const TransportState& state) override;
 
     juce::AudioProcessorValueTreeState& getAPVTS() override { return apvts; }
+
+    // Rhythm introspection for BPM Monitor
+    std::optional<RhythmInfo> getRhythmInfo() const override;
     
     bool getParamRouting(const juce::String& paramId, int& outBusIndex, int& outChannelIndexInBus) const override;
 

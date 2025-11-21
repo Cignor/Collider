@@ -444,3 +444,37 @@ void ClockDividerModuleProcessor::drawIoPins(const NodePinHelpers& helpers)
     helpers.drawAudioOutputPin("x4", 5);
 }
 #endif
+
+std::optional<RhythmInfo> ClockDividerModuleProcessor::getRhythmInfo() const
+{
+    RhythmInfo info;
+    
+    // Build display name with logical ID
+    info.displayName = "Clock Divider #" + juce::String(getLogicalId());
+    info.sourceType = "clock_divider";
+    
+    // Clock Divider is clock-driven (not synced to transport)
+    info.isSynced = false;
+    
+#if defined(PRESET_CREATOR_UI)
+    // Get detected BPM from visualization data (calculated in processBlock)
+    const double detectedBPM = vizData.currentBpm.load();
+    const double clockInterval = vizData.clockInterval.load();
+    
+    // Active if we're receiving clock input (interval > 0 means clock detected)
+    info.isActive = clockInterval > 0.0;
+    
+    // BPM is the detected input clock BPM
+    info.bpm = static_cast<float>(detectedBPM);
+#else
+    // In non-UI builds, we can't access vizData, so return unknown
+    info.isActive = false;
+    info.bpm = 0.0f;
+#endif
+    
+    // Validate BPM before returning
+    if (!std::isfinite(info.bpm) || info.bpm < 0.0f)
+        info.bpm = 0.0f;
+    
+    return info;
+}

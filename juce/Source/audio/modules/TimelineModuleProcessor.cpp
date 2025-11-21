@@ -18,6 +18,47 @@ juce::AudioProcessorValueTreeState::ParameterLayout TimelineModuleProcessor::cre
     return { params.begin(), params.end() };
 }
 
+std::optional<RhythmInfo> TimelineModuleProcessor::getRhythmInfo() const
+{
+    RhythmInfo info;
+    
+    // Build display name with logical ID
+    info.displayName = "Timeline #" + juce::String(getLogicalId());
+    info.sourceType = "timeline";
+    
+    // Timeline is always synced to transport
+    info.isSynced = true;
+    
+    // Read LIVE transport state from parent (not cached copy)
+    TransportState transport;
+    bool hasTransport = false;
+    if (getParent())
+    {
+        transport = getParent()->getTransportState();
+        hasTransport = true;
+    }
+    
+    // Timeline is active when playing back AND transport is playing
+    const bool isPlayingBack = playParam && playParam->get();
+    info.isActive = hasTransport && isPlayingBack && transport.isPlaying;
+    
+    // BPM comes directly from transport (Timeline is always synced)
+    if (hasTransport && info.isActive)
+    {
+        info.bpm = static_cast<float>(transport.bpm);
+    }
+    else
+    {
+        info.bpm = 0.0f; // Not playing or no transport
+    }
+    
+    // Validate BPM before returning
+    if (!std::isfinite(info.bpm))
+        info.bpm = 0.0f;
+    
+    return info;
+}
+
 TimelineModuleProcessor::TimelineModuleProcessor()
     : ModuleProcessor(BusesProperties()
           .withInput("Inputs", juce::AudioChannelSet::discreteChannels(32), true)    // Max 32 input channels for dynamic routing

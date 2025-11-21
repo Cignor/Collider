@@ -2555,7 +2555,7 @@ A hybrid smart system that automatically detects and reports BPM from rhythm-pro
    
 2. **Introspection (Recommended):**
    - Automatically detects modules that implement `getRhythmInfo()`
-   - Works with: Sequencer, Step Sequencer, Animation, Physics, and other rhythm-producing modules
+   - Works with: Tempo Clock, Sequencers (Step, Stroke, Snapshot), Timeline, Clock Divider, LFOs, Function Generator, Random, Phaser, Chorus, Sample Loader, and other rhythm-producing modules
    - Provides instant, accurate BPM reporting
    - Scans the graph periodically (every 128 audio blocks for efficiency)
    
@@ -2592,10 +2592,17 @@ A hybrid smart system that automatically detects and reports BPM from rhythm-pro
 - Supports up to 16 audio detection inputs
 
 **Supported Introspection Sources:**
-- Sequencer (reports BPM when active)
-- Step Sequencer (reports BPM when running)
-- Animation (reports BPM based on animation speed and duration)
-- Physics (can report rhythm from collision events)
+- **Tempo Clock** - Master tempo source (always synced to transport)
+- **Stroke Sequencer** - Gesture-based sequencer (sync or free-run)
+- **Snapshot Sequencer** - Clock-driven patch state sequencer
+- **Timeline** - Automation recorder/playback (always synced)
+- **Clock Divider** - Clock division/multiplication (reports detected BPM)
+- **LFO** - Low-frequency oscillator (sync or free-run rate)
+- **Function Generator** - Drawable envelope/LFO (sync or free-run rate)
+- **Random** - Random value generator (sync or free-run rate)
+- **Phaser** - Phaser effect LFO rate
+- **Chorus** - Chorus effect LFO rate
+- **Sample Loader** - Sample playback (when synced and looping)
 - Other modules implementing `getRhythmInfo()`
 
 ---

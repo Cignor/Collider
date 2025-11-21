@@ -50,6 +50,9 @@ public:
 
     juce::AudioProcessorValueTreeState& getAPVTS() override { return apvts; }
 
+    // Rhythm introspection for BPM Monitor
+    std::optional<RhythmInfo> getRhythmInfo() const override;
+
     // Dynamic I/O for flexible automation routing
     std::vector<DynamicPinInfo> getDynamicInputPins() const override;
     std::vector<DynamicPinInfo> getDynamicOutputPins() const override;

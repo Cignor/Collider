@@ -32,6 +32,9 @@ public:
 
     juce::AudioProcessorValueTreeState& getAPVTS() override { return apvts; }
 
+    // Rhythm introspection for BPM Monitor
+    std::optional<RhythmInfo> getRhythmInfo() const override;
+
     // State management for transport settings
     juce::ValueTree getExtraStateTree() const override;
     void setExtraStateTree(const juce::ValueTree&) override;

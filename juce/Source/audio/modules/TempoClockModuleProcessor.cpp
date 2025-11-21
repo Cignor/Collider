@@ -819,4 +819,73 @@ void TempoClockModuleProcessor::drawIoPins(const NodePinHelpers& helpers)
 }
 #endif
 
+std::optional<RhythmInfo> TempoClockModuleProcessor::getRhythmInfo() const
+{
+    RhythmInfo info;
+    
+    // Build display name with logical ID
+    info.displayName = "Tempo Clock #" + juce::String(getLogicalId());
+    info.sourceType = "tempo_clock";
+    
+    // Read LIVE transport state from parent (not cached copy)
+    TransportState transport;
+    bool hasTransport = false;
+    if (getParent())
+    {
+        transport = getParent()->getTransportState();
+        hasTransport = true;
+    }
+    
+    // Determine sync status
+    // Tempo Clock can sync to host or timeline
+    const bool syncToHost = syncToHostParam && syncToHostParam->load() > 0.5f;
+    const bool syncToTimeline = syncToTimelineParam && syncToTimelineParam->load() > 0.5f;
+    info.isSynced = syncToHost || syncToTimeline;
+    
+    // Determine active state - Tempo Clock is active when transport is playing
+    info.isActive = hasTransport ? transport.isPlaying : false;
+    
+    // Calculate BPM
+    // Priority order (matching processBlock logic):
+    // 1. Timeline sync (if deriveBPM enabled) -> use transport BPM
+    // 2. Host sync -> use transport BPM
+    // 3. Parameter/CV/Tap tempo -> use parameter BPM
+    // Note: CV modulation and tap tempo update the parameter, so reading bpmParam
+    // gives us the current value (though instantaneous CV modulation won't be reflected)
+    float currentBPM = bpmParam ? bpmParam->load() : 120.0f;
+    
+    if (syncToTimeline && hasTransport)
+    {
+        // Timeline sync: BPM is derived from timeline if enabled
+        const bool deriveBPM = enableBPMDerivationParam && enableBPMDerivationParam->load() > 0.5f;
+        if (deriveBPM)
+        {
+            // BPM is calculated from timeline length and beats per timeline
+            // This is handled in processBlock, so we use the transport BPM which reflects it
+            currentBPM = static_cast<float>(transport.bpm);
+        }
+        // else: use parameter BPM (already set above)
+    }
+    else if (syncToHost && hasTransport)
+    {
+        // Syncing to host: use transport BPM (Tempo Clock follows host tempo)
+        currentBPM = static_cast<float>(transport.bpm);
+    }
+    // else: use parameter BPM (already set above)
+    
+    // Validate BPM before returning
+    if (!std::isfinite(currentBPM))
+    {
+        currentBPM = 120.0f; // Safe default
+    }
+    else
+    {
+        // Clamp to valid range (20-300 BPM)
+        currentBPM = juce::jlimit(20.0f, 300.0f, currentBPM);
+    }
+    
+    info.bpm = currentBPM;
+    
+    return info;
+}
 

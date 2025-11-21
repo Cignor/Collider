@@ -584,3 +584,27 @@ std::vector<DynamicPinInfo> PhaserModuleProcessor::getDynamicOutputPins() const
     return pins;
 }
 
+std::optional<RhythmInfo> PhaserModuleProcessor::getRhythmInfo() const
+{
+    RhythmInfo info;
+    
+    // Build display name with logical ID
+    info.displayName = "Phaser #" + juce::String(getLogicalId());
+    info.sourceType = "phaser";
+    
+    // Phaser LFO is free-running (not synced to transport)
+    info.isSynced = false;
+    info.isActive = true; // Always active when processing
+    
+    // Convert LFO rate (Hz) to BPM
+    // Rate is in cycles per second (Hz), one cycle = one "beat"
+    const float rate = rateParam ? rateParam->load() : 0.5f;
+    info.bpm = rate * 60.0f; // Convert Hz to BPM
+    
+    // Validate BPM before returning
+    if (!std::isfinite(info.bpm))
+        info.bpm = 0.0f;
+    
+    return info;
+}
+

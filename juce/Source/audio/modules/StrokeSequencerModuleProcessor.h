@@ -20,6 +20,9 @@ public:
     bool getParamRouting(const juce::String& paramId, int& outBusIndex, int& outChannelIndexInBus) const override;
     std::vector<DynamicPinInfo> getDynamicInputPins() const override;
     std::vector<DynamicPinInfo> getDynamicOutputPins() const override;
+
+    // Rhythm introspection for BPM Monitor
+    std::optional<RhythmInfo> getRhythmInfo() const override;
     
 #if defined(PRESET_CREATOR_UI)
     std::atomic<bool> autoBuildDrumKitTriggered { false };

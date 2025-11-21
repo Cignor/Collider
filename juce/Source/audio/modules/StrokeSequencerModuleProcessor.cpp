@@ -1014,3 +1014,73 @@ void StrokeSequencerModuleProcessor::setExtraStateTree(const juce::ValueTree& st
     }
 }
 
+std::optional<RhythmInfo> StrokeSequencerModuleProcessor::getRhythmInfo() const
+{
+    RhythmInfo info;
+    
+    // Build display name with logical ID
+    info.displayName = "Stroke Seq #" + juce::String(getLogicalId());
+    info.sourceType = "stroke_sequencer";
+    
+    // Check if synced to transport
+    const bool syncEnabled = apvts.getRawParameterValue(paramIdSync)->load() > 0.5f;
+    info.isSynced = syncEnabled;
+    
+    // Read LIVE transport state from parent (not cached copy)
+    TransportState transport;
+    bool hasTransport = false;
+    if (getParent())
+    {
+        transport = getParent()->getTransportState();
+        hasTransport = true;
+    }
+    
+    // Check if active (transport playing in sync mode, or always active in free-running)
+    if (syncEnabled)
+    {
+        info.isActive = hasTransport ? transport.isPlaying : false;
+    }
+    else
+    {
+        info.isActive = true; // Free-running is always active
+    }
+    
+    // Calculate effective BPM
+    if (syncEnabled && info.isActive && hasTransport)
+    {
+        // In sync mode: calculate effective BPM from transport + division
+        int divisionIndex = (int)apvts.getRawParameterValue(paramIdRateDivision)->load();
+        
+        // Check for global division override from Tempo Clock
+        int globalDiv = transport.globalDivisionIndex.load();
+        if (globalDiv >= 0)
+            divisionIndex = globalDiv;
+        
+        // Division multipliers: 1/32, 1/16, 1/8, 1/4, 1/2, 1, 2, 4, 8
+        static const double divisions[] = { 1.0/32.0, 1.0/16.0, 1.0/8.0, 1.0/4.0, 1.0/2.0, 1.0, 2.0, 4.0, 8.0 };
+        const double beatDivision = divisions[juce::jlimit(0, 8, divisionIndex)];
+        
+        // Effective BPM = transport BPM * division
+        // (One complete playhead cycle = one "beat" at the division rate)
+        info.bpm = static_cast<float>(transport.bpm * beatDivision);
+    }
+    else if (!syncEnabled)
+    {
+        // Free-running mode: convert Hz rate to BPM
+        // Rate is in cycles per second (Hz), one cycle = one "beat"
+        const float rate = rateParam ? rateParam->load() : 1.0f;
+        info.bpm = rate * 60.0f; // Convert Hz to BPM
+    }
+    else
+    {
+        // Synced but transport stopped
+        info.bpm = 0.0f;
+    }
+    
+    // Validate BPM before returning
+    if (!std::isfinite(info.bpm))
+        info.bpm = 0.0f;
+    
+    return info;
+}
+

@@ -35,6 +35,9 @@ public:
     // --- Required by ModuleProcessor ---
     juce::AudioProcessorValueTreeState& getAPVTS() override { return apvts; }
 
+    // Rhythm introspection for BPM Monitor
+    std::optional<RhythmInfo> getRhythmInfo() const override;
+
     // --- Sample Loading ---
     void loadSample(const juce::File& file);
     void loadSample(const juce::String& filePath);

@@ -94,9 +94,20 @@ void BPMMonitorModuleProcessor::scanGraphForRhythmSources()
         if (rhythmInfo.has_value())
         {
             IntrospectedSource source;
-            source.name = rhythmInfo->displayName;
-            source.type = rhythmInfo->sourceType;
-            source.bpm = rhythmInfo->bpm;
+            // Validate and sanitize display name - make a fresh copy to avoid corruption
+            juce::String rawName = rhythmInfo->displayName;
+            if (rawName.isEmpty())
+            {
+                source.name = "Unknown #" + juce::String(logicalId);
+            }
+            else
+            {
+                // Create a clean copy by reconstructing the string
+                source.name = juce::String(rawName.toUTF8().getAddress());
+            }
+            
+            source.type = rhythmInfo->sourceType.isEmpty() ? "unknown" : juce::String(rhythmInfo->sourceType.toUTF8().getAddress());
+            source.bpm = std::isfinite(rhythmInfo->bpm) ? rhythmInfo->bpm : 0.0f;
             source.isActive = rhythmInfo->isActive;
             source.isSynced = rhythmInfo->isSynced;
             m_introspectedSources.push_back(source);
@@ -227,8 +238,9 @@ void BPMMonitorModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
         for (const auto& src : introspected)
         {
             VizSource viz;
-            viz.name = src.name;
-            viz.bpm = src.bpm;
+            // Ensure name is valid and not empty
+            viz.name = src.name.isEmpty() ? "Unknown" : src.name;
+            viz.bpm = std::isfinite(src.bpm) ? src.bpm : 0.0f;
             viz.confidence = src.isActive ? 1.0f : 0.0f;
             viz.isActive = src.isActive;
             m_vizIntrospected.push_back(viz);
@@ -482,12 +494,34 @@ void BPMMonitorModuleProcessor::drawParametersInNode(float itemWidth,
                 dl->AddRectFilled (ImVec2 (barStartX, y), ImVec2 (p1.x - 10.0f, y + rowHeight - 6.0f), IM_COL32 (30, 33, 45, 180), 4.0f);
                 dl->AddRectFilled (ImVec2 (barStartX, y), ImVec2 (barEndX, y + rowHeight - 6.0f), fill, 4.0f);
 
-                juce::String text = juce::String::formatted ("%s  |  %.1f BPM  [%s]",
-                                                             viz.name.toRawUTF8(),
-                                                             viz.bpm,
-                                                             viz.isActive ? "RUN" : "IDLE");
+                // Sanitize name - ensure it's valid and not empty
+                juce::String displayName = viz.name;
+                if (displayName.isEmpty())
+                    displayName = "Unknown";
+                
+                // Remove any non-printable characters that might cause UTF-8 issues
+                juce::String sanitizedName;
+                for (juce::juce_wchar c : displayName)
+                {
+                    if (c >= 32 && c < 127) // Printable ASCII range
+                        sanitizedName += juce::String::charToString(c);
+                    else if (c > 127) // Allow non-ASCII but valid Unicode
+                        sanitizedName += juce::String::charToString(c);
+                    // Skip control characters (0-31) except space
+                }
+                if (sanitizedName.isEmpty())
+                    sanitizedName = "Unknown";
+                
+                // Validate BPM value
+                float displayBPM = std::isfinite(viz.bpm) ? viz.bpm : 0.0f;
+                
+                // Build text safely
+                juce::String statusText = viz.isActive ? "RUN" : "IDLE";
+                juce::String text = sanitizedName + "  |  " + juce::String(displayBPM, 1) + " BPM  [" + statusText + "]";
 
-                dl->AddText (ImGui::GetFont(), ImGui::GetFontSize(), ImVec2 (barStartX + 4.0f, y + 3.0f), textColor, text.toRawUTF8());
+                // Convert to const char* for ImGui - use toUTF8().getAddress() which is safer
+                const char* textCStr = text.toUTF8().getAddress();
+                dl->AddText (ImGui::GetFont(), ImGui::GetFontSize(), ImVec2 (barStartX + 4.0f, y + 3.0f), textColor, textCStr);
                 y += rowHeight;
             }
         }

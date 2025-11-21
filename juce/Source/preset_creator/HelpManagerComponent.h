@@ -33,7 +33,7 @@ public:
 
     /**
      * @brief Sets the currently active tab by its index.
-     * 0 = Shortcuts, 1 = Node Dictionary, 2 = Getting Started, 3 = FAQ, 4 = About
+     * 0 = Shortcuts, 1 = Node Dictionary, 2 = Getting Started, 3 = FAQ, 4 = About, 5 = UI Tips
      * This is used by external triggers (like F1 or context menus) to
      * open the manager to a specific tab.
      * @param tabIndex The index of the tab to select.
@@ -54,7 +54,7 @@ public:
 private:
     // === Window State ===
     bool m_isOpen = false;
-    int m_currentTab = 0; // 0:Shortcuts, 1:Dictionary, 2:GettingStarted, 3:FAQ, 4:About
+    int m_currentTab = 0; // 0:Shortcuts, 1:Dictionary, 2:GettingStarted, 3:FAQ, 4:About, 5:UITips
     bool m_shouldSetTab = false; // Flag to programmatically set tab (e.g., from F1)
     ImGuiNodeEditorComponent* parentEditor = nullptr;
     collider::ShortcutManager& shortcutManager;
@@ -65,6 +65,7 @@ private:
     void renderGettingStartedTab();
     void renderFaqTab();
     void renderAboutTab();
+    void renderUiTipsTab();
 
     // === Markdown Parsing & Rendering (for Node Dictionary and Getting Started) ===
     struct MarkdownSection
