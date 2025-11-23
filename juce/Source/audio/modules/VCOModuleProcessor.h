@@ -28,6 +28,8 @@ public:
     void prepareToPlay (double sampleRate, int samplesPerBlock) override;
     void releaseResources() override {}
     void processBlock (juce::AudioBuffer<float>&, juce::MidiBuffer&) override;
+    void setTimingInfo(const TransportState& state) override;
+    void forceStop() override;
 
     juce::AudioProcessorValueTreeState& getAPVTS() override { return apvts; }
 
@@ -471,6 +473,9 @@ private:
     // Portamento/glide
     float currentFrequency { 440.0f };
     double sampleRate { 44100.0 };
+    
+    // Transport state tracking
+    TransportState m_currentTransport;
 
 #if defined(PRESET_CREATOR_UI)
     // --- Visualization Data (thread-safe, updated from audio thread) ---

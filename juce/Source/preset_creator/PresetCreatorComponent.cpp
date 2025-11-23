@@ -1,6 +1,9 @@
 // RtLogger flush integrated via timer in component
 #include "PresetCreatorComponent.h"
 #include "ImGuiNodeEditorComponent.h"
+#include "PresetCreatorApplication.h"
+#include "PresetAutoHealer.h"
+#include "PresetValidator.h"
 #include "../utils/RtLogger.h"
 
 PresetCreatorComponent::PresetCreatorComponent(juce::AudioDeviceManager& adm,
@@ -85,7 +88,7 @@ PresetCreatorComponent::PresetCreatorComponent(juce::AudioDeviceManager& adm,
         juceLogsDir.createDirectory();
         auto logName = juce::String ("preset_creator_") + juce::Time::getCurrentTime().formatted ("%Y-%m-%d_%H-%M-%S") + ".log";
         auto logFile = juceLogsDir.getChildFile (logName);
-        fileLogger = std::make_unique<juce::FileLogger> (logFile, "Preset Creator Session", 10 * 1024 * 1024);
+        fileLogger = std::make_unique<juce::FileLogger> (logFile, "Pikon Raditsz Session", 10 * 1024 * 1024);
         if (fileLogger != nullptr)
             juce::Logger::setCurrentLogger (fileLogger.get());
         juce::Logger::writeToLog ("PresetCreator log file: " + logFile.getFullPathName());
@@ -99,6 +102,15 @@ PresetCreatorComponent::PresetCreatorComponent(juce::AudioDeviceManager& adm,
     startTimerHz (30);
     
     setWindowFileName({}); // Set the default title on startup
+    
+    // Load startup default preset if one is set - defer until after initialization
+    juce::MessageManager::callAsync([this]()
+    {
+        juce::Timer::callAfterDelay(500, [this]()
+        {
+            loadStartupDefaultPreset();
+        });
+    });
 }
 
 // ADD: Implementation of the audio settings dialog function
@@ -123,7 +135,7 @@ void PresetCreatorComponent::setWindowFileName(const juce::String& fileName)
     // Find the parent window of this component
     if (auto* window = findParentComponentOfClass<juce::DocumentWindow>())
     {
-        juce::String newTitle = "Preset Creator"; // The default title
+        juce::String newTitle = "Pikon Raditsz"; // The default title
         if (fileName.isNotEmpty())
         {
             newTitle += " - " + fileName; // Append the filename if one is provided
@@ -340,6 +352,112 @@ void PresetCreatorComponent::doSave()
 
 // Removed legacy doLoad(): loading is centralized in ImGuiNodeEditorComponent::startLoadDialog()
 
+void PresetCreatorComponent::loadStartupDefaultPreset()
+{
+    // Only load once
+    if (startupPresetLoaded)
+        return;
+    
+    if (editor == nullptr || synth == nullptr)
+    {
+        juce::Logger::writeToLog("[Startup] Editor or synth not ready yet, will retry");
+        return;
+    }
+    
+    // Get the startup preset path from application properties
+    auto& app = PresetCreatorApplication::getApp();
+    auto* props = app.getProperties();
+    if (props == nullptr)
+    {
+        juce::Logger::writeToLog("[Startup] Properties not available");
+        return;
+    }
+    
+    auto startupPresetPath = props->getValue("startupDefaultPreset", "");
+    if (startupPresetPath.isEmpty())
+    {
+        juce::Logger::writeToLog("[Startup] No startup preset configured");
+        return;
+    }
+    
+    juce::File startupFile(startupPresetPath);
+    if (!startupFile.existsAsFile())
+    {
+        juce::Logger::writeToLog("[Startup] Default preset file not found: " + startupPresetPath);
+        // Clear the invalid path from settings
+        props->setValue("startupDefaultPreset", "");
+        props->saveIfNeeded();
+        return;
+    }
+    
+    juce::Logger::writeToLog("[Startup] Loading default preset: " + startupFile.getFullPathName());
+    
+    try
+    {
+        // Use the same loading logic as the regular load dialog (with healing and validation)
+        // This is safer than loadPresetFromFile which doesn't do healing
+        auto xml = juce::XmlDocument::parse(startupFile);
+        if (!xml)
+        {
+            juce::Logger::writeToLog("[Startup] ERROR: Failed to parse XML file");
+            props->setValue("startupDefaultPreset", "");
+            props->saveIfNeeded();
+            return;
+        }
+        
+        juce::ValueTree presetVT = juce::ValueTree::fromXml(*xml);
+        
+        // Apply healing and validation (same as regular load)
+        PresetAutoHealer healer;
+        auto healingMessages = healer.heal(presetVT);
+        
+        PresetValidator validator;
+        auto issues = validator.validate(presetVT);
+        
+        // Load the healed preset
+        juce::MemoryBlock mb;
+        juce::MemoryOutputStream mos(mb, false);
+        if (auto healedXml = presetVT.createXml())
+        {
+            healedXml->writeTo(mos);
+            synth->setStateInformation(mb.getData(), (int)mb.getSize());
+            
+            // Apply UI state if present
+            auto uiState = presetVT.getChildWithName("NodeEditorUI");
+            if (uiState.isValid())
+                editor->applyUiValueTree(uiState);
+            
+            setWindowFileName(startupFile.getFileName());
+            startupPresetLoaded = true;
+            
+            juce::Logger::writeToLog("[Startup] Default preset loaded successfully");
+            if (!healingMessages.empty() || !issues.empty())
+            {
+                juce::Logger::writeToLog("[Startup] Preset had " + juce::String((int)issues.size()) + 
+                                        " issue(s), " + juce::String((int)healingMessages.size()) + " auto-healed");
+            }
+        }
+        else
+        {
+            juce::Logger::writeToLog("[Startup] ERROR: Failed to create XML from healed preset");
+        }
+    }
+    catch (const std::exception& e)
+    {
+        juce::Logger::writeToLog("[Startup] ERROR loading default preset: " + juce::String(e.what()));
+        // Clear the problematic preset from settings
+        props->setValue("startupDefaultPreset", "");
+        props->saveIfNeeded();
+    }
+    catch (...)
+    {
+        juce::Logger::writeToLog("[Startup] ERROR loading default preset: Unknown exception");
+        // Clear the problematic preset from settings
+        props->setValue("startupDefaultPreset", "");
+        props->saveIfNeeded();
+    }
+}
+
 bool PresetCreatorComponent::keyPressed (const juce::KeyPress& key)
 {
     if (key.getKeyCode() == juce::KeyPress::spaceKey)
@@ -382,6 +500,15 @@ bool PresetCreatorComponent::keyStateChanged (bool isKeyDown)
 void PresetCreatorComponent::visibilityChanged()
 {
     juce::Logger::writeToLog (juce::String ("Component visible? ") + (isShowing() ? "yes" : "no"));
+    
+    // Load startup preset when component becomes visible (as a fallback if async didn't work)
+    if (isShowing())
+    {
+        juce::Timer::callAfterDelay(1000, [this]()
+        {
+            loadStartupDefaultPreset();
+        });
+    }
 }
 
 void PresetCreatorComponent::startAudition()

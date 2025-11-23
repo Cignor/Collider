@@ -65,6 +65,62 @@ private:
     std::unique_ptr<MainWindow> mainWindow;
     std::unique_ptr<juce::FileLogger> fileLogger;
     std::unique_ptr<juce::PropertiesFile> appProperties;
-    std::unique_ptr<juce::DialogWindow> splashWindowPtr;
+    
+    // Custom transparent window for splash screen (no JUCE branding)
+    class TransparentSplashWindow : public juce::TopLevelWindow
+    {
+    public:
+        TransparentSplashWindow() : juce::TopLevelWindow("", true) // true = add to desktop
+        {
+            setAlwaysOnTop(true);
+            setOpaque(false); // Transparent window to support alpha channel
+            setWantsKeyboardFocus(true); // Enable keyboard focus
+        }
+        
+        void paint(juce::Graphics& g) override
+        {
+            // Don't draw anything - fully transparent to respect PNG alpha
+        }
+        
+        void resized() override
+        {
+            // Ensure child components fill the window
+            for (int i = 0; i < getNumChildComponents(); ++i)
+            {
+                if (auto* child = getChildComponent(i))
+                {
+                    child->setBounds(getLocalBounds());
+                }
+            }
+        }
+        
+        bool keyPressed(const juce::KeyPress& key) override
+        {
+            // Forward key press to splash component
+            for (int i = 0; i < getNumChildComponents(); ++i)
+            {
+                if (auto* child = getChildComponent(i))
+                {
+                    if (child->keyPressed(key))
+                        return true;
+                }
+            }
+            return false;
+        }
+        
+        void mouseDown(const juce::MouseEvent& e) override
+        {
+            // Forward mouse click to splash component
+            for (int i = 0; i < getNumChildComponents(); ++i)
+            {
+                if (auto* child = getChildComponent(i))
+                {
+                    child->mouseDown(e.getEventRelativeTo(child));
+                }
+            }
+        }
+    };
+    
+    std::unique_ptr<TransparentSplashWindow> splashWindowPtr;
 };
 

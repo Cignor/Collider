@@ -184,7 +184,19 @@ void VCOModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::Mi
         const float s = oscillator.processSample(0.0f);
         
         // Apply gate with click-free smoothing
-        float targetGate = gateActive ? gateCV[i] : 1.0f;
+        // CRITICAL FIX: If transport is stopped, force gate to 0 (silence VCO)
+        // Otherwise, use gate input if connected, or default to 1.0 if no gate input
+        float targetGate;
+        if (!m_currentTransport.isPlaying)
+        {
+            // Transport is stopped - silence the VCO
+            targetGate = 0.0f;
+        }
+        else
+        {
+            // Transport is playing - use gate input if connected, otherwise default to 1.0
+            targetGate = gateActive ? gateCV[i] : 1.0f;
+        }
         // Treat near-zero magnitudes as zero to avoid flutter from denormals or noise
         if (std::abs(targetGate) < 1.0e-4f) targetGate = 0.0f;
         if (targetGate > 1.0f) targetGate = 1.0f;
@@ -243,6 +255,17 @@ bool VCOModuleProcessor::getParamRouting(const juce::String& paramId, int& outBu
     if (paramId == paramIdWaveformMod) { outChannelIndexInBus = 1; return true; }
     if (paramId == "gate_mod")         { outChannelIndexInBus = 2; return true; }
     return false;
+}
+
+void VCOModuleProcessor::setTimingInfo(const TransportState& state)
+{
+    m_currentTransport = state;
+}
+
+void VCOModuleProcessor::forceStop()
+{
+    // Force gate to zero to silence the VCO
+    smoothedGate = 0.0f;
 }
 
 

@@ -38,8 +38,10 @@ public:
 
 private:
     int midiActivityFrames = 0; // For MIDI activity indicator
+    bool startupPresetLoaded = false; // Track if startup preset has been loaded
 
     void setWindowFileName(const juce::String& fileName);
+    void loadStartupDefaultPreset();
     void buttonClicked (juce::Button*) override;
     void timerCallback() override;
     void refreshModulesList();

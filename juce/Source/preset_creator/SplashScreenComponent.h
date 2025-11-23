@@ -42,6 +42,12 @@ private:
     static constexpr int AUTO_DISMISS_MS = 8000; // 8 seconds
     bool autoDismissEnabled = true;
     
+    // Splash screen image
+    juce::Image splashImage;
+    
+    // Load the splash screen image
+    void loadSplashImage();
+    
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(SplashScreenComponent)
 };
 

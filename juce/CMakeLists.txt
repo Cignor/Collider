@@ -265,7 +265,7 @@ endif()
 include_directories(SYSTEM ${CUDAToolkit_INCLUDE_DIRS})
 
 # Check for standalone pre-built OpenCV
-set(OPENCV_INSTALL_PREFIX "${CMAKE_SOURCE_DIR}/opencv_cuda_install")
+set(OPENCV_INSTALL_PREFIX "${CMAKE_SOURCE_DIR}/../opencv_cuda_install")
 set(OPENCV_PREBUILT FALSE)
 set(OPENCV_HAS_RELEASE FALSE)
 set(OPENCV_HAS_DEBUG FALSE)
@@ -964,9 +964,11 @@ target_include_directories(ColliderApp PRIVATE
 # ==============================================================================
 
 juce_add_gui_app(PresetCreatorApp
-    PRODUCT_NAME "Preset Creator"
+    PRODUCT_NAME "Pikon Raditsz"
     VERSION "0.1.0"
     COMPANY_NAME "Collider"
+    ICON_BIG "${CMAKE_SOURCE_DIR}/../icons/pikon_raditsz_icon.png"
+    ICON_SMALL "${CMAKE_SOURCE_DIR}/../icons/pikon_raditsz_icon.png"
 )
 
 target_sources(PresetCreatorApp PRIVATE
@@ -1229,6 +1231,17 @@ target_sources(PresetCreatorApp PRIVATE
     Source/animation/FbxLoader.cpp
     Source/animation/AnimationRenderer.h
     Source/animation/AnimationRenderer.cpp
+)
+
+# Copy splash screen image to executable directory
+add_custom_command(
+    TARGET PresetCreatorApp POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E make_directory
+            "$<TARGET_FILE_DIR:PresetCreatorApp>/icons"
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            "${CMAKE_SOURCE_DIR}/../icons/splash clean.png"
+            "$<TARGET_FILE_DIR:PresetCreatorApp>/icons/splash clean.png"
+    COMMENT "Copying splash screen image to executable directory"
 )
 
 # This target now needs to know where to find all the headers

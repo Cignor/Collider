@@ -309,35 +309,135 @@ ImGuiNodeEditorComponent::ImGuiNodeEditorComponent(juce::AudioDeviceManager& dm)
     themeEditor.setStartPicker([this](std::function<void(ImU32)> onPicked){ this->startColorPicking(std::move(onPicked)); });
     
     // Initialize browser paths (load from saved settings or use defaults)
+    // Use currentExecutableFile and default to exe/presets, exe/samples, exe/midi
+    // Cache exe directory to avoid slow path resolution on every button click
+    try
+    {
+        auto exeFile = juce::File::getSpecialLocation(juce::File::currentExecutableFile);
+        if (exeFile.getFullPathName().isNotEmpty())
+        {
+            m_cachedExeDir = exeFile.getParentDirectory();
+        }
+    }
+    catch (...)
+    {
+        juce::Logger::writeToLog("[UI] Failed to resolve executable path, using fallback");
+        m_cachedExeDir = juce::File();
+    }
+    
+    juce::File exeDir = m_cachedExeDir;
+    
     if (auto* props = PresetCreatorApplication::getApp().getProperties())
     {
-        // Load the last used paths, providing defaults if they don't exist
-        auto appFile = juce::File::getSpecialLocation(juce::File::currentApplicationFile);
-        juce::File defaultPresetPath = appFile.getParentDirectory().getChildFile("Presets");
-        juce::File defaultSamplePath = appFile.getParentDirectory().getChildFile("Samples");
+        // Default paths: exe/presets, exe/samples, exe/midi
+        juce::File defaultPresetPath = exeDir.getChildFile("presets");
+        juce::File defaultSamplePath = exeDir.getChildFile("samples");
+        juce::File defaultMidiPath = exeDir.getChildFile("midi");
 
-        m_presetScanPath = juce::File(props->getValue("presetScanPath", defaultPresetPath.getFullPathName()));
-        m_sampleScanPath = juce::File(props->getValue("sampleScanPath", defaultSamplePath.getFullPathName()));
+        // Load saved paths
+        juce::String savedPresetPath = props->getValue("presetScanPath", "");
+        juce::String savedSamplePath = props->getValue("sampleScanPath", "");
+        juce::String savedMidiPath = props->getValue("midiScanPath", "");
+        
+        // Migration: Check if saved paths are using old defaults and update them
+        // Check for old project directory pattern (H:\0000_CODE\01_collider_pyo) or old default locations
+        bool presetNeedsMigration = savedPresetPath.isEmpty();
+        bool sampleNeedsMigration = savedSamplePath.isEmpty();
+        bool midiNeedsMigration = savedMidiPath.isEmpty();
+        
+        if (!presetNeedsMigration && exeDir.getFullPathName().isNotEmpty())
+        {
+            juce::String presetPathLower = savedPresetPath.toLowerCase();
+            juce::File savedPresetFile(savedPresetPath);
+            juce::File oldDefaultPreset = exeDir.getChildFile("Presets");
+            
+            // Migrate if: pointing to old project directory, old default location, or empty
+            if (presetPathLower.contains("0000_code") || 
+                presetPathLower.contains("01_collider_pyo") ||
+                savedPresetFile == oldDefaultPreset ||
+                !savedPresetFile.exists())
+            {
+                presetNeedsMigration = true;
+            }
+        }
+        
+        if (!sampleNeedsMigration && exeDir.getFullPathName().isNotEmpty())
+        {
+            juce::String samplePathLower = savedSamplePath.toLowerCase();
+            juce::File savedSampleFile(savedSamplePath);
+            juce::File oldDefaultSample = exeDir.getChildFile("Samples");
+            
+            // Migrate if: pointing to old project directory, old default location, or empty
+            if (samplePathLower.contains("0000_code") || 
+                samplePathLower.contains("01_collider_pyo") ||
+                savedSampleFile == oldDefaultSample ||
+                !savedSampleFile.exists())
+            {
+                sampleNeedsMigration = true;
+            }
+        }
+        
+        if (!midiNeedsMigration && exeDir.getFullPathName().isNotEmpty())
+        {
+            juce::String midiPathLower = savedMidiPath.toLowerCase();
+            juce::File savedMidiFile(savedMidiPath);
+            
+            // Migrate if: pointing to old project directory, old audio/MIDI structure, or empty
+            if (midiPathLower.contains("0000_code") || 
+                midiPathLower.contains("01_collider_pyo") ||
+                midiPathLower.contains("/audio/midi") ||
+                (midiPathLower.contains("midi") && midiPathLower.contains("audio")) ||
+                !savedMidiFile.exists())
+            {
+                midiNeedsMigration = true;
+            }
+        }
+        
+        // Apply migration if needed
+        if (presetNeedsMigration)
+        {
+            m_presetScanPath = defaultPresetPath;
+            props->setValue("presetScanPath", defaultPresetPath.getFullPathName());
+            juce::Logger::writeToLog("[UI] Migrated preset path to: " + defaultPresetPath.getFullPathName());
+        }
+        else
+        {
+            m_presetScanPath = juce::File(savedPresetPath);
+        }
+        
+        if (sampleNeedsMigration)
+        {
+            m_sampleScanPath = defaultSamplePath;
+            props->setValue("sampleScanPath", defaultSamplePath.getFullPathName());
+            juce::Logger::writeToLog("[UI] Migrated sample path to: " + defaultSamplePath.getFullPathName());
+        }
+        else
+        {
+            m_sampleScanPath = juce::File(savedSamplePath);
+        }
+        
+        if (midiNeedsMigration)
+        {
+            m_midiScanPath = defaultMidiPath;
+            props->setValue("midiScanPath", defaultMidiPath.getFullPathName());
+            juce::Logger::writeToLog("[UI] Migrated MIDI path to: " + defaultMidiPath.getFullPathName());
+        }
+        else
+        {
+            m_midiScanPath = juce::File(savedMidiPath);
+        }
     }
     
     // Create these directories if they don't already exist
-    if (!m_presetScanPath.exists())
+    if (m_presetScanPath.getFullPathName().isNotEmpty() && !m_presetScanPath.exists())
         m_presetScanPath.createDirectory();
-    if (!m_sampleScanPath.exists())
+    if (m_sampleScanPath.getFullPathName().isNotEmpty() && !m_sampleScanPath.exists())
         m_sampleScanPath.createDirectory();
+    if (m_midiScanPath.getFullPathName().isNotEmpty() && !m_midiScanPath.exists())
+        m_midiScanPath.createDirectory();
     
     juce::Logger::writeToLog("[UI] Preset path set to: " + m_presetScanPath.getFullPathName());
     juce::Logger::writeToLog("[UI] Sample path set to: " + m_sampleScanPath.getFullPathName());
-    
-    // --- MIDI BROWSER PATH INITIALIZATION ---
-    if (auto* props = PresetCreatorApplication::getApp().getProperties())
-    {
-        auto appFile = juce::File::getSpecialLocation(juce::File::currentApplicationFile);
-        juce::File defaultMidiPath = appFile.getParentDirectory().getChildFile("audio").getChildFile("MIDI");
-        m_midiScanPath = juce::File(props->getValue("midiScanPath", defaultMidiPath.getFullPathName()));
-    }
-    if (!m_midiScanPath.exists())
-        m_midiScanPath.createDirectory();
     juce::Logger::writeToLog("[UI] MIDI path set to: " + m_midiScanPath.getFullPathName());
     // --- END OF MIDI INITIALIZATION ---
 }
@@ -407,12 +507,19 @@ void ImGuiNodeEditorComponent::registerShortcuts()
                    { ImGuiKey_B, true, false, false, false },
                    shortcutBeautifyLayoutRequested);
 
-    registerAction(ShortcutActionIds::editCtrlR,
-                   "Record Output / Reset Selection",
-                   "Record the output when nothing is selected or reset selected nodes to defaults.",
+    registerAction(ShortcutActionIds::editRecordOutput,
+                   "Record Output",
+                   "Record the main output to a file.",
                    "Edit",
                    { ImGuiKey_R, true, false, false, false },
-                   shortcutCtrlRRequested);
+                   shortcutRecordOutputRequested);
+    
+    registerAction(ShortcutActionIds::editResetNode,
+                   "Reset Node",
+                   "Reset selected nodes to their default parameter values.",
+                   "Edit",
+                   { ImGuiKey_R, true, true, false, false },
+                   shortcutResetNodeRequested);
 
     registerAction(ShortcutActionIds::editSelectAll,
                    "Select All",
@@ -571,6 +678,13 @@ void ImGuiNodeEditorComponent::registerShortcuts()
                    { ImGuiKey_T, true, false, false, false }, // Ctrl+T default
                    shortcutConnectSelectedToTrackMixerRequested);
 
+    registerAction(ShortcutActionIds::graphConnectSelectedToRecorder,
+                   "Connect Selected to Recorder",
+                   "Connect selected nodes to a new Recorder for multi-phase recording.",
+                   "Graph",
+                   { ImGuiKey_None, false, false, false, false }, // No default shortcut - user can assign
+                   shortcutConnectSelectedToRecorderRequested);
+
     registerAction(ShortcutActionIds::graphShowInsertPopup,
                    "Open Insert Node Popup",
                    "Open the insert node popup for the selected node.",
@@ -633,6 +747,7 @@ void ImGuiNodeEditorComponent::unregisterShortcuts()
     shortcutManager.unregisterAction(ShortcutActionIds::graphInsertOnLink);
     shortcutManager.unregisterAction(ShortcutActionIds::graphShowInsertPopup);
     shortcutManager.unregisterAction(ShortcutActionIds::graphConnectSelectedToTrackMixer);
+    shortcutManager.unregisterAction(ShortcutActionIds::graphConnectSelectedToRecorder);
     shortcutManager.unregisterAction(ShortcutActionIds::graphInsertMixer);
     shortcutManager.unregisterAction(ShortcutActionIds::debugToggleOverlay);
     shortcutManager.unregisterAction(ShortcutActionIds::historyRedo);
@@ -656,7 +771,8 @@ void ImGuiNodeEditorComponent::unregisterShortcuts()
     shortcutManager.unregisterAction(ShortcutActionIds::editConnectOutput);
     shortcutManager.unregisterAction(ShortcutActionIds::editMuteSelection);
     shortcutManager.unregisterAction(ShortcutActionIds::editSelectAll);
-    shortcutManager.unregisterAction(ShortcutActionIds::editCtrlR);
+    shortcutManager.unregisterAction(ShortcutActionIds::editRecordOutput);
+    shortcutManager.unregisterAction(ShortcutActionIds::editResetNode);
     shortcutManager.unregisterAction(ShortcutActionIds::fileBeautifyLayout);
     shortcutManager.unregisterAction(ShortcutActionIds::fileRandomizeConnections);
     shortcutManager.unregisterAction(ShortcutActionIds::fileRandomizePatch);
@@ -1001,6 +1117,46 @@ void ImGuiNodeEditorComponent::renderImGui()
             }
             if (ImGui::MenuItem("Save Preset As...", "Ctrl+Alt+S")) { startSaveDialog(); }
             if (ImGui::MenuItem("Load Preset", "Ctrl+O")) { startLoadDialog(); }
+            
+            ImGui::Separator();
+            
+            // Set startup default preset
+            if (ImGui::MenuItem("Set Startup Default Preset..."))
+            {
+                auto presetsDir = findPresetsDirectory();
+                startupPresetChooser = std::make_unique<juce::FileChooser>("Choose Default Startup Preset", presetsDir, "*.xml");
+                startupPresetChooser->launchAsync(juce::FileBrowserComponent::openMode | juce::FileBrowserComponent::canSelectFiles,
+                    [this](const juce::FileChooser& fc)
+                {
+                    auto file = fc.getResult();
+                    if (file.existsAsFile())
+                    {
+                        auto& app = PresetCreatorApplication::getApp();
+                        if (auto* props = app.getProperties())
+                        {
+                            props->setValue("startupDefaultPreset", file.getFullPathName());
+                            props->saveIfNeeded();
+                            NotificationManager::post(NotificationManager::Type::Success, 
+                                "Startup default preset set to: " + file.getFileNameWithoutExtension());
+                            juce::Logger::writeToLog("[Settings] Startup default preset set to: " + file.getFullPathName());
+                        }
+                    }
+                    startupPresetChooser.reset(); // Clean up after use
+                });
+            }
+            
+            // Clear startup default preset
+            if (ImGui::MenuItem("Clear Startup Default Preset"))
+            {
+                auto& app = PresetCreatorApplication::getApp();
+                if (auto* props = app.getProperties())
+                {
+                    props->setValue("startupDefaultPreset", "");
+                    props->saveIfNeeded();
+                    NotificationManager::post(NotificationManager::Type::Info, "Startup default preset cleared");
+                    juce::Logger::writeToLog("[Settings] Startup default preset cleared");
+                }
+            }
             
             ImGui::Separator();
             
@@ -1370,6 +1526,30 @@ void ImGuiNodeEditorComponent::renderImGui()
                 handleConnectSelectedToTrackMixer();
             }
             
+            // Get the shortcut string for "Connect Selected to Recorder"
+            juce::String recorderShortcutLabel;
+            {
+                const auto& context = nodeEditorContextId;
+                auto userBinding = shortcutManager.getUserBinding(ShortcutActionIds::graphConnectSelectedToRecorder, context);
+                if (userBinding.hasValue() && userBinding->isValid())
+                {
+                    recorderShortcutLabel = userBinding->toString();
+                }
+                else
+                {
+                    auto defaultBinding = shortcutManager.getDefaultBinding(ShortcutActionIds::graphConnectSelectedToRecorder, context);
+                    if (defaultBinding.hasValue() && defaultBinding->isValid())
+                    {
+                        recorderShortcutLabel = defaultBinding->toString();
+                    }
+                }
+            }
+            
+            if (ImGui::MenuItem("Connect Selected to Recorder", recorderShortcutLabel.isEmpty() ? nullptr : recorderShortcutLabel.toRawUTF8(), false, anyNodesSelected))
+            {
+                handleConnectSelectedToRecorder();
+            }
+            
             // Meta Module: Collapse selected nodes into a reusable sub-patch
             // if (ImGui::MenuItem("Collapse to Meta Module", "Ctrl+Shift+M", false, multipleNodesSelected))
             // {
@@ -1379,6 +1559,32 @@ void ImGuiNodeEditorComponent::renderImGui()
             if (ImGui::MenuItem("Record Output", "Ctrl+R"))
             {
                 handleRecordOutput();
+            }
+            
+            if (ImGui::MenuItem("Reset Node", "Ctrl+Shift+R", false, ImNodes::NumSelectedNodes() > 0))
+            {
+                const int numSelected = ImNodes::NumSelectedNodes();
+                if (numSelected > 0 && synth != nullptr)
+                {
+                    pushSnapshot();
+
+                    std::vector<int> selectedNodeIds(numSelected);
+                    ImNodes::GetSelectedNodes(selectedNodeIds.data());
+
+                    for (int lid : selectedNodeIds)
+                    {
+                        if (auto* module = synth->getModuleForLogical((juce::uint32)lid))
+                        {
+                            auto& params = module->getParameters();
+                            for (auto* paramBase : params)
+                            {
+                                if (auto* param = dynamic_cast<juce::RangedAudioParameter*>(paramBase))
+                                    param->setValueNotifyingHost(param->getDefaultValue());
+                            }
+                            juce::Logger::writeToLog("[Reset] Reset parameters for node " + juce::String(lid));
+                        }
+                    }
+                }
             }
             
             if (ImGui::MenuItem("Beautify Layout", "Ctrl+B"))
@@ -1928,7 +2134,12 @@ void ImGuiNodeEditorComponent::renderImGui()
         // 2. "Change Path" Button
         if (ImGui::Button("Change Path##preset"))
         {
-            presetPathChooser = std::make_unique<juce::FileChooser>("Select Preset Directory", m_presetScanPath);
+            // Construct File from path string directly - no validation, no blocking
+            // If path is empty, use empty File() which opens at system default (fastest)
+            juce::File startDir = m_presetScanPath.getFullPathName().isNotEmpty() 
+                ? juce::File(m_presetScanPath.getFullPathName()) 
+                : juce::File();
+            presetPathChooser = std::make_unique<juce::FileChooser>("Select Preset Directory", startDir);
             presetPathChooser->launchAsync(juce::FileBrowserComponent::openMode | juce::FileBrowserComponent::canSelectDirectories,
                 [this](const juce::FileChooser& fc)
                 {
@@ -1941,6 +2152,9 @@ void ImGuiNodeEditorComponent::renderImGui()
                         {
                             props->setValue("presetScanPath", m_presetScanPath.getFullPathName());
                         }
+                        // Rescan the directory after path change
+                        m_presetManager.clearCache();
+                        m_presetManager.scanDirectory(m_presetScanPath);
                     }
                 });
         }
@@ -2050,7 +2264,12 @@ void ImGuiNodeEditorComponent::renderImGui()
         // 2. "Change Path" Button
         if (ImGui::Button("Change Path##sample"))
         {
-            samplePathChooser = std::make_unique<juce::FileChooser>("Select Sample Directory", m_sampleScanPath);
+            // Construct File from path string directly - no validation, no blocking
+            // If path is empty, use empty File() which opens at system default (fastest)
+            juce::File startDir = m_sampleScanPath.getFullPathName().isNotEmpty() 
+                ? juce::File(m_sampleScanPath.getFullPathName()) 
+                : juce::File();
+            samplePathChooser = std::make_unique<juce::FileChooser>("Select Sample Directory", startDir);
             samplePathChooser->launchAsync(juce::FileBrowserComponent::openMode | juce::FileBrowserComponent::canSelectDirectories,
                 [this](const juce::FileChooser& fc)
                 {
@@ -2063,6 +2282,9 @@ void ImGuiNodeEditorComponent::renderImGui()
                         {
                             props->setValue("sampleScanPath", m_sampleScanPath.getFullPathName());
                         }
+                        // Rescan the directory after path change
+                        m_sampleManager.clearCache();
+                        m_sampleManager.scanDirectory(m_sampleScanPath);
                     }
                 });
         }
@@ -2104,7 +2326,12 @@ void ImGuiNodeEditorComponent::renderImGui()
         // 2. "Change Path" Button
         if (ImGui::Button("Change Path##midi"))
         {
-            midiPathChooser = std::make_unique<juce::FileChooser>("Select MIDI Directory", m_midiScanPath);
+            // Construct File from path string directly - no validation, no blocking
+            // If path is empty, use empty File() which opens at system default (fastest)
+            juce::File startDir = m_midiScanPath.getFullPathName().isNotEmpty() 
+                ? juce::File(m_midiScanPath.getFullPathName()) 
+                : juce::File();
+            midiPathChooser = std::make_unique<juce::FileChooser>("Select MIDI Directory", startDir);
             midiPathChooser->launchAsync(juce::FileBrowserComponent::openMode | juce::FileBrowserComponent::canSelectDirectories,
                 [this](const juce::FileChooser& fc)
                 {
@@ -2117,6 +2344,9 @@ void ImGuiNodeEditorComponent::renderImGui()
                         {
                             props->setValue("midiScanPath", m_midiScanPath.getFullPathName());
                         }
+                        // Rescan the directory after path change
+                        m_midiManager.clearCache();
+                        m_midiManager.scanDirectory(m_midiScanPath);
                     }
                 });
         }
@@ -3764,11 +3994,18 @@ if (auto* mp = synth->getModuleForLogical (lid))
 
         const bool insertMixerShortcut = consumeShortcutFlag(shortcutInsertMixerRequested);
         const bool connectToTrackMixerShortcut = consumeShortcutFlag(shortcutConnectSelectedToTrackMixerRequested);
+        const bool connectToRecorderShortcut = consumeShortcutFlag(shortcutConnectSelectedToRecorderRequested);
         
         // Handle "Connect Selected to Track Mixer" shortcut
         if (connectToTrackMixerShortcut && ImNodes::NumSelectedNodes() > 0)
         {
             handleConnectSelectedToTrackMixer();
+        }
+        
+        // Handle "Connect Selected to Recorder" shortcut
+        if (connectToRecorderShortcut && ImNodes::NumSelectedNodes() > 0)
+        {
+            handleConnectSelectedToRecorder();
         }
         
         if ((triggerInsertMixer || (selectedLogicalId != 0 && insertMixerShortcut)) && !mixerShortcutCooldown)
@@ -5631,7 +5868,12 @@ if (auto* mp = synth->getModuleForLogical (lid))
                 handleColorCodedChaining(PinDataType::Video);
             }
         
-            if (consumeShortcutFlag(shortcutCtrlRRequested))
+            if (consumeShortcutFlag(shortcutRecordOutputRequested))
+            {
+                handleRecordOutput();
+            }
+            
+            if (consumeShortcutFlag(shortcutResetNodeRequested))
             {
                 const int numSelected = ImNodes::NumSelectedNodes();
                 if (numSelected > 0 && synth != nullptr)
@@ -5654,10 +5896,6 @@ if (auto* mp = synth->getModuleForLogical (lid))
                             juce::Logger::writeToLog("[Reset] Reset parameters for node " + juce::String(lid));
                         }
                     }
-                }
-                else
-                {
-                    handleRecordOutput();
                 }
             }
             if (consumeShortcutFlag(shortcutConnectOutputRequested) && ImNodes::NumSelectedNodes() == 1)
@@ -7421,6 +7659,126 @@ void ImGuiNodeEditorComponent::handleConnectSelectedToTrackMixer()
     graphNeedsRebuild = true;
     juce::Logger::writeToLog("--- [Connect to Mixer] Routine complete. ---");
 }
+
+void ImGuiNodeEditorComponent::handleConnectSelectedToRecorder()
+{
+    if (synth == nullptr || ImNodes::NumSelectedNodes() <= 0)
+    {
+        juce::Logger::writeToLog("[AutoConnect] Aborted: No synth or no nodes selected.");
+        return;
+    }
+
+    // This is a significant action, so create an undo state first.
+    pushSnapshot();
+    juce::Logger::writeToLog("--- [Connect to Recorder] Starting routine ---");
+
+    // 1. Get all selected node IDs.
+    const int numSelectedNodes = ImNodes::NumSelectedNodes();
+    std::vector<int> selectedNodeLids(numSelectedNodes);
+    ImNodes::GetSelectedNodes(selectedNodeLids.data());
+
+    // 2. Find the rightmost position of the selected nodes to position recorders.
+    float maxX = 0.0f;
+    for (int lid : selectedNodeLids)
+    {
+        ImVec2 pos = ImNodes::GetNodeGridSpacePos(lid);
+        if (pos.x > maxX) {
+            maxX = pos.x;
+        }
+    }
+    
+    // 3. Create a recorder for each selected node that has audio outputs.
+    int recorderCount = 0;
+    float verticalSpacing = 200.0f; // Vertical spacing between recorders
+    float startY = 0.0f;
+    
+    // Calculate starting Y position (center of selected nodes vertically)
+    float totalY = 0.0f;
+    int validNodeCount = 0;
+    for (int lid : selectedNodeLids)
+    {
+        if (auto* mp = synth->getModuleForLogical((juce::uint32) lid))
+        {
+            const int audioCh = mp->getTotalNumOutputChannels();
+            if (audioCh > 0)
+            {
+                ImVec2 pos = ImNodes::GetNodeGridSpacePos(lid);
+                totalY += pos.y;
+                validNodeCount++;
+            }
+        }
+    }
+    
+    if (validNodeCount == 0)
+    {
+        juce::Logger::writeToLog("[AutoConnect] No audio outputs found on selected nodes.");
+        return;
+    }
+    
+    startY = totalY / validNodeCount - (validNodeCount - 1) * verticalSpacing / 2.0f;
+    
+    // 4. Create a recorder for each selected node with audio outputs.
+    for (int lid : selectedNodeLids)
+    {
+        if (auto* mp = synth->getModuleForLogical((juce::uint32) lid))
+        {
+            const int audioCh = mp->getTotalNumOutputChannels();
+            if (audioCh == 0)
+            {
+                juce::Logger::writeToLog("[AutoConnect] Skipping node " + juce::String(lid) + " (no audio outputs)");
+                continue;
+            }
+            
+            // Create a recorder for this node
+            auto recorderNodeId = synth->addModule("recorder");
+            auto recorderLid = synth->getLogicalIdForNode(recorderNodeId);
+            
+            // Position the recorder to the right of the source node
+            ImVec2 sourcePos = ImNodes::GetNodeGridSpacePos(lid);
+            float recorderX = maxX + 800.0f;
+            float recorderY = startY + recorderCount * verticalSpacing;
+            pendingNodePositions[(int)recorderLid] = ImVec2(recorderX, recorderY);
+            
+            // Get the source node ID
+            auto sourceNodeId = synth->getNodeIdForLogical((juce::uint32) lid);
+            
+            // Connect the source to the recorder
+            if (audioCh == 1)
+            {
+                // Mono source: connect to left channel
+                synth->connect(sourceNodeId, 0, recorderNodeId, 0);
+                juce::Logger::writeToLog("[AutoConnect] Connected mono node " + juce::String(lid) + 
+                                         " (Out 0) -> Recorder " + juce::String(recorderLid) + " In L (0)");
+            }
+            else if (audioCh >= 2)
+            {
+                // Stereo source: connect to both channels
+                synth->connect(sourceNodeId, 0, recorderNodeId, 0);
+                synth->connect(sourceNodeId, 1, recorderNodeId, 1);
+                juce::Logger::writeToLog("[AutoConnect] Connected stereo node " + juce::String(lid) + 
+                                         " (Out 0,1) -> Recorder " + juce::String(recorderLid) + " In L,R (0,1)");
+            }
+            
+            // Set suggested filename for the recorder
+            if (auto* recorder = dynamic_cast<RecordModuleProcessor*>(synth->getModuleForLogical(recorderLid)))
+            {
+                recorder->setPropertiesFile(PresetCreatorApplication::getApp().getProperties());
+                if (auto* sourceModule = synth->getModuleForLogical((juce::uint32) lid))
+                {
+                    recorder->updateSuggestedFilename(sourceModule->getName());
+                }
+            }
+            
+            recorderCount++;
+            juce::Logger::writeToLog("[AutoConnect] Created Recorder " + juce::String(recorderLid) + " for node " + juce::String(lid));
+        }
+    }
+
+    // 5. Flag the graph for a rebuild to apply all changes.
+    graphNeedsRebuild = true;
+    juce::Logger::writeToLog("--- [Connect to Recorder] Routine complete. Created " + juce::String(recorderCount) + " recorder(s). ---");
+}
+
 void ImGuiNodeEditorComponent::handleMidiPlayerAutoConnect(MIDIPlayerModuleProcessor* midiPlayer, juce::uint32 midiPlayerLid)
 {
     if (!synth || !midiPlayer || midiPlayerLid == 0 || !midiPlayer->hasMIDIFileLoaded())
@@ -9935,37 +10293,129 @@ void ImGuiNodeEditorComponent::expandMetaModule(juce::uint32 metaLogicalId)
 
 juce::File ImGuiNodeEditorComponent::findPresetsDirectory()
 {
-    // First, check exe/presets/ directory (preferred location)
-    auto exeDir = juce::File::getSpecialLocation(juce::File::currentExecutableFile).getParentDirectory();
-    auto presetsDir = exeDir.getChildFile("presets");
-    if (presetsDir.exists() && presetsDir.isDirectory())
+    // Try to get executable directory with error handling to prevent blocking
+    // Use a quick check to avoid slow filesystem operations
+    juce::File exeDir;
+    juce::String exePath;
+    
+    try
     {
-        return presetsDir;
+        auto exeFile = juce::File::getSpecialLocation(juce::File::currentExecutableFile);
+        exePath = exeFile.getFullPathName();
+        
+        // Quick validation: check if path is non-empty before doing expensive operations
+        if (exePath.isNotEmpty())
+        {
+            exeDir = exeFile.getParentDirectory();
+            // Quick check: if parent directory path is empty or clearly invalid, skip it
+            if (exeDir.getFullPathName().isEmpty())
+            {
+                exeDir = juce::File();
+            }
+        }
     }
-    // Create exe/presets/ if it doesn't exist
-    if (presetsDir.createDirectory())
+    catch (...)
     {
-        return presetsDir;
+        // If executable path resolution fails, fall back to user documents
+        juce::Logger::writeToLog("[PresetLoader] Failed to resolve executable path, using fallback");
+        exeDir = juce::File();
     }
     
-    // Fallback: Search upwards from the executable's location for a sibling directory
-    // named "Synth_presets". This is robust to different build configurations.
-    juce::File dir = exeDir;
-
-    for (int i = 0; i < 8; ++i) // Limit search depth to 8 levels
+    // If we successfully got the exe directory, try exe/presets/ first
+    // Only do filesystem checks if we have a valid path
+    if (exeDir.getFullPathName().isNotEmpty())
     {
-        dir = dir.getParentDirectory();
-        if (!dir.exists()) break;
-
-        juce::File candidate = dir.getSiblingFile("Synth_presets");
-        if (candidate.isDirectory())
+        auto presetsDir = exeDir.getChildFile("presets");
+        // Quick check: only call exists() if path looks valid
+        if (presetsDir.getFullPathName().isNotEmpty())
         {
-            return candidate;
+            try
+            {
+                if (presetsDir.exists() && presetsDir.isDirectory())
+                {
+                    return presetsDir;
+                }
+                // Create exe/presets/ if it doesn't exist (but don't block if it fails)
+                if (presetsDir.createDirectory())
+                {
+                    return presetsDir;
+                }
+            }
+            catch (...)
+            {
+                // If filesystem operations fail, continue to fallback
+                juce::Logger::writeToLog("[PresetLoader] Filesystem check failed for exe/presets, using fallback");
+            }
+        }
+        
+        // Fallback: Search upwards from the executable's location for a sibling directory
+        // named "Synth_presets". This is robust to different build configurations.
+        // Limit iterations and add error handling to prevent blocking
+        juce::File dir = exeDir;
+        for (int i = 0; i < 8; ++i) // Limit search depth to 8 levels
+        {
+            try
+            {
+                dir = dir.getParentDirectory();
+                auto dirPath = dir.getFullPathName();
+                if (dirPath.isEmpty() || !dir.exists()) break;
+
+                juce::File candidate = dir.getSiblingFile("Synth_presets");
+                if (candidate.getFullPathName().isNotEmpty() && candidate.isDirectory())
+                {
+                    return candidate;
+                }
+            }
+            catch (...)
+            {
+                // If filesystem operations fail during search, break out
+                break;
+            }
+        }
+        
+        // If exe directory is valid, return it as final fallback
+        if (exeDir.getFullPathName().isNotEmpty())
+        {
+            return exeDir;
         }
     }
     
-    // Final fallback: return exe directory if nothing found
-    return exeDir;
+    // Ultimate fallback: Use user documents directory if executable path resolution failed
+    try
+    {
+        auto userDocs = juce::File::getSpecialLocation(juce::File::userDocumentsDirectory);
+        if (userDocs.getFullPathName().isNotEmpty())
+        {
+            auto presetsDir = userDocs.getChildFile("Presets");
+            if (presetsDir.getFullPathName().isNotEmpty())
+            {
+                try
+                {
+                    if (presetsDir.exists() && presetsDir.isDirectory())
+                    {
+                        return presetsDir;
+                    }
+                    if (presetsDir.createDirectory())
+                    {
+                        return presetsDir;
+                    }
+                }
+                catch (...)
+                {
+                    // Continue to return userDocs as fallback
+                }
+            }
+            return userDocs; // Last resort: return user documents directory
+        }
+    }
+    catch (...)
+    {
+        // If everything fails, return an empty file (FileChooser will use system default)
+        juce::Logger::writeToLog("[PresetLoader] All fallbacks failed, using system default");
+    }
+    
+    // Return empty file - FileChooser will handle this gracefully by using system default location
+    return juce::File();
 }
 // Helper function implementations
 PinDataType ImGuiNodeEditorComponent::getPinDataTypeForPin(const PinID& pin)

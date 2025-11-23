@@ -1,0 +1,11 @@
+# CMake generation dependency list for this directory.
+C:/Program Files/CMake/share/cmake-4.1/Modules/CheckCSourceCompiles.cmake
+C:/Program Files/CMake/share/cmake-4.1/Modules/CheckIncludeFile.cmake
+C:/Program Files/CMake/share/cmake-4.1/Modules/CheckIncludeFileCXX.cmake
+C:/Program Files/CMake/share/cmake-4.1/Modules/CheckIncludeFiles.cmake
+C:/Program Files/CMake/share/cmake-4.1/Modules/CheckTypeSize.cmake
+H:/0000_CODE/01_collider_pyo/juce/build/CMakeFiles/cmake.verify_globs
+H:/0000_CODE/01_collider_pyo/juce/build/_deps/opencv-src/3rdparty/libjpeg-turbo/CMakeLists.txt
+H:/0000_CODE/01_collider_pyo/juce/build/_deps/opencv-src/3rdparty/libjpeg-turbo/jconfig.h.in
+H:/0000_CODE/01_collider_pyo/juce/build/_deps/opencv-src/3rdparty/libjpeg-turbo/jconfigint.h.in
+H:/0000_CODE/01_collider_pyo/juce/build/_deps/opencv-src/3rdparty/libjpeg-turbo/jversion.h.in

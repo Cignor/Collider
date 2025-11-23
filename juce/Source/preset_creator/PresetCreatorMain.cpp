@@ -17,7 +17,7 @@ void PresetCreatorApplication::initialise(const juce::String&)
                            .getParentDirectory().getChildFile ("juce").getChildFile ("logs");
         logsDir.createDirectory();
         auto logFile = logsDir.getChildFile ("preset_creator_" + juce::Time::getCurrentTime().formatted ("%Y-%m-%d_%H-%M-%S") + ".log");
-        fileLogger = std::make_unique<juce::FileLogger> (logFile, "Preset Creator Session", 0);
+        fileLogger = std::make_unique<juce::FileLogger> (logFile, "Pikon Raditsz Session", 0);
         juce::Logger::setCurrentLogger (fileLogger.get());
         DBG("[PresetCreator] Logger initialised at: " + logFile.getFullPathName());
         juce::Logger::writeToLog("PresetCreatorApplication::initialise called");
@@ -118,14 +118,11 @@ void PresetCreatorApplication::showSplashScreen()
         
         // Get bounds before moving ownership
         auto splashBounds = splash->getBounds();
+        juce::Logger::writeToLog("[Splash] Splash component created, size: " + juce::String(splashBounds.getWidth()) + "x" + juce::String(splashBounds.getHeight()));
         
-        // Create a dialog window for the splash screen (non-modal)
-        splashWindowPtr = std::make_unique<juce::DialogWindow>(
-            VersionInfo::getApplicationName(),
-            juce::Colours::transparentBlack,
-            false,  // Not modal - don't block
-            true     // Add to desktop
-        );
+        // Create a custom transparent window for the splash screen (no JUCE branding)
+        splashWindowPtr = std::make_unique<TransparentSplashWindow>();
+        juce::Logger::writeToLog("[Splash] Transparent window created");
         
         // Set up dismiss callback
         auto* splashPtr = splash.get();
@@ -146,12 +143,9 @@ void PresetCreatorApplication::showSplashScreen()
             }
         };
         
-        // Set splash as content and configure window
-        splashWindowPtr->setContentOwned(splash.release(), true);
-        splashWindowPtr->setTitleBarHeight(0); // No title bar
-        splashWindowPtr->setResizable(false, false);
-        splashWindowPtr->setUsingNativeTitleBar(false);
-        splashWindowPtr->setAlwaysOnTop(true);
+        // Add splash component to window (capture pointer before releasing ownership)
+        auto* splashComponent = splash.get();
+        splashWindowPtr->addAndMakeVisible(splash.release());
         
         // Center splash on screen
         auto screenBounds = juce::Desktop::getInstance().getDisplays().getPrimaryDisplay()->userArea;
@@ -161,16 +155,25 @@ void PresetCreatorApplication::showSplashScreen()
         );
         splashWindowPtr->setBounds(splashBounds);
         
+        // Ensure splash component fills entire window bounds
+        if (splashComponent != nullptr)
+        {
+            splashComponent->setBounds(0, 0, splashBounds.getWidth(), splashBounds.getHeight());
+        }
+        
         // Show splash (non-modal, won't block)
         splashWindowPtr->setVisible(true);
         splashWindowPtr->toFront(true);
         
-        // Focus splash component to receive keyboard events
-        if (auto* content = splashWindowPtr->getContentComponent())
+        // Grab keyboard focus for the window and component
+        splashWindowPtr->grabKeyboardFocus();
+        if (splashComponent != nullptr)
         {
-            content->grabKeyboardFocus();
+            splashComponent->grabKeyboardFocus();
         }
         
+        juce::Logger::writeToLog("[Splash] Window visible: " + juce::String(splashWindowPtr->isVisible() ? "yes" : "no"));
+        juce::Logger::writeToLog("[Splash] Window bounds: " + splashWindowPtr->getBounds().toString());
         juce::Logger::writeToLog("[Splash] Splash screen shown successfully");
     }
     catch (const std::exception& e)

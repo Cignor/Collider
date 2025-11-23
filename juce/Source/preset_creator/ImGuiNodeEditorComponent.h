@@ -129,6 +129,7 @@ public:
     void handleRandomizePatch();
     void handleRandomizeConnections();
     void handleConnectSelectedToTrackMixer();
+    void handleConnectSelectedToRecorder();
     void handleBeautifyLayout();
     void handleMidiPlayerAutoConnect(MIDIPlayerModuleProcessor* midiPlayer, juce::uint32 midiPlayerLid);
     void handleMidiPlayerAutoConnectVCO(MIDIPlayerModuleProcessor* midiPlayer, juce::uint32 midiPlayerLid);
@@ -282,6 +283,9 @@ public:
     std::unique_ptr<juce::FileChooser> presetPathChooser;
     std::unique_ptr<juce::FileChooser> samplePathChooser;
     
+    // Cached exe directory to avoid slow path resolution on every button click
+    juce::File m_cachedExeDir;
+    
     // MIDI file management
     MidiManager m_midiManager;
     juce::File m_midiScanPath;
@@ -298,7 +302,7 @@ public:
     // Selection state
     int selectedLogicalId { 0 };
 
-    std::unique_ptr<juce::FileChooser> saveChooser, loadChooser;
+    std::unique_ptr<juce::FileChooser> saveChooser, loadChooser, startupPresetChooser;
 
     // Map of linkId -> (srcAttr, dstAttr) populated each frame
     std::unordered_map<int, std::pair<int,int>> linkIdToAttrs;
@@ -343,7 +347,8 @@ public:
         static inline const juce::Identifier fileRandomizePatch { "actions.file.randomizePatch" };
         static inline const juce::Identifier fileRandomizeConnections { "actions.file.randomizeConnections" };
         static inline const juce::Identifier fileBeautifyLayout { "actions.file.beautifyLayout" };
-        static inline const juce::Identifier editCtrlR { "actions.edit.resetOrRecord" };
+        static inline const juce::Identifier editRecordOutput { "actions.edit.recordOutput" };
+        static inline const juce::Identifier editResetNode { "actions.edit.resetNode" };
         static inline const juce::Identifier editMuteSelection { "actions.edit.muteSelection" };
         static inline const juce::Identifier editSelectAll { "actions.edit.selectAll" };
         static inline const juce::Identifier editConnectOutput { "actions.edit.connectToOutput" };
@@ -362,6 +367,7 @@ public:
         static inline const juce::Identifier debugToggleOverlay { "actions.debug.toggleDiagnostics" };
         static inline const juce::Identifier graphInsertMixer { "actions.graph.insertMixer" };
         static inline const juce::Identifier graphConnectSelectedToTrackMixer { "actions.graph.connectSelectedToTrackMixer" };
+        static inline const juce::Identifier graphConnectSelectedToRecorder { "actions.graph.connectSelectedToRecorder" };
         static inline const juce::Identifier graphShowInsertPopup { "actions.graph.showInsertPopup" };
         static inline const juce::Identifier graphInsertOnLink { "actions.graph.insertOnLink" };
         static inline const juce::Identifier graphChainSequential { "actions.graph.chainSequential" };
@@ -378,7 +384,8 @@ public:
     std::atomic<bool> shortcutRandomizePatchRequested { false };
     std::atomic<bool> shortcutRandomizeConnectionsRequested { false };
     std::atomic<bool> shortcutBeautifyLayoutRequested { false };
-    std::atomic<bool> shortcutCtrlRRequested { false };
+    std::atomic<bool> shortcutRecordOutputRequested { false };
+    std::atomic<bool> shortcutResetNodeRequested { false };
     std::atomic<bool> shortcutSelectAllRequested { false };
     std::atomic<bool> shortcutMuteSelectionRequested { false };
     std::atomic<bool> shortcutConnectOutputRequested { false };
@@ -396,6 +403,7 @@ public:
     std::atomic<bool> shortcutToggleDebugRequested { false };
     std::atomic<bool> shortcutInsertMixerRequested { false };
     std::atomic<bool> shortcutConnectSelectedToTrackMixerRequested { false };
+    std::atomic<bool> shortcutConnectSelectedToRecorderRequested { false };
     std::atomic<bool> shortcutShowInsertPopupRequested { false };
     std::atomic<bool> shortcutInsertOnLinkRequested { false };
     std::atomic<bool> shortcutChainSequentialRequested { false };
