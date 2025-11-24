@@ -543,15 +543,13 @@ void PhaserModuleProcessor::drawParametersInNode(float itemWidth, const std::fun
 
 void PhaserModuleProcessor::drawIoPins(const NodePinHelpers& helpers)
 {
-    helpers.drawAudioInputPin("In L", 0);
-    helpers.drawAudioInputPin("In R", 1);
-    helpers.drawAudioInputPin("Rate Mod", 2);
-    helpers.drawAudioInputPin("Depth Mod", 3);
-    helpers.drawAudioInputPin("Centre Mod", 4);
-    helpers.drawAudioInputPin("Feedback Mod", 5);
-    helpers.drawAudioInputPin("Mix Mod", 6);
-    helpers.drawAudioOutputPin("Out L", 0);
-    helpers.drawAudioOutputPin("Out R", 1);
+    helpers.drawParallelPins("In L", 0, "Out L", 0);
+    helpers.drawParallelPins("In R", 1, "Out R", 1);
+    helpers.drawParallelPins("Rate Mod", 2, nullptr, -1);
+    helpers.drawParallelPins("Depth Mod", 3, nullptr, -1);
+    helpers.drawParallelPins("Centre Mod", 4, nullptr, -1);
+    helpers.drawParallelPins("Feedback Mod", 5, nullptr, -1);
+    helpers.drawParallelPins("Mix Mod", 6, nullptr, -1);
 }
 #endif
 

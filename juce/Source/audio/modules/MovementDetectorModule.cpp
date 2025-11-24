@@ -762,31 +762,54 @@ void MovementDetectorModule::drawParametersInNode(float itemWidth,
     #endif
     
     // Mode selection
+    bool modeMod = isParamModulated("mode");
+    if (modeMod) ImGui::BeginDisabled();
     int mode = (int)modeParam->load();
     const char* modes[] = { "Optical Flow", "Background Subtraction" };
     if (ImGui::Combo("Mode", &mode, modes, 2))
     {
-        *dynamic_cast<juce::AudioParameterChoice*>(apvts.getParameter("mode")) = mode;
+        if (!modeMod) *dynamic_cast<juce::AudioParameterChoice*>(apvts.getParameter("mode")) = mode;
         onModificationEnded();
     }
+    // Scroll-edit for mode combo
+    if (!modeMod && ImGui::IsItemHovered())
+    {
+        const float wheel = ImGui::GetIO().MouseWheel;
+        if (wheel != 0.0f)
+        {
+            const int newMode = juce::jlimit(0, 1, mode + (wheel > 0.0f ? -1 : 1));
+            if (newMode != mode)
+            {
+                *dynamic_cast<juce::AudioParameterChoice*>(apvts.getParameter("mode")) = newMode;
+                onModificationEnded();
+            }
+        }
+    }
+    if (modeMod) ImGui::EndDisabled();
     
     // Sensitivity slider
-    float sensitivity = sensitivityParam->load();
+    bool sensitivityMod = isParamModulated("sensitivity");
+    float sensitivity = sensitivityMod ? getLiveParamValue("sensitivity", sensitivityParam->load()) : sensitivityParam->load();
+    if (sensitivityMod) ImGui::BeginDisabled();
     if (ImGui::SliderFloat("Sensitivity", &sensitivity, 0.01f, 1.0f, "%.2f"))
     {
-        *dynamic_cast<juce::AudioParameterFloat*>(apvts.getParameter("sensitivity")) = sensitivity;
+        if (!sensitivityMod) *dynamic_cast<juce::AudioParameterFloat*>(apvts.getParameter("sensitivity")) = sensitivity;
     }
-    if (ImGui::IsItemDeactivatedAfterEdit())
+    if (ImGui::IsItemDeactivatedAfterEdit() && !sensitivityMod)
     {
         onModificationEnded();
     }
+    if (!sensitivityMod) adjustParamOnWheel(apvts.getParameter("sensitivity"), "sensitivity", sensitivity);
+    if (sensitivityMod) ImGui::EndDisabled();
     
     // Zoom controls (-/+) Small/Normal/Large
+    bool zoomMod = isParamModulated("zoomLevel");
     int level = zoomLevelParam ? (int) zoomLevelParam->load() : 1;
     level = juce::jlimit(0, 2, level);
     float buttonWidth = (itemWidth / 2.0f) - 4.0f;
     const bool atMin = (level <= 0);
     const bool atMax = (level >= 2);
+    if (zoomMod) ImGui::BeginDisabled();
     if (atMin) ImGui::BeginDisabled();
     if (ImGui::Button("-", ImVec2(buttonWidth, 0)))
     {
@@ -806,6 +829,22 @@ void MovementDetectorModule::drawParametersInNode(float itemWidth,
         onModificationEnded();
     }
     if (atMax) ImGui::EndDisabled();
+    // Scroll-edit for zoom level
+    if (!zoomMod && ImGui::IsItemHovered())
+    {
+        const float wheel = ImGui::GetIO().MouseWheel;
+        if (wheel != 0.0f)
+        {
+            const int newLevel = juce::jlimit(0, 2, level + (wheel > 0.0f ? 1 : -1));
+            if (newLevel != level)
+            {
+                if (auto* p = apvts.getParameter("zoomLevel"))
+                    p->setValueNotifyingHost((float)newLevel / 2.0f);
+                onModificationEnded();
+            }
+        }
+    }
+    if (zoomMod) ImGui::EndDisabled();
 
     // NEW: Algorithm tuning controls
     if (mode == 0) // Optical Flow
@@ -813,9 +852,13 @@ void MovementDetectorModule::drawParametersInNode(float itemWidth,
         ImGui::Text("Optical Flow Settings");
         if (maxFeaturesParam)
         {
+            bool maxFeaturesMod = isParamModulated("maxFeatures");
             int maxF = maxFeaturesParam->get();
-            if (ImGui::SliderInt("Max Features", &maxF, 20, 500)) { *maxFeaturesParam = maxF; }
-            if (ImGui::IsItemDeactivatedAfterEdit()) onModificationEnded();
+            if (maxFeaturesMod) ImGui::BeginDisabled();
+            if (ImGui::SliderInt("Max Features", &maxF, 20, 500)) { if (!maxFeaturesMod) *maxFeaturesParam = maxF; }
+            if (ImGui::IsItemDeactivatedAfterEdit() && !maxFeaturesMod) onModificationEnded();
+            if (!maxFeaturesMod) adjustParamOnWheel(apvts.getParameter("maxFeatures"), "maxFeatures", (float)maxF);
+            if (maxFeaturesMod) ImGui::EndDisabled();
         }
     }
     else

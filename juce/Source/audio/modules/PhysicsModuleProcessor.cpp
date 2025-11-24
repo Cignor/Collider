@@ -1116,6 +1116,8 @@ void PhysicsModuleProcessor::drawParametersInNode(float itemWidth, const std::fu
                     p->setValueNotifyingHost(apvts.getParameterRange(paramID).convertTo0to1(value));
             }
             if (ImGui::IsItemDeactivatedAfterEdit()) { onModificationEnded(); }
+            if (auto* juceParam = ap.getParameter(paramID))
+                adjustParamOnWheel(juceParam, paramID, value);
             
             ImGui::PopStyleColor(5);
             ImGui::PopItemWidth();
@@ -1169,6 +1171,9 @@ void PhysicsModuleProcessor::drawParametersInNode(float itemWidth, const std::fu
         ImGui::PopStyleColor(4);
         ImGui::PopItemWidth();
 
+        if (!gravityIsMod)
+            adjustParamOnWheel(ap.getParameter(paramIdGravity), paramIdGravity, gravityValue);
+
         if (gravityIsMod)
         {
             ImGui::EndDisabled();
@@ -1206,6 +1211,9 @@ void PhysicsModuleProcessor::drawParametersInNode(float itemWidth, const std::fu
         
         ImGui::PopStyleColor(4);
         ImGui::PopItemWidth();
+
+        if (!windIsMod)
+            adjustParamOnWheel(ap.getParameter(paramIdWind), paramIdWind, windValue);
 
         if (windIsMod)
         {
@@ -1245,6 +1253,9 @@ void PhysicsModuleProcessor::drawParametersInNode(float itemWidth, const std::fu
         ImGui::PopStyleColor(4);
         ImGui::PopItemWidth();
 
+        if (!vortexStrIsMod)
+            adjustParamOnWheel(ap.getParameter(paramIdVortexStrength), paramIdVortexStrength, vortexStrengthValue);
+
         if (vortexStrIsMod)
         {
             ImGui::EndDisabled();
@@ -1282,6 +1293,9 @@ void PhysicsModuleProcessor::drawParametersInNode(float itemWidth, const std::fu
         
         ImGui::PopStyleColor(4);
         ImGui::PopItemWidth();
+
+        if (!vortexSpinIsMod)
+            adjustParamOnWheel(ap.getParameter(paramIdVortexSpin), paramIdVortexSpin, vortexSpinValue);
 
         if (vortexSpinIsMod)
         {
@@ -1321,6 +1335,9 @@ void PhysicsModuleProcessor::drawParametersInNode(float itemWidth, const std::fu
         ImGui::PopStyleColor(4);
         ImGui::PopItemWidth();
 
+        if (!magnetForceIsMod)
+            adjustParamOnWheel(ap.getParameter(paramIdMagnetForce), paramIdMagnetForce, magnetForceValue);
+
         if (magnetForceIsMod)
         {
             ImGui::EndDisabled();
@@ -1348,6 +1365,8 @@ void PhysicsModuleProcessor::drawParametersInNode(float itemWidth, const std::fu
                 param->setValueNotifyingHost(apvts.getParameterRange(paramIdStrokeSize).convertTo0to1(strokeSizeValue));
         }
         if (ImGui::IsItemDeactivatedAfterEdit()) { onModificationEnded(); }
+        if (auto* juceParam = ap.getParameter(paramIdStrokeSize))
+            adjustParamOnWheel(juceParam, paramIdStrokeSize, strokeSizeValue);
         
         ImGui::PopStyleColor(4);
         ImGui::PopItemWidth();
@@ -1374,6 +1393,7 @@ void PhysicsModuleProcessor::drawParametersInNode(float itemWidth, const std::fu
             *maxObjectsParam = maxObjectsValue;
         }
         if (ImGui::IsItemDeactivatedAfterEdit()) { onModificationEnded(); }
+        adjustParamOnWheel(ap.getParameter(paramIdMaxObjects), paramIdMaxObjects, (float)maxObjectsValue);
         
         ImGui::PopStyleColor(4);
         
@@ -2094,6 +2114,37 @@ void PhysicsModuleProcessor::drawParametersInNode(float itemWidth, const std::fu
 
         ImGui::PopItemWidth();
     }
+}
+
+void PhysicsModuleProcessor::drawIoPins(const NodePinHelpers& helpers)
+{
+    helpers.drawParallelPins("Spawn Ball", 0, "Out L", 0);
+    helpers.drawParallelPins("Spawn Square", 1, "Out R", 1);
+    helpers.drawParallelPins("Spawn Triangle", 2, "Main Trigger", 2);
+    helpers.drawParallelPins("Gravity Mod", 3, "Ball Trigger", 3);
+    helpers.drawParallelPins("Wind Mod", 4, "Square Trigger", 4);
+    helpers.drawParallelPins("Vortex Str Mod", 5, "Triangle Trig", 5);
+    helpers.drawParallelPins("Vortex Spin Mod", 6, "Ball Pos X", 6);
+    helpers.drawParallelPins("Magnet Force Mod", 7, "Ball Pos Y", 7);
+
+    ImGui::Spacing();
+
+    helpers.drawParallelPins(nullptr, -1, "Ball Vel X", 8);
+    helpers.drawParallelPins(nullptr, -1, "Ball Vel Y", 9);
+
+    ImGui::Spacing();
+
+    helpers.drawParallelPins(nullptr, -1, "Square Pos X", 10);
+    helpers.drawParallelPins(nullptr, -1, "Square Pos Y", 11);
+    helpers.drawParallelPins(nullptr, -1, "Square Vel X", 12);
+    helpers.drawParallelPins(nullptr, -1, "Square Vel Y", 13);
+
+    ImGui::Spacing();
+
+    helpers.drawParallelPins(nullptr, -1, "Triangle Pos X", 14);
+    helpers.drawParallelPins(nullptr, -1, "Triangle Pos Y", 15);
+    helpers.drawParallelPins(nullptr, -1, "Triangle Vel X", 16);
+    helpers.drawParallelPins(nullptr, -1, "Triangle Vel Y", 17);
 }
 #endif
 

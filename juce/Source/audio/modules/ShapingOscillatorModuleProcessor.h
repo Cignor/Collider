@@ -39,6 +39,7 @@ public:
     void drawIoPins(const NodePinHelpers& helpers) override;
     juce::String getAudioInputLabel(int channel) const override;
     juce::String getAudioOutputLabel(int channel) const override;
+    bool usesCustomPinLayout() const override { return true; }
 #endif
 
     bool getParamRouting(const juce::String& paramId, int& outBusIndex, int& outChannelIndexInBus) const override;

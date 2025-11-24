@@ -36,7 +36,7 @@ void ClockDividerModuleProcessor::prepareToPlay(double sr, int samplesPerBlock)
     sampleRate = sr;
     clockCount = 0;
     div2State = div4State = div8State = false;
-    currentClockInterval = sampleRate; // Default to 1 second
+    currentClockInterval = 0.0; // CRITICAL FIX: Initialize to 0 to indicate no clock detected yet
     samplesSinceLastClock = 0;
     multiplierPhase[0] = multiplierPhase[1] = multiplierPhase[2] = 0.0;
     lastInputState = false;
@@ -130,6 +130,15 @@ void ClockDividerModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer,
             if (clockCount % 8 == 0) { div8State = !div8State; pulseSamplesRemaining[2] = (int) juce::jmax(1.0, currentClockInterval * 2.0 * pulseWidth); }
         }
         lastInputState = schmittStateClock;
+        
+        // CRITICAL FIX: If no clock detected for too long, reset multiplier phases
+        // This prevents multipliers from continuing to advance with stale interval data
+        const int timeoutSamples = (int)(sampleRate * 2.0); // 2 second timeout
+        if (currentClockInterval > 0 && samplesSinceLastClock > timeoutSamples)
+        {
+            currentClockInterval = 0.0;
+            multiplierPhase[0] = multiplierPhase[1] = multiplierPhase[2] = 0.0;
+        }
 
         // Gate/trigger shaping using pulse width
         div2Out[i] = pulseSamplesRemaining[0]-- > 0 ? 1.0f : 0.0f;
@@ -434,14 +443,12 @@ void ClockDividerModuleProcessor::drawParametersInNode(float itemWidth, const st
 
 void ClockDividerModuleProcessor::drawIoPins(const NodePinHelpers& helpers)
 {
-    helpers.drawAudioInputPin("Clock In", 0);
-    helpers.drawAudioInputPin("Reset", 1);
-    helpers.drawAudioOutputPin("/2", 0);
-    helpers.drawAudioOutputPin("/4", 1);
-    helpers.drawAudioOutputPin("/8", 2);
-    helpers.drawAudioOutputPin("x2", 3);
-    helpers.drawAudioOutputPin("x3", 4);
-    helpers.drawAudioOutputPin("x4", 5);
+    helpers.drawParallelPins("Clock In", 0, "/2", 0);
+    helpers.drawParallelPins("Reset", 1, "/4", 1);
+    helpers.drawParallelPins(nullptr, -1, "/8", 2);
+    helpers.drawParallelPins(nullptr, -1, "x2", 3);
+    helpers.drawParallelPins(nullptr, -1, "x3", 4);
+    helpers.drawParallelPins(nullptr, -1, "x4", 5);
 }
 #endif
 

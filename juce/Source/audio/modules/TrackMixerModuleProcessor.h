@@ -23,6 +23,7 @@ public:
     // Per-channel label used by cable inspector and tooltips
     juce::String getAudioInputLabel(int channel) const override;
     void drawIoPins(const NodePinHelpers& helpers) override;
+    bool usesCustomPinLayout() const override { return true; }
     bool getParamRouting(const juce::String& paramId, int& outBusIndex, int& outChannelIndexInBus) const override;
     
     // Dynamic pin reporting (fixes color issue for tracks beyond 8)
@@ -60,6 +61,31 @@ private:
     mutable std::atomic<int> lastActiveTracks { 2 };
     static constexpr float kNeutral = 0.5f;
     static constexpr float kDeadZone = 0.02f; // treat values within +/-2% around neutral as no-mod
+
+#if defined(PRESET_CREATOR_UI)
+    // --- Visualization Data (thread-safe, updated from audio thread) ---
+    struct VizData
+    {
+        static constexpr int waveformPoints = 256;
+        std::array<std::atomic<float>, waveformPoints> outputWaveformL;
+        std::array<std::atomic<float>, waveformPoints> outputWaveformR;
+        std::atomic<int> activeTracks { 2 };
+        std::atomic<float> outputLevelDbL { -60.0f };
+        std::atomic<float> outputLevelDbR { -60.0f };
+
+        VizData()
+        {
+            for (auto& v : outputWaveformL) v.store(0.0f);
+            for (auto& v : outputWaveformR) v.store(0.0f);
+        }
+    };
+    VizData vizData;
+
+    // Circular buffer for waveform capture (stereo output)
+    juce::AudioBuffer<float> vizOutputBuffer;
+    int vizWritePos { 0 };
+    static constexpr int vizBufferSize = 2048; // ~43ms at 48kHz
+#endif
 };
 
 

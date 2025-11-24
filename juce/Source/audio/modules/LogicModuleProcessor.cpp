@@ -410,11 +410,9 @@ void LogicModuleProcessor::drawParametersInNode(float itemWidth, const std::func
 
 void LogicModuleProcessor::drawIoPins(const NodePinHelpers& helpers)
 {
-    helpers.drawAudioInputPin("In A", 0);
-    helpers.drawAudioInputPin("In B", 1);
-    helpers.drawAudioOutputPin("AND", 0);
-    helpers.drawAudioOutputPin("OR", 1);
-    helpers.drawAudioOutputPin("XOR", 2);
-    helpers.drawAudioOutputPin("NOT A", 3);
+    helpers.drawParallelPins("In A", 0, "AND", 0);
+    helpers.drawParallelPins("In B", 1, "OR", 1);
+    helpers.drawParallelPins(nullptr, -1, "XOR", 2);
+    helpers.drawParallelPins(nullptr, -1, "NOT A", 3);
 }
 #endif

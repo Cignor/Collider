@@ -27,10 +27,8 @@ public:
 
     void drawIoPins(const NodePinHelpers& helpers) override
     {
-        helpers.drawAudioInputPin("In L", 0);
-        helpers.drawAudioInputPin("In R", 1);
-        helpers.drawAudioOutputPin("Out L", 0);
-        helpers.drawAudioOutputPin("Out R", 1);
+        helpers.drawParallelPins("In L", 0, "Out L", 0);
+        helpers.drawParallelPins("In R", 1, "Out R", 1);
     }
 
     juce::String getAudioInputLabel(int channel) const override

@@ -121,13 +121,19 @@ void ScopeModuleProcessor::drawParametersInNode (float itemWidth, const std::fun
     themeText("Scope Settings", theme.modules.scope_section_header);
     ImGui::Spacing();
     
+    const bool isSecondsModulated = isParamModulated("monitorSeconds");
+    if (isSecondsModulated) ImGui::BeginDisabled();
     if (ImGui::SliderFloat ("Seconds", &seconds, 0.5f, 20.0f, "%.1f s"))
     {
-        if (auto* p = ap.getParameter ("monitorSeconds"))
-            p->setValueNotifyingHost (ap.getParameterRange("monitorSeconds").convertTo0to1 (seconds));
+        if (!isSecondsModulated)
+        {
+            if (auto* p = ap.getParameter ("monitorSeconds"))
+                p->setValueNotifyingHost (ap.getParameterRange("monitorSeconds").convertTo0to1 (seconds));
+        }
     }
-    if (ImGui::IsItemDeactivatedAfterEdit()) { onModificationEnded(); }
-    adjustParamOnWheel (ap.getParameter ("monitorSeconds"), "monitorSeconds", seconds);
+    if (ImGui::IsItemDeactivatedAfterEdit() && !isSecondsModulated) { onModificationEnded(); }
+    if (!isSecondsModulated) adjustParamOnWheel (ap.getParameter ("monitorSeconds"), "monitorSeconds", seconds);
+    if (isSecondsModulated) ImGui::EndDisabled();
     ImGui::SameLine();
     HelpMarkerScope("Time window for waveform display (0.5-20 seconds)\nAlso affects min/max monitoring period");
     

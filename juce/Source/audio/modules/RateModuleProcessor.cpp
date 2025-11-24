@@ -293,8 +293,7 @@ void RateModuleProcessor::drawParametersInNode(float itemWidth, const std::funct
 
 void RateModuleProcessor::drawIoPins(const NodePinHelpers& helpers)
 {
-    helpers.drawAudioInputPin("Mod In", 0);
-    helpers.drawAudioOutputPin("Out", 0);
+    helpers.drawParallelPins("Mod In", 0, "Out", 0);
 }
 
 float RateModuleProcessor::getLastOutputValue() const

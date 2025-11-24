@@ -175,6 +175,20 @@ public:
                 if (auto* p = dynamic_cast<juce::AudioParameterChoice*>(ap.getParameter(paramIdType))) *p = ftype;
             }
         }
+        if (!isTypeModulated && ImGui::IsItemHovered())
+        {
+            const float wheel = ImGui::GetIO().MouseWheel;
+            if (wheel != 0.0f)
+            {
+                const int newType = juce::jlimit(0, 2, ftype + (wheel > 0.0f ? -1 : 1));
+                if (newType != ftype)
+                {
+                    ftype = newType;
+                    if (auto* p = dynamic_cast<juce::AudioParameterChoice*>(ap.getParameter(paramIdType))) *p = ftype;
+                    onModificationEnded();
+                }
+            }
+        }
         if (ImGui::IsItemDeactivatedAfterEdit()) { onModificationEnded(); }
         if (isTypeModulated) { ImGui::EndDisabled(); ImGui::SameLine(); ImGui::TextUnformatted("(mod)"); }
         ImGui::SameLine();
@@ -262,16 +276,14 @@ public:
 
     void drawIoPins(const NodePinHelpers& helpers) override
     {
-        helpers.drawAudioInputPin("In L", 0);
-        helpers.drawAudioInputPin("In R", 1);
-
-        helpers.drawAudioInputPin("Cutoff Mod", 2);
-        helpers.drawAudioInputPin("Resonance Mod", 3);
-        helpers.drawAudioInputPin("Type Mod", 4);
-
-        helpers.drawAudioOutputPin("Out L", 0);
-        helpers.drawAudioOutputPin("Out R", 1);
+        helpers.drawParallelPins("In L", 0, "Out L", 0);
+        helpers.drawParallelPins("In R", 1, "Out R", 1);
+        helpers.drawParallelPins("Cutoff Mod", 2, nullptr, -1);
+        helpers.drawParallelPins("Resonance Mod", 3, nullptr, -1);
+        helpers.drawParallelPins("Type Mod", 4, nullptr, -1);
     }
+
+    bool usesCustomPinLayout() const override { return true; }
 
     juce::String getAudioInputLabel(int channel) const override
     {

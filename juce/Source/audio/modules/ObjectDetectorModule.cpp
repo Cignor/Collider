@@ -602,7 +602,6 @@ void ObjectDetectorModule::drawParametersInNode(float itemWidth,
                                                 const std::function<bool(const juce::String& paramId)>& isParamModulated,
                                                 const std::function<void()>& onModificationEnded)
 {
-    juce::ignoreUnused(isParamModulated);
     const auto& theme = ThemeManager::getInstance().getCurrentTheme();
     ImGui::PushItemWidth(itemWidth);
     
@@ -675,20 +674,30 @@ void ObjectDetectorModule::drawParametersInNode(float itemWidth,
         }
     }
     
-    float confidence = confidenceThresholdParam ? confidenceThresholdParam->load() : 0.5f;
+    bool confidenceMod = isParamModulated("confidence");
+    const float confidenceDefault = confidenceThresholdParam ? confidenceThresholdParam->load() : 0.5f;
+    float confidence = confidenceMod ? getLiveParamValue("confidence", confidenceDefault) : confidenceDefault;
+    if (confidenceMod) ImGui::BeginDisabled();
     if (ImGui::SliderFloat("Confidence", &confidence, 0.0f, 1.0f, "%.2f"))
     {
-        if (auto* p = dynamic_cast<juce::AudioParameterFloat*>(apvts.getParameter("confidence")))
-            *p = confidence;
-        onModificationEnded();
+        if (!confidenceMod)
+        {
+            if (auto* p = dynamic_cast<juce::AudioParameterFloat*>(apvts.getParameter("confidence")))
+                *p = confidence;
+        }
     }
+    if (ImGui::IsItemDeactivatedAfterEdit() && !confidenceMod) onModificationEnded();
+    if (!confidenceMod) adjustParamOnWheel(apvts.getParameter("confidence"), "confidence", confidence);
+    if (confidenceMod) ImGui::EndDisabled();
     
     // Zoom controls
+    bool zoomMod = isParamModulated("zoomLevel");
     int level = zoomLevelParam ? (int) zoomLevelParam->load() : 1;
     level = juce::jlimit(0, 2, level);
     float buttonWidth = (itemWidth / 2.0f) - 4.0f;
     const bool atMin = (level <= 0);
     const bool atMax = (level >= 2);
+    if (zoomMod) ImGui::BeginDisabled();
     if (atMin) ImGui::BeginDisabled();
     if (ImGui::Button("-", ImVec2(buttonWidth, 0)))
     {
@@ -708,6 +717,22 @@ void ObjectDetectorModule::drawParametersInNode(float itemWidth,
         onModificationEnded();
     }
     if (atMax) ImGui::EndDisabled();
+    // Scroll-edit for zoom level
+    if (!zoomMod && ImGui::IsItemHovered())
+    {
+        const float wheel = ImGui::GetIO().MouseWheel;
+        if (wheel != 0.0f)
+        {
+            const int newLevel = juce::jlimit(0, 2, level + (wheel > 0.0f ? 1 : -1));
+            if (newLevel != level)
+            {
+                if (auto* p = apvts.getParameter("zoomLevel"))
+                    p->setValueNotifyingHost((float)newLevel / 2.0f);
+                onModificationEnded();
+            }
+        }
+    }
+    if (zoomMod) ImGui::EndDisabled();
     
     if (modelLoaded)
     {

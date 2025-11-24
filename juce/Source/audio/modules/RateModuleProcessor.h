@@ -23,6 +23,7 @@ public:
 
     float getLastOutputValue() const;
     void drawIoPins(const NodePinHelpers& helpers) override;
+    bool usesCustomPinLayout() const override { return true; }
     bool getParamRouting(const juce::String& paramId, int& outBusIndex, int& outChannelIndexInBus) const override;
 
 #if defined(PRESET_CREATOR_UI)

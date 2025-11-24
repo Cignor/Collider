@@ -563,8 +563,43 @@ void MidiLoggerModuleProcessor::drawParametersInNode(float /*itemWidth*/, const 
     ImGui::Text("Playhead: %.2f beats | %d tracks", 
                 samplesPerBeat > 0 ? playheadPositionSamples / samplesPerBeat : 0.0, 
                 (int)tracks.size());
+    ImGui::PopID();
+}
+
+void MidiLoggerModuleProcessor::drawIoPins(const NodePinHelpers& helpers)
+{
+    const int existingTracks = (int)tracks.size();
+    const int numInputTracks = existingTracks + 1;
+
+    for (int trackIndex = 0; trackIndex < numInputTracks; ++trackIndex)
+    {
+        const bool hasOutputs = trackIndex < existingTracks;
+        const int trackNumber = trackIndex + 1;
+
+        auto drawRow = [&](const char* labelPrefix, int channelOffset)
+        {
+            const int channel = trackIndex * 3 + channelOffset;
+            juce::String inLabel = juce::String(labelPrefix) + " " + juce::String(trackNumber);
+            juce::String outLabel = inLabel;
+
+            helpers.drawParallelPins(
+                inLabel.toRawUTF8(),
+                channel,
+                hasOutputs ? outLabel.toRawUTF8() : nullptr,
+                hasOutputs ? channel : -1);
+        };
+
+        drawRow("Gate", 0);
+        drawRow("Pitch", 1);
+        drawRow("Velo", 2);
+    }
 }
 #endif
+
+bool MidiLoggerModuleProcessor::usesCustomPinLayout() const
+{
+    return true;
+}
 
 // --- MidiTrack Method Implementations ---
 

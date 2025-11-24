@@ -460,18 +460,15 @@ void WaveshaperModuleProcessor::drawParametersInNode(float itemWidth, const std:
 
 void WaveshaperModuleProcessor::drawIoPins(const NodePinHelpers& helpers)
 {
-    helpers.drawAudioInputPin("In L", 0);
-    helpers.drawAudioInputPin("In R", 1);
+    helpers.drawParallelPins("In L", 0, "Out L", 0);
+    helpers.drawParallelPins("In R", 1, "Out R", 1);
 
     // CORRECTED MODULATION PINS - Use absolute channel index
     int busIdx, chanInBus;
     if (getParamRouting("drive", busIdx, chanInBus))
-        helpers.drawAudioInputPin("Drive Mod", getChannelIndexInProcessBlockBuffer(true, busIdx, chanInBus));
+        helpers.drawParallelPins("Drive Mod", getChannelIndexInProcessBlockBuffer(true, busIdx, chanInBus), nullptr, -1);
     if (getParamRouting("type", busIdx, chanInBus))
-        helpers.drawAudioInputPin("Type Mod", getChannelIndexInProcessBlockBuffer(true, busIdx, chanInBus));
-
-    helpers.drawAudioOutputPin("Out L", 0);
-    helpers.drawAudioOutputPin("Out R", 1);
+        helpers.drawParallelPins("Type Mod", getChannelIndexInProcessBlockBuffer(true, busIdx, chanInBus), nullptr, -1);
 }
 #endif
 

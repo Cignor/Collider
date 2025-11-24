@@ -370,16 +370,20 @@ void FrequencyGraphModuleProcessor::drawParametersInNode(float itemWidth, const 
             *p = decay;
         }
     }
+    if (auto* p = ap.getParameter(FrequencyGraphModuleProcessor::paramIdDecay))
+        ModuleProcessor::adjustParamOnWheel(p, FrequencyGraphModuleProcessor::paramIdDecay, decay);
     if (ImGui::IsItemDeactivatedAfterEdit()) onModificationEnded();
 
-    auto drawThresholdSlider = [&](const char* label, std::atomic<float>* param, const char* paramId) {
-        float val = param->load();
-        if (ImGui::SliderFloat(label, &val, -96.0f, 0.0f, "%.1f dB")) {
+    auto drawThresholdSlider = [&](const char* label, std::atomic<float>* paramValue, const char* paramId)
+    {
+        float val = paramValue->load();
+        if (ImGui::SliderFloat(label, &val, -96.0f, 0.0f, "%.1f dB"))
+        {
             if (auto* p = dynamic_cast<juce::AudioParameterFloat*>(ap.getParameter(paramId)))
-            {
                 *p = val;
-            }
         }
+        if (auto* p = ap.getParameter(paramId))
+            ModuleProcessor::adjustParamOnWheel(p, paramId, val);
         if (ImGui::IsItemDeactivatedAfterEdit()) onModificationEnded();
     };
 

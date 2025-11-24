@@ -659,6 +659,21 @@ void SAndHModuleProcessor::drawParametersInNode(float itemWidth, const std::func
         if (!edgeMod)
             if (auto* p = dynamic_cast<juce::AudioParameterChoice*>(ap.getParameter("edge")))
                 *p = edgeDisplay;
+    if (!edgeMod && ImGui::IsItemHovered())
+    {
+        const float wheel = ImGui::GetIO().MouseWheel;
+        if (wheel != 0.0f)
+        {
+            const int newEdge = juce::jlimit(0, 2, edgeDisplay + (wheel > 0.0f ? -1 : 1));
+            if (newEdge != edgeDisplay)
+            {
+                edgeDisplay = newEdge;
+                if (auto* p = dynamic_cast<juce::AudioParameterChoice*>(ap.getParameter("edge")))
+                    *p = edgeDisplay;
+                onModificationEnded();
+            }
+        }
+    }
     if (ImGui::IsItemDeactivatedAfterEdit()) { onModificationEnded(); }
     if (edgeMod) { ImGui::EndDisabled(); ImGui::SameLine(); ImGui::TextUnformatted("(mod)"); }
 

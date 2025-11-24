@@ -674,7 +674,6 @@ void ColorTrackerModule::drawParametersInNode(float itemWidth,
                                               const std::function<bool(const juce::String& paramId)>& isParamModulated,
                                               const std::function<void()>& onModificationEnded)
 {
-    juce::ignoreUnused(isParamModulated);
     const auto& theme = ThemeManager::getInstance().getCurrentTheme();
     ImGui::PushItemWidth(itemWidth);
     
@@ -720,14 +719,18 @@ void ColorTrackerModule::drawParametersInNode(float itemWidth,
         isColorPickerActive.store(true);
     }
 
+    bool numAutoColorsMod = isParamModulated("numAutoColors");
     int k = numAutoColorsParam ? numAutoColorsParam->get() : 12;
+    if (numAutoColorsMod) ImGui::BeginDisabled();
     ImGui::PushItemWidth(itemWidth - 60.0f); // Make space for button
     if (ImGui::SliderInt("##numautocolors", &k, 2, 24, "Auto-Track %d Colors"))
     {
-        if (numAutoColorsParam) *numAutoColorsParam = k;
+        if (!numAutoColorsMod && numAutoColorsParam) *numAutoColorsParam = k;
         onModificationEnded();
     }
+    if (!numAutoColorsMod) adjustParamOnWheel(apvts.getParameter("numAutoColors"), "numAutoColors", (float)k);
     ImGui::PopItemWidth();
+    if (numAutoColorsMod) ImGui::EndDisabled();
     ImGui::SameLine();
     if (ImGui::Button("Go", ImVec2(50.0f, 0)))
     {
@@ -771,17 +774,20 @@ void ColorTrackerModule::drawParametersInNode(float itemWidth,
 
     // Zoom controls (-/+) like PoseEstimator
     {
+        bool zoomMod = isParamModulated("zoomLevel");
         int level = zoomLevelParam ? (int) zoomLevelParam->load() : 1;
         level = juce::jlimit(0, 2, level);
         float buttonWidth = (itemWidth / 2.0f) - 4.0f;
         const bool atMin = (level <= 0);
         const bool atMax = (level >= 2);
+        if (zoomMod) ImGui::BeginDisabled();
         if (atMin) ImGui::BeginDisabled();
         if (ImGui::Button("-", ImVec2(buttonWidth, 0)))
         {
             int newLevel = juce::jmax(0, level - 1);
             if (auto* p = apvts.getParameter("zoomLevel"))
                 p->setValueNotifyingHost((float)newLevel / 2.0f);
+            onModificationEnded();
         }
         if (atMin) ImGui::EndDisabled();
         ImGui::SameLine();
@@ -791,8 +797,25 @@ void ColorTrackerModule::drawParametersInNode(float itemWidth,
             int newLevel = juce::jmin(2, level + 1);
             if (auto* p = apvts.getParameter("zoomLevel"))
                 p->setValueNotifyingHost((float)newLevel / 2.0f);
+            onModificationEnded();
         }
         if (atMax) ImGui::EndDisabled();
+        // Scroll-edit for zoom level
+        if (!zoomMod && ImGui::IsItemHovered())
+        {
+            const float wheel = ImGui::GetIO().MouseWheel;
+            if (wheel != 0.0f)
+            {
+                const int newLevel = juce::jlimit(0, 2, level + (wheel > 0.0f ? 1 : -1));
+                if (newLevel != level)
+                {
+                    if (auto* p = apvts.getParameter("zoomLevel"))
+                        p->setValueNotifyingHost((float)newLevel / 2.0f);
+                    onModificationEnded();
+                }
+            }
+        }
+        if (zoomMod) ImGui::EndDisabled();
     }
 
     // Render tracked color list with swatch, tolerance, and remove

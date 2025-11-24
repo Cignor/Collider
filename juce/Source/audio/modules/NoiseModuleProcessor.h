@@ -47,6 +47,8 @@ public:
     
     // --- Parameter Modulation Routing ---
     bool getParamRouting(const juce::String& paramId, int& outBusIndex, int& outChannelIndexInBus) const override;
+    bool usesCustomPinLayout() const override { return true; }
+    ImVec2 getCustomNodeSize() const override { return ImVec2(260.0f, 0.0f); }
 
 #if defined(PRESET_CREATOR_UI)
     // --- UI Drawing and Pin Definitions ---

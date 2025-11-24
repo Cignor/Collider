@@ -820,12 +820,14 @@ void VideoFileLoaderModule::drawParametersInNode(float itemWidth,
     if (sync) ImGui::EndDisabled();
 
     // Zoom buttons (+/-) across 3 levels
+    bool zoomModulated = isParamModulated("zoomLevel");
     int level = zoomLevelParam ? (int) zoomLevelParam->load() : 1;
     level = juce::jlimit(0, 2, level);
     float buttonWidth = (itemWidth / 2.0f) - 4.0f;
     const bool atMin = (level <= 0);
     const bool atMax = (level >= 2);
 
+    if (zoomModulated) ImGui::BeginDisabled();
     if (atMin) ImGui::BeginDisabled();
     if (ImGui::Button("-", ImVec2(buttonWidth, 0)))
     {
@@ -847,6 +849,22 @@ void VideoFileLoaderModule::drawParametersInNode(float itemWidth,
         onModificationEnded();
     }
     if (atMax) ImGui::EndDisabled();
+    // Scroll-edit for zoom level
+    if (!zoomModulated && ImGui::IsItemHovered())
+    {
+        const float wheel = ImGui::GetIO().MouseWheel;
+        if (wheel != 0.0f)
+        {
+            const int newLevel = juce::jlimit(0, 2, level + (wheel > 0.0f ? 1 : -1));
+            if (newLevel != level)
+            {
+                if (auto* p = apvts.getParameter("zoomLevel"))
+                    p->setValueNotifyingHost((float)newLevel / 2.0f);
+                onModificationEnded();
+            }
+        }
+    }
+    if (zoomModulated) ImGui::EndDisabled();
     
     const juce::String sourceIdText = juce::String::formatted("Source ID: %d", (int)getLogicalId());
     ThemeText(sourceIdText.toRawUTF8(), theme.text.section_header);
@@ -866,6 +884,8 @@ void VideoFileLoaderModule::drawParametersInNode(float itemWidth,
     }
 
     // ADD ENGINE SELECTION COMBO BOX
+    bool engineModulated = isParamModulated("engine");
+    if (engineModulated) ImGui::BeginDisabled();
     int engineIdx = engineParam ? engineParam->getIndex() : 1;
     const char* items[] = { "RubberBand (High Quality)", "Naive (Low CPU)" };
     if (ImGui::Combo("Engine", &engineIdx, items, 2))
@@ -873,35 +893,78 @@ void VideoFileLoaderModule::drawParametersInNode(float itemWidth,
         if (engineParam) *engineParam = engineIdx;
         onModificationEnded();
     }
+    // Scroll-edit for engine combo
+    if (!engineModulated && ImGui::IsItemHovered())
+    {
+        const float wheel = ImGui::GetIO().MouseWheel;
+        if (wheel != 0.0f)
+        {
+            const int newIdx = juce::jlimit(0, 1, engineIdx + (wheel > 0.0f ? -1 : 1));
+            if (newIdx != engineIdx && engineParam)
+            {
+                *engineParam = newIdx;
+                onModificationEnded();
+            }
+        }
+    }
+    if (engineModulated) ImGui::EndDisabled();
 
     // --- Playback speed (slider only) ---
-    float spd = speedParam ? speedParam->load() : 1.0f;
-        if (ImGui::SliderFloat("Speed", &spd, 0.25f, 4.0f, "%.2fx"))
-        {
-            if (auto* p = dynamic_cast<juce::AudioParameterFloat*>(apvts.getParameter("speed"))) *p = spd;
-        }
-        if (ImGui::IsItemDeactivatedAfterEdit()) onModificationEnded();
-
-    // --- Trim / Timeline --- (always visible, never greyed)
+    bool speedModulated = isParamModulated("speed");
+    const float speedFallback = speedParam ? speedParam->load() : 1.0f;
+    float spd = speedModulated ? getLiveParamValue("speed", speedFallback) : speedFallback;
+    if (speedModulated) ImGui::BeginDisabled();
+    if (ImGui::SliderFloat("Speed", &spd, 0.25f, 4.0f, "%.2fx"))
     {
+        if (!speedModulated)
+        {
+            if (auto* p = dynamic_cast<juce::AudioParameterFloat*>(apvts.getParameter("speed")))
+                *p = spd;
+        }
+    }
+    if (ImGui::IsItemDeactivatedAfterEdit() && !speedModulated) onModificationEnded();
+    if (!speedModulated) adjustParamOnWheel(apvts.getParameter("speed"), "speed", spd);
+    if (speedModulated) ImGui::EndDisabled();
+
+    // --- Trim / Timeline ---
+    {
+        bool inModulated = isParamModulated("in");
+        bool outModulated = isParamModulated("out");
         const int tf = juce::jmax(1, totalFrames.load());
-        float inN = inNormParam ? inNormParam->load() : 0.0f;
-        float outN = outNormParam ? outNormParam->load() : 1.0f;
+        float inN = inModulated ? getLiveParamValue("in", inNormParam ? inNormParam->load() : 0.0f)
+                                : (inNormParam ? inNormParam->load() : 0.0f);
+        float outN = outModulated ? getLiveParamValue("out", outNormParam ? outNormParam->load() : 1.0f)
+                                  : (outNormParam ? outNormParam->load() : 1.0f);
         
+        if (inModulated) ImGui::BeginDisabled();
         if (ImGui::SliderFloat("Start", &inN, 0.0f, 1.0f, "%.3f"))
         {
-            inN = juce::jlimit(0.0f, outN - 0.01f, inN);
-            if (auto* p = dynamic_cast<juce::AudioParameterFloat*>(apvts.getParameter("in"))) *p = inN;
-            pendingSeekNormalized.store(inN); // Use unified seek
+            if (!inModulated)
+            {
+                inN = juce::jlimit(0.0f, outN - 0.01f, inN);
+                if (auto* p = dynamic_cast<juce::AudioParameterFloat*>(apvts.getParameter("in")))
+                    *p = inN;
+                pendingSeekNormalized.store(inN); // Use unified seek
+            }
         }
-        if (ImGui::IsItemDeactivatedAfterEdit()) onModificationEnded();
+        if (ImGui::IsItemDeactivatedAfterEdit() && !inModulated) onModificationEnded();
+        if (!inModulated) adjustParamOnWheel(apvts.getParameter("in"), "in", inN);
+        if (inModulated) ImGui::EndDisabled();
 
+        if (outModulated) ImGui::BeginDisabled();
         if (ImGui::SliderFloat("End", &outN, 0.0f, 1.0f, "%.3f"))
         {
-            outN = juce::jlimit(inN + 0.01f, 1.0f, outN);
-            if (auto* p = dynamic_cast<juce::AudioParameterFloat*>(apvts.getParameter("out"))) *p = outN;
-            onModificationEnded();
+            if (!outModulated)
+            {
+                outN = juce::jlimit(inN + 0.01f, 1.0f, outN);
+                if (auto* p = dynamic_cast<juce::AudioParameterFloat*>(apvts.getParameter("out")))
+                    *p = outN;
+                onModificationEnded();
+            }
         }
+        if (ImGui::IsItemDeactivatedAfterEdit() && !outModulated) onModificationEnded();
+        if (!outModulated) adjustParamOnWheel(apvts.getParameter("out"), "out", outN);
+        if (outModulated) ImGui::EndDisabled();
 
         float pos = (tf > 1) ? ((float)lastPosFrame.load() / (float)tf) : 0.0f;
         // Clamp position UI between in/out
@@ -909,11 +972,18 @@ void VideoFileLoaderModule::drawParametersInNode(float itemWidth,
         float maxPos = juce::jlimit(minPos, 1.0f, outN);
         pos = juce::jlimit(minPos, maxPos, pos);
 
-        if (ImGui::SliderFloat("Position", &pos, 0.0f, 1.0f, "%.3f"))
+        // Position slider is read-only (shows current position, doesn't set parameter)
+        ImGui::SliderFloat("Position", &pos, 0.0f, 1.0f, "%.3f");
+        if (ImGui::IsItemHovered())
         {
-            pendingSeekNormalized.store(pos); // Use unified seek
+            const float wheel = ImGui::GetIO().MouseWheel;
+            if (wheel != 0.0f)
+            {
+                const float step = 0.01f;
+                const float newPos = juce::jlimit(minPos, maxPos, pos + (wheel > 0.0f ? step : -step));
+                pendingSeekNormalized.store(newPos);
+            }
         }
-        if (ImGui::IsItemDeactivatedAfterEdit()) onModificationEnded();
     }
     
     ImGui::PopItemWidth();

@@ -62,6 +62,8 @@ public:
 
     // Parameter bus contract implementation (must be available in Collider too)
     bool getParamRouting(const juce::String& paramId, int& outBusIndex, int& outChannelIndexInBus) const override;
+    bool usesCustomPinLayout() const override { return true; }
+    ImVec2 getCustomNodeSize() const override { return ImVec2(360.0f, 0.0f); }
 
     juce::String getAudioInputLabel(int channel) const override
     {

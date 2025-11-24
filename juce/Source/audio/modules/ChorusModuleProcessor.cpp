@@ -516,22 +516,45 @@ void ChorusModuleProcessor::drawParametersInNode(float itemWidth, const std::fun
 
 void ChorusModuleProcessor::drawIoPins(const NodePinHelpers& helpers)
 {
-    // Use dynamic pins - this preserves the exact same modulation system
-    // The channel indices match getParamRouting() exactly
     auto dynamicInputs = getDynamicInputPins();
     auto dynamicOutputs = getDynamicOutputPins();
 
-    // Draw inputs using dynamic pin system
-    for (const auto& pin : dynamicInputs)
+    const auto findInput = [&](const char* label) -> const DynamicPinInfo*
     {
-        helpers.drawAudioInputPin(pin.name.toRawUTF8(), pin.channel);
-    }
+        if (label == nullptr)
+            return nullptr;
+        for (const auto& pin : dynamicInputs)
+            if (pin.name == label)
+                return &pin;
+        return nullptr;
+    };
 
-    // Draw outputs using dynamic pin system
-    for (const auto& pin : dynamicOutputs)
+    const auto findOutput = [&](const char* label) -> const DynamicPinInfo*
     {
-        helpers.drawAudioOutputPin(pin.name.toRawUTF8(), pin.channel);
-    }
+        if (label == nullptr)
+            return nullptr;
+        for (const auto& pin : dynamicOutputs)
+            if (pin.name == label)
+                return &pin;
+        return nullptr;
+    };
+
+    const auto emitRow = [&](const char* inLabel, const char* outLabel)
+    {
+        const auto* inPin = findInput(inLabel);
+        const auto* outPin = findOutput(outLabel);
+        const char* resolvedInLabel = inPin ? inPin->name.toRawUTF8() : nullptr;
+        const int resolvedInChannel = inPin ? inPin->channel : -1;
+        const char* resolvedOutLabel = outPin ? outPin->name.toRawUTF8() : nullptr;
+        const int resolvedOutChannel = outPin ? outPin->channel : -1;
+        helpers.drawParallelPins(resolvedInLabel, resolvedInChannel, resolvedOutLabel, resolvedOutChannel);
+    };
+
+    emitRow("In L", "Out L");
+    emitRow("In R", "Out R");
+    emitRow("Rate Mod", nullptr);
+    emitRow("Depth Mod", nullptr);
+    emitRow("Mix Mod", nullptr);
 }
 #endif
 

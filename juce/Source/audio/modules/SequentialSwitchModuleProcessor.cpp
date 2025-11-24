@@ -513,17 +513,11 @@ void SequentialSwitchModuleProcessor::drawParametersInNode(
 void SequentialSwitchModuleProcessor::drawIoPins(const NodePinHelpers& helpers)
 {
     // Draw input pins (left side)
-    helpers.drawAudioInputPin("Gate In", 0);
-    helpers.drawAudioInputPin("Thresh 1 CV", 1);
-    helpers.drawAudioInputPin("Thresh 2 CV", 2);
-    helpers.drawAudioInputPin("Thresh 3 CV", 3);
-    helpers.drawAudioInputPin("Thresh 4 CV", 4);
-
-    // Draw output pins (right side)
-    helpers.drawAudioOutputPin("Out 1", 0);
-    helpers.drawAudioOutputPin("Out 2", 1);
-    helpers.drawAudioOutputPin("Out 3", 2);
-    helpers.drawAudioOutputPin("Out 4", 3);
+    helpers.drawParallelPins("Gate In", 0, "Out 1", 0);
+    helpers.drawParallelPins("Thresh 1 CV", 1, "Out 2", 1);
+    helpers.drawParallelPins("Thresh 2 CV", 2, "Out 3", 2);
+    helpers.drawParallelPins("Thresh 3 CV", 3, "Out 4", 3);
+    helpers.drawParallelPins("Thresh 4 CV", 4, nullptr, -1);
 }
 
 juce::String SequentialSwitchModuleProcessor::getAudioInputLabel(int channel) const

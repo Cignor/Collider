@@ -366,10 +366,9 @@ void MapRangeModuleProcessor::drawParametersInNode(float itemWidth, const std::f
 
 void MapRangeModuleProcessor::drawIoPins(const NodePinHelpers& helpers)
 {
-    helpers.drawAudioInputPin("Input", 0);
-    helpers.drawAudioOutputPin("Norm Out", 0);
-    helpers.drawAudioOutputPin("Raw Out", 1);
-    helpers.drawAudioOutputPin("CV Out", 2);
+    helpers.drawParallelPins("Input", 0, "Norm Out", 0);
+    helpers.drawParallelPins(nullptr, -1, "Raw Out", 1);
+    helpers.drawParallelPins(nullptr, -1, "CV Out", 2);
 }
 #endif
 

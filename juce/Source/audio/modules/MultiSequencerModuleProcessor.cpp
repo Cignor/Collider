@@ -283,15 +283,20 @@ void MultiSequencerModuleProcessor::processBlock (juce::AudioBuffer<float>& buff
         else
         {
             // FREE-RUNNING MODE: Use the internal phase clock
-            const double phaseInc = (sampleRate > 0.0 ? (double) rate / sampleRate : 0.0);
-            phase += phaseInc;
-            if (phase >= 1.0)
+            // CRITICAL FIX: Only advance in free-running mode if transport is playing
+            if (m_currentTransport.isPlaying)
             {
-                phase -= 1.0;
-                const int next = (currentStep.load() + 1) % juce::jlimit (1, MAX_STEPS, activeSteps);
-                currentStep.store(next);
-                stepAdvanced = true;
+                const double phaseInc = (sampleRate > 0.0 ? (double) rate / sampleRate : 0.0);
+                phase += phaseInc;
+                if (phase >= 1.0)
+                {
+                    phase -= 1.0;
+                    const int next = (currentStep.load() + 1) % juce::jlimit (1, MAX_STEPS, activeSteps);
+                    currentStep.store(next);
+                    stepAdvanced = true;
+                }
             }
+            // If transport is stopped, phase does not advance
         }
         lastStepsLive = activeSteps;
 
@@ -332,8 +337,9 @@ void MultiSequencerModuleProcessor::processBlock (juce::AudioBuffer<float>& buff
         gateFadeProgress = juce::jmin(1.0f, gateFadeProgress + fadeIncrement);
         const float fadeMultiplier = isGateOn ? gateFadeProgress : (1.0f - gateFadeProgress);
         
-        const float gateBinaryValue = (phase < gateLen) && isGateOn ? fadeMultiplier : 0.0f;
-        const float gateNuancedValue = (phase < gateLen) && isGateOn ? (stepGateLevel * fadeMultiplier) : 0.0f;
+        // CRITICAL FIX: Silence gates when transport is stopped
+        const float gateBinaryValue = (m_currentTransport.isPlaying && (phase < gateLen) && isGateOn) ? fadeMultiplier : 0.0f;
+        const float gateNuancedValue = (m_currentTransport.isPlaying && (phase < gateLen) && isGateOn) ? (stepGateLevel * fadeMultiplier) : 0.0f;
         previousGateOn = isGateOn;
         
         bool trigActive = (stepTrigParams[currentStepIndex]) ? (bool)(*stepTrigParams[currentStepIndex]) : false;
@@ -357,9 +363,20 @@ void MultiSequencerModuleProcessor::processBlock (juce::AudioBuffer<float>& buff
         if (gateNuancedOut) gateNuancedOut[i] = gateNuancedValue;
         if (velocityOut) velocityOut[i] = 0.85f;
         if (modOut) modOut[i] = 0.0f;
+        // CRITICAL FIX: Silence triggers when transport is stopped
         if (trigOut) {
-            trigOut[i] = (pendingTriggerSamples > 0) ? 1.0f : 0.0f;
-            if (pendingTriggerSamples > 0) --pendingTriggerSamples;
+            float pulse = 0.0f;
+            if (m_currentTransport.isPlaying && pendingTriggerSamples > 0)
+            {
+                pulse = 1.0f;
+                --pendingTriggerSamples;
+            }
+            else
+            {
+                // Clear any pending triggers when transport stops
+                pendingTriggerSamples = 0;
+            }
+            trigOut[i] = pulse;
         }
     }
     setLiveParamValue("rate_live", lastRateLive);
@@ -386,8 +403,9 @@ void MultiSequencerModuleProcessor::processBlock (juce::AudioBuffer<float>& buff
         }
 
         // --- THE FIX IS HERE ---
-        // The trigger is only high if it's enabled AND the playhead is on this step.
-        const float trigOutputValue = (liveTrig && step == currentStep.load()) ? 1.0f : 0.0f;
+        // The trigger is only high if it's enabled AND the playhead is on this step AND transport is playing.
+        // CRITICAL FIX: Silence triggers when transport is stopped
+        const float trigOutputValue = (m_currentTransport.isPlaying && liveTrig && step == currentStep.load()) ? 1.0f : 0.0f;
 
         float gateLevel = stepGateParams[step] ? stepGateParams[step]->load() : 0.8f;
         const int gateModChannel = 38 + step;
@@ -395,6 +413,8 @@ void MultiSequencerModuleProcessor::processBlock (juce::AudioBuffer<float>& buff
              const float cv = inputBus.getReadPointer(gateModChannel)[0];
              gateLevel = juce::jlimit(0.0f, 1.0f, gateLevel + (cv - 0.5f));
         }
+        // CRITICAL FIX: Silence gates when transport is stopped
+        const float finalGateLevel = m_currentTransport.isPlaying ? gateLevel : 0.0f;
 
         int pitchOutChannel = 7 + step * 3 + 0;
         int gateOutChannel  = 7 + step * 3 + 1;
@@ -405,7 +425,7 @@ void MultiSequencerModuleProcessor::processBlock (juce::AudioBuffer<float>& buff
             juce::FloatVectorOperations::fill(outBus.getWritePointer(pitchOutChannel), liveValue, numSamples);
             
         if (gateOutChannel < outBus.getNumChannels())
-            juce::FloatVectorOperations::fill(outBus.getWritePointer(gateOutChannel), gateLevel, numSamples);
+            juce::FloatVectorOperations::fill(outBus.getWritePointer(gateOutChannel), finalGateLevel, numSamples);
 
         if (trigOutChannel < outBus.getNumChannels())
             juce::FloatVectorOperations::fill(outBus.getWritePointer(trigOutChannel), trigOutputValue, numSamples);
@@ -540,27 +560,45 @@ void MultiSequencerModuleProcessor::drawParametersInNode (float itemWidth, const
     const float line_y = gate_sliders_p0.y + (1.0f - threshold_value) * slider_height;
     ImGui::GetWindowDrawList()->AddLine(ImVec2(gate_sliders_p0.x, line_y), ImVec2(gate_sliders_p0.x + row_width, line_y), thresholdColor, 2.0f);
     
-    // Apply spacing for trigger checkbox grid (MOVED HERE - directly after gate sliders!)
+    // Trigger checkbox grid: align columns with the gate sliders above
+    const ImVec2 trigRowStart = ImGui::GetCursorScreenPos();
+    const float checkboxSize = ImGui::GetFrameHeight();
+    const float totalRowWidth = (sliderW * shown) + (shown > 0 ? spacing * (shown - 1) : 0.0f);
+
     ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(spacing, spacing));
-    
-    // CRITICAL FIX: Use BeginGroup() to constrain the grid
     ImGui::BeginGroup();
-    for (int i = 0; i < shown; ++i) {
-        if (i > 0) ImGui::SameLine();
+    for (int i = 0; i < shown; ++i)
+    {
+        const float columnX = gate_sliders_p0.x + i * (sliderW + spacing);
+
         bool baseTrig = (stepTrigParams.size() > (size_t)i && stepTrigParams[i]) ? (bool)(*stepTrigParams[i]) : false;
         const auto trigModId = "step" + juce::String(i + 1) + "_trig_mod";
         const bool trigIsModulated = isParamInputConnected(trigModId);
         bool displayTrig = trigIsModulated ? getLiveParamValueFor(trigModId, "trig_live_" + juce::String(i + 1), baseTrig ? 1.0f : 0.0f) > 0.5f : baseTrig;
+
+        ImVec2 checkboxPos = ImVec2(columnX + (sliderW - checkboxSize) * 0.5f, trigRowStart.y);
+        ImGui::SetCursorScreenPos(checkboxPos);
+
         if (trigIsModulated) ImGui::BeginDisabled();
         ImGui::PushID(1000 + i);
-        if (ImGui::Checkbox("##trig", &displayTrig) && !trigIsModulated && stepTrigParams[i]) *stepTrigParams[i] = displayTrig;
-        if (ImGui::IsItemDeactivatedAfterEdit()) onModificationEnded();
+        if (ImGui::Checkbox("##trig", &displayTrig) && !trigIsModulated && stepTrigParams[i])
+        {
+            *stepTrigParams[i] = displayTrig;
+            onModificationEnded();
+        }
+        if (ImGui::IsItemHovered())
+        {
+            ImGui::BeginTooltip();
+            ImGui::TextUnformatted(("Step " + juce::String(i + 1) + " Trigger").toRawUTF8());
+            ImGui::EndTooltip();
+        }
         ImGui::PopID();
         if (trigIsModulated) ImGui::EndDisabled();
     }
-    ImGui::EndGroup();  // End checkboxes group
-    
-    ImGui::PopStyleVar(); // Pop ItemSpacing for trigger checkboxes
+    ImGui::SetCursorScreenPos(trigRowStart);
+    ImGui::Dummy(ImVec2(totalRowWidth, checkboxSize));
+    ImGui::EndGroup();
+    ImGui::PopStyleVar(); // restore spacing for subsequent controls
     
     ImGui::Text("Current Step: %d", currentStep.load() + 1);
     
@@ -797,4 +835,16 @@ std::optional<RhythmInfo> MultiSequencerModuleProcessor::getRhythmInfo() const
     }
     
     return info;
+}
+
+void MultiSequencerModuleProcessor::forceStop()
+{
+    // Reset sequencer to step 0 and phase to 0
+    currentStep.store(0);
+    phase = 0.0;
+    // Reset gate fade state
+    previousGateOn = false;
+    gateFadeProgress = 0.0f;
+    // Clear any pending trigger pulses
+    pendingTriggerSamples = 0;
 }

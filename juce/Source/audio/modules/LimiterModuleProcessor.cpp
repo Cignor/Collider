@@ -389,12 +389,10 @@ void LimiterModuleProcessor::drawParametersInNode(float itemWidth, const std::fu
 
 void LimiterModuleProcessor::drawIoPins(const NodePinHelpers& helpers)
 {
-    helpers.drawAudioInputPin("In L", 0);
-    helpers.drawAudioInputPin("In R", 1);
-    helpers.drawAudioInputPin("Thresh Mod", 2);
-    helpers.drawAudioInputPin("Release Mod", 3);
-    helpers.drawAudioOutputPin("Out L", 0);
-    helpers.drawAudioOutputPin("Out R", 1);
+    helpers.drawParallelPins("In L", 0, "Out L", 0);
+    helpers.drawParallelPins("In R", 1, "Out R", 1);
+    helpers.drawParallelPins("Thresh Mod", 2, nullptr, -1);
+    helpers.drawParallelPins("Release Mod", 3, nullptr, -1);
 }
 #endif
 

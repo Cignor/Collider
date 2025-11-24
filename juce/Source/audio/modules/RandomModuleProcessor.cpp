@@ -325,6 +325,21 @@ void RandomModuleProcessor::drawParametersInNode(float itemWidth, const std::fun
                 onModificationEnded();
             }
         }
+        if (!isGlobalDivisionActive && ImGui::IsItemHovered())
+        {
+            const float wheel = ImGui::GetIO().MouseWheel;
+            if (wheel != 0.0f)
+            {
+                const int newDiv = juce::jlimit(0, 8, division + (wheel > 0.0f ? -1 : 1));
+                if (newDiv != division)
+                {
+                    division = newDiv;
+                    if (auto* p = dynamic_cast<juce::AudioParameterChoice*>(ap.getParameter("rate_division")))
+                        *p = division;
+                    onModificationEnded();
+                }
+            }
+        }
         
         if (isGlobalDivisionActive)
         {
@@ -616,11 +631,11 @@ void RandomModuleProcessor::drawParametersInNode(float itemWidth, const std::fun
 
 void RandomModuleProcessor::drawIoPins(const NodePinHelpers& helpers)
 {
-    helpers.drawAudioOutputPin("Norm Out", 0);
-    helpers.drawAudioOutputPin("Raw Out", 1);
-    helpers.drawAudioOutputPin("CV Out", 2);
-    helpers.drawAudioOutputPin("Bool Out", 3);
-    helpers.drawAudioOutputPin("Trig Out", 4);
+    helpers.drawParallelPins(nullptr, -1, "Norm Out", 0);
+    helpers.drawParallelPins(nullptr, -1, "Raw Out", 1);
+    helpers.drawParallelPins(nullptr, -1, "CV Out", 2);
+    helpers.drawParallelPins(nullptr, -1, "Bool Out", 3);
+    helpers.drawParallelPins(nullptr, -1, "Trig Out", 4);
 }
 
 juce::String RandomModuleProcessor::getAudioInputLabel(int) const { return {}; }

@@ -130,45 +130,8 @@ public:
         {
             onModificationEnded();
         }
+        adjustParamOnWheel(ap.getParameter("value"), "value", currentValue);
         ImGui::PopItemWidth();
-
-        // New Time-Based, Exponential Mouse Wheel Logic
-        if (ImGui::IsItemHovered())
-        {
-            const float wheel = ImGui::GetIO().MouseWheel;
-            if (wheel != 0.0f)
-            {
-                const double currentTime = ImGui::GetTime();
-                const double timeDelta = currentTime - lastScrollTime;
-
-                // 1. If user paused for > 0.2s, reset momentum
-                if (timeDelta > 0.2)
-                {
-                    scrollMomentum = 1.0f;
-                }
-
-                // 2. Define the smallest step for precision
-                const float baseStep = 0.01f;
-                
-                // 3. Calculate the final step using the momentum
-                float finalStep = baseStep * scrollMomentum;
-
-                // 4. Update the value
-                float newValue = currentValue + (wheel > 0.0f ? finalStep : -finalStep);
-                
-                // Snap to the baseStep to keep numbers clean
-                newValue = std::round(newValue / baseStep) * baseStep;
-
-                // 5. Increase momentum for the *next* scroll event (exponential)
-                // This makes continuous scrolling accelerate.
-                scrollMomentum *= 1.08f;
-                scrollMomentum = std::min(scrollMomentum, 2000.0f); // Cap momentum to prevent runaway
-
-                // 6. Update the parameter and timestamp
-                *p = juce::jlimit(p->range.start, p->range.end, newValue);
-                lastScrollTime = currentTime;
-            }
-        }
         
         // CV Output Range Controls (compact layout)
         ImGui::Text("CV Out Range (0-1)");
@@ -182,12 +145,14 @@ public:
             *dynamic_cast<juce::AudioParameterFloat*>(ap.getParameter("cvMin")) = cvMin;
             onModificationEnded();
         }
+        adjustParamOnWheel(ap.getParameter("cvMin"), "cvMin", cvMin);
         ImGui::SameLine();
         if (ImGui::SliderFloat("##cv_max", &cvMax, 0.0f, 1.0f, "Max: %.2f"))
         {
             *dynamic_cast<juce::AudioParameterFloat*>(ap.getParameter("cvMax")) = cvMax;
             onModificationEnded();
         }
+        adjustParamOnWheel(ap.getParameter("cvMax"), "cvMax", cvMax);
         ImGui::PopItemWidth();
         ImGui::PopID();
     }
@@ -229,10 +194,6 @@ private:
     std::atomic<float>* valueParam { nullptr };
     std::atomic<float>* cvMinParam { nullptr };
     std::atomic<float>* cvMaxParam { nullptr };
-
-    // Add these two state variables for the new scroll logic
-    double lastScrollTime { 0.0 };
-    float scrollMomentum { 1.0f };
 
 #if defined(PRESET_CREATOR_UI)
     struct VizData

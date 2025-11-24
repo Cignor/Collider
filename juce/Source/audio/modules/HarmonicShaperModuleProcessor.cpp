@@ -808,16 +808,14 @@ void HarmonicShaperModuleProcessor::drawParametersInNode(float itemWidth, const 
 
 void HarmonicShaperModuleProcessor::drawIoPins(const NodePinHelpers& helpers)
 {
-    helpers.drawAudioInputPin("In L", 0);
-    helpers.drawAudioInputPin("In R", 1);
-    helpers.drawAudioInputPin("Freq Mod", 2);
-    helpers.drawAudioInputPin("Drive Mod", 3);
-    helpers.drawAudioInputPin("Gain Mod", 4);
-    helpers.drawAudioInputPin("Mix Mod", 5);
-    helpers.drawAudioInputPin("Character Mod", 6);
-    helpers.drawAudioInputPin("Smoothness Mod", 7);
-    helpers.drawAudioOutputPin("Out L", 0);
-    helpers.drawAudioOutputPin("Out R", 1);
+    helpers.drawParallelPins("In L", 0, "Out L", 0);
+    helpers.drawParallelPins("In R", 1, "Out R", 1);
+    helpers.drawParallelPins("Freq Mod", 2, nullptr, -1);
+    helpers.drawParallelPins("Drive Mod", 3, nullptr, -1);
+    helpers.drawParallelPins("Gain Mod", 4, nullptr, -1);
+    helpers.drawParallelPins("Mix Mod", 5, nullptr, -1);
+    helpers.drawParallelPins("Character Mod", 6, nullptr, -1);
+    helpers.drawParallelPins("Smoothness Mod", 7, nullptr, -1);
 }
 
 juce::String HarmonicShaperModuleProcessor::getAudioInputLabel(int channel) const

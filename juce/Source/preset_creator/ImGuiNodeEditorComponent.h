@@ -138,6 +138,7 @@ public:
     void handleInsertNodeOnSelectedLinks(const juce::String& nodeType);
     void insertNodeBetween(const juce::String& nodeType);
     void insertNodeBetween(const juce::String& nodeType, const PinID& srcPin, const PinID& dstPin, bool createUndoSnapshot = true);
+    void insertNodeAfterSelection(const juce::String& nodeType);
     void drawInsertNodeOnLinkPopup();
     struct LinkInfo;
     void drawLinkInspectorTooltip(const LinkInfo& link);

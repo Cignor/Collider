@@ -477,12 +477,8 @@ void MultiBandShaperModuleProcessor::drawParametersInNode(
 
 void MultiBandShaperModuleProcessor::drawIoPins(const NodePinHelpers& helpers)
 {
-    helpers.drawAudioInputPin("In L", 0);
-    helpers.drawAudioInputPin("In R", 1);
-    helpers.drawAudioOutputPin("Out L", 0);
-    helpers.drawAudioOutputPin("Out R", 1);
-    
-    ImGui::Spacing(); // Add a little space before mod inputs
+    helpers.drawParallelPins("In L", 0, "Out L", 0);
+    helpers.drawParallelPins("In R", 1, "Out R", 1);
 
     for (int i = 0; i < NUM_BANDS; ++i)
     {
@@ -490,7 +486,10 @@ void MultiBandShaperModuleProcessor::drawIoPins(const NodePinHelpers& helpers)
         int busIdx, chanInBus;
         if (getParamRouting(paramId, busIdx, chanInBus))
         {
-            helpers.drawAudioInputPin(("Drive " + juce::String(i + 1) + " Mod").toRawUTF8(), getChannelIndexInProcessBlockBuffer(true, busIdx, chanInBus));
+            helpers.drawParallelPins(("Drive " + juce::String(i + 1) + " Mod").toRawUTF8(),
+                                     getChannelIndexInProcessBlockBuffer(true, busIdx, chanInBus),
+                                     nullptr,
+                                     -1);
         }
     }
     
@@ -498,7 +497,10 @@ void MultiBandShaperModuleProcessor::drawIoPins(const NodePinHelpers& helpers)
     int busIdx, chanInBus;
     if (getParamRouting("outputGain", busIdx, chanInBus))
     {
-        helpers.drawAudioInputPin("Gain Mod", getChannelIndexInProcessBlockBuffer(true, busIdx, chanInBus));
+        helpers.drawParallelPins("Gain Mod",
+                                 getChannelIndexInProcessBlockBuffer(true, busIdx, chanInBus),
+                                 nullptr,
+                                 -1);
     }
 }
 #endif

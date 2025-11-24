@@ -405,26 +405,39 @@ void ContourDetectorModule::drawParametersInNode(float itemWidth,
         }
     #endif
 
-    float th = thresholdParam ? thresholdParam->load() : 128.0f;
+    bool thresholdMod = isParamModulated("threshold");
+    float th = thresholdMod ? getLiveParamValue("threshold", thresholdParam ? thresholdParam->load() : 128.0f)
+                            : (thresholdParam ? thresholdParam->load() : 128.0f);
+    if (thresholdMod) ImGui::BeginDisabled();
     if (ImGui::SliderFloat("Threshold", &th, 0.0f, 255.0f, "%.0f"))
     {
-        if (auto* p = dynamic_cast<juce::AudioParameterFloat*>(apvts.getParameter("threshold")))
-            *p = th;
-        onModificationEnded();
+        if (!thresholdMod)
+        {
+            if (auto* p = dynamic_cast<juce::AudioParameterFloat*>(apvts.getParameter("threshold")))
+                *p = th;
+        }
     }
+    if (ImGui::IsItemDeactivatedAfterEdit() && !thresholdMod) onModificationEnded();
+    if (!thresholdMod) adjustParamOnWheel(apvts.getParameter("threshold"), "threshold", th);
+    if (thresholdMod) ImGui::EndDisabled();
+    bool noiseReductionMod = isParamModulated("noiseReduction");
+    if (noiseReductionMod) ImGui::BeginDisabled();
     bool nr = noiseReductionParam ? noiseReductionParam->get() : true;
     if (ImGui::Checkbox("Noise Reduction", &nr))
     {
-        if (noiseReductionParam) *noiseReductionParam = nr;
+        if (!noiseReductionMod && noiseReductionParam) *noiseReductionParam = nr;
         onModificationEnded();
     }
+    if (noiseReductionMod) ImGui::EndDisabled();
 
     // Zoom controls
+    bool zoomMod = isParamModulated("zoomLevel");
     int level = zoomLevelParam ? (int) zoomLevelParam->load() : 1;
     level = juce::jlimit(0, 2, level);
     float buttonWidth = (itemWidth / 2.0f) - 4.0f;
     const bool atMin = (level <= 0);
     const bool atMax = (level >= 2);
+    if (zoomMod) ImGui::BeginDisabled();
     if (atMin) ImGui::BeginDisabled();
     if (ImGui::Button("-", ImVec2(buttonWidth, 0)))
     {
@@ -444,6 +457,22 @@ void ContourDetectorModule::drawParametersInNode(float itemWidth,
         onModificationEnded();
     }
     if (atMax) ImGui::EndDisabled();
+    // Scroll-edit for zoom level
+    if (!zoomMod && ImGui::IsItemHovered())
+    {
+        const float wheel = ImGui::GetIO().MouseWheel;
+        if (wheel != 0.0f)
+        {
+            const int newLevel = juce::jlimit(0, 2, level + (wheel > 0.0f ? 1 : -1));
+            if (newLevel != level)
+            {
+                if (auto* p = apvts.getParameter("zoomLevel"))
+                    p->setValueNotifyingHost((float)newLevel / 2.0f);
+                onModificationEnded();
+            }
+        }
+    }
+    if (zoomMod) ImGui::EndDisabled();
 
     
     // Zone color palette (4 colors)

@@ -355,12 +355,8 @@ void PanVolModuleProcessor::drawParametersInNode(float itemWidth,
 void PanVolModuleProcessor::drawIoPins(const NodePinHelpers& helpers)
 {
     // Output pins for connecting to mixer/track mixer
-    helpers.drawAudioOutputPin("Pan Out", 0);
-    helpers.drawAudioOutputPin("Vol Out", 1);
-    
-    // CV modulation inputs
-    helpers.drawAudioInputPin("Pan Mod", 0);
-    helpers.drawAudioInputPin("Vol Mod", 1);
+    helpers.drawParallelPins("Pan Mod", 0, "Pan Out", 0);
+    helpers.drawParallelPins("Vol Mod", 1, "Vol Out", 1);
 }
 
 ImVec2 PanVolModuleProcessor::getCustomNodeSize() const

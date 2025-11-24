@@ -76,24 +76,25 @@ public:
         ImGui::Spacing(); // Small gap before remaining modulation inputs
         
         // Remaining modulation inputs
-        helpers.drawAudioInputPin("Pitch Base Mod", 7);
-        helpers.drawAudioInputPin("Value Mult Mod", 8);
-        helpers.drawAudioInputPin("Curve Select Mod", 9);
+        helpers.drawParallelPins("Pitch Base Mod", 7, nullptr, -1);
+        helpers.drawParallelPins("Value Mult Mod", 8, nullptr, -1);
+        helpers.drawParallelPins("Curve Select Mod", 9, nullptr, -1);
 
         ImGui::Spacing(); // Visual separator before curve outputs
         ImGui::Spacing();
 
         // Dedicated curve outputs (grouped by color for clarity)
-        helpers.drawAudioOutputPin("Blue Value", 7);
-        helpers.drawAudioOutputPin("Blue Pitch", 8);
-        helpers.drawAudioOutputPin("Red Value", 9);
-        helpers.drawAudioOutputPin("Red Pitch", 10);
-        helpers.drawAudioOutputPin("Green Value", 11);
-        helpers.drawAudioOutputPin("Green Pitch", 12);
+        helpers.drawParallelPins(nullptr, -1, "Blue Value", 7);
+        helpers.drawParallelPins(nullptr, -1, "Blue Pitch", 8);
+        helpers.drawParallelPins(nullptr, -1, "Red Value", 9);
+        helpers.drawParallelPins(nullptr, -1, "Red Pitch", 10);
+        helpers.drawParallelPins(nullptr, -1, "Green Value", 11);
+        helpers.drawParallelPins(nullptr, -1, "Green Pitch", 12);
     }
 
     juce::String getAudioInputLabel(int channel) const override;
     juce::String getAudioOutputLabel(int channel) const override;
+    bool usesCustomPinLayout() const override { return true; }
 #endif
 
     bool getParamRouting(const juce::String& paramId, int& outBusIndex, int& outChannelIndexInBus) const override;

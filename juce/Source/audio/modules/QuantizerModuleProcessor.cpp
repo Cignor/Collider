@@ -323,15 +323,13 @@ void QuantizerModuleProcessor::drawParametersInNode(float itemWidth, const std::
 
 void QuantizerModuleProcessor::drawIoPins(const NodePinHelpers& helpers)
 {
-    helpers.drawAudioInputPin("In", 0);
+    helpers.drawParallelPins("In", 0, "Out", 0);
     
     int busIdx, chanInBus;
     if (getParamRouting("scale_mod", busIdx, chanInBus))
-        helpers.drawAudioInputPin("Scale Mod", getChannelIndexInProcessBlockBuffer(true, busIdx, chanInBus));
+        helpers.drawParallelPins("Scale Mod", getChannelIndexInProcessBlockBuffer(true, busIdx, chanInBus), nullptr, -1);
     if (getParamRouting("root_mod", busIdx, chanInBus))
-        helpers.drawAudioInputPin("Root Mod", getChannelIndexInProcessBlockBuffer(true, busIdx, chanInBus));
-    
-    helpers.drawAudioOutputPin("Out", 0);
+        helpers.drawParallelPins("Root Mod", getChannelIndexInProcessBlockBuffer(true, busIdx, chanInBus), nullptr, -1);
 }
 
 bool QuantizerModuleProcessor::getParamRouting(const juce::String& paramId, int& outBusIndex, int& outChannelIndexInBus) const

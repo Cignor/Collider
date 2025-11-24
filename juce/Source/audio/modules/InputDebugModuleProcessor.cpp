@@ -460,14 +460,12 @@ void InputDebugModuleProcessor::drawParametersInNode(float itemWidth, const std:
 
 void InputDebugModuleProcessor::drawIoPins(const NodePinHelpers& helpers)
 {
-    // 8-channel pass-through
+    // 8-channel pass-through using parallel pins
     for (int ch = 0; ch < 8; ++ch)
     {
-        helpers.drawAudioInputPin((juce::String("Tap In ") + juce::String(ch + 1)).toRawUTF8(), ch);
-    }
-    for (int ch = 0; ch < 8; ++ch)
-    {
-        helpers.drawAudioOutputPin((juce::String("Tap Out ") + juce::String(ch + 1)).toRawUTF8(), ch);
+        const juce::String inLabel = "Tap In " + juce::String(ch + 1);
+        const juce::String outLabel = "Tap Out " + juce::String(ch + 1);
+        helpers.drawParallelPins(inLabel.toRawUTF8(), ch, outLabel.toRawUTF8(), ch);
     }
 }
 #endif

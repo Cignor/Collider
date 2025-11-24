@@ -583,7 +583,7 @@ db["random"] = ModulePinInfo(
     db["multi_sequencer"] = multiSequencerPins;
     db["comparator"] = ModulePinInfo(
         NodeWidth::Small,
-        { AudioPin("In", 0, PinDataType::CV) },
+        { AudioPin("In", 0, PinDataType::Audio) },
         { AudioPin("Out", 0, PinDataType::Gate) },
         {}
     );

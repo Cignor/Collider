@@ -522,15 +522,13 @@ void CompressorModuleProcessor::drawParametersInNode(float itemWidth, const std:
 
 void CompressorModuleProcessor::drawIoPins(const NodePinHelpers& helpers)
 {
-    helpers.drawAudioInputPin("In L", 0);
-    helpers.drawAudioInputPin("In R", 1);
-    helpers.drawAudioInputPin("Thresh Mod", 2);
-    helpers.drawAudioInputPin("Ratio Mod", 3);
-    helpers.drawAudioInputPin("Attack Mod", 4);
-    helpers.drawAudioInputPin("Release Mod", 5);
-    helpers.drawAudioInputPin("Makeup Mod", 6);
-    helpers.drawAudioOutputPin("Out L", 0);
-    helpers.drawAudioOutputPin("Out R", 1);
+    helpers.drawParallelPins("In L", 0, "Out L", 0);
+    helpers.drawParallelPins("In R", 1, "Out R", 1);
+    helpers.drawParallelPins("Thresh Mod", 2, nullptr, -1);
+    helpers.drawParallelPins("Ratio Mod", 3, nullptr, -1);
+    helpers.drawParallelPins("Attack Mod", 4, nullptr, -1);
+    helpers.drawParallelPins("Release Mod", 5, nullptr, -1);
+    helpers.drawParallelPins("Makeup Mod", 6, nullptr, -1);
 }
 #endif
 

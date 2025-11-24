@@ -40,6 +40,7 @@ private:
     static juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout();
 
     void setTimingInfo(const TransportState& state) override;
+    void forceStop() override;
 
     juce::AudioProcessorValueTreeState apvts;
 

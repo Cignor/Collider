@@ -56,6 +56,8 @@ public:
     // Dynamic I/O for flexible automation routing
     std::vector<DynamicPinInfo> getDynamicInputPins() const override;
     std::vector<DynamicPinInfo> getDynamicOutputPins() const override;
+    bool usesCustomPinLayout() const override { return true; }
+    ImVec2 getCustomNodeSize() const override { return ImVec2(320.0f, 0.0f); }
 
     // XML Persistence for automation data
     juce::ValueTree getExtraStateTree() const override;

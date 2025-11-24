@@ -27,11 +27,12 @@ public:
 
     void drawIoPins(const NodePinHelpers& helpers) override
     {
-        helpers.drawAudioInputPin("Signal In", 0);
-        helpers.drawAudioInputPin("Rise Mod", 1);
-        helpers.drawAudioInputPin("Fall Mod", 2);
-        helpers.drawAudioOutputPin("Smoothed Out", 0);
+        helpers.drawParallelPins("Signal In", 0, "Smoothed Out", 0);
+        helpers.drawParallelPins("Rise Mod", 1, nullptr, -1);
+        helpers.drawParallelPins("Fall Mod", 2, nullptr, -1);
     }
+
+    bool usesCustomPinLayout() const override { return true; }
 
     juce::String getAudioInputLabel(int channel) const override
     {

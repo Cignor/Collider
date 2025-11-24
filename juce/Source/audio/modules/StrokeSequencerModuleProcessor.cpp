@@ -123,6 +123,17 @@ bool StrokeSequencerModuleProcessor::getParamRouting(const juce::String& paramId
     return false;
 }
 
+void StrokeSequencerModuleProcessor::drawIoPins(const NodePinHelpers& helpers)
+{
+    helpers.drawParallelPins("Reset In", 0, "Floor Trig Out", 0);
+    helpers.drawParallelPins("Rate Mod In", 1, "Mid Trig Out", 1);
+    helpers.drawParallelPins("Floor Mod In", 2, "Ceiling Trig Out", 2);
+    helpers.drawParallelPins("Mid Mod In", 3, "Continuous Pitch", 3);
+    helpers.drawParallelPins("Ceiling Mod In", 4, "Floor Pitch", 4);
+    helpers.drawParallelPins(nullptr, -1, "Mid Pitch", 5);
+    helpers.drawParallelPins(nullptr, -1, "Ceiling Pitch", 6);
+}
+
 void StrokeSequencerModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffer&)
 {
     // --- Thread-safe Update Block ---
@@ -530,12 +541,29 @@ void StrokeSequencerModuleProcessor::drawParametersInNode(float itemWidth, const
         // Grey out if controlled by Tempo Clock
         if (isGlobalDivisionActive) ImGui::BeginDisabled();
         
-        if (ImGui::Combo("Division", &division, "1/32\0""1/16\0""1/8\0""1/4\0""1/2\0""1\0""2\0""4\0""8\0\0"))
+        const bool comboUsed = ImGui::Combo("Division", &division, "1/32\0""1/16\0""1/8\0""1/4\0""1/2\0""1\0""2\0""4\0""8\0\0");
+        if (comboUsed)
         {
             if (!isGlobalDivisionActive)
             {
                 if (auto* p = dynamic_cast<juce::AudioParameterChoice*>(apvts.getParameter(paramIdRateDivision))) *p = division;
                 onModificationEnded();
+            }
+        }
+
+        if (!isGlobalDivisionActive && ImGui::IsItemHovered())
+        {
+            const float wheel = ImGui::GetIO().MouseWheel;
+            if (wheel != 0.0f)
+            {
+                const int delta = wheel > 0.0f ? -1 : 1;
+                const int newDivision = juce::jlimit(0, 8, division + delta);
+                if (newDivision != division)
+                {
+                    division = newDivision;
+                    if (auto* p = dynamic_cast<juce::AudioParameterChoice*>(apvts.getParameter(paramIdRateDivision))) *p = division;
+                    onModificationEnded();
+                }
             }
         }
         
@@ -561,6 +589,8 @@ void StrokeSequencerModuleProcessor::drawParametersInNode(float itemWidth, const
         if (isRateMod) ImGui::BeginDisabled();
         if (ImGui::SliderFloat("Rate", &rateValue, 0.1f, 20.0f, "%.2f Hz", ImGuiSliderFlags_Logarithmic))
             if (!isRateMod) *rateParam = rateValue;
+        if (!isRateMod)
+            adjustParamOnWheel(apvts.getParameter(paramIdRate), paramIdRate, rateValue);
         if (ImGui::IsItemDeactivatedAfterEdit() && !isRateMod) onModificationEnded();
         if (isRateMod) { ImGui::EndDisabled(); ImGui::SameLine(); ImGui::TextUnformatted("(mod)"); }
     }
@@ -780,6 +810,8 @@ void StrokeSequencerModuleProcessor::drawParametersInNode(float itemWidth, const
         // When the user drags, we update the parameter
         *playheadParam = displayValue;
     }
+    if (auto* playheadParameter = apvts.getParameter(paramIdPlayhead))
+        adjustParamOnWheel(playheadParameter, paramIdPlayhead, displayValue);
 
     // Detect when the user grabs and releases the slider
     if (ImGui::IsItemActivated())
@@ -805,7 +837,7 @@ void StrokeSequencerModuleProcessor::drawParametersInNode(float itemWidth, const
         const ImVec2 sliderSize(18.0f, canvas_size.y);
         
         // Helper lambda for a color-coded vertical modulated slider
-        auto createV_Slider = [&](const char* label, const juce::String& paramID, const juce::String& modID, 
+        auto createV_Slider = [&](const char* label, const char* paramID, const juce::String& modID, 
                                    std::atomic<float>* paramPtr, const char* liveKey, ImVec4 sliderColor) {
             const bool isMod = isParamModulated(modID);
             float value = isMod ? getLiveParamValueFor(modID, liveKey, paramPtr->load()) : paramPtr->load();
@@ -824,6 +856,12 @@ void StrokeSequencerModuleProcessor::drawParametersInNode(float itemWidth, const
             }
             if (ImGui::IsItemDeactivatedAfterEdit() && !isMod) onModificationEnded();
             if (isMod) ImGui::EndDisabled();
+
+            if (!isMod)
+            {
+                if (auto* parameter = apvts.getParameter(paramID))
+                    adjustParamOnWheel(parameter, paramID, value);
+            }
             
             ImGui::PopStyleColor(5);
         };

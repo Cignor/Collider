@@ -170,12 +170,14 @@ public:
     // Dynamic pin interface - expose all 6 output channels and 3 input triggers
     std::vector<DynamicPinInfo> getDynamicInputPins() const override;
     std::vector<DynamicPinInfo> getDynamicOutputPins() const override;
+    bool usesCustomPinLayout() const override { return true; }
     
     // Modulation routing for CV inputs
     bool getParamRouting(const juce::String& paramId, int& outBusIndex, int& outChannelIndexInBus) const override;
     
 #if defined(PRESET_CREATOR_UI)
     void drawParametersInNode(float itemWidth, const std::function<bool(const juce::String& paramId)>& isParamModulated, const std::function<void()>& onModificationEnded) override;
+    void drawIoPins(const NodePinHelpers& helpers) override;
     
     // Custom node dimensions - Physics module needs a large canvas for the simulation
     ImVec2 getCustomNodeSize() const override 

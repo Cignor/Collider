@@ -220,6 +220,8 @@ void WebcamLoaderModule::drawParametersInNode(float itemWidth,
         ImGui::BeginDisabled();
     }
     
+    bool cameraModulated = isParamModulated("cameraIndex");
+    if (cameraModulated) ImGui::BeginDisabled();
     if (ImGui::BeginCombo("Camera", currentCameraName))
     {
         for (int i = 0; i < availableCameraNames.size(); ++i)
@@ -251,6 +253,22 @@ void WebcamLoaderModule::drawParametersInNode(float itemWidth,
         }
         ImGui::EndCombo();
     }
+    // Scroll-edit for camera combo
+    if (!cameraModulated && ImGui::IsItemHovered())
+    {
+        const float wheel = ImGui::GetIO().MouseWheel;
+        if (wheel != 0.0f)
+        {
+            const int maxIndex = juce::jmax(0, (int)availableCameraNames.size() - 1);
+            const int newIndex = juce::jlimit(0, maxIndex, currentIndex + (wheel > 0.0f ? -1 : 1));
+            if (newIndex != currentIndex)
+            {
+                *dynamic_cast<juce::AudioParameterInt*>(apvts.getParameter("cameraIndex")) = newIndex;
+                onModificationEnded();
+            }
+        }
+    }
+    if (cameraModulated) ImGui::EndDisabled();
     
     if (isScanning || noCameras)
     {
@@ -258,12 +276,14 @@ void WebcamLoaderModule::drawParametersInNode(float itemWidth,
     }
     
     // Zoom buttons (+ to increase, - to decrease) across 3 levels
+    bool zoomModulated = isParamModulated("zoomLevel");
     int level = zoomLevelParam ? (int) zoomLevelParam->load() : 1;
     level = juce::jlimit(0, 2, level);
     float buttonWidth = (itemWidth / 2.0f) - 4.0f;
     const bool atMin = (level <= 0);
     const bool atMax = (level >= 2);
 
+    if (zoomModulated) ImGui::BeginDisabled();
     if (atMin) ImGui::BeginDisabled();
     if (ImGui::Button("-", ImVec2(buttonWidth, 0)))
     {
@@ -285,6 +305,22 @@ void WebcamLoaderModule::drawParametersInNode(float itemWidth,
         onModificationEnded();
     }
     if (atMax) ImGui::EndDisabled();
+    // Scroll-edit for zoom level
+    if (!zoomModulated && ImGui::IsItemHovered())
+    {
+        const float wheel = ImGui::GetIO().MouseWheel;
+        if (wheel != 0.0f)
+        {
+            const int newLevel = juce::jlimit(0, 2, level + (wheel > 0.0f ? 1 : -1));
+            if (newLevel != level)
+            {
+                if (auto* p = apvts.getParameter("zoomLevel"))
+                    p->setValueNotifyingHost((float)newLevel / 2.0f);
+                onModificationEnded();
+            }
+        }
+    }
+    if (zoomModulated) ImGui::EndDisabled();
     
     const juce::String sourceText = juce::String::formatted("Source ID: %d", (int)getLogicalId());
     ThemeText(sourceText.toRawUTF8(), theme.text.section_header);

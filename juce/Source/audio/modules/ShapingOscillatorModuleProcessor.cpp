@@ -256,6 +256,20 @@ void ShapingOscillatorModuleProcessor::drawParametersInNode (float itemWidth,
     {
         if (!waveIsMod) if (auto* p = dynamic_cast<juce::AudioParameterChoice*>(ap.getParameter(paramIdWaveform))) *p = wave;
     }
+    if (!waveIsMod && ImGui::IsItemHovered())
+    {
+        const float wheel = ImGui::GetIO().MouseWheel;
+        if (wheel != 0.0f)
+        {
+            const int newWave = juce::jlimit(0, 2, wave + (wheel > 0.0f ? -1 : 1));
+            if (newWave != wave)
+            {
+                wave = newWave;
+                if (auto* p = dynamic_cast<juce::AudioParameterChoice*>(ap.getParameter(paramIdWaveform))) *p = wave;
+                onModificationEnded();
+            }
+        }
+    }
     if (ImGui::IsItemDeactivatedAfterEdit()) onModificationEnded();
     if (waveIsMod) { ImGui::EndDisabled(); ImGui::SameLine(); ImGui::TextUnformatted("(mod)"); }
     if (ImGui::IsItemHovered()) ImGui::SetTooltip("Oscillator waveform shape");
@@ -414,14 +428,11 @@ void ShapingOscillatorModuleProcessor::drawParametersInNode (float itemWidth,
 
 void ShapingOscillatorModuleProcessor::drawIoPins(const NodePinHelpers& helpers)
 {
-    helpers.drawAudioInputPin("In L", 0);
-    helpers.drawAudioInputPin("In R", 1);
-    helpers.drawAudioInputPin("Freq Mod", 2);
-    helpers.drawAudioInputPin("Wave Mod", 3);
-    helpers.drawAudioInputPin("Drive Mod", 4);
-
-    helpers.drawAudioOutputPin("Out L", 0);
-    helpers.drawAudioOutputPin("Out R", 1);
+    helpers.drawParallelPins("In L", 0, "Out L", 0);
+    helpers.drawParallelPins("In R", 1, "Out R", 1);
+    helpers.drawParallelPins("Freq Mod", 2, nullptr, -1);
+    helpers.drawParallelPins("Wave Mod", 3, nullptr, -1);
+    helpers.drawParallelPins("Drive Mod", 4, nullptr, -1);
 }
 
 juce::String ShapingOscillatorModuleProcessor::getAudioInputLabel(int channel) const

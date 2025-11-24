@@ -695,16 +695,14 @@ void GranulatorModuleProcessor::drawParametersInNode(float itemWidth, const std:
 
 void GranulatorModuleProcessor::drawIoPins(const NodePinHelpers& helpers)
 {
-    helpers.drawAudioInputPin("In L", 0);
-    helpers.drawAudioInputPin("In R", 1);
-    helpers.drawAudioInputPin("Trigger In", 2);
-    helpers.drawAudioInputPin("Density Mod", 3);
-    helpers.drawAudioInputPin("Size Mod", 4);
-    helpers.drawAudioInputPin("Position Mod", 5);
-    helpers.drawAudioInputPin("Pitch Mod", 6);
-    helpers.drawAudioInputPin("Gate Mod", 7);
-    helpers.drawAudioOutputPin("Out L", 0);
-    helpers.drawAudioOutputPin("Out R", 1);
+    helpers.drawParallelPins("In L", 0, "Out L", 0);
+    helpers.drawParallelPins("In R", 1, "Out R", 1);
+    helpers.drawParallelPins("Trigger In", 2, nullptr, -1);
+    helpers.drawParallelPins("Density Mod", 3, nullptr, -1);
+    helpers.drawParallelPins("Size Mod", 4, nullptr, -1);
+    helpers.drawParallelPins("Position Mod", 5, nullptr, -1);
+    helpers.drawParallelPins("Pitch Mod", 6, nullptr, -1);
+    helpers.drawParallelPins("Gate Mod", 7, nullptr, -1);
 }
 #endif
 

@@ -46,6 +46,7 @@ public:
 #if defined(PRESET_CREATOR_UI)
     void drawParametersInNode(float itemWidth, const std::function<bool(const juce::String&)>& isParamModulated, const std::function<void()>& onModificationEnded) override;
     void drawIoPins(const NodePinHelpers& helpers) override;
+    bool usesCustomPinLayout() const override { return true; }
 #endif
     bool getParamRouting(const juce::String& paramId, int& outBusIndex, int& outChannelIndexInBus) const override;
     juce::String getAudioInputLabel(int channel) const override;

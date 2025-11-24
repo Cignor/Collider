@@ -916,6 +916,20 @@ void BitCrusherModuleProcessor::drawParametersInNode(float itemWidth, const std:
             if (auto* p = dynamic_cast<juce::AudioParameterChoice*>(ap.getParameter(paramIdQuantMode))) *p = quantMode;
         }
     }
+    if (!isQuantModeModulated && ImGui::IsItemHovered())
+    {
+        const float wheel = ImGui::GetIO().MouseWheel;
+        if (wheel != 0.0f)
+        {
+            const int newMode = juce::jlimit(0, 2, quantMode + (wheel > 0.0f ? -1 : 1));
+            if (newMode != quantMode)
+            {
+                quantMode = newMode;
+                if (auto* p = dynamic_cast<juce::AudioParameterChoice*>(ap.getParameter(paramIdQuantMode))) *p = quantMode;
+                onModificationEnded();
+            }
+        }
+    }
     if (ImGui::IsItemDeactivatedAfterEdit()) { onModificationEnded(); }
     if (isQuantModeModulated) { ImGui::EndDisabled(); ImGui::SameLine(); ImGui::TextUnformatted("(mod)"); }
     ImGui::SameLine();
@@ -969,24 +983,21 @@ void BitCrusherModuleProcessor::drawParametersInNode(float itemWidth, const std:
 
 void BitCrusherModuleProcessor::drawIoPins(const NodePinHelpers& helpers)
 {
-    helpers.drawAudioInputPin("In L", 0);
-    helpers.drawAudioInputPin("In R", 1);
+    helpers.drawParallelPins("In L", 0, "Out L", 0);
+    helpers.drawParallelPins("In R", 1, "Out R", 1);
     
     // Modulation pins - use virtual _mod IDs as per BestPracticeNodeProcessor.md
     int busIdx, chanInBus;
     if (getParamRouting(paramIdBitDepthMod, busIdx, chanInBus))
-        helpers.drawAudioInputPin("Bit Depth Mod", getChannelIndexInProcessBlockBuffer(true, busIdx, chanInBus));
+        helpers.drawParallelPins("Bit Depth Mod", getChannelIndexInProcessBlockBuffer(true, busIdx, chanInBus), nullptr, -1);
     if (getParamRouting(paramIdSampleRateMod, busIdx, chanInBus))
-        helpers.drawAudioInputPin("Sample Rate Mod", getChannelIndexInProcessBlockBuffer(true, busIdx, chanInBus));
+        helpers.drawParallelPins("Sample Rate Mod", getChannelIndexInProcessBlockBuffer(true, busIdx, chanInBus), nullptr, -1);
     if (getParamRouting(paramIdMixMod, busIdx, chanInBus))
-        helpers.drawAudioInputPin("Mix Mod", getChannelIndexInProcessBlockBuffer(true, busIdx, chanInBus));
+        helpers.drawParallelPins("Mix Mod", getChannelIndexInProcessBlockBuffer(true, busIdx, chanInBus), nullptr, -1);
     if (getParamRouting(paramIdAntiAliasMod, busIdx, chanInBus))
-        helpers.drawAudioInputPin("Anti-Alias Mod", getChannelIndexInProcessBlockBuffer(true, busIdx, chanInBus));
+        helpers.drawParallelPins("Anti-Alias Mod", getChannelIndexInProcessBlockBuffer(true, busIdx, chanInBus), nullptr, -1);
     if (getParamRouting(paramIdQuantModeMod, busIdx, chanInBus))
-        helpers.drawAudioInputPin("Quant Mode Mod", getChannelIndexInProcessBlockBuffer(true, busIdx, chanInBus));
-    
-    helpers.drawAudioOutputPin("Out L", 0);
-    helpers.drawAudioOutputPin("Out R", 1);
+        helpers.drawParallelPins("Quant Mode Mod", getChannelIndexInProcessBlockBuffer(true, busIdx, chanInBus), nullptr, -1);
 }
 #endif
 

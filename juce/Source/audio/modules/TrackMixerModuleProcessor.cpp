@@ -1,6 +1,10 @@
 #include "TrackMixerModuleProcessor.h"
 #include <cmath>
 
+#if defined(PRESET_CREATOR_UI)
+#include "../../preset_creator/theme/ThemeManager.h"
+#endif
+
 TrackMixerModuleProcessor::TrackMixerModuleProcessor()
     : ModuleProcessor(BusesProperties()
           .withInput("Inputs", juce::AudioChannelSet::discreteChannels(MAX_TRACKS + 1 + (MAX_TRACKS * 2)), true) // 0-63: Audio, 64: NumTracks Mod, 65+: Gain/Pan Mods
@@ -48,6 +52,13 @@ juce::AudioProcessorValueTreeState::ParameterLayout TrackMixerModuleProcessor::c
 void TrackMixerModuleProcessor::prepareToPlay(double sampleRate, int samplesPerBlock)
 {
     juce::ignoreUnused(sampleRate, samplesPerBlock);
+
+#if defined(PRESET_CREATOR_UI)
+    // Initialize visualization buffer (stereo)
+    vizOutputBuffer.setSize(2, vizBufferSize);
+    vizOutputBuffer.clear();
+    vizWritePos = 0;
+#endif
 }
 
 void TrackMixerModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midi)
@@ -142,6 +153,54 @@ void TrackMixerModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
     outBus.copyFrom(0, 0, mixBus, 0, 0, numSamples);
     if (outBus.getNumChannels() > 1)
         outBus.copyFrom(1, 0, mixBus, 1, 0, numSamples);
+
+#if defined(PRESET_CREATOR_UI)
+    // Capture output audio for visualization
+    if (vizOutputBuffer.getNumSamples() > 0 && outBus.getNumChannels() >= 2)
+    {
+        const int samplesToCopy = juce::jmin(numSamples, vizBufferSize);
+        for (int ch = 0; ch < 2; ++ch)
+        {
+            if (outBus.getNumChannels() > ch)
+            {
+                const float* outputData = outBus.getReadPointer(ch);
+                for (int i = 0; i < samplesToCopy; ++i)
+                {
+                    const int writeIdx = (vizWritePos + i) % vizBufferSize;
+                    vizOutputBuffer.setSample(ch, writeIdx, outputData[i]);
+                }
+            }
+        }
+        vizWritePos = (vizWritePos + samplesToCopy) % vizBufferSize;
+    }
+
+    // Update visualization data (thread-safe)
+    // Downsample waveforms from circular buffer
+    const int stride = vizBufferSize / VizData::waveformPoints;
+    for (int i = 0; i < VizData::waveformPoints; ++i)
+    {
+        const int readIdx = (vizWritePos - VizData::waveformPoints * stride + i * stride + vizBufferSize) % vizBufferSize;
+        if (vizOutputBuffer.getNumSamples() > 0)
+        {
+            vizData.outputWaveformL[i].store(vizOutputBuffer.getSample(0, readIdx));
+            vizData.outputWaveformR[i].store(vizOutputBuffer.getNumChannels() > 1 ? vizOutputBuffer.getSample(1, readIdx) : 0.0f);
+        }
+    }
+
+    // Calculate output levels (RMS)
+    float outputRmsL = 0.0f;
+    float outputRmsR = 0.0f;
+    if (numSamples > 0)
+    {
+        if (outBus.getNumChannels() > 0)
+            outputRmsL = outBus.getRMSLevel(0, 0, numSamples);
+        if (outBus.getNumChannels() > 1)
+            outputRmsR = outBus.getRMSLevel(1, 0, numSamples);
+    }
+    vizData.outputLevelDbL.store(juce::Decibels::gainToDecibels(outputRmsL, -60.0f));
+    vizData.outputLevelDbR.store(juce::Decibels::gainToDecibels(outputRmsR, -60.0f));
+    vizData.activeTracks.store(numTracks);
+#endif
 }
 
 int TrackMixerModuleProcessor::getEffectiveNumTracks() const
@@ -204,6 +263,123 @@ void TrackMixerModuleProcessor::drawParametersInNode(float itemWidth, const std:
         ImGui::TextUnformatted("(mod)");
     }
 
+    ImGui::Spacing();
+    ImGui::Spacing();
+
+    // === STEREO WAVEFORM VISUALIZATION ===
+    const auto& theme = ThemeManager::getInstance().getCurrentTheme();
+    
+    // Helper for tooltips
+    auto HelpMarkerTrackMixer = [](const char* desc) {
+        ImGui::TextDisabled("(?)");
+        if (ImGui::BeginItemTooltip()) {
+            ImGui::PushTextWrapPos(ImGui::GetFontSize() * 35.0f);
+            ImGui::TextUnformatted(desc);
+            ImGui::PopTextWrapPos();
+            ImGui::EndTooltip();
+        }
+    };
+
+    // Read visualization data (thread-safe)
+    float outputWaveformL[VizData::waveformPoints];
+    float outputWaveformR[VizData::waveformPoints];
+    for (int i = 0; i < VizData::waveformPoints; ++i)
+    {
+        outputWaveformL[i] = vizData.outputWaveformL[i].load();
+        outputWaveformR[i] = vizData.outputWaveformR[i].load();
+    }
+    const int activeTracksCount = vizData.activeTracks.load();
+    const float outputLevelDbL = vizData.outputLevelDbL.load();
+    const float outputLevelDbR = vizData.outputLevelDbR.load();
+
+    // Waveform visualization in child window
+    const auto& freqColors = theme.modules.frequency_graph;
+    const auto resolveColor = [](ImU32 value, ImU32 fallback) { return value != 0 ? value : fallback; };
+    const float waveHeight = 140.0f;
+    const ImVec2 graphSize(itemWidth, waveHeight);
+    
+    if (ImGui::BeginChild("TrackMixerOscilloscope", graphSize, false, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse))
+    {
+        ImDrawList* drawList = ImGui::GetWindowDrawList();
+        const ImVec2 p0 = ImGui::GetWindowPos();
+        const ImVec2 p1 = ImVec2(p0.x + graphSize.x, p0.y + graphSize.y);
+        
+        // Background
+        const ImU32 bgColor = resolveColor(freqColors.background, IM_COL32(18, 20, 24, 255));
+        drawList->AddRectFilled(p0, p1, bgColor);
+        
+        // Grid lines
+        const ImU32 gridColor = resolveColor(freqColors.grid, IM_COL32(50, 55, 65, 255));
+        const float midY = p0.y + graphSize.y * 0.5f;
+        drawList->AddLine(ImVec2(p0.x, midY), ImVec2(p1.x, midY), gridColor, 1.0f);
+        drawList->AddLine(ImVec2(p0.x, p0.y), ImVec2(p1.x, p0.y), gridColor, 1.0f);
+        drawList->AddLine(ImVec2(p0.x, p1.y), ImVec2(p1.x, p1.y), gridColor, 1.0f);
+        
+        // Clip to graph area
+        drawList->PushClipRect(p0, p1, true);
+        
+        // Draw stereo waveforms (L and R overlaid with different colors)
+        const float scaleY = graphSize.y * 0.45f;
+        const float stepX = graphSize.x / (float)(VizData::waveformPoints - 1);
+        
+        // Left channel - use theme accent color with slight blue tint
+        ImVec4 accentL = theme.accent;
+        accentL.x *= 0.7f; // Reduce red, keep blue/green
+        accentL.y *= 1.0f;
+        accentL.z = juce::jmin(1.0f, accentL.z * 1.2f); // Boost blue
+        const ImU32 waveformColorL = ImGui::ColorConvertFloat4ToU32(accentL);
+        float prevXL = p0.x;
+        float prevYL = midY;
+        for (int i = 0; i < VizData::waveformPoints; ++i)
+        {
+            const float sample = juce::jlimit(-1.0f, 1.0f, outputWaveformL[i]);
+            const float x = p0.x + i * stepX;
+            const float y = juce::jlimit(p0.y, p1.y, midY - sample * scaleY);
+            if (i > 0)
+                drawList->AddLine(ImVec2(prevXL, prevYL), ImVec2(x, y), waveformColorL, 2.0f);
+            prevXL = x;
+            prevYL = y;
+        }
+
+        // Right channel - use theme accent color with slight orange tint
+        ImVec4 accentR = theme.accent;
+        accentR.x = juce::jmin(1.0f, accentR.x * 1.3f); // Boost red
+        accentR.y *= 0.8f; // Reduce green
+        accentR.z *= 0.5f; // Reduce blue
+        const ImU32 waveformColorR = ImGui::ColorConvertFloat4ToU32(accentR);
+        float prevXR = p0.x;
+        float prevYR = midY;
+        for (int i = 0; i < VizData::waveformPoints; ++i)
+        {
+            const float sample = juce::jlimit(-1.0f, 1.0f, outputWaveformR[i]);
+            const float x = p0.x + i * stepX;
+            const float y = juce::jlimit(p0.y, p1.y, midY - sample * scaleY);
+            if (i > 0)
+                drawList->AddLine(ImVec2(prevXR, prevYR), ImVec2(x, y), waveformColorR, 2.0f);
+            prevXR = x;
+            prevYR = y;
+        }
+        
+        drawList->PopClipRect();
+        
+        // Info overlay
+        ImGui::SetCursorPos(ImVec2(4, 4));
+        ImGui::TextColored(ImVec4(1.0f, 1.0f, 1.0f, 0.9f), "%d tracks", activeTracksCount);
+        
+        // Level meters (bottom left) - match waveform colors
+        ImGui::SetCursorPos(ImVec2(4, graphSize.y - 40));
+        ImGui::TextColored(accentL, "L: %.1f dB", outputLevelDbL);
+        ImGui::SetCursorPos(ImVec2(4, graphSize.y - 20));
+        ImGui::TextColored(accentR, "R: %.1f dB", outputLevelDbR);
+        
+        // Invisible drag blocker
+        ImGui::SetCursorPos(ImVec2(0, 0));
+        ImGui::InvisibleButton("##trackMixerOscilloscopeDrag", graphSize);
+    }
+    ImGui::EndChild(); // CRITICAL: Must be OUTSIDE the if block!
+
+    ImGui::Spacing();
+    ImGui::Spacing();
 
     // --- Per-Track Sliders (Dynamically created for all active tracks) ---
     // --- FIX: Use the 'displayedTracks' variable here, which respects modulation ---
@@ -309,18 +485,18 @@ void TrackMixerModuleProcessor::drawIoPins(const NodePinHelpers& helpers)
     const int activeTracks = juce::jlimit(2, MAX_TRACKS, lastActiveTracks.load());
 
     // --- Draw Output Pins First ---
-    helpers.drawAudioOutputPin("Out L", 0);
-    helpers.drawAudioOutputPin("Out R", 1);
+    helpers.drawParallelPins(nullptr, -1, "Out L", 0);
+    helpers.drawParallelPins(nullptr, -1, "Out R", 1);
 
     // --- Draw Input Pins ---
     // Replace generic bus pins with human-legible per-channel pins
     for (int t = 0; t < activeTracks; ++t)
-        helpers.drawAudioInputPin(("Audio " + juce::String(t + 1)).toRawUTF8(), t);
+        helpers.drawParallelPins(("Audio " + juce::String(t + 1)).toRawUTF8(), t, nullptr, -1);
 
     // --- Draw Modulation Pins ---
     int busIdx, chanInBus;
     if (getParamRouting(paramIdNumTracksMod, busIdx, chanInBus))
-        helpers.drawAudioInputPin("Num Tracks Mod", getChannelIndexInProcessBlockBuffer(true, busIdx, chanInBus));
+        helpers.drawParallelPins("Num Tracks Mod", getChannelIndexInProcessBlockBuffer(true, busIdx, chanInBus), nullptr, -1);
 
     // Draw per-track modulation pins
     for (int t = 1; t <= activeTracks; ++t)
@@ -330,9 +506,9 @@ void TrackMixerModuleProcessor::drawIoPins(const NodePinHelpers& helpers)
         const juce::String panModId = paramIdPanModPrefix + trackNumStr;
 
         if (getParamRouting(gainModId, busIdx, chanInBus))
-            helpers.drawAudioInputPin(("Gain " + trackNumStr + " Mod").toRawUTF8(), getChannelIndexInProcessBlockBuffer(true, busIdx, chanInBus));
+            helpers.drawParallelPins(("Gain " + trackNumStr + " Mod").toRawUTF8(), getChannelIndexInProcessBlockBuffer(true, busIdx, chanInBus), nullptr, -1);
         if (getParamRouting(panModId, busIdx, chanInBus))
-            helpers.drawAudioInputPin(("Pan " + trackNumStr + " Mod").toRawUTF8(), getChannelIndexInProcessBlockBuffer(true, busIdx, chanInBus));
+            helpers.drawParallelPins(("Pan " + trackNumStr + " Mod").toRawUTF8(), getChannelIndexInProcessBlockBuffer(true, busIdx, chanInBus), nullptr, -1);
     }
 }
 

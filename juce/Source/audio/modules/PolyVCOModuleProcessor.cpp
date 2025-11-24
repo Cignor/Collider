@@ -472,6 +472,7 @@ void PolyVCOModuleProcessor::drawParametersInNode(float itemWidth, const std::fu
         }
     }
     if (ImGui::IsItemDeactivatedAfterEdit()) onModificationEnded();
+    adjustParamOnWheel(ap.getParameter("portamento"), "portamento", portamentoTime);
     
     ImGui::SameLine();
     ImGui::Text("Portamento");
@@ -678,6 +679,22 @@ void PolyVCOModuleProcessor::drawParametersInNode(float itemWidth, const std::fu
                     onModificationEnded();
                 }
             }
+            if (!isWaveModulated && ImGui::IsItemHovered())
+            {
+                const float wheel = ImGui::GetIO().MouseWheel;
+                if (wheel != 0.0f)
+                {
+                    int newWave = juce::jlimit(0, 2, wave + (wheel > 0.0f ? -1 : 1));
+                    if (newWave != wave)
+                    {
+                        wave = newWave;
+                        if (voiceWaveParams[i]) {
+                            *voiceWaveParams[i] = wave;
+                            onModificationEnded();
+                        }
+                    }
+                }
+            }
             ImGui::PopItemWidth();
             if (isWaveModulated) ImGui::EndDisabled();
             
@@ -694,6 +711,7 @@ void PolyVCOModuleProcessor::drawParametersInNode(float itemWidth, const std::fu
                 if (!isFreqModulated && voiceFreqParams[i]) *voiceFreqParams[i] = freq;
             }
             if (ImGui::IsItemDeactivatedAfterEdit() && !isFreqModulated) onModificationEnded();
+            if (!isFreqModulated) adjustParamOnWheel(ap.getParameter("freq_" + idx), "freq_" + idx, freq);
             ImGui::PopItemWidth();
             if (isFreqModulated) ImGui::EndDisabled();
             
@@ -710,6 +728,7 @@ void PolyVCOModuleProcessor::drawParametersInNode(float itemWidth, const std::fu
                 if (!isGateModulated && voiceGateParams[i]) *voiceGateParams[i] = gate;
             }
             if (ImGui::IsItemDeactivatedAfterEdit() && !isGateModulated) onModificationEnded();
+            if (!isGateModulated) adjustParamOnWheel(ap.getParameter("gate_" + idx), "gate_" + idx, gate);
             ImGui::PopItemWidth();
             if (isGateModulated) ImGui::EndDisabled();
             
@@ -738,34 +757,29 @@ void PolyVCOModuleProcessor::drawIoPins(const NodePinHelpers& helpers)
         const int inGate = 1 + (2 * MAX_VOICES) + i;
         const int outChannel = i;
 
-        // Use a group to keep all pins for a voice together visually.
-        ImGui::BeginGroup();
-
-        // Row 1: The main Freq input is paired with the voice's audio output.
+        // Row 1: Frequency modulation paired with the output.
         helpers.drawParallelPins(
             ("Freq " + idx + " Mod").toRawUTF8(),
             inFreq,
-            ("Freq " + idx).toRawUTF8(), // The output is also labeled "Freq"
+            ("Freq " + idx).toRawUTF8(),
             outChannel
         );
 
-        // Row 2: The Wave input stands alone on the left.
+        // Row 2: Wave modulation (input only).
         helpers.drawParallelPins(
             ("Wave " + idx + " Mod").toRawUTF8(),
             inWave,
-            nullptr,  // No output text on this row
-            -1        // No output pin on this row
+            nullptr,
+            -1
         );
 
-        // Row 3: The Gate input also stands alone on the left.
+        // Row 3: Gate modulation (input only).
         helpers.drawParallelPins(
             ("Gate " + idx + " Mod").toRawUTF8(),
             inGate,
             nullptr,
             -1
         );
-
-        ImGui::EndGroup();
 
         // Add visual separation between voice groups.
         if (i < activeVoices - 1)

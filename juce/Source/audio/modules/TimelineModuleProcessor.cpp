@@ -630,14 +630,18 @@ void TimelineModuleProcessor::drawParametersInNode(float itemWidth,
 
 void TimelineModuleProcessor::drawIoPins(const NodePinHelpers& helpers)
 {
-    // Draw dynamic pins based on channels
+    // Draw dynamic pins based on channels using the parallel layout helper
     const juce::ScopedLock lock(automationLock);
     for (size_t i = 0; i < m_automationChannels.size(); ++i)
     {
-        juce::String inputName = juce::String(m_automationChannels[i].name) + " In";
-        juce::String outputName = juce::String(m_automationChannels[i].name) + " Out";
-        helpers.drawAudioInputPin(inputName.toRawUTF8(), (int)i);
-        helpers.drawAudioOutputPin(outputName.toRawUTF8(), (int)i);
+        const juce::String inputName = juce::String(m_automationChannels[i].name) + " In";
+        const juce::String outputName = juce::String(m_automationChannels[i].name) + " Out";
+        helpers.drawParallelPins(inputName.toRawUTF8(), static_cast<int>(i),
+                                 outputName.toRawUTF8(), static_cast<int>(i));
+        if (i < m_automationChannels.size() - 1)
+        {
+            ImGui::Spacing();
+        }
     }
 }
 

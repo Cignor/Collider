@@ -353,9 +353,8 @@ void MathModuleProcessor::drawParametersInNode (float itemWidth, const std::func
 
 void MathModuleProcessor::drawIoPins(const NodePinHelpers& helpers)
 {
-    helpers.drawAudioInputPin("In A", 0);
-    helpers.drawAudioInputPin("In B", 1);
-    helpers.drawAudioOutputPin("Out", 0);
+    helpers.drawParallelPins("In A", 0, "Out", 0);
+    helpers.drawParallelPins("In B", 1, nullptr, -1);
 }
 #endif
 

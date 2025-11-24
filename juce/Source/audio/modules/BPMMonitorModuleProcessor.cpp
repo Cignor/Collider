@@ -352,17 +352,26 @@ void BPMMonitorModuleProcessor::drawParametersInNode(float itemWidth,
     ImGui::PushItemWidth(itemWidth);
     
     ThemeText("BPM MONITOR", theme.modules.sequencer_section_header);
+    auto* modeParam         = dynamic_cast<juce::AudioParameterChoice*>(apvts.getParameter("mode"));
+    auto* minBPMParam       = dynamic_cast<juce::AudioParameterFloat*>(apvts.getParameter("minBPM"));
+    auto* maxBPMParam       = dynamic_cast<juce::AudioParameterFloat*>(apvts.getParameter("maxBPM"));
+    auto* numInputsParam    = dynamic_cast<juce::AudioParameterInt*>(apvts.getParameter("numInputs"));
+    auto* sensitivityParam  = dynamic_cast<juce::AudioParameterFloat*>(apvts.getParameter("sensitivity"));
+    auto* detMinParam       = dynamic_cast<juce::AudioParameterFloat*>(apvts.getParameter("detMinBPM"));
+    auto* detMaxParam       = dynamic_cast<juce::AudioParameterFloat*>(apvts.getParameter("detMaxBPM"));
     
     // Mode selector
     int mode = apvts.getRawParameterValue("mode")->load();
     if (ImGui::Combo("Mode", &mode, "Auto\0Introspection Only\0Detection Only\0\0"))
     {
-        if (auto* p = dynamic_cast<juce::AudioParameterChoice*>(apvts.getParameter("mode")))
+        if (modeParam != nullptr)
         {
-            *p = mode;
+            *modeParam = mode;
             onModificationEnded();
         }
     }
+    if (modeParam != nullptr)
+        ModuleProcessor::adjustParamOnWheel(modeParam, "mode", (float) mode);
     
     // BPM Normalization Range
     ImGui::Text("CV Normalization Range:");
@@ -370,17 +379,21 @@ void BPMMonitorModuleProcessor::drawParametersInNode(float itemWidth,
     float minBPM = apvts.getRawParameterValue("minBPM")->load();
     if (ImGui::SliderFloat("Min BPM", &minBPM, 20.0f, 300.0f, "%.0f"))
     {
-        if (auto* p = dynamic_cast<juce::AudioParameterFloat*>(apvts.getParameter("minBPM")))
-            *p = minBPM;
+        if (minBPMParam != nullptr)
+            *minBPMParam = minBPM;
     }
+    if (minBPMParam != nullptr)
+        ModuleProcessor::adjustParamOnWheel(minBPMParam, "minBPM", minBPM);
     if (ImGui::IsItemDeactivatedAfterEdit()) onModificationEnded();
     
     float maxBPM = apvts.getRawParameterValue("maxBPM")->load();
     if (ImGui::SliderFloat("Max BPM", &maxBPM, 20.0f, 300.0f, "%.0f"))
     {
-        if (auto* p = dynamic_cast<juce::AudioParameterFloat*>(apvts.getParameter("maxBPM")))
-            *p = maxBPM;
+        if (maxBPMParam != nullptr)
+            *maxBPMParam = maxBPM;
     }
+    if (maxBPMParam != nullptr)
+        ModuleProcessor::adjustParamOnWheel(maxBPMParam, "maxBPM", maxBPM);
     if (ImGui::IsItemDeactivatedAfterEdit()) onModificationEnded();
     
     // Beat Detection Settings (only show if detection is enabled)
@@ -391,17 +404,21 @@ void BPMMonitorModuleProcessor::drawParametersInNode(float itemWidth,
         int numInputs = apvts.getRawParameterValue("numInputs")->load();
         if (ImGui::SliderInt("Detection Inputs", &numInputs, 0, MAX_DETECTION_INPUTS))
         {
-            if (auto* p = dynamic_cast<juce::AudioParameterInt*>(apvts.getParameter("numInputs")))
-                *p = numInputs;
+            if (numInputsParam != nullptr)
+                *numInputsParam = numInputs;
         }
+        if (numInputsParam != nullptr)
+            ModuleProcessor::adjustParamOnWheel(numInputsParam, "numInputs", (float) numInputs);
         if (ImGui::IsItemDeactivatedAfterEdit()) onModificationEnded();
         
         float sensitivity = apvts.getRawParameterValue("sensitivity")->load();
         if (ImGui::SliderFloat("Sensitivity", &sensitivity, 0.0f, 1.0f, "%.2f"))
         {
-            if (auto* p = dynamic_cast<juce::AudioParameterFloat*>(apvts.getParameter("sensitivity")))
-                *p = sensitivity;
+            if (sensitivityParam != nullptr)
+                *sensitivityParam = sensitivity;
         }
+        if (sensitivityParam != nullptr)
+            ModuleProcessor::adjustParamOnWheel(sensitivityParam, "sensitivity", sensitivity);
         if (ImGui::IsItemDeactivatedAfterEdit()) onModificationEnded();
         
         const auto detMinRange = apvts.getParameterRange("detMinBPM");
@@ -411,18 +428,22 @@ void BPMMonitorModuleProcessor::drawParametersInNode(float itemWidth,
         if (ImGui::SliderFloat("Det Min BPM", &detMinBPM,
                                detMinRange.start, detMaxRange.end, "%.0f"))
         {
-            if (auto* p = dynamic_cast<juce::AudioParameterFloat*>(apvts.getParameter("detMinBPM")))
-                *p = detMinBPM;
+            if (detMinParam != nullptr)
+                *detMinParam = detMinBPM;
         }
+        if (detMinParam != nullptr)
+            ModuleProcessor::adjustParamOnWheel(detMinParam, "detMinBPM", detMinBPM);
         if (ImGui::IsItemDeactivatedAfterEdit()) onModificationEnded();
         
         float detMaxBPM = apvts.getRawParameterValue("detMaxBPM")->load();
         if (ImGui::SliderFloat("Det Max BPM", &detMaxBPM,
                                detMinRange.start, detMaxRange.end, "%.0f"))
         {
-            if (auto* p = dynamic_cast<juce::AudioParameterFloat*>(apvts.getParameter("detMaxBPM")))
-                *p = detMaxBPM;
+            if (detMaxParam != nullptr)
+                *detMaxParam = detMaxBPM;
         }
+        if (detMaxParam != nullptr)
+            ModuleProcessor::adjustParamOnWheel(detMaxParam, "detMaxBPM", detMaxBPM);
         if (ImGui::IsItemDeactivatedAfterEdit()) onModificationEnded();
     }
     

@@ -466,20 +466,19 @@ public:
 
     void drawIoPins(const NodePinHelpers& helpers) override
     {
-        helpers.drawAudioInputPin("In L", 0);
-        helpers.drawAudioInputPin("In R", 1);
+        helpers.drawParallelPins("In L", 0, "Out L", 0);
+        helpers.drawParallelPins("In R", 1, "Out R", 1);
         
         int busIdx, chanInBus;
         if (getParamRouting("size", busIdx, chanInBus))
-            helpers.drawAudioInputPin("Size Mod", getChannelIndexInProcessBlockBuffer(true, busIdx, chanInBus));
+            helpers.drawParallelPins("Size Mod", getChannelIndexInProcessBlockBuffer(true, busIdx, chanInBus), nullptr, -1);
         if (getParamRouting("damp", busIdx, chanInBus))
-            helpers.drawAudioInputPin("Damp Mod", getChannelIndexInProcessBlockBuffer(true, busIdx, chanInBus));
+            helpers.drawParallelPins("Damp Mod", getChannelIndexInProcessBlockBuffer(true, busIdx, chanInBus), nullptr, -1);
         if (getParamRouting("mix", busIdx, chanInBus))
-            helpers.drawAudioInputPin("Mix Mod", getChannelIndexInProcessBlockBuffer(true, busIdx, chanInBus));
-            
-        helpers.drawAudioOutputPin("Out L", 0);
-        helpers.drawAudioOutputPin("Out R", 1);
+            helpers.drawParallelPins("Mix Mod", getChannelIndexInProcessBlockBuffer(true, busIdx, chanInBus), nullptr, -1);
     }
+
+    bool usesCustomPinLayout() const override { return true; }
 
     juce::String getAudioInputLabel(int channel) const override
     {

@@ -32,6 +32,8 @@ public:
     void drawIoPins(const NodePinHelpers& helpers) override;
 #endif
 
+    bool usesCustomPinLayout() const override { return true; }
+
     // Labels for pins for Debug CSV enrichment
     juce::String getAudioInputLabel(int channel) const override
     {

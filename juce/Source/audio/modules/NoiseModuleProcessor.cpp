@@ -262,6 +262,20 @@ void NoiseModuleProcessor::drawParametersInNode(float itemWidth, const std::func
     {
         if (!colourIsModulated) *colourParam = colourIndex;
     }
+    if (!colourIsModulated && ImGui::IsItemHovered())
+    {
+        const float wheel = ImGui::GetIO().MouseWheel;
+        if (wheel != 0.0f)
+        {
+            const int newIndex = juce::jlimit(0, 2, colourIndex + (wheel > 0.0f ? -1 : 1));
+            if (newIndex != colourIndex)
+            {
+                colourIndex = newIndex;
+                *colourParam = colourIndex;
+                onModificationEnded();
+            }
+        }
+    }
     if (ImGui::IsItemDeactivatedAfterEdit() && !colourIsModulated) { onModificationEnded(); }
     if (colourIsModulated) { ImGui::EndDisabled(); ImGui::SameLine(); ThemeText("(mod)", theme.text.active); }
     if (ImGui::IsItemHovered()) ImGui::SetTooltip("White=flat spectrum, Pink=-3dB/oct, Brown=-6dB/oct");
@@ -425,10 +439,10 @@ void NoiseModuleProcessor::drawParametersInNode(float itemWidth, const std::func
 
 void NoiseModuleProcessor::drawIoPins(const NodePinHelpers& helpers)
 {
-    helpers.drawAudioInputPin("Level Mod", 0);
-    helpers.drawAudioInputPin("Colour Mod", 1);
-    helpers.drawAudioInputPin("Rate Mod", 2);
-    helpers.drawAudioOutputPin("Out", 0);
+    helpers.drawParallelPins("Level Mod", 0, nullptr, -1);
+    helpers.drawParallelPins("Colour Mod", 1, nullptr, -1);
+    helpers.drawParallelPins("Rate Mod", 2, nullptr, -1);
+    helpers.drawParallelPins(nullptr, -1, "Out", 0);
 }
 
 // --- Pin Label and Routing Definitions ---

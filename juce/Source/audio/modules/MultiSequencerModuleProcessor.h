@@ -32,12 +32,15 @@ public:
     std::atomic<bool> autoConnectSamplersTriggered { false };
     std::atomic<bool> autoConnectVCOTriggered { false };
 
+    ImVec2 getCustomNodeSize() const override { return ImVec2(360.0f, 0.0f); }
+
     void drawParametersInNode (float itemWidth, const std::function<bool(const juce::String& paramId)>& isParamModulated, const std::function<void()>& onModificationEnded) override;
     void drawIoPins(const NodePinHelpers& helpers) override;
 #endif
 
 protected:
     void setTimingInfo(const TransportState& state) override;
+    void forceStop() override;
 
 private:
     static juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout();

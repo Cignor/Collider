@@ -286,21 +286,20 @@ public:
 
     void drawIoPins(const NodePinHelpers& helpers) override
     {
-        helpers.drawAudioInputPin("In L", 0);
-        helpers.drawAudioInputPin("In R", 1);
+        helpers.drawParallelPins("In L", 0, "Out L", 0);
+        helpers.drawParallelPins("In R", 1, "Out R", 1);
 
         // CORRECTED MODULATION PINS - Use absolute channel indices
         int busIdx, chanInBus;
         if (getParamRouting("timeMs", busIdx, chanInBus))
-            helpers.drawAudioInputPin("Time Mod", getChannelIndexInProcessBlockBuffer(true, busIdx, chanInBus));
+            helpers.drawParallelPins("Time Mod", getChannelIndexInProcessBlockBuffer(true, busIdx, chanInBus), nullptr, -1);
         if (getParamRouting("feedback", busIdx, chanInBus))
-            helpers.drawAudioInputPin("Feedback Mod", getChannelIndexInProcessBlockBuffer(true, busIdx, chanInBus));
+            helpers.drawParallelPins("Feedback Mod", getChannelIndexInProcessBlockBuffer(true, busIdx, chanInBus), nullptr, -1);
         if (getParamRouting("mix", busIdx, chanInBus))
-            helpers.drawAudioInputPin("Mix Mod", getChannelIndexInProcessBlockBuffer(true, busIdx, chanInBus));
-
-        helpers.drawAudioOutputPin("Out L", 0);
-        helpers.drawAudioOutputPin("Out R", 1);
+            helpers.drawParallelPins("Mix Mod", getChannelIndexInProcessBlockBuffer(true, busIdx, chanInBus), nullptr, -1);
     }
+
+    bool usesCustomPinLayout() const override { return true; }
 
     juce::String getAudioInputLabel(int channel) const override
     {

@@ -1623,77 +1623,77 @@ void ImGuiNodeEditorComponent::renderImGui()
             
             if (ImGui::BeginMenu("Effects", isNodeSelected))
             {
-                if (ImGui::MenuItem("VCF")) { insertNodeBetween("vcf"); }
-                if (ImGui::MenuItem("Delay")) { insertNodeBetween("delay"); }
-                if (ImGui::MenuItem("Reverb")) { insertNodeBetween("reverb"); }
-                if (ImGui::MenuItem("Chorus")) { insertNodeBetween("chorus"); }
-                if (ImGui::MenuItem("Phaser")) { insertNodeBetween("phaser"); }
-                if (ImGui::MenuItem("Compressor")) { insertNodeBetween("compressor"); }
-                if (ImGui::MenuItem("Limiter")) { insertNodeBetween("limiter"); }
-                if (ImGui::MenuItem("Noise Gate")) { insertNodeBetween("gate"); }
-                if (ImGui::MenuItem("Reroute")) { insertNodeBetween("reroute"); }
-                if (ImGui::MenuItem("Drive")) { insertNodeBetween("drive"); }
-                if (ImGui::MenuItem("Bit Crusher")) { insertNodeBetween("bit_crusher"); }
-                if (ImGui::MenuItem("Graphic EQ")) { insertNodeBetween("graphic_eq"); }
-                if (ImGui::MenuItem("Waveshaper")) { insertNodeBetween("waveshaper"); }
-                if (ImGui::MenuItem("8-Band Shaper")) { insertNodeBetween("8bandshaper"); }
-                if (ImGui::MenuItem("Granulator")) { insertNodeBetween("granulator"); }
-                if (ImGui::MenuItem("Harmonic Shaper")) { insertNodeBetween("harmonic_shaper"); }
-                if (ImGui::MenuItem("Time/Pitch Shifter")) { insertNodeBetween("timepitch"); }
-                if (ImGui::MenuItem("De-Crackle")) { insertNodeBetween("de_crackle"); }
+                if (ImGui::MenuItem("VCF")) { insertNodeAfterSelection("vcf"); }
+                if (ImGui::MenuItem("Delay")) { insertNodeAfterSelection("delay"); }
+                if (ImGui::MenuItem("Reverb")) { insertNodeAfterSelection("reverb"); }
+                if (ImGui::MenuItem("Chorus")) { insertNodeAfterSelection("chorus"); }
+                if (ImGui::MenuItem("Phaser")) { insertNodeAfterSelection("phaser"); }
+                if (ImGui::MenuItem("Compressor")) { insertNodeAfterSelection("compressor"); }
+                if (ImGui::MenuItem("Limiter")) { insertNodeAfterSelection("limiter"); }
+                if (ImGui::MenuItem("Noise Gate")) { insertNodeAfterSelection("gate"); }
+                if (ImGui::MenuItem("Reroute")) { insertNodeAfterSelection("reroute"); }
+                if (ImGui::MenuItem("Drive")) { insertNodeAfterSelection("drive"); }
+                if (ImGui::MenuItem("Bit Crusher")) { insertNodeAfterSelection("bit_crusher"); }
+                if (ImGui::MenuItem("Graphic EQ")) { insertNodeAfterSelection("graphic_eq"); }
+                if (ImGui::MenuItem("Waveshaper")) { insertNodeAfterSelection("waveshaper"); }
+                if (ImGui::MenuItem("8-Band Shaper")) { insertNodeAfterSelection("8bandshaper"); }
+                if (ImGui::MenuItem("Granulator")) { insertNodeAfterSelection("granulator"); }
+                if (ImGui::MenuItem("Harmonic Shaper")) { insertNodeAfterSelection("harmonic_shaper"); }
+                if (ImGui::MenuItem("Time/Pitch Shifter")) { insertNodeAfterSelection("timepitch"); }
+                if (ImGui::MenuItem("De-Crackle")) { insertNodeAfterSelection("de_crackle"); }
                 ImGui::EndMenu();
             }
             
             if (ImGui::BeginMenu("Modulators", isNodeSelected))
             {
-                if (ImGui::MenuItem("LFO")) { insertNodeBetween("lfo"); }
-                if (ImGui::MenuItem("ADSR")) { insertNodeBetween("adsr"); }
-                if (ImGui::MenuItem("Random")) { insertNodeBetween("random"); }
-                if (ImGui::MenuItem("S&H")) { insertNodeBetween("s_and_h"); }
-                if (ImGui::MenuItem("Function Generator")) { insertNodeBetween("function_generator"); }
-                if (ImGui::MenuItem("Shaping Oscillator")) { insertNodeBetween("shaping_oscillator"); }
+                if (ImGui::MenuItem("LFO")) { insertNodeAfterSelection("lfo"); }
+                if (ImGui::MenuItem("ADSR")) { insertNodeAfterSelection("adsr"); }
+                if (ImGui::MenuItem("Random")) { insertNodeAfterSelection("random"); }
+                if (ImGui::MenuItem("S&H")) { insertNodeAfterSelection("s_and_h"); }
+                if (ImGui::MenuItem("Function Generator")) { insertNodeAfterSelection("function_generator"); }
+                if (ImGui::MenuItem("Shaping Oscillator")) { insertNodeAfterSelection("shaping_oscillator"); }
                 ImGui::EndMenu();
             }
             
             if (ImGui::BeginMenu("Utilities & Logic", isNodeSelected))
             {
-                if (ImGui::MenuItem("VCA")) { insertNodeBetween("vca"); }
-                if (ImGui::MenuItem("Mixer")) { insertNodeBetween("mixer"); }
-                if (ImGui::MenuItem("CV Mixer")) { insertNodeBetween("cv_mixer"); }
-                if (ImGui::MenuItem("Track Mixer")) { insertNodeBetween("track_mixer"); }
-                if (ImGui::MenuItem("PanVol")) { insertNodeBetween("panvol"); }
-                if (ImGui::MenuItem("Attenuverter")) { insertNodeBetween("attenuverter"); }
-                if (ImGui::MenuItem("Lag Processor")) { insertNodeBetween("lag_processor"); }
-                if (ImGui::MenuItem("Math")) { insertNodeBetween("math"); }
-                if (ImGui::MenuItem("Map Range")) { insertNodeBetween("map_range"); }
-                if (ImGui::MenuItem("Quantizer")) { insertNodeBetween("quantizer"); }
-                if (ImGui::MenuItem("Rate")) { insertNodeBetween("rate"); }
-                if (ImGui::MenuItem("Comparator")) { insertNodeBetween("comparator"); }
-                if (ImGui::MenuItem("Logic")) { insertNodeBetween("logic"); }
-                if (ImGui::MenuItem("Reroute")) { insertNodeBetween("reroute"); }
-                if (ImGui::MenuItem("Sequential Switch")) { insertNodeBetween("sequential_switch"); }
+                if (ImGui::MenuItem("VCA")) { insertNodeAfterSelection("vca"); }
+                if (ImGui::MenuItem("Mixer")) { insertNodeAfterSelection("mixer"); }
+                if (ImGui::MenuItem("CV Mixer")) { insertNodeAfterSelection("cv_mixer"); }
+                if (ImGui::MenuItem("Track Mixer")) { insertNodeAfterSelection("track_mixer"); }
+                if (ImGui::MenuItem("PanVol")) { insertNodeAfterSelection("panvol"); }
+                if (ImGui::MenuItem("Attenuverter")) { insertNodeAfterSelection("attenuverter"); }
+                if (ImGui::MenuItem("Lag Processor")) { insertNodeAfterSelection("lag_processor"); }
+                if (ImGui::MenuItem("Math")) { insertNodeAfterSelection("math"); }
+                if (ImGui::MenuItem("Map Range")) { insertNodeAfterSelection("map_range"); }
+                if (ImGui::MenuItem("Quantizer")) { insertNodeAfterSelection("quantizer"); }
+                if (ImGui::MenuItem("Rate")) { insertNodeAfterSelection("rate"); }
+                if (ImGui::MenuItem("Comparator")) { insertNodeAfterSelection("comparator"); }
+                if (ImGui::MenuItem("Logic")) { insertNodeAfterSelection("logic"); }
+                if (ImGui::MenuItem("Reroute")) { insertNodeAfterSelection("reroute"); }
+                if (ImGui::MenuItem("Sequential Switch")) { insertNodeAfterSelection("sequential_switch"); }
                 ImGui::EndMenu();
             }
             
             if (ImGui::BeginMenu("Computer Vision", isNodeSelected))
             {
-                if (ImGui::MenuItem("Video FX")) { insertNodeBetween("video_fx"); }
-                if (ImGui::MenuItem("Crop Video")) { insertNodeBetween("crop_video"); }
+                if (ImGui::MenuItem("Video FX")) { insertNodeAfterSelection("video_fx"); }
+                if (ImGui::MenuItem("Crop Video")) { insertNodeAfterSelection("crop_video"); }
                 ImGui::EndMenu();
             }
             
             if (ImGui::BeginMenu("TTS", isNodeSelected))
             {
-                if (ImGui::MenuItem("TTS Performer")) { insertNodeBetween("tts_performer"); }
-                if (ImGui::MenuItem("Vocal Tract Filter")) { insertNodeBetween("vocal_tract_filter"); }
+                if (ImGui::MenuItem("TTS Performer")) { insertNodeAfterSelection("tts_performer"); }
+                if (ImGui::MenuItem("Vocal Tract Filter")) { insertNodeAfterSelection("vocal_tract_filter"); }
                 ImGui::EndMenu();
             }
             
             if (ImGui::BeginMenu("Analysis", isNodeSelected))
             {
-                if (ImGui::MenuItem("Scope")) { insertNodeBetween("scope"); }
-                if (ImGui::MenuItem("Frequency Graph")) { insertNodeBetween("frequency_graph"); }
-                if (ImGui::MenuItem("BPM Monitor")) { insertNodeBetween("bpm_monitor"); }
+                if (ImGui::MenuItem("Scope")) { insertNodeAfterSelection("scope"); }
+                if (ImGui::MenuItem("Frequency Graph")) { insertNodeAfterSelection("frequency_graph"); }
+                if (ImGui::MenuItem("BPM Monitor")) { insertNodeAfterSelection("bpm_monitor"); }
                 ImGui::EndMenu();
             }
             
@@ -3844,29 +3844,18 @@ if (auto* mp = synth->getModuleForLogical (lid))
                     }
                 };
 
-            // ADD THE NEW drawParallelPins HELPER
+
+            // Manual layout: align output labels with pins using SameLine
             helpers.drawParallelPins = [&](const char* inLabel, int inChannel, const char* outLabel, int outChannel)
             {
-                // 3-column layout: [InputPin] [Right-aligned Output Label] [Output Pin]
                 ImGui::PushID((inChannel << 16) ^ outChannel ^ lid);
-                ImGui::Columns(3, "parallel_io_layout", false);
 
-                const float pinW = 18.0f;
                 const float spacing = ImGui::GetStyle().ItemSpacing.x;
-                // CRITICAL FIX: Use stable nodeContentWidth to set ALL column widths explicitly
-                // This prevents the feedback loop that causes position-dependent node scaling
-                
-                // Calculate column widths to fill exactly nodeContentWidth
-                float inTextW = inLabel ? ImGui::CalcTextSize(inLabel).x : 0.0f;
-                float inColW = inLabel ? (inTextW + pinW + spacing) : 0.0f;  // Input label + pin + spacing
-                float outPinColW = 20.0f;  // Output pin column (fixed narrow width)
-                float labelColW = nodeContentWidth - inColW - outPinColW - spacing;  // Middle fills remaining space
+                const float labelToPinGap = spacing * 0.3f;
+                const float rowStartX = ImGui::GetCursorPosX();
 
-                ImGui::SetColumnWidth(0, inColW);
-                ImGui::SetColumnWidth(1, labelColW);
-                ImGui::SetColumnWidth(2, outPinColW);
+                bool hasItemOnLine = false;
 
-                // Column 0: Input pin with label
                 if (inLabel != nullptr)
                 {
                     int inAttr = encodePinId({lid, inChannel, true});
@@ -3888,23 +3877,23 @@ if (auto* mp = synth->getModuleForLogical (lid))
                     jassert(gImNodesInputDepth >= 0);
 #endif
                     ImNodes::PopColorStyle();
+                    hasItemOnLine = true;
                 }
 
-                // Column 1: Output label (right-aligned within this column)
-                ImGui::NextColumn();
+                if (!hasItemOnLine && outLabel != nullptr)
+                {
+                    ImGui::Dummy(ImVec2(0.0f, 0.0f));
+                    hasItemOnLine = true;
+                }
+
                 if (outLabel != nullptr)
                 {
-                    // EXACT OFFICIAL PATTERN: Same as regular output pins
                     const float textW = ImGui::CalcTextSize(outLabel).x;
-                    ImGui::Indent(labelColW - textW);  // Right-align to column width
-                    ImGui::TextUnformatted(outLabel);
-                    ImGui::Unindent(labelColW - textW);
-                }
+                    const float desiredStart = rowStartX + juce::jmax(0.0f, nodeContentWidth - textW - labelToPinGap);
+                    if (hasItemOnLine)
+                        ImGui::SameLine(0.0f, spacing);
+                    ImGui::SetCursorPosX(desiredStart);
 
-                // Column 2: Output pin
-                ImGui::NextColumn();
-                if (outLabel != nullptr)
-                {
                     int outAttr = encodePinId({lid, outChannel, false});
                     seenAttrs.insert(outAttr);
                     availableAttrs.insert(outAttr);
@@ -3917,24 +3906,24 @@ if (auto* mp = synth->getModuleForLogical (lid))
                     ++gImNodesOutputDepth;
 #endif
                     ImNodes::BeginOutputAttribute(outAttr);
-                    ImGui::Dummy(ImVec2(1.0f, ImGui::GetTextLineHeight()));
+                    ImGui::TextUnformatted(outLabel);
                     ImNodes::EndOutputAttribute();
 #if JUCE_DEBUG
                     --gImNodesOutputDepth;
                     jassert(gImNodesOutputDepth >= 0);
 #endif
+                    ImNodes::PopColorStyle();
 
-                    // Cache pin center
                     ImVec2 pinMin = ImGui::GetItemRectMin();
                     ImVec2 pinMax = ImGui::GetItemRectMax();
-                    float yCenter = pinMin.y + (pinMax.y - pinMin.y) * 0.5f;
-                    float xPos = pinMax.x;
+                    const float yCenter = pinMin.y + (pinMax.y - pinMin.y) * 0.5f;
+                    const float xPos = pinMax.x;
                     attrPositions[outAttr] = ImVec2(xPos, yCenter);
-                    ImNodes::PopColorStyle();
                 }
 
-                // Restore to single column for the next row
-                ImGui::Columns(1);
+                if (inLabel == nullptr && outLabel == nullptr)
+                    ImGui::Dummy(ImVec2(0.0f, ImGui::GetTextLineHeight()));
+
                 ImGui::PopID();
             };
 
@@ -3944,6 +3933,12 @@ if (auto* mp = synth->getModuleForLogical (lid))
                 if (!module) return;
                 const auto logicalId = module->getLogicalId();
                 const auto moduleType = synth->getModuleTypeForLogical(logicalId);
+
+                if (module->usesCustomPinLayout())
+                {
+                    module->drawIoPins(helpers);
+                    return;
+                }
 
                 // 1. Get dynamic pins from the module itself.
                 auto dynamicInputs = module->getDynamicInputPins();
@@ -9901,6 +9896,84 @@ void ImGuiNodeEditorComponent::insertNodeBetween(const juce::String& nodeType, c
     }
 }
 
+void ImGuiNodeEditorComponent::insertNodeAfterSelection(const juce::String& nodeType)
+{
+    if (synth == nullptr || selectedLogicalId == 0)
+        return;
+
+    const juce::uint32 sourceLid = (juce::uint32)selectedLogicalId;
+    auto sourceNodeId = synth->getNodeIdForLogical(sourceLid);
+    if (sourceNodeId == juce::AudioProcessorGraph::NodeID{})
+        return;
+
+    auto connections = synth->getConnectionsInfo();
+    std::vector<ModularSynthProcessor::ConnectionInfo> outgoing;
+    outgoing.reserve(connections.size());
+    for (const auto& c : connections)
+    {
+        if (c.srcLogicalId == sourceLid)
+            outgoing.push_back(c);
+    }
+
+    if (outgoing.empty())
+    {
+        NotificationManager::post(NotificationManager::Type::Info, "Selected node has no outgoing connections to intercept.");
+        return;
+    }
+
+    auto newNodeId = synth->addModule(nodeType);
+    if (newNodeId == juce::AudioProcessorGraph::NodeID{})
+    {
+        juce::Logger::writeToLog("[InsertNodeAfterSelection] Failed to create module: " + nodeType);
+        return;
+    }
+
+    auto newLogicalId = synth->getLogicalIdForNode(newNodeId);
+    if (newLogicalId == 0)
+    {
+        juce::Logger::writeToLog("[InsertNodeAfterSelection] Failed to get logical ID for new node");
+        return;
+    }
+
+    ImVec2 srcPos = ImNodes::GetNodeGridSpacePos(selectedLogicalId);
+    pendingNodePositions[(int)newLogicalId] = ImVec2(srcPos.x + 160.0f, srcPos.y);
+
+    auto outputNodeId = synth->getOutputNodeID();
+    std::set<int> connectedInputChannels;
+
+    for (const auto& conn : outgoing)
+    {
+        auto dstNodeId = conn.dstLogicalId == 0 ? outputNodeId : synth->getNodeIdForLogical(conn.dstLogicalId);
+        if (dstNodeId.uid == 0)
+            continue;
+
+        synth->disconnect(sourceNodeId, conn.srcChan, dstNodeId, conn.dstChan);
+
+        if (connectedInputChannels.insert(conn.srcChan).second)
+        {
+            if (!synth->connect(sourceNodeId, conn.srcChan, newNodeId, conn.srcChan))
+            {
+                juce::Logger::writeToLog("[InsertNodeAfterSelection] Failed to connect source ch "
+                                         + juce::String(conn.srcChan) + " to new node.");
+            }
+        }
+
+        if (!synth->connect(newNodeId, conn.srcChan, dstNodeId, conn.dstChan))
+        {
+            juce::Logger::writeToLog("[InsertNodeAfterSelection] Failed to connect new node output ch "
+                                     + juce::String(conn.srcChan) + " to logical "
+                                     + juce::String((int)conn.dstLogicalId) + " ch " + juce::String(conn.dstChan));
+        }
+    }
+
+    if (getTypeForLogical(newLogicalId).equalsIgnoreCase("reroute"))
+        updateRerouteTypeFromConnections(newLogicalId);
+
+    selectedLogicalId = (int)newLogicalId;
+    graphNeedsRebuild = true;
+    pushSnapshot();
+}
+
 void ImGuiNodeEditorComponent::insertNodeBetween(const juce::String& nodeType)
 {
     if (linkToInsertOn.linkId != -1)
@@ -12457,3 +12530,4 @@ void ImGuiNodeEditorComponent::mergePresetFromFile(const juce::File& file, ImVec
     juce::Logger::writeToLog("[Preset] Successfully merged preset: " + file.getFullPathName() + 
                              " above existing nodes with offsets (" + juce::String(xOffset) + ", " + juce::String(yOffset) + ")");
 }
+

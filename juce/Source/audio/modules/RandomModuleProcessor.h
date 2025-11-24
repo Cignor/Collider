@@ -52,6 +52,7 @@ public:
     juce::String getAudioInputLabel(int channel) const override;
     juce::String getAudioOutputLabel(int channel) const override;
     bool getParamRouting(const juce::String& paramId, int& outBusIndex, int& outChannelIndexInBus) const override;
+    bool usesCustomPinLayout() const override { return true; }
 #endif
 
 private:

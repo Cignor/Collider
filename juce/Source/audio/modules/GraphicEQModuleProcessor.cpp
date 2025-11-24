@@ -766,24 +766,22 @@ void GraphicEQModuleProcessor::drawParametersInNode(float itemWidth, const std::
 void GraphicEQModuleProcessor::drawIoPins(const NodePinHelpers& helpers)
 {
     // All inputs on Bus 0 (channels 0-11)
-    helpers.drawAudioInputPin("In L", 0);
-    helpers.drawAudioInputPin("In R", 1);
+    helpers.drawParallelPins("In L", 0, "Out L", 0);
+    helpers.drawParallelPins("In R", 1, "Out R", 1);
 
     // Band gain modulation inputs (channels 2-9)
     for (int i = 0; i < 8; ++i)
     {
-        helpers.drawAudioInputPin(("Band " + juce::String(i + 1) + " Mod").toRawUTF8(), 2 + i);
+        helpers.drawParallelPins(("Band " + juce::String(i + 1) + " Mod").toRawUTF8(), 2 + i, nullptr, -1);
     }
 
     // Threshold modulation inputs (channels 10-11)
-    helpers.drawAudioInputPin("Gate Thr Mod", 10);
-    helpers.drawAudioInputPin("Trig Thr Mod", 11);
+    helpers.drawParallelPins("Gate Thr Mod", 10, nullptr, -1);
+    helpers.drawParallelPins("Trig Thr Mod", 11, nullptr, -1);
 
-    // Output pins
-    helpers.drawAudioOutputPin("Out L", 0);
-    helpers.drawAudioOutputPin("Out R", 1);
-    helpers.drawAudioOutputPin("Gate Out", 2);
-    helpers.drawAudioOutputPin("Trig Out", 3);
+    // Output-only pins
+    helpers.drawParallelPins(nullptr, -1, "Gate Out", 2);
+    helpers.drawParallelPins(nullptr, -1, "Trig Out", 3);
 }
 #endif
 

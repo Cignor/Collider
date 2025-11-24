@@ -561,25 +561,21 @@ void CVMixerModuleProcessor::drawParametersInNode (float itemWidth, const std::f
 void CVMixerModuleProcessor::drawIoPins(const NodePinHelpers& helpers)
 {
     // Audio inputs
-    helpers.drawAudioInputPin("In A", 0);
-    helpers.drawAudioInputPin("In B", 1);
-    helpers.drawAudioInputPin("In C", 2);
-    helpers.drawAudioInputPin("In D", 3);
+    helpers.drawParallelPins("In A", 0, "Mix Out", 0);
+    helpers.drawParallelPins("In B", 1, "Inv Out", 1);
+    helpers.drawParallelPins("In C", 2, nullptr, -1);
+    helpers.drawParallelPins("In D", 3, nullptr, -1);
 
     // Modulation inputs
     int busIdx, chanInBus;
     if (getParamRouting("crossfade", busIdx, chanInBus))
-        helpers.drawAudioInputPin("Crossfade Mod", getChannelIndexInProcessBlockBuffer(true, busIdx, chanInBus));
+        helpers.drawParallelPins("Crossfade Mod", getChannelIndexInProcessBlockBuffer(true, busIdx, chanInBus), nullptr, -1);
     if (getParamRouting("levelA", busIdx, chanInBus))
-        helpers.drawAudioInputPin("Level A Mod", getChannelIndexInProcessBlockBuffer(true, busIdx, chanInBus));
+        helpers.drawParallelPins("Level A Mod", getChannelIndexInProcessBlockBuffer(true, busIdx, chanInBus), nullptr, -1);
     if (getParamRouting("levelC", busIdx, chanInBus))
-        helpers.drawAudioInputPin("Level C Mod", getChannelIndexInProcessBlockBuffer(true, busIdx, chanInBus));
+        helpers.drawParallelPins("Level C Mod", getChannelIndexInProcessBlockBuffer(true, busIdx, chanInBus), nullptr, -1);
     if (getParamRouting("levelD", busIdx, chanInBus))
-        helpers.drawAudioInputPin("Level D Mod", getChannelIndexInProcessBlockBuffer(true, busIdx, chanInBus));
-
-    // Outputs
-    helpers.drawAudioOutputPin("Mix Out", 0);
-    helpers.drawAudioOutputPin("Inv Out", 1);
+        helpers.drawParallelPins("Level D Mod", getChannelIndexInProcessBlockBuffer(true, busIdx, chanInBus), nullptr, -1);
 }
 
 bool CVMixerModuleProcessor::getParamRouting(const juce::String& paramId, int& outBusIndex, int& outChannelIndexInBus) const

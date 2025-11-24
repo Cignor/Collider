@@ -361,6 +361,9 @@ juce::AudioProcessorValueTreeState::ParameterLayout VocalTractFilterModuleProces
 #include <vector>
 std::vector<DynamicPinInfo> VocalTractFilterModuleProcessor::getDynamicInputPins() const
 {
+    if (usesCustomPinLayout())
+        return {};
+
     std::vector<DynamicPinInfo> pins;
     // Bus 0: Audio In (Stereo)
     pins.push_back({ "Audio In L", getChannelIndexInProcessBlockBuffer(true, 0, 0), PinDataType::Audio });
@@ -375,6 +378,9 @@ std::vector<DynamicPinInfo> VocalTractFilterModuleProcessor::getDynamicInputPins
 
 std::vector<DynamicPinInfo> VocalTractFilterModuleProcessor::getDynamicOutputPins() const
 {
+    if (usesCustomPinLayout())
+        return {};
+
     std::vector<DynamicPinInfo> pins;
     // Stereo output on bus 0
     pins.push_back({ "Audio Out L", 0, PinDataType::Audio });
@@ -559,10 +565,10 @@ void VocalTractFilterModuleProcessor::drawParametersInNode(float itemWidth, cons
     }
     
     if (ImGui::SliderFloat("Vowel", &v, 0.0f, 4.0f, "%.1f")) {
-        if (!isVowelModulated) { *vowelShapeParam = v; if (onModificationEnded) onModificationEnded(); }
+        if (!isVowelModulated) { *vowelShapeParam = v; }
     }
+    if (ImGui::IsItemDeactivatedAfterEdit() && !isVowelModulated) { onModificationEnded(); }
     if (!isVowelModulated) adjustParamOnWheel(apvts.getParameter("vowelShape"), "vowelShape", v);
-    if (ImGui::IsItemDeactivatedAfterEdit()) { onModificationEnded(); }
     if (isVowelModulated) { ImGui::EndDisabled(); ImGui::SameLine(); ImGui::TextUnformatted("(mod)"); }
     
     // Formant Shift
@@ -574,10 +580,10 @@ void VocalTractFilterModuleProcessor::drawParametersInNode(float itemWidth, cons
     }
     
     if (ImGui::SliderFloat("Formant", &s, -1.0f, 1.0f, "%.2f")) {
-        if (!isFormantModulated) { *formantShiftParam = s; if (onModificationEnded) onModificationEnded(); }
+        if (!isFormantModulated) { *formantShiftParam = s; }
     }
+    if (ImGui::IsItemDeactivatedAfterEdit() && !isFormantModulated) { onModificationEnded(); }
     if (!isFormantModulated) adjustParamOnWheel(apvts.getParameter("formantShift"), "formantShift", s);
-    if (ImGui::IsItemDeactivatedAfterEdit()) { onModificationEnded(); }
     if (isFormantModulated) { ImGui::EndDisabled(); ImGui::SameLine(); ImGui::TextUnformatted("(mod)"); }
     
     // Instability
@@ -589,10 +595,10 @@ void VocalTractFilterModuleProcessor::drawParametersInNode(float itemWidth, cons
     }
     
     if (ImGui::SliderFloat("Instab", &i, 0.0f, 1.0f, "%.2f")) {
-        if (!isInstabilityModulated) { *instabilityParam = i; if (onModificationEnded) onModificationEnded(); }
+        if (!isInstabilityModulated) { *instabilityParam = i; }
     }
+    if (ImGui::IsItemDeactivatedAfterEdit() && !isInstabilityModulated) { onModificationEnded(); }
     if (!isInstabilityModulated) adjustParamOnWheel(apvts.getParameter("instability"), "instability", i);
-    if (ImGui::IsItemDeactivatedAfterEdit()) { onModificationEnded(); }
     if (isInstabilityModulated) { ImGui::EndDisabled(); ImGui::SameLine(); ImGui::TextUnformatted("(mod)"); }
     
     // Gain
@@ -604,10 +610,10 @@ void VocalTractFilterModuleProcessor::drawParametersInNode(float itemWidth, cons
     }
     
     if (ImGui::SliderFloat("Gain", &g, -24.0f, 24.0f, "%.1f dB")) {
-        if (!isGainModulated) { *outputGainParam = g; if (onModificationEnded) onModificationEnded(); }
+        if (!isGainModulated) { *outputGainParam = g; }
     }
+    if (ImGui::IsItemDeactivatedAfterEdit() && !isGainModulated) { onModificationEnded(); }
     if (!isGainModulated) adjustParamOnWheel(apvts.getParameter("formantGain"), "formantGain", g);
-    if (ImGui::IsItemDeactivatedAfterEdit()) { onModificationEnded(); }
     if (isGainModulated) { ImGui::EndDisabled(); ImGui::SameLine(); ImGui::TextUnformatted("(mod)"); }
     
     ImGui::PopItemWidth();
@@ -615,22 +621,20 @@ void VocalTractFilterModuleProcessor::drawParametersInNode(float itemWidth, cons
 
 void VocalTractFilterModuleProcessor::drawIoPins(const NodePinHelpers& helpers)
 {
-    helpers.drawAudioInputPin("Audio In L", 0);
-    helpers.drawAudioInputPin("Audio In R", 1);
+    // Audio inputs and outputs
+    helpers.drawParallelPins("Audio In L", 0, "Audio Out L", 0);
+    helpers.drawParallelPins("Audio In R", 1, "Audio Out R", 1);
     
     // Modulation input pins
     int busIdx, chanInBus;
     if (getParamRouting("vowelShape", busIdx, chanInBus))
-        helpers.drawAudioInputPin("Vowel Mod", getChannelIndexInProcessBlockBuffer(true, busIdx, chanInBus));
+        helpers.drawParallelPins("Vowel Mod", getChannelIndexInProcessBlockBuffer(true, busIdx, chanInBus), nullptr, -1);
     if (getParamRouting("formantShift", busIdx, chanInBus))
-        helpers.drawAudioInputPin("Formant Mod", getChannelIndexInProcessBlockBuffer(true, busIdx, chanInBus));
+        helpers.drawParallelPins("Formant Mod", getChannelIndexInProcessBlockBuffer(true, busIdx, chanInBus), nullptr, -1);
     if (getParamRouting("instability", busIdx, chanInBus))
-        helpers.drawAudioInputPin("Instability Mod", getChannelIndexInProcessBlockBuffer(true, busIdx, chanInBus));
+        helpers.drawParallelPins("Instability Mod", getChannelIndexInProcessBlockBuffer(true, busIdx, chanInBus), nullptr, -1);
     if (getParamRouting("formantGain", busIdx, chanInBus))
-        helpers.drawAudioInputPin("Gain Mod", getChannelIndexInProcessBlockBuffer(true, busIdx, chanInBus));
-    
-    helpers.drawAudioOutputPin("Audio Out L", 0);
-    helpers.drawAudioOutputPin("Audio Out R", 1);
+        helpers.drawParallelPins("Gain Mod", getChannelIndexInProcessBlockBuffer(true, busIdx, chanInBus), nullptr, -1);
 }
 #endif
 

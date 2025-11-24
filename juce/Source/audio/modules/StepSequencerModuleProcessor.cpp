@@ -350,15 +350,20 @@ void StepSequencerModuleProcessor::processBlock (juce::AudioBuffer<float>& buffe
         else
         {
             // FREE-RUNNING MODE: Use the internal phase clock
-            const double phaseInc = (sampleRate > 0.0 ? (double) rate / sampleRate : 0.0);
-            phase += phaseInc;
-            if (phase >= 1.0)
+            // CRITICAL FIX: Only advance in free-running mode if transport is playing
+            if (m_currentTransport.isPlaying)
             {
-                phase -= 1.0;
-                const int next = (currentStep.load() + 1) % juce::jlimit (1, MAX_STEPS, activeSteps);
-                currentStep.store(next);
-                stepAdvanced = true;
+                const double phaseInc = (sampleRate > 0.0 ? (double) rate / sampleRate : 0.0);
+                phase += phaseInc;
+                if (phase >= 1.0)
+                {
+                    phase -= 1.0;
+                    const int next = (currentStep.load() + 1) % juce::jlimit (1, MAX_STEPS, activeSteps);
+                    currentStep.store(next);
+                    stepAdvanced = true;
+                }
             }
+            // If transport is stopped, phase does not advance
         }
         lastStepsLive = activeSteps;
 
@@ -418,10 +423,12 @@ void StepSequencerModuleProcessor::processBlock (juce::AudioBuffer<float>& buffe
         previousGateOn = isGateOn;
         
         // 3. Generate the binary "Gate" output with fade-in.
-        const float gateBinaryValue = isGateOn ? gateFadeProgress : 0.0f;
+        // CRITICAL FIX: Silence gates when transport is stopped
+        const float gateBinaryValue = (m_currentTransport.isPlaying && isGateOn) ? gateFadeProgress : 0.0f;
         
         // 4. Generate the analog "Gate Nuanced" output with fade-in.
-        const float gateNuancedValue = isGateOn ? (stepGateLevel * gateFadeProgress) : 0.0f;
+        // CRITICAL FIX: Silence gates when transport is stopped
+        const float gateNuancedValue = (m_currentTransport.isPlaying && isGateOn) ? (stepGateLevel * gateFadeProgress) : 0.0f;
         // --- END OF NEW LOGIC ---
         
         // Live gate level is already stored in the UI telemetry bootstrap
@@ -461,13 +468,19 @@ void StepSequencerModuleProcessor::processBlock (juce::AudioBuffer<float>& buffe
         if (modOut != nullptr)      modOut[i] = 0.0f;
         // Timed gate remains level-based
         // Trigger Out: 1ms pulse after each step advance
+        // CRITICAL FIX: Silence triggers when transport is stopped
         if (trigOut != nullptr)
         {
             float pulse = 0.0f;
-            if (pendingTriggerSamples > 0)
+            if (m_currentTransport.isPlaying && pendingTriggerSamples > 0)
             {
                 pulse = 1.0f;
                 --pendingTriggerSamples;
+            }
+            else
+            {
+                // Clear any pending triggers when transport stops
+                pendingTriggerSamples = 0;
             }
             trigOut[i] = pulse;
         }
@@ -780,20 +793,23 @@ void StepSequencerModuleProcessor::drawParametersInNode (float itemWidth, const 
     ImGui::PopItemWidth();
 
     // --- Per-step Trigger checkboxes row ---
-    // Place checkboxes exactly under each slider, matching widths and exact columns
     {
-        const float cbWidth = sliderW; // same width as sliders
+        const ImVec2 styleSpacing = ImGui::GetStyle().ItemSpacing;
+        const float spacing = styleSpacing.x;
+        const ImVec2 trigRowStart = ImGui::GetCursorScreenPos();
+        const float checkboxSize = ImGui::GetFrameHeight();
+        const float rowWidth = (sliderW * shown) + (shown > 0 ? spacing * (shown - 1) : 0.0f);
+
+        ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(spacing, styleSpacing.y));
+        ImGui::BeginGroup();
         for (int i = 0; i < shown; ++i)
         {
-            // Compute the same X layout as sliders
-            if (i > 0) ImGui::SameLine();
+            const float columnX = gate_sliders_p0.x + i * (sliderW + spacing);
 
             bool baseTrig = (stepTrigParams.size() > (size_t) i && stepTrigParams[i] != nullptr) ? (bool) (*stepTrigParams[i]) : false;
-            // Only grey out when the TRIGGER mod is connected (not the value mod)
             const juce::String trigModId = "step" + juce::String(i + 1) + "_trig_mod";
             const bool trigIsModulated = isParamModulated(trigModId);
 
-            // Use live value for display when modulated
             bool displayTrig = baseTrig;
             if (trigIsModulated) {
                 displayTrig = getLiveParamValueFor("step" + juce::String(i + 1) + "_trig_mod",
@@ -801,27 +817,32 @@ void StepSequencerModuleProcessor::drawParametersInNode (float itemWidth, const 
                                                   baseTrig ? 1.0f : 0.0f) > 0.5f;
             }
 
+            ImGui::SetCursorScreenPos(ImVec2(columnX + (sliderW - checkboxSize) * 0.5f, trigRowStart.y));
+
             if (trigIsModulated) ImGui::BeginDisabled();
             ImGui::PushID(1000 + i);
-            ImGui::SetNextItemWidth(cbWidth);
-            ImGui::PushItemWidth(cbWidth);
-            bool changed = ImGui::Checkbox("##trig", &displayTrig);
-            ImGui::PopItemWidth();
-            if (changed && !trigIsModulated && stepTrigParams.size() > (size_t) i && stepTrigParams[i] != nullptr)
+            bool toggled = ImGui::Checkbox("##trig", &displayTrig);
+            if (toggled && !trigIsModulated && stepTrigParams[i] != nullptr)
             {
-                // Only update parameter if not modulated
                 *stepTrigParams[i] = displayTrig;
+                onModificationEnded();
             }
-            // Fill remaining width so columns align exactly to sliderW
+            else if (!trigIsModulated && ImGui::IsItemDeactivatedAfterEdit())
+                onModificationEnded();
+            if (ImGui::IsItemHovered())
             {
-                float used = ImGui::GetItemRectSize().x;
-                if (used < cbWidth) { ImGui::SameLine(0.0f, 0.0f); ImGui::Dummy(ImVec2(cbWidth - used, 0.0f)); }
+                ImGui::BeginTooltip();
+                ImGui::Text("Step %d Trigger", i + 1);
+                ImGui::EndTooltip();
             }
-            if (ImGui::IsItemDeactivatedAfterEdit()) { onModificationEnded(); }
             ImGui::PopID();
-            if (trigIsModulated) { ImGui::EndDisabled(); }
+            if (trigIsModulated) ImGui::EndDisabled();
         }
-        // Mod banner if any are modulated
+        ImGui::SetCursorScreenPos(trigRowStart);
+        ImGui::Dummy(ImVec2(rowWidth, checkboxSize));
+        ImGui::EndGroup();
+        ImGui::PopStyleVar();
+
         bool anyTrigMod = false;
         for (int i = 0; i < shown; ++i)
         {
@@ -837,15 +858,13 @@ void StepSequencerModuleProcessor::drawIoPins(const NodePinHelpers& helpers)
 {
     // ARCHITECTURAL FIX: All inputs are now on a single bus, so we can use direct channel indices
     
-    // Main stereo audio input pins (Channels 0-1)
-    helpers.drawAudioInputPin("Mod In L", 0);
-    helpers.drawAudioInputPin("Mod In R", 1);
-    
-    // Global modulation inputs (Channels 2-4)
-    helpers.drawAudioInputPin("Rate Mod", 2);
-    helpers.drawAudioInputPin("Gate Mod", 3);
-    helpers.drawAudioInputPin("Steps Mod", 4);
-    
+    helpers.drawParallelPins("Mod In L", 0, "Pitch", 0);
+    helpers.drawParallelPins("Mod In R", 1, "Gate", 1);
+    helpers.drawParallelPins("Rate Mod", 2, "Gate Nuanced", 2);
+    helpers.drawParallelPins("Gate Mod", 3, "Velocity", 3);
+    helpers.drawParallelPins("Steps Mod", 4, "Mod", 4);
+    helpers.drawParallelPins(nullptr, -1, "Trigger", 5);
+
     // Dynamic per-step modulation inputs
     const int boundMaxPins = stepsModMaxParam != nullptr ? juce::jlimit (1, MAX_STEPS, (int) stepsModMaxParam->load()) : MAX_STEPS;
     int activeSteps = numStepsParam != nullptr ? (int) numStepsParam->load() : 8;
@@ -868,20 +887,10 @@ void StepSequencerModuleProcessor::drawIoPins(const NodePinHelpers& helpers)
         const int valChan  = 6 + (stepIdx - 1);           // 6..21
         const int trigChan = 22 + (stepIdx - 1);          // 22..37
         const int gateChan = 38 + (stepIdx - 1);          // 38..53
-        helpers.drawAudioInputPin(("Step " + juce::String(stepIdx) + " Mod").toRawUTF8(), valChan);
-        helpers.drawAudioInputPin(("Step " + juce::String(stepIdx) + " Trig Mod").toRawUTF8(), trigChan);
-        helpers.drawAudioInputPin(("Step " + juce::String(stepIdx) + " Gate Mod").toRawUTF8(), gateChan);
+        helpers.drawParallelPins(("Step " + juce::String(stepIdx) + " Mod").toRawUTF8(), valChan, nullptr, -1);
+        helpers.drawParallelPins(("Step " + juce::String(stepIdx) + " Trig Mod").toRawUTF8(), trigChan, nullptr, -1);
+        helpers.drawParallelPins(("Step " + juce::String(stepIdx) + " Gate Mod").toRawUTF8(), gateChan, nullptr, -1);
     }
-
-    // Output pins
-    helpers.drawAudioOutputPin("Pitch", 0);
-    helpers.drawAudioOutputPin("Gate", 1);
-    helpers.drawAudioOutputPin("Gate Nuanced", 2);
-    helpers.drawAudioOutputPin("Velocity", 3);
-    helpers.drawAudioOutputPin("Mod", 4);
-    helpers.drawAudioOutputPin("Trigger", 5);
-
-    // Note: helpers API handles pin disappearance when the number of steps shrinks; no manual clear required here.
 }
 #endif
 
@@ -1011,4 +1020,15 @@ std::optional<RhythmInfo> StepSequencerModuleProcessor::getRhythmInfo() const
     return info;
 }
 
+void StepSequencerModuleProcessor::forceStop()
+{
+    // Reset sequencer to step 0 and phase to 0
+    currentStep.store(0);
+    phase = 0.0;
+    // Reset gate fade state
+    previousGateOn = false;
+    gateFadeProgress = 0.0f;
+    // Clear any pending trigger pulses
+    pendingTriggerSamples = 0;
+}
 

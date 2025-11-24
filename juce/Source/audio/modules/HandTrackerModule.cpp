@@ -487,16 +487,40 @@ void HandTrackerModule::drawParametersInNode(float itemWidth,
     #endif
     
     // Confidence
-    float conf = confidenceThresholdParam ? confidenceThresholdParam->load() : 0.1f;
+    bool confMod = isParamModulated("confidence");
+    float confFallback = confidenceThresholdParam ? confidenceThresholdParam->load() : 0.1f;
+    float conf = confMod ? getLiveParamValue("confidence", confFallback) : confFallback;
+    if (confMod) ImGui::BeginDisabled();
     if (ImGui::SliderFloat("Confidence", &conf, 0.0f, 1.0f, "%.2f")) {
-        *dynamic_cast<juce::AudioParameterFloat*>(apvts.getParameter("confidence")) = conf; onModificationEnded();
+        if (!confMod) *dynamic_cast<juce::AudioParameterFloat*>(apvts.getParameter("confidence")) = conf;
     }
+    if (ImGui::IsItemDeactivatedAfterEdit() && !confMod) onModificationEnded();
+    if (!confMod) adjustParamOnWheel(apvts.getParameter("confidence"), "confidence", conf);
+    if (confMod) ImGui::EndDisabled();
     // Zoom -/+
+    bool zoomMod = isParamModulated("zoomLevel");
     int level = zoomLevelParam ? (int)zoomLevelParam->load() : 1; level = juce::jlimit(0,2,level);
     float bw = (itemWidth/2.0f)-4.0f; bool atMin=(level<=0), atMax=(level>=2);
+    if (zoomMod) ImGui::BeginDisabled();
     if(atMin) ImGui::BeginDisabled(); if(ImGui::Button("-", ImVec2(bw,0))){ int nl=juce::jmax(0,level-1); if(auto* p=apvts.getParameter("zoomLevel")) p->setValueNotifyingHost((float)nl/2.0f); onModificationEnded(); }
     if(atMin) ImGui::EndDisabled(); ImGui::SameLine(); if(atMax) ImGui::BeginDisabled(); if(ImGui::Button("+", ImVec2(bw,0))){ int nl=juce::jmin(2,level+1); if(auto* p=apvts.getParameter("zoomLevel")) p->setValueNotifyingHost((float)nl/2.0f); onModificationEnded(); }
     if(atMax) ImGui::EndDisabled();
+    // Scroll-edit for zoom level
+    if (!zoomMod && ImGui::IsItemHovered())
+    {
+        const float wheel = ImGui::GetIO().MouseWheel;
+        if (wheel != 0.0f)
+        {
+            const int newLevel = juce::jlimit(0, 2, level + (wheel > 0.0f ? 1 : -1));
+            if (newLevel != level)
+            {
+                if (auto* p = apvts.getParameter("zoomLevel"))
+                    p->setValueNotifyingHost((float)newLevel / 2.0f);
+                onModificationEnded();
+            }
+        }
+    }
+    if (zoomMod) ImGui::EndDisabled();
 
     
     // Zone color palette (4 colors)

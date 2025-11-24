@@ -31,24 +31,21 @@ public:
 
     void drawIoPins(const NodePinHelpers& helpers) override
     {
-        // Two stereo input pairs: signal (0,1) and gate (2,3)
-        helpers.drawAudioInputPin("Signal In L", 0);
-        helpers.drawAudioInputPin("Signal In R", 1);
-        helpers.drawAudioInputPin("Gate In L", 2);
-        helpers.drawAudioInputPin("Gate In R", 3);
+        helpers.drawParallelPins("Signal In L", 0, "Out L", 0);
+        helpers.drawParallelPins("Signal In R", 1, "Out R", 1);
+        helpers.drawParallelPins("Gate In L", 2, nullptr, -1);
+        helpers.drawParallelPins("Gate In R", 3, nullptr, -1);
 
-        // CORRECTED MODULATION PINS - Use absolute channel indices
         int busIdx, chanInBus;
         if (getParamRouting("threshold_mod", busIdx, chanInBus))
-            helpers.drawAudioInputPin("Threshold Mod", getChannelIndexInProcessBlockBuffer(true, busIdx, chanInBus));
+            helpers.drawParallelPins("Threshold Mod", getChannelIndexInProcessBlockBuffer(true, busIdx, chanInBus), nullptr, -1);
         if (getParamRouting("slewMs_mod", busIdx, chanInBus))
-            helpers.drawAudioInputPin("Slew Mod", getChannelIndexInProcessBlockBuffer(true, busIdx, chanInBus));
+            helpers.drawParallelPins("Slew Mod", getChannelIndexInProcessBlockBuffer(true, busIdx, chanInBus), nullptr, -1);
         if (getParamRouting("edge_mod", busIdx, chanInBus))
-            helpers.drawAudioInputPin("Edge Mod", getChannelIndexInProcessBlockBuffer(true, busIdx, chanInBus));
-
-        helpers.drawAudioOutputPin("Out L", 0);
-        helpers.drawAudioOutputPin("Out R", 1);
+            helpers.drawParallelPins("Edge Mod", getChannelIndexInProcessBlockBuffer(true, busIdx, chanInBus), nullptr, -1);
     }
+
+    bool usesCustomPinLayout() const override { return true; }
 
     juce::String getAudioInputLabel(int channel) const override
     {

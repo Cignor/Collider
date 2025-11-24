@@ -25,8 +25,7 @@ public:
 
     void drawIoPins(const NodePinHelpers& helpers) override
     {
-        helpers.drawAudioInputPin("In", 0);
-        helpers.drawAudioOutputPin("Out", 0);
+        helpers.drawParallelPins("In", 0, "Out", 0);
     }
 
     juce::String getAudioInputLabel(int channel) const override
@@ -47,6 +46,8 @@ public:
         }
     }
 #endif
+
+    bool usesCustomPinLayout() const override { return true; }
 
     const juce::AudioBuffer<float>& getScopeBuffer() const { return scopeBuffer; }
     

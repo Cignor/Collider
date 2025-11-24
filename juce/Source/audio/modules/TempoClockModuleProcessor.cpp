@@ -800,22 +800,14 @@ void TempoClockModuleProcessor::drawParametersInNode(float itemWidth, const std:
 
 void TempoClockModuleProcessor::drawIoPins(const NodePinHelpers& helpers)
 {
-    helpers.drawAudioInputPin("BPM Mod", 0);
-    helpers.drawAudioInputPin("Tap", 1);
-    helpers.drawAudioInputPin("Nudge+", 2);
-    helpers.drawAudioInputPin("Nudge-", 3);
-    helpers.drawAudioInputPin("Play", 4);
-    helpers.drawAudioInputPin("Stop", 5);
-    helpers.drawAudioInputPin("Reset", 6);
-    helpers.drawAudioInputPin("Swing Mod", 7);
-
-    helpers.drawAudioOutputPin("Clock", 0);
-    helpers.drawAudioOutputPin("Beat Trig", 1);
-    helpers.drawAudioOutputPin("Bar Trig", 2);
-    helpers.drawAudioOutputPin("Beat Gate", 3);
-    helpers.drawAudioOutputPin("Phase", 4);
-    helpers.drawAudioOutputPin("BPM CV", 5);
-    helpers.drawAudioOutputPin("Downbeat", 6);
+    helpers.drawParallelPins("BPM Mod", 0, "Clock", 0);
+    helpers.drawParallelPins("Tap", 1, "Beat Trig", 1);
+    helpers.drawParallelPins("Nudge+", 2, "Bar Trig", 2);
+    helpers.drawParallelPins("Nudge-", 3, "Beat Gate", 3);
+    helpers.drawParallelPins("Play", 4, "Phase", 4);
+    helpers.drawParallelPins("Stop", 5, "BPM CV", 5);
+    helpers.drawParallelPins("Reset", 6, "Downbeat", 6);
+    helpers.drawParallelPins("Swing Mod", 7, nullptr, -1);
 }
 #endif
 

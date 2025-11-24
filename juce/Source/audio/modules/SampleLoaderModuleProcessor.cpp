@@ -1643,6 +1643,20 @@ void SampleLoaderModuleProcessor::drawParametersInNode(float itemWidth, const st
                 *syncModeParam = syncModeIdx;
             onModificationEnded();
         }
+        if (syncModeParam && ImGui::IsItemHovered())
+        {
+            const float wheel = ImGui::GetIO().MouseWheel;
+            if (wheel != 0.0f)
+            {
+                const int newIdx = juce::jlimit(0, 1, syncModeIdx + (wheel > 0.0f ? -1 : 1));
+                if (newIdx != syncModeIdx)
+                {
+                    syncModeIdx = newIdx;
+                    *syncModeParam = syncModeIdx;
+                    onModificationEnded();
+                }
+            }
+        }
     }
     ImGui::Spacing();
     
@@ -1808,6 +1822,23 @@ void SampleLoaderModuleProcessor::drawParametersInNode(float itemWidth, const st
             sampleProcessor->setEngine(engineIdx == 0 ? SampleVoiceProcessor::Engine::RubberBand
                                                       : SampleVoiceProcessor::Engine::Naive);
         onModificationEnded();
+    }
+    if (ImGui::IsItemHovered())
+    {
+        const float wheel = ImGui::GetIO().MouseWheel;
+        if (wheel != 0.0f)
+        {
+            const int newIdx = juce::jlimit(0, 1, engineIdx + (wheel > 0.0f ? -1 : 1));
+            if (newIdx != engineIdx)
+            {
+                engineIdx = newIdx;
+                apvts.getParameter("engine")->setValueNotifyingHost((float) engineIdx);
+                if (sampleProcessor)
+                    sampleProcessor->setEngine(engineIdx == 0 ? SampleVoiceProcessor::Engine::RubberBand
+                                                              : SampleVoiceProcessor::Engine::Naive);
+                onModificationEnded();
+            }
+        }
     }
     
     if (engineIdx == 0)
@@ -2045,17 +2076,18 @@ void SampleLoaderModuleProcessor::drawParametersInNode(float itemWidth, const st
 void SampleLoaderModuleProcessor::drawIoPins(const NodePinHelpers& helpers)
 {
     // Modulation inputs
-    helpers.drawAudioInputPin("Pitch Mod", 0);
-    helpers.drawAudioInputPin("Speed Mod", 1);
-    helpers.drawAudioInputPin("Gate Mod", 2);
-    helpers.drawAudioInputPin("Trigger Mod", 3);
-    helpers.drawAudioInputPin("Range Start Mod", 4);
-    helpers.drawAudioInputPin("Range End Mod", 5);
-    helpers.drawAudioInputPin("Randomize Trig", 6);
-    helpers.drawAudioInputPin("Position Mod", 7);
+    helpers.drawParallelPins("Pitch Mod", 0, nullptr, -1);
+    helpers.drawParallelPins("Speed Mod", 1, nullptr, -1);
+    helpers.drawParallelPins("Gate Mod", 2, nullptr, -1);
+    helpers.drawParallelPins("Trigger Mod", 3, nullptr, -1);
+    helpers.drawParallelPins("Range Start Mod", 4, nullptr, -1);
+    helpers.drawParallelPins("Range End Mod", 5, nullptr, -1);
+    helpers.drawParallelPins("Randomize Trig", 6, nullptr, -1);
+    helpers.drawParallelPins("Position Mod", 7, nullptr, -1);
+
     // Audio outputs (stereo)
-    helpers.drawAudioOutputPin("Out L", 0);
-    helpers.drawAudioOutputPin("Out R", 1);
+    helpers.drawParallelPins(nullptr, -1, "Out L", 0);
+    helpers.drawParallelPins(nullptr, -1, "Out R", 1);
 }
 #endif
 

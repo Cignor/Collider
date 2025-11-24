@@ -149,7 +149,25 @@ void DebugModuleProcessor::drawParametersInNode(float itemWidth, const std::func
     if (ImGui::Checkbox("Pause", &uiPaused)) {}
     ImGui::SameLine(); ImGui::Text("Dropped: %u", droppedEvents.load());
     ImGui::SliderFloat("Threshold", &threshold, 0.0f, 0.05f, "%.4f");
+    if (ImGui::IsItemHovered())
+    {
+        const float wheel = ImGui::GetIO().MouseWheel;
+        if (wheel != 0.0f)
+        {
+            const float step = 0.0005f;
+            threshold = juce::jlimit (0.0f, 0.05f, threshold + (wheel > 0.0f ? step : -step));
+        }
+    }
     ImGui::SliderInt("Max events/block", &maxEventsPerBlock, 1, 512);
+    if (ImGui::IsItemHovered())
+    {
+        const float wheel = ImGui::GetIO().MouseWheel;
+        if (wheel != 0.0f)
+        {
+            const int delta = wheel > 0.0f ? 1 : -1;
+            maxEventsPerBlock = juce::jlimit (1, 512, maxEventsPerBlock + delta);
+        }
+    }
     if (ImGui::Button("Clear")) { uiEvents.clear(); for (auto& s : stats) { s.min = 1e9f; s.max = -1e9f; s.rmsAcc = 0.0f; s.rmsCount = 0; } }
     ImGui::SameLine();
     if (ImGui::Button("Copy CSV"))
@@ -464,15 +482,12 @@ void DebugModuleProcessor::drawParametersInNode(float itemWidth, const std::func
 
 void DebugModuleProcessor::drawIoPins(const NodePinHelpers& helpers)
 {
-    // One bus with 8 channels, editor pins refer to channel indices 0..7
-    helpers.drawAudioInputPin("In 1", 0);
-    helpers.drawAudioInputPin("In 2", 1);
-    helpers.drawAudioInputPin("In 3", 2);
-    helpers.drawAudioInputPin("In 4", 3);
-    helpers.drawAudioInputPin("In 5", 4);
-    helpers.drawAudioInputPin("In 6", 5);
-    helpers.drawAudioInputPin("In 7", 6);
-    helpers.drawAudioInputPin("In 8", 7);
+    // One bus with 8 channels, render inputs using the parallel helper for alignment
+    for (int ch = 0; ch < 8; ++ch)
+    {
+        const juce::String label = "In " + juce::String (ch + 1);
+        helpers.drawParallelPins (label.toRawUTF8(), ch, nullptr, -1);
+    }
 }
 #endif
 

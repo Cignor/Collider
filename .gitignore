@@ -78,6 +78,9 @@ audio/Recorder/*.wav
 *.blend
 *.blend1
 
+# Video assets
+*.mov
+
 # C# build artifacts
 **/obj/Debug/
 **/obj/Release/

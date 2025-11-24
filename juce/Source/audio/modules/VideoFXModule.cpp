@@ -621,7 +621,6 @@ void VideoFXModule::drawParametersInNode(float itemWidth,
                                          const std::function<bool(const juce::String& paramId)>& isParamModulated,
                                          const std::function<void()>& onModificationEnded)
 {
-    juce::ignoreUnused(isParamModulated);
     const auto& theme = ThemeManager::getInstance().getCurrentTheme();
     auto themeText = [](const juce::String& text, const ImVec4& colour)
     {
@@ -674,12 +673,14 @@ void VideoFXModule::drawParametersInNode(float itemWidth,
 #endif
 
     // Zoom buttons
+    bool zoomModulated = isParamModulated("zoomLevel");
     int level = zoomLevelParam ? (int) zoomLevelParam->load() : 1;
     level = juce::jlimit(0, 2, level);
     float buttonWidth = (itemWidth / 2.0f) - 4.0f;
     const bool atMin = (level <= 0);
     const bool atMax = (level >= 2);
 
+    if (zoomModulated) ImGui::BeginDisabled();
     if (atMin) ImGui::BeginDisabled();
     if (ImGui::Button("-", ImVec2(buttonWidth, 0)))
     {
@@ -701,6 +702,22 @@ void VideoFXModule::drawParametersInNode(float itemWidth,
         onModificationEnded();
     }
     if (atMax) ImGui::EndDisabled();
+    // Scroll-edit for zoom level
+    if (!zoomModulated && ImGui::IsItemHovered())
+    {
+        const float wheel = ImGui::GetIO().MouseWheel;
+        if (wheel != 0.0f)
+        {
+            const int newLevel = juce::jlimit(0, 2, level + (wheel > 0.0f ? 1 : -1));
+            if (newLevel != level)
+            {
+                if (auto* p = apvts.getParameter("zoomLevel"))
+                    p->setValueNotifyingHost((float)newLevel / 2.0f);
+                onModificationEnded();
+            }
+        }
+    }
+    if (zoomModulated) ImGui::EndDisabled();
     
     themeText(juce::String::formatted("Source ID In: %d", (int)currentSourceId.load()), theme.modules.videofx_section_header);
     themeText(juce::String::formatted("Output ID: %d", (int)getLogicalId()), theme.modules.videofx_section_header);
@@ -708,85 +725,178 @@ void VideoFXModule::drawParametersInNode(float itemWidth,
     themeText("Color Adjustments", theme.modules.videofx_section_subheader);
     
     // Color sliders
-    float brightness = brightnessParam ? brightnessParam->load() : 0.0f;
+    bool brightnessMod = isParamModulated("brightness");
+    const float brightnessDefault = brightnessParam ? brightnessParam->load() : 0.0f;
+    float brightness = brightnessMod ? getLiveParamValue("brightness", brightnessDefault) : brightnessDefault;
+    if (brightnessMod) ImGui::BeginDisabled();
     if (ImGui::SliderFloat("Brightness", &brightness, -100.0f, 100.0f))
     {
-        if (auto* p = dynamic_cast<juce::AudioParameterFloat*>(apvts.getParameter("brightness"))) *p = brightness;
-        onModificationEnded();
+        if (!brightnessMod)
+        {
+            if (auto* p = dynamic_cast<juce::AudioParameterFloat*>(apvts.getParameter("brightness")))
+                *p = brightness;
+        }
     }
+    if (ImGui::IsItemDeactivatedAfterEdit() && !brightnessMod) onModificationEnded();
+    if (!brightnessMod) adjustParamOnWheel(apvts.getParameter("brightness"), "brightness", brightness);
+    if (brightnessMod) ImGui::EndDisabled();
     
-    float contrast = contrastParam ? contrastParam->load() : 1.0f;
+    bool contrastMod = isParamModulated("contrast");
+    const float contrastDefault = contrastParam ? contrastParam->load() : 1.0f;
+    float contrast = contrastMod ? getLiveParamValue("contrast", contrastDefault) : contrastDefault;
+    if (contrastMod) ImGui::BeginDisabled();
     if (ImGui::SliderFloat("Contrast", &contrast, 0.0f, 3.0f))
     {
-        if (auto* p = dynamic_cast<juce::AudioParameterFloat*>(apvts.getParameter("contrast"))) *p = contrast;
-        onModificationEnded();
+        if (!contrastMod)
+        {
+            if (auto* p = dynamic_cast<juce::AudioParameterFloat*>(apvts.getParameter("contrast")))
+                *p = contrast;
+        }
     }
+    if (ImGui::IsItemDeactivatedAfterEdit() && !contrastMod) onModificationEnded();
+    if (!contrastMod) adjustParamOnWheel(apvts.getParameter("contrast"), "contrast", contrast);
+    if (contrastMod) ImGui::EndDisabled();
     
-    float saturation = saturationParam ? saturationParam->load() : 1.0f;
+    bool saturationMod = isParamModulated("saturation");
+    const float saturationDefault = saturationParam ? saturationParam->load() : 1.0f;
+    float saturation = saturationMod ? getLiveParamValue("saturation", saturationDefault) : saturationDefault;
+    if (saturationMod) ImGui::BeginDisabled();
     if (ImGui::SliderFloat("Saturation", &saturation, 0.0f, 3.0f))
     {
-        if (auto* p = dynamic_cast<juce::AudioParameterFloat*>(apvts.getParameter("saturation"))) *p = saturation;
-        onModificationEnded();
+        if (!saturationMod)
+        {
+            if (auto* p = dynamic_cast<juce::AudioParameterFloat*>(apvts.getParameter("saturation")))
+                *p = saturation;
+        }
     }
+    if (ImGui::IsItemDeactivatedAfterEdit() && !saturationMod) onModificationEnded();
+    if (!saturationMod) adjustParamOnWheel(apvts.getParameter("saturation"), "saturation", saturation);
+    if (saturationMod) ImGui::EndDisabled();
     
-    float hueShift = hueShiftParam ? hueShiftParam->load() : 0.0f;
+    bool hueShiftMod = isParamModulated("hueShift");
+    const float hueDefault = hueShiftParam ? hueShiftParam->load() : 0.0f;
+    float hueShift = hueShiftMod ? getLiveParamValue("hueShift", hueDefault) : hueDefault;
+    if (hueShiftMod) ImGui::BeginDisabled();
     if (ImGui::SliderFloat("Hue Shift", &hueShift, -180.0f, 180.0f))
     {
-        if (auto* p = dynamic_cast<juce::AudioParameterFloat*>(apvts.getParameter("hueShift"))) *p = hueShift;
-        onModificationEnded();
+        if (!hueShiftMod)
+        {
+            if (auto* p = dynamic_cast<juce::AudioParameterFloat*>(apvts.getParameter("hueShift")))
+                *p = hueShift;
+        }
     }
+    if (ImGui::IsItemDeactivatedAfterEdit() && !hueShiftMod) onModificationEnded();
+    if (!hueShiftMod) adjustParamOnWheel(apvts.getParameter("hueShift"), "hueShift", hueShift);
+    if (hueShiftMod) ImGui::EndDisabled();
     
-    float gainR = gainRedParam ? gainRedParam->load() : 1.0f;
+    bool gainRedMod = isParamModulated("gainRed");
+    const float gainRDefault = gainRedParam ? gainRedParam->load() : 1.0f;
+    float gainR = gainRedMod ? getLiveParamValue("gainRed", gainRDefault) : gainRDefault;
+    if (gainRedMod) ImGui::BeginDisabled();
     if (ImGui::SliderFloat("Red Gain", &gainR, 0.0f, 2.0f))
     {
-        if (auto* p = dynamic_cast<juce::AudioParameterFloat*>(apvts.getParameter("gainRed"))) *p = gainR;
-        onModificationEnded();
+        if (!gainRedMod)
+        {
+            if (auto* p = dynamic_cast<juce::AudioParameterFloat*>(apvts.getParameter("gainRed")))
+                *p = gainR;
+        }
     }
+    if (ImGui::IsItemDeactivatedAfterEdit() && !gainRedMod) onModificationEnded();
+    if (!gainRedMod) adjustParamOnWheel(apvts.getParameter("gainRed"), "gainRed", gainR);
+    if (gainRedMod) ImGui::EndDisabled();
     
-    float gainG = gainGreenParam ? gainGreenParam->load() : 1.0f;
+    bool gainGreenMod = isParamModulated("gainGreen");
+    const float gainGDefault = gainGreenParam ? gainGreenParam->load() : 1.0f;
+    float gainG = gainGreenMod ? getLiveParamValue("gainGreen", gainGDefault) : gainGDefault;
+    if (gainGreenMod) ImGui::BeginDisabled();
     if (ImGui::SliderFloat("Green Gain", &gainG, 0.0f, 2.0f))
     {
-        if (auto* p = dynamic_cast<juce::AudioParameterFloat*>(apvts.getParameter("gainGreen"))) *p = gainG;
-        onModificationEnded();
+        if (!gainGreenMod)
+        {
+            if (auto* p = dynamic_cast<juce::AudioParameterFloat*>(apvts.getParameter("gainGreen")))
+                *p = gainG;
+        }
     }
+    if (ImGui::IsItemDeactivatedAfterEdit() && !gainGreenMod) onModificationEnded();
+    if (!gainGreenMod) adjustParamOnWheel(apvts.getParameter("gainGreen"), "gainGreen", gainG);
+    if (gainGreenMod) ImGui::EndDisabled();
     
-    float gainB = gainBlueParam ? gainBlueParam->load() : 1.0f;
+    bool gainBlueMod = isParamModulated("gainBlue");
+    const float gainBDefault = gainBlueParam ? gainBlueParam->load() : 1.0f;
+    float gainB = gainBlueMod ? getLiveParamValue("gainBlue", gainBDefault) : gainBDefault;
+    if (gainBlueMod) ImGui::BeginDisabled();
     if (ImGui::SliderFloat("Blue Gain", &gainB, 0.0f, 2.0f))
     {
-        if (auto* p = dynamic_cast<juce::AudioParameterFloat*>(apvts.getParameter("gainBlue"))) *p = gainB;
-        onModificationEnded();
+        if (!gainBlueMod)
+        {
+            if (auto* p = dynamic_cast<juce::AudioParameterFloat*>(apvts.getParameter("gainBlue")))
+                *p = gainB;
+        }
     }
+    if (ImGui::IsItemDeactivatedAfterEdit() && !gainBlueMod) onModificationEnded();
+    if (!gainBlueMod) adjustParamOnWheel(apvts.getParameter("gainBlue"), "gainBlue", gainB);
+    if (gainBlueMod) ImGui::EndDisabled();
     
+    bool sepiaMod = isParamModulated("sepia");
+    if (sepiaMod) ImGui::BeginDisabled();
     bool sepia = sepiaParam ? sepiaParam->get() : false;
     if (ImGui::Checkbox("Sepia", &sepia))
     {
-        if (sepiaParam) *sepiaParam = sepia;
+        if (!sepiaMod && sepiaParam) *sepiaParam = sepia;
         onModificationEnded();
     }
+    if (sepiaMod) ImGui::EndDisabled();
     
-    float temperature = temperatureParam ? temperatureParam->load() : 0.0f;
+    bool temperatureMod = isParamModulated("temperature");
+    const float temperatureDefault = temperatureParam ? temperatureParam->load() : 0.0f;
+    float temperature = temperatureMod ? getLiveParamValue("temperature", temperatureDefault) : temperatureDefault;
+    if (temperatureMod) ImGui::BeginDisabled();
     if (ImGui::SliderFloat("Temperature", &temperature, -1.0f, 1.0f))
     {
-        if (auto* p = dynamic_cast<juce::AudioParameterFloat*>(apvts.getParameter("temperature"))) *p = temperature;
-        onModificationEnded();
+        if (!temperatureMod)
+        {
+            if (auto* p = dynamic_cast<juce::AudioParameterFloat*>(apvts.getParameter("temperature")))
+                *p = temperature;
+        }
     }
+    if (ImGui::IsItemDeactivatedAfterEdit() && !temperatureMod) onModificationEnded();
+    if (!temperatureMod) adjustParamOnWheel(apvts.getParameter("temperature"), "temperature", temperature);
+    if (temperatureMod) ImGui::EndDisabled();
     
     themeText("Filters & Effects", theme.modules.videofx_section_subheader);
     
     // Filter sliders
-    float sharpen = sharpenParam ? sharpenParam->load() : 0.0f;
+    bool sharpenMod = isParamModulated("sharpen");
+    const float sharpenDefault = sharpenParam ? sharpenParam->load() : 0.0f;
+    float sharpen = sharpenMod ? getLiveParamValue("sharpen", sharpenDefault) : sharpenDefault;
+    if (sharpenMod) ImGui::BeginDisabled();
     if (ImGui::SliderFloat("Sharpen", &sharpen, 0.0f, 2.0f))
     {
-        if (auto* p = dynamic_cast<juce::AudioParameterFloat*>(apvts.getParameter("sharpen"))) *p = sharpen;
-        onModificationEnded();
+        if (!sharpenMod)
+        {
+            if (auto* p = dynamic_cast<juce::AudioParameterFloat*>(apvts.getParameter("sharpen")))
+                *p = sharpen;
+        }
     }
+    if (ImGui::IsItemDeactivatedAfterEdit() && !sharpenMod) onModificationEnded();
+    if (!sharpenMod) adjustParamOnWheel(apvts.getParameter("sharpen"), "sharpen", sharpen);
+    if (sharpenMod) ImGui::EndDisabled();
     
-    float blur = blurParam ? blurParam->load() : 0.0f;
+    bool blurMod = isParamModulated("blur");
+    const float blurDefault = blurParam ? blurParam->load() : 0.0f;
+    float blur = blurMod ? getLiveParamValue("blur", blurDefault) : blurDefault;
+    if (blurMod) ImGui::BeginDisabled();
     if (ImGui::SliderFloat("Blur", &blur, 0.0f, 20.0f))
     {
-        if (auto* p = dynamic_cast<juce::AudioParameterFloat*>(apvts.getParameter("blur"))) *p = blur;
-        onModificationEnded();
+        if (!blurMod)
+        {
+            if (auto* p = dynamic_cast<juce::AudioParameterFloat*>(apvts.getParameter("blur")))
+                *p = blur;
+        }
     }
+    if (ImGui::IsItemDeactivatedAfterEdit() && !blurMod) onModificationEnded();
+    if (!blurMod) adjustParamOnWheel(apvts.getParameter("blur"), "blur", blur);
+    if (blurMod) ImGui::EndDisabled();
     
     // Effect checkboxes
     bool grayscale = grayscaleParam ? grayscaleParam->get() : false;
@@ -830,31 +940,48 @@ void VideoFXModule::drawParametersInNode(float itemWidth,
     if (threshEnable)
     {
         ImGui::SameLine();
-        float threshLevel = thresholdLevelParam ? thresholdLevelParam->load() : 127.0f;
+        bool threshLevelMod = isParamModulated("thresholdLevel");
+        float threshLevel = threshLevelMod ? getLiveParamValue("thresholdLevel", thresholdLevelParam ? thresholdLevelParam->load() : 127.0f)
+                                           : (thresholdLevelParam ? thresholdLevelParam->load() : 127.0f);
+        if (threshLevelMod) ImGui::BeginDisabled();
         if (ImGui::SliderFloat("##level", &threshLevel, 0.0f, 255.0f, "%.0f"))
         {
-             if (auto* p = dynamic_cast<juce::AudioParameterFloat*>(apvts.getParameter("thresholdLevel"))) *p = threshLevel;
-             onModificationEnded();
+             if (!threshLevelMod)
+             {
+                 if (auto* p = dynamic_cast<juce::AudioParameterFloat*>(apvts.getParameter("thresholdLevel")))
+                     *p = threshLevel;
+             }
         }
+        if (ImGui::IsItemDeactivatedAfterEdit() && !threshLevelMod) onModificationEnded();
+        if (!threshLevelMod) adjustParamOnWheel(apvts.getParameter("thresholdLevel"), "thresholdLevel", threshLevel);
+        if (threshLevelMod) ImGui::EndDisabled();
     }
     
     // Posterize
+    bool posterizeMod = isParamModulated("posterizeLevels");
     int posterizeLevels = posterizeLevelsParam ? posterizeLevelsParam->get() : 16;
+    if (posterizeMod) ImGui::BeginDisabled();
     if (ImGui::SliderInt("Posterize", &posterizeLevels, 2, 16))
     {
-        if (posterizeLevelsParam) *posterizeLevelsParam = posterizeLevels;
+        if (!posterizeMod && posterizeLevelsParam) *posterizeLevelsParam = posterizeLevels;
         onModificationEnded();
     }
     if (ImGui::IsItemHovered()) ImGui::SetTooltip("Reduces the number of colors.\nLower values = stronger effect.");
+    if (!posterizeMod) adjustParamOnWheel(apvts.getParameter("posterizeLevels"), "posterizeLevels", (float)posterizeLevels);
+    if (posterizeMod) ImGui::EndDisabled();
     
     // Pixelate
+    bool pixelateMod = isParamModulated("pixelateSize");
     int pixelateSize = pixelateBlockSizeParam ? pixelateBlockSizeParam->get() : 1;
+    if (pixelateMod) ImGui::BeginDisabled();
     if (ImGui::SliderInt("Pixelate", &pixelateSize, 1, 128))
     {
-        if (pixelateBlockSizeParam) *pixelateBlockSizeParam = pixelateSize;
+        if (!pixelateMod && pixelateBlockSizeParam) *pixelateBlockSizeParam = pixelateSize;
         onModificationEnded();
     }
     if (ImGui::IsItemHovered()) ImGui::SetTooltip("Creates a mosaic effect.\nHigher values = larger blocks.");
+    if (!pixelateMod) adjustParamOnWheel(apvts.getParameter("pixelateSize"), "pixelateSize", (float)pixelateSize);
+    if (pixelateMod) ImGui::EndDisabled();
     
     // Edge Detection (Canny)
     bool cannyEnable = cannyEnableParam ? cannyEnableParam->get() : false;
@@ -866,49 +993,102 @@ void VideoFXModule::drawParametersInNode(float itemWidth,
     
     if (cannyEnable)
     {
-        float cannyTh1 = cannyThresh1Param ? cannyThresh1Param->load() : 50.0f;
+        bool cannyTh1Mod = isParamModulated("cannyThresh1");
+        float cannyTh1 = cannyTh1Mod ? getLiveParamValue("cannyThresh1", cannyThresh1Param ? cannyThresh1Param->load() : 50.0f)
+                                     : (cannyThresh1Param ? cannyThresh1Param->load() : 50.0f);
+        if (cannyTh1Mod) ImGui::BeginDisabled();
         if (ImGui::SliderFloat("Canny Thresh 1", &cannyTh1, 0.0f, 255.0f))
         {
-            if (auto* p = dynamic_cast<juce::AudioParameterFloat*>(apvts.getParameter("cannyThresh1"))) *p = cannyTh1;
-            onModificationEnded();
+            if (!cannyTh1Mod)
+            {
+                if (auto* p = dynamic_cast<juce::AudioParameterFloat*>(apvts.getParameter("cannyThresh1")))
+                    *p = cannyTh1;
+            }
         }
+        if (ImGui::IsItemDeactivatedAfterEdit() && !cannyTh1Mod) onModificationEnded();
+        if (!cannyTh1Mod) adjustParamOnWheel(apvts.getParameter("cannyThresh1"), "cannyThresh1", cannyTh1);
+        if (cannyTh1Mod) ImGui::EndDisabled();
         
-        float cannyTh2 = cannyThresh2Param ? cannyThresh2Param->load() : 150.0f;
+        bool cannyTh2Mod = isParamModulated("cannyThresh2");
+        float cannyTh2 = cannyTh2Mod ? getLiveParamValue("cannyThresh2", cannyThresh2Param ? cannyThresh2Param->load() : 150.0f)
+                                     : (cannyThresh2Param ? cannyThresh2Param->load() : 150.0f);
+        if (cannyTh2Mod) ImGui::BeginDisabled();
         if (ImGui::SliderFloat("Canny Thresh 2", &cannyTh2, 0.0f, 255.0f))
         {
-            if (auto* p = dynamic_cast<juce::AudioParameterFloat*>(apvts.getParameter("cannyThresh2"))) *p = cannyTh2;
-            onModificationEnded();
+            if (!cannyTh2Mod)
+            {
+                if (auto* p = dynamic_cast<juce::AudioParameterFloat*>(apvts.getParameter("cannyThresh2")))
+                    *p = cannyTh2;
+            }
         }
+        if (ImGui::IsItemDeactivatedAfterEdit() && !cannyTh2Mod) onModificationEnded();
+        if (!cannyTh2Mod) adjustParamOnWheel(apvts.getParameter("cannyThresh2"), "cannyThresh2", cannyTh2);
+        if (cannyTh2Mod) ImGui::EndDisabled();
     }
     
     themeText("Advanced Effects", theme.modules.videofx_section_subheader);
     
     // Vignette
-    float vignetteAmount = vignetteAmountParam ? vignetteAmountParam->load() : 0.0f;
+    bool vignetteAmountMod = isParamModulated("vignetteAmount");
+    float vignetteAmount = vignetteAmountMod ? getLiveParamValue("vignetteAmount", vignetteAmountParam ? vignetteAmountParam->load() : 0.0f)
+                                             : (vignetteAmountParam ? vignetteAmountParam->load() : 0.0f);
+    if (vignetteAmountMod) ImGui::BeginDisabled();
     if (ImGui::SliderFloat("Vignette Amount", &vignetteAmount, 0.0f, 1.0f))
     {
-        if (auto* p = dynamic_cast<juce::AudioParameterFloat*>(apvts.getParameter("vignetteAmount"))) *p = vignetteAmount;
-        onModificationEnded();
+        if (!vignetteAmountMod)
+        {
+            if (auto* p = dynamic_cast<juce::AudioParameterFloat*>(apvts.getParameter("vignetteAmount")))
+                *p = vignetteAmount;
+        }
     }
+    if (ImGui::IsItemDeactivatedAfterEdit() && !vignetteAmountMod) onModificationEnded();
+    if (!vignetteAmountMod) adjustParamOnWheel(apvts.getParameter("vignetteAmount"), "vignetteAmount", vignetteAmount);
+    if (vignetteAmountMod) ImGui::EndDisabled();
     
     if (vignetteAmount > 0.0f)
     {
-        float vignetteSize = vignetteSizeParam ? vignetteSizeParam->load() : 0.5f;
+        bool vignetteSizeMod = isParamModulated("vignetteSize");
+        float vignetteSize = vignetteSizeMod ? getLiveParamValue("vignetteSize", vignetteSizeParam ? vignetteSizeParam->load() : 0.5f)
+                                             : (vignetteSizeParam ? vignetteSizeParam->load() : 0.5f);
+        if (vignetteSizeMod) ImGui::BeginDisabled();
         if (ImGui::SliderFloat("Vignette Size", &vignetteSize, 0.1f, 2.0f))
         {
-            if (auto* p = dynamic_cast<juce::AudioParameterFloat*>(apvts.getParameter("vignetteSize"))) *p = vignetteSize;
-            onModificationEnded();
+            if (!vignetteSizeMod)
+            {
+                if (auto* p = dynamic_cast<juce::AudioParameterFloat*>(apvts.getParameter("vignetteSize")))
+                    *p = vignetteSize;
+            }
         }
+        if (ImGui::IsItemDeactivatedAfterEdit() && !vignetteSizeMod) onModificationEnded();
+        if (!vignetteSizeMod) adjustParamOnWheel(apvts.getParameter("vignetteSize"), "vignetteSize", vignetteSize);
+        if (vignetteSizeMod) ImGui::EndDisabled();
     }
     
     // Kaleidoscope
+    bool kaleidoscopeMod = isParamModulated("kaleidoscope");
+    if (kaleidoscopeMod) ImGui::BeginDisabled();
     int kaleidoscopeMode = kaleidoscopeModeParam ? kaleidoscopeModeParam->getIndex() : 0;
     const char* kaleidoscopeModes[] = { "None", "4-Way", "8-Way" };
     if (ImGui::Combo("Kaleidoscope", &kaleidoscopeMode, kaleidoscopeModes, 3))
     {
-        if (kaleidoscopeModeParam) kaleidoscopeModeParam->setValueNotifyingHost((float)kaleidoscopeMode / 2.0f);
+        if (!kaleidoscopeMod && kaleidoscopeModeParam) kaleidoscopeModeParam->setValueNotifyingHost((float)kaleidoscopeMode / 2.0f);
         onModificationEnded();
     }
+    // Scroll-edit for kaleidoscope combo
+    if (!kaleidoscopeMod && ImGui::IsItemHovered())
+    {
+        const float wheel = ImGui::GetIO().MouseWheel;
+        if (wheel != 0.0f)
+        {
+            const int newMode = juce::jlimit(0, 2, kaleidoscopeMode + (wheel > 0.0f ? -1 : 1));
+            if (newMode != kaleidoscopeMode && kaleidoscopeModeParam)
+            {
+                kaleidoscopeModeParam->setValueNotifyingHost((float)newMode / 2.0f);
+                onModificationEnded();
+            }
+        }
+    }
+    if (kaleidoscopeMod) ImGui::EndDisabled();
     
     ImGui::PopItemWidth();
 }
@@ -1349,4 +1529,5 @@ void VideoFXModule::applyKaleidoscope_gpu(cv::cuda::GpuMat& ioFrame, int mode)
 }
 
 #endif
+
 

@@ -34,6 +34,7 @@ public:
 
     // Parameter bus contract implementation (must be available in Collider too)
     bool getParamRouting(const juce::String& paramId, int& outBusIndex, int& outChannelIndexInBus) const override;
+    bool usesCustomPinLayout() const override { return true; }
 
 private:
     static juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout();

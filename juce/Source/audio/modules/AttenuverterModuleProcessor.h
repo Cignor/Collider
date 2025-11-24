@@ -45,12 +45,12 @@ public:
 
     void drawIoPins(const NodePinHelpers& helpers) override
     {
-        helpers.drawAudioInputPin("In L", 0);
-        helpers.drawAudioInputPin("In R", 1);
-        helpers.drawAudioInputPin("Amount Mod", 2);
-        helpers.drawAudioOutputPin("Out L", 0);
-        helpers.drawAudioOutputPin("Out R", 1);
+        helpers.drawParallelPins("In L", 0, "Out L", 0);
+        helpers.drawParallelPins("In R", 1, "Out R", 1);
+        helpers.drawParallelPins("Amount Mod", 2, nullptr, -1);
     }
+
+    bool usesCustomPinLayout() const override { return true; }
 
     juce::String getAudioInputLabel(int channel) const override
     {

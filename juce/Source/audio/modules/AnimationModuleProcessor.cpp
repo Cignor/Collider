@@ -7,6 +7,30 @@
 #include "../../preset_creator/theme/ThemeManager.h"
 #endif
 
+#if defined(PRESET_CREATOR_UI)
+namespace
+{
+    inline bool adjustFloatOnWheel(float& value, float step, float minValue, float maxValue)
+    {
+        if (ImGui::IsItemHovered())
+        {
+            const float wheel = ImGui::GetIO().MouseWheel;
+            if (wheel != 0.0f)
+            {
+                const float delta = wheel > 0.0f ? step : -step;
+                const float newValue = juce::jlimit(minValue, maxValue, value + delta);
+                if (newValue != value)
+                {
+                    value = newValue;
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+}
+#endif
+
 // Helper function to recursively build edge list from skeleton hierarchy
 void buildEdgeListRecursive(
     const NodeData& node,
@@ -641,6 +665,7 @@ void AnimationModuleProcessor::drawParametersInNode(float itemWidth,
                     m_selectedBoneIndex = -1;
                     m_selectedBoneName = "None";
                     m_selectedBoneID = -1;
+                    onModificationEnded();
                 }
 
                 // Iterate through cached bone names (thread-safe)
@@ -663,6 +688,7 @@ void AnimationModuleProcessor::drawParametersInNode(float itemWidth,
                         {
                             m_selectedBoneID = -1;
                         }
+                        onModificationEnded();
                     }
                     if (isSelected)
                     {
@@ -745,9 +771,14 @@ void AnimationModuleProcessor::drawParametersInNode(float itemWidth,
         static float speed = 1.0f;
         if (ImGui::SliderFloat("Speed", &speed, 0.1f, 3.0f, "%.2f"))
         {
-            // Safe to call directly - the animator pointer is valid for this frame
-            currentAnimator->SetAnimationSpeed(speed);
+            if (currentAnimator != nullptr)
+                currentAnimator->SetAnimationSpeed(speed);
         }
+        const bool speedWheel = adjustFloatOnWheel(speed, 0.05f, 0.1f, 3.0f);
+        if (speedWheel && currentAnimator != nullptr)
+            currentAnimator->SetAnimationSpeed(speed);
+        if (ImGui::IsItemDeactivatedAfterEdit() || speedWheel)
+            onModificationEnded();
         
         // DEBUG: Display basic info (accessing animator state directly is unsafe due to audio thread)
         ImGui::Text("Debug Info:");
@@ -761,8 +792,19 @@ void AnimationModuleProcessor::drawParametersInNode(float itemWidth,
         
         // Camera controls
         ImGui::SliderFloat("Zoom", &m_zoom, 1.0f, 50.0f, "%.1f");
+        const bool zoomWheel = adjustFloatOnWheel(m_zoom, 0.5f, 1.0f, 50.0f);
+        if (ImGui::IsItemDeactivatedAfterEdit() || zoomWheel)
+            onModificationEnded();
+
         ImGui::SliderFloat("Pan X", &m_panX, -20.0f, 20.0f, "%.1f");
+        const bool panXWheel = adjustFloatOnWheel(m_panX, 0.25f, -20.0f, 20.0f);
+        if (ImGui::IsItemDeactivatedAfterEdit() || panXWheel)
+            onModificationEnded();
+
         ImGui::SliderFloat("Pan Y", &m_panY, -20.0f, 20.0f, "%.1f");
+        const bool panYWheel = adjustFloatOnWheel(m_panY, 0.25f, -20.0f, 20.0f);
+        if (ImGui::IsItemDeactivatedAfterEdit() || panYWheel)
+            onModificationEnded();
         
         // View rotation controls
         ImGui::Text("View Rotation:");
@@ -846,6 +888,7 @@ void AnimationModuleProcessor::drawParametersInNode(float itemWidth,
 
         // Colored Sliders for each ground plane
         {
+            const float planeStep = juce::jmax(0.01f, (sliderMax - sliderMin) * 0.01f);
             const juce::ScopedLock lock(m_groundPlanesLock);
             for (int i = 0; i < (int)m_groundPlanes.size(); ++i)
             {
@@ -858,11 +901,13 @@ void AnimationModuleProcessor::drawParametersInNode(float itemWidth,
 
                 // Slider for Y position (center line)
                 ImGui::SliderFloat("Ground Y", &m_groundPlanes[i].y, sliderMin, sliderMax, "%.2f");
-                if (ImGui::IsItemDeactivatedAfterEdit()) onModificationEnded();
+                const bool groundYWheel = adjustFloatOnWheel(m_groundPlanes[i].y, planeStep, sliderMin, sliderMax);
+                if (ImGui::IsItemDeactivatedAfterEdit() || groundYWheel) onModificationEnded();
 
                 // Slider for Depth (monitoring zone size)
                 ImGui::SliderFloat("Depth", &m_groundPlanes[i].depth, 0.0f, 2.0f, "%.2f");
-                if (ImGui::IsItemDeactivatedAfterEdit()) onModificationEnded();
+                const bool depthWheel = adjustFloatOnWheel(m_groundPlanes[i].depth, 0.02f, 0.0f, 2.0f);
+                if (ImGui::IsItemDeactivatedAfterEdit() || depthWheel) onModificationEnded();
 
                 ImGui::PopStyleColor(4);
                 ImGui::PopID();

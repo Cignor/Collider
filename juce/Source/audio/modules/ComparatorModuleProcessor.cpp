@@ -46,8 +46,7 @@ void ComparatorModuleProcessor::drawParametersInNode(float itemWidth,
 
 void ComparatorModuleProcessor::drawIoPins(const NodePinHelpers& helpers)
 {
-    helpers.drawAudioInputPin("In", 0);
-    helpers.drawAudioOutputPin("Out", 0);
+    helpers.drawParallelPins("In", 0, "Out", 0);
 }
 #endif
 

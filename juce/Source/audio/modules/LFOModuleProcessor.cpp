@@ -306,6 +306,7 @@ void LFOModuleProcessor::drawParametersInNode(float itemWidth, const std::functi
     // Rate slider with tooltip
     if (isRateModulated) ImGui::BeginDisabled();
     if (ImGui::SliderFloat("Rate", &rate, 0.05f, 20.0f, "%.2f Hz", ImGuiSliderFlags_Logarithmic)) if (!isRateModulated) *dynamic_cast<juce::AudioParameterFloat*>(ap.getParameter(paramIdRate)) = rate;
+    if (!isRateModulated) adjustParamOnWheel(ap.getParameter(paramIdRate), "rate", rate);
     if (ImGui::IsItemDeactivatedAfterEdit() && !isRateModulated) onModificationEnded();
     if (isRateModulated) { ImGui::EndDisabled(); ImGui::SameLine(); ImGui::TextUnformatted("(mod)"); }
     ImGui::SameLine();
@@ -314,6 +315,7 @@ void LFOModuleProcessor::drawParametersInNode(float itemWidth, const std::functi
     // Depth slider with tooltip
     if (isDepthModulated) ImGui::BeginDisabled();
     if (ImGui::SliderFloat("Depth", &depth, 0.0f, 1.0f)) if (!isDepthModulated) *dynamic_cast<juce::AudioParameterFloat*>(ap.getParameter(paramIdDepth)) = depth;
+    if (!isDepthModulated) adjustParamOnWheel(ap.getParameter(paramIdDepth), "depth", depth);
     if (ImGui::IsItemDeactivatedAfterEdit() && !isDepthModulated) onModificationEnded();
     if (isDepthModulated) { ImGui::EndDisabled(); ImGui::SameLine(); ImGui::TextUnformatted("(mod)"); }
     ImGui::SameLine();
@@ -322,6 +324,20 @@ void LFOModuleProcessor::drawParametersInNode(float itemWidth, const std::functi
     // Wave combo with tooltip
     if (isWaveModulated) ImGui::BeginDisabled();
     if (ImGui::Combo("Wave", &wave, "Sine\0Tri\0Saw\0\0")) if (!isWaveModulated) *dynamic_cast<juce::AudioParameterChoice*>(ap.getParameter(paramIdWave)) = wave;
+    if (!isWaveModulated && ImGui::IsItemHovered())
+    {
+        const float wheel = ImGui::GetIO().MouseWheel;
+        if (wheel != 0.0f)
+        {
+            const int newWave = juce::jlimit(0, 2, wave + (wheel > 0.0f ? -1 : 1));
+            if (newWave != wave)
+            {
+                wave = newWave;
+                if (auto* p = dynamic_cast<juce::AudioParameterChoice*>(ap.getParameter(paramIdWave))) *p = wave;
+                onModificationEnded();
+            }
+        }
+    }
     if (ImGui::IsItemDeactivatedAfterEdit() && !isWaveModulated) onModificationEnded();
     if (isWaveModulated) { ImGui::EndDisabled(); ImGui::SameLine(); ImGui::TextUnformatted("(mod)"); }
     ImGui::SameLine();
@@ -519,10 +535,9 @@ void LFOModuleProcessor::drawParametersInNode(float itemWidth, const std::functi
 
 void LFOModuleProcessor::drawIoPins(const NodePinHelpers& helpers)
 {
-    helpers.drawAudioInputPin("Rate Mod", 0);
-    helpers.drawAudioInputPin("Depth Mod", 1);
-    helpers.drawAudioInputPin("Wave Mod", 2);
-    helpers.drawAudioOutputPin("Out", 0);
+    helpers.drawParallelPins("Rate Mod", 0, "Out", 0);
+    helpers.drawParallelPins("Depth Mod", 1, nullptr, -1);
+    helpers.drawParallelPins("Wave Mod", 2, nullptr, -1);
 }
 
 juce::String LFOModuleProcessor::getAudioInputLabel(int channel) const

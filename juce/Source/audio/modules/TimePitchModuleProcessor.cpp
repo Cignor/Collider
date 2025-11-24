@@ -668,6 +668,20 @@ void TimePitchModuleProcessor::drawParametersInNode (float itemWidth,
     const char* items[] = { "RubberBand", "Naive" };
     if (ImGui::Combo ("Engine", &engineIdx, items, 2))
         if (engineParam) *engineParam = engineIdx;
+    if (engineParam && ImGui::IsItemHovered())
+    {
+        const float wheel = ImGui::GetIO().MouseWheel;
+        if (wheel != 0.0f)
+        {
+            const int newIdx = juce::jlimit(0, 1, engineIdx + (wheel > 0.0f ? -1 : 1));
+            if (newIdx != engineIdx)
+            {
+                engineIdx = newIdx;
+                *engineParam = engineIdx;
+                onModificationEnded();
+            }
+        }
+    }
     if (ImGui::IsItemDeactivatedAfterEdit()) onModificationEnded();
 
     ImGui::Spacing();
@@ -702,13 +716,10 @@ void TimePitchModuleProcessor::drawParametersInNode (float itemWidth,
 
 void TimePitchModuleProcessor::drawIoPins (const NodePinHelpers& helpers)
 {
-    helpers.drawAudioInputPin ("In L", 0);
-    helpers.drawAudioInputPin ("In R", 1);
-    helpers.drawAudioInputPin ("Speed Mod", 2);
-    helpers.drawAudioInputPin ("Pitch Mod", 3);
-
-    helpers.drawAudioOutputPin ("Out L", 0);
-    helpers.drawAudioOutputPin ("Out R", 1);
+    helpers.drawParallelPins ("In L", 0, "Out L", 0);
+    helpers.drawParallelPins ("In R", 1, "Out R", 1);
+    helpers.drawParallelPins ("Speed Mod", 2, nullptr, -1);
+    helpers.drawParallelPins ("Pitch Mod", 3, nullptr, -1);
 }
 #endif
 

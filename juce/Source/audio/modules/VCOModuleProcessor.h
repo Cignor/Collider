@@ -266,6 +266,23 @@ public:
         {
             if (!waveMod) if (auto* p = dynamic_cast<juce::AudioParameterChoice*>(ap.getParameter(paramIdWaveform))) *p = wave;
         }
+        if (!waveMod && ImGui::IsItemHovered())
+        {
+            const float wheel = ImGui::GetIO().MouseWheel;
+            if (wheel != 0.0f)
+            {
+                int newWave = juce::jlimit(0, 2, wave + (wheel > 0.0f ? -1 : 1));
+                if (newWave != wave)
+                {
+                    wave = newWave;
+                    if (auto* p = dynamic_cast<juce::AudioParameterChoice*>(ap.getParameter(paramIdWaveform)))
+                    {
+                        *p = wave;
+                        onModificationEnded();
+                    }
+                }
+            }
+        }
         if (ImGui::IsItemDeactivatedAfterEdit()) { onModificationEnded(); }
         if (waveMod) ImGui::EndDisabled();
         
@@ -426,11 +443,9 @@ public:
 
     void drawIoPins(const NodePinHelpers& helpers) override
     {
-        // Single input bus (0): ch0 Frequency Mod, ch1 Waveform Mod, ch2 Gate
-        helpers.drawAudioInputPin("Frequency", 0);
-        helpers.drawAudioInputPin("Waveform", 1);
-        helpers.drawAudioInputPin("Gate", 2);
-        helpers.drawAudioOutputPin("Out", 0);
+        helpers.drawParallelPins("Frequency Mod", 0, "Output", 0);
+        helpers.drawParallelPins("Waveform Mod", 1, nullptr, -1);
+        helpers.drawParallelPins("Gate In", 2, nullptr, -1);
     }
 
     juce::String getAudioInputLabel(int channel) const override

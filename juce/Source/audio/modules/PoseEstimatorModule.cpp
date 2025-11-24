@@ -741,36 +741,66 @@ void PoseEstimatorModule::drawParametersInNode(float itemWidth,
     #endif
     
     // Only show Model selection (as requested)
+    bool modelMod = isParamModulated("model");
+    if (modelMod) ImGui::BeginDisabled();
     if (modelChoiceParam)
     {
         int m = modelChoiceParam->getIndex();
         if (ImGui::Combo("Model", &m, "BODY_25 (25 pts)\0COCO (18 pts)\0MPI (15 pts)\0MPI Fast (15 pts)\0\0"))
         {
-            *modelChoiceParam = m;
+            if (!modelMod) *modelChoiceParam = m;
             requestedModelIndex = m; // signal thread to reload
             onModificationEnded();
         }
+        // Scroll-edit for model combo
+        if (!modelMod && ImGui::IsItemHovered())
+        {
+            const float wheel = ImGui::GetIO().MouseWheel;
+            if (wheel != 0.0f)
+            {
+                const int newM = juce::jlimit(0, 3, m + (wheel > 0.0f ? -1 : 1));
+                if (newM != m)
+                {
+                    *modelChoiceParam = newM;
+                    requestedModelIndex = newM;
+                    onModificationEnded();
+                }
+            }
+        }
     }
+    if (modelMod) ImGui::EndDisabled();
 
     // Blob size (maps to quality tiers)
+    bool qualityMod = isParamModulated("quality");
+    if (qualityMod) ImGui::BeginDisabled();
     if (qualityParam)
     {
         int blobSize = (qualityParam->getIndex() == 0) ? 224 : 368;
         if (ImGui::SliderInt("Blob Size", &blobSize, 224, 368))
         {
-            int q = (blobSize <= 296) ? 0 : 1; // snap to Low/Medium
-            *qualityParam = q;
-            onModificationEnded();
+            if (!qualityMod)
+            {
+                int q = (blobSize <= 296) ? 0 : 1; // snap to Low/Medium
+                *qualityParam = q;
+                onModificationEnded();
+            }
         }
+        if (!qualityMod) adjustParamOnWheel(apvts.getParameter("quality"), "quality", (float)qualityParam->getIndex());
     }
+    if (qualityMod) ImGui::EndDisabled();
 
     // Confidence threshold
-    float confidence = confidenceThresholdParam->load();
+    bool confidenceMod = isParamModulated("confidence");
+    float confidenceFallback = confidenceThresholdParam ? confidenceThresholdParam->load() : 0.5f;
+    float confidence = confidenceMod ? getLiveParamValue("confidence", confidenceFallback) : confidenceFallback;
+    if (confidenceMod) ImGui::BeginDisabled();
     if (ImGui::SliderFloat("Confidence", &confidence, 0.0f, 1.0f, "%.2f"))
     {
-        *dynamic_cast<juce::AudioParameterFloat*>(apvts.getParameter("confidence")) = confidence;
-        onModificationEnded();
+        if (!confidenceMod) *dynamic_cast<juce::AudioParameterFloat*>(apvts.getParameter("confidence")) = confidence;
     }
+    if (ImGui::IsItemDeactivatedAfterEdit() && !confidenceMod) onModificationEnded();
+    if (!confidenceMod) adjustParamOnWheel(apvts.getParameter("confidence"), "confidence", confidence);
+    if (confidenceMod) ImGui::EndDisabled();
 
     // Restore Zoom (-/+) controls
     int level = zoomLevelParam ? (int) zoomLevelParam->load() : 1;

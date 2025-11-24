@@ -20,6 +20,7 @@ public:
                               const std::function<bool(const juce::String& paramId)>& isParamModulated,
                               const std::function<void()>& onModificationEnded) override;
     void drawIoPins(const NodePinHelpers& helpers) override;
+    bool usesCustomPinLayout() const override { return true; }
 #endif
 
 private:

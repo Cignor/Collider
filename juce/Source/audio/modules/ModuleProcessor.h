@@ -202,6 +202,10 @@ public:
     // Optional UI hook for drawing IO pins inside nodes
     virtual void drawIoPins(const NodePinHelpers& /*helpers*/) {}
 
+    // Modules can override this to force Preset Creator to call drawIoPins()
+    // even if dynamic pin info is available (needed for custom layouts).
+    virtual bool usesCustomPinLayout() const { return false; }
+
 #if defined(PRESET_CREATOR_UI)
     // Optional UI hook for modules that need custom node dimensions (Exception size category)
     // Return ImVec2(width, height) for custom size, or ImVec2(0, 0) to use default from PinDatabase

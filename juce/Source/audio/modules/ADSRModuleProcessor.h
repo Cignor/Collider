@@ -42,18 +42,15 @@ public:
 
     void drawIoPins(const NodePinHelpers& helpers) override
     {
-        helpers.drawAudioInputPin("Gate In", 0);
-        helpers.drawAudioInputPin("Trigger In", 1);
-        
-        helpers.drawAudioInputPin("Attack Mod", 2);
-        helpers.drawAudioInputPin("Decay Mod", 3);
-        helpers.drawAudioInputPin("Sustain Mod", 4);
-        helpers.drawAudioInputPin("Release Mod", 5);
-        helpers.drawAudioOutputPin("Env Out", 0);
-        helpers.drawAudioOutputPin("Inv Out", 1);
-        helpers.drawAudioOutputPin("EOR Gate", 2);
-        helpers.drawAudioOutputPin("EOC Gate", 3);
+        helpers.drawParallelPins("Gate In", 0, "Env Out", 0);
+        helpers.drawParallelPins("Trigger In", 1, "Inv Out", 1);
+        helpers.drawParallelPins("Attack Mod", 2, "EOR Gate", 2);
+        helpers.drawParallelPins("Decay Mod", 3, "EOC Gate", 3);
+        helpers.drawParallelPins("Sustain Mod", 4, nullptr, -1);
+        helpers.drawParallelPins("Release Mod", 5, nullptr, -1);
     }
+
+    bool usesCustomPinLayout() const override { return true; }
 
     juce::String getAudioInputLabel(int channel) const override
     {

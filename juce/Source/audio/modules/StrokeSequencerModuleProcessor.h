@@ -20,6 +20,8 @@ public:
     bool getParamRouting(const juce::String& paramId, int& outBusIndex, int& outChannelIndexInBus) const override;
     std::vector<DynamicPinInfo> getDynamicInputPins() const override;
     std::vector<DynamicPinInfo> getDynamicOutputPins() const override;
+    bool usesCustomPinLayout() const override { return true; }
+    ImVec2 getCustomNodeSize() const override { return ImVec2(520.0f, 0.0f); }
 
     // Rhythm introspection for BPM Monitor
     std::optional<RhythmInfo> getRhythmInfo() const override;
@@ -28,6 +30,7 @@ public:
     std::atomic<bool> autoBuildDrumKitTriggered { false };
     
     void drawParametersInNode(float itemWidth, const std::function<bool(const juce::String& paramId)>& isParamModulated, const std::function<void()>& onModificationEnded) override;
+    void drawIoPins(const NodePinHelpers& helpers) override;
 #endif
 
     // --- State Management ---

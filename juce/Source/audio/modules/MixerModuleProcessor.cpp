@@ -516,21 +516,18 @@ void MixerModuleProcessor::drawParametersInNode (float itemWidth, const std::fun
 
 void MixerModuleProcessor::drawIoPins(const NodePinHelpers& helpers)
 {
-    helpers.drawAudioInputPin("In A L", 0);
-    helpers.drawAudioInputPin("In A R", 1);
-    helpers.drawAudioInputPin("In B L", 2);
-    helpers.drawAudioInputPin("In B R", 3);
+    helpers.drawParallelPins("In A L", 0, "Out L", 0);
+    helpers.drawParallelPins("In A R", 1, "Out R", 1);
+    helpers.drawParallelPins("In B L", 2, nullptr, -1);
+    helpers.drawParallelPins("In B R", 3, nullptr, -1);
 
     int busIdx, chanInBus;
     if (getParamRouting("gain", busIdx, chanInBus))
-        helpers.drawAudioInputPin("Gain Mod", getChannelIndexInProcessBlockBuffer(true, busIdx, chanInBus));
+        helpers.drawParallelPins("Gain Mod", getChannelIndexInProcessBlockBuffer(true, busIdx, chanInBus), nullptr, -1);
     if (getParamRouting("pan", busIdx, chanInBus))
-        helpers.drawAudioInputPin("Pan Mod", getChannelIndexInProcessBlockBuffer(true, busIdx, chanInBus));
+        helpers.drawParallelPins("Pan Mod", getChannelIndexInProcessBlockBuffer(true, busIdx, chanInBus), nullptr, -1);
     if (getParamRouting("crossfade", busIdx, chanInBus))
-        helpers.drawAudioInputPin("X-Fade Mod", getChannelIndexInProcessBlockBuffer(true, busIdx, chanInBus));
-
-    helpers.drawAudioOutputPin("Out L", 0);
-    helpers.drawAudioOutputPin("Out R", 1);
+        helpers.drawParallelPins("X-Fade Mod", getChannelIndexInProcessBlockBuffer(true, busIdx, chanInBus), nullptr, -1);
 }
 
 bool MixerModuleProcessor::getParamRouting(const juce::String& paramId, int& outBusIndex, int& outChannelIndexInBus) const

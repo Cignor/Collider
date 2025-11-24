@@ -75,14 +75,12 @@ PinDataType RerouteModuleProcessor::getPassthroughType() const
 
 std::vector<DynamicPinInfo> RerouteModuleProcessor::getDynamicInputPins() const
 {
-    // Use empty label to minimize node footprint (circle-only pins)
-    return { DynamicPinInfo("", 0, getPassthroughType()) };
+    return { DynamicPinInfo("In", 0, getPassthroughType()) };
 }
 
 std::vector<DynamicPinInfo> RerouteModuleProcessor::getDynamicOutputPins() const
 {
-    // Use empty label to minimize node footprint (circle-only pins)
-    return { DynamicPinInfo("", 0, getPassthroughType()) };
+    return { DynamicPinInfo("Out", 0, getPassthroughType()) };
 }
 
 juce::ValueTree RerouteModuleProcessor::getExtraStateTree() const
@@ -104,7 +102,7 @@ void RerouteModuleProcessor::setExtraStateTree(const juce::ValueTree& state)
 #if defined(PRESET_CREATOR_UI)
 void RerouteModuleProcessor::drawIoPins(const NodePinHelpers& helpers)
 {
-    helpers.drawIoPins(this);
+    helpers.drawParallelPins("In", 0, "Out", 0);
 }
 #endif
 
