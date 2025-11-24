@@ -17,11 +17,9 @@ SplashScreenComponent::SplashScreenComponent()
         setSize(600, 400);
     }
     
-    // Set up auto-dismiss timer
-    if (autoDismissEnabled)
-    {
-        startTimer(AUTO_DISMISS_MS);
-    }
+    // Set up timer to check for user input (keyboard or mouse)
+    // Check frequently (every 50ms) for any user activity
+    startTimer(50);
     
     // Make component visible and able to receive focus
     setVisible(true);
@@ -87,12 +85,13 @@ void SplashScreenComponent::paint(juce::Graphics& g)
     // The bee is typically on the left side, so we'll align text to the right
     const int padding = 40;
     const int leftMargin = getWidth() / 2; // Start text area from middle (right side)
-    auto bounds = juce::Rectangle<int>(leftMargin, padding, getWidth() - leftMargin - padding, getHeight() - padding * 2);
+    const int topPadding = 80; // Top padding for text area
+    auto bounds = juce::Rectangle<int>(leftMargin, topPadding, getWidth() - leftMargin - padding, getHeight() - topPadding - padding);
     
     // Title - Application name (positioned on right side)
     g.setColour(juce::Colours::white);
     g.setFont(juce::Font(48.0f, juce::Font::bold));
-    auto titleBounds = bounds.removeFromTop(80);
+    auto titleBounds = bounds.removeFromTop(60);
     g.drawFittedText(
         VersionInfo::APPLICATION_NAME,
         titleBounds,
@@ -100,12 +99,12 @@ void SplashScreenComponent::paint(juce::Graphics& g)
         1
     );
     
-    bounds.removeFromTop(20);
+    bounds.removeFromTop(2); // Very tight spacing - version close to title
     
     // Version
     g.setColour(juce::Colour(0xffcccccc));
     g.setFont(juce::Font(24.0f));
-    auto versionBounds = bounds.removeFromTop(40);
+    auto versionBounds = bounds.removeFromTop(28);
     g.drawFittedText(
         "Version " + VersionInfo::getFullVersionString(),
         versionBounds,
@@ -113,25 +112,12 @@ void SplashScreenComponent::paint(juce::Graphics& g)
         1
     );
     
-    bounds.removeFromTop(20);
+    bounds.removeFromTop(2); // Very tight spacing - author close to version
     
-    // Build type
-    g.setColour(juce::Colour(0xffaaaaaa));
-    g.setFont(juce::Font(18.0f));
-    auto buildBounds = bounds.removeFromTop(30);
-    g.drawFittedText(
-        VersionInfo::BUILD_TYPE,
-        buildBounds,
-        juce::Justification::centredLeft,
-        1
-    );
-    
-    bounds.removeFromTop(40);
-    
-    // Author
+    // Author - aligned with version text
     g.setColour(juce::Colour(0xff888888));
     g.setFont(juce::Font(16.0f));
-    auto authorBounds = bounds.removeFromTop(25);
+    auto authorBounds = bounds.removeFromTop(20);
     g.drawFittedText(
         "By " + juce::String(VersionInfo::AUTHOR),
         authorBounds,
@@ -139,13 +125,28 @@ void SplashScreenComponent::paint(juce::Graphics& g)
         1
     );
     
-    // Dismiss hint at bottom right
-    g.setColour(juce::Colour(0xff666666));
-    g.setFont(juce::Font(14.0f));
-    auto hintBounds = juce::Rectangle<int>(padding, getHeight() - 30, getWidth() - padding * 2, 20);
+    // Bottom hints with better spacing and styling
+    const int bottomPadding = 60; // More space from bottom to avoid touching drawing
+    const int hintSpacing = 8;
+    
+    // Dismiss hint at bottom - with subtle styling
+    g.setColour(juce::Colour(0xff888888));
+    g.setFont(juce::Font(13.0f, juce::Font::plain));
+    auto hintBounds = juce::Rectangle<int>(padding, getHeight() - bottomPadding, getWidth() - padding * 2, 18);
     g.drawFittedText(
         "Press any key or click to continue",
         hintBounds,
+        juce::Justification::centredBottom,
+        1
+    );
+    
+    // Help hint below dismiss hint - smaller and more subtle
+    g.setColour(juce::Colour(0xff666666));
+    g.setFont(juce::Font(11.0f, juce::Font::plain));
+    auto helpBounds = juce::Rectangle<int>(padding, getHeight() - bottomPadding + hintSpacing + 18, getWidth() - padding * 2, 16);
+    g.drawFittedText(
+        "Press F1 for Help",
+        helpBounds,
         juce::Justification::centredBottom,
         1
     );
@@ -154,13 +155,26 @@ void SplashScreenComponent::paint(juce::Graphics& g)
 void SplashScreenComponent::resized()
 {
     // Component size is fixed, but we can handle resizing if needed
+    // Request focus when resized to ensure we can receive keyboard events
+    grabKeyboardFocus();
 }
 
 bool SplashScreenComponent::keyPressed(const juce::KeyPress& key)
 {
-    dismiss();
     juce::ignoreUnused(key);
+    dismiss();
     return true;
+}
+
+bool SplashScreenComponent::keyStateChanged(bool isKeyDown)
+{
+    // Dismiss on any key state change (catches keys that might not trigger keyPressed)
+    if (isKeyDown)
+    {
+        dismiss();
+        return true;
+    }
+    return false;
 }
 
 void SplashScreenComponent::mouseDown(const juce::MouseEvent& e)
@@ -169,10 +183,53 @@ void SplashScreenComponent::mouseDown(const juce::MouseEvent& e)
     dismiss();
 }
 
+void SplashScreenComponent::mouseUp(const juce::MouseEvent& e)
+{
+    juce::ignoreUnused(e);
+    dismiss();
+}
+
+void SplashScreenComponent::mouseWheelMove(const juce::MouseEvent& e, const juce::MouseWheelDetails& wheel)
+{
+    juce::ignoreUnused(e, wheel);
+    dismiss();
+}
+
+void SplashScreenComponent::mouseDoubleClick(const juce::MouseEvent& e)
+{
+    juce::ignoreUnused(e);
+    dismiss();
+}
+
 void SplashScreenComponent::timerCallback()
 {
-    stopTimer();
-    dismiss();
+    // Check if any mouse buttons are currently down
+    auto& desktop = juce::Desktop::getInstance();
+    auto mods = desktop.getMainMouseSource().getCurrentModifiers();
+    if (mods.isAnyMouseButtonDown())
+    {
+        dismiss();
+        return;
+    }
+    
+    // Check if any keys are currently pressed (check common keys)
+    // This is a simple approach - check modifier keys and a few common keys
+    if (mods.isAnyModifierKeyDown() || 
+        juce::KeyPress::isKeyCurrentlyDown(juce::KeyPress::spaceKey) ||
+        juce::KeyPress::isKeyCurrentlyDown(juce::KeyPress::returnKey) ||
+        juce::KeyPress::isKeyCurrentlyDown(juce::KeyPress::escapeKey))
+    {
+        dismiss();
+        return;
+    }
+    
+    // Auto-dismiss after timeout (check if we've been showing for 8 seconds)
+    static auto startTime = juce::Time::getMillisecondCounterHiRes();
+    auto elapsed = juce::Time::getMillisecondCounterHiRes() - startTime;
+    if (elapsed >= AUTO_DISMISS_MS)
+    {
+        dismiss();
+    }
 }
 
 void SplashScreenComponent::dismiss()

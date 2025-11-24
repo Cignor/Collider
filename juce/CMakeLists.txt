@@ -993,6 +993,8 @@ target_sources(PresetCreatorApp PRIVATE
     Source/preset_creator/PresetCreatorComponent.cpp
     Source/preset_creator/ControllerPresetManager.h
     Source/preset_creator/ControllerPresetManager.cpp
+    Source/preset_creator/VstManager.h
+    Source/preset_creator/VstManager.cpp
     Source/preset_creator/SplashScreenComponent.h
     Source/preset_creator/SplashScreenComponent.cpp
     

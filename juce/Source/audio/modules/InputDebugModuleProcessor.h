@@ -63,6 +63,31 @@ private:
     std::vector<InputDebugEvent> displayedEvents;
     static constexpr size_t MAX_DISPLAYED_EVENTS = 500;
     bool isPaused { false };
+
+#if defined(PRESET_CREATOR_UI)
+    // --- Visualization Data (thread-safe, updated from audio thread) ---
+    struct VizData
+    {
+        static constexpr int waveformPoints = 256;
+        static constexpr int numChannels = 8;
+        std::array<std::array<std::atomic<float>, waveformPoints>, numChannels> waveforms;
+        std::array<std::atomic<float>, numChannels> currentValues {};
+
+        VizData()
+        {
+            for (auto& ch : waveforms)
+                for (auto& v : ch)
+                    v.store(0.0f);
+            for (auto& v : currentValues)
+                v.store(0.0f);
+        }
+    };
+    VizData vizData;
+
+    // Circular buffers for waveform capture
+    std::array<juce::AudioBuffer<float>, 8> vizBuffers;
+    std::array<int, 8> vizWritePositions {};
+#endif
 };
 
 

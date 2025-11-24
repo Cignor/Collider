@@ -2,13 +2,13 @@
 
 ## General
 
-### What is Collider?
+### What is Pikon Raditsz?
 
-Collider is a modular synthesizer environment that combines audio processing, CV modulation, and real-time computer vision into a single, patchable interface.
+Pikon Raditsz is a modular synthesizer environment that combines audio processing, CV modulation, and real-time computer vision into a single, patchable interface.
 
 ### Is it free?
 
-Yes, Collider is an open-source project.
+Yes, Pikon Raditsz is an open-source project.
 
 ## Audio
 

@@ -14,6 +14,7 @@
 #include "PresetManager.h"
 #include "SampleManager.h"
 #include "MidiManager.h"
+#include "VstManager.h"
 #include "ControllerPresetManager.h"
 #include "NotificationManager.h"
 #include "ShortcutManager.h"
@@ -291,6 +292,12 @@ public:
     juce::File m_midiScanPath;
     juce::String m_midiSearchTerm;
     std::unique_ptr<juce::FileChooser> midiPathChooser;
+    
+    // VST plugin management
+    VstManager m_vstManager;
+    juce::File m_vstScanPath;
+    juce::String m_vstSearchTerm;
+    std::unique_ptr<juce::FileChooser> vstPathChooser;
     
     // Meta module editing state
     juce::uint32 metaModuleToEditLid = 0;
@@ -584,6 +591,13 @@ public:
     
     // --- VST Plugin Support ---
     void addPluginModules();
+    
+    // Helper function to draw VST menu organized by manufacturer (for popup menus)
+    // isMultiInsert: true for "Insert on Selected Cables", false for "Insert Between"
+    void drawVstMenuByManufacturer(bool isMultiInsert, bool isVideoCable);
+    
+    // Helper function to draw VST menu organized by manufacturer (for "Add Module" context menu)
+    void drawVstMenuByManufacturerForAddModule();
     
     // --- Global GPU/CPU Settings ---
     static bool getGlobalGpuEnabled() { return s_globalGpuEnabled; }

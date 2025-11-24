@@ -39,6 +39,8 @@ public:
     void prepareToPlay(double sampleRate, int samplesPerBlock) override;
     void releaseResources() override {}
     void processBlock(juce::AudioBuffer<float>&, juce::MidiBuffer&) override;
+    void setTimingInfo(const TransportState& state) override;
+    void forceStop() override;
 
     // --- Required by ModuleProcessor ---
     juce::AudioProcessorValueTreeState& getAPVTS() override { return apvts; }
@@ -71,6 +73,9 @@ private:
     juce::dsp::IIR::Filter<float> brownFilter; // Simple filter to approximate brown noise
     double currentSampleRate { 44100.0 };
     float slowNoiseState { 0.0f };
+    
+    // Transport state tracking
+    TransportState m_currentTransport;
 
 #if defined(PRESET_CREATOR_UI)
     struct VizData

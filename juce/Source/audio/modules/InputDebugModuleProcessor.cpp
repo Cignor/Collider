@@ -1,5 +1,8 @@
 #include "InputDebugModuleProcessor.h"
 #include "../graph/ModularSynthProcessor.h"
+#if defined(PRESET_CREATOR_UI)
+#include "../../preset_creator/theme/ThemeManager.h"
+#endif
 
 static juce::AudioProcessorValueTreeState::ParameterLayout makeLayout()
 {
@@ -27,10 +30,20 @@ InputDebugModuleProcessor::InputDebugModuleProcessor()
 
 void InputDebugModuleProcessor::prepareToPlay(double sampleRate, int samplesPerBlock)
 {
-    juce::ignoreUnused(samplesPerBlock);
     currentSampleRate = (sampleRate > 0.0 ? sampleRate : 44100.0);
     totalSamplesProcessed = 0;
     droppedEvents.store(0, std::memory_order_relaxed);
+
+#if defined(PRESET_CREATOR_UI)
+    // Initialize visualization buffers (circular buffers for waveform capture)
+    const int vizBufferSize = 4096;
+    for (int ch = 0; ch < 8; ++ch)
+    {
+        vizBuffers[ch].setSize(1, vizBufferSize);
+        vizBuffers[ch].clear();
+        vizWritePositions[ch] = 0;
+    }
+#endif
 }
 
 void InputDebugModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midi)
@@ -71,13 +84,140 @@ void InputDebugModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
         lastValues[(size_t) ch] = v;
     }
 
+#if defined(PRESET_CREATOR_UI)
+    // Capture waveform data for visualization (downsampled)
+    for (int ch = 0; ch < numChannels && ch < 8; ++ch)
+    {
+        auto& vizBuffer = vizBuffers[ch];
+        const int vizBufferSize = vizBuffer.getNumSamples();
+        if (vizBufferSize > 0)
+        {
+            // Write incoming samples to circular buffer
+            float* writePtr = vizBuffer.getWritePointer(0);
+            for (int i = 0; i < numSamples; ++i)
+            {
+                writePtr[vizWritePositions[ch]] = in.getSample(ch, i);
+                vizWritePositions[ch] = (vizWritePositions[ch] + 1) % vizBufferSize;
+            }
+
+            // Downsample to visualization points
+            const int stride = juce::jmax(1, vizBufferSize / InputDebugModuleProcessor::VizData::waveformPoints);
+            for (int i = 0; i < InputDebugModuleProcessor::VizData::waveformPoints; ++i)
+            {
+                const int readIdx = (vizWritePositions[ch] - InputDebugModuleProcessor::VizData::waveformPoints * stride + i * stride + vizBufferSize) % vizBufferSize;
+                const float sample = writePtr[readIdx];
+                vizData.waveforms[ch][i].store(sample, std::memory_order_relaxed);
+            }
+
+            // Store current value (magnitude)
+            const float currentVal = in.getMagnitude(ch, 0, numSamples);
+            vizData.currentValues[ch].store(currentVal, std::memory_order_relaxed);
+        }
+    }
+#endif
+
     totalSamplesProcessed += (juce::uint64) numSamples;
 }
 
 #if defined(PRESET_CREATOR_UI)
 void InputDebugModuleProcessor::drawParametersInNode(float itemWidth, const std::function<bool(const juce::String&)> & /*isParamModulated*/, const std::function<void()> & /*onModificationEnded*/)
 {
+    const auto& theme = ThemeManager::getInstance().getCurrentTheme();
     ImGui::PushItemWidth(itemWidth);
+
+    // === WAVEFORM VISUALIZATION ===
+    ImGui::PushID(this);
+    
+    // Read visualization data (thread-safe) - BEFORE BeginChild
+    std::array<std::array<float, InputDebugModuleProcessor::VizData::waveformPoints>, 8> waveforms;
+    std::array<float, 8> currentValues;
+    for (int ch = 0; ch < 8; ++ch)
+    {
+        for (int i = 0; i < InputDebugModuleProcessor::VizData::waveformPoints; ++i)
+            waveforms[ch][i] = vizData.waveforms[ch][i].load();
+        currentValues[ch] = vizData.currentValues[ch].load();
+    }
+
+    const float waveHeight = 180.0f;
+    const ImVec2 graphSize(itemWidth, waveHeight);
+    
+    if (ImGui::BeginChild("InputDebugViz", graphSize, false, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse))
+    {
+        ImDrawList* drawList = ImGui::GetWindowDrawList();
+        const ImVec2 p0 = ImGui::GetWindowPos();
+        const ImVec2 p1 = ImVec2(p0.x + graphSize.x, p0.y + graphSize.y);
+        
+        // Background
+        const ImU32 bgColor = ThemeManager::getInstance().getCanvasBackground();
+        drawList->AddRectFilled(p0, p1, bgColor);
+        
+        // Clip to graph area
+        drawList->PushClipRect(p0, p1, true);
+        
+        // Draw waveforms for each channel (8 channels, stacked)
+        const float channelHeight = graphSize.y / 8.0f;
+        const float scaleY = channelHeight * 0.35f;
+        const float stepX = graphSize.x / (float)(InputDebugModuleProcessor::VizData::waveformPoints - 1);
+        
+        // Color palette for channels
+        const ImU32 channelColors[8] = {
+            ImGui::ColorConvertFloat4ToU32(theme.accent),
+            ImGui::ColorConvertFloat4ToU32(theme.modulation.frequency),
+            ImGui::ColorConvertFloat4ToU32(theme.modulation.amplitude),
+            ImGui::ColorConvertFloat4ToU32(theme.modulation.timbre),
+            ImGui::ColorConvertFloat4ToU32(theme.modulation.filter),
+            ImGui::ColorConvertFloat4ToU32(ImVec4(1.0f, 0.5f, 0.0f, 1.0f)), // Orange
+            ImGui::ColorConvertFloat4ToU32(ImVec4(0.5f, 0.0f, 1.0f, 1.0f)), // Purple
+            ImGui::ColorConvertFloat4ToU32(ImVec4(0.0f, 1.0f, 0.5f, 1.0f))  // Cyan
+        };
+        
+        // Center line color
+        const ImU32 centerLineColor = IM_COL32(100, 100, 100, 80);
+        
+        for (int ch = 0; ch < 8; ++ch)
+        {
+            const float channelTop = p0.y + ch * channelHeight;
+            const float channelMid = channelTop + channelHeight * 0.5f;
+            const float channelBottom = channelTop + channelHeight;
+            
+            // Draw center line for each channel
+            drawList->AddLine(ImVec2(p0.x, channelMid), ImVec2(p1.x, channelMid), centerLineColor, 0.5f);
+            
+            // Draw waveform
+            const ImU32 waveformColor = channelColors[ch];
+            float prevX = p0.x;
+            float prevY = channelMid;
+            
+            for (int i = 0; i < InputDebugModuleProcessor::VizData::waveformPoints; ++i)
+            {
+                const float sample = juce::jlimit(-1.0f, 1.0f, waveforms[ch][i]);
+                const float x = p0.x + i * stepX;
+                const float y = juce::jlimit(channelTop, channelBottom, channelMid - sample * scaleY);
+                if (i > 0)
+                    drawList->AddLine(ImVec2(prevX, prevY), ImVec2(x, y), waveformColor, 1.0f);
+                prevX = x;
+                prevY = y;
+            }
+            
+            // Channel label and value
+            const float labelX = p0.x + 4.0f;
+            const float labelY = channelTop + 2.0f;
+            const juce::String label = "Ch" + juce::String(ch + 1) + ": " + juce::String(currentValues[ch], 3);
+            drawList->AddText(ImVec2(labelX, labelY), waveformColor, label.toRawUTF8());
+        }
+        
+        drawList->PopClipRect();
+        
+        // Invisible drag blocker
+        ImGui::SetCursorPos(ImVec2(0, 0));
+        ImGui::InvisibleButton("##inputDebugVizDrag", graphSize);
+    }
+    ImGui::EndChild();
+    
+    ImGui::PopID();
+    ImGui::Spacing();
+
+    // === CONTROLS ===
     if (ImGui::Checkbox("Pause", &isPaused)) {}
     ImGui::SameLine(); ImGui::Text("Dropped: %u", droppedEvents.load());
 

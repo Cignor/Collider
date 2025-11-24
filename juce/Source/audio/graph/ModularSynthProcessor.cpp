@@ -128,15 +128,8 @@ ModularSynthProcessor::ModularSynthProcessor()
     probeScopeNodeId = probeScopeNode->nodeID;
     juce::Logger::writeToLog("[ModularSynth] Initialized probe scope with nodeID: " + juce::String(probeScopeNodeId.uid));
     
-    // Create BPM Monitor node (always present, undeletable like output node)
-    auto bpmMonitor = std::make_unique<BPMMonitorModuleProcessor>();
-    bpmMonitor->setLogicalId(999); // Special ID to make it undeletable
-    bpmMonitorNode = internalGraph->addNode(std::move(bpmMonitor));
-    if (auto* processor = dynamic_cast<ModuleProcessor*>(bpmMonitorNode->getProcessor()))
-        processor->setParent(this);
-    // Add to logicalIdToModule so it appears in the UI
-    logicalIdToModule[999] = LogicalModule{ bpmMonitorNode->nodeID, "bpm_monitor" };
-    juce::Logger::writeToLog("[ModularSynth] Initialized BPM Monitor with logicalID: 999");
+    // BPM Monitor is now a normal module that can be added via menus
+    bpmMonitorNode = nullptr;
     
     activeAudioProcessors.store(std::make_shared<const std::vector<std::shared_ptr<ModuleProcessor>>>());
     connectionSnapshot.store(std::make_shared<const std::vector<ConnectionInfo>>(), std::memory_order_relaxed);
@@ -583,13 +576,6 @@ void ModularSynthProcessor::setStateInformation(const void* data, int sizeInByte
         const juce::String type = mv.getProperty("type").toString();
 
         juce::Logger::writeToLog("[STATE] Processing module " + juce::String(i) + ": logicalId=" + juce::String(logicalId) + " type='" + type + "'");
-
-        // Skip BPM Monitor (logical ID 999) - it's always present and should not be loaded from preset
-        if (logicalId == 999)
-        {
-            juce::Logger::writeToLog("[STATE] Skipping BPM Monitor (logical ID 999) - always present");
-            continue;
-        }
 
         if (logicalId > 0 && type.isNotEmpty())
         {

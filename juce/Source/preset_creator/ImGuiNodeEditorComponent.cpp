@@ -436,9 +436,69 @@ ImGuiNodeEditorComponent::ImGuiNodeEditorComponent(juce::AudioDeviceManager& dm)
     if (m_midiScanPath.getFullPathName().isNotEmpty() && !m_midiScanPath.exists())
         m_midiScanPath.createDirectory();
     
+    // --- VST BROWSER PATH INITIALIZATION ---
+    if (auto* props = PresetCreatorApplication::getApp().getProperties())
+    {
+        // Default path: exe/vst (lowercase, matching other browsers)
+        juce::File defaultVstPath = exeDir.getChildFile("vst");
+        
+        // Load saved path
+        juce::String savedVstPath = props->getValue("vstScanPath", "");
+        
+        // Migration: Check if saved path is using old defaults
+        bool vstNeedsMigration = savedVstPath.isEmpty();
+        
+        if (!vstNeedsMigration && exeDir.getFullPathName().isNotEmpty())
+        {
+            juce::String vstPathLower = savedVstPath.toLowerCase();
+            juce::File savedVstFile(savedVstPath);
+            juce::File oldDefaultVst = exeDir.getChildFile("VST"); // Old capital VST
+            
+            // Migrate if: pointing to old project directory, old default location (capital VST), or empty
+            if (vstPathLower.contains("0000_code") || 
+                vstPathLower.contains("01_collider_pyo") ||
+                savedVstFile == oldDefaultVst ||
+                !savedVstFile.exists())
+            {
+                vstNeedsMigration = true;
+            }
+        }
+        
+        // Apply migration if needed
+        if (vstNeedsMigration)
+        {
+            m_vstScanPath = defaultVstPath;
+            props->setValue("vstScanPath", defaultVstPath.getFullPathName());
+            juce::Logger::writeToLog("[UI] Migrated VST path to: " + defaultVstPath.getFullPathName());
+        }
+        else
+        {
+            m_vstScanPath = juce::File(savedVstPath);
+        }
+    }
+    
+    // Create VST directory if it doesn't exist
+    if (m_vstScanPath.getFullPathName().isNotEmpty() && !m_vstScanPath.exists())
+        m_vstScanPath.createDirectory();
+    
     juce::Logger::writeToLog("[UI] Preset path set to: " + m_presetScanPath.getFullPathName());
     juce::Logger::writeToLog("[UI] Sample path set to: " + m_sampleScanPath.getFullPathName());
     juce::Logger::writeToLog("[UI] MIDI path set to: " + m_midiScanPath.getFullPathName());
+    juce::Logger::writeToLog("[UI] VST path set to: " + m_vstScanPath.getFullPathName());
+    
+    // Build initial VST tree from existing KnownPluginList if plugins are already loaded
+    // (This happens if known_plugins.xml was loaded on startup)
+    if (m_vstScanPath.getFullPathName().isNotEmpty() && m_vstScanPath.exists())
+    {
+        auto& app = PresetCreatorApplication::getApp();
+        auto& knownPluginList = app.getKnownPluginList();
+        if (knownPluginList.getNumTypes() > 0)
+        {
+            // Build tree from existing plugin list without re-scanning
+            m_vstManager.buildTreeFromPluginList(m_vstScanPath, knownPluginList);
+            juce::Logger::writeToLog("[UI] Built VST tree from existing plugin list (" + juce::String(knownPluginList.getNumTypes()) + " plugins)");
+        }
+    }
     // --- END OF MIDI INITIALIZATION ---
 }
 
@@ -518,7 +578,7 @@ void ImGuiNodeEditorComponent::registerShortcuts()
                    "Reset Node",
                    "Reset selected nodes to their default parameter values.",
                    "Edit",
-                   { ImGuiKey_R, true, true, false, false },
+                   { ImGuiKey_R, false, false, true, false }, // Alt+R
                    shortcutResetNodeRequested);
 
     registerAction(ShortcutActionIds::editSelectAll,
@@ -682,7 +742,7 @@ void ImGuiNodeEditorComponent::registerShortcuts()
                    "Connect Selected to Recorder",
                    "Connect selected nodes to a new Recorder for multi-phase recording.",
                    "Graph",
-                   { ImGuiKey_None, false, false, false, false }, // No default shortcut - user can assign
+                   { ImGuiKey_R, true, true, false, false }, // Ctrl+Shift+R
                    shortcutConnectSelectedToRecorderRequested);
 
     registerAction(ShortcutActionIds::graphShowInsertPopup,
@@ -1158,81 +1218,6 @@ void ImGuiNodeEditorComponent::renderImGui()
                 }
             }
             
-            ImGui::Separator();
-            
-            // Plugin scanning menu item
-            if (ImGui::MenuItem("Scan for Plugins..."))
-            {
-                // Get the application instance to access plugin management
-                auto& app = PresetCreatorApplication::getApp();
-                auto& formatManager = app.getPluginFormatManager();
-                auto& knownPluginList = app.getKnownPluginList();
-
-                // 1. Find the VST3 format
-                juce::VST3PluginFormat* vst3Format = nullptr;
-                for (int i = 0; i < formatManager.getNumFormats(); ++i)
-                {
-                    if (auto* format = formatManager.getFormat(i); format->getName() == "VST3")
-                    {
-                        vst3Format = dynamic_cast<juce::VST3PluginFormat*>(format);
-                        break;
-                    }
-                }
-
-                if (vst3Format != nullptr)
-                {
-                    // 2. Define the specific folder to scan
-                    juce::File vstDir = juce::File::getSpecialLocation(juce::File::currentExecutableFile)
-                                            .getParentDirectory().getChildFile("VST");
-
-                    juce::FileSearchPath searchPath;
-                    if (vstDir.isDirectory())
-                    {
-                        searchPath.add(vstDir);
-                        juce::Logger::writeToLog("[VST Scan] Starting scan in: " + vstDir.getFullPathName());
-                    }
-                    else
-                    {
-                        vstDir.createDirectory();
-                        searchPath.add(vstDir);
-                        juce::Logger::writeToLog("[VST Scan] Created VST directory at: " + vstDir.getFullPathName());
-                    }
-
-                    // 3. Scan for plugins
-                    auto appDataDir = juce::File::getSpecialLocation(juce::File::userApplicationDataDirectory)
-                                        .getChildFile(app.getApplicationName());
-                    
-                    juce::PluginDirectoryScanner scanner(knownPluginList, *vst3Format, searchPath, true,
-                                                         appDataDir.getChildFile("dead_plugins.txt"), true);
-
-                    // 4. Perform the scan
-                    juce::String pluginBeingScanned;
-                    int numFound = 0;
-                    while (scanner.scanNextFile(true, pluginBeingScanned))
-                    {
-                        juce::Logger::writeToLog("[VST Scan] Scanning: " + pluginBeingScanned);
-                        ++numFound;
-                    }
-                    
-                    juce::Logger::writeToLog("[VST Scan] Scan complete. Found " + juce::String(numFound) + " plugin(s).");
-                    juce::Logger::writeToLog("[VST Scan] Total plugins in list: " + juce::String(knownPluginList.getNumTypes()));
-                    
-                    // 5. Save the updated plugin list
-                    auto pluginListFile = appDataDir.getChildFile("known_plugins.xml");
-                    if (auto pluginListXml = knownPluginList.createXml())
-                    {
-                        if (pluginListXml->writeTo(pluginListFile))
-                        {
-                            juce::Logger::writeToLog("[VST Scan] Saved plugin list to: " + pluginListFile.getFullPathName());
-                        }
-                    }
-                }
-                else
-                {
-                    juce::Logger::writeToLog("[VST Scan] ERROR: VST3 format not found in format manager.");
-                }
-            }
-            
             ImGui::EndMenu();
         }
         
@@ -1462,16 +1447,7 @@ void ImGuiNodeEditorComponent::renderImGui()
                     juce::Logger::writeToLog("[Settings] Global GPU: " + juce::String(gpuEnabled ? "ENABLED" : "DISABLED"));
                 }
                 
-                ImGui::TextDisabled("This setting controls all vision nodes:");
-                ImGui::TextDisabled("  - Pose Estimator");
-                ImGui::TextDisabled("  - Hand Tracker");
-                ImGui::TextDisabled("  - Face Tracker");
-                ImGui::TextDisabled("  - Object Detector");
-                ImGui::TextDisabled("  - Human Detector");
-                ImGui::TextDisabled("  - Color Tracker");
-                ImGui::TextDisabled("  - Contour Detector");
-                ImGui::TextDisabled("  - Movement Detector");
-                ImGui::TextDisabled("  - Semantic Segmentation");
+                ImGui::TextDisabled("Computer vision nodes require GPU");
                 
                 ImGui::Separator();
                 
@@ -1561,7 +1537,26 @@ void ImGuiNodeEditorComponent::renderImGui()
                 handleRecordOutput();
             }
             
-            if (ImGui::MenuItem("Reset Node", "Ctrl+Shift+R", false, ImNodes::NumSelectedNodes() > 0))
+            // Get the shortcut string for "Reset Node"
+            juce::String resetNodeShortcutLabel;
+            {
+                const auto& context = nodeEditorContextId;
+                auto userBinding = shortcutManager.getUserBinding(ShortcutActionIds::editResetNode, context);
+                if (userBinding.hasValue() && userBinding->isValid())
+                {
+                    resetNodeShortcutLabel = userBinding->toString();
+                }
+                else
+                {
+                    auto defaultBinding = shortcutManager.getDefaultBinding(ShortcutActionIds::editResetNode, context);
+                    if (defaultBinding.hasValue() && defaultBinding->isValid())
+                    {
+                        resetNodeShortcutLabel = defaultBinding->toString();
+                    }
+                }
+            }
+            
+            if (ImGui::MenuItem("Reset Node", resetNodeShortcutLabel.isEmpty() ? nullptr : resetNodeShortcutLabel.toRawUTF8(), false, ImNodes::NumSelectedNodes() > 0))
             {
                 const int numSelected = ImNodes::NumSelectedNodes();
                 if (numSelected > 0 && synth != nullptr)
@@ -1698,6 +1693,7 @@ void ImGuiNodeEditorComponent::renderImGui()
             {
                 if (ImGui::MenuItem("Scope")) { insertNodeBetween("scope"); }
                 if (ImGui::MenuItem("Frequency Graph")) { insertNodeBetween("frequency_graph"); }
+                if (ImGui::MenuItem("BPM Monitor")) { insertNodeBetween("bpm_monitor"); }
                 ImGui::EndMenu();
             }
             
@@ -1755,16 +1751,31 @@ void ImGuiNodeEditorComponent::renderImGui()
             ImGui::Separator();
             ImGui::Spacing();
             
+            // Access PresetCreatorComponent to use unified setMasterPlayState()
+            auto* presetCreator = dynamic_cast<PresetCreatorComponent*>(getParentComponent());
+            
             // Play/Pause button
             if (transportState.isPlaying)
             {
                 if (ImGui::Button("Pause"))
-                    synth->setPlaying(false);
+                {
+                    // Use unified setMasterPlayState() to control both audio callback and transport
+                    if (presetCreator != nullptr)
+                        presetCreator->setMasterPlayState(false);
+                    else
+                        synth->setPlaying(false); // Fallback if parent not available
+                }
             }
             else
             {
                 if (ImGui::Button("Play"))
-                    synth->setPlaying(true);
+                {
+                    // Use unified setMasterPlayState() to control both audio callback and transport
+                    if (presetCreator != nullptr)
+                        presetCreator->setMasterPlayState(true);
+                    else
+                        synth->setPlaying(true); // Fallback if parent not available
+                }
             }
             
             ImGui::SameLine();
@@ -1772,7 +1783,13 @@ void ImGuiNodeEditorComponent::renderImGui()
             // Stop button (resets position)
             if (ImGui::Button("Stop"))
             {
-                synth->setPlaying(false);
+                // Use unified setMasterPlayState() to control both audio callback and transport
+                if (presetCreator != nullptr)
+                    presetCreator->setMasterPlayState(false);
+                else
+                    synth->setPlaying(false); // Fallback if parent not available
+                
+                // Reset transport position (same behavior as before)
                 synth->resetTransportPosition();
             }
             
@@ -2438,6 +2455,144 @@ void ImGuiNodeEditorComponent::renderImGui()
     
     ImGui::Separator();
     
+    // === VST BROWSER ===
+    pushHeaderColors(theme.headers.recent);  // Use recent header color for VST (can add dedicated color later)
+    bool vstExpanded = ImGui::CollapsingHeader("VST Plugins");
+    ImGui::PopStyleColor(4); // 3 background colors + 1 text color
+    
+    if (vstExpanded)
+    {
+        // 1. Path Display (read-only)
+        char pathBuf[1024];
+        strncpy(pathBuf, m_vstScanPath.getFullPathName().toRawUTF8(), sizeof(pathBuf) - 1);
+        ImGui::InputText("##vstpath", pathBuf, sizeof(pathBuf), ImGuiInputTextFlags_ReadOnly);
+
+        // 2. "Change Path" Button
+        if (ImGui::Button("Change Path##vst"))
+        {
+            // Construct File from path string directly - no validation, no blocking
+            // If path is empty, use empty File() which opens at system default (fastest)
+            juce::File startDir = m_vstScanPath.getFullPathName().isNotEmpty() 
+                ? juce::File(m_vstScanPath.getFullPathName()) 
+                : juce::File();
+            vstPathChooser = std::make_unique<juce::FileChooser>("Select VST Directory", startDir);
+            vstPathChooser->launchAsync(juce::FileBrowserComponent::openMode | juce::FileBrowserComponent::canSelectDirectories,
+                [this](const juce::FileChooser& fc)
+                {
+                    auto dir = fc.getResult();
+                    if (dir.isDirectory())
+                    {
+                        m_vstScanPath = dir;
+                        // Save the new path to the properties file
+                        if (auto* props = PresetCreatorApplication::getApp().getProperties())
+                        {
+                            props->setValue("vstScanPath", m_vstScanPath.getFullPathName());
+                        }
+                        // Rescan the directory after path change
+                        auto& app = PresetCreatorApplication::getApp();
+                        m_vstManager.clearCache();
+                        m_vstManager.scanDirectory(m_vstScanPath, app.getPluginFormatManager(), app.getKnownPluginList());
+                    }
+                });
+        }
+        ImGui::SameLine();
+
+        // 3. "Scan" Button
+        if (ImGui::Button("Scan##vst"))
+        {
+            auto& app = PresetCreatorApplication::getApp();
+            m_vstManager.clearCache();
+            m_vstManager.scanDirectory(m_vstScanPath, app.getPluginFormatManager(), app.getKnownPluginList());
+        }
+
+        // 4. Search bar for filtering results
+        char searchBuf[256] = {};
+        strncpy(searchBuf, m_vstSearchTerm.toRawUTF8(), sizeof(searchBuf) - 1);
+        if (ImGui::InputText("Search##vst", searchBuf, sizeof(searchBuf)))
+            m_vstSearchTerm = juce::String(searchBuf);
+
+        ImGui::Separator();
+
+        // 5. Display hierarchical VST tree
+        std::function<void(const VstManager::DirectoryNode*)> drawVstTree = 
+            [&](const VstManager::DirectoryNode* node)
+            {
+                if (!node || (node->plugins.empty() && node->subdirectories.empty())) return;
+
+                // Draw subdirectories (manufacturers) first
+                for (const auto& subdir : node->subdirectories)
+                {
+                    if (ImGui::TreeNode(subdir->name.toRawUTF8()))
+                    {
+                        drawVstTree(subdir.get());
+                        ImGui::TreePop();
+                    }
+                }
+
+                // Draw plugins in this node
+                for (const auto& plugin : node->plugins)
+                {
+                    // Apply search filter
+                    if (m_vstSearchTerm.isNotEmpty() && 
+                        !plugin.name.containsIgnoreCase(m_vstSearchTerm) &&
+                        !plugin.manufacturer.containsIgnoreCase(m_vstSearchTerm))
+                        continue;
+
+                    juce::String displayName = plugin.name;
+                    if (plugin.manufacturer.isNotEmpty())
+                        displayName += " (" + plugin.manufacturer + ")";
+
+                    bool clicked = ImGui::Selectable(displayName.toRawUTF8());
+
+                    // Drag and drop support
+                    if (ImGui::BeginDragDropSource(ImGuiDragDropFlags_None))
+                    {
+                        // Store plugin description as payload
+                        const std::string pluginId = plugin.description.createIdentifierString().toStdString();
+                        ImGui::SetDragDropPayload("DND_VST_PLUGIN", pluginId.c_str(), pluginId.length() + 1);
+                        ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
+                        ImGui::Text("Dragging: %s", displayName.toRawUTF8());
+                        ImGui::EndDragDropSource();
+                    }
+
+                    // If clicked (not dragged), add plugin as node
+                    if (clicked && synth != nullptr)
+                    {
+                        auto& app = PresetCreatorApplication::getApp();
+                        auto nodeId = synth->addVstModule(app.getPluginFormatManager(), plugin.description);
+                        if (nodeId.uid != 0)
+                        {
+                            const ImVec2 mouse = ImGui::GetMousePos();
+                            const auto logicalId = synth->getLogicalIdForNode(nodeId);
+                            pendingNodeScreenPositions[(int)logicalId] = mouse;
+                            snapshotAfterEditor = true;
+                            juce::Logger::writeToLog("[VST] Added plugin: " + plugin.name);
+                        }
+                        else
+                        {
+                            juce::Logger::writeToLog("[VST] ERROR: Failed to add plugin: " + plugin.name);
+                        }
+                    }
+
+                    // Tooltip with plugin info
+                    if (ImGui::IsItemHovered())
+                    {
+                        ImGui::BeginTooltip();
+                        ImGui::Text("Name: %s", plugin.name.toRawUTF8());
+                        ImGui::Text("Manufacturer: %s", plugin.manufacturer.toRawUTF8());
+                        ImGui::Text("Version: %s", plugin.version.toRawUTF8());
+                        ImGui::Text("Type: %s", plugin.isInstrument ? "Instrument" : "Effect");
+                        ImGui::Text("Inputs: %d, Outputs: %d", plugin.numInputs, plugin.numOutputs);
+                        ImGui::EndTooltip();
+                    }
+                }
+            };
+
+        drawVstTree(m_vstManager.getRootNode());
+    }
+    
+    ImGui::Separator();
+    
     // === MODULE BROWSER ===
     pushHeaderColors(theme.headers.system);
     bool modulesExpanded = ImGui::CollapsingHeader("Modules", ImGuiTreeNodeFlags_DefaultOpen);
@@ -2631,6 +2786,7 @@ void ImGuiNodeEditorComponent::renderImGui()
         addModuleButton("Debug", "debug");
         addModuleButton("Input Debug", "input_debug");
         addModuleButton("Frequency Graph", "frequency_graph");
+        addModuleButton("BPM Monitor", "bpm_monitor");
     }
     
     // ═══════════════════════════════════════════════════════════════════════════════
@@ -2678,17 +2834,7 @@ void ImGuiNodeEditorComponent::renderImGui()
     }
     
     // ═══════════════════════════════════════════════════════════════════════════════
-    // 11. PLUGINS / VST - Third-party audio plugins
-    // ═══════════════════════════════════════════════════════════════════════════════
-    pushCategoryColor(ModuleCategory::Plugin);
-    bool pluginsExpanded = ImGui::CollapsingHeader("Plugins / VST", ImGuiTreeNodeFlags_DefaultOpen);
-    ImGui::PopStyleColor(4); // 3 background colors + 1 text color
-    if (pluginsExpanded) {
-        addPluginModules();
-    }
-    
-    // ═══════════════════════════════════════════════════════════════════════════════
-    // 12. SYSTEM - Patch organization and system utilities
+    // 11. SYSTEM - Patch organization and system utilities
     // ═══════════════════════════════════════════════════════════════════════════════
     pushCategoryColor(ModuleCategory::Sys);
     bool systemExpanded = ImGui::CollapsingHeader("System", ImGuiTreeNodeFlags_DefaultOpen);
@@ -3920,16 +4066,6 @@ if (auto* mp = synth->getModuleForLogical (lid))
             }
             pendingNodePositions.erase(it);
         }
-        else if ((int)lid == 999)
-        {
-            // BPM Monitor node (999): set default position if not in pending positions
-            ImVec2 currentPos = ImNodes::GetNodeGridSpacePos((int)lid);
-            if (currentPos.x == 0.0f && currentPos.y == 0.0f)
-            {
-                ImNodes::SetNodeGridSpacePos((int)lid, ImVec2(450.0f, 300.0f));
-                juce::Logger::writeToLog("[PositionRestore] Set default position for BPM monitor node: (450.0, 300.0)");
-            }
-        }
             // Apply pending size if queued (for Comment nodes to prevent feedback loop)
             if (auto itSize = pendingNodeSizes.find((int) lid); itSize != pendingNodeSizes.end())
             {
@@ -3951,7 +4087,7 @@ if (auto* mp = synth->getModuleForLogical (lid))
             const juce::String selectedType = selectedLogicalId != 0 ? getTypeForLogical((juce::uint32)selectedLogicalId) : juce::String();
             const bool selectedIsMeta = selectedType.equalsIgnoreCase("meta_module") || selectedType.equalsIgnoreCase("meta");
 
-            if (ImGui::MenuItem("Delete") && selectedLogicalId != 0 && selectedLogicalId != 999)
+            if (ImGui::MenuItem("Delete") && selectedLogicalId != 0)
             {
                 mutedNodeStates.erase((juce::uint32)selectedLogicalId); // Clean up muted state if exists
                 synth->removeModule (synth->getNodeIdForLogical ((juce::uint32) selectedLogicalId));
@@ -4250,8 +4386,8 @@ if (auto* mp = synth->getModuleForLogical (lid))
             ImVec2 currentPos = ImNodes::GetNodeGridSpacePos(0);
             if (currentPos.x == 0.0f && currentPos.y == 0.0f)
             {
-                ImNodes::SetNodeGridSpacePos(0, ImVec2(1200.0f, 500.0f));
-                juce::Logger::writeToLog("[PositionRestore] Set default position for output node: (1200.0, 500.0)");
+                ImNodes::SetNodeGridSpacePos(0, ImVec2(1250.0f, 500.0f));
+                juce::Logger::writeToLog("[PositionRestore] Set default position for output node: (2000.0, 500.0)");
             }
         }
         drawnNodes.insert(0);
@@ -5446,6 +5582,7 @@ if (auto* mp = synth->getModuleForLogical (lid))
                     if (ImGui::MenuItem("Debug")) addAtMouse("debug");
                     if (ImGui::MenuItem("Input Debug")) addAtMouse("input_debug");
                     if (ImGui::MenuItem("Frequency Graph")) addAtMouse("frequency_graph");
+                    if (ImGui::MenuItem("BPM Monitor")) addAtMouse("bpm_monitor");
                     ImGui::EndMenu();
                 }
                 if (ImGui::BeginMenu("TTS")) {
@@ -5476,7 +5613,7 @@ if (auto* mp = synth->getModuleForLogical (lid))
                 }
                 
                 if (ImGui::BeginMenu("Plugins / VST")) {
-                    addPluginModules(); // Re-use your existing plugin menu logic
+                    drawVstMenuByManufacturerForAddModule();
                     ImGui::EndMenu();
                 }
                 
@@ -6571,19 +6708,11 @@ void ImGuiNodeEditorComponent::applyUiValueTreeNow (const juce::ValueTree& uiSta
     auto outputIt = pendingNodePositions.find(0);
     if (outputIt == pendingNodePositions.end())
     {
-        // Position output node on right side but closer to center for better first-time UX
-        pendingNodePositions[0] = ImVec2(1200.0f, 500.0f);
-        juce::Logger::writeToLog("[UI_RESTORE] Set default position for output node: (1200.0, 500.0)");
+        // Position output node on right side, far enough to avoid splash screen overlap
+        pendingNodePositions[0] = ImVec2(1250.0f, 500.0f);
+        juce::Logger::writeToLog("[UI_RESTORE] Set default position for output node: (2000.0, 500.0)");
     }
     
-    // BPM Monitor node (ID 999): left of center
-    auto bpmMonitorIt = pendingNodePositions.find(999);
-    if (bpmMonitorIt == pendingNodePositions.end())
-    {
-        // Position BPM monitor node on left side, higher up to match screenshot layout
-        pendingNodePositions[999] = ImVec2(450.0f, 300.0f);
-        juce::Logger::writeToLog("[UI_RESTORE] Set default position for BPM monitor node: (450.0, 300.0)");
-    }
     
     // Muting/unmuting modifies graph connections, so we must tell the
     // synth to rebuild its processing order.
@@ -9317,7 +9446,9 @@ void ImGuiNodeEditorComponent::drawInsertNodeOnLinkPopup()
             // Modulators
             {"S&H", "s_and_h"}, {"Function Generator", "function_generator"},
             // Sequencers
-            {"Timeline", "timeline"}
+            {"Timeline", "timeline"},
+            // Analysis (CV outputs)
+            {"BPM Monitor", "bpm_monitor"}
         };
         const std::map<const char*, const char*> videoInsertable = {
             // Computer Vision (Video processing)
@@ -9366,84 +9497,7 @@ void ImGuiNodeEditorComponent::drawInsertNodeOnLinkPopup()
             ImGui::Separator();
             if (ImGui::BeginMenu("VST"))
             {
-                auto& app = PresetCreatorApplication::getApp();
-                auto& knownPluginList = app.getKnownPluginList();
-                auto& formatManager = app.getPluginFormatManager();
-                
-                // Get the VST folder at exe position
-                juce::File exeDir = juce::File::getSpecialLocation(juce::File::currentApplicationFile).getParentDirectory();
-                juce::File vstFolder = exeDir.getChildFile("VST");
-                
-                // Get all plugins and filter/deduplicate
-                const auto& allPlugins = knownPluginList.getTypes();
-                
-                // Filter to only plugins in the VST folder and deduplicate
-                std::vector<juce::PluginDescription> filteredPlugins;
-                std::set<juce::String> seenPlugins; // Use name + manufacturer as unique key
-                
-                for (const auto& desc : allPlugins)
-                {
-                    // Check if plugin is in the VST folder at exe position
-                    juce::File pluginFile(desc.fileOrIdentifier);
-                    if (!pluginFile.existsAsFile())
-                        continue;
-                        
-                    juce::File pluginDir = pluginFile.getParentDirectory();
-                    if (!pluginDir.isAChildOf(vstFolder) && pluginDir != vstFolder)
-                        continue;
-                    
-                    // Create unique key for deduplication (name + manufacturer)
-                    juce::String uniqueKey = desc.name + "|" + desc.manufacturerName;
-                    if (seenPlugins.find(uniqueKey) != seenPlugins.end())
-                        continue; // Skip duplicate
-                    
-                    seenPlugins.insert(uniqueKey);
-                    filteredPlugins.push_back(desc);
-                }
-                
-                // Use PushID to create unique IDs for each plugin
-                ImGui::PushID("InsertVSTList");
-                int pluginIndex = 0;
-                for (const auto& desc : filteredPlugins)
-                {
-                    ImGui::PushID(pluginIndex++);
-                    juce::String menuLabel = desc.name;
-                    if (desc.manufacturerName.isNotEmpty())
-                    {
-                        menuLabel += " (" + desc.manufacturerName + ")";
-                    }
-                    
-                    if (ImGui::MenuItem(menuLabel.toRawUTF8()))
-                    {
-                        if (isMultiInsert)
-                        {
-                            handleInsertNodeOnSelectedLinks(desc.name);
-                        }
-                        else
-                        {
-                            insertNodeBetween(desc.name);
-                        }
-                        ImGui::CloseCurrentPopup();
-                    }
-                    
-                    // Show tooltip with plugin info
-                    if (ImGui::IsItemHovered())
-                    {
-                        ImGui::BeginTooltip();
-                        ImGui::Text("Manufacturer: %s", desc.manufacturerName.toRawUTF8());
-                        ImGui::Text("Version: %s", desc.version.toRawUTF8());
-                        ImGui::EndTooltip();
-                    }
-                    
-                    ImGui::PopID(); // Pop plugin index ID
-                }
-                ImGui::PopID(); // Pop InsertVSTList ID
-                
-                if (filteredPlugins.empty())
-                {
-                    ImGui::TextDisabled("No plugins in VST folder");
-                }
-                
+                drawVstMenuByManufacturer(isMultiInsert, isVideoCable);
                 ImGui::EndMenu();
             }
         }
@@ -11174,6 +11228,131 @@ void ImGuiNodeEditorComponent::addPluginModules()
     }
     ImGui::PopID(); // Pop PluginList ID
 }
+
+void ImGuiNodeEditorComponent::drawVstMenuByManufacturer(bool isMultiInsert, bool isVideoCable)
+{
+    if (isVideoCable) return; // VST plugins are audio-only
+    
+    auto& app = PresetCreatorApplication::getApp();
+    auto& knownPluginList = app.getKnownPluginList();
+    
+    // Use VstManager to get plugins organized by manufacturer
+    auto* rootNode = m_vstManager.getRootNode();
+    if (!rootNode || rootNode->subdirectories.empty())
+    {
+        ImGui::TextDisabled("No plugins found.");
+        return;
+    }
+    
+    // Iterate through manufacturer nodes (subdirectories)
+    for (const auto& manufacturerNode : rootNode->subdirectories)
+    {
+        if (manufacturerNode->plugins.empty())
+            continue;
+            
+        // Create collapsible tree node for each manufacturer
+        if (ImGui::TreeNode(manufacturerNode->name.toRawUTF8()))
+        {
+            // List all plugins for this manufacturer
+            for (const auto& plugin : manufacturerNode->plugins)
+            {
+                juce::String menuLabel = plugin.name;
+                
+                if (ImGui::MenuItem(menuLabel.toRawUTF8()))
+                {
+                    if (isMultiInsert)
+                    {
+                        handleInsertNodeOnSelectedLinks(plugin.description.name);
+                    }
+                    else
+                    {
+                        insertNodeBetween(plugin.description.name);
+                    }
+                    ImGui::CloseCurrentPopup();
+                }
+                
+                // Show tooltip with plugin info
+                if (ImGui::IsItemHovered())
+                {
+                    ImGui::BeginTooltip();
+                    ImGui::Text("Manufacturer: %s", plugin.manufacturer.toRawUTF8());
+                    ImGui::Text("Version: %s", plugin.version.toRawUTF8());
+                    ImGui::Text("Type: %s", plugin.isInstrument ? "Instrument" : "Effect");
+                    ImGui::Text("Inputs: %d, Outputs: %d", plugin.numInputs, plugin.numOutputs);
+                    ImGui::EndTooltip();
+                }
+            }
+            
+            ImGui::TreePop();
+        }
+    }
+}
+
+void ImGuiNodeEditorComponent::drawVstMenuByManufacturerForAddModule()
+{
+    if (synth == nullptr)
+        return;
+    
+    auto& app = PresetCreatorApplication::getApp();
+    auto& formatManager = app.getPluginFormatManager();
+    
+    // Use VstManager to get plugins organized by manufacturer
+    auto* rootNode = m_vstManager.getRootNode();
+    if (!rootNode || rootNode->subdirectories.empty())
+    {
+        ImGui::TextDisabled("No plugins found.");
+        return;
+    }
+    
+    // Iterate through manufacturer nodes (subdirectories)
+    for (const auto& manufacturerNode : rootNode->subdirectories)
+    {
+        if (manufacturerNode->plugins.empty())
+            continue;
+            
+        // Create collapsible tree node for each manufacturer
+        if (ImGui::TreeNode(manufacturerNode->name.toRawUTF8()))
+        {
+            // List all plugins for this manufacturer
+            for (const auto& plugin : manufacturerNode->plugins)
+            {
+                juce::String menuLabel = plugin.name;
+                
+                if (ImGui::MenuItem(menuLabel.toRawUTF8()))
+                {
+                    auto nodeId = synth->addVstModule(formatManager, plugin.description);
+                    if (nodeId.uid != 0)
+                    {
+                        const ImVec2 mouse = ImGui::GetMousePos();
+                        const auto logicalId = synth->getLogicalIdForNode(nodeId);
+                        pendingNodeScreenPositions[(int)logicalId] = mouse;
+                        snapshotAfterEditor = true;
+                        juce::Logger::writeToLog("[VST] Added plugin: " + plugin.name);
+                        ImGui::CloseCurrentPopup();
+                    }
+                    else
+                    {
+                        juce::Logger::writeToLog("[VST] ERROR: Failed to add plugin: " + plugin.name);
+                    }
+                }
+                
+                // Show tooltip with plugin info
+                if (ImGui::IsItemHovered())
+                {
+                    ImGui::BeginTooltip();
+                    ImGui::Text("Manufacturer: %s", plugin.manufacturer.toRawUTF8());
+                    ImGui::Text("Version: %s", plugin.version.toRawUTF8());
+                    ImGui::Text("Type: %s", plugin.isInstrument ? "Instrument" : "Effect");
+                    ImGui::Text("Inputs: %d, Outputs: %d", plugin.numInputs, plugin.numOutputs);
+                    ImGui::EndTooltip();
+                }
+            }
+            
+            ImGui::TreePop();
+        }
+    }
+}
+
 void ImGuiNodeEditorComponent::handleCollapseToMetaModule()
 {
     if (!synth)

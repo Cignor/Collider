@@ -25,7 +25,7 @@
  * - [Name] CV - Normalized 0-1 for modulation
  * - [Name] Active/Confidence - Gate or confidence level
  * 
- * This node is always present (like the output node) and undeletable.
+ * This node can be added via the Analysis menu and behaves like a normal module.
  */
 class BPMMonitorModuleProcessor : public ModuleProcessor
 {
@@ -46,7 +46,7 @@ public:
     ~BPMMonitorModuleProcessor() override = default;
 
     // === JUCE AudioProcessor Interface ===
-    const juce::String getName() const override { return "BPM Monitor"; }
+    const juce::String getName() const override { return "bpm_monitor"; }
     void prepareToPlay(double sampleRate, int samplesPerBlock) override;
     void releaseResources() override {}
     void processBlock(juce::AudioBuffer<float>&, juce::MidiBuffer&) override;

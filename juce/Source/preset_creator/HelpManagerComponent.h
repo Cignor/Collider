@@ -101,16 +101,25 @@ private:
     bool faqLoaded = false;
     juce::File faqFile;
 
+    // About state
+    std::vector<MarkdownSection> aboutSections;
+    bool aboutLoaded = false;
+    juce::File aboutFile;
+
     // Markdown parsing functions
     void loadNodeDictionary();
     void loadGettingStarted();
     void loadFaq();
+    void loadAbout();
     void parseMarkdown(const juce::String& content, std::vector<MarkdownSection>& sections);
     void renderMarkdownSection(const MarkdownSection& section, const juce::String& searchTerm, bool parentMatches = true, bool forceExpand = false);
+    void renderAboutSection(const MarkdownSection& section); // Special renderer for About tab (non-collapsible)
+    void renderAboutText(const juce::String& text); // Special text renderer for About tab (better paragraph handling)
     void renderMarkdownText(const juce::String& text);
     void renderFormattedText(const juce::String& text); // Renders text with inline formatting (bold, code)
     juce::String extractAnchor(const juce::String& headerLine);
     juce::String replaceShortcutPlaceholders(const juce::String& text); // Replaces hardcoded shortcuts with actual shortcuts from ShortcutManager
+    juce::String replaceVersionInfoPlaceholders(const juce::String& text); // Replaces VersionInfo placeholders ({{APPLICATION_NAME}}, etc.)
     
     // Helper to get category color from section title
     ImU32 getCategoryColorForSection(const juce::String& sectionTitle) const;

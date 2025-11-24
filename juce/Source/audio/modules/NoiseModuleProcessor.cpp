@@ -92,45 +92,61 @@ void NoiseModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::
     const float baseRateHz = rateHzParam ? rateHzParam->load() : 20.0f;
 
     // --- Per-Sample Processing for Responsive Modulation ---
+    // CRITICAL FIX: Only generate noise when transport is playing
+    const bool shouldGenerateNoise = m_currentTransport.isPlaying;
+    
     for (int i = 0; i < numSamples; ++i)
     {
-        // 1. Calculate effective parameter values for this sample
+        // Declare variables outside if block for telemetry use
         float effectiveLevelDb = baseLevelDb;
-        if (isLevelModulated && levelCV != nullptr) {
-            // CV maps 0..1 to the full dB range
-            effectiveLevelDb = juce::jmap(levelCV[i], 0.0f, 1.0f, -60.0f, 6.0f);
-        }
-
         int effectiveColour = baseColour;
-        if (isColourModulated && colourCV != nullptr) {
-            // CV maps 0..1 to the 3 choices
-            effectiveColour = static_cast<int>(juce::jlimit(0.0f, 1.0f, colourCV[i]) * 2.99f);
-        }
-
         float effectiveRateHz = baseRateHz;
-        if (isRateModulated && rateCV != nullptr) {
-            effectiveRateHz = juce::jmap(rateCV[i], 0.0f, 1.0f, minRateHz, maxRateHz);
-        }
-        effectiveRateHz = juce::jlimit(minRateHz, maxRateHz, effectiveRateHz);
-
-        // 2. Generate raw white noise
-        float sample = random.nextFloat() * 2.0f - 1.0f;
-
-        // 3. Filter noise based on effective colour
-        switch (effectiveColour)
+        float sample = 0.0f; // Default to silence
+        
+        if (shouldGenerateNoise)
         {
-            case 0: /* White noise, no filter */ break;
-            case 1: sample = pinkFilter.processSample(sample); break;
-            case 2: sample = brownFilter.processSample(sample); break;
+            // 1. Calculate effective parameter values for this sample
+            if (isLevelModulated && levelCV != nullptr) {
+                // CV maps 0..1 to the full dB range
+                effectiveLevelDb = juce::jmap(levelCV[i], 0.0f, 1.0f, -60.0f, 6.0f);
+            }
+
+            if (isColourModulated && colourCV != nullptr) {
+                // CV maps 0..1 to the 3 choices
+                effectiveColour = static_cast<int>(juce::jlimit(0.0f, 1.0f, colourCV[i]) * 2.99f);
+            }
+
+            if (isRateModulated && rateCV != nullptr) {
+                effectiveRateHz = juce::jmap(rateCV[i], 0.0f, 1.0f, minRateHz, maxRateHz);
+            }
+            effectiveRateHz = juce::jlimit(minRateHz, maxRateHz, effectiveRateHz);
+
+            // 2. Generate raw white noise
+            sample = random.nextFloat() * 2.0f - 1.0f;
+
+            // 3. Filter noise based on effective colour
+            switch (effectiveColour)
+            {
+                case 0: /* White noise, no filter */ break;
+                case 1: sample = pinkFilter.processSample(sample); break;
+                case 2: sample = brownFilter.processSample(sample); break;
+            }
+
+            // 4. Apply gain
+            sample *= juce::Decibels::decibelsToGain(effectiveLevelDb);
+
+            // 5. Rate smoothing: higher rate -> faster tracking, lower rate -> slower movement
+            const float smoothingAmount = juce::jlimit(0.0001f, 1.0f, effectiveRateHz / maxRateHz);
+            slowNoiseState += smoothingAmount * (sample - slowNoiseState);
+            sample = slowNoiseState;
         }
-
-        // 4. Apply gain
-        sample *= juce::Decibels::decibelsToGain(effectiveLevelDb);
-
-        // 5. Rate smoothing: higher rate -> faster tracking, lower rate -> slower movement
-        const float smoothingAmount = juce::jlimit(0.0001f, 1.0f, effectiveRateHz / maxRateHz);
-        slowNoiseState += smoothingAmount * (sample - slowNoiseState);
-        sample = slowNoiseState;
+        else
+        {
+            // Transport is stopped - fade to silence smoothly
+            const float fadeRate = 0.01f; // Fast fade
+            slowNoiseState += fadeRate * (0.0f - slowNoiseState);
+            sample = slowNoiseState;
+        }
 
         // 6. Write to mono output
         outBus.setSample(0, i, sample);
@@ -206,6 +222,17 @@ bool NoiseModuleProcessor::getParamRouting(const juce::String& paramId, int& out
     if (paramId == paramIdRateMod)   { outChannelIndexInBus = 2; return true; }
     
     return false;
+}
+
+void NoiseModuleProcessor::setTimingInfo(const TransportState& state)
+{
+    m_currentTransport = state;
+}
+
+void NoiseModuleProcessor::forceStop()
+{
+    // Force noise state to silence
+    slowNoiseState = 0.0f;
 }
 
 #if defined(PRESET_CREATOR_UI)

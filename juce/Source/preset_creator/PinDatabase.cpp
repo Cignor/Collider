@@ -48,7 +48,7 @@ void populateModuleDescriptions()
     descriptions["de_crackle"]          = "A utility to reduce clicks from discontinuous signals.";
     descriptions["recorder"]            = "Records incoming audio to a WAV, AIFF, or FLAC file.";
     descriptions["tempo_clock"]         = "Global clock generator with BPM control, transport, and clock outputs.";
-    descriptions["bpm_monitor"]         = "Monitors and reports BPM from rhythm-producing modules (sequencers, animations). Always present and undeletable.";
+    descriptions["bpm_monitor"]         = "Monitors and reports BPM from rhythm-producing modules (sequencers, animations).";
     descriptions["timeline"]            = "Transport-synchronized automation recorder with sample-accurate timing for CV, Gate, Trigger, and Raw signals.";
     // Modulators
     descriptions["lfo"]                 = "A Low-Frequency Oscillator for modulation.";

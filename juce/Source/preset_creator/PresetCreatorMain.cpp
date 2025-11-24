@@ -124,7 +124,7 @@ void PresetCreatorApplication::showSplashScreen()
         splashWindowPtr = std::make_unique<TransparentSplashWindow>();
         juce::Logger::writeToLog("[Splash] Transparent window created");
         
-        // Set up dismiss callback
+        // Set up dismiss callback for splash component
         auto* splashPtr = splash.get();
         splashPtr->onDismiss = [this]()
         {
@@ -147,30 +147,23 @@ void PresetCreatorApplication::showSplashScreen()
         auto* splashComponent = splash.get();
         splashWindowPtr->addAndMakeVisible(splash.release());
         
-        // Center splash on screen
+        // Make window fullscreen to catch all mouse clicks
         auto screenBounds = juce::Desktop::getInstance().getDisplays().getPrimaryDisplay()->userArea;
+        splashWindowPtr->setBounds(screenBounds);
+        
+        // Center splash component in the fullscreen window
         splashBounds.setPosition(
             screenBounds.getCentreX() - splashBounds.getWidth() / 2,
             screenBounds.getCentreY() - splashBounds.getHeight() / 2
         );
-        splashWindowPtr->setBounds(splashBounds);
-        
-        // Ensure splash component fills entire window bounds
         if (splashComponent != nullptr)
         {
-            splashComponent->setBounds(0, 0, splashBounds.getWidth(), splashBounds.getHeight());
+            splashComponent->setBounds(splashBounds.translated(-screenBounds.getX(), -screenBounds.getY()));
         }
         
-        // Show splash (non-modal, won't block)
+        // Show splash
         splashWindowPtr->setVisible(true);
         splashWindowPtr->toFront(true);
-        
-        // Grab keyboard focus for the window and component
-        splashWindowPtr->grabKeyboardFocus();
-        if (splashComponent != nullptr)
-        {
-            splashComponent->grabKeyboardFocus();
-        }
         
         juce::Logger::writeToLog("[Splash] Window visible: " + juce::String(splashWindowPtr->isVisible() ? "yes" : "no"));
         juce::Logger::writeToLog("[Splash] Window bounds: " + splashWindowPtr->getBounds().toString());

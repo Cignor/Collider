@@ -70,6 +70,7 @@ HelpManagerComponent::HelpManagerComponent(ImGuiNodeEditorComponent* parent)
     nodeDictionaryFile = userManualDir.getChildFile("Nodes_Dictionary.md");
     gettingStartedFile = userManualDir.getChildFile("Getting_Started.md");
     faqFile = userManualDir.getChildFile("FAQ.md");
+    aboutFile = userManualDir.getChildFile("About.md");
     
     // Fallback: try project root (for development)
     auto projectRoot = appDir.getParentDirectory(); // Go up one level from executable
@@ -94,6 +95,13 @@ HelpManagerComponent::HelpManagerComponent(ImGuiNodeEditorComponent* parent)
         auto fallbackFile = fallbackUserManualDir.getChildFile("FAQ.md");
         if (fallbackFile.existsAsFile())
             faqFile = fallbackFile;
+    }
+    
+    if (!aboutFile.existsAsFile())
+    {
+        auto fallbackFile = fallbackUserManualDir.getChildFile("About.md");
+        if (fallbackFile.existsAsFile())
+            aboutFile = fallbackFile;
     }
     
     juce::Logger::writeToLog("[HelpManager] Initialized and loaded shortcut files.");
@@ -429,37 +437,29 @@ void HelpManagerComponent::renderFaqTab()
 
 void HelpManagerComponent::renderAboutTab()
 {
-    const auto name = VersionInfo::getApplicationName();
-    const auto version = VersionInfo::getFullVersionString();
-    const auto buildType = VersionInfo::getBuildTypeString();
-    const auto author = VersionInfo::getAuthorString();
-    const auto buildInfo = VersionInfo::getBuildInfoString();
-    
-    ImGui::Text("%s", name.toRawUTF8());
-    ImGui::Text("Version %s", version.toRawUTF8());
-    ImGui::Text("%s", buildType.toRawUTF8());
-    
-    ImGui::Separator();
-    ImGui::Spacing();
-    
-    ImGui::TextWrapped("By %s", author.toRawUTF8());
-    ImGui::Spacing();
-    ImGui::TextWrapped("%s", buildInfo.toRawUTF8());
-    ImGui::Spacing();
-    ImGui::TextWrapped("Built with JUCE, Dear ImGui, ImNodes, and the Collider Core audio engine.");
-    
-    ImGui::Spacing();
-    ImGui::Spacing();
-    
-    if (ImGui::Button("GitHub Repository"))
+    // Lazy load the markdown file on first open
+    if (!aboutLoaded)
     {
-        juce::URL("https://github.com/Cignor/Pikon-Raditsz").launchInDefaultBrowser();
+        loadAbout();
     }
-    ImGui::SameLine();
-    if (ImGui::Button("Full Documentation"))
+
+    // Render the markdown content
+    if (ImGui::BeginChild("AboutContent", ImVec2(0, 0), false, ImGuiWindowFlags_HorizontalScrollbar))
     {
-        // TODO: Add link to documentation website
+        if (aboutSections.empty())
+        {
+            ImGui::TextWrapped("About file not found or could not be loaded.");
+            ImGui::TextWrapped("Expected location: %s", aboutFile.getFullPathName().toRawUTF8());
+        }
+        else
+        {
+            for (const auto& section : aboutSections)
+            {
+                renderAboutSection(section);
+            }
+        }
     }
+    ImGui::EndChild();
 }
 
 void HelpManagerComponent::renderUiTipsTab()
@@ -1207,6 +1207,34 @@ void HelpManagerComponent::loadFaq()
     juce::Logger::writeToLog("[HelpManager] Loaded FAQ: " + juce::String(faqSections.size()) + " top-level sections");
 }
 
+void HelpManagerComponent::loadAbout()
+{
+    if (aboutLoaded || !aboutFile.existsAsFile())
+    {
+        if (!aboutFile.existsAsFile())
+        {
+            juce::Logger::writeToLog("[HelpManager] About file not found: " + aboutFile.getFullPathName());
+        }
+        aboutLoaded = true;
+        return;
+    }
+    
+    juce::String content = aboutFile.loadFileAsString();
+    if (content.isEmpty())
+    {
+        juce::Logger::writeToLog("[HelpManager] Failed to load About file or file is empty.");
+        aboutLoaded = true;
+        return;
+    }
+    
+    // Replace VersionInfo placeholders before parsing
+    content = replaceVersionInfoPlaceholders(content);
+    
+    parseMarkdown(content, aboutSections);
+    aboutLoaded = true;
+    juce::Logger::writeToLog("[HelpManager] Loaded About: " + juce::String(aboutSections.size()) + " top-level sections");
+}
+
 void HelpManagerComponent::parseMarkdown(const juce::String& content, std::vector<MarkdownSection>& sections)
 {
     sections.clear();
@@ -1519,6 +1547,20 @@ juce::String HelpManagerComponent::replaceShortcutPlaceholders(const juce::Strin
     return result;
 }
 
+juce::String HelpManagerComponent::replaceVersionInfoPlaceholders(const juce::String& text)
+{
+    juce::String result = text;
+    
+    // Replace VersionInfo placeholders with actual values
+    result = result.replace("{{APPLICATION_NAME}}", VersionInfo::getApplicationName());
+    result = result.replace("{{VERSION_FULL}}", VersionInfo::getFullVersionString());
+    result = result.replace("{{BUILD_TYPE}}", VersionInfo::getBuildTypeString());
+    result = result.replace("{{AUTHOR}}", VersionInfo::getAuthorString());
+    result = result.replace("{{BUILD_INFO}}", VersionInfo::getBuildInfoString());
+    
+    return result;
+}
+
 void HelpManagerComponent::renderMarkdownText(const juce::String& text)
 {
     if (text.isEmpty())
@@ -1757,11 +1799,25 @@ void HelpManagerComponent::renderFormattedText(const juce::String& text)
             ImGui::PushStyleColor(ImGuiCol_Text, linkColor);
             if (ImGui::Selectable(segmentText.toRawUTF8(), false, ImGuiSelectableFlags_None))
             {
-                // Clicked! Scroll to anchor
+                // Check if it's an external URL (starts with http:// or https://)
                 juce::String target = linkTarget;
-                if (target.startsWith("#"))
-                    target = target.substring(1);
-                scrollToAnchor = target;
+                if (target.startsWith("http://") || target.startsWith("https://"))
+                {
+                    // External URL - open in browser
+                    juce::URL(target).launchInDefaultBrowser();
+                }
+                else if (target.startsWith("mailto:"))
+                {
+                    // Email link - open in default email client
+                    juce::URL(target).launchInDefaultBrowser();
+                }
+                else
+                {
+                    // Internal anchor link - scroll to anchor
+                    if (target.startsWith("#"))
+                        target = target.substring(1);
+                    scrollToAnchor = target;
+                }
             }
             ImGui::PopStyleColor();
             ImGui::PopID();
@@ -1982,6 +2038,218 @@ void HelpManagerComponent::renderNodeDictionaryContent(const std::vector<Markdow
         
         // Render the section (it will handle scrolling internally)
         renderMarkdownSection(section, searchTerm, true, shouldExpand);
+    }
+}
+
+void HelpManagerComponent::renderAboutSection(const MarkdownSection& section)
+{
+    // Special renderer for About tab - renders flat without collapsible headers
+    if (section.level == 1)
+    {
+        // Level 1 (##) - render as a large, styled header (not collapsible)
+        ImGui::Spacing();
+        ImGui::Spacing();
+        
+        ImVec4 accentColor = ImGui::GetStyleColorVec4(ImGuiCol_HeaderHovered);
+        accentColor.w = 1.0f;
+        accentColor.x = std::min(1.0f, accentColor.x * 1.1f);
+        accentColor.y = std::min(1.0f, accentColor.y * 1.1f);
+        accentColor.z = std::min(1.0f, accentColor.z * 1.15f);
+        
+        ImGui::PushStyleColor(ImGuiCol_Text, accentColor);
+        ImGui::SetWindowFontScale(1.5f);
+        ImGui::TextUnformatted(section.title.toRawUTF8());
+        ImGui::SetWindowFontScale(1.0f);
+        ImGui::PopStyleColor();
+        
+        ImGui::Spacing();
+        ImGui::Separator();
+        ImGui::Spacing();
+        
+        // Render content with better paragraph handling
+        renderAboutText(section.content);
+        
+        // Render children
+        for (const auto& child : section.children)
+        {
+            renderAboutSection(child);
+        }
+    }
+    else if (section.level == 2)
+    {
+        // Level 2 (###) - render as a medium header
+        ImGui::Spacing();
+        ImGui::Spacing();
+        
+        ImVec4 accentColor = ImGui::GetStyleColorVec4(ImGuiCol_HeaderHovered);
+        accentColor.w = 1.0f;
+        ImGui::PushStyleColor(ImGuiCol_Text, accentColor);
+        ImGui::SetWindowFontScale(1.2f);
+        ImGui::TextUnformatted(section.title.toRawUTF8());
+        ImGui::SetWindowFontScale(1.0f);
+        ImGui::PopStyleColor();
+        
+        ImGui::Spacing();
+        
+        // Render content with better paragraph handling
+        renderAboutText(section.content);
+        
+        // Render children
+        for (const auto& child : section.children)
+        {
+            renderAboutSection(child);
+        }
+        
+        ImGui::Spacing();
+    }
+    else
+    {
+        // Level 3+ (####) - render as a small header
+        ImGui::Spacing();
+        
+        ImVec4 accentColor = ImGui::GetStyleColorVec4(ImGuiCol_HeaderHovered);
+        accentColor.w = 1.0f;
+        ImGui::PushStyleColor(ImGuiCol_Text, accentColor);
+        ImGui::SetWindowFontScale(1.1f);
+        ImGui::TextUnformatted(section.title.toRawUTF8());
+        ImGui::SetWindowFontScale(1.0f);
+        ImGui::PopStyleColor();
+        
+        ImGui::Spacing();
+        
+        // Render content with better paragraph handling
+        renderAboutText(section.content);
+        
+        // Render children
+        for (const auto& child : section.children)
+        {
+            renderAboutSection(child);
+        }
+    }
+}
+
+void HelpManagerComponent::renderAboutText(const juce::String& text)
+{
+    if (text.isEmpty())
+        return;
+    
+    // Replace VersionInfo placeholders
+    juce::String processedText = replaceVersionInfoPlaceholders(text);
+    
+    auto lines = juce::StringArray::fromLines(processedText);
+    
+    // Render lines with proper handling of lists, horizontal rules, and line breaks
+    bool inList = false;
+    bool lastLineWasEmpty = false;
+    
+    for (int i = 0; i < lines.size(); ++i)
+    {
+        juce::String line = lines[i];
+        juce::String trimmed = line.trimEnd();
+        
+        // Check for horizontal rule
+        if (trimmed == "---" || trimmed.startsWith("---"))
+        {
+            if (inList)
+            {
+                inList = false;
+                ImGui::Unindent(20.0f);
+            }
+            ImGui::Separator();
+            ImGui::Spacing();
+            lastLineWasEmpty = false;
+            continue;
+        }
+        
+        // Check if this is a list item
+        bool isListItem = (trimmed.startsWith("- ") || trimmed.startsWith("* "));
+        
+        if (trimmed.isEmpty())
+        {
+            // Empty line = paragraph break
+            if (inList)
+            {
+                inList = false;
+                ImGui::Unindent(20.0f);
+            }
+            if (!lastLineWasEmpty && i > 0)
+            {
+                ImGui::Spacing();
+            }
+            lastLineWasEmpty = true;
+        }
+        else if (isListItem)
+        {
+            // List item
+            if (!inList)
+            {
+                inList = true;
+                ImGui::Indent(20.0f);
+            }
+            
+            // Render the list item (remove the bullet marker)
+            juce::String itemText = trimmed.substring(2); // Remove "- " or "* "
+            ImGui::Bullet();
+            ImGui::SameLine();
+            renderFormattedText(itemText);
+            
+            lastLineWasEmpty = false;
+        }
+        else
+        {
+            // Regular text line
+            if (inList)
+            {
+                inList = false;
+                ImGui::Unindent(20.0f);
+            }
+            
+            // Check if this is an author/credit line (starts with "**By**" or "**Icon drawing by**")
+            bool isAuthorLine = trimmed.startsWith("**By**") || trimmed.startsWith("**Icon drawing by**");
+            
+            if (isAuthorLine)
+            {
+                // Special styling for author/credit lines - warmer, more appealing color
+                ImVec4 authorColor = ImGui::GetStyleColorVec4(ImGuiCol_HeaderHovered);
+                // Make it warmer (more orange/yellow) and brighter
+                authorColor.x = std::min(1.0f, authorColor.x * 1.3f); // More red
+                authorColor.y = std::min(1.0f, authorColor.y * 1.2f); // More green/yellow
+                authorColor.z = std::min(1.0f, authorColor.z * 0.8f); // Less blue
+                authorColor.w = 1.0f;
+                
+                ImGui::PushStyleColor(ImGuiCol_Text, authorColor);
+                ImGui::SetWindowFontScale(1.1f); // Slightly larger
+                renderFormattedText(trimmed);
+                ImGui::SetWindowFontScale(1.0f);
+                ImGui::PopStyleColor();
+            }
+            else
+            {
+                // Regular text line
+                renderFormattedText(trimmed);
+            }
+            
+            lastLineWasEmpty = false;
+            
+            // Add small spacing after (unless next line is empty, a list item, or a separator)
+            if (i + 1 < lines.size())
+            {
+                juce::String nextLine = lines[i + 1].trim();
+                if (!nextLine.isEmpty() && 
+                    !nextLine.startsWith("- ") && 
+                    !nextLine.startsWith("* ") &&
+                    nextLine != "---")
+                {
+                    ImGui::Spacing();
+                }
+            }
+        }
+    }
+    
+    // Close any open list
+    if (inList)
+    {
+        ImGui::Unindent(20.0f);
     }
 }
 

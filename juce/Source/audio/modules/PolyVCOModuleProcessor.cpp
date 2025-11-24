@@ -89,6 +89,13 @@ void PolyVCOModuleProcessor::prepareToPlay(double sr, int samplesPerBlock)
         gateOnState[i] = 0;
         currentFrequencies[i] = 440.0f; // Initialize portamento frequencies
     }
+
+#if defined(PRESET_CREATOR_UI)
+    // Initialize visualization buffer
+    vizOutputBuffer.setSize(1, vizBufferSize);
+    vizOutputBuffer.clear();
+    vizWritePos = 0;
+#endif
 }
 
 void PolyVCOModuleProcessor::releaseResources()
@@ -191,8 +198,17 @@ void PolyVCOModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce
             }
             
             // --- THIS IS THE DEFINITIVE FIX ---
+            // CRITICAL FIX: If transport is stopped, force gate to 0 (silence PolyVCO)
+            // Otherwise, use gate input if connected, or default to slider value if no gate input
             float finalGateMultiplier = 0.0f;
-            if (gateIsModulated[voice])
+            if (!m_currentTransport.isPlaying)
+            {
+                // Transport is stopped - silence the voice
+                finalGateMultiplier = 0.0f;
+                // Fade gate envelope to zero smoothly
+                gateEnvelope[voice] += (0.0f - gateEnvelope[voice]) * 0.01f;
+            }
+            else if (gateIsModulated[voice])
             {
                 // MODE 1: Gate is modulated by an external signal (e.g., an ADSR).
                 // Use the incoming CV directly as the gate's level.
@@ -265,6 +281,58 @@ void PolyVCOModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce
     }
 
     setLiveParamValue("numVoices_live", (float)finalActiveVoices);
+
+#if defined(PRESET_CREATOR_UI)
+    // Capture combined output from all active voices for visualization
+    if (vizOutputBuffer.getNumSamples() > 0)
+    {
+        for (int i = 0; i < outBus.getNumSamples(); ++i)
+        {
+            // Sum all active voices together
+            float combinedSample = 0.0f;
+            for (int voice = 0; voice < finalActiveVoices; ++voice)
+            {
+                combinedSample += outBus.getSample(voice, i);
+            }
+            // Normalize by number of voices to prevent clipping
+            combinedSample /= (float)juce::jmax(1, finalActiveVoices);
+            
+            const int writeIdx = (vizWritePos + i) % vizBufferSize;
+            vizOutputBuffer.setSample(0, writeIdx, combinedSample);
+        }
+    }
+    
+    vizWritePos = (vizWritePos + outBus.getNumSamples()) % vizBufferSize;
+
+    // Update visualization data (thread-safe)
+    // Downsample waveform from circular buffer
+    const int stride = vizBufferSize / VizData::waveformPoints;
+    for (int i = 0; i < VizData::waveformPoints; ++i)
+    {
+        const int readIdx = (vizWritePos - VizData::waveformPoints * stride + i * stride + vizBufferSize) % vizBufferSize;
+        if (vizOutputBuffer.getNumSamples() > 0)
+            vizData.combinedWaveform[i].store(vizOutputBuffer.getSample(0, readIdx));
+    }
+    
+    // Update live stats
+    vizData.activeVoices.store(finalActiveVoices);
+    
+    // Calculate average frequency (use currentFrequencies for smoothed/portamento values) and gate level
+    float avgFreq = 0.0f;
+    float avgGate = 0.0f;
+    for (int voice = 0; voice < finalActiveVoices; ++voice)
+    {
+        avgFreq += currentFrequencies[voice];
+        avgGate += lastGate[voice];
+    }
+    if (finalActiveVoices > 0)
+    {
+        avgFreq /= (float)finalActiveVoices;
+        avgGate /= (float)finalActiveVoices;
+    }
+    vizData.averageFrequency.store(avgFreq);
+    vizData.averageGateLevel.store(avgGate);
+#endif
 }
 
 std::vector<DynamicPinInfo> PolyVCOModuleProcessor::getDynamicInputPins() const
@@ -458,6 +526,97 @@ void PolyVCOModuleProcessor::drawParametersInNode(float itemWidth, const std::fu
     if (ImGui::IsItemHovered()) ImGui::SetTooltip("500ms");
     
     ImGui::PopStyleVar();
+
+    ImGui::Spacing();
+    ImGui::Spacing();
+
+    // === OSCILLOSCOPE VISUALIZATION ===
+    ThemeText("Oscilloscope", theme.text.section_header);
+    ImGui::Spacing();
+
+    // Read visualization data (thread-safe)
+    float combinedWaveform[VizData::waveformPoints];
+    for (int i = 0; i < VizData::waveformPoints; ++i)
+    {
+        combinedWaveform[i] = vizData.combinedWaveform[i].load();
+    }
+    const int activeVoicesCount = vizData.activeVoices.load();
+    const float avgFreq = vizData.averageFrequency.load();
+    const float avgGate = vizData.averageGateLevel.load();
+
+    // Waveform visualization in child window
+    const auto& freqColors = theme.modules.frequency_graph;
+    const auto resolveColor = [](ImU32 value, ImU32 fallback) { return value != 0 ? value : fallback; };
+    const float waveHeight = 140.0f;
+    const ImVec2 graphSize(itemWidth, waveHeight);
+    
+    if (ImGui::BeginChild("PolyVCOOscilloscope", graphSize, false, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse))
+    {
+        ImDrawList* drawList = ImGui::GetWindowDrawList();
+        const ImVec2 p0 = ImGui::GetWindowPos();
+        const ImVec2 p1 = ImVec2(p0.x + graphSize.x, p0.y + graphSize.y);
+        
+        // Background
+        const ImU32 bgColor = resolveColor(freqColors.background, IM_COL32(18, 20, 24, 255));
+        drawList->AddRectFilled(p0, p1, bgColor);
+        
+        // Grid lines
+        const ImU32 gridColor = resolveColor(freqColors.grid, IM_COL32(50, 55, 65, 255));
+        const float midY = p0.y + graphSize.y * 0.5f;
+        drawList->AddLine(ImVec2(p0.x, midY), ImVec2(p1.x, midY), gridColor, 1.0f);
+        drawList->AddLine(ImVec2(p0.x, p0.y), ImVec2(p1.x, p0.y), gridColor, 1.0f);
+        drawList->AddLine(ImVec2(p0.x, p1.y), ImVec2(p1.x, p1.y), gridColor, 1.0f);
+        
+        // Clip to graph area
+        drawList->PushClipRect(p0, p1, true);
+        
+        // Draw combined waveform from all active voices
+        const float scaleY = graphSize.y * 0.45f;
+        const float stepX = graphSize.x / (float)(VizData::waveformPoints - 1);
+        
+        const ImU32 waveformColor = ImGui::ColorConvertFloat4ToU32(theme.accent);
+        float prevX = p0.x;
+        float prevY = midY;
+        for (int i = 0; i < VizData::waveformPoints; ++i)
+        {
+            const float sample = juce::jlimit(-1.0f, 1.0f, combinedWaveform[i]);
+            const float x = p0.x + i * stepX;
+            const float y = juce::jlimit(p0.y, p1.y, midY - sample * scaleY);
+            if (i > 0)
+                drawList->AddLine(ImVec2(prevX, prevY), ImVec2(x, y), waveformColor, 2.5f);
+            prevX = x;
+            prevY = y;
+        }
+
+        // Draw average gate level indicator (horizontal line showing gate amount)
+        if (avgGate < 1.0f)
+        {
+            const ImU32 gateIndicatorColor = ImGui::ColorConvertFloat4ToU32(theme.modulation.amplitude);
+            const float gateY = p0.y + graphSize.y - (avgGate * graphSize.y * 0.3f);
+            const float clampedGateY = juce::jlimit(p0.y + 2.0f, p1.y - 2.0f, gateY);
+            drawList->AddLine(ImVec2(p0.x, clampedGateY), ImVec2(p1.x, clampedGateY), gateIndicatorColor, 1.5f);
+            
+            // Gate label using drawList
+            const ImU32 textColor = gateIndicatorColor;
+            drawList->AddText(ImVec2(p0.x + 4.0f, clampedGateY - 12.0f), textColor, "Avg Gate");
+        }
+        
+        drawList->PopClipRect();
+        
+        // Info overlay
+        ImGui::SetCursorPos(ImVec2(4, 4));
+        ImGui::TextColored(ImVec4(1.0f, 1.0f, 1.0f, 0.9f), "%.1f Hz avg | %d voices", avgFreq, activeVoicesCount);
+        if (avgGate < 1.0f)
+        {
+            ImGui::SetCursorPos(ImVec2(4, graphSize.y - 20));
+            ImGui::TextColored(ImVec4(1.0f, 0.6f, 0.2f, 1.0f), "Gate: %.2f", avgGate);
+        }
+        
+        // Invisible drag blocker
+        ImGui::SetCursorPos(ImVec2(0, 0));
+        ImGui::InvisibleButton("##polyvcoOscilloscopeDrag", graphSize);
+    }
+    ImGui::EndChild(); // CRITICAL: Must be OUTSIDE the if block!
 
     ImGui::Spacing();
     ImGui::Spacing();
@@ -671,4 +830,19 @@ bool PolyVCOModuleProcessor::getParamRouting(const juce::String& paramId, int& o
     }
 
     return false;
+}
+
+void PolyVCOModuleProcessor::setTimingInfo(const TransportState& state)
+{
+    m_currentTransport = state;
+}
+
+void PolyVCOModuleProcessor::forceStop()
+{
+    // Force all gate envelopes to zero to silence all voices
+    for (int i = 0; i < MAX_VOICES; ++i)
+    {
+        gateEnvelope[i] = 0.0f;
+        smoothedGateLevels[i] = 0.0f;
+    }
 }

@@ -6,7 +6,7 @@ Built on JUCE and Dear ImGui, Pikon Raditsz ships with **100+ synthesis modules*
 
 ---
 
-## What Makes Collider Unique
+## What Makes Pikon Raditsz Unique
 
 ### 🎥 **Computer Vision Integration**
 Control synthesis with your body, hands, or objects in real-time:
@@ -44,8 +44,8 @@ cmake -B build -S .
 cmake --build build --config Release
 
 # Run
-./build/Release/ColliderApp.exe  # Windows
-./build/ColliderApp              # macOS/Linux
+./build/Release/PikonRaditszApp.exe  # Windows
+./build/PikonRaditszApp              # macOS/Linux
 ```
 
 **Requirements:** CMake 3.22+, C++20 compiler, CUDA Toolkit (optional), FFmpeg, JUCE dependencies.

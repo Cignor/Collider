@@ -22,6 +22,8 @@ public:
     std::vector<DynamicPinInfo> getDynamicOutputPins() const override;
     
     void processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midi) override;
+    void setTimingInfo(const TransportState& state) override;
+    void forceStop() override;
 
     juce::AudioProcessorValueTreeState& getAPVTS() override { return apvts; }
 
@@ -69,4 +71,30 @@ private:
     // Portamento/glide: per-voice smoothed frequency
     std::array<float, MAX_VOICES> currentFrequencies {};
     double sampleRate { 44100.0 };
+    
+    // Transport state tracking
+    TransportState m_currentTransport;
+
+#if defined(PRESET_CREATOR_UI)
+    // --- Visualization Data (thread-safe, updated from audio thread) ---
+    struct VizData
+    {
+        static constexpr int waveformPoints = 256;
+        std::array<std::atomic<float>, waveformPoints> combinedWaveform;
+        std::atomic<int> activeVoices { 0 };
+        std::atomic<float> averageFrequency { 440.0f };
+        std::atomic<float> averageGateLevel { 0.0f };
+
+        VizData()
+        {
+            for (auto& v : combinedWaveform) v.store(0.0f);
+        }
+    };
+    VizData vizData;
+
+    // Circular buffer for waveform capture (combined output from all voices)
+    juce::AudioBuffer<float> vizOutputBuffer;
+    int vizWritePos { 0 };
+    static constexpr int vizBufferSize = 2048; // ~43ms at 48kHz
+#endif
 };

@@ -31,16 +31,19 @@ public:
     // Callback for when splash is dismissed
     std::function<void()> onDismiss;
     
-    // Handle keyboard and mouse events
+    // Handle keyboard and mouse events (dismiss on any interaction except mouse move)
     bool keyPressed(const juce::KeyPress& key) override;
+    bool keyStateChanged(bool isKeyDown) override;
     void mouseDown(const juce::MouseEvent& e) override;
+    void mouseUp(const juce::MouseEvent& e) override;
+    void mouseWheelMove(const juce::MouseEvent& e, const juce::MouseWheelDetails& wheel) override;
+    void mouseDoubleClick(const juce::MouseEvent& e) override;
     
-    // Optional: auto-dismiss after timeout
+    // Timer checks for keyboard/mouse activity and auto-dismiss
     void timerCallback() override;
     
 private:
     static constexpr int AUTO_DISMISS_MS = 8000; // 8 seconds
-    bool autoDismissEnabled = true;
     
     // Splash screen image
     juce::Image splashImage;

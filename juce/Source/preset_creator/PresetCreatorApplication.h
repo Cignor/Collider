@@ -74,7 +74,6 @@ private:
         {
             setAlwaysOnTop(true);
             setOpaque(false); // Transparent window to support alpha channel
-            setWantsKeyboardFocus(true); // Enable keyboard focus
         }
         
         void paint(juce::Graphics& g) override
@@ -84,40 +83,8 @@ private:
         
         void resized() override
         {
-            // Ensure child components fill the window
-            for (int i = 0; i < getNumChildComponents(); ++i)
-            {
-                if (auto* child = getChildComponent(i))
-                {
-                    child->setBounds(getLocalBounds());
-                }
-            }
-        }
-        
-        bool keyPressed(const juce::KeyPress& key) override
-        {
-            // Forward key press to splash component
-            for (int i = 0; i < getNumChildComponents(); ++i)
-            {
-                if (auto* child = getChildComponent(i))
-                {
-                    if (child->keyPressed(key))
-                        return true;
-                }
-            }
-            return false;
-        }
-        
-        void mouseDown(const juce::MouseEvent& e) override
-        {
-            // Forward mouse click to splash component
-            for (int i = 0; i < getNumChildComponents(); ++i)
-            {
-                if (auto* child = getChildComponent(i))
-                {
-                    child->mouseDown(e.getEventRelativeTo(child));
-                }
-            }
+            // Keep splash component centered (don't resize it to fill window)
+            // The component's bounds are set in showSplashScreen() and should remain fixed
         }
     };
     
