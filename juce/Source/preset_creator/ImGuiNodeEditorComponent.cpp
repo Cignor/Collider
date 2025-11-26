@@ -128,6 +128,7 @@ bool ImGuiNodeEditorComponent::s_globalGpuEnabled = true;
 #include "../audio/modules/HandTrackerModule.h"
 #include "../audio/modules/FaceTrackerModule.h"
 #include "../audio/modules/VideoFXModule.h"
+#include "../audio/modules/VideoDrawImpactModuleProcessor.h"
 #include "../audio/modules/CropVideoModule.h"
 #include "../audio/modules/MapRangeModuleProcessor.h"
 #include "../audio/modules/LagProcessorModuleProcessor.h"
@@ -949,6 +950,7 @@ void ImGuiNodeEditorComponent::renderOpenGL()
     renderImGui();
     themeEditor.render();  // Render theme editor if open
     m_helpManager.render(); // Render help manager if open
+    voiceDownloadDialog.render(); // Render voice download dialog if open
     ImGui::Render();
     auto* dd = ImGui::GetDrawData();
     // Render via OpenGL2 backend
@@ -1281,6 +1283,11 @@ void ImGuiNodeEditorComponent::renderImGui()
             {
                 m_helpManager.open();
                 m_helpManager.setActiveTab(0); // Open to Shortcuts tab
+            }
+            
+            if (ImGui::MenuItem("Download Piper Voices..."))
+            {
+                voiceDownloadDialog.open();
             }
             
             ImGui::Separator();
@@ -1678,6 +1685,7 @@ void ImGuiNodeEditorComponent::renderImGui()
             if (ImGui::BeginMenu("Computer Vision", isNodeSelected))
             {
                 if (ImGui::MenuItem("Video FX")) { insertNodeAfterSelection("video_fx"); }
+                if (ImGui::MenuItem("Video Draw Impact")) { insertNodeAfterSelection("video_draw_impact"); }
                 if (ImGui::MenuItem("Crop Video")) { insertNodeAfterSelection("crop_video"); }
                 ImGui::EndMenu();
             }
@@ -2673,6 +2681,7 @@ void ImGuiNodeEditorComponent::renderImGui()
         addModuleButton("Noise", "noise");
         addModuleButton("Audio Input", "audio_input");
         addModuleButton("Sample Loader", "sample_loader");
+        addModuleButton("Sample SFX", "sample_sfx");
         addModuleButton("Value", "value");
     }
     
@@ -2824,6 +2833,7 @@ void ImGuiNodeEditorComponent::renderImGui()
         ImGui::Spacing();
         ThemeText("Processors:", theme.text.section_header);
         addModuleButton("Video FX", "video_fx");
+        addModuleButton("Video Draw Impact", "video_draw_impact");
         addModuleButton("Movement Detector", "movement_detector");
         addModuleButton("Object Detector", "object_detector");
         addModuleButton("Pose Estimator", "pose_estimator");
@@ -3668,6 +3678,76 @@ if (auto* mp = synth->getModuleForLogical (lid))
         }
         // Now draw the regular parameters below the video
         fxModule->drawParametersInNode(nodeContentWidth, isParamModulated, onModificationEnded);
+    }
+    else if (auto* drawImpactModule = dynamic_cast<VideoDrawImpactModuleProcessor*>(mp))
+    {
+        juce::Image frame = drawImpactModule->getLatestFrame();
+        if (!frame.isNull())
+        {
+            if (visionModuleTextures.find((int)lid) == visionModuleTextures.end())
+            {
+                visionModuleTextures[(int)lid] = std::make_unique<juce::OpenGLTexture>();
+            }
+            juce::OpenGLTexture* texture = visionModuleTextures[(int)lid].get();
+            texture->loadImage(frame);
+            if (texture->getTextureID() != 0)
+            {
+                float nativeWidth = (float)frame.getWidth();
+                float nativeHeight = (float)frame.getHeight();
+                float aspectRatio = (nativeWidth > 0.0f) ? nativeHeight / nativeWidth : 0.75f; // Default to 4:3
+                ImVec2 renderSize = ImVec2(nodeContentWidth, nodeContentWidth * aspectRatio);
+                // Flip Y-coords for correct orientation
+                ImGui::Image((void*)(intptr_t)texture->getTextureID(), renderSize, ImVec2(0, 1), ImVec2(1, 0));
+
+                // Overlay invisible button to capture mouse (prevents node dragging while drawing)
+                const ImVec2 imageMin = ImGui::GetItemRectMin();
+                const ImVec2 imageMax = ImGui::GetItemRectMax();
+                const float imageWidth = imageMax.x - imageMin.x;
+                const float imageHeight = imageMax.y - imageMin.y;
+                const ImVec2 cursorAfterImage = ImGui::GetCursorScreenPos();
+                ImGui::SetCursorScreenPos(imageMin);
+                ImGui::PushID("video_draw_impact_canvas");
+                ImGui::InvisibleButton("canvas", renderSize,
+                                       ImGuiButtonFlags_MouseButtonLeft | ImGuiButtonFlags_MouseButtonRight);
+                ImGui::PopID();
+                const bool isHovered = ImGui::IsItemHovered();
+                const bool isActive = ImGui::IsItemActive();
+                ImGui::SetCursorScreenPos(cursorAfterImage);
+                const bool leftDown = isActive && ImGui::IsMouseDown(ImGuiMouseButton_Left);
+                const bool rightDown = isActive && ImGui::IsMouseDown(ImGuiMouseButton_Right);
+                const bool eitherDown = leftDown || rightDown;
+
+                if (imageWidth > 0.0f && imageHeight > 0.0f && frame.getWidth() > 0 && frame.getHeight() > 0)
+                {
+                    if (isHovered)
+                        ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
+
+                    if (eitherDown)
+                    {
+                        const ImVec2 mousePos = ImGui::GetIO().MousePos;
+                        float normX = juce::jlimit(0.0f, 1.0f, (mousePos.x - imageMin.x) / imageWidth);
+                        float normY = juce::jlimit(0.0f, 1.0f, (mousePos.y - imageMin.y) / imageHeight);
+
+                        const int pixelX = juce::jlimit(0, frame.getWidth() - 1,
+                            juce::roundToInt(normX * (frame.getWidth() - 1)));
+                        const int pixelY = juce::jlimit(0, frame.getHeight() - 1,
+                            juce::roundToInt(normY * (frame.getHeight() - 1)));
+
+                        drawImpactModule->enqueueDrawPointFromUi(pixelX, pixelY, rightDown);
+                    }
+                    else if (!isActive)
+                    {
+                        drawImpactModule->endUiStroke();
+                    }
+                }
+                else if (!isActive)
+                {
+                    drawImpactModule->endUiStroke();
+                }
+            }
+        }
+        // Now draw the regular parameters below the video
+        drawImpactModule->drawParametersInNode(nodeContentWidth, isParamModulated, onModificationEnded);
     }
     else if (auto* cropVideoModule = dynamic_cast<CropVideoModule*>(mp))
     {
@@ -5492,6 +5572,7 @@ if (auto* mp = synth->getModuleForLogical (lid))
                     if (ImGui::MenuItem("Noise")) addAtMouse("noise");
                     if (ImGui::MenuItem("Audio Input")) addAtMouse("audio_input");
                     if (ImGui::MenuItem("Sample Loader")) addAtMouse("sample_loader");
+                    if (ImGui::MenuItem("Sample SFX")) addAtMouse("sample_sfx");
                     if (ImGui::MenuItem("Value")) addAtMouse("value");
                     ImGui::EndMenu();
                 }
@@ -5595,6 +5676,7 @@ if (auto* mp = synth->getModuleForLogical (lid))
                     if (ImGui::MenuItem("Video File Loader")) addAtMouse("video_file_loader");
                     ImGui::Separator();
                     if (ImGui::MenuItem("Video FX")) addAtMouse("video_fx");
+                    if (ImGui::MenuItem("Video Draw Impact")) addAtMouse("video_draw_impact");
                     if (ImGui::MenuItem("Crop Video")) addAtMouse("crop_video");
                     ImGui::Separator();
                     if (ImGui::MenuItem("Movement Detector")) addAtMouse("movement_detector");
@@ -9413,6 +9495,8 @@ void ImGuiNodeEditorComponent::drawInsertNodeOnLinkPopup()
         // Map format: {Display Name, Internal Type}
         // Internal types use lowercase with underscores for spaces
         const std::map<const char*, const char*> audioInsertable = {
+            // Sources
+            {"Sample Loader", "sample_loader"}, {"Sample SFX", "sample_sfx"},
             // Effects
             {"VCF", "vcf"}, {"Delay", "delay"}, {"Reverb", "reverb"},
             {"Chorus", "chorus"}, {"Phaser", "phaser"}, {"Compressor", "compressor"},
@@ -9448,7 +9532,7 @@ void ImGuiNodeEditorComponent::drawInsertNodeOnLinkPopup()
         const std::map<const char*, const char*> videoInsertable = {
             // Computer Vision (Video processing)
             // Passthrough nodes (Video In → Video Out)
-            {"Video FX", "video_fx"}, {"Crop Video", "crop_video"},
+            {"Video FX", "video_fx"}, {"Video Draw Impact", "video_draw_impact"}, {"Crop Video", "crop_video"},
             {"Reroute", "reroute"},
             {"Movement Detector", "movement_detector"},
             {"Object Detector", "object_detector"},
@@ -11038,7 +11122,7 @@ ImGuiNodeEditorComponent::ModuleCategory ImGuiNodeEditorComponent::getModuleCate
     
     // --- 10. COMPUTER VISION (Bright Orange) ---
     if (lower.contains("webcam") || lower.contains("video_file") ||
-        lower == "video_fx" || lower == "crop_video" ||
+        lower == "video_fx" || lower == "video_draw_impact" || lower == "crop_video" ||
         lower.contains("movement") || lower.contains("detector") || 
         lower.contains("opencv") || lower.contains("vision") ||
         lower.contains("tracker") || lower.contains("segmentation") ||
@@ -11099,6 +11183,7 @@ std::map<juce::String, std::pair<const char*, const char*>> ImGuiNodeEditorCompo
         {"MIDI Logger", {"midi_logger", "Records CV/Gate to MIDI events with piano roll editor and .mid export"}},
         {"Value", {"value", "Constant CV value output"}},
         {"Sample Loader", {"sample_loader", "Loads and plays audio samples"}},
+        {"Sample SFX", {"sample_sfx", "Plays sample variations from a folder with automatic switching"}},
         
         // TTS
         {"TTS Performer", {"tts_performer", "Text-to-speech synthesizer"}},
@@ -11112,6 +11197,7 @@ std::map<juce::String, std::pair<const char*, const char*>> ImGuiNodeEditorCompo
         {"Webcam Loader", {"webcam_loader", "Captures video from a webcam and publishes it as a source for vision processing modules"}},
         {"Video File Loader", {"video_file_loader", "Loads and plays a video file, publishes it as a source for vision processing modules"}},
         {"Video FX", {"video_fx", "Applies real-time video effects (brightness, contrast, saturation, blur, sharpen, etc.) to video sources, chainable"}},
+        {"Video Draw Impact", {"video_draw_impact", "Allows drawing colored impact marks on video frames. Drawings persist for a configurable number of frames, creating visual rhythms that can be tracked by the Color Tracker node."}},
         {"Crop Video", {"crop_video", "Crops and resizes video frames to a specified region, chainable video processor"}},
         {"Movement Detector", {"movement_detector", "Analyzes video source for motion via optical flow or background subtraction, outputs motion data as CV"}},
         {"Object Detector", {"object_detector", "Uses YOLOv3 to detect objects (person, car, etc.) and outputs bounding box position/size as CV"}},
@@ -11982,6 +12068,7 @@ void ImGuiNodeEditorComponent::populateDragInsertSuggestions()
     addInputModule(PinDataType::Raw, "scope");
 
     addInputModule(PinDataType::Video, "video_fx");
+    addInputModule(PinDataType::Video, "video_draw_impact");
     addInputModule(PinDataType::Video, "crop_video");
 
     // Seed curated sources for fast access when connecting INTO inputs (needs outputs).

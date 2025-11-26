@@ -77,6 +77,7 @@ private:
     juce::AudioParameterChoice* engineParam = nullptr;
     
     std::atomic<bool> playing { true };
+    std::atomic<bool> isStopped { true }; // true = stopped (reset to start), false = paused (resume from current)
     std::atomic<bool> syncToTransport { true };
     std::atomic<bool> lastTransportPlaying { false };
     std::atomic<bool> needPreviewFrame { false };

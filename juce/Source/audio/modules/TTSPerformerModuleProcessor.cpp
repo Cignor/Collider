@@ -3,6 +3,7 @@
 #include <juce_audio_formats/juce_audio_formats.h>
 #include <nlohmann/json.hpp>
 #include <unordered_set>
+#include <map>
 
 // --- Audio-based Word Detection Implementation ---
 // This function is used when JSON timing data is not available from piper.exe
@@ -1056,6 +1057,41 @@ void TTSPerformerModuleProcessor::SynthesisThread::run()
             if (!modelFile.existsAsFile() || !configFile.existsAsFile()) 
                 throw std::runtime_error("Model .onnx and/or .onnx.json not found in models folder.");
             
+            // Verify model file is valid (not empty/corrupted)
+            // ONNX model files should be at least 1 MB (valid models are typically 60-120 MB)
+            const juce::int64 MIN_MODEL_SIZE = 1024 * 1024; // 1 MB minimum
+            const juce::int64 MIN_CONFIG_SIZE = 1000; // 1 KB minimum for JSON
+            
+            juce::int64 modelSize = modelFile.getSize();
+            juce::int64 configSize = configFile.getSize();
+            
+            juce::Logger::writeToLog("[TTS Performer] Model file size: " + juce::String(modelSize) + " bytes");
+            juce::Logger::writeToLog("[TTS Performer] Config file size: " + juce::String(configSize) + " bytes");
+            
+            if (modelSize == 0)
+            {
+                juce::Logger::writeToLog("[TTS Performer] ERROR: Model file is empty: " + modelPath);
+                throw std::runtime_error("Model file is empty or corrupted: " + modelFile.getFileName().toStdString() + " (0 bytes). Please re-download this voice.");
+            }
+            
+            if (modelSize < MIN_MODEL_SIZE)
+            {
+                juce::Logger::writeToLog("[TTS Performer] ERROR: Model file is too small (corrupted): " + modelPath + " (" + juce::String(modelSize) + " bytes, expected at least " + juce::String(MIN_MODEL_SIZE) + " bytes)");
+                throw std::runtime_error("Model file is corrupted or incomplete: " + modelFile.getFileName().toStdString() + " (only " + std::to_string(modelSize) + " bytes, expected at least " + std::to_string(MIN_MODEL_SIZE) + " bytes). Please re-download this voice from the download dialog.");
+            }
+            
+            if (configSize == 0)
+            {
+                juce::Logger::writeToLog("[TTS Performer] ERROR: Config file is empty: " + configPath);
+                throw std::runtime_error("Config file is empty or corrupted: " + configFile.getFileName().toStdString() + ". Please re-download this voice.");
+            }
+            
+            if (configSize < MIN_CONFIG_SIZE)
+            {
+                juce::Logger::writeToLog("[TTS Performer] ERROR: Config file is too small (corrupted): " + configPath + " (" + juce::String(configSize) + " bytes)");
+                throw std::runtime_error("Config file is corrupted or incomplete: " + configFile.getFileName().toStdString() + ". Please re-download this voice.");
+            }
+            
             // --- Phase 4: Check Cache and Update Usage Time ---
             juce::String cacheKey = getCacheKey(modelPath);
             bool wasCached = isVoiceCached(modelPath);
@@ -1094,18 +1130,27 @@ void TTSPerformerModuleProcessor::SynthesisThread::run()
                                          .getNonexistentChildFile("piper_input", ".txt");
             tempInputFile.replaceWithText(textToSynthesize);
             
-            // Build command using Windows cmd to pipe input to piper with JSON output
+            // Build command using Windows cmd to pipe input to piper
             juce::ChildProcess piperProcess;
             // Build command with working directory change to ensure piper can find its dependencies
             auto workingDirectory = piperExecutable.getParentDirectory();
-            juce::String command = "cmd /c \"cd /d \"" + workingDirectory.getFullPathName() + "\" && type \"" 
+            
+            // Create temp file to capture stderr/stdout for debugging crashes
+            juce::File tempErrorFile = juce::File::getSpecialLocation(juce::File::tempDirectory)
+                                          .getNonexistentChildFile("piper_error", ".txt");
+            
+            // Build command with stdout/stderr redirected to error file for debugging
+            // This helps us see what piper.exe is saying before it crashes
+            // Using parentheses to group the pipe operation before redirecting output
+            juce::String command = "cmd /c \"cd /d \"" + workingDirectory.getFullPathName() + "\" && (type \"" 
                                  + tempInputFile.getFullPathName() + "\" | \"" 
                                  + piperExecutable.getFullPathName() + "\" --model \"" + modelFile.getFullPathName() + "\""
                                  + " --espeak_data \"" + workingDirectory.getChildFile("espeak-ng-data").getFullPathName() + "\""
-                                 + " --output_file \"" + tempWavFile.getFullPathName() + "\"\"";
+                                 + " --output_file \"" + tempWavFile.getFullPathName() + "\") > \"" + tempErrorFile.getFullPathName() + "\" 2>&1\"";
             
             DBG("[TTS Performer] Starting Piper process with command: " + command);
             juce::Logger::writeToLog("[TTS Performer] Starting Piper process with command: " + command);
+            juce::Logger::writeToLog("[TTS Performer] Error output will be logged to: " + tempErrorFile.getFullPathName());
             
             if (piperProcess.start(command))
             {
@@ -1133,8 +1178,59 @@ void TTSPerformerModuleProcessor::SynthesisThread::run()
                 DBG("[TTS Performer] Piper process finished with exit code: " + juce::String(exitCode));
                 juce::Logger::writeToLog("[TTS Performer] Piper process finished with exit code: " + juce::String(exitCode));
                 
+                // Read process output (stdout/stderr) from temp file
+                juce::String outputText;
+                if (tempErrorFile.existsAsFile() && tempErrorFile.getSize() > 0)
+                {
+                    outputText = tempErrorFile.loadFileAsString();
+                    if (outputText.isNotEmpty())
+                    {
+                        juce::Logger::writeToLog("[TTS Performer] Piper process output:");
+                        juce::StringArray lines;
+                        lines.addTokens(outputText, "\r\n", "\"");
+                        for (const auto& line : lines)
+                        {
+                            if (line.trim().isNotEmpty())
+                                juce::Logger::writeToLog("  > " + line);
+                        }
+                    }
+                    // Clean up error file after reading
+                    tempErrorFile.deleteFile();
+                }
+                
                 if (exitCode != 0)
-                    throw std::runtime_error("Piper process failed with exit code: " + std::to_string(exitCode));
+                {
+                    // Enhanced error message with exit code interpretation
+                    juce::String errorMsg = "Piper process failed with exit code: " + juce::String(exitCode);
+                    if (exitCode == -1073740791) // 0xC0000409 STATUS_STACK_BUFFER_OVERRUN
+                    {
+                        errorMsg += " (STATUS_STACK_BUFFER_OVERRUN - piper.exe crashed). ";
+                        errorMsg += "Possible causes: corrupted model file, missing DLL dependencies (ONNX Runtime), or model incompatibility. ";
+                        errorMsg += "Model: " + modelFile.getFileName();
+                        errorMsg += " (Size: " + juce::String(modelFile.getSize()) + " bytes)";
+                        
+                        // Suggest checking model file integrity
+                        juce::Logger::writeToLog("[TTS Performer] WARNING: Model file may be corrupted or incompatible.");
+                        juce::Logger::writeToLog("[TTS Performer] Try re-downloading this voice model from the download dialog.");
+                    }
+                    else if (exitCode < 0)
+                    {
+                        errorMsg += " (Process crashed). ";
+                    }
+                    
+                    if (outputText.isNotEmpty())
+                    {
+                        juce::String shortOutput = outputText.substring(0, 500).replace("\r", " ").replace("\n", " ");
+                        errorMsg += " Error output: " + shortOutput;
+                    }
+                    else
+                    {
+                        errorMsg += " (No error output captured - process may have crashed before writing to stderr).";
+                    }
+                    
+                    juce::Logger::writeToLog("[TTS Performer] ERROR: " + errorMsg);
+                    throw std::runtime_error(errorMsg.toStdString());
+                }
                 
                 // Clean up input file
                 tempInputFile.deleteFile();
@@ -1975,6 +2071,383 @@ juce::File TTSPerformerModuleProcessor::resolveSelectedModelFile() const
             return resolveModelsBaseDir().getChildFile(e.relativeOnnx);
     }
     return resolveModelsBaseDir().getChildFile("piper-voices/en/en_US/lessac/medium/en_US-lessac-medium.onnx");
+}
+
+// --- Voice Manifest and Status Checking Implementation ---
+
+std::vector<TTSPerformerModuleProcessor::VoiceEntry> TTSPerformerModuleProcessor::getAllAvailableVoices()
+{
+    // This is the comprehensive list from the PowerShell script
+    // Mark 3-4 voices as isIncluded=true for default distribution
+    std::vector<VoiceEntry> voices;
+    
+    // English (US) - Various accents and styles
+    voices.emplace_back("en_US-lessac-medium", "English (US)", "General American", "Female", "Medium", true);  // DEFAULT
+    voices.emplace_back("en_US-lessac-high", "English (US)", "General American", "Female", "High", false);
+    voices.emplace_back("en_US-lessac-low", "English (US)", "General American", "Female", "Low", false);
+    voices.emplace_back("en_US-libritts-high", "English (US)", "General American", "Male", "High", false);
+    voices.emplace_back("en_US-libritts-medium", "English (US)", "General American", "Male", "Medium", true);  // DEFAULT
+    voices.emplace_back("en_US-libritts-low", "English (US)", "General American", "Male", "Low", false);
+    voices.emplace_back("en_US-vctk-medium", "English (US)", "Various", "Mixed", "Medium", false);
+    
+    // English (UK) - British accents
+    voices.emplace_back("en_GB-alan-medium", "English (UK)", "British", "Male", "Medium", false);
+    voices.emplace_back("en_GB-alan-high", "English (UK)", "British", "Male", "High", false);
+    voices.emplace_back("en_GB-southern_english_female-medium", "English (UK)", "Southern British", "Female", "Medium", false);
+    
+    // English (AU) - Australian accent
+    voices.emplace_back("en_AU-shmale-medium", "English (AU)", "Australian", "Male", "Medium", false);
+    
+    // German voices
+    voices.emplace_back("de_DE-thorsten-medium", "German", "Standard German", "Male", "Medium", true);  // DEFAULT
+    voices.emplace_back("de_DE-thorsten-high", "German", "Standard German", "Male", "High", false);
+    voices.emplace_back("de_DE-thorsten-low", "German", "Standard German", "Male", "Low", false);
+    voices.emplace_back("de_DE-ramona-medium", "German", "Standard German", "Female", "Medium", false);
+    voices.emplace_back("de_DE-ramona-low", "German", "Standard German", "Female", "Low", false);
+    voices.emplace_back("de_DE-pavoque-low", "German", "Standard German", "Female", "Low", false);
+    voices.emplace_back("de_DE-eva_k-x_low", "German", "Standard German", "Female", "x_low", false);
+    voices.emplace_back("de_DE-karlsson-low", "German", "Standard German", "Male", "Low", false);
+    voices.emplace_back("de_DE-kerstin-low", "German", "Standard German", "Female", "Low", false);
+    voices.emplace_back("de_DE-mls-medium", "German", "Standard German", "Mixed", "Medium", false);
+    voices.emplace_back("de_DE-thorsten_emotional-medium", "German", "Standard German", "Male", "Medium", false);
+    
+    // Spanish voices
+    voices.emplace_back("es_ES-davefx-medium", "Spanish (Spain)", "Castilian", "Male", "Medium", false);
+    voices.emplace_back("es_ES-davefx-high", "Spanish (Spain)", "Castilian", "Male", "High", false);
+    voices.emplace_back("es_MX-claudio-medium", "Spanish (Mexico)", "Mexican", "Male", "Medium", false);
+    
+    // French voices
+    voices.emplace_back("fr_FR-siwis-medium", "French", "Standard French", "Male", "Medium", true);  // DEFAULT
+    voices.emplace_back("fr_FR-siwis-high", "French", "Standard French", "Male", "High", false);
+    voices.emplace_back("fr_FR-siwis-low", "French", "Standard French", "Male", "Low", false);
+    voices.emplace_back("fr_FR-siwis_female-medium", "French", "Standard French", "Female", "Medium", false);
+    
+    // Italian voices
+    voices.emplace_back("it_IT-riccardo-medium", "Italian", "Standard Italian", "Male", "Medium", false);
+    voices.emplace_back("it_IT-riccardo-high", "Italian", "Standard Italian", "Male", "High", false);
+    
+    // Portuguese voices
+    voices.emplace_back("pt_BR-faber-medium", "Portuguese (Brazil)", "Brazilian", "Male", "Medium", false);
+    voices.emplace_back("pt_BR-faber-high", "Portuguese (Brazil)", "Brazilian", "Male", "High", false);
+    
+    // Dutch voices
+    voices.emplace_back("nl_NL-mls-medium", "Dutch", "Standard Dutch", "Male", "Medium", false);
+    voices.emplace_back("nl_NL-mls-high", "Dutch", "Standard Dutch", "Male", "High", false);
+    
+    // Russian voices
+    voices.emplace_back("ru_RU-dmitri-medium", "Russian", "Standard Russian", "Male", "Medium", false);
+    voices.emplace_back("ru_RU-dmitri-high", "Russian", "Standard Russian", "Male", "High", false);
+    
+    // Chinese voices
+    voices.emplace_back("zh_CN-huayan-medium", "Chinese (Mandarin)", "Standard Mandarin", "Female", "Medium", false);
+    voices.emplace_back("zh_CN-huayan-high", "Chinese (Mandarin)", "Standard Mandarin", "Female", "High", false);
+    
+    // Japanese voices
+    voices.emplace_back("ja_JP-ljspeech-medium", "Japanese", "Standard Japanese", "Female", "Medium", false);
+    voices.emplace_back("ja_JP-ljspeech-high", "Japanese", "Standard Japanese", "Female", "High", false);
+    
+    // Korean voices
+    voices.emplace_back("ko_KR-kss-medium", "Korean", "Standard Korean", "Female", "Medium", false);
+    
+    // Polish voices
+    voices.emplace_back("pl_PL-darkman-medium", "Polish", "Standard Polish", "Male", "Medium", false);
+    
+    // Czech voices
+    voices.emplace_back("cs_CZ-jirka-medium", "Czech", "Standard Czech", "Male", "Medium", false);
+    
+    // Greek voices
+    voices.emplace_back("el_GR-rapunzelina-medium", "Greek", "Standard Greek", "Female", "Medium", false);
+    
+    // Finnish voices
+    voices.emplace_back("fi_FI-harri-medium", "Finnish", "Standard Finnish", "Male", "Medium", false);
+    
+    // Swedish voices
+    voices.emplace_back("sv_SE-nst-medium", "Swedish", "Standard Swedish", "Male", "Medium", false);
+    
+    // Norwegian voices
+    voices.emplace_back("nb_NO-talesyntese-medium", "Norwegian", "Standard Norwegian", "Male", "Medium", false);
+    
+    // Danish voices
+    voices.emplace_back("da_DK-talesyntese-medium", "Danish", "Standard Danish", "Male", "Medium", false);
+    
+    // Additional voices from voices.json
+    // Arabic voices
+    voices.emplace_back("ar_JO-kareem-low", "Arabic", "Standard Arabic", "Unknown", "Low", false);
+    voices.emplace_back("ar_JO-kareem-medium", "Arabic", "Standard Arabic", "Unknown", "Medium", false);
+    
+    // Catalan voices
+    voices.emplace_back("ca_ES-upc_ona-medium", "Catalan", "Standard Catalan", "Unknown", "Medium", false);
+    voices.emplace_back("ca_ES-upc_ona-x_low", "Catalan", "Standard Catalan", "Unknown", "x_low", false);
+    voices.emplace_back("ca_ES-upc_pau-x_low", "Catalan", "Standard Catalan", "Unknown", "x_low", false);
+    
+    // Chinese voices
+    voices.emplace_back("zh_CN-huayan-x_low", "Chinese (Mandarin)", "Standard Mandarin", "Unknown", "x_low", false);
+    
+    // Czech voices
+    voices.emplace_back("cs_CZ-jirka-low", "Czech", "Standard Czech", "Male", "Low", false);
+    
+    // Dutch voices (additional)
+    voices.emplace_back("nl_BE-nathalie-medium", "Dutch", "Belgian", "Female", "Medium", false);
+    voices.emplace_back("nl_BE-nathalie-x_low", "Dutch", "Belgian", "Female", "x_low", false);
+    voices.emplace_back("nl_BE-rdh-medium", "Dutch", "Belgian", "Unknown", "Medium", false);
+    voices.emplace_back("nl_BE-rdh-x_low", "Dutch", "Belgian", "Unknown", "x_low", false);
+    voices.emplace_back("nl_NL-mls_5809-low", "Dutch", "Standard Dutch", "Unknown", "Low", false);
+    voices.emplace_back("nl_NL-mls_7432-low", "Dutch", "Standard Dutch", "Unknown", "Low", false);
+    voices.emplace_back("nl_NL-pim-medium", "Dutch", "Standard Dutch", "Unknown", "Medium", false);
+    voices.emplace_back("nl_NL-ronnie-medium", "Dutch", "Standard Dutch", "Unknown", "Medium", false);
+    
+    // English voices (additional)
+    voices.emplace_back("en_GB-alan-low", "English (UK)", "British", "Male", "Low", false);
+    voices.emplace_back("en_GB-alba-medium", "English (UK)", "British", "Female", "Medium", false);
+    voices.emplace_back("en_GB-aru-medium", "English (UK)", "British", "Mixed", "Medium", false);
+    voices.emplace_back("en_GB-cori-high", "English (UK)", "British", "Unknown", "High", false);
+    voices.emplace_back("en_GB-cori-medium", "English (UK)", "British", "Unknown", "Medium", false);
+    voices.emplace_back("en_GB-jenny_dioco-medium", "English (UK)", "British", "Female", "Medium", false);
+    voices.emplace_back("en_GB-northern_english_male-medium", "English (UK)", "British", "Male", "Medium", false);
+    voices.emplace_back("en_GB-semaine-medium", "English (UK)", "British", "Mixed", "Medium", false);
+    voices.emplace_back("en_GB-southern_english_female-low", "English (UK)", "Southern British", "Female", "Low", false);
+    voices.emplace_back("en_GB-vctk-medium", "English (UK)", "British", "Mixed", "Medium", false);
+    voices.emplace_back("en_US-amy-low", "English (US)", "General American", "Female", "Low", false);
+    voices.emplace_back("en_US-amy-medium", "English (US)", "General American", "Female", "Medium", false);
+    voices.emplace_back("en_US-arctic-medium", "English (US)", "General American", "Mixed", "Medium", false);
+    voices.emplace_back("en_US-bryce-medium", "English (US)", "General American", "Unknown", "Medium", false);
+    voices.emplace_back("en_US-danny-low", "English (US)", "General American", "Unknown", "Low", false);
+    voices.emplace_back("en_US-hfc_female-medium", "English (US)", "General American", "Female", "Medium", false);
+    voices.emplace_back("en_US-hfc_male-medium", "English (US)", "General American", "Male", "Medium", false);
+    voices.emplace_back("en_US-joe-medium", "English (US)", "General American", "Unknown", "Medium", false);
+    voices.emplace_back("en_US-john-medium", "English (US)", "General American", "Unknown", "Medium", false);
+    voices.emplace_back("en_US-kathleen-low", "English (US)", "General American", "Female", "Low", false);
+    voices.emplace_back("en_US-kristin-medium", "English (US)", "General American", "Female", "Medium", false);
+    voices.emplace_back("en_US-kusal-medium", "English (US)", "General American", "Unknown", "Medium", false);
+    voices.emplace_back("en_US-l2arctic-medium", "English (US)", "General American", "Mixed", "Medium", false);
+    voices.emplace_back("en_US-libritts_r-medium", "English (US)", "General American", "Mixed", "Medium", false);
+    voices.emplace_back("en_US-ljspeech-high", "English (US)", "General American", "Unknown", "High", false);
+    voices.emplace_back("en_US-ljspeech-medium", "English (US)", "General American", "Unknown", "Medium", false);
+    voices.emplace_back("en_US-norman-medium", "English (US)", "General American", "Male", "Medium", false);
+    voices.emplace_back("en_US-reza_ibrahim-medium", "English (US)", "General American", "Unknown", "Medium", false);
+    voices.emplace_back("en_US-ryan-high", "English (US)", "General American", "Unknown", "High", false);
+    voices.emplace_back("en_US-ryan-low", "English (US)", "General American", "Unknown", "Low", false);
+    voices.emplace_back("en_US-ryan-medium", "English (US)", "General American", "Unknown", "Medium", false);
+    voices.emplace_back("en_US-sam-medium", "English (US)", "General American", "Unknown", "Medium", false);
+    
+    // Farsi voices
+    voices.emplace_back("fa_IR-amir-medium", "Farsi", "Standard Farsi", "Unknown", "Medium", false);
+    voices.emplace_back("fa_IR-ganji-medium", "Farsi", "Standard Farsi", "Unknown", "Medium", false);
+    voices.emplace_back("fa_IR-ganji_adabi-medium", "Farsi", "Standard Farsi", "Unknown", "Medium", false);
+    voices.emplace_back("fa_IR-gyro-medium", "Farsi", "Standard Farsi", "Unknown", "Medium", false);
+    voices.emplace_back("fa_IR-reza_ibrahim-medium", "Farsi", "Standard Farsi", "Unknown", "Medium", false);
+    
+    // Finnish voices (additional)
+    voices.emplace_back("fi_FI-harri-low", "Finnish", "Standard Finnish", "Male", "Low", false);
+    
+    // French voices (additional)
+    voices.emplace_back("fr_FR-gilles-low", "French", "Standard French", "Unknown", "Low", false);
+    voices.emplace_back("fr_FR-mls-medium", "French", "Standard French", "Mixed", "Medium", false);
+    voices.emplace_back("fr_FR-mls_1840-low", "French", "Standard French", "Unknown", "Low", false);
+    voices.emplace_back("fr_FR-tom-medium", "French", "Standard French", "Unknown", "Medium", false);
+    voices.emplace_back("fr_FR-upmc-medium", "French", "Standard French", "Mixed", "Medium", false);
+    
+    // Georgian voices
+    voices.emplace_back("ka_GE-natia-medium", "Georgian", "Standard Georgian", "Female", "Medium", false);
+    
+    // Greek voices (additional)
+    voices.emplace_back("el_GR-rapunzelina-low", "Greek", "Standard Greek", "Female", "Low", false);
+    
+    // Hebrew voices
+    voices.emplace_back("he_IL-motek-medium", "Hebrew", "Standard Hebrew", "Unknown", "Medium", false);
+    
+    // Hindi voices
+    voices.emplace_back("hi_IN-pratham-medium", "Hindi", "Standard Hindi", "Male", "Medium", false);
+    voices.emplace_back("hi_IN-priyamvada-medium", "Hindi", "Standard Hindi", "Female", "Medium", false);
+    voices.emplace_back("hi_IN-rohan-medium", "Hindi", "Standard Hindi", "Male", "Medium", false);
+    
+    // Hungarian voices
+    voices.emplace_back("hu_HU-anna-medium", "Hungarian", "Standard Hungarian", "Unknown", "Medium", false);
+    voices.emplace_back("hu_HU-berta-medium", "Hungarian", "Standard Hungarian", "Unknown", "Medium", false);
+    voices.emplace_back("hu_HU-imre-medium", "Hungarian", "Standard Hungarian", "Unknown", "Medium", false);
+    
+    // Icelandic voices
+    voices.emplace_back("is_IS-bui-medium", "Icelandic", "Standard Icelandic", "Unknown", "Medium", false);
+    voices.emplace_back("is_IS-salka-medium", "Icelandic", "Standard Icelandic", "Unknown", "Medium", false);
+    voices.emplace_back("is_IS-steinn-medium", "Icelandic", "Standard Icelandic", "Unknown", "Medium", false);
+    voices.emplace_back("is_IS-ugla-medium", "Icelandic", "Standard Icelandic", "Unknown", "Medium", false);
+    
+    // Indonesian voices
+    voices.emplace_back("id_ID-news_tts-medium", "Indonesian", "Standard Indonesian", "Unknown", "Medium", false);
+    
+    // Italian voices (additional)
+    voices.emplace_back("it_IT-paola-medium", "Italian", "Standard Italian", "Unknown", "Medium", false);
+    voices.emplace_back("it_IT-riccardo-x_low", "Italian", "Standard Italian", "Male", "x_low", false);
+    
+    // Kazakh voices
+    voices.emplace_back("kk_KZ-iseke-x_low", "Kazakh", "Standard Kazakh", "Unknown", "x_low", false);
+    voices.emplace_back("kk_KZ-issai-high", "Kazakh", "Standard Kazakh", "Mixed", "High", false);
+    voices.emplace_back("kk_KZ-raya-x_low", "Kazakh", "Standard Kazakh", "Unknown", "x_low", false);
+    
+    // Latvian voices
+    voices.emplace_back("lv_LV-aivars-medium", "Latvian", "Standard Latvian", "Male", "Medium", false);
+    
+    // Luxembourgish voices
+    voices.emplace_back("lb_LU-marylux-medium", "Luxembourgish", "Standard Luxembourgish", "Female", "Medium", false);
+    
+    // Malayalam voices
+    voices.emplace_back("ml_IN-arjun-medium", "Malayalam", "Standard Malayalam", "Male", "Medium", false);
+    voices.emplace_back("ml_IN-meera-medium", "Malayalam", "Standard Malayalam", "Female", "Medium", false);
+    
+    // Nepali voices
+    voices.emplace_back("ne_NP-chitwan-medium", "Nepali", "Standard Nepali", "Unknown", "Medium", false);
+    voices.emplace_back("ne_NP-google-medium", "Nepali", "Standard Nepali", "Mixed", "Medium", false);
+    voices.emplace_back("ne_NP-google-x_low", "Nepali", "Standard Nepali", "Mixed", "x_low", false);
+    
+    // Norwegian voices (additional)
+    voices.emplace_back("no_NO-talesyntese-medium", "Norwegian", "Standard Norwegian", "Unknown", "Medium", false);
+    
+    // Polish voices (additional)
+    voices.emplace_back("pl_PL-gosia-medium", "Polish", "Standard Polish", "Female", "Medium", false);
+    voices.emplace_back("pl_PL-mc_speech-medium", "Polish", "Standard Polish", "Unknown", "Medium", false);
+    voices.emplace_back("pl_PL-mls_6892-low", "Polish", "Standard Polish", "Unknown", "Low", false);
+    
+    // Portuguese voices (additional)
+    voices.emplace_back("pt_BR-cadu-medium", "Portuguese (Brazil)", "Brazilian", "Unknown", "Medium", false);
+    voices.emplace_back("pt_BR-edresson-low", "Portuguese (Brazil)", "Brazilian", "Unknown", "Low", false);
+    voices.emplace_back("pt_BR-jeff-medium", "Portuguese (Brazil)", "Brazilian", "Unknown", "Medium", false);
+    voices.emplace_back("pt_PT-tugao-medium", "Portuguese (Portugal)", "European Portuguese", "Unknown", "Medium", false);
+    
+    // Romanian voices
+    voices.emplace_back("ro_RO-mihai-medium", "Romanian", "Standard Romanian", "Male", "Medium", false);
+    
+    // Russian voices (additional)
+    voices.emplace_back("ru_RU-denis-medium", "Russian", "Standard Russian", "Male", "Medium", false);
+    voices.emplace_back("ru_RU-irina-medium", "Russian", "Standard Russian", "Female", "Medium", false);
+    voices.emplace_back("ru_RU-ruslan-medium", "Russian", "Standard Russian", "Male", "Medium", false);
+    
+    // Serbian voices
+    voices.emplace_back("sr_RS-serbski_institut-medium", "Serbian", "Standard Serbian", "Mixed", "Medium", false);
+    
+    // Slovak voices
+    voices.emplace_back("sk_SK-lili-medium", "Slovak", "Standard Slovak", "Unknown", "Medium", false);
+    
+    // Slovenian voices
+    voices.emplace_back("sl_SI-artur-medium", "Slovenian", "Standard Slovenian", "Male", "Medium", false);
+    
+    // Spanish voices (additional)
+    voices.emplace_back("es_AR-daniela-high", "Spanish (Argentina)", "Argentinian", "Female", "High", false);
+    voices.emplace_back("es_ES-carlfm-x_low", "Spanish (Spain)", "Castilian", "Unknown", "x_low", false);
+    voices.emplace_back("es_ES-mls_10246-low", "Spanish (Spain)", "Castilian", "Unknown", "Low", false);
+    voices.emplace_back("es_ES-mls_9972-low", "Spanish (Spain)", "Castilian", "Unknown", "Low", false);
+    voices.emplace_back("es_ES-sharvard-medium", "Spanish (Spain)", "Castilian", "Mixed", "Medium", false);
+    voices.emplace_back("es_MX-ald-medium", "Spanish (Mexico)", "Mexican", "Unknown", "Medium", false);
+    voices.emplace_back("es_MX-claude-high", "Spanish (Mexico)", "Mexican", "Unknown", "High", false);
+    
+    // Swahili voices
+    voices.emplace_back("sw_CD-lanfrica-medium", "Swahili", "Standard Swahili", "Unknown", "Medium", false);
+    
+    // Swedish voices (additional)
+    voices.emplace_back("sv_SE-lisa-medium", "Swedish", "Standard Swedish", "Female", "Medium", false);
+    
+    // Telugu voices
+    voices.emplace_back("te_IN-maya-medium", "Telugu", "Standard Telugu", "Female", "Medium", false);
+    voices.emplace_back("te_IN-padmavathi-medium", "Telugu", "Standard Telugu", "Female", "Medium", false);
+    voices.emplace_back("te_IN-venkatesh-medium", "Telugu", "Standard Telugu", "Male", "Medium", false);
+    
+    // Turkish voices
+    voices.emplace_back("tr_TR-dfki-medium", "Turkish", "Standard Turkish", "Unknown", "Medium", false);
+    voices.emplace_back("tr_TR-fahrettin-medium", "Turkish", "Standard Turkish", "Male", "Medium", false);
+    voices.emplace_back("tr_TR-fettah-medium", "Turkish", "Standard Turkish", "Male", "Medium", false);
+    
+    // Ukrainian voices
+    voices.emplace_back("uk_UA-lada-x_low", "Ukrainian", "Standard Ukrainian", "Female", "x_low", false);
+    voices.emplace_back("uk_UA-ukrainian_tts-medium", "Ukrainian", "Standard Ukrainian", "Mixed", "Medium", false);
+    
+    // Vietnamese voices
+    voices.emplace_back("vi_VN-25hours_single-low", "Vietnamese", "Standard Vietnamese", "Unknown", "Low", false);
+    voices.emplace_back("vi_VN-vais1000-medium", "Vietnamese", "Standard Vietnamese", "Unknown", "Medium", false);
+    voices.emplace_back("vi_VN-vivos-x_low", "Vietnamese", "Standard Vietnamese", "Mixed", "x_low", false);
+    
+    // Welsh voices
+    voices.emplace_back("cy_GB-bu_tts-medium", "Welsh", "British", "Mixed", "Medium", false);
+    voices.emplace_back("cy_GB-gwryw_gogleddol-medium", "Welsh", "British", "Unknown", "Medium", false);
+    
+    return voices;
+}
+
+TTSPerformerModuleProcessor::VoiceStatus TTSPerformerModuleProcessor::checkVoiceStatus(const juce::String& voiceName) const
+{
+    // Parse voice name to construct expected path
+    // Format: "en_US-lessac-medium" -> "piper-voices/en/en_US/lessac/medium/en_US-lessac-medium.onnx"
+    // Voice names follow pattern: <locale>-<voice>-<quality>
+    
+    // Find the last dash to separate quality from the rest
+    int lastDash = voiceName.lastIndexOfChar('-');
+    if (lastDash < 0)
+    {
+        DBG("[Voice Status] Invalid voice name format (no dashes): " + voiceName);
+        return VoiceStatus::Error;
+    }
+    
+    // Get everything before the last dash
+    juce::String beforeLastDash = voiceName.substring(0, lastDash);
+    
+    // Find the second-to-last dash in the substring
+    int secondLastDash = beforeLastDash.lastIndexOfChar('-');
+    if (secondLastDash < 0)
+    {
+        DBG("[Voice Status] Invalid voice name format (need at least 2 dashes): " + voiceName);
+        return VoiceStatus::Error;
+    }
+    
+    juce::String locale = voiceName.substring(0, secondLastDash);  // "en_US"
+    juce::String voice = voiceName.substring(secondLastDash + 1, lastDash);  // "lessac"
+    juce::String quality = voiceName.substring(lastDash + 1);  // "medium"
+    
+    // Extract language code from locale (e.g., "en_US" -> "en")
+    juce::String lang = locale.substring(0, locale.indexOfChar('_'));
+    if (lang.isEmpty()) lang = locale;  // Fallback if no underscore
+    
+    // Build expected file paths
+    juce::File modelsDir = resolveModelsBaseDir();
+    juce::File onnxFile = modelsDir.getChildFile("piper-voices")
+                               .getChildFile(lang)
+                               .getChildFile(locale)
+                               .getChildFile(voice)
+                               .getChildFile(quality)
+                               .getChildFile(voiceName + ".onnx");
+    juce::File jsonFile = onnxFile.withFileExtension(".onnx.json");
+    
+    bool onnxExists = onnxFile.existsAsFile() && onnxFile.getSize() > 0;
+    bool jsonExists = jsonFile.existsAsFile() && jsonFile.getSize() > 0;
+    
+    // Check if files are corrupted (too small to be valid)
+    const juce::int64 MIN_MODEL_SIZE = 1024 * 1024; // 1 MB minimum (valid models are 60-120 MB)
+    const juce::int64 MIN_CONFIG_SIZE = 1000; // 1 KB minimum
+    
+    if (onnxExists && jsonExists)
+    {
+        // Verify files are not corrupted (too small)
+        if (onnxFile.getSize() < MIN_MODEL_SIZE || jsonFile.getSize() < MIN_CONFIG_SIZE)
+        {
+            DBG("[Voice Status] Files exist but are too small (corrupted): " + voiceName);
+            return VoiceStatus::Error;  // Mark as error if corrupted
+        }
+        return VoiceStatus::Installed;
+    }
+    else if (onnxExists || jsonExists)
+        return VoiceStatus::Partial;  // One file missing
+    else
+        return VoiceStatus::NotInstalled;
+}
+
+std::map<juce::String, TTSPerformerModuleProcessor::VoiceStatus> TTSPerformerModuleProcessor::checkAllVoiceStatuses() const
+{
+    std::map<juce::String, VoiceStatus> statuses;
+    auto availableVoices = getAllAvailableVoices();
+    
+    for (const auto& voice : availableVoices)
+    {
+        statuses[voice.name] = checkVoiceStatus(voice.name);
+    }
+    
+    return statuses;
 }
 
 bool TTSPerformerModuleProcessor::loadVoicesFromMapFile(const juce::File& mapFile)

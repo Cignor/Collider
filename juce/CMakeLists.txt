@@ -776,6 +776,8 @@ target_sources(ColliderApp PRIVATE
     Source/audio/modules/TimingData.h
     Source/audio/modules/SampleLoaderModuleProcessor.h
     Source/audio/modules/SampleLoaderModuleProcessor.cpp
+    Source/audio/modules/SampleSfxModuleProcessor.h
+    Source/audio/modules/SampleSfxModuleProcessor.cpp
     Source/audio/modules/FunctionGeneratorModuleProcessor.h
     Source/audio/modules/FunctionGeneratorModuleProcessor.cpp
     Source/audio/modules/BestPracticeNodeProcessor.h
@@ -834,6 +836,8 @@ target_sources(ColliderApp PRIVATE
     Source/audio/modules/TimeStretcherAudioSource.cpp
     Source/audio/modules/VideoFXModule.h
     Source/audio/modules/VideoFXModule.cpp
+    Source/audio/modules/VideoDrawImpactModuleProcessor.h
+    Source/audio/modules/VideoDrawImpactModuleProcessor.cpp
     Source/audio/modules/MovementDetectorModule.h
     Source/audio/modules/MovementDetectorModule.cpp
     Source/audio/modules/HumanDetectorModule.h
@@ -874,6 +878,10 @@ target_sources(ColliderApp PRIVATE
     Source/ipc/CommandBus.h
     Source/audio/utils/VoiceDeletionUtils.h
     Source/audio/dsp/TimePitchProcessor.h
+    Source/audio/voices/VoiceDownloadHelper.h
+    Source/audio/voices/VoiceDownloadHelper.cpp
+    Source/audio/voices/VoiceDownloadThread.h
+    Source/audio/voices/VoiceDownloadThread.cpp
     Source/utils/RtLogger.h
     Source/utils/RtLogger.cpp
 )
@@ -1009,6 +1017,8 @@ target_sources(PresetCreatorApp PRIVATE
     Source/preset_creator/theme/ThemeEditorComponent.cpp
     Source/preset_creator/HelpManagerComponent.h
     Source/preset_creator/HelpManagerComponent.cpp
+    Source/preset_creator/VoiceDownloadDialog.h
+    Source/preset_creator/VoiceDownloadDialog.cpp
 
     # Add ImGui, imnodes, and the backend DIRECTLY as source files
     ${imgui_fc_SOURCE_DIR}/imgui.cpp
@@ -1104,6 +1114,8 @@ target_sources(PresetCreatorApp PRIVATE
     Source/audio/modules/TimingData.h
     Source/audio/modules/SampleLoaderModuleProcessor.h
     Source/audio/modules/SampleLoaderModuleProcessor.cpp
+    Source/audio/modules/SampleSfxModuleProcessor.h
+    Source/audio/modules/SampleSfxModuleProcessor.cpp
     Source/audio/modules/FunctionGeneratorModuleProcessor.h
     Source/audio/modules/FunctionGeneratorModuleProcessor.cpp
     Source/audio/modules/BestPracticeNodeProcessor.h
@@ -1114,6 +1126,10 @@ target_sources(PresetCreatorApp PRIVATE
     Source/audio/modules/ShapingOscillatorModuleProcessor.cpp
     Source/audio/voices/SampleVoiceProcessor.h
     Source/audio/voices/SampleVoiceProcessor.cpp
+    Source/audio/voices/VoiceDownloadHelper.h
+    Source/audio/voices/VoiceDownloadHelper.cpp
+    Source/audio/voices/VoiceDownloadThread.h
+    Source/audio/voices/VoiceDownloadThread.cpp
     Source/audio/graph/VoiceProcessor.h
     Source/audio/graph/VoiceProcessor.cpp
     Source/audio/assets/SampleBank.h
@@ -1200,6 +1216,8 @@ target_sources(PresetCreatorApp PRIVATE
     Source/audio/modules/TimeStretcherAudioSource.cpp
     Source/audio/modules/VideoFXModule.h
     Source/audio/modules/VideoFXModule.cpp
+    Source/audio/modules/VideoDrawImpactModuleProcessor.h
+    Source/audio/modules/VideoDrawImpactModuleProcessor.cpp
     Source/audio/modules/MovementDetectorModule.h
     Source/audio/modules/MovementDetectorModule.cpp
     Source/audio/modules/HumanDetectorModule.h
@@ -1233,6 +1251,12 @@ target_sources(PresetCreatorApp PRIVATE
     Source/animation/FbxLoader.cpp
     Source/animation/AnimationRenderer.h
     Source/animation/AnimationRenderer.cpp
+    Source/preset_creator/VoiceDownloadDialog.h
+    Source/preset_creator/VoiceDownloadDialog.cpp
+    Source/audio/voices/VoiceDownloadHelper.h
+    Source/audio/voices/VoiceDownloadHelper.cpp
+    Source/audio/voices/VoiceDownloadThread.h
+    Source/audio/voices/VoiceDownloadThread.cpp
 )
 
 # Copy splash screen image to executable directory

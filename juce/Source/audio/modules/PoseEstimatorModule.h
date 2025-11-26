@@ -16,7 +16,7 @@
 #endif
 
 // The MPI model detects 15 keypoints per person
-constexpr int MPI_NUM_KEYPOINTS = 15;
+inline constexpr int MPI_NUM_KEYPOINTS = 15;
 
 /**
  * A real-time safe struct to hold the (x, y) coordinates of each keypoint.
@@ -118,6 +118,9 @@ private:
     // Source ID (read from input cable in audio thread, used by processing thread)
     std::atomic<juce::uint32> currentSourceId { 0 };
     
+    // Cached resolved source ID from connection graph (for XML load before processBlock runs)
+    juce::uint32 cachedResolvedSourceId { 0 };
+    
     // Lock-free FIFO for passing results from processing thread to audio thread
     PoseResult lastResultForAudio;
     juce::AbstractFifo fifo { 16 };
@@ -126,6 +129,10 @@ private:
     // UI preview
     juce::Image latestFrameForGui;
     juce::CriticalSection imageLock;
+    
+    // Cached last BGR frame for operations while source is paused/no new frames
+    cv::Mat lastFrameBgr;
+    juce::CriticalSection frameLock;
 };
 
 // Keypoint names for the MPI model (for UI labels and debugging)

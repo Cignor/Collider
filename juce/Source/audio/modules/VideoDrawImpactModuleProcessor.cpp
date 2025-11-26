@@ -1,0 +1,1458 @@
+#include "VideoDrawImpactModuleProcessor.h"
+#include "../../video/VideoFrameManager.h"
+#include "../graph/ModularSynthProcessor.h"
+#include <opencv2/imgproc.hpp>
+#include <cmath>
+#include <algorithm>
+
+#if defined(PRESET_CREATOR_UI)
+#include <imgui.h>
+#include "../../preset_creator/theme/ThemeManager.h"
+#endif
+
+juce::AudioProcessorValueTreeState::ParameterLayout VideoDrawImpactModuleProcessor::createParameterLayout()
+{
+    std::vector<std::unique_ptr<juce::RangedAudioParameter>> params;
+
+    // Saturation control (0.0 = grayscale, 1.0 = full color, up to 3.0 for oversaturation)
+    params.push_back(std::make_unique<juce::AudioParameterFloat>("saturation", "Saturation", 0.0f, 3.0f, 1.0f));
+    
+    // Drawing color (RGB stored as normalized floats)
+    params.push_back(std::make_unique<juce::AudioParameterFloat>("drawColorR", "Draw Color R", 0.0f, 1.0f, 1.0f));
+    params.push_back(std::make_unique<juce::AudioParameterFloat>("drawColorG", "Draw Color G", 0.0f, 1.0f, 0.0f));
+    params.push_back(std::make_unique<juce::AudioParameterFloat>("drawColorB", "Draw Color B", 0.0f, 1.0f, 0.0f));
+    
+    // Frame persistence (how many frames a drawing stays visible)
+    params.push_back(std::make_unique<juce::AudioParameterInt>("framePersistence", "Frame Persistence", 1, 60, 3));
+    
+    // Brush size (radius in pixels)
+    params.push_back(std::make_unique<juce::AudioParameterInt>("brushSize", "Brush Size", 1, 50, 5));
+    
+    // Clear all drawings button (trigger, not persistent)
+    params.push_back(std::make_unique<juce::AudioParameterBool>("clearDrawings", "Clear Drawings", false));
+
+    return { params.begin(), params.end() };
+}
+
+VideoDrawImpactModuleProcessor::VideoDrawImpactModuleProcessor()
+    : ModuleProcessor(BusesProperties()
+                      .withInput("Input", juce::AudioChannelSet::mono(), true)
+                      .withOutput("Output", juce::AudioChannelSet::mono(), true)),
+      juce::Thread("VideoDrawImpact Thread"),
+      apvts(*this, nullptr, "VideoDrawImpactParams", createParameterLayout())
+{
+    // Initialize parameter pointers
+    saturationParam = apvts.getRawParameterValue("saturation");
+    drawColorRParam = apvts.getRawParameterValue("drawColorR");
+    drawColorGParam = apvts.getRawParameterValue("drawColorG");
+    drawColorBParam = apvts.getRawParameterValue("drawColorB");
+    framePersistenceParam = dynamic_cast<juce::AudioParameterInt*>(apvts.getParameter("framePersistence"));
+    brushSizeParam = dynamic_cast<juce::AudioParameterInt*>(apvts.getParameter("brushSize"));
+    clearDrawingsParam = dynamic_cast<juce::AudioParameterBool*>(apvts.getParameter("clearDrawings"));
+    
+    // Initialize current draw color from parameters
+    updateDrawColorFromParams();
+}
+
+VideoDrawImpactModuleProcessor::~VideoDrawImpactModuleProcessor()
+{
+    stopThread(5000);
+    VideoFrameManager::getInstance().removeSource(getLogicalId());
+}
+
+void VideoDrawImpactModuleProcessor::prepareToPlay(double, int)
+{
+    startThread();
+}
+
+void VideoDrawImpactModuleProcessor::releaseResources()
+{
+    signalThreadShouldExit();
+    stopThread(5000);
+}
+
+void VideoDrawImpactModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midi)
+{
+    juce::ignoreUnused(midi);
+    
+    // Read the Source ID from our input pin
+    auto inputBuffer = getBusBuffer(buffer, true, 0);
+    if (inputBuffer.getNumSamples() > 0)
+    {
+        currentSourceId.store((juce::uint32)inputBuffer.getSample(0, 0));
+    }
+    
+    buffer.clear();
+    
+    // Find our own ID if it's not set
+    juce::uint32 myLogicalId = storedLogicalId;
+    if (myLogicalId == 0 && parentSynth != nullptr)
+    {
+        for (const auto& info : parentSynth->getModulesInfo())
+        {
+            if (parentSynth->getModuleForLogical(info.first) == this)
+            {
+                myLogicalId = info.first;
+                storedLogicalId = myLogicalId;
+                break;
+            }
+        }
+    }
+    
+    // Output our own Logical ID on the output pin, so we can be chained
+    if (buffer.getNumChannels() > 0 && buffer.getNumSamples() > 0)
+    {
+        float sourceId = (float)myLogicalId;
+        for (int sample = 0; sample < buffer.getNumSamples(); ++sample)
+        {
+            buffer.setSample(0, sample, sourceId);
+        }
+    }
+}
+
+void VideoDrawImpactModuleProcessor::run()
+{
+    // Resolve our logical ID once at the start
+    juce::uint32 myLogicalId = storedLogicalId;
+    if (myLogicalId == 0 && parentSynth != nullptr)
+    {
+        for (const auto& info : parentSynth->getModulesInfo())
+        {
+            if (parentSynth->getModuleForLogical(info.first) == this)
+            {
+                myLogicalId = info.first;
+                storedLogicalId = myLogicalId;
+                break;
+            }
+        }
+    }
+    
+    cv::Mat processedFrame;
+    
+    while (!threadShouldExit())
+    {
+        juce::uint32 sourceId = currentSourceId.load();
+        cv::Mat frame = VideoFrameManager::getInstance().getFrame(sourceId);
+        
+        // Cache last good frame for paused/no-signal scenarios (like ColorTrackerModule)
+        if (!frame.empty())
+        {
+            const juce::ScopedLock lk(frameLock);
+            frame.copyTo(lastFrameBgr);
+        }
+        else
+        {
+            // Use cached frame when no fresh frames are available (e.g., transport paused, loading)
+            const juce::ScopedLock lk(frameLock);
+            if (!lastFrameBgr.empty())
+                frame = lastFrameBgr.clone();
+        }
+        
+        if (frame.empty())
+        {
+            // Wait longer when no frame is available (video might still be loading)
+            // This is especially important when loading from XML, as the video source
+            // needs time to open and produce the first frame
+            wait(100);
+            continue;
+        }
+        
+        // Increment frame number for timeline tracking
+        int currentFrameIndex = currentFrameNumber.fetch_add(1) + 1;
+        
+        // Query timeline state from source
+        SourceTimelineState timelineState = getSourceTimelineState();
+        double timelinePos = timelineState.isValid ? timelineState.positionSeconds
+                                                   : static_cast<double>(currentFrameIndex);
+        double prevPos = lastTimelinePositionSeconds.load();
+        double deltaTime = 0.0;
+        if (timelineState.isValid)
+        {
+            double duration = juce::jmax(1e-6, timelineState.durationSeconds);
+            deltaTime = timelinePos - prevPos;
+            if (deltaTime < 0.0)
+                deltaTime += duration;
+            if (!timelineState.isActive)
+                deltaTime = 0.0;
+        }
+        else
+        {
+            deltaTime = 1.0 / 30.0; // Fallback frame duration
+        }
+        if (deltaTime <= 0.0)
+            deltaTime = lastFrameDurationSeconds.load();
+        lastTimelinePositionSeconds.store(timelinePos);
+        lastFrameDurationSeconds.store(deltaTime);
+        
+        // Clone frame for processing
+        processedFrame = frame.clone();
+        
+        // Apply saturation adjustment
+        float saturation = saturationParam ? saturationParam->load() : 0.0f;
+        if (saturation < 1.0f)
+        {
+            applySaturation(processedFrame, saturation);
+        }
+        
+        // Process pending draw operations from UI thread
+        processPendingDrawOps();
+        
+        // Draw all active strokes onto frame
+        drawStrokesOnFrame(processedFrame, timelineState, deltaTime, currentFrameIndex);
+        
+        // Clean up expired keyframes (when not timeline-driven)
+        cleanupExpiredKeyframes();
+        
+        // Publish processed frame
+        if (myLogicalId != 0)
+            VideoFrameManager::getInstance().setFrame(myLogicalId, processedFrame);
+        
+        // Update GUI preview
+        updateGuiFrame(processedFrame);
+        
+        // Handle clear drawings button
+        if (clearDrawingsParam && clearDrawingsParam->get())
+        {
+            const juce::ScopedLock lock(drawingsLock);
+            activeDrawings.clear();
+            *clearDrawingsParam = false;  // Reset button
+        }
+        
+        wait(33); // ~30 FPS
+    }
+}
+
+void VideoDrawImpactModuleProcessor::applySaturation(cv::Mat& frame, float saturation)
+{
+    if (saturation >= 1.0f) return;  // No change needed
+    
+    cv::Mat hsv;
+    cv::cvtColor(frame, hsv, cv::COLOR_BGR2HSV);
+    std::vector<cv::Mat> hsvChannels;
+    cv::split(hsv, hsvChannels);
+    
+    // Apply saturation
+    hsvChannels[1].convertTo(hsvChannels[1], CV_32F);
+    hsvChannels[1] *= saturation;
+    hsvChannels[1].convertTo(hsvChannels[1], CV_8U);
+    
+    cv::merge(hsvChannels, hsv);
+    cv::cvtColor(hsv, frame, cv::COLOR_HSV2BGR);
+}
+
+void VideoDrawImpactModuleProcessor::updateDrawColorFromParams()
+{
+    float r = drawColorRParam ? drawColorRParam->load() : 1.0f;
+    float g = drawColorGParam ? drawColorGParam->load() : 0.0f;
+    float b = drawColorBParam ? drawColorBParam->load() : 0.0f;
+    
+    // Convert RGB (0-1) to BGR (0-255) for OpenCV
+    currentDrawColor = cv::Scalar(
+        (int)(b * 255.0f),  // B
+        (int)(g * 255.0f),  // G
+        (int)(r * 255.0f)   // R
+    );
+}
+
+void VideoDrawImpactModuleProcessor::addDrawPoint(const cv::Point2i& point, bool isErase)
+{
+    const juce::ScopedLock lock(pendingOpsLock);
+    
+    // Update draw color from parameters if not erasing
+    if (!isErase)
+    {
+        updateDrawColorFromParams();
+    }
+    
+    PendingDrawOperation op;
+    op.point = point;
+    op.color = isErase ? cv::Scalar(255, 255, 255) : currentDrawColor;  // White for erase
+    op.brushSize = brushSizeParam ? brushSizeParam->get() : 5;
+    op.isNewStroke = !isDrawing || (isErase != lastWasErase);  // New stroke if mode changed
+    op.isErase = isErase;
+    
+    pendingDrawOps.push_back(op);
+    isDrawing = true;
+    lastDrawPoint = point;
+    lastWasErase = isErase;
+}
+
+VideoDrawImpactModuleProcessor::SourceTimelineState VideoDrawImpactModuleProcessor::getSourceTimelineState() const
+{
+    SourceTimelineState state;
+    
+    const juce::uint32 sourceId = currentSourceId.load();
+    if (sourceId == 0 || parentSynth == nullptr)
+        return state;
+    
+    if (auto* module = parentSynth->getModuleForLogical(sourceId))
+    {
+        if (module->canProvideTimeline())
+        {
+            state.positionSeconds = juce::jmax(0.0, module->getTimelinePositionSeconds());
+            state.durationSeconds = juce::jmax(0.0, module->getTimelineDurationSeconds());
+            state.isActive = module->isTimelineActive();
+            state.isValid = state.durationSeconds > 0.0;
+        }
+    }
+    
+    return state;
+}
+
+bool VideoDrawImpactModuleProcessor::eraseKeyframesNear(double targetValue,
+                                                        float normalizedY,
+                                                        bool timelineMode,
+                                                        double valueTolerance,
+                                                        float yTolerance,
+                                                        double wrapLength)
+{
+    const juce::ScopedLock lock(timelineLock);
+    if (timelineKeyframes.empty())
+        return false;
+    
+    const double clampedValueTol = juce::jmax(0.0, valueTolerance);
+    const float clampedYTol = juce::jmax(0.0f, yTolerance);
+    bool removed = false;
+    
+    auto newEnd = std::remove_if(timelineKeyframes.begin(), timelineKeyframes.end(),
+        [&](const TimelineKeyframe& kf)
+        {
+            double value = timelineMode ? kf.timeSeconds : static_cast<double>(kf.frameNumber);
+            double delta = std::abs(value - targetValue);
+            if (wrapLength > 0.0)
+            {
+                double wrapDelta = wrapLength - delta;
+                if (wrapDelta > 0.0)
+                    delta = juce::jmin(delta, wrapDelta);
+            }
+            if (delta <= clampedValueTol &&
+                std::abs(kf.normalizedY - normalizedY) <= clampedYTol)
+            {
+                removed = true;
+                return true;
+            }
+            return false;
+        });
+    
+    if (removed)
+        timelineKeyframes.erase(newEnd, timelineKeyframes.end());
+    return removed;
+}
+
+void VideoDrawImpactModuleProcessor::updateKeyframePosition(int keyframeIndex, double newTimeSeconds, float newNormalizedY)
+{
+    const juce::ScopedLock lock(timelineLock);
+    
+    if (keyframeIndex < 0 || keyframeIndex >= (int)timelineKeyframes.size())
+        return;
+    
+    TimelineKeyframe& kf = timelineKeyframes[(size_t)keyframeIndex];
+    
+    // Update time
+    kf.timeSeconds = newTimeSeconds;
+    
+    // Update normalized Y position
+    kf.normalizedY = juce::jlimit(0.0f, 1.0f, newNormalizedY);
+    
+    // If not timeline-driven, also update frame number (assuming 30 FPS)
+    if (!getSourceTimelineState().isValid)
+    {
+        kf.frameNumber = (int)std::round(newTimeSeconds * 30.0);
+    }
+}
+
+void VideoDrawImpactModuleProcessor::processPendingDrawOps()
+{
+    const juce::ScopedLock pendingLock(pendingOpsLock);
+    const juce::ScopedLock drawingsLockGuard(drawingsLock);
+    
+    DrawingStroke* currentStroke = nullptr;
+    int currentFrame = currentFrameNumber.load();
+    const SourceTimelineState timelineState = getSourceTimelineState();
+    const double timelineDuration = timelineState.isValid ? juce::jmax(1e-6, timelineState.durationSeconds) : 1.0;
+    
+    for (const auto& op : pendingDrawOps)
+    {
+        if (op.isNewStroke || currentStroke == nullptr)
+        {
+            // Start new stroke
+            DrawingStroke newStroke;
+            newStroke.color = op.color;
+            newStroke.brushSize = op.brushSize;
+            newStroke.remainingFrames = framePersistenceParam ? framePersistenceParam->get() : 3;
+            newStroke.startFrameNumber = currentFrame;
+            newStroke.isErase = op.isErase;
+            newStroke.points.push_back(op.point);
+            activeDrawings.push_back(newStroke);
+            currentStroke = &activeDrawings.back();
+            
+            // Add color to history if it's a draw operation (not erase)
+            if (!op.isErase)
+            {
+                // Convert BGR (0-255) to RGB (0-1) for ImGui
+                ImVec4 colorHistoryEntry(
+                    op.color[2] / 255.0f,  // R
+                    op.color[1] / 255.0f,  // G
+                    op.color[0] / 255.0f,  // B
+                    1.0f                    // A
+                );
+                
+                // Add to history (most recent first)
+                const juce::ScopedLock colorHistoryGuard(colorHistoryLock);
+                // Remove if already exists (to move to front)
+                usedColors.erase(
+                    std::remove_if(usedColors.begin(), usedColors.end(),
+                        [&colorHistoryEntry](const ImVec4& c) {
+                            return std::abs(c.x - colorHistoryEntry.x) < 0.01f &&
+                                   std::abs(c.y - colorHistoryEntry.y) < 0.01f &&
+                                   std::abs(c.z - colorHistoryEntry.z) < 0.01f;
+                        }),
+                    usedColors.end()
+                );
+                // Add to front
+                usedColors.insert(usedColors.begin(), colorHistoryEntry);
+                // Limit to MAX_COLOR_HISTORY
+                if (usedColors.size() > MAX_COLOR_HISTORY)
+                    usedColors.resize(MAX_COLOR_HISTORY);
+                
+                // Create timeline keyframe ONLY for draw operations (not erase)
+                // Erase operations should only remove existing drawings, not create markers
+                TimelineKeyframe keyframe;
+                keyframe.frameNumber = currentFrame;
+                if (timelineState.isValid)
+                {
+                    double timeSeconds = timelineState.positionSeconds;
+                    if (timelineDuration > 0.0)
+                        timeSeconds = std::fmod(juce::jmax(0.0, timeSeconds), timelineDuration);
+                    keyframe.timeSeconds = timeSeconds;
+                }
+                else
+                {
+                    keyframe.timeSeconds = static_cast<double>(currentFrame);
+                }
+                double frameDur = lastFrameDurationSeconds.load();
+                if (frameDur <= 0.0)
+                    frameDur = 1.0 / 30.0;
+                const int persistenceFrames = framePersistenceParam ? framePersistenceParam->get() : 3;
+                keyframe.persistenceSeconds = juce::jmax(1e-4, frameDur * juce::jmax(1, persistenceFrames));
+                keyframe.color = op.color;
+                keyframe.brushSize = op.brushSize;
+                keyframe.isErase = false;  // Draw operations are never erase markers
+                
+                // Get frame dimensions for normalization
+                juce::Image latest = getLatestFrame();
+                if (!latest.isNull())
+                {
+                    keyframe.normalizedX = (float)op.point.x / latest.getWidth();
+                    keyframe.normalizedY = (float)op.point.y / latest.getHeight();
+                }
+                else
+                {
+                    keyframe.normalizedX = 0.5f;
+                    keyframe.normalizedY = 0.5f;
+                }
+                
+                const juce::ScopedLock timelineLockGuard(timelineLock);
+                timelineKeyframes.push_back(keyframe);
+            }
+            // Note: Erase operations do NOT create timeline keyframes
+            // They only affect activeDrawings for immediate visual erasing on the frame
+        }
+        else
+        {
+            // Continue current stroke
+            currentStroke->points.push_back(op.point);
+        }
+    }
+    
+    pendingDrawOps.clear();
+}
+
+void VideoDrawImpactModuleProcessor::drawStrokesOnFrame(cv::Mat& frame,
+                                                        const SourceTimelineState& timelineState,
+                                                        double frameDurationSeconds,
+                                                        int currentFrameIndex)
+{
+    {
+        const juce::ScopedLock lock(drawingsLock);
+        
+        for (auto& stroke : activeDrawings)
+        {
+            if (stroke.isErase)
+            {
+                cv::Scalar eraseColor(0, 0, 0);
+                
+                if (stroke.points.size() < 2)
+                {
+                    cv::circle(frame, stroke.points[0], stroke.brushSize * 2, eraseColor, -1);
+                }
+                else
+                {
+                    for (size_t i = 1; i < stroke.points.size(); ++i)
+                    {
+                        cv::line(frame, stroke.points[i-1], stroke.points[i], 
+                                 eraseColor, stroke.brushSize * 2, cv::LINE_AA);
+                    }
+                }
+            }
+            else
+            {
+                if (stroke.points.size() < 2)
+                {
+                    cv::circle(frame, stroke.points[0], stroke.brushSize, stroke.color, -1);
+                }
+                else
+                {
+                    for (size_t i = 1; i < stroke.points.size(); ++i)
+                    {
+                        cv::line(frame, stroke.points[i-1], stroke.points[i], 
+                                 stroke.color, stroke.brushSize, cv::LINE_AA);
+                    }
+                }
+            }
+            
+            stroke.remainingFrames--;
+        }
+        
+        activeDrawings.erase(
+            std::remove_if(activeDrawings.begin(), activeDrawings.end(),
+                [](const DrawingStroke& s) { return s.remainingFrames <= 0; }),
+            activeDrawings.end()
+        );
+    }
+    
+    const double duration = timelineState.isValid ? juce::jmax(1e-6, timelineState.durationSeconds) : 0.0;
+    const double currentTime = timelineState.isValid ? timelineState.positionSeconds
+                                                     : static_cast<double>(currentFrameIndex) * frameDurationSeconds;
+    const int persistenceFrames = framePersistenceParam ? framePersistenceParam->get() : 3;
+    const double defaultPersistenceSeconds = juce::jmax(frameDurationSeconds * juce::jmax(1, persistenceFrames), 1e-4);
+    
+    const juce::ScopedLock timelineGuard(timelineLock);
+    for (const auto& kf : timelineKeyframes)
+    {
+        double persistenceSeconds = kf.persistenceSeconds > 0.0 ? kf.persistenceSeconds : defaultPersistenceSeconds;
+        bool shouldDraw = false;
+        if (timelineState.isValid)
+        {
+            double dt = currentTime - kf.timeSeconds;
+            if (dt < 0.0 && duration > 0.0)
+                dt += duration;
+            if (dt >= 0.0 && dt <= persistenceSeconds)
+                shouldDraw = true;
+        }
+        else
+        {
+            int frameOffset = currentFrameIndex - kf.frameNumber;
+            if (frameOffset >= 0)
+            {
+                double dtSeconds = frameOffset * frameDurationSeconds;
+                if (dtSeconds <= persistenceSeconds)
+                    shouldDraw = true;
+            }
+        }
+        
+        if (!shouldDraw)
+            continue;
+        
+        int x = frame.cols > 1 ? juce::jlimit(0, frame.cols - 1,
+                    static_cast<int>(std::round(kf.normalizedX * (frame.cols - 1)))) : 0;
+        int y = frame.rows > 1 ? juce::jlimit(0, frame.rows - 1,
+                    static_cast<int>(std::round(kf.normalizedY * (frame.rows - 1)))) : 0;
+        cv::Point2i pt(x, y);
+        
+        if (kf.isErase)
+        {
+            cv::Scalar eraseColor(0, 0, 0);
+            cv::circle(frame, pt, juce::jmax(1, kf.brushSize * 2), eraseColor, -1);
+        }
+        else
+        {
+            cv::circle(frame, pt, juce::jmax(1, kf.brushSize), kf.color, -1);
+        }
+    }
+}
+
+void VideoDrawImpactModuleProcessor::cleanupExpiredKeyframes()
+{
+    if (getSourceTimelineState().isValid)
+        return; // Preserve keyframes when synced to a video timeline
+    
+    const juce::ScopedLock lock(timelineLock);
+    int currentFrame = currentFrameNumber.load();
+    int maxPersistence = framePersistenceParam ? framePersistenceParam->get() : 3;
+    
+    timelineKeyframes.erase(
+        std::remove_if(timelineKeyframes.begin(), timelineKeyframes.end(),
+            [currentFrame, maxPersistence](const TimelineKeyframe& kf) {
+                return (currentFrame - kf.frameNumber) > maxPersistence;
+            }),
+        timelineKeyframes.end()
+    );
+}
+
+void VideoDrawImpactModuleProcessor::updateGuiFrame(const cv::Mat& frame)
+{
+    cv::Mat bgraFrame;
+    cv::cvtColor(frame, bgraFrame, cv::COLOR_BGR2BGRA);
+    
+    const juce::ScopedLock lock(imageLock);
+    
+    if (latestFrameForGui.isNull() || 
+        latestFrameForGui.getWidth() != bgraFrame.cols || 
+        latestFrameForGui.getHeight() != bgraFrame.rows)
+    {
+        latestFrameForGui = juce::Image(juce::Image::ARGB, bgraFrame.cols, bgraFrame.rows, true);
+    }
+    
+    juce::Image::BitmapData destData(latestFrameForGui, juce::Image::BitmapData::writeOnly);
+    memcpy(destData.data, bgraFrame.data, bgraFrame.total() * bgraFrame.elemSize());
+}
+
+juce::Image VideoDrawImpactModuleProcessor::getLatestFrame()
+{
+    const juce::ScopedLock lock(imageLock);
+    return latestFrameForGui.createCopy();
+}
+
+juce::ValueTree VideoDrawImpactModuleProcessor::getExtraStateTree() const
+{
+    juce::ValueTree vt("VideoDrawImpactState");
+    // Save current draw color, frame persistence, brush size, zoom
+    if (drawColorRParam) vt.setProperty("drawColorR", drawColorRParam->load(), nullptr);
+    if (drawColorGParam) vt.setProperty("drawColorG", drawColorGParam->load(), nullptr);
+    if (drawColorBParam) vt.setProperty("drawColorB", drawColorBParam->load(), nullptr);
+    vt.setProperty("zoomPixelsPerSecond", zoomPixelsPerSecond, nullptr);
+    
+    // For integer parameters, convert from normalized value (0-1) to actual integer range
+    if (auto* param = apvts.getParameter("framePersistence"))
+    {
+        auto range = apvts.getParameterRange("framePersistence");
+        float normalizedValue = param->getValue();
+        int actualValue = (int)range.convertFrom0to1(normalizedValue);
+        vt.setProperty("framePersistence", actualValue, nullptr);
+    }
+    if (auto* param = apvts.getParameter("brushSize"))
+    {
+        auto range = apvts.getParameterRange("brushSize");
+        float normalizedValue = param->getValue();
+        int actualValue = (int)range.convertFrom0to1(normalizedValue);
+        vt.setProperty("brushSize", actualValue, nullptr);
+    }
+    
+    {
+        const juce::ScopedLock lock(timelineLock);
+        if (!timelineKeyframes.empty())
+        {
+            juce::ValueTree timelineNode("Keyframes");
+            for (const auto& kf : timelineKeyframes)
+            {
+                juce::ValueTree kfNode("Keyframe");
+                kfNode.setProperty("frame", kf.frameNumber, nullptr);
+                kfNode.setProperty("timeSeconds", kf.timeSeconds, nullptr);
+                kfNode.setProperty("persistenceSeconds", kf.persistenceSeconds, nullptr);
+                kfNode.setProperty("brushSize", kf.brushSize, nullptr);
+                kfNode.setProperty("isErase", kf.isErase, nullptr);
+                kfNode.setProperty("normalizedX", kf.normalizedX, nullptr);
+                kfNode.setProperty("normalizedY", kf.normalizedY, nullptr);
+                kfNode.setProperty("colorB", (int)kf.color[0], nullptr);
+                kfNode.setProperty("colorG", (int)kf.color[1], nullptr);
+                kfNode.setProperty("colorR", (int)kf.color[2], nullptr);
+                timelineNode.addChild(kfNode, -1, nullptr);
+            }
+            vt.addChild(timelineNode, -1, nullptr);
+        }
+    }
+    
+    // Save used colors palette
+    {
+        const juce::ScopedLock colorHistoryGuard(colorHistoryLock);
+        if (!usedColors.empty())
+        {
+            juce::ValueTree colorsNode("UsedColors");
+            for (const auto& color : usedColors)
+            {
+                juce::ValueTree colorNode("Color");
+                colorNode.setProperty("r", color.x, nullptr);  // RGB as floats 0-1
+                colorNode.setProperty("g", color.y, nullptr);
+                colorNode.setProperty("b", color.z, nullptr);
+                colorsNode.addChild(colorNode, -1, nullptr);
+            }
+            vt.addChild(colorsNode, -1, nullptr);
+        }
+    }
+    
+    return vt;
+}
+
+void VideoDrawImpactModuleProcessor::setExtraStateTree(const juce::ValueTree& state)
+{
+    if (!state.isValid() || !state.hasType("VideoDrawImpactState"))
+        return;
+    
+    // Restore parameters
+    if (auto* param = apvts.getParameter("drawColorR"))
+        param->setValueNotifyingHost(state.getProperty("drawColorR", 1.0f));
+    if (auto* param = apvts.getParameter("drawColorG"))
+        param->setValueNotifyingHost(state.getProperty("drawColorG", 0.0f));
+    if (auto* param = apvts.getParameter("drawColorB"))
+        param->setValueNotifyingHost(state.getProperty("drawColorB", 0.0f));
+    if (auto* param = apvts.getParameter("framePersistence"))
+        param->setValueNotifyingHost(state.getProperty("framePersistence", 3.0f));
+    if (auto* param = apvts.getParameter("brushSize"))
+        param->setValueNotifyingHost(state.getProperty("brushSize", 5.0f));
+    
+    // Restore zoom
+    zoomPixelsPerSecond = (float)state.getProperty("zoomPixelsPerSecond", 50.0);
+    zoomPixelsPerSecond = juce::jlimit(10.0f, 500.0f, zoomPixelsPerSecond); // Clamp to valid range
+    
+    updateDrawColorFromParams();
+    
+    // Restore used colors palette
+    if (auto colorsNode = state.getChildWithName("UsedColors"); colorsNode.isValid())
+    {
+        const juce::ScopedLock colorHistoryGuard(colorHistoryLock);
+        usedColors.clear();
+        for (int i = 0; i < colorsNode.getNumChildren(); ++i)
+        {
+            auto colorChild = colorsNode.getChild(i);
+            if (!colorChild.hasType("Color"))
+                continue;
+            
+            ImVec4 color;
+            color.x = (float)colorChild.getProperty("r", 1.0f);  // R
+            color.y = (float)colorChild.getProperty("g", 0.0f);  // G
+            color.z = (float)colorChild.getProperty("b", 0.0f);  // B
+            color.w = 1.0f;  // Alpha always 1.0
+            
+            // Clamp values to valid range
+            color.x = juce::jlimit(0.0f, 1.0f, color.x);
+            color.y = juce::jlimit(0.0f, 1.0f, color.y);
+            color.z = juce::jlimit(0.0f, 1.0f, color.z);
+            
+            usedColors.push_back(color);
+        }
+        // Limit to MAX_COLOR_HISTORY (in case saved preset has more)
+        if (usedColors.size() > MAX_COLOR_HISTORY)
+            usedColors.resize(MAX_COLOR_HISTORY);
+    }
+    
+    if (auto keyframesNode = state.getChildWithName("Keyframes"); keyframesNode.isValid())
+    {
+        const juce::ScopedLock lock(timelineLock);
+        timelineKeyframes.clear();
+        for (int i = 0; i < keyframesNode.getNumChildren(); ++i)
+        {
+            auto child = keyframesNode.getChild(i);
+            if (!child.hasType("Keyframe"))
+                continue;
+            
+            TimelineKeyframe kf;
+            kf.frameNumber = (int)child.getProperty("frame", 0);
+            kf.timeSeconds = (double)child.getProperty("timeSeconds", 0.0);
+            kf.persistenceSeconds = (double)child.getProperty("persistenceSeconds", 0.0);
+            kf.brushSize = (int)child.getProperty("brushSize", 5);
+            kf.isErase = (bool)child.getProperty("isErase", false);
+            kf.normalizedX = (float)child.getProperty("normalizedX", 0.5f);
+            kf.normalizedY = (float)child.getProperty("normalizedY", 0.5f);
+            int b = (int)child.getProperty("colorB", 0);
+            int g = (int)child.getProperty("colorG", 0);
+            int r = (int)child.getProperty("colorR", 0);
+            kf.color = cv::Scalar(b, g, r);
+            timelineKeyframes.push_back(kf);
+        }
+    }
+}
+
+std::vector<DynamicPinInfo> VideoDrawImpactModuleProcessor::getDynamicInputPins() const
+{
+    std::vector<DynamicPinInfo> pins;
+    pins.push_back({ "Source In", 0, PinDataType::Video });
+    return pins;
+}
+
+std::vector<DynamicPinInfo> VideoDrawImpactModuleProcessor::getDynamicOutputPins() const
+{
+    std::vector<DynamicPinInfo> pins;
+    pins.push_back({ "Output", 0, PinDataType::Video });
+    return pins;
+}
+
+#if defined(PRESET_CREATOR_UI)
+ImVec2 VideoDrawImpactModuleProcessor::getCustomNodeSize() const
+{
+    // Return a reasonable default size (can be adjusted based on UI needs)
+    return ImVec2(480.0f, 0.0f);
+}
+
+void VideoDrawImpactModuleProcessor::drawParametersInNode(float itemWidth,
+                                                          const std::function<bool(const juce::String& paramId)>& isParamModulated,
+                                                          const std::function<void()>& onModificationEnded)
+{
+    // Protect global ID space (prevents conflicts when multiple instances exist)
+    ImGui::PushID(this);
+    
+    const auto& theme = ThemeManager::getInstance().getCurrentTheme();
+    ImGui::PushItemWidth(itemWidth);
+    
+    // Read data before any child windows (following visualization guide pattern)
+    // Note: Video preview is handled centrally by ImGuiNodeEditorComponent
+    juce::Image latestFrame = getLatestFrame();
+    int frameWidth = latestFrame.getWidth();
+    int frameHeight = latestFrame.getHeight();
+    
+    // Get current parameter values
+    float saturation = saturationParam ? saturationParam->load() : 1.0f;
+    float colorR = drawColorRParam ? drawColorRParam->load() : 1.0f;
+    float colorG = drawColorGParam ? drawColorGParam->load() : 0.0f;
+    float colorB = drawColorBParam ? drawColorBParam->load() : 0.0f;
+    int framePersistence = framePersistenceParam ? framePersistenceParam->get() : 3;
+    int brushSize = brushSizeParam ? brushSizeParam->get() : 5;
+    bool clearDrawings = clearDrawingsParam ? clearDrawingsParam->get() : false;
+    
+    // Saturation slider
+    bool saturationMod = isParamModulated("saturation");
+    if (saturationMod) ImGui::BeginDisabled();
+    if (ImGui::SliderFloat("Saturation", &saturation, 0.0f, 3.0f, "%.2f"))
+    {
+        if (!saturationMod)
+        {
+            // Update parameter through APVTS to ensure it's saved properly
+            if (auto* param = apvts.getParameter("saturation"))
+            {
+                // Convert to normalized 0-1 range and set through APVTS
+                float normalizedValue = apvts.getParameterRange("saturation").convertTo0to1(saturation);
+                param->setValueNotifyingHost(normalizedValue);
+            }
+        }
+    }
+    if (ImGui::IsItemDeactivatedAfterEdit() && !saturationMod) onModificationEnded();
+    if (!saturationMod) adjustParamOnWheel(apvts.getParameter("saturation"), "saturation", saturation);
+    if (saturationMod) ImGui::EndDisabled();
+    
+    ImGui::Spacing();
+    
+    // Color picker and history palette side by side for better space usage
+    // Get color history (thread-safe copy) - read before layout calculations
+    std::vector<ImVec4> colorsCopy;
+    {
+        const juce::ScopedLock colorHistoryGuard(colorHistoryLock);
+        colorsCopy = usedColors;
+    }
+    
+    // Calculate layout: color picker on left, palette on right
+    const float colorPickerWidth = itemWidth * 0.65f;  // 65% for color picker
+    const float paletteWidth = itemWidth - colorPickerWidth - 8.0f;  // Remaining space minus spacing
+    const float swatchSize = 20.0f;  // Smaller swatches for compact layout
+    const float spacing = 3.0f;
+    const int cols = 3;  // 3 columns for better fit in narrow space
+    
+    // Color picker on the left
+    ImGui::PushItemWidth(colorPickerWidth);
+    ImVec4 colorVec4(colorR, colorG, colorB, 1.0f);
+    bool colorRMod = isParamModulated("drawColorR");
+    bool colorGMod = isParamModulated("drawColorG");
+    bool colorBMod = isParamModulated("drawColorB");
+    bool anyColorMod = colorRMod || colorGMod || colorBMod;
+    
+    if (anyColorMod) ImGui::BeginDisabled();
+    if (ImGui::ColorPicker4("Draw Color", (float*)&colorVec4, ImGuiColorEditFlags_NoAlpha | ImGuiColorEditFlags_NoInputs | ImGuiColorEditFlags_NoLabel))
+    {
+        if (!anyColorMod)
+        {
+            if (drawColorRParam) drawColorRParam->store(colorVec4.x);
+            if (drawColorGParam) drawColorGParam->store(colorVec4.y);
+            if (drawColorBParam) drawColorBParam->store(colorVec4.z);
+            updateDrawColorFromParams();
+            onModificationEnded();
+        }
+    }
+    // Scroll wheel support for color picker (manual handler since adjustParamOnWheel can't hook into ColorPicker4)
+    if (!anyColorMod && ImGui::IsItemHovered())
+    {
+        const float wheel = ImGui::GetIO().MouseWheel;
+        if (wheel != 0.0f)
+        {
+            // Adjust color components by small steps (0.01 per wheel tick)
+            const float step = 0.01f;
+            const float delta = wheel > 0.0f ? step : -step;
+            
+            float newR = juce::jlimit(0.0f, 1.0f, colorVec4.x + delta);
+            float newG = juce::jlimit(0.0f, 1.0f, colorVec4.y + delta);
+            float newB = juce::jlimit(0.0f, 1.0f, colorVec4.z + delta);
+            
+            // Only update if values changed
+            if (newR != colorVec4.x || newG != colorVec4.y || newB != colorVec4.z)
+            {
+                if (drawColorRParam) drawColorRParam->store(newR);
+                if (drawColorGParam) drawColorGParam->store(newG);
+                if (drawColorBParam) drawColorBParam->store(newB);
+                updateDrawColorFromParams();
+                onModificationEnded();
+            }
+        }
+    }
+    if (anyColorMod) ImGui::EndDisabled();
+    ImGui::PopItemWidth();
+    
+    // Color history palette on the right - use SameLine to place next to color picker
+    ImGui::SameLine(0, 8.0f);  // 8px spacing from color picker
+    
+    // Create a group for the palette to keep it organized
+    ImGui::BeginGroup();
+    
+    // Compact label (optional, can be removed for even more space)
+    ImGui::TextDisabled("Used:");
+    
+    // Display color swatches in a compact grid (3 columns)
+    for (int i = 0; i < MAX_COLOR_HISTORY; ++i)
+    {
+        if (i > 0 && i % cols == 0)
+            ImGui::NewLine();
+        else if (i > 0)
+            ImGui::SameLine(0, spacing);
+        
+        ImVec2 pos = ImGui::GetCursorScreenPos();
+        ImVec2 size(swatchSize, swatchSize);
+        
+        if (i < (int)colorsCopy.size())
+        {
+            // Draw filled color rectangle
+            ImVec4 color = colorsCopy[i];
+            ImU32 colorU32 = ImGui::ColorConvertFloat4ToU32(color);
+            
+            ImGui::GetWindowDrawList()->AddRectFilled(pos, ImVec2(pos.x + size.x, pos.y + size.y), colorU32);
+            ImGui::GetWindowDrawList()->AddRect(pos, ImVec2(pos.x + size.x, pos.y + size.y), IM_COL32(200, 200, 200, 255), 0.0f, 0, 1.0f);
+            
+            // Make it clickable
+            ImGui::InvisibleButton(("##colorSwatch" + juce::String(i)).toRawUTF8(), size);
+            if (ImGui::IsItemClicked(ImGuiMouseButton_Left) && !anyColorMod)
+            {
+                // Select this color
+                if (drawColorRParam) drawColorRParam->store(color.x);
+                if (drawColorGParam) drawColorGParam->store(color.y);
+                if (drawColorBParam) drawColorBParam->store(color.z);
+                updateDrawColorFromParams();
+                onModificationEnded();
+            }
+            
+            // Tooltip
+            if (ImGui::IsItemHovered())
+            {
+                ImGui::BeginTooltip();
+                ImGui::Text("R: %.2f G: %.2f B: %.2f", color.x, color.y, color.z);
+                ImGui::Text("Click to select");
+                ImGui::EndTooltip();
+            }
+        }
+        else
+        {
+            // Draw empty rectangle placeholder (dashed border to show it's available)
+            ImU32 borderColor = IM_COL32(120, 120, 120, 150);
+            ImGui::GetWindowDrawList()->AddRect(pos, ImVec2(pos.x + size.x, pos.y + size.y), borderColor, 0.0f, 0, 1.0f);
+            // Draw diagonal line to indicate empty
+            ImGui::GetWindowDrawList()->AddLine(pos, ImVec2(pos.x + size.x, pos.y + size.y), borderColor, 1.0f);
+            ImGui::Dummy(size);  // Reserve space
+        }
+    }
+    
+    ImGui::EndGroup();
+    
+    ImGui::Spacing();
+    ImGui::TextDisabled("Left-click to draw, right-click to erase on the video preview.");
+    
+    ImGui::Spacing();
+    
+    // Frame persistence slider
+    bool framePersistenceMod = isParamModulated("framePersistence");
+    if (framePersistenceMod) ImGui::BeginDisabled();
+    if (ImGui::SliderInt("Frame Persistence", &framePersistence, 1, 60, "%d frames"))
+    {
+        if (!framePersistenceMod && framePersistenceParam)
+            *framePersistenceParam = framePersistence;
+    }
+    if (ImGui::IsItemDeactivatedAfterEdit() && !framePersistenceMod) onModificationEnded();
+    if (!framePersistenceMod) adjustParamOnWheel(apvts.getParameter("framePersistence"), "framePersistence", (float)framePersistence);
+    if (framePersistenceMod) ImGui::EndDisabled();
+    
+    // Brush size slider
+    bool brushSizeMod = isParamModulated("brushSize");
+    if (brushSizeMod) ImGui::BeginDisabled();
+    if (ImGui::SliderInt("Brush Size", &brushSize, 1, 50, "%d px"))
+    {
+        if (!brushSizeMod && brushSizeParam)
+            *brushSizeParam = brushSize;
+    }
+    if (ImGui::IsItemDeactivatedAfterEdit() && !brushSizeMod) onModificationEnded();
+    if (!brushSizeMod) adjustParamOnWheel(apvts.getParameter("brushSize"), "brushSize", (float)brushSize);
+    if (brushSizeMod) ImGui::EndDisabled();
+    
+    ImGui::Spacing();
+    
+    // Clear drawings button
+    if (ImGui::Button("Clear All Drawings", ImVec2(itemWidth, 0)))
+    {
+        if (clearDrawingsParam)
+            *clearDrawingsParam = true;
+        onModificationEnded();
+    }
+    
+    ImGui::Spacing();
+    
+    const SourceTimelineState timelineStateUi = getSourceTimelineState();
+    
+    // Video preview area (will be handled by central texture system)
+    // For now, show frame info
+    if (!latestFrame.isNull())
+    {
+        ImGui::Text("Frame: %dx%d", frameWidth, frameHeight);
+        ImGui::Text("Frame #: %d", currentFrameNumber.load());
+        if (timelineStateUi.isValid)
+            ImGui::Text("Time: %.2fs / %.2fs",
+                        timelineStateUi.positionSeconds,
+                        timelineStateUi.durationSeconds);
+    }
+    else
+    {
+        ImGui::TextDisabled("No video input");
+    }
+    
+    ImGui::Spacing();
+    
+    // === TIMELINE ZOOM SECTION ===
+    ImGui::Text("Timeline Zoom:");
+    ImGui::SameLine();
+    ImGui::PushItemWidth(120);
+    if (ImGui::SliderFloat("##zoom", &zoomPixelsPerSecond, 10.0f, 500.0f, "%.0f px/s"))
+    {
+        // Zoom changed - no action needed, just update the variable
+    }
+    // Scroll-edit for zoom slider (manual handling since zoomPixelsPerSecond is not a JUCE parameter)
+    if (ImGui::IsItemHovered())
+    {
+        const float wheel = ImGui::GetIO().MouseWheel;
+        if (wheel != 0.0f)
+        {
+            const float zoomStep = 10.0f; // 10 pixels per second per scroll step
+            const float newZoom = juce::jlimit(10.0f, 500.0f, zoomPixelsPerSecond + (wheel > 0.0f ? zoomStep : -zoomStep));
+            if (newZoom != zoomPixelsPerSecond)
+            {
+                zoomPixelsPerSecond = newZoom;
+            }
+        }
+    }
+    ImGui::PopItemWidth();
+    
+    ImGui::Spacing();
+    
+    // === TIMELINE VIEW ===
+    // Read keyframes data BEFORE BeginChild (following VCO pattern)
+    std::vector<TimelineKeyframe> keyframesCopy;
+    int currentFrame = currentFrameNumber.load();
+    int maxPersistence = framePersistenceParam ? framePersistenceParam->get() : 3;
+    
+    {
+        const juce::ScopedLock lock(timelineLock);
+        keyframesCopy = timelineKeyframes; // Copy for UI thread
+    }
+    
+    // Calculate timeline size
+    const float timelineHeight = 80.0f;
+    const ImVec2 graphSize(itemWidth, timelineHeight);
+    // Enable horizontal scrolling for zoom functionality (like MIDIPlayerModuleProcessor)
+    const ImGuiWindowFlags childFlags = ImGuiWindowFlags_HorizontalScrollbar;
+    
+    // Begin timeline child window
+    if (ImGui::BeginChild("TimelineView", graphSize, false, childFlags))
+    {
+        ImDrawList* drawList = ImGui::GetWindowDrawList();
+        float scrollX = ImGui::GetScrollX();
+        
+        // Get theme colors (using resolveColor pattern like other modules)
+        const auto resolveColor = [](ImU32 value, ImU32 fallback) { return value != 0 ? value : fallback; };
+        ImU32 bgColor = resolveColor(theme.canvas.canvas_background, IM_COL32(30, 30, 30, 255));
+        ImU32 gridColor = resolveColor(theme.canvas.grid_color, IM_COL32(60, 60, 60, 255));
+        ImU32 playheadColor = IM_COL32(255, 200, 0, 255); // Bright yellow-orange
+        ImU32 textColor = ImGui::ColorConvertFloat4ToU32(theme.text.section_header);
+        if (textColor == 0) textColor = IM_COL32(255, 255, 255, 255);
+        
+        const bool hasTimeline = timelineStateUi.isValid;
+        
+        // Calculate total timeline width based on zoom (like MIDIPlayerModuleProcessor)
+        // Must be calculated before scroll-to-zoom code uses it
+        double totalDuration = hasTimeline ? juce::jmax(1e-3, timelineStateUi.durationSeconds) : 1.0;
+        int minFrame = 0;
+        int maxFrame = currentFrame;
+        if (!hasTimeline && !keyframesCopy.empty())
+        {
+            minFrame = keyframesCopy[0].frameNumber;
+            maxFrame = currentFrame;
+            for (const auto& kf : keyframesCopy)
+            {
+                if (kf.frameNumber < minFrame) minFrame = kf.frameNumber;
+                if (kf.frameNumber > maxFrame) maxFrame = kf.frameNumber;
+            }
+            if (currentFrame > maxPersistence)
+            {
+                minFrame = juce::jmax(0, currentFrame - maxPersistence * 2);
+            }
+            // Estimate duration from frame range (assuming 30 FPS)
+            totalDuration = juce::jmax(1.0, (maxFrame - minFrame) / 30.0);
+        }
+        
+        // --- SCROLL-TO-ZOOM ON TIMELINE (centered on playhead) ---
+        // Handle scroll wheel for zooming (must be inside BeginChild context)
+        // Must be after totalDuration is calculated
+        if (ImGui::IsWindowHovered())
+        {
+            const float wheel = ImGui::GetIO().MouseWheel;
+            if (wheel != 0.0f && !ImGui::IsAnyItemActive()) // Don't zoom while dragging sliders or keyframes
+            {
+                // Calculate playhead position in content space (before zoom change)
+                double playheadTime = hasTimeline ? timelineStateUi.positionSeconds : (currentFrame / 30.0);
+                const float oldPixelsPerSecond = zoomPixelsPerSecond;
+                const float playheadX_content = (float)(playheadTime * oldPixelsPerSecond);
+                
+                // Get current scroll position
+                const float oldScrollX = scrollX;
+                
+                // Calculate playhead position relative to visible window
+                const float playheadX_visible = playheadX_content - oldScrollX;
+                
+                // Apply zoom (zoom in when scrolling up, zoom out when scrolling down)
+                const float zoomStep = 10.0f; // 10 pixels per second per scroll step
+                const float newZoom = juce::jlimit(10.0f, 500.0f, zoomPixelsPerSecond + (wheel > 0.0f ? zoomStep : -zoomStep));
+                
+                if (newZoom != zoomPixelsPerSecond)
+                {
+                    // Calculate new playhead position in content space (after zoom change)
+                    const float newPixelsPerSecond = newZoom;
+                    const float newPlayheadX_content = (float)(playheadTime * newPixelsPerSecond);
+                    
+                    // Adjust scroll to keep playhead at the same visible position
+                    const float newScrollX = newPlayheadX_content - playheadX_visible;
+                    
+                    // Update zoom
+                    zoomPixelsPerSecond = newZoom;
+                    
+                    // Set new scroll position (clamped to valid range)
+                    const float totalWidth = (float)(totalDuration * newZoom);
+                    const float maxScroll = std::max(0.0f, totalWidth - graphSize.x);
+                    const float clampedScroll = juce::jlimit(0.0f, maxScroll, newScrollX);
+                    
+                    ImGui::SetScrollX(clampedScroll);
+                    scrollX = clampedScroll; // Update local scrollX for drawing calculations
+                }
+            }
+        }
+        
+        const float totalWidth = (float)(totalDuration * zoomPixelsPerSecond);
+        
+        // CRITICAL: Reserve space for the ENTIRE timeline content so scrolling works properly
+        ImGui::Dummy(ImVec2(totalWidth, timelineHeight));
+        
+        // Get the screen position for drawing (AFTER Dummy)
+        const ImVec2 timelineStartPos = ImGui::GetItemRectMin();
+        const ImVec2 p0 = timelineStartPos;
+        const ImVec2 p1 = ImVec2(p0.x + graphSize.x, p0.y + graphSize.y);
+        
+        // Draw background (only visible portion for performance)
+        const float visibleLeft = p0.x;
+        const float visibleRight = visibleLeft + graphSize.x;
+        drawList->AddRectFilled(
+            ImVec2(visibleLeft, p0.y),
+            ImVec2(visibleRight, p1.y),
+            bgColor
+        );
+        
+        // Clip rect
+        drawList->PushClipRect(p0, p1, true);
+        
+        const double displayStart = hasTimeline ? 0.0 : 0.0;
+        const double displayEnd = totalDuration;
+        const double displayRange = juce::jmax(1e-6, displayEnd - displayStart);
+        
+        // Draw grid lines (scroll-aware culling for performance, like MIDIPlayerModuleProcessor)
+        if (displayRange > 0.0)
+        {
+            // Calculate visible time range based on scroll position
+            const double visibleStartTime = scrollX / zoomPixelsPerSecond;
+            const double visibleEndTime = (scrollX + graphSize.x) / zoomPixelsPerSecond;
+            
+            // Draw grid lines every 1 second (or adjust as needed)
+            const double gridStep = 1.0; // 1 second intervals
+            const double firstGridLine = std::floor(visibleStartTime / gridStep) * gridStep;
+            const double lastGridLine = std::ceil(visibleEndTime / gridStep) * gridStep;
+            
+            for (double t = firstGridLine; t <= lastGridLine + 1e-6; t += gridStep)
+            {
+                if (t < displayStart || t > displayEnd) continue;
+                
+                // Calculate absolute position in content space
+                const float x = timelineStartPos.x + (float)(t * zoomPixelsPerSecond);
+                
+                // Only draw if visible
+                if (x >= visibleLeft && x <= visibleRight)
+                {
+                    drawList->AddLine(ImVec2(x, p0.y), ImVec2(x, p1.y), gridColor, 1.0f);
+                }
+            }
+        }
+        
+        // Handle right-click erasing on timeline (account for scroll and zoom)
+        if (displayRange > 0.0 && ImGui::IsMouseDown(ImGuiMouseButton_Right))
+        {
+            // Get mouse position relative to the child window (accounts for scrolling)
+            ImVec2 mousePos = ImGui::GetIO().MousePos;
+            ImVec2 windowPos = ImGui::GetWindowPos();
+            ImVec2 windowSize = ImGui::GetWindowSize();
+            
+            // Check if mouse is within the timeline window bounds
+            if (mousePos.x >= windowPos.x && mousePos.x <= windowPos.x + windowSize.x &&
+                mousePos.y >= windowPos.y && mousePos.y <= windowPos.y + windowSize.y)
+            {
+                // Convert mouse position to content space (accounting for scroll)
+                // Mouse X relative to window + scroll position = position in content space
+                float mouseXInContent = (mousePos.x - windowPos.x) + scrollX;
+                
+                // Convert content space position to timeline time
+                double targetTime = mouseXInContent / zoomPixelsPerSecond;
+                targetTime = juce::jlimit(displayStart, displayEnd, targetTime);
+                
+                // Convert to appropriate value based on timeline mode
+                double targetValue = hasTimeline ? targetTime : (targetTime * 30.0); // Assume 30 FPS for frame-based
+                
+                // Mouse Y relative to window (0 = top of timeline, windowSize.y = bottom)
+                float targetNormY = juce::jlimit(0.0f, 1.0f, (float)((mousePos.y - windowPos.y) / windowSize.y));
+                
+                double valueTolerance = hasTimeline 
+                    ? juce::jmax(0.1, 10.0 / zoomPixelsPerSecond)  // Time-based: ~10 pixels tolerance
+                    : juce::jmax(1.0, 10.0 / zoomPixelsPerSecond * 30.0); // Frame-based: convert to frames
+                float yTolerance = 0.08f;
+                eraseKeyframesNear(targetValue, targetNormY, hasTimeline,
+                                   valueTolerance, yTolerance,
+                                   hasTimeline ? displayRange : 0.0);
+            }
+        }
+        
+        // Draw keyframes (scroll-aware culling)
+        // Calculate visible time range based on scroll position
+        const double visibleStartTime = scrollX / zoomPixelsPerSecond;
+        const double visibleEndTime = (scrollX + graphSize.x) / zoomPixelsPerSecond;
+        
+        // Handle keyframe dragging
+        ImVec2 mousePos = ImGui::GetIO().MousePos;
+        bool mouseInTimeline = mousePos.x >= p0.x && mousePos.x <= p1.x &&
+                               mousePos.y >= p0.y && mousePos.y <= p1.y;
+        
+        // Check for drag start (left mouse button down on a keyframe)
+        const float hitRadius = 8.0f; // Hit detection radius in pixels
+        if (!isDraggingKeyframe && mouseInTimeline && ImGui::IsMouseClicked(ImGuiMouseButton_Left))
+        {
+            // Find keyframe under mouse cursor
+            for (size_t i = 0; i < keyframesCopy.size(); ++i)
+            {
+                const auto& kf = keyframesCopy[i];
+                double keyTime = hasTimeline ? kf.timeSeconds : (kf.frameNumber / 30.0);
+                
+                // Skip if not visible
+                if (keyTime < visibleStartTime - 0.1 || keyTime > visibleEndTime + 0.1)
+                    continue;
+                
+                float x = timelineStartPos.x + (float)(keyTime * zoomPixelsPerSecond);
+                if (x < visibleLeft || x > visibleRight)
+                    continue;
+                
+                float y = p0.y + (kf.normalizedY) * graphSize.y;
+                y = juce::jlimit(p0.y, p1.y, y);
+                
+                // Check if mouse is within hit radius
+                float dx = mousePos.x - x;
+                float dy = mousePos.y - y;
+                if (std::sqrt(dx * dx + dy * dy) <= hitRadius)
+                {
+                    // Start dragging this keyframe
+                    isDraggingKeyframe = true;
+                    draggingKeyframeIndex = (int)i;
+                    dragOffsetX = dx;
+                    dragOffsetY = dy;
+                    break;
+                }
+            }
+        }
+        
+        // Handle drag update
+        if (isDraggingKeyframe && ImGui::IsMouseDown(ImGuiMouseButton_Left))
+        {
+            if (draggingKeyframeIndex >= 0 && draggingKeyframeIndex < (int)keyframesCopy.size())
+            {
+                // Calculate new position from mouse position (accounting for scroll)
+                // Don't subtract dragOffset - we want the keyframe to follow the mouse exactly
+                double newTime = (mousePos.x - timelineStartPos.x + scrollX) / zoomPixelsPerSecond;
+                newTime = juce::jlimit(displayStart, displayEnd, newTime);
+                
+                float newNormY = juce::jlimit(0.0f, 1.0f, (mousePos.y - p0.y) / graphSize.y);
+                
+                // Update keyframe position
+                updateKeyframePosition(draggingKeyframeIndex, newTime, newNormY);
+                
+                // Update the copy for immediate visual feedback
+                if (draggingKeyframeIndex < (int)keyframesCopy.size())
+                {
+                    keyframesCopy[(size_t)draggingKeyframeIndex].timeSeconds = newTime;
+                    keyframesCopy[(size_t)draggingKeyframeIndex].normalizedY = newNormY;
+                    if (!hasTimeline)
+                    {
+                        keyframesCopy[(size_t)draggingKeyframeIndex].frameNumber = (int)std::round(newTime * 30.0);
+                    }
+                }
+            }
+        }
+        else if (isDraggingKeyframe && ImGui::IsMouseReleased(ImGuiMouseButton_Left))
+        {
+            // End drag - mark as modified for undo/redo
+            onModificationEnded();
+            isDraggingKeyframe = false;
+            draggingKeyframeIndex = -1;
+        }
+        
+        for (size_t i = 0; i < keyframesCopy.size(); ++i)
+        {
+            const auto& kf = keyframesCopy[i];
+            
+            // Calculate keyframe time
+            double keyTime = hasTimeline ? kf.timeSeconds : (kf.frameNumber / 30.0); // Assume 30 FPS for frame-based
+            
+            // Cull keyframes outside visible range
+            if (keyTime < visibleStartTime - 0.1 || keyTime > visibleEndTime + 0.1)
+                continue;
+            
+            // Calculate X position in content space (absolute, not relative to viewport)
+            float x = timelineStartPos.x + (float)(keyTime * zoomPixelsPerSecond);
+            
+            // Only draw if visible
+            if (x < visibleLeft || x > visibleRight)
+                continue;
+            
+            // Calculate Y position based on normalized Y (0 = top, 1 = bottom)
+            float y = p0.y + (kf.normalizedY) * graphSize.y;
+            y = juce::jlimit(p0.y, p1.y, y);
+            
+            // Convert BGR to RGB for ImGui
+            ImU32 keyframeColor = IM_COL32(
+                (int)kf.color[2], // R
+                (int)kf.color[1], // G
+                (int)kf.color[0], // B
+                255
+            );
+            
+            // Highlight if being dragged
+            bool isDragging = isDraggingKeyframe && draggingKeyframeIndex == (int)i;
+            ImU32 drawColor = isDragging ? IM_COL32(255, 255, 0, 255) : keyframeColor; // Yellow when dragging
+            
+            // Draw keyframe mark (circle for draw, X for erase)
+            if (kf.isErase)
+            {
+                // Draw X mark for erase
+                const float markSize = 6.0f;
+                drawList->AddLine(ImVec2(x - markSize, y - markSize), ImVec2(x + markSize, y + markSize), drawColor, 2.0f);
+                drawList->AddLine(ImVec2(x - markSize, y + markSize), ImVec2(x + markSize, y - markSize), drawColor, 2.0f);
+            }
+            else
+            {
+                // Draw filled circle for draw
+                drawList->AddCircleFilled(ImVec2(x, y), (float)kf.brushSize * 0.5f, drawColor);
+                drawList->AddCircle(ImVec2(x, y), (float)kf.brushSize * 0.5f, IM_COL32(255, 255, 255, 200), 1.0f);
+            }
+            
+            // Draw invisible button for easier hit detection
+            ImGui::SetCursorScreenPos(ImVec2(x - hitRadius, y - hitRadius));
+            ImGui::InvisibleButton(("##keyframe" + juce::String(i)).toRawUTF8(), ImVec2(hitRadius * 2, hitRadius * 2));
+            if (ImGui::IsItemHovered() && !isDraggingKeyframe)
+            {
+                ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
+            }
+        }
+        
+        // Draw playhead (current frame position, in content space)
+        if (displayRange > 0.0)
+        {
+            double playheadTime = hasTimeline ? timelineStateUi.positionSeconds : (currentFrame / 30.0); // Assume 30 FPS
+            playheadTime = juce::jlimit(displayStart, displayEnd, playheadTime);
+            
+            // Calculate playhead position in content space
+            float playheadX = timelineStartPos.x + (float)(playheadTime * zoomPixelsPerSecond);
+            
+            // Only draw if visible
+            if (playheadX >= visibleLeft && playheadX <= visibleRight)
+            {
+            
+            // Draw playhead line
+            drawList->AddLine(
+                ImVec2(playheadX, p0.y),
+                ImVec2(playheadX, p1.y),
+                playheadColor,
+                2.0f
+            );
+            
+                // Draw playhead triangle at top
+                const float triangleSize = 6.0f;
+                const ImVec2 triangleTop(playheadX, p0.y - triangleSize);
+                const ImVec2 triangleLeft(playheadX - triangleSize * 0.5f, p0.y);
+                const ImVec2 triangleRight(playheadX + triangleSize * 0.5f, p0.y);
+                drawList->AddTriangleFilled(triangleTop, triangleLeft, triangleRight, playheadColor);
+            }
+        }
+        
+        // Pop clip rect
+        drawList->PopClipRect();
+        
+        // Draw frame number labels at bottom
+        ImGui::SetCursorPos(ImVec2(4, graphSize.y - 20));
+        if (hasTimeline)
+        {
+            ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(textColor),
+                               "Time %.2fs / %.2fs",
+                               timelineStateUi.positionSeconds,
+                               timelineStateUi.durationSeconds);
+        }
+        else if (displayRange > 0.0)
+        {
+            juce::String frameText = juce::String::formatted("Frame %d-%d", minFrame, maxFrame);
+            ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(textColor), "%s", frameText.toRawUTF8());
+        }
+        else
+        {
+            ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(textColor), "No keyframes");
+        }
+        
+        // Invisible button for drag blocking
+        ImGui::SetCursorPos(ImVec2(0, 0));
+        ImGui::InvisibleButton("##timelineDrag", graphSize);
+    }
+    ImGui::EndChild(); // CRITICAL: Must be OUTSIDE the if block!
+    ImGui::TextDisabled("Right-click the timeline to remove impact markers.");
+    
+    ImGui::PopItemWidth();
+    ImGui::PopID();
+}
+
+void VideoDrawImpactModuleProcessor::enqueueDrawPointFromUi(int x, int y, bool isErase)
+{
+    addDrawPoint(cv::Point2i(x, y), isErase);
+}
+
+void VideoDrawImpactModuleProcessor::endUiStroke()
+{
+    const juce::ScopedLock lock(pendingOpsLock);
+    isDrawing = false;
+    lastWasErase = false;
+    lastDrawPoint = { -1, -1 };
+}
+
+void VideoDrawImpactModuleProcessor::drawIoPins(const NodePinHelpers& helpers)
+{
+    // Use drawParallelPins for proper parallel layout (following ParallelPinsGuide)
+    helpers.drawParallelPins("Source In", 0, "Output", 0);
+}
+#endif
+

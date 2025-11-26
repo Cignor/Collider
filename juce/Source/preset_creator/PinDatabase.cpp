@@ -23,6 +23,7 @@ void populateModuleDescriptions()
     descriptions["midi_jog_wheel"]      = "A single MIDI-learnable jog wheel control for expressive modulation.";
     descriptions["value"]               = "Outputs a constant, adjustable numerical value.";
     descriptions["sample_loader"]       = "Loads and plays audio samples with pitch/time control.";
+    descriptions["sample_sfx"]           = "Plays sample variations from a folder with automatic switching.";
     // TTS Family
     descriptions["tts_performer"]       = "Advanced Text-to-Speech engine with word-level sequencing.";
     descriptions["vocal_tract_filter"]  = "A formant filter that simulates human vowel sounds.";
@@ -89,6 +90,7 @@ void populateModuleDescriptions()
     descriptions["webcam_loader"]       = "Captures video from a webcam and publishes it as a source for vision processing modules.";
     descriptions["video_file_loader"]   = "Loads and plays a video file, publishes it as a source for vision processing modules.";
     descriptions["video_fx"]            = "Applies real-time video effects (brightness, contrast, saturation, blur, sharpen, etc.) to video sources, chainable.";
+    descriptions["video_draw_impact"]    = "Allows drawing colored impact marks on video frames. Drawings persist for a configurable number of frames, creating visual rhythms that can be tracked by the Color Tracker node.";
     descriptions["movement_detector"]   = "Analyzes video source for motion via optical flow or background subtraction, outputs motion data as CV, and 4 zone gates as Gate.";
     descriptions["pose_estimator"]      = "Uses OpenPose to detect 15 body keypoints, outputs their positions as CV, and 4 zone gates as Gate.";
     descriptions["hand_tracker"]        = "Detects 21 hand keypoints. Wrist outputs absolute screen position; all other keypoints output relative positions to wrist, making the hand an instrument independent of screen location. Outputs 4 zone gates as Gate.";
@@ -143,6 +145,13 @@ void populatePinDatabase()
         { AudioPin("Pitch Mod", 0, PinDataType::CV), AudioPin("Speed Mod", 1, PinDataType::CV), AudioPin("Gate Mod", 2, PinDataType::CV),
           AudioPin("Trigger Mod", 3, PinDataType::Gate), AudioPin("Range Start Mod", 4, PinDataType::CV), AudioPin("Range End Mod", 5, PinDataType::CV),
           AudioPin("Randomize Trig", 6, PinDataType::Gate), AudioPin("Position Mod", 7, PinDataType::CV) },
+        { AudioPin("Out L", 0, PinDataType::Audio), AudioPin("Out R", 1, PinDataType::Audio) },
+        {}
+    );
+    db["sample_sfx"] = ModulePinInfo(
+        NodeWidth::Medium,
+        { AudioPin("Pitch Var Mod", 0, PinDataType::CV), AudioPin("Gate Mod", 1, PinDataType::CV), AudioPin("Trigger", 2, PinDataType::Gate),
+          AudioPin("Range Start Mod", 3, PinDataType::CV), AudioPin("Range End Mod", 4, PinDataType::CV) },
         { AudioPin("Out L", 0, PinDataType::Audio), AudioPin("Out R", 1, PinDataType::Audio) },
         {}
     );
@@ -1223,6 +1232,14 @@ db["random"] = ModulePinInfo(
         NodeWidth::Exception, // Custom size for video preview
         {}, // Dynamic inputs defined by module (video source + optional CV parameters)
         {}, // Dynamic outputs defined by module (processed video output)
+        {}
+    );
+
+    // Video Draw Impact Module - Uses dynamic pins for video I/O
+    db["video_draw_impact"] = ModulePinInfo(
+        NodeWidth::Exception, // Custom size for video preview and drawing interface
+        { AudioPin("Source In", 0, PinDataType::Video) },
+        { AudioPin("Output", 0, PinDataType::Video) },
         {}
     );
 

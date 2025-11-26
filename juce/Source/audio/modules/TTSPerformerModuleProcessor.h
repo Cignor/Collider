@@ -92,6 +92,28 @@ public:
     int findLastWordIndexAtOrBefore(double timeSec) const;
     int findWordIndexForTime(float timeSeconds) const;
     void clampWordIndexToTrim();
+    
+    // --- Voice Manifest and Status Checking (for download system) ---
+    enum class VoiceStatus { NotInstalled, Installed, Partial, Error };
+    
+    struct VoiceEntry
+    {
+        juce::String name;           // e.g., "en_US-lessac-medium"
+        juce::String language;       // e.g., "English (US)"
+        juce::String accent;         // e.g., "General American"
+        juce::String gender;         // e.g., "Female"
+        juce::String quality;        // e.g., "Medium"
+        bool isIncluded;             // Is this one of the 3-4 default voices in distribution?
+        
+        VoiceEntry() = default;
+        VoiceEntry(const juce::String& n, const juce::String& lang, const juce::String& acc,
+                  const juce::String& gen, const juce::String& qual, bool included = false)
+            : name(n), language(lang), accent(acc), gender(gen), quality(qual), isIncluded(included) {}
+    };
+    
+    static std::vector<VoiceEntry> getAllAvailableVoices();
+    VoiceStatus checkVoiceStatus(const juce::String& voiceName) const;
+    std::map<juce::String, VoiceStatus> checkAllVoiceStatuses() const;
 
     // --- Phase 5: Waveform Visualization Methods (UI-only) ---
 #if defined(PRESET_CREATOR_UI)

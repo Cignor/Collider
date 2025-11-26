@@ -66,8 +66,15 @@ void VideoFileLoaderModule::prepareToPlay(double sampleRate, int samplesPerBlock
     
     startThread(juce::Thread::Priority::normal);
     // If we already had a file open previously, request re-open on thread start
+    // Also check videoFileToLoad (set by setExtraStateTree when loading from XML)
     if (currentVideoFile.existsAsFile())
         videoFileToLoad = currentVideoFile;
+    else if (videoFileToLoad.existsAsFile() && !currentVideoFile.existsAsFile())
+    {
+        // When loading from XML, videoFileToLoad is set but currentVideoFile is empty
+        // Ensure the file will be opened by the thread
+        // (The thread will check videoFileToLoad.existsAsFile() and open it)
+    }
 }
 
 void VideoFileLoaderModule::releaseResources()
@@ -325,24 +332,31 @@ void VideoFileLoaderModule::run()
             }
         }
 
-        // On play edge: seek to IN point using unified seek
+        // On play edge: only seek to IN point if coming from stopped state (not paused)
         bool nowPlaying = playing.load();
         bool wasPlaying = lastPlaying.exchange(nowPlaying);
         if (nowPlaying && !wasPlaying)
         {
-            float inN = inNormParam ? inNormParam->load() : 0.0f;
-            pendingSeekNormalized.store(inN); // Use unified seek
-            needPreviewFrame.store(true);
-            
-            // Also seek audio - clear FIFO and reset position
-            const juce::ScopedLock audioLk(audioLock);
-            if (audioReader) {
-                audioReadPosition = inN * audioReader->lengthInSamples;
-                currentAudioSamplePosition.store((juce::int64)audioReadPosition); // SET THE MASTER CLOCK
-                audioReader->resetPosition(); // Force seek on next read
-                abstractFifo.reset(); // Clear FIFO on seek
-                timePitch.reset();
+            // Only seek to start if we were stopped (not paused)
+            if (isStopped.load())
+            {
+                float inN = inNormParam ? inNormParam->load() : 0.0f;
+                pendingSeekNormalized.store(inN); // Use unified seek
+                needPreviewFrame.store(true);
+                
+                // Also seek audio - clear FIFO and reset position
+                const juce::ScopedLock audioLk(audioLock);
+                if (audioReader) {
+                    audioReadPosition = inN * audioReader->lengthInSamples;
+                    currentAudioSamplePosition.store((juce::int64)audioReadPosition); // SET THE MASTER CLOCK
+                    audioReader->resetPosition(); // Force seek on next read
+                    abstractFifo.reset(); // Clear FIFO on seek
+                    timePitch.reset();
+                }
+                // Mark as no longer stopped (now playing)
+                isStopped.store(false);
             }
+            // If paused, just resume from current position (no seek needed)
         }
 
         // Respect play/pause
@@ -487,8 +501,9 @@ void VideoFileLoaderModule::run()
                 }
                 else 
                 {
-                    // Not looping, so stop playback
+                    // Not looping, so stop playback and mark as stopped
                     playing.store(false);
+                    isStopped.store(true);
                 }
             }
             
@@ -558,6 +573,7 @@ void VideoFileLoaderModule::loadAudioFromVideo()
     currentAudioSamplePosition.store(0); // Reset master clock
     abstractFifo.reset(); // Clear FIFO
     audioLoaded.store(false);
+    isStopped.store(true); // New file loaded, start from beginning
     
     if (!currentVideoFile.existsAsFile()) return;
     
@@ -622,6 +638,20 @@ void VideoFileLoaderModule::processBlock(juce::AudioBuffer<float>& buffer, juce:
     if (!audioLoaded.load() || !playing.load())
     {
         return;
+    }
+
+    // Ensure sync state mirrors parameter value even if changed externally
+    const bool paramSync = syncParam ? (*syncParam > 0.5f) : true;
+    const bool storedSync = syncToTransport.load();
+    if (paramSync != storedSync)
+    {
+        syncToTransport.store(paramSync);
+        if (paramSync)
+        {
+            playing.store(lastTransportPlaying.load());
+            if (currentVideoFile.existsAsFile())
+                videoFileToLoad = currentVideoFile;
+        }
     }
     
     // --- NEW FIFO-BASED AUDIO PROCESSING ---
@@ -741,6 +771,9 @@ void VideoFileLoaderModule::setExtraStateTree(const juce::ValueTree& state)
         if (restoredFile.existsAsFile())
         {
             videoFileToLoad = restoredFile;
+            // Also set currentVideoFile so prepareToPlay() will trigger reload
+            // This ensures the video opens immediately when play is clicked after loading
+            currentVideoFile = restoredFile;
             juce::Logger::writeToLog("[VideoFileLoader] Restored video file from preset: " + filePath);
         }
         else
@@ -806,17 +839,64 @@ void VideoFileLoaderModule::drawParametersInNode(float itemWidth,
 
     ImGui::SameLine();
     bool localPlaying = playing.load();
+    bool localStopped = isStopped.load();
     if (sync) ImGui::BeginDisabled();
-    const char* btn = localPlaying ? "Stop" : "Play";
+    
+    // Play/Pause button: shows "Pause" when playing, "Play" when paused or stopped
+    const char* playPauseBtn = localPlaying ? "Pause" : "Play";
     if (sync)
     {
         // Mirror transport state in label when synced
-        btn = lastTransportPlaying.load() ? "Stop" : "Play";
+        playPauseBtn = lastTransportPlaying.load() ? "Pause" : "Play";
     }
-    if (ImGui::Button(btn))
+    if (ImGui::Button(playPauseBtn))
     {
-        playing.store(!localPlaying);
+        if (localPlaying)
+        {
+            // Pause: stop playing but keep position (not stopped)
+            playing.store(false);
+            isStopped.store(false);
+        }
+        else
+        {
+            // Play: start playing
+            // If was stopped (isStopped = true), run() thread will seek to start
+            // If was paused (isStopped = false), run() thread will resume from current position
+            // Explicitly preserve the paused state - if we were paused, ensure we stay paused
+            if (!localStopped)
+            {
+                // We were paused, so ensure isStopped stays false when resuming
+                isStopped.store(false);
+            }
+            // If we were stopped (localStopped = true), keep it true so run() thread can seek
+            playing.store(true);
+        }
     }
+    
+    // Stop button: reset to start position
+    ImGui::SameLine();
+    if (ImGui::Button("Stop"))
+    {
+        // Stop: reset position to start and mark as stopped
+        playing.store(false);
+        isStopped.store(true);
+        
+        // Immediately seek to start point
+        float inN = inNormParam ? inNormParam->load() : 0.0f;
+        pendingSeekNormalized.store(inN);
+        needPreviewFrame.store(true);
+        
+        // Also seek audio - clear FIFO and reset position
+        const juce::ScopedLock audioLk(audioLock);
+        if (audioReader) {
+            audioReadPosition = inN * audioReader->lengthInSamples;
+            currentAudioSamplePosition.store((juce::int64)audioReadPosition);
+            audioReader->resetPosition();
+            abstractFifo.reset();
+            timePitch.reset();
+        }
+    }
+    
     if (sync) ImGui::EndDisabled();
 
     // Zoom buttons (+/-) across 3 levels
@@ -972,16 +1052,31 @@ void VideoFileLoaderModule::drawParametersInNode(float itemWidth,
         float maxPos = juce::jlimit(minPos, 1.0f, outN);
         pos = juce::jlimit(minPos, maxPos, pos);
 
-        // Position slider is read-only (shows current position, doesn't set parameter)
-        ImGui::SliderFloat("Position", &pos, 0.0f, 1.0f, "%.3f");
-        if (ImGui::IsItemHovered())
+        // Position slider (manual scrub when not synced to transport)
+        bool sliderChanged = false;
+        if (sync) ImGui::BeginDisabled();
+        sliderChanged = ImGui::SliderFloat("Position", &pos, minPos, maxPos, "%.3f");
+        if (sync) ImGui::EndDisabled();
+        if (!sync)
         {
-            const float wheel = ImGui::GetIO().MouseWheel;
-            if (wheel != 0.0f)
+            if (sliderChanged)
             {
-                const float step = 0.01f;
-                const float newPos = juce::jlimit(minPos, maxPos, pos + (wheel > 0.0f ? step : -step));
-                pendingSeekNormalized.store(newPos);
+                pendingSeekNormalized.store(pos);
+                if (tf > 1)
+                {
+                    const int newFrame = (int)juce::jlimit(0, tf - 1, (int)std::round(pos * (float)(tf - 1)));
+                    lastPosFrame.store(newFrame);
+                }
+            }
+            if (ImGui::IsItemHovered())
+            {
+                const float wheel = ImGui::GetIO().MouseWheel;
+                if (wheel != 0.0f)
+                {
+                    const float step = 0.01f;
+                    const float newPos = juce::jlimit(minPos, maxPos, pos + (wheel > 0.0f ? step : -step));
+                    pendingSeekNormalized.store(newPos);
+                }
             }
         }
     }
@@ -1021,6 +1116,7 @@ void VideoFileLoaderModule::forceStop()
 {
     // Force stop playback regardless of sync settings
     playing.store(false);
+    isStopped.store(true);
     lastTransportPlaying.store(false);
 }
 

@@ -20,6 +20,7 @@
 #include "ShortcutManager.h"
 #include "theme/ThemeEditorComponent.h"
 #include "HelpManagerComponent.h"
+#include "VoiceDownloadDialog.h"
 
 // Forward declarations from Dear ImGui / imnodes
 struct ImGuiContext; struct ImGuiIO; struct ImNodesContext;
@@ -511,6 +512,7 @@ public:
     bool showMidiDeviceManager { false };
     bool showAboutDialog { false };
     ThemeEditorComponent themeEditor { this };
+    VoiceDownloadDialog voiceDownloadDialog;
     int pendingInsertLinkId { -1 };
     
     // Probe tool state

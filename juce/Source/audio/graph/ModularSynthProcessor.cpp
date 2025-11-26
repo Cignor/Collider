@@ -38,6 +38,7 @@
 #include "../modules/VocalTractFilterModuleProcessor.h"
 #include "../modules/VstHostModuleProcessor.h"
 #include "../modules/SampleLoaderModuleProcessor.h"
+#include "../modules/SampleSfxModuleProcessor.h"
 #include "../modules/FunctionGeneratorModuleProcessor.h"
 #include "../modules/TimePitchModuleProcessor.h"
 #include "../modules/DebugModuleProcessor.h"
@@ -78,6 +79,7 @@
 #include "../modules/WebcamLoaderModule.h"
 #include "../modules/VideoFileLoaderModule.h"
 #include "../modules/VideoFXModule.h"
+#include "../modules/VideoDrawImpactModuleProcessor.h"
 #include "../modules/MovementDetectorModule.h"
 #include "../modules/PoseEstimatorModule.h"
 #include "../modules/HandTrackerModule.h"
@@ -824,6 +826,7 @@ namespace {
             reg("value", []{ return std::make_unique<ValueModuleProcessor>(); });
             reg("tts_performer", []{ return std::make_unique<TTSPerformerModuleProcessor>(); });
             reg("sample_loader", []{ return std::make_unique<SampleLoaderModuleProcessor>(); });
+            reg("sample_sfx", []{ return std::make_unique<SampleSfxModuleProcessor>(); });
             reg("function_generator", []{ return std::make_unique<FunctionGeneratorModuleProcessor>(); });
             reg("timepitch", []{ return std::make_unique<TimePitchModuleProcessor>(); });
             reg("midi_player", []{ return std::make_unique<MIDIPlayerModuleProcessor>(); });
@@ -860,6 +863,7 @@ namespace {
             reg("webcam_loader", []{ return std::make_unique<WebcamLoaderModule>(); });
             reg("video_file_loader", []{ return std::make_unique<VideoFileLoaderModule>(); });
             reg("video_fx", []{ return std::make_unique<VideoFXModule>(); });
+            reg("video_draw_impact", []{ return std::make_unique<VideoDrawImpactModuleProcessor>(); });
             reg("movement_detector", []{ return std::make_unique<MovementDetectorModule>(); });
             reg("pose_estimator", []{ return std::make_unique<PoseEstimatorModule>(); });
             reg("hand_tracker", []{ return std::make_unique<HandTrackerModule>(); });

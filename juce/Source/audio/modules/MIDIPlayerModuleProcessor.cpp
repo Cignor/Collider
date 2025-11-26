@@ -637,7 +637,7 @@ static void HelpMarkerPlayer(const char* desc)
 // ==============================================================================
 // PHASE 2: PIANO ROLL UI (Ported from MidiLogger)
 // ==============================================================================
-void MIDIPlayerModuleProcessor::drawParametersInNode(float /*itemWidth*/, const std::function<bool(const juce::String&)>&, const std::function<void()>& onModificationEnded)
+void MIDIPlayerModuleProcessor::drawParametersInNode(float /*itemWidth*/, const std::function<bool(const juce::String&)>& isParamModulated, const std::function<void()>& onModificationEnded)
 {
     // --- Invisible Scaffolding ---
     ImGui::Dummy(ImVec2(nodeWidth, 0.0f));
@@ -817,16 +817,21 @@ void MIDIPlayerModuleProcessor::drawParametersInNode(float /*itemWidth*/, const 
         }
         const char* previewText = previewLabel.isNotEmpty() ? previewLabel.toRawUTF8() : "No Track";
         
+        bool trackModulated = isParamModulated(TRACK_PARAM);
+        if (trackModulated) ImGui::BeginDisabled();
         if (ImGui::BeginCombo("##track", previewText))
         {
             // "Show All" option (track index -1)
             bool showAllSelected = (track == -1);
             if (ImGui::Selectable("Show All Tracks", showAllSelected))
             {
-                float norm = apvts.getParameterRange(TRACK_PARAM).convertTo0to1(-1.0f);
-                apvts.getParameter(TRACK_PARAM)->setValueNotifyingHost(norm);
-                currentTrackIndex = -1;
-                onModificationEnded();
+                if (!trackModulated)
+                {
+                    float norm = apvts.getParameterRange(TRACK_PARAM).convertTo0to1(-1.0f);
+                    apvts.getParameter(TRACK_PARAM)->setValueNotifyingHost(norm);
+                    currentTrackIndex = -1;
+                    onModificationEnded();
+                }
             }
             if (showAllSelected)
                 ImGui::SetItemDefaultFocus();
@@ -843,10 +848,13 @@ void MIDIPlayerModuleProcessor::drawParametersInNode(float /*itemWidth*/, const 
                     
                     if (ImGui::Selectable(label.toRawUTF8(), isSelected))
                     {
-                        float norm = apvts.getParameterRange(TRACK_PARAM).convertTo0to1((float)i);
-                        apvts.getParameter(TRACK_PARAM)->setValueNotifyingHost(norm);
-                        currentTrackIndex = i;
-                        onModificationEnded();
+                        if (!trackModulated)
+                        {
+                            float norm = apvts.getParameterRange(TRACK_PARAM).convertTo0to1((float)i);
+                            apvts.getParameter(TRACK_PARAM)->setValueNotifyingHost(norm);
+                            currentTrackIndex = i;
+                            onModificationEnded();
+                        }
                     }
                     
                     if (isSelected)
@@ -855,6 +863,30 @@ void MIDIPlayerModuleProcessor::drawParametersInNode(float /*itemWidth*/, const 
             }
             ImGui::EndCombo();
         }
+        // Scroll-edit for track combo
+        if (!trackModulated && ImGui::IsItemHovered())
+        {
+            const float wheel = ImGui::GetIO().MouseWheel;
+            if (wheel != 0.0f)
+            {
+                int maxTrack = std::max(0, getNumTracks() - 1);
+                int currentTrackIdx = (int)trackParam->load();
+                // Scroll down advances forward (increment), scroll up goes backward (decrement)
+                int newTrack = currentTrackIdx + (wheel > 0.0f ? -1 : 1);
+                // Wrap: -1 (Show All) -> 0 -> 1 -> ... -> maxTrack -> -1
+                if (newTrack < -1) newTrack = maxTrack;
+                else if (newTrack > maxTrack) newTrack = -1;
+                
+                if (newTrack != currentTrackIdx)
+                {
+                    float norm = apvts.getParameterRange(TRACK_PARAM).convertTo0to1((float)newTrack);
+                    apvts.getParameter(TRACK_PARAM)->setValueNotifyingHost(norm);
+                    currentTrackIndex = newTrack;
+                    onModificationEnded();
+                }
+            }
+        }
+        if (trackModulated) ImGui::EndDisabled();
         ImGui::PopItemWidth();
     }
     
@@ -877,11 +909,13 @@ void MIDIPlayerModuleProcessor::drawParametersInNode(float /*itemWidth*/, const 
     
     ImGui::SameLine();
     ImGui::PushItemWidth(100);
+    bool tempoMultModulated = isParamModulated("tempoMultiplier");
+    if (tempoMultModulated) ImGui::BeginDisabled();
     float tempoMult = tempoMultiplierParam ? tempoMultiplierParam->get() : 1.0f;
     if (ImGui::SliderFloat("##tempo", &tempoMult, 0.25f, 4.0f, "%.2fx"))
     {
         juce::Logger::writeToLog("[TEMPO SLIDER] Changed to: " + juce::String(tempoMult) + " | zoomX is: " + juce::String(zoomX));
-        if (tempoMultiplierParam)
+        if (!tempoMultModulated && tempoMultiplierParam)
         {
             float norm = apvts.getParameterRange("tempoMultiplier").convertTo0to1(tempoMult);
             apvts.getParameter("tempoMultiplier")->setValueNotifyingHost(norm);
@@ -889,6 +923,8 @@ void MIDIPlayerModuleProcessor::drawParametersInNode(float /*itemWidth*/, const 
             onModificationEnded();
         }
     }
+    if (ImGui::IsItemDeactivatedAfterEdit() && !tempoMultModulated) onModificationEnded();
+    if (!tempoMultModulated) adjustParamOnWheel(apvts.getParameter("tempoMultiplier"), "tempoMultiplier", tempoMult);
     if (ImGui::IsItemHovered())
     {
         const double currentBpm = tempoParam ? tempoParam->load() : fileBpm;
@@ -896,6 +932,7 @@ void MIDIPlayerModuleProcessor::drawParametersInNode(float /*itemWidth*/, const 
                          currentBpm, tempoMult, fileBpm,
                          syncToHost ? "Host" : "File");
     }
+    if (tempoMultModulated) ImGui::EndDisabled();
     ImGui::PopItemWidth();
     
     ImGui::Spacing(); // Visual separation between tempo and pitch
@@ -904,16 +941,20 @@ void MIDIPlayerModuleProcessor::drawParametersInNode(float /*itemWidth*/, const 
     ImGui::Text("Pitch Transpose:");
     ImGui::SameLine();
     ImGui::PushItemWidth(150);
-    float pitchOffset = pitchParam ? pitchParam->load() : 0.0f;
+    bool pitchModulated = isParamModulated(PITCH_PARAM);
+    if (pitchModulated) ImGui::BeginDisabled();
+    float pitchOffset = pitchModulated ? getLiveParamValueFor("pitch_mod", "pitch_live", pitchParam ? pitchParam->load() : 0.0f) : (pitchParam ? pitchParam->load() : 0.0f);
     if (ImGui::SliderFloat("##pitchTranspose", &pitchOffset, -24.0f, 24.0f, "%+.0f semi"))
     {
-        if (pitchParam)
+        if (!pitchModulated && pitchParam)
         {
             float norm = apvts.getParameterRange(PITCH_PARAM).convertTo0to1(pitchOffset);
             apvts.getParameter(PITCH_PARAM)->setValueNotifyingHost(norm);
             onModificationEnded();
         }
     }
+    if (ImGui::IsItemDeactivatedAfterEdit() && !pitchModulated) onModificationEnded();
+    if (!pitchModulated) adjustParamOnWheel(apvts.getParameter(PITCH_PARAM), PITCH_PARAM, pitchOffset);
     if (ImGui::IsItemHovered())
     {
         int octaves = (int)(pitchOffset / 12.0f);
@@ -929,6 +970,7 @@ void MIDIPlayerModuleProcessor::drawParametersInNode(float /*itemWidth*/, const 
         if (octaves != 0) tooltip += ")";
         ImGui::SetTooltip("%s", tooltip.toRawUTF8());
     }
+    if (pitchModulated) ImGui::EndDisabled();
     ImGui::PopItemWidth();
     
     ImGui::Spacing(); // Visual separation between pitch and zoom
@@ -940,6 +982,21 @@ void MIDIPlayerModuleProcessor::drawParametersInNode(float /*itemWidth*/, const 
     if (ImGui::SliderFloat("##zoom", &zoomX, 20.0f, 400.0f, "%.0fpx/beat"))
     {
         juce::Logger::writeToLog("[ZOOM SLIDER] Changed to: " + juce::String(zoomX) + "px/beat");
+    }
+    // Scroll-edit for zoom slider (manual handling since zoomX is not a JUCE parameter)
+    if (ImGui::IsItemHovered())
+    {
+        const float wheel = ImGui::GetIO().MouseWheel;
+        if (wheel != 0.0f)
+        {
+            const float zoomStep = 5.0f; // 5 pixels per beat per scroll step
+            const float newZoom = juce::jlimit(20.0f, 400.0f, zoomX + (wheel > 0.0f ? zoomStep : -zoomStep));
+            if (newZoom != zoomX)
+            {
+                zoomX = newZoom;
+                juce::Logger::writeToLog("[ZOOM SLIDER] Scroll-edit changed to: " + juce::String(zoomX) + "px/beat");
+            }
+        }
     }
     ImGui::PopItemWidth();
     
@@ -1048,7 +1105,55 @@ void MIDIPlayerModuleProcessor::drawParametersInNode(float /*itemWidth*/, const 
                       ImGuiWindowFlags_HorizontalScrollbar | ImGuiWindowFlags_NoMove);
     
     ImDrawList* drawList = ImGui::GetWindowDrawList();
-    const float scrollX = ImGui::GetScrollX();
+    float scrollX = ImGui::GetScrollX();
+    
+    // --- SCROLL-TO-ZOOM ON TIMELINE (centered on playhead) ---
+    // Handle scroll wheel for zooming (must be inside BeginChild context)
+    if (ImGui::IsWindowHovered())
+    {
+        const float wheel = ImGui::GetIO().MouseWheel;
+        if (wheel != 0.0f && !ImGui::IsAnyItemActive()) // Don't zoom while dragging sliders
+        {
+            // Calculate playhead position in content space (before zoom change)
+            const double visualTempo = fileBpm;
+            const float oldPixelsPerBeat = zoomX;
+            const float playheadX_content = (float)(currentPlaybackTime / (60.0 / visualTempo)) * oldPixelsPerBeat;
+            
+            // Get current scroll position
+            const float oldScrollX = scrollX;
+            
+            // Calculate playhead position relative to visible window
+            const float playheadX_visible = playheadX_content - oldScrollX;
+            
+            // Apply zoom (zoom in when scrolling up, zoom out when scrolling down)
+            const float zoomStep = 10.0f; // 10 pixels per beat per scroll step
+            const float newZoom = juce::jlimit(20.0f, 400.0f, zoomX + (wheel > 0.0f ? zoomStep : -zoomStep));
+            
+            if (newZoom != zoomX)
+            {
+                // Calculate new playhead position in content space (after zoom change)
+                const float newPixelsPerBeat = newZoom;
+                const float newPlayheadX_content = (float)(currentPlaybackTime / (60.0 / visualTempo)) * newPixelsPerBeat;
+                
+                // Adjust scroll to keep playhead at the same visible position
+                const float newScrollX = newPlayheadX_content - playheadX_visible;
+                
+                // Update zoom
+                zoomX = newZoom;
+                
+                // Set new scroll position (clamped to valid range)
+                const int numBars = (int)std::ceil(totalDuration / (60.0 / visualTempo * 4.0));
+                const float totalWidth = numBars * 4.0f * newZoom;
+                const float maxScroll = std::max(0.0f, totalWidth - nodeWidth);
+                const float clampedScroll = juce::jlimit(0.0f, maxScroll, newScrollX);
+                
+                ImGui::SetScrollX(clampedScroll);
+                scrollX = clampedScroll; // Update local scrollX for drawing calculations
+                
+                juce::Logger::writeToLog("[TIMELINE ZOOM] Scroll-zoom changed to: " + juce::String(zoomX) + "px/beat (centered on playhead)");
+            }
+        }
+    }
     
     // --- 3. TIMELINE RULER ---
     // CRITICAL FIX: Use ORIGINAL file tempo for visual layout, not current playback tempo!

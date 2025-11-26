@@ -242,20 +242,107 @@ void PoseEstimatorModule::run()
             loadModel(toLoad);
         }
         
-        if (!modelLoaded)
-        {
-            wait(200);
-            continue;
-        }
-
         // Get the source ID from the input cable (set by processBlock from the audio thread)
         juce::uint32 sourceId = currentSourceId.load();
         
-        // Fetch frame from the VideoFrameManager
+        // CRITICAL FIX for XML load: If sourceId is 0 (processBlock hasn't run yet),
+        // use cached resolved source ID, or try to resolve it from the connection graph
+        if (sourceId == 0)
+        {
+            // First try cached resolved ID
+            if (cachedResolvedSourceId != 0)
+            {
+                sourceId = cachedResolvedSourceId;
+            }
+            // If no cache, try to resolve from connection graph (keep trying until it works)
+            else if (parentSynth != nullptr)
+            {
+                auto snapshot = parentSynth->getConnectionSnapshot();
+                if (snapshot && !snapshot->empty())
+                {
+                    // Resolve our logical ID first
+                    juce::uint32 myLogicalId = storedLogicalId;
+                    if (myLogicalId == 0)
+                    {
+                        for (const auto& info : parentSynth->getModulesInfo())
+                        {
+                            if (parentSynth->getModuleForLogical(info.first) == this)
+                            {
+                                myLogicalId = info.first;
+                                storedLogicalId = myLogicalId;
+                                break;
+                            }
+                        }
+                    }
+                    
+                    // Find connection to our input channel 0
+                    if (myLogicalId != 0)
+                    {
+                        for (const auto& conn : *snapshot)
+                        {
+                            if (conn.dstLogicalId == myLogicalId && conn.dstChan == 0)
+                            {
+                                sourceId = conn.srcLogicalId;
+                                cachedResolvedSourceId = sourceId; // Cache it
+                                break;
+                            }
+                        }
+                    }
+                }
+                
+                // FALLBACK: If connection resolution didn't work, try to find ANY video source with frames
+                // This handles cases where connection snapshot isn't ready yet or connection isn't found
+                if (sourceId == 0)
+                {
+                    for (const auto& info : parentSynth->getModulesInfo())
+                    {
+                        // Check if this is a video source module type
+                        juce::String moduleType = info.second.toLowerCase();
+                        if (moduleType.contains("video") || moduleType.contains("webcam") || moduleType == "video_file_loader")
+                        {
+                            // Try to get a frame from this source to see if it's producing frames
+                            cv::Mat testFrame = VideoFrameManager::getInstance().getFrame(info.first);
+                            if (!testFrame.empty())
+                            {
+                                sourceId = info.first;
+                                cachedResolvedSourceId = sourceId; // Cache it
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        else
+        {
+            // If processBlock() has set sourceId, clear cached resolved ID (no longer needed)
+            if (cachedResolvedSourceId != 0 && cachedResolvedSourceId != sourceId)
+                cachedResolvedSourceId = 0;
+        }
+        
+        // Fetch frame from the VideoFrameManager (always attempt, even if sourceId == 0)
+        // This must happen BEFORE modelLoaded check to ensure frames are cached even during model loading
         cv::Mat frame = VideoFrameManager::getInstance().getFrame(sourceId);
+        
+        // Cache last good frame for paused/no-signal scenarios
+        if (!frame.empty())
+        {
+            const juce::ScopedLock lk(frameLock);
+            frame.copyTo(lastFrameBgr);
+        }
+        else
+        {
+            // Use cached frame when no fresh frames are available (e.g., transport paused or during XML load)
+            const juce::ScopedLock lk(frameLock);
+            if (!lastFrameBgr.empty())
+                frame = lastFrameBgr.clone();
+        }
         
         if (!frame.empty())
         {
+            // Only do pose estimation if model is loaded
+            if (modelLoaded)
+            {
             #if WITH_CUDA_SUPPORT
                 // Check if user wants GPU and if a CUDA device is available
                 bool useGpu = useGpuParam ? useGpuParam->get() : false;
@@ -411,16 +498,37 @@ void PoseEstimatorModule::run()
                 cv::Mat emptyFrame;
                 VideoFrameManager::getInstance().setFrame(getSecondaryLogicalId(), emptyFrame);
             }
+            }
             
-            // --- PASSTHROUGH LOGIC ---
-            if (myLogicalId != 0)
-                VideoFrameManager::getInstance().setFrame(myLogicalId, frame);
-            // 6. Update the GUI preview frame
+            // --- PASSTHROUGH LOGIC (always do this, even if model not loaded) ---
+            // Resolve logical ID fresh each iteration (like ColorTrackerModule)
+            // CRITICAL: During XML load, setLogicalId() is called AFTER prepareToPlay(),
+            // so storedLogicalId might be 0 when thread starts. Always try to resolve.
+            juce::uint32 frameId = storedLogicalId;
+            // Always try to resolve - parentSynth might not be ready or setLogicalId() might not have been called yet
+            if (parentSynth != nullptr)
+            {
+                for (const auto& info : parentSynth->getModulesInfo())
+                {
+                    if (parentSynth->getModuleForLogical(info.first) == this)
+                    {
+                        frameId = info.first;
+                        if (storedLogicalId != frameId)
+                            storedLogicalId = frameId; // Update cache if different
+                        break;
+                    }
+                }
+            }
+            // Always update GUI frame, even if frameId is 0 (frame will still be visible in node)
             updateGuiFrame(frame);
+            // Only passthrough if we have a valid frameId
+            if (frameId != 0)
+                VideoFrameManager::getInstance().setFrame(frameId, frame);
         }
         
         // Run at ~15 FPS (pose estimation is computationally expensive)
-        wait(66);
+        // Use shorter wait when model not loaded to check more frequently
+        wait(modelLoaded ? 66 : 33);
     }
     
     juce::Logger::writeToLog("[PoseEstimator] Processing thread stopped");
