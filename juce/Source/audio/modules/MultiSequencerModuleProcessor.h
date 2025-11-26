@@ -52,6 +52,7 @@ private:
 
     TransportState m_currentTransport;
     bool wasPlaying = false;
+    TransportCommand lastTransportCommand { TransportCommand::Stop };
 
     std::atomic<float>* rateParam { nullptr };
     std::atomic<float>* gateLengthParam { nullptr };

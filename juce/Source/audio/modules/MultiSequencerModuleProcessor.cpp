@@ -97,15 +97,20 @@ void MultiSequencerModuleProcessor::prepareToPlay (double newSampleRate, int sam
 
 void MultiSequencerModuleProcessor::setTimingInfo(const TransportState& state)
 {
-    // Check if the transport has just started playing
-    if (state.isPlaying && !wasPlaying)
+    ModuleProcessor::setTimingInfo(state);
+
+    const TransportCommand command = state.lastCommand.load();
+    if (command != lastTransportCommand)
     {
-        // Reset to the beginning when play is pressed
-        currentStep.store(0);
-        phase = 0.0;
+        if (command == TransportCommand::Stop)
+        {
+            currentStep.store(0);
+            phase = 0.0;
+        }
+        lastTransportCommand = command;
     }
+
     wasPlaying = state.isPlaying;
-    
     m_currentTransport = state;
 }
 

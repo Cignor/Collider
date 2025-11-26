@@ -103,22 +103,8 @@ void FaceTrackerModule::loadModel()
 
 void FaceTrackerModule::run()
 {
-    // Resolve our logical ID once at the start
-    juce::uint32 myLogicalId = storedLogicalId;
-    if (myLogicalId == 0 && parentSynth != nullptr)
-    {
-        for (const auto& info : parentSynth->getModulesInfo())
-        {
-            if (parentSynth->getModuleForLogical(info.first) == this)
-            {
-                myLogicalId = info.first;
-                storedLogicalId = myLogicalId; // Cache it
-                break;
-            }
-        }
-    }
-    
-    if (!modelLoaded) loadModel();
+    if (!modelLoaded)
+        loadModel();
     
     #if WITH_CUDA_SUPPORT
         bool lastGpuState = false; // Track GPU state to minimize backend switches
@@ -127,9 +113,98 @@ void FaceTrackerModule::run()
     
     while (!threadShouldExit())
     {
-        auto srcId = currentSourceId.load();
-        cv::Mat frame = VideoFrameManager::getInstance().getFrame(srcId);
-        if (frame.empty()) { wait(50); continue; }
+        if (!modelLoaded)
+            loadModel();
+        
+        juce::uint32 sourceId = currentSourceId.load();
+        cv::Mat prefetchedFrame;
+        
+        if (sourceId == 0)
+        {
+            if (cachedResolvedSourceId != 0)
+            {
+                sourceId = cachedResolvedSourceId;
+            }
+            else if (parentSynth != nullptr)
+            {
+                auto snapshot = parentSynth->getConnectionSnapshot();
+                if (snapshot && !snapshot->empty())
+                {
+                    juce::uint32 myLogicalId = storedLogicalId;
+                    if (myLogicalId == 0)
+                    {
+                        for (const auto& info : parentSynth->getModulesInfo())
+                        {
+                            if (parentSynth->getModuleForLogical(info.first) == this)
+                            {
+                                myLogicalId = info.first;
+                                storedLogicalId = myLogicalId;
+                                break;
+                            }
+                        }
+                    }
+                    
+                    if (myLogicalId != 0)
+                    {
+                        for (const auto& conn : *snapshot)
+                        {
+                            if (conn.dstLogicalId == myLogicalId && conn.dstChan == 0)
+                            {
+                                sourceId = conn.srcLogicalId;
+                                cachedResolvedSourceId = sourceId;
+                                break;
+                            }
+                        }
+                    }
+                }
+                
+                if (sourceId == 0)
+                {
+                    for (const auto& info : parentSynth->getModulesInfo())
+                    {
+                        juce::String moduleType = info.second.toLowerCase();
+                        if (moduleType.contains("video") || moduleType.contains("webcam") || moduleType == "video_file_loader")
+                        {
+                            cv::Mat testFrame = VideoFrameManager::getInstance().getFrame(info.first);
+                            if (!testFrame.empty())
+                            {
+                                sourceId = info.first;
+                                cachedResolvedSourceId = sourceId;
+                                prefetchedFrame = testFrame;
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        else
+        {
+            if (cachedResolvedSourceId != 0 && cachedResolvedSourceId != sourceId)
+                cachedResolvedSourceId = 0;
+        }
+        
+        cv::Mat frame = prefetchedFrame.empty()
+            ? VideoFrameManager::getInstance().getFrame(sourceId)
+            : prefetchedFrame;
+        
+        if (!frame.empty())
+        {
+            const juce::ScopedLock lk(frameLock);
+            frame.copyTo(lastFrameBgr);
+        }
+        else
+        {
+            const juce::ScopedLock lk(frameLock);
+            if (!lastFrameBgr.empty())
+                frame = lastFrameBgr.clone();
+        }
+        
+        if (frame.empty())
+        {
+            wait(50);
+            continue;
+        }
 
         bool useGpu = false;
         
@@ -273,10 +348,27 @@ void FaceTrackerModule::run()
         
         if (fifo.getFreeSpace()>=1){ auto w=fifo.write(1); if (w.blockSize1>0) fifoBuffer[w.startIndex1]=result; }
         
+        // Resolve logical ID continuously (handles XML load timing)
+        juce::uint32 myLogicalId = storedLogicalId;
+        if (myLogicalId == 0 && parentSynth != nullptr)
+        {
+            for (const auto& info : parentSynth->getModulesInfo())
+            {
+                if (parentSynth->getModuleForLogical(info.first) == this)
+                {
+                    myLogicalId = info.first;
+                    storedLogicalId = myLogicalId;
+                    break;
+                }
+            }
+        }
+        
+        // Update GUI preview regardless of passthrough availability
+        updateGuiFrame(frame);
+        
         // --- PASSTHROUGH LOGIC ---
         if (myLogicalId != 0)
             VideoFrameManager::getInstance().setFrame(myLogicalId, frame);
-        updateGuiFrame(frame);
         wait(66);
     }
 }

@@ -52,6 +52,7 @@ void SampleVoiceProcessor::renderBlock(juce::AudioBuffer<float>& buffer, juce::M
     // Parameters to stretcher
     const float apTime = apvts.getRawParameterValue("timeStretchRatio") ? apvts.getRawParameterValue("timeStretchRatio")->load() : 1.0f;
     const float apPitch = apvts.getRawParameterValue("pitchSemitones") ? apvts.getRawParameterValue("pitchSemitones")->load() : 0.0f;
+    // Treat effectiveTime as a unified SPEED multiplier (2.0 = faster, 0.5 = slower)
     const float effectiveTime = juce::jlimit(0.25f, 4.0f, apTime * zoneTimeStretchRatio);
     const float effectivePitchSemis = basePitchSemitones + apPitch;
 
@@ -72,7 +73,9 @@ void SampleVoiceProcessor::renderBlock(juce::AudioBuffer<float>& buffer, juce::M
         auto* srcL = sourceBuffer.getReadPointer(0);
         auto* srcR = sourceBuffer.getNumChannels() > 1 ? sourceBuffer.getReadPointer(1) : srcL;
         const double pitchScale = std::pow(2.0, (double) effectivePitchSemis / 12.0);
-        const double step = pitchScale / (double) juce::jmax(0.0001f, effectiveTime);
+        // Naive engine: interpret effectiveTime as SPEED (not duration ratio).
+        // Higher speed => larger step per frame (faster playback).
+        const double step = pitchScale * (double) juce::jmax(0.0001f, effectiveTime);
         const double effectiveEndSample = (endSamplePos < 0.0 || endSamplePos >= sourceLength) ? (double)sourceLength - 1 : endSamplePos;
         for (int i = 0; i < numDestSamples; ++i)
         {

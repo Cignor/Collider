@@ -120,6 +120,29 @@ void SampleSfxModuleProcessor::prepareToPlay(double sampleRate, int samplesPerBl
     {
         createSampleProcessor();
     }
+
+    const bool shouldResume = resumeAfterPrepare.exchange(false);
+    if (shouldResume)
+    {
+        const float cached = lastKnownNormalizedPosition.load();
+        if (cached >= 0.0f)
+            pendingResumeNormalized.store(cached);
+    }
+}
+
+void SampleSfxModuleProcessor::releaseResources()
+{
+    snapshotPlaybackState();
+
+    bool wasPlaying = false;
+    {
+        const juce::ScopedLock lock(processorSwapLock);
+        if (sampleProcessor)
+            wasPlaying = sampleProcessor->isPlaying;
+    }
+
+    resumeShouldPlay.store(wasPlaying && !isStopped.load());
+    resumeAfterPrepare.store(true);
 }
 
 void SampleSfxModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midiMessages)
@@ -150,6 +173,24 @@ void SampleSfxModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, ju
     {
         outBus.clear();
         return;
+    }
+
+    const float resumeNorm = pendingResumeNormalized.exchange(-1.0f);
+    if (resumeNorm >= 0.0f)
+    {
+        if (currentSample && currentSample->stereo.getNumSamples() > 0)
+        {
+            const double totalSamples = (double)currentSample->stereo.getNumSamples();
+            const double clampedSample = juce::jlimit(0.0, totalSamples, (double)resumeNorm * totalSamples);
+            currentProcessor->setCurrentPosition(clampedSample);
+            updateCachedPosition(clampedSample, totalSamples);
+            if (resumeShouldPlay.exchange(false))
+                currentProcessor->isPlaying = true;
+        }
+        else
+        {
+            pendingResumeNormalized.store(resumeNorm);
+        }
     }
     
     // Multi-bus input architecture
@@ -326,6 +367,10 @@ void SampleSfxModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, ju
         if (lastOutputValues[0]) lastOutputValues[0]->store(peakAbs(0));
         if (lastOutputValues[1]) lastOutputValues[1]->store(peakAbs(1));
     }
+
+    if (currentSample)
+        updateCachedPosition(currentProcessor->getCurrentPosition(), (double)currentSample->stereo.getNumSamples());
+    moduleIsPlaying.store(currentProcessor->isPlaying);
 }
 
 void SampleSfxModuleProcessor::reset()
@@ -338,10 +383,88 @@ void SampleSfxModuleProcessor::reset()
 
 void SampleSfxModuleProcessor::forceStop()
 {
-    if (sampleProcessor != nullptr)
+    handleStopRequest();
+}
+
+void SampleSfxModuleProcessor::updateCachedPosition(double samplePos, double totalSamples)
+{
+    lastKnownSamplePosition.store(samplePos);
+    if (totalSamples > 0.0)
     {
-        sampleProcessor->isPlaying = false;
+        const double normalized = juce::jlimit(0.0, 1.0, samplePos / totalSamples);
+        lastKnownNormalizedPosition.store((float)normalized);
     }
+}
+
+void SampleSfxModuleProcessor::snapshotPlaybackState()
+{
+    double samplePos = lastKnownSamplePosition.load();
+    double totalSamples = 0.0;
+
+    {
+        const juce::ScopedLock lock(processorSwapLock);
+        if (sampleProcessor)
+            samplePos = sampleProcessor->getCurrentPosition();
+        if (currentSample)
+            totalSamples = (double)currentSample->stereo.getNumSamples();
+    }
+
+    updateCachedPosition(samplePos, totalSamples);
+}
+
+void SampleSfxModuleProcessor::handlePauseRequest()
+{
+    snapshotPlaybackState();
+    resumeAfterPrepare.store(true);
+    resumeShouldPlay.store(false);
+    isStopped.store(false);
+
+    const juce::ScopedLock lock(processorSwapLock);
+    if (sampleProcessor)
+        sampleProcessor->isPlaying = false;
+}
+
+void SampleSfxModuleProcessor::handleStopRequest()
+{
+    snapshotPlaybackState();
+
+    {
+        const juce::ScopedLock queueGuard(queueLock);
+        triggerQueue.clear();
+    }
+
+    std::shared_ptr<SampleBank::Sample> safeSample;
+    double totalSamples = 0.0;
+    {
+        const juce::ScopedLock lock(processorSwapLock);
+        safeSample = currentSample;
+        if (sampleProcessor)
+            sampleProcessor->isPlaying = false;
+        if (safeSample)
+            totalSamples = (double)safeSample->stereo.getNumSamples();
+        const float startNorm = rangeStartParam ? rangeStartParam->load() : 0.0f;
+        const double startSample = totalSamples > 0.0 ? juce::jlimit(0.0, totalSamples, (double)startNorm * totalSamples) : 0.0;
+        if (sampleProcessor && totalSamples > 0.0)
+            sampleProcessor->setCurrentPosition(startSample);
+        lastKnownSamplePosition.store(startSample);
+        lastKnownNormalizedPosition.store(totalSamples > 0.0 ? (float)juce::jlimit(0.0, 1.0, startSample / totalSamples) : 0.0f);
+    }
+
+    pendingResumeNormalized.store(-1.0f);
+    resumeAfterPrepare.store(false);
+    resumeShouldPlay.store(false);
+    isStopped.store(true);
+}
+
+void SampleSfxModuleProcessor::handlePlayRequest()
+{
+    resumeAfterPrepare.store(false);
+    resumeShouldPlay.store(false);
+    isStopped.store(false);
+
+    const juce::ScopedLock lock(processorSwapLock);
+    if (sampleProcessor)
+        sampleProcessor->isPlaying = true;
 }
 
 void SampleSfxModuleProcessor::setSampleFolder(const juce::File& folder)
@@ -582,6 +705,10 @@ void SampleSfxModuleProcessor::createSampleProcessor()
     
     // Reset position without starting playback - wait for trigger
     newProcessor->resetPosition();
+    lastKnownSamplePosition.store(startNorm * sourceLength);
+    lastKnownNormalizedPosition.store(startNorm);
+    pendingResumeNormalized.store(-1.0f);
+    isStopped.store(true);
     
     // Set parameters from our APVTS
     newProcessor->setZoneTimeStretchRatio(1.0f); // No time stretch for SFX
@@ -621,6 +748,29 @@ juce::File SampleSfxModuleProcessor::getLastFolder() const
     }
     
     return juce::File();
+}
+
+void SampleSfxModuleProcessor::setTimingInfo(const TransportState& state)
+{
+    ModuleProcessor::setTimingInfo(state);
+
+    const bool previousTransportPlaying = lastTransportPlaying.exchange(state.isPlaying);
+    const bool transportPlayEdge = state.isPlaying && !previousTransportPlaying;
+    const bool transportStopEdge = !state.isPlaying && previousTransportPlaying;
+    const TransportCommand lastCommand = state.lastCommand.load();
+
+    if (transportStopEdge)
+    {
+        if (lastCommand == TransportCommand::Stop)
+            handleStopRequest();
+        else
+            handlePauseRequest();
+    }
+    else if (transportPlayEdge)
+    {
+        if (resumeShouldPlay.exchange(false) || state.isPlaying)
+            handlePlayRequest();
+    }
 }
 
 void SampleSfxModuleProcessor::getStateInformation(juce::MemoryBlock& destData)

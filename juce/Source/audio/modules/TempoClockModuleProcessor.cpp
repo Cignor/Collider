@@ -109,8 +109,8 @@ void TempoClockModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
     // Handle edge controls (play/stop/reset/tap/nudge)
     // FIX: Only allow these to modify BPM if CV is NOT connected
     auto edge = [&](const float* cv, bool& last){ bool now = (cv && cv[0] > 0.5f); bool rising = now && !last; last = now; return rising; };
-    if (edge(playCV, lastPlayHigh))   if (auto* p = getParent()) p->setPlaying(true);
-    if (edge(stopCV, lastStopHigh))   if (auto* p = getParent()) p->setPlaying(false);
+    if (edge(playCV, lastPlayHigh))   if (auto* p = getParent()) p->applyTransportCommand(TransportCommand::Play);
+    if (edge(stopCV, lastStopHigh))   if (auto* p = getParent()) p->applyTransportCommand(TransportCommand::Stop);
     if (edge(resetCV, lastResetHigh)) if (auto* p = getParent()) p->resetTransportPosition();
     
     // TAP TEMPO (CV Input): Calculate BPM from interval between taps (ONLY if BPM CV not connected)

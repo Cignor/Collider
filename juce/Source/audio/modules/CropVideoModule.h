@@ -67,6 +67,7 @@ private:
     
     // CV Input Value
     std::atomic<juce::uint32> currentSourceId { 0 };
+    juce::uint32 cachedResolvedSourceId { 0 };
     
     // Tracking & Detection State
     std::atomic<bool> manualTrackingActive { false };
@@ -88,5 +89,10 @@ private:
     juce::Image latestInputFrameForGui;  // NEW: Holds the uncropped input for drawing
     juce::Image latestOutputFrameForGui; // RENAMED: Holds the cropped output
     juce::CriticalSection imageLock;
+
+    cv::Mat lastFrameBgr;
+    juce::CriticalSection frameLock;
+
+    juce::uint32 storedLogicalId { 0 };
 };
 

@@ -92,6 +92,37 @@
 #include "../modules/OutletModuleProcessor.h"
 #include "../modules/MetaModuleProcessor.h"
 
+void ModularSynthProcessor::setPlayingWithCommand(bool playing, TransportCommand command)
+{
+    m_transportState.lastCommand.store(command);
+    m_transportState.isPlaying = playing;
+
+    if (auto processors = activeAudioProcessors.load())
+    {
+        for (const auto& modulePtr : *processors)
+            if (modulePtr)
+                modulePtr->setTimingInfo(m_transportState);
+    }
+}
+
+void ModularSynthProcessor::applyTransportCommand(TransportCommand command)
+{
+    switch (command)
+    {
+        case TransportCommand::Play:
+            setPlayingWithCommand(true, TransportCommand::Play);
+            break;
+        case TransportCommand::Pause:
+            setPlayingWithCommand(false, TransportCommand::Pause);
+            break;
+        case TransportCommand::Stop:
+            setPlayingWithCommand(false, TransportCommand::Stop);
+            break;
+        default:
+            break;
+    }
+}
+
 #if JUCE_DEBUG
 namespace
 {
@@ -743,7 +774,7 @@ void ModularSynthProcessor::setStateInformation(const void* data, int sizeInByte
     // CRITICAL: Stop transport BEFORE commitChanges() to prevent auto-start during load
     // This ensures processBlock() sees transport as stopped and doesn't auto-start modules
     juce::Logger::writeToLog("[STATE] Stopping transport before commitChanges()...");
-    setPlaying(false); // Stop transport and broadcast to all modules
+    applyTransportCommand(TransportCommand::Stop); // Stop transport and broadcast to all modules
     
     juce::Logger::writeToLog("[STATE] Calling commitChanges()...");
     commitChanges();
@@ -751,7 +782,7 @@ void ModularSynthProcessor::setStateInformation(const void* data, int sizeInByte
     // CRITICAL: Broadcast stopped transport state to all newly created modules
     // This ensures modules created during commitChanges() receive the stopped state
     juce::Logger::writeToLog("[STATE] Broadcasting stopped transport state to all modules...");
-    setPlaying(false); // Broadcast again to ensure all modules receive stopped state
+    applyTransportCommand(TransportCommand::Stop); // Broadcast again to ensure all modules receive stopped state
     
     // CRITICAL: Force stop all modules after patch load (safety net)
     // This ensures no modules are playing even if they auto-started during load

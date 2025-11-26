@@ -370,21 +370,6 @@ void VideoFXModule::applyKaleidoscope(cv::Mat& ioFrame, int mode)
 
 void VideoFXModule::run()
 {
-    // Resolve our logical ID once at the start
-    juce::uint32 myLogicalId = storedLogicalId;
-    if (myLogicalId == 0 && parentSynth != nullptr)
-    {
-        for (const auto& info : parentSynth->getModulesInfo())
-        {
-            if (parentSynth->getModuleForLogical(info.first) == this)
-            {
-                myLogicalId = info.first;
-                storedLogicalId = myLogicalId; // Cache it
-                break;
-            }
-        }
-    }
-    
     cv::Mat processedFrame;
 #if defined(WITH_CUDA_SUPPORT)
     cv::cuda::GpuMat gpuFrame;
@@ -393,9 +378,89 @@ void VideoFXModule::run()
     while (!threadShouldExit())
     {
         juce::uint32 sourceId = currentSourceId.load();
-        if (sourceId == 0) { wait(50); continue; }
+        cv::Mat prefetchedFrame;
+        
+        if (sourceId == 0)
+        {
+            if (cachedResolvedSourceId != 0)
+            {
+                sourceId = cachedResolvedSourceId;
+            }
+            else if (parentSynth != nullptr)
+            {
+                auto snapshot = parentSynth->getConnectionSnapshot();
+                if (snapshot && !snapshot->empty())
+                {
+                    juce::uint32 myLogicalId = storedLogicalId;
+                    if (myLogicalId == 0)
+                    {
+                        for (const auto& info : parentSynth->getModulesInfo())
+                        {
+                            if (parentSynth->getModuleForLogical(info.first) == this)
+                            {
+                                myLogicalId = info.first;
+                                storedLogicalId = myLogicalId;
+                                break;
+                            }
+                        }
+                    }
+                    
+                    if (myLogicalId != 0)
+                    {
+                        for (const auto& conn : *snapshot)
+                        {
+                            if (conn.dstLogicalId == myLogicalId && conn.dstChan == 0)
+                            {
+                                sourceId = conn.srcLogicalId;
+                                cachedResolvedSourceId = sourceId;
+                                break;
+                            }
+                        }
+                    }
+                }
+                
+                if (sourceId == 0)
+                {
+                    for (const auto& info : parentSynth->getModulesInfo())
+                    {
+                        juce::String moduleType = info.second.toLowerCase();
+                        if (moduleType.contains("video") || moduleType.contains("webcam") || moduleType == "video_file_loader")
+                        {
+                            cv::Mat testFrame = VideoFrameManager::getInstance().getFrame(info.first);
+                            if (!testFrame.empty())
+                            {
+                                sourceId = info.first;
+                                cachedResolvedSourceId = sourceId;
+                                prefetchedFrame = testFrame;
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        else
+        {
+            if (cachedResolvedSourceId != 0 && cachedResolvedSourceId != sourceId)
+                cachedResolvedSourceId = 0;
+        }
 
-        cv::Mat frame = VideoFrameManager::getInstance().getFrame(sourceId);
+        cv::Mat frame = prefetchedFrame.empty()
+            ? VideoFrameManager::getInstance().getFrame(sourceId)
+            : prefetchedFrame;
+        
+        if (!frame.empty())
+        {
+            const juce::ScopedLock lk(frameLock);
+            frame.copyTo(lastFrameBgr);
+        }
+        else
+        {
+            const juce::ScopedLock lk(frameLock);
+            if (!lastFrameBgr.empty())
+                frame = lastFrameBgr.clone();
+        }
+
         if (frame.empty()) { wait(33); continue; }
 
         // --- 1. Get all parameter values once ---
@@ -507,10 +572,24 @@ void VideoFXModule::run()
             applyKaleidoscope(processedFrame, kaleidoscopeMode);
         }
 
+        juce::uint32 myLogicalId = storedLogicalId;
+        if (myLogicalId == 0 && parentSynth != nullptr)
+        {
+            for (const auto& info : parentSynth->getModulesInfo())
+            {
+                if (parentSynth->getModuleForLogical(info.first) == this)
+                {
+                    myLogicalId = info.first;
+                    storedLogicalId = myLogicalId;
+                    break;
+                }
+            }
+        }
+
         // --- 4. Publish and update UI ---
+        updateGuiFrame(processedFrame);
         if (myLogicalId != 0)
             VideoFrameManager::getInstance().setFrame(myLogicalId, processedFrame);
-        updateGuiFrame(processedFrame);
 
         wait(33); // ~30 FPS
     }

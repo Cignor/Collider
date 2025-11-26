@@ -196,6 +196,10 @@ private:
     // Manual scrubbing state (for sync override)
     std::atomic<bool> manualScrubPending { false }; // True when user manually scrubbed and sync should be temporarily ignored
     std::atomic<int> manualScrubBlocksRemaining { 0 }; // Number of blocks to skip sync after manual scrub
+    std::atomic<double> currentBpm { 120.0 }; 
+    std::atomic<bool> lastTransportPlaying { false };
+    TransportCommand lastTransportCommand { TransportCommand::Stop }; // Track last command to detect transitions
+    double pausedPosition { -1.0 }; // Track position when paused (for resume in unsynced mode) 
     
     // --- Parameter References ---
     // Parameters are accessed directly via apvts.getRawParameterValue()

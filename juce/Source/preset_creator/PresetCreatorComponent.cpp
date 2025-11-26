@@ -35,7 +35,7 @@ PresetCreatorComponent::PresetCreatorComponent(juce::AudioDeviceManager& adm,
     // --- END OF FIX ---
     
     // CRITICAL: Ensure transport starts in stopped state (synchronized with UI)
-    synth->setPlaying(false);
+    synth->applyTransportCommand(TransportCommand::Stop);
     juce::Logger::writeToLog("[Transport] Initialized in stopped state");
     
     juce::Logger::writeToLog("Setting model on editor...");
@@ -161,7 +161,7 @@ void PresetCreatorComponent::resized()
     log.setBounds (10, getHeight() - 160, getWidth() - 20, 150);
 }
 
-void PresetCreatorComponent::setMasterPlayState(bool shouldBePlaying)
+void PresetCreatorComponent::setMasterPlayState(bool shouldBePlaying, TransportCommand command)
 {
     if (synth == nullptr)
         return;
@@ -184,8 +184,14 @@ void PresetCreatorComponent::setMasterPlayState(bool shouldBePlaying)
         }
     }
 
+    auto resolvedCommand = command;
+    if (resolvedCommand == TransportCommand::Pause && shouldBePlaying)
+        resolvedCommand = TransportCommand::Play;
+    else if (resolvedCommand == TransportCommand::Play && !shouldBePlaying)
+        resolvedCommand = TransportCommand::Pause;
+
     // 2. Control the synth's internal transport clock
-    synth->setPlaying(shouldBePlaying);
+    synth->applyTransportCommand(resolvedCommand);
 }
 
 PresetCreatorComponent::~PresetCreatorComponent()
@@ -462,11 +468,7 @@ bool PresetCreatorComponent::keyPressed (const juce::KeyPress& key)
 {
     if (key.getKeyCode() == juce::KeyPress::spaceKey)
     {
-        if (spacebarDownTime == 0) // Only record time on the initial press
-        {
-            spacebarDownTime = juce::Time::getMillisecondCounter();
-            wasLongPress = false;
-        }
+        spacebarHeld = true;
         return true;
     }
     return false;
@@ -476,23 +478,16 @@ bool PresetCreatorComponent::keyStateChanged (bool isKeyDown)
 {
     juce::ignoreUnused (isKeyDown);
 
-    if (!juce::KeyPress::isKeyCurrentlyDown(juce::KeyPress::spaceKey))
+    if (spacebarHeld && !juce::KeyPress::isKeyCurrentlyDown(juce::KeyPress::spaceKey))
     {
-        if (spacebarDownTime != 0) // Key was just released
+        spacebarHeld = false;
+        if (synth)
         {
-            auto pressDuration = juce::Time::getMillisecondCounter() - spacebarDownTime;
-            if (pressDuration < longPressThresholdMs && !wasLongPress)
-            {
-                // SHORT PRESS (TOGGLE)
-                if (synth)
-                {
-                    const bool isCurrentlyPlaying = synth->getTransportState().isPlaying;
-                    setMasterPlayState(!isCurrentlyPlaying); // Use the unified function
-                }
-            }
-            // If it was a long press, the timer callback will handle stopping.
+            const bool isCurrentlyPlaying = synth->getTransportState().isPlaying;
+            setMasterPlayState(!isCurrentlyPlaying,
+                               isCurrentlyPlaying ? TransportCommand::Pause
+                                                  : TransportCommand::Play);
         }
-        spacebarDownTime = 0; // Reset for next press
     }
     return false;
 }
@@ -572,28 +567,6 @@ void PresetCreatorComponent::timerCallback()
     if (editor != nullptr)
         editor->setMidiActivityFrames(midiActivityFrames);
     
-    if (synth != nullptr)
-    {
-        // Check for long press activation
-        if (spacebarDownTime != 0 && !wasLongPress)
-        {
-            auto pressDuration = juce::Time::getMillisecondCounter() - spacebarDownTime;
-            if (pressDuration >= longPressThresholdMs)
-            {
-                wasLongPress = true;
-                setMasterPlayState(true); // Use the unified function
-            }
-        }
-        
-        // Check for long press release
-        if (wasLongPress && !juce::KeyPress::isKeyCurrentlyDown(juce::KeyPress::spaceKey))
-        {
-            setMasterPlayState(false); // Use the unified function
-            wasLongPress = false;
-            spacebarDownTime = 0;
-        }
-    }
-
     static int counter = 0;
     if ((++counter % 60) == 0)
         juce::Logger::writeToLog ("[Heartbeat] UI alive");

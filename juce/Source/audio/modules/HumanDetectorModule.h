@@ -97,9 +97,13 @@ private:
     
     // Current source ID (read from input pin)
     std::atomic<juce::uint32> currentSourceId { 0 };
+    juce::uint32 cachedResolvedSourceId { 0 };
     
     // GUI preview
     juce::Image latestFrameForGui;
     juce::CriticalSection imageLock;
+    cv::Mat lastFrameBgr;
+    juce::CriticalSection frameLock;
+    juce::uint32 storedLogicalId { 0 };
 };
 

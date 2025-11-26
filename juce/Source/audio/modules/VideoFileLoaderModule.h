@@ -90,6 +90,9 @@ private:
     // Master clock: audio-driven synchronization for video sync
     std::atomic<juce::int64> currentAudioSamplePosition { 0 }; // The master clock - only advanced by audio thread
     std::atomic<double> sourceAudioSampleRate { 44100.0 }; // Sample rate of the loaded file
+    std::atomic<double> audioReaderLengthSamples { 0.0 };
+    std::atomic<float> lastKnownNormalizedPosition { 0.0f };
+    std::atomic<bool> resumeAfterPrepare { false };
     
     // Unified, thread-safe seeking mechanism for both video and audio
     std::atomic<float> pendingSeekNormalized { -1.0f };
@@ -167,5 +170,10 @@ private:
     int fifoSize { 0 };
     
     void loadAudioFromVideo();
+
+    void updateLastKnownNormalizedFromSamples(juce::int64 samplePos);
+    void snapshotPlaybackStateForResume();
+    void handlePauseRequest();
+    void handleStopRequest();
 };
 

@@ -91,6 +91,7 @@ private:
     // --- Transport State ---
     TransportState m_currentTransport;
     bool wasPlaying = false;
+    TransportCommand lastTransportCommand { TransportCommand::Stop };
 
     // --- UI State ---
     bool isDrawing = false;

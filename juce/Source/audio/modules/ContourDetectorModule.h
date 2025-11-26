@@ -78,12 +78,18 @@ private:
     cv::Ptr<cv::BackgroundSubtractor> backSub;
     
     std::atomic<juce::uint32> currentSourceId { 0 };
+    juce::uint32 cachedResolvedSourceId { 0 };
     ContourResult lastResultForAudio;
     juce::AbstractFifo fifo { 16 };
     std::vector<ContourResult> fifoBuffer;
     
     juce::Image latestFrameForGui;
     juce::CriticalSection imageLock;
+
+    cv::Mat lastFrameBgr;
+    juce::CriticalSection frameLock;
+
+    juce::uint32 storedLogicalId { 0 };
 };
 
 

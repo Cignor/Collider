@@ -19,10 +19,11 @@ public:
 
     // --- Audio Processing ---
     void prepareToPlay(double sampleRate, int samplesPerBlock) override;
-    void releaseResources() override {}
+    void releaseResources() override;
     void processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midiMessages) override;
     void reset() override;
     void forceStop() override;
+    void setTimingInfo(const TransportState& state) override;
 
     // --- State Management ---
     void getStateInformation(juce::MemoryBlock& destData) override;
@@ -100,6 +101,14 @@ public:
 private:
     // --- APVTS ---
     juce::AudioProcessorValueTreeState apvts;
+    std::atomic<bool> moduleIsPlaying { false };
+    std::atomic<bool> isStopped { true };
+    std::atomic<bool> resumeAfterPrepare { false };
+    std::atomic<bool> resumeShouldPlay { false };
+    std::atomic<float> lastKnownNormalizedPosition { 0.0f };
+    std::atomic<double> lastKnownSamplePosition { 0.0 };
+    std::atomic<float> pendingResumeNormalized { -1.0f };
+    std::atomic<bool> lastTransportPlaying { false };
 
     // --- Sample Management ---
     std::shared_ptr<SampleBank::Sample> currentSample;
@@ -162,5 +171,11 @@ private:
 #if defined(PRESET_CREATOR_UI)
     void generateWaveformPreview();
 #endif
+
+    void updateCachedPosition(double samplePos, double totalSamples);
+    void snapshotPlaybackState();
+    void handlePauseRequest();
+    void handleStopRequest();
+    void handlePlayRequest();
 };
 

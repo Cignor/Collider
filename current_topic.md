@@ -1,3 +1,23 @@
+## SampleLoader synced playback still stutters
+
+### Context
+- Project: Collider modular synth (JUCE/C++).
+- Current branch is heavily modified with new TransportCommand semantics.
+- SampleLoader synced playback was smoothed recently via `needTransportCatchup`, but the user reports extreme stutter even after reverting `SampleLoaderModuleProcessor.{h,cpp}` to HEAD (pre-smoothing).
+- Stutter only manifests when `SampleLoaderModuleProcessor` is synced to the global transport; unsynced playback is fine.
+- Reverting the SampleLoader files ruled out the new smoothing logic, so the issue likely lives in the transport broadcast path or another module that manipulates SampleLoader when synced.
+- Other relevant files touched in this workstream: `ModularSynthProcessor.*`, `ModuleProcessor.h`, `PresetCreatorComponent.*`, `ImGuiNodeEditorComponent.cpp`, `SampleSfxModuleProcessor.*`, sequencer processors.
+
+### What I need help with
+1. Identify which part of the synced transport pipeline is still forcing discontinuous seeks on SampleLoader even after the local revert.
+2. Confirm whether `ModularSynthProcessor::applyTransportCommand` or `ModuleProcessor::setTimingInfo` is introducing extra stop/start edges every block.
+3. Determine if any of the new timeline-master or TransportCommand changes are now re-broadcasting `TransportState::songPositionSeconds` in a way that causes SampleLoader to re-cue constantly.
+4. Suggest diagnostics or logging points to prove where the discontinuity originates (global transport vs module-local state).
+
+### Recent actions
+- Hard reset of `SampleLoaderModuleProcessor.cpp` and `.h` to the previous clean version (no smoothing flags).
+- Verified synced playback still stutters immediately afterwards.
+- No further local edits made yet; awaiting guidance before digging deeper to avoid thrashing.
 # Harmonic Shaper CV Modulation Routing Issue - JUCE Buffer Aliasing
 
 ## 🐛 Problem Summary

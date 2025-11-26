@@ -11,29 +11,32 @@
 juce::AudioProcessorValueTreeState::ParameterLayout VideoFileLoaderModule::createParameterLayout()
 {
     std::vector<std::unique_ptr<juce::RangedAudioParameter>> params;
-    
+
     params.push_back(std::make_unique<juce::AudioParameterBool>("loop", "Loop", true));
     params.push_back(std::make_unique<juce::AudioParameterBool>("sync", "Sync to Transport", true));
-    params.push_back(std::make_unique<juce::AudioParameterChoice>(
-        "zoomLevel", "Zoom Level", juce::StringArray{ "Small", "Normal", "Large" }, 1));
+    params.push_back(
+        std::make_unique<juce::AudioParameterChoice>(
+            "zoomLevel", "Zoom Level", juce::StringArray{"Small", "Normal", "Large"}, 1));
     // Playback controls
-    params.push_back(std::make_unique<juce::AudioParameterFloat>(
-        "speed", "Speed", juce::NormalisableRange<float>(0.25f, 4.0f, 0.01f), 1.0f));
-    params.push_back(std::make_unique<juce::AudioParameterFloat>(
-        "in", "Start", 0.0f, 1.0f, 0.0f));
-    params.push_back(std::make_unique<juce::AudioParameterFloat>(
-        "out", "End", 0.0f, 1.0f, 1.0f));
-    
+    params.push_back(
+        std::make_unique<juce::AudioParameterFloat>(
+            "speed", "Speed", juce::NormalisableRange<float>(0.25f, 4.0f, 0.01f), 1.0f));
+    params.push_back(std::make_unique<juce::AudioParameterFloat>("in", "Start", 0.0f, 1.0f, 0.0f));
+    params.push_back(std::make_unique<juce::AudioParameterFloat>("out", "End", 0.0f, 1.0f, 1.0f));
+
     // Add the engine selection parameter, defaulting to Naive for performance
-    params.push_back(std::make_unique<juce::AudioParameterChoice>("engine", "Engine", juce::StringArray { "RubberBand", "Naive" }, 1));
-    
-    return { params.begin(), params.end() };
+    params.push_back(
+        std::make_unique<juce::AudioParameterChoice>(
+            "engine", "Engine", juce::StringArray{"RubberBand", "Naive"}, 1));
+
+    return {params.begin(), params.end()};
 }
 
 VideoFileLoaderModule::VideoFileLoaderModule()
-    : ModuleProcessor(BusesProperties()
-                     .withOutput("CV Out", juce::AudioChannelSet::mono(), true)
-                     .withOutput("Audio Out", juce::AudioChannelSet::stereo(), true)),
+    : ModuleProcessor(
+          BusesProperties()
+              .withOutput("CV Out", juce::AudioChannelSet::mono(), true)
+              .withOutput("Audio Out", juce::AudioChannelSet::stereo(), true)),
       juce::Thread("Video File Loader Thread"),
       apvts(*this, nullptr, "VideoFileLoaderParams", createParameterLayout())
 {
@@ -58,12 +61,12 @@ void VideoFileLoaderModule::prepareToPlay(double sampleRate, int samplesPerBlock
     const juce::ScopedLock lock(audioLock);
     audioSampleRate = sampleRate;
     timePitch.prepare(sampleRate, 2, samplesPerBlock); // Prepare for stereo
-    
+
     // Initialize FIFO to ~5 seconds of stereo audio
     fifoSize = (int)(sampleRate * 5.0);
     audioFifo.setSize(2, fifoSize, false, true, true); // 2 channels
     abstractFifo.setTotalSize(fifoSize);
-    
+
     startThread(juce::Thread::Priority::normal);
     // If we already had a file open previously, request re-open on thread start
     // Also check videoFileToLoad (set by setExtraStateTree when loading from XML)
@@ -75,13 +78,31 @@ void VideoFileLoaderModule::prepareToPlay(double sampleRate, int samplesPerBlock
         // Ensure the file will be opened by the thread
         // (The thread will check videoFileToLoad.existsAsFile() and open it)
     }
+
+    // CRITICAL FIX: Don't clear resumeAfterPrepare here!
+    // When unsynced, setTimingInfo() needs this flag to restore position on play edge.
+    // Only queue a seek if we have a saved position, but preserve the flag.
+    const bool shouldResume = resumeAfterPrepare.load();
+    if (shouldResume)
+    {
+        const float savedPos = lastKnownNormalizedPosition.load();
+        if (savedPos >= 0.0f)
+        {
+            pendingSeekNormalized.store(savedPos);
+            needPreviewFrame.store(true);
+            juce::Logger::writeToLog(
+                "[VideoLoader prepareToPlay] Queuing seek to restored position: " +
+                juce::String(savedPos, 3));
+        }
+    }
 }
 
 void VideoFileLoaderModule::releaseResources()
 {
+    resumeAfterPrepare.store(!isStopped.load());
     signalThreadShouldExit();
     stopThread(5000);
-    
+
     const juce::ScopedLock lock(audioLock);
     timePitch.reset();
 }
@@ -90,7 +111,8 @@ void VideoFileLoaderModule::chooseVideoFile()
 {
     // Default to exe/video/ directory, create if it doesn't exist
     juce::File startDir;
-    auto exeDir = juce::File::getSpecialLocation(juce::File::currentExecutableFile).getParentDirectory();
+    auto       exeDir =
+        juce::File::getSpecialLocation(juce::File::currentExecutableFile).getParentDirectory();
     auto videoDir = exeDir.getChildFile("video");
     if (videoDir.exists() && videoDir.isDirectory())
         startDir = videoDir;
@@ -98,14 +120,13 @@ void VideoFileLoaderModule::chooseVideoFile()
         startDir = videoDir;
     else
         startDir = exeDir; // Fallback to exe folder if video directory can't be created
-    
-    fileChooser = std::make_unique<juce::FileChooser>("Select a video file...", 
-                                                       startDir, 
-                                                       "*.mp4;*.mov;*.avi;*.mkv;*.wmv");
-    auto chooserFlags = juce::FileBrowserComponent::openMode | juce::FileBrowserComponent::canSelectFiles;
-    
-    fileChooser->launchAsync(chooserFlags, [this](const juce::FileChooser& fc)
-    {
+
+    fileChooser = std::make_unique<juce::FileChooser>(
+        "Select a video file...", startDir, "*.mp4;*.mov;*.avi;*.mkv;*.wmv");
+    auto chooserFlags =
+        juce::FileBrowserComponent::openMode | juce::FileBrowserComponent::canSelectFiles;
+
+    fileChooser->launchAsync(chooserFlags, [this](const juce::FileChooser& fc) {
         auto file = fc.getResult();
         if (file.existsAsFile())
         {
@@ -130,14 +151,14 @@ void VideoFileLoaderModule::run()
             }
         }
     }
-    
+
     // One-time OpenCV build summary: detect if FFMPEG is integrated
     {
-        static std::atomic<bool> buildInfoLogged { false };
+        static std::atomic<bool> buildInfoLogged{false};
         if (!buildInfoLogged.exchange(true))
         {
             juce::String info(cv::getBuildInformation().c_str());
-            bool ffmpegYes = false;
+            bool         ffmpegYes = false;
             juce::String ffmpegLine;
             {
                 juce::StringArray lines;
@@ -147,34 +168,40 @@ void VideoFileLoaderModule::run()
                     if (ln.containsIgnoreCase("FFMPEG:"))
                     {
                         ffmpegLine = ln.trim();
-                        if (ln.containsIgnoreCase("YES")) ffmpegYes = true;
+                        if (ln.containsIgnoreCase("YES"))
+                            ffmpegYes = true;
                         break;
                     }
                 }
             }
-            juce::Logger::writeToLog("[OpenCV Build] FFMPEG integrated: " + juce::String(ffmpegYes ? "YES" : "NO") +
-                                     (ffmpegLine.isNotEmpty() ? juce::String(" | ") + ffmpegLine : juce::String()));
+            juce::Logger::writeToLog(
+                "[OpenCV Build] FFMPEG integrated: " + juce::String(ffmpegYes ? "YES" : "NO") +
+                (ffmpegLine.isNotEmpty() ? juce::String(" | ") + ffmpegLine : juce::String()));
         }
     }
 
-    bool sourceIsOpen = false;
-    double videoFps = 30.0; // Default FPS
+    bool   sourceIsOpen = false;
+    double videoFps = 30.0;        // Default FPS
     double frameDurationMs = 33.0; // Default to ~30fps
-    
+
     while (!threadShouldExit())
     {
         // Check if user requested a new file OR we need to (re)open the same file after restart
-        if (videoFileToLoad.existsAsFile() && (!videoCapture.isOpened() || videoFileToLoad != currentVideoFile))
+        if (videoFileToLoad.existsAsFile() &&
+            (!videoCapture.isOpened() || videoFileToLoad != currentVideoFile))
         {
             if (videoCapture.isOpened())
             {
                 videoCapture.release();
             }
-            
-            bool opened = videoCapture.open(videoFileToLoad.getFullPathName().toStdString(), cv::CAP_FFMPEG);
+
+            bool opened =
+                videoCapture.open(videoFileToLoad.getFullPathName().toStdString(), cv::CAP_FFMPEG);
             if (!opened)
             {
-                juce::Logger::writeToLog("[VideoFileLoader] FFmpeg backend open failed, retrying default backend: " + videoFileToLoad.getFullPathName());
+                juce::Logger::writeToLog(
+                    "[VideoFileLoader] FFmpeg backend open failed, retrying default backend: " +
+                    videoFileToLoad.getFullPathName());
                 opened = videoCapture.open(videoFileToLoad.getFullPathName().toStdString());
             }
             if (opened)
@@ -184,35 +211,40 @@ void VideoFileLoaderModule::run()
                 sourceIsOpen = true;
                 needPreviewFrame.store(true);
                 // Log backend name (helps diagnose FFmpeg vs MSMF at runtime)
-               #if (CV_VERSION_MAJOR >= 4)
+#if (CV_VERSION_MAJOR >= 4)
                 juce::String backendName = videoCapture.getBackendName().c_str();
                 juce::Logger::writeToLog("[VideoFileLoader] Backend: " + backendName);
-               #endif
+#endif
                 // Reset state for new media, but keep user-defined in/out ranges
                 totalFrames.store(0); // force re-evaluation
                 lastPosFrame.store(0);
                 pendingSeekFrame.store(0);
-                
+
                 // Get the video's native FPS and codec
                 videoFps = videoCapture.get(cv::CAP_PROP_FPS);
-                lastFourcc.store((int) videoCapture.get(cv::CAP_PROP_FOURCC));
+                lastFourcc.store((int)videoCapture.get(cv::CAP_PROP_FOURCC));
                 {
-                    // Backend and raw FOURCC diagnostics
-                    #if CV_VERSION_MAJOR >= 4
+// Backend and raw FOURCC diagnostics
+#if CV_VERSION_MAJOR >= 4
                     const std::string backendName = videoCapture.getBackendName();
-                    juce::Logger::writeToLog("[VideoFileLoader] Backend: " + juce::String(backendName.c_str()));
-                    #endif
+                    juce::Logger::writeToLog(
+                        "[VideoFileLoader] Backend: " + juce::String(backendName.c_str()));
+#endif
                     const int fourccRaw = lastFourcc.load();
-                    juce::Logger::writeToLog("[VideoFileLoader] Metadata: FPS=" + juce::String(videoFps,2) +
-                                             ", Raw FOURCC=" + juce::String(fourccRaw) +
-                                             " ('" + fourccToString(fourccRaw) + "')");
+                    juce::Logger::writeToLog(
+                        "[VideoFileLoader] Metadata: FPS=" + juce::String(videoFps, 2) +
+                        ", Raw FOURCC=" + juce::String(fourccRaw) + " ('" +
+                        fourccToString(fourccRaw) + "')");
                 }
                 {
-                    int tf = (int) videoCapture.get(cv::CAP_PROP_FRAME_COUNT);
-                    if (tf <= 1) tf = 0; // treat unknown/invalid as 0 so UI uses normalized seeks
+                    int tf = (int)videoCapture.get(cv::CAP_PROP_FRAME_COUNT);
+                    if (tf <= 1)
+                        tf = 0; // treat unknown/invalid as 0 so UI uses normalized seeks
                     totalFrames.store(tf);
-                    juce::Logger::writeToLog("[VideoFileLoader] Opened '" + currentVideoFile.getFileName() + "' frames=" + juce::String(tf) +
-                                             ", fps=" + juce::String(videoFps,2) + ", fourcc='" + fourccToString(lastFourcc.load()) + "'");
+                    juce::Logger::writeToLog(
+                        "[VideoFileLoader] Opened '" + currentVideoFile.getFileName() +
+                        "' frames=" + juce::String(tf) + ", fps=" + juce::String(videoFps, 2) +
+                        ", fourcc='" + fourccToString(lastFourcc.load()) + "'");
                     if (tf > 1 && videoFps > 0.0)
                         totalDurationMs.store((double)tf * (1000.0 / videoFps));
                     else
@@ -221,32 +253,35 @@ void VideoFileLoaderModule::run()
                 if (videoFps > 0.0 && videoFps < 1000.0) // Sanity check
                 {
                     frameDurationMs = 1000.0 / videoFps;
-                    juce::Logger::writeToLog("[VideoFileLoader] Opened: " + currentVideoFile.getFileName() + 
-                                            " (FPS: " + juce::String(videoFps, 2) + ")");
+                    juce::Logger::writeToLog(
+                        "[VideoFileLoader] Opened: " + currentVideoFile.getFileName() +
+                        " (FPS: " + juce::String(videoFps, 2) + ")");
                 }
                 else
                 {
                     frameDurationMs = 33.0; // Fallback to 30fps
-                    juce::Logger::writeToLog("[VideoFileLoader] Opened: " + currentVideoFile.getFileName() + 
-                                            " (FPS unknown, using 30fps)");
+                    juce::Logger::writeToLog(
+                        "[VideoFileLoader] Opened: " + currentVideoFile.getFileName() +
+                        " (FPS unknown, using 30fps)");
                 }
-                
+
                 // Load audio from the video file
                 loadAudioFromVideo();
             }
             else
             {
-                juce::Logger::writeToLog("[VideoFileLoader] Failed to open: " + videoFileToLoad.getFullPathName());
+                juce::Logger::writeToLog(
+                    "[VideoFileLoader] Failed to open: " + videoFileToLoad.getFullPathName());
                 videoFileToLoad = juce::File{};
             }
         }
-        
+
         if (!sourceIsOpen)
         {
             wait(500);
             continue;
         }
-        
+
         // --- UNIFIED SEEK LOGIC ---
         // This is now the single point of control for seeking, triggered by UI.
         float normSeekPos = pendingSeekNormalized.exchange(-1.0f);
@@ -256,21 +291,24 @@ void VideoFileLoaderModule::run()
             if (durMs > 0.0)
             {
                 double seekToMs = juce::jlimit(0.0, durMs, (double)normSeekPos * durMs);
-                
+
                 // Seek video
                 const juce::ScopedLock capLock(captureLock);
                 if (videoCapture.isOpened())
                     videoCapture.set(cv::CAP_PROP_POS_MSEC, seekToMs);
-                
+
                 // Seek audio by updating the read position - clear FIFO and reset
                 const juce::ScopedLock audioLk(audioLock);
-                if (audioReader) {
+                if (audioReader)
+                {
                     audioReadPosition = normSeekPos * audioReader->lengthInSamples;
-                    currentAudioSamplePosition.store((juce::int64)audioReadPosition); // SET THE MASTER CLOCK
+                    const juce::int64 newSamplePos = (juce::int64)audioReadPosition;
+                    currentAudioSamplePosition.store(newSamplePos); // SET THE MASTER CLOCK
+                    updateLastKnownNormalizedFromSamples(newSamplePos);
                     audioReader->resetPosition(); // Force seek on next read
-                    abstractFifo.reset(); // Clear FIFO on seek
-                    timePitch.reset(); // Reset time stretcher state after seek
-                    
+                    abstractFifo.reset();         // Clear FIFO on seek
+                    timePitch.reset();            // Reset time stretcher state after seek
+
                     // If we're the timeline master and playing, update transport immediately
                     // This ensures transport syncs immediately, not waiting for TempoClock to read
                     if (playing.load())
@@ -294,14 +332,17 @@ void VideoFileLoaderModule::run()
                 const juce::ScopedLock capLock(captureLock);
                 if (videoCapture.isOpened())
                     videoCapture.set(cv::CAP_PROP_POS_AVI_RATIO, (double)normSeekPos);
-                
+
                 // Seek audio by ratio - clear FIFO and reset
                 const juce::ScopedLock audioLk(audioLock);
-                if (audioReader) {
+                if (audioReader)
+                {
                     audioReadPosition = normSeekPos * audioReader->lengthInSamples;
-                    currentAudioSamplePosition.store((juce::int64)audioReadPosition); // SET THE MASTER CLOCK
+                    const juce::int64 newSamplePos = (juce::int64)audioReadPosition;
+                    currentAudioSamplePosition.store(newSamplePos); // SET THE MASTER CLOCK
+                    updateLastKnownNormalizedFromSamples(newSamplePos);
                     audioReader->resetPosition(); // Force seek on next read
-                    abstractFifo.reset(); // Clear FIFO on seek
+                    abstractFifo.reset();         // Clear FIFO on seek
                     timePitch.reset();
                 }
             }
@@ -314,19 +355,23 @@ void VideoFileLoaderModule::run()
         {
             const juce::ScopedLock capLock(captureLock);
             if (videoCapture.isOpened())
-                videoCapture.set(cv::CAP_PROP_POS_FRAMES, (double) seekTo);
+                videoCapture.set(cv::CAP_PROP_POS_FRAMES, (double)seekTo);
             needPreviewFrame.store(true);
-            
+
             // Also seek audio - clear FIFO and reset position
             const juce::ScopedLock audioLk(audioLock);
-            if (audioReader) {
+            if (audioReader)
+            {
                 int tfLocal = totalFrames.load();
-                if (tfLocal > 1) {
+                if (tfLocal > 1)
+                {
                     float normPos = (float)seekTo / (float)(tfLocal - 1);
                     audioReadPosition = normPos * audioReader->lengthInSamples;
-                    currentAudioSamplePosition.store((juce::int64)audioReadPosition); // SET THE MASTER CLOCK
+                    const juce::int64 newSamplePos = (juce::int64)audioReadPosition;
+                    currentAudioSamplePosition.store(newSamplePos); // SET THE MASTER CLOCK
+                    updateLastKnownNormalizedFromSamples(newSamplePos);
                     audioReader->resetPosition(); // Force seek on next read
-                    abstractFifo.reset(); // Clear FIFO on seek
+                    abstractFifo.reset();         // Clear FIFO on seek
                     timePitch.reset();
                 }
             }
@@ -337,26 +382,51 @@ void VideoFileLoaderModule::run()
         bool wasPlaying = lastPlaying.exchange(nowPlaying);
         if (nowPlaying && !wasPlaying)
         {
-            // Only seek to start if we were stopped (not paused)
-            if (isStopped.load())
+            // DEBUG: Log play edge detection in run() thread
+            const bool resumeFlag = resumeAfterPrepare.load();
+            const bool stoppedFlag = isStopped.load();
+            const float currentPos = lastKnownNormalizedPosition.load();
+            juce::Logger::writeToLog(
+                "[VideoLoader run()] Play edge detected - isStopped=" + juce::String(stoppedFlag ? "true" : "false") +
+                ", resumeFlag=" + juce::String(resumeFlag ? "true" : "false") +
+                ", currentPos=" + juce::String(currentPos, 3));
+
+            // PRIORITY 1: Check for paused resume first
+            // If we're resuming from pause, DON'T seek to start - let setTimingInfo() handle restoration
+            if (resumeFlag)
             {
+                juce::Logger::writeToLog("[VideoLoader run()] Detected resume from pause - skipping seek, waiting for setTimingInfo() to restore");
+                // Don't seek - let setTimingInfo() handle restoration
+                // Just mark as no longer stopped
+                isStopped.store(false);
+            }
+            // PRIORITY 2: Only seek to start if truly stopped (not paused)
+            else if (isStopped.load())
+            {
+                juce::Logger::writeToLog("[VideoLoader run()] Detected play from stopped state - seeking to IN point");
                 float inN = inNormParam ? inNormParam->load() : 0.0f;
                 pendingSeekNormalized.store(inN); // Use unified seek
                 needPreviewFrame.store(true);
-                
+
                 // Also seek audio - clear FIFO and reset position
                 const juce::ScopedLock audioLk(audioLock);
-                if (audioReader) {
+                if (audioReader)
+                {
                     audioReadPosition = inN * audioReader->lengthInSamples;
-                    currentAudioSamplePosition.store((juce::int64)audioReadPosition); // SET THE MASTER CLOCK
+                    const juce::int64 newSamplePos = (juce::int64)audioReadPosition;
+                    currentAudioSamplePosition.store(newSamplePos); // SET THE MASTER CLOCK
+                    updateLastKnownNormalizedFromSamples(newSamplePos);
                     audioReader->resetPosition(); // Force seek on next read
-                    abstractFifo.reset(); // Clear FIFO on seek
+                    abstractFifo.reset();         // Clear FIFO on seek
                     timePitch.reset();
                 }
                 // Mark as no longer stopped (now playing)
                 isStopped.store(false);
             }
-            // If paused, just resume from current position (no seek needed)
+            else
+            {
+                juce::Logger::writeToLog("[VideoLoader run()] Play edge but neither stopped nor resuming - already playing?");
+            }
         }
 
         // Respect play/pause
@@ -376,18 +446,21 @@ void VideoFileLoaderModule::run()
                         if (myLogicalId != 0)
                             VideoFrameManager::getInstance().setFrame(myLogicalId, preview);
                         updateGuiFrame(preview);
-                        juce::Logger::writeToLog("[VideoFileLoader][Preview] Published paused preview frame");
-                        lastPosFrame.store((int) videoCapture.get(cv::CAP_PROP_POS_FRAMES));
+                        juce::Logger::writeToLog(
+                            "[VideoFileLoader][Preview] Published paused preview frame");
+                        lastPosFrame.store((int)videoCapture.get(cv::CAP_PROP_POS_FRAMES));
                         if (lastFourcc.load() == 0)
-                            lastFourcc.store((int) videoCapture.get(cv::CAP_PROP_FOURCC));
+                            lastFourcc.store((int)videoCapture.get(cv::CAP_PROP_FOURCC));
                         // Also try to refresh total frames after the first paused read
                         if (totalFrames.load() <= 1)
                         {
-                            int tf = (int) videoCapture.get(cv::CAP_PROP_FRAME_COUNT);
+                            int tf = (int)videoCapture.get(cv::CAP_PROP_FRAME_COUNT);
                             if (tf > 1)
                             {
                                 totalFrames.store(tf);
-                                juce::Logger::writeToLog("[VideoFileLoader] Frame count acquired after paused read: " + juce::String(tf));
+                                juce::Logger::writeToLog(
+                                    "[VideoFileLoader] Frame count acquired after paused read: " +
+                                    juce::String(tf));
                             }
                         }
                     }
@@ -398,57 +471,75 @@ void VideoFileLoaderModule::run()
         }
 
         // Get current UI settings for this iteration
-        const bool isLoopingEnabled = loopParam && loopParam->load() > 0.5f;
+        const bool  isLoopingEnabled = loopParam && loopParam->load() > 0.5f;
         const float startNormalized = inNormParam ? inNormParam->load() : 0.0f;
         const float endNormalized = outNormParam ? outNormParam->load() : 1.0f;
-        
+
         // ==============================================================================
         //  SECTION 1: AUDIO DECODER (The "Producer")
         //  This thread's only job is to decode audio and keep the FIFO buffer full,
         //  respecting the start/end points and looping its read position.
         // ==============================================================================
-        if (playing.load() && audioLoaded.load() && audioReader && abstractFifo.getFreeSpace() > 8192)
+        if (playing.load() && audioLoaded.load() && audioReader &&
+            abstractFifo.getFreeSpace() > 8192)
         {
             const juce::ScopedLock audioLk(audioLock);
-            if (audioReader) 
+            if (audioReader)
             {
-                const juce::int64 startSample = (juce::int64)(startNormalized * audioReader->lengthInSamples);
+                const juce::int64 startSample =
+                    (juce::int64)(startNormalized * audioReader->lengthInSamples);
                 juce::int64 endSample = (juce::int64)(endNormalized * audioReader->lengthInSamples);
-                if (endSample <= startSample) endSample = audioReader->lengthInSamples;
-                
+                if (endSample <= startSample)
+                    endSample = audioReader->lengthInSamples;
+
                 // If the decoder's read-head is past the end point, loop it back to the start.
-                if (audioReadPosition >= endSample) {
-                    if (isLoopingEnabled) {
+                if (audioReadPosition >= endSample)
+                {
+                    if (isLoopingEnabled)
+                    {
                         audioReadPosition = (double)startSample;
                     }
                 }
-                
+
                 // If the read-head is within the valid range, decode a chunk of audio.
-                if (audioReadPosition < endSample) {
+                if (audioReadPosition < endSample)
+                {
                     const int samplesToRead = 4096;
                     const int numSamplesAvailable = (int)(endSample - audioReadPosition);
                     const int numSamplesToReadNow = juce::jmin(samplesToRead, numSamplesAvailable);
-                    
-                    if (numSamplesToReadNow > 0) {
+
+                    if (numSamplesToReadNow > 0)
+                    {
                         juce::AudioBuffer<float> tempReadBuffer(2, numSamplesToReadNow);
-                        float* channelPointers[] = { tempReadBuffer.getWritePointer(0), tempReadBuffer.getWritePointer(1) };
-                        if (audioReader->readSamples(reinterpret_cast<int* const*>(channelPointers), 2, 0, (juce::int64)audioReadPosition, numSamplesToReadNow)) {
+                        float*                   channelPointers[] = {
+                            tempReadBuffer.getWritePointer(0), tempReadBuffer.getWritePointer(1)};
+                        if (audioReader->readSamples(
+                                reinterpret_cast<int* const*>(channelPointers),
+                                2,
+                                0,
+                                (juce::int64)audioReadPosition,
+                                numSamplesToReadNow))
+                        {
                             audioReadPosition += numSamplesToReadNow;
-                            
+
                             // Write decoded audio into the FIFO buffer for the audio thread
                             int s1, z1, s2, z2;
                             abstractFifo.prepareToWrite(numSamplesToReadNow, s1, z1, s2, z2);
-                            if (z1 > 0) audioFifo.copyFrom(0, s1, tempReadBuffer, 0, 0, z1);
-                            if (z1 > 0) audioFifo.copyFrom(1, s1, tempReadBuffer, 1, 0, z1);
-                            if (z2 > 0) audioFifo.copyFrom(0, s2, tempReadBuffer, 0, z1, z2);
-                            if (z2 > 0) audioFifo.copyFrom(1, s2, tempReadBuffer, 1, z1, z2);
+                            if (z1 > 0)
+                                audioFifo.copyFrom(0, s1, tempReadBuffer, 0, 0, z1);
+                            if (z1 > 0)
+                                audioFifo.copyFrom(1, s1, tempReadBuffer, 1, 0, z1);
+                            if (z2 > 0)
+                                audioFifo.copyFrom(0, s2, tempReadBuffer, 0, z1, z2);
+                            if (z2 > 0)
+                                audioFifo.copyFrom(1, s2, tempReadBuffer, 1, z1, z2);
                             abstractFifo.finishedWrite(z1 + z2);
                         }
                     }
                 }
             }
         }
-        
+
         // ==============================================================================
         //  SECTION 2: VIDEO DISPLAY (The "Slave")
         //  This thread syncs the video to the master audio clock and handles the actual loop event.
@@ -457,40 +548,44 @@ void VideoFileLoaderModule::run()
         {
             // Get the current time from the master audio clock
             const juce::int64 audioMasterPosition = currentAudioSamplePosition.load();
-            const double sourceRate = sourceAudioSampleRate.load();
-            const double currentTimeInSeconds = (double)audioMasterPosition / sourceRate;
-            
+            const double      sourceRate = sourceAudioSampleRate.load();
+            const double      currentTimeInSeconds = (double)audioMasterPosition / sourceRate;
+
             // Calculate the target video frame that corresponds to the audio time
             int targetVideoFrame = (int)(currentTimeInSeconds * videoFps);
-            
+
             const int totalVideoFrames = totalFrames.load();
             const int startFrame = (int)(startNormalized * totalVideoFrames);
             const int endFrame = (int)(endNormalized * totalVideoFrames);
-            
+
             // **THE CRITICAL FIX**: Check if the MASTER AUDIO CLOCK has passed the end point.
             if (targetVideoFrame >= endFrame)
             {
                 if (isLoopingEnabled)
                 {
-                    // The loop is triggered HERE. Atomically reset all playback state for both audio and video.
+                    // The loop is triggered HERE. Atomically reset all playback state for both
+                    // audio and video.
                     const juce::ScopedLock audioLk(audioLock);
                     const juce::ScopedLock capLock(captureLock);
-                    
-                    const juce::int64 startSample = (juce::int64)(startNormalized * audioReader->lengthInSamples);
-                    
+
+                    const juce::int64 startSample =
+                        (juce::int64)(startNormalized * audioReader->lengthInSamples);
+
                     // Reset master clock to the start position
-                    currentAudioSamplePosition.store(startSample); 
+                    currentAudioSamplePosition.store(startSample);
+                    updateLastKnownNormalizedFromSamples(startSample);
                     // Reset audio decoder's read position
-                    audioReadPosition = (double)startSample; 
+                    audioReadPosition = (double)startSample;
                     // Reset video to the start frame
-                    if (videoCapture.isOpened()) videoCapture.set(cv::CAP_PROP_POS_FRAMES, startFrame); 
+                    if (videoCapture.isOpened())
+                        videoCapture.set(cv::CAP_PROP_POS_FRAMES, startFrame);
                     // Flush all buffers
-                    abstractFifo.reset(); 
-                    timePitch.reset(); 
-                    
+                    abstractFifo.reset();
+                    timePitch.reset();
+
                     // The new target is now the start frame
-                    targetVideoFrame = startFrame; 
-                    
+                    targetVideoFrame = startFrame;
+
                     // CRITICAL: If synced to transport, ensure playing state is maintained
                     // This prevents setTimingInfo() from stopping playback after loop
                     if (syncToTransport.load() && !playing.load())
@@ -499,28 +594,33 @@ void VideoFileLoaderModule::run()
                         playing.store(lastTransportPlaying.load());
                     }
                 }
-                else 
+                else
                 {
                     // Not looping, so stop playback and mark as stopped
+                    juce::Logger::writeToLog("[VideoLoader run()] End of video reached (not looping) - stopping and marking as stopped");
                     playing.store(false);
                     isStopped.store(true);
+                    resumeAfterPrepare.store(false);
                 }
             }
-            
-            // With the correct target frame determined, seek the video capture directly to that frame.
+
+            // With the correct target frame determined, seek the video capture directly to that
+            // frame.
             if (playing.load() && videoCapture.isOpened())
             {
                 const juce::ScopedLock capLock(captureLock);
                 int currentVideoFrame = (int)videoCapture.get(cv::CAP_PROP_POS_FRAMES);
-                
+
                 // Only update the video if the target frame is different from the current one.
-                if (currentVideoFrame != targetVideoFrame) {
+                if (currentVideoFrame != targetVideoFrame)
+                {
                     videoCapture.set(cv::CAP_PROP_POS_FRAMES, targetVideoFrame);
                 }
-                
+
                 // Read and display the single, correct frame for this point in time.
                 cv::Mat frame;
-                if (videoCapture.read(frame)) {
+                if (videoCapture.read(frame))
+                {
                     if (myLogicalId != 0)
                         VideoFrameManager::getInstance().setFrame(myLogicalId, frame);
                     updateGuiFrame(frame);
@@ -530,11 +630,11 @@ void VideoFileLoaderModule::run()
                 }
             }
         }
-        
+
         // A short sleep to prevent this thread from consuming 100% CPU
         wait(5);
     }
-    
+
     videoCapture.release();
     VideoFrameManager::getInstance().removeSource(getLogicalId());
 }
@@ -543,16 +643,15 @@ void VideoFileLoaderModule::updateGuiFrame(const cv::Mat& frame)
 {
     cv::Mat bgraFrame;
     cv::cvtColor(frame, bgraFrame, cv::COLOR_BGR2BGRA);
-    
+
     const juce::ScopedLock lock(imageLock);
-    
-    if (latestFrameForGui.isNull() || 
-        latestFrameForGui.getWidth() != bgraFrame.cols || 
+
+    if (latestFrameForGui.isNull() || latestFrameForGui.getWidth() != bgraFrame.cols ||
         latestFrameForGui.getHeight() != bgraFrame.rows)
     {
         latestFrameForGui = juce::Image(juce::Image::ARGB, bgraFrame.cols, bgraFrame.rows, true);
     }
-    
+
     juce::Image::BitmapData destData(latestFrameForGui, juce::Image::BitmapData::writeOnly);
     memcpy(destData.data, bgraFrame.data, bgraFrame.total() * bgraFrame.elemSize());
 }
@@ -563,51 +662,137 @@ juce::Image VideoFileLoaderModule::getLatestFrame()
     return latestFrameForGui.createCopy();
 }
 
+void VideoFileLoaderModule::updateLastKnownNormalizedFromSamples(juce::int64 samplePos)
+{
+    const double lengthSamples = audioReaderLengthSamples.load();
+    if (lengthSamples > 0.0)
+    {
+        const double normalized = juce::jlimit(0.0, 1.0, (double)samplePos / lengthSamples);
+        lastKnownNormalizedPosition.store((float)normalized);
+
+        const int tf = totalFrames.load();
+        if (tf > 1)
+        {
+            const int frame = juce::jlimit(0, tf - 1, (int)std::round(normalized * (tf - 1)));
+            lastPosFrame.store(frame);
+        }
+    }
+}
+
+void VideoFileLoaderModule::snapshotPlaybackStateForResume()
+{
+    updateLastKnownNormalizedFromSamples(currentAudioSamplePosition.load());
+}
+
+void VideoFileLoaderModule::handlePauseRequest()
+{
+    snapshotPlaybackStateForResume();
+    playing.store(false);
+    isStopped.store(false);
+    resumeAfterPrepare.store(true);
+
+    // DEBUG: Log pause with current position
+    const juce::int64 currentPos = currentAudioSamplePosition.load();
+    const double      sourceRate = sourceAudioSampleRate.load();
+    if (sourceRate > 0.0)
+    {
+        const double posSeconds = (double)currentPos / sourceRate;
+        juce::Logger::writeToLog(
+            "[VideoLoader Pause] Saved position: " + juce::String(currentPos) + " samples (" +
+            juce::String(posSeconds, 3) +
+            "s), normalized=" + juce::String(lastKnownNormalizedPosition.load(), 3));
+    }
+    else
+    {
+        juce::Logger::writeToLog(
+            "[VideoLoader Pause] WARNING: Saved position but invalid sample rate");
+    }
+}
+
+void VideoFileLoaderModule::handleStopRequest()
+{
+    // DEBUG: Log stop request with current state
+    const bool isPaused = !isStopped.load() && !playing.load();
+    const bool hasResumePos = resumeAfterPrepare.load() && lastKnownNormalizedPosition.load() >= 0.0f;
+    juce::Logger::writeToLog(
+        "[VideoLoader Stop] Stop requested - isPaused=" + juce::String(isPaused ? "true" : "false") +
+        ", hasResumePos=" + juce::String(hasResumePos ? "true" : "false") +
+        ", currentPos=" + juce::String(lastKnownNormalizedPosition.load(), 3));
+
+    // Protect paused state: If we're paused (not stopped) and have a resume position,
+    // don't treat this as a stop - preserve the resume state
+    // This prevents accidental clearing of resume state if stop command arrives before play
+    if (isPaused && hasResumePos)
+    {
+        juce::Logger::writeToLog("[VideoLoader Stop] Ignoring stop - preserving paused state with resume position");
+        // Still stop playing, but don't clear resume flag or mark as stopped
+        playing.store(false);
+        return;
+    }
+
+    snapshotPlaybackStateForResume();
+    playing.store(false);
+    isStopped.store(true);
+    resumeAfterPrepare.store(false);
+
+    // DEBUG: Log stop completion
+    juce::Logger::writeToLog("[VideoLoader Stop] Stopped and reset resume flag");
+}
+
 void VideoFileLoaderModule::loadAudioFromVideo()
 {
     const juce::ScopedLock lock(audioLock);
-    
+
     audioReader.reset();
     timePitch.reset(); // Reset the processing engine
     audioReadPosition = 0.0;
     currentAudioSamplePosition.store(0); // Reset master clock
+    updateLastKnownNormalizedFromSamples(0);
     abstractFifo.reset(); // Clear FIFO
     audioLoaded.store(false);
     isStopped.store(true); // New file loaded, start from beginning
-    
-    if (!currentVideoFile.existsAsFile()) return;
-    
+    resumeAfterPrepare.store(false);
+    audioReaderLengthSamples.store(0.0);
+    lastKnownNormalizedPosition.store(0.0f);
+
+    if (!currentVideoFile.existsAsFile())
+        return;
+
     try
     {
         audioReader = std::make_unique<FFmpegAudioReader>(currentVideoFile.getFullPathName());
-        
+
         if (audioReader != nullptr && audioReader->lengthInSamples > 0)
         {
             audioLoaded.store(true);
             sourceAudioSampleRate.store(audioReader->sampleRate); // Store the source sample rate
+            audioReaderLengthSamples.store((double)audioReader->lengthInSamples);
+            updateLastKnownNormalizedFromSamples(currentAudioSamplePosition.load());
             juce::Logger::writeToLog("[VideoFileLoader] Audio loaded via FFmpeg.");
         }
         else
         {
-            juce::Logger::writeToLog("[VideoFileLoader] Could not extract audio stream via FFmpeg.");
+            juce::Logger::writeToLog(
+                "[VideoFileLoader] Could not extract audio stream via FFmpeg.");
         }
     }
     catch (const std::exception& e)
     {
-        juce::Logger::writeToLog("[VideoFileLoader] Exception loading audio: " + juce::String(e.what()));
+        juce::Logger::writeToLog(
+            "[VideoFileLoader] Exception loading audio: " + juce::String(e.what()));
     }
 }
 
 void VideoFileLoaderModule::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midi)
 {
     juce::ignoreUnused(midi);
-    
+
     auto cvOutBus = getBusBuffer(buffer, false, 0);
     auto audioOutBus = getBusBuffer(buffer, false, 1);
-    
+
     cvOutBus.clear();
     audioOutBus.clear();
-    
+
     // --- BEGIN FIX ---
     // Find our own ID if it's not set
     juce::uint32 myLogicalId = storedLogicalId;
@@ -624,7 +809,7 @@ void VideoFileLoaderModule::processBlock(juce::AudioBuffer<float>& buffer, juce:
         }
     }
     // --- END FIX ---
-    
+
     // Output Source ID on CV bus
     if (cvOutBus.getNumChannels() > 0)
     {
@@ -633,7 +818,7 @@ void VideoFileLoaderModule::processBlock(juce::AudioBuffer<float>& buffer, juce:
         for (int ch = 0; ch < cvOutBus.getNumChannels(); ++ch)
             cvOutBus.copyFrom(ch, 1, cvOutBus, ch, 0, cvOutBus.getNumSamples() - 1);
     }
-    
+
     // Return early if not playing
     if (!audioLoaded.load() || !playing.load())
     {
@@ -653,18 +838,19 @@ void VideoFileLoaderModule::processBlock(juce::AudioBuffer<float>& buffer, juce:
                 videoFileToLoad = currentVideoFile;
         }
     }
-    
+
     // --- NEW FIFO-BASED AUDIO PROCESSING ---
     const juce::ScopedLock lock(audioLock);
-    const int numSamples = audioOutBus.getNumSamples();
-    
+    const int              numSamples = audioOutBus.getNumSamples();
+
     // 1. Configure the time-stretcher
     const float speed = juce::jlimit(0.25f, 4.0f, speedParam ? speedParam->load() : 1.0f);
-    const int engineIdx = engineParam ? engineParam->getIndex() : 1;
-    auto requestedMode = (engineIdx == 0) ? TimePitchProcessor::Mode::RubberBand : TimePitchProcessor::Mode::Fifo;
-    
+    const int   engineIdx = engineParam ? engineParam->getIndex() : 1;
+    auto        requestedMode =
+        (engineIdx == 0) ? TimePitchProcessor::Mode::RubberBand : TimePitchProcessor::Mode::Fifo;
+
     timePitch.setMode(requestedMode);
-    
+
     // THIS IS THE FIX: Calculate the correct ratio based on which engine is active.
     double ratioForEngine = (double)speed;
     if (requestedMode == TimePitchProcessor::Mode::RubberBand)
@@ -673,46 +859,49 @@ void VideoFileLoaderModule::processBlock(juce::AudioBuffer<float>& buffer, juce:
         // A speed of 2.0x requires a stretch ratio of 0.5 to play twice as fast.
         ratioForEngine = 1.0 / juce::jmax(0.01, (double)speed);
     }
-    
+
     // The Naive engine expects a direct playback speed, so `ratioForEngine` is unchanged.
     timePitch.setTimeStretchRatio(ratioForEngine);
-    
+
     // 2. Determine how many source frames we need to pull from the FIFO
     const int framesToReadFromFifo = (int)std::ceil((double)numSamples * speed);
-    
+
     if (abstractFifo.getNumReady() >= framesToReadFromFifo)
     {
         // Use a temporary buffer for interleaving
         juce::AudioBuffer<float> interleavedBuffer(1, framesToReadFromFifo * 2);
-        float* interleavedData = interleavedBuffer.getWritePointer(0);
-        
+        float*                   interleavedData = interleavedBuffer.getWritePointer(0);
+
         // 3. Read from FIFO and interleave the data
         int start1, size1, start2, size2;
         abstractFifo.prepareToRead(framesToReadFromFifo, start1, size1, start2, size2);
-        
+
         const float* fifoDataL = audioFifo.getReadPointer(0);
         const float* fifoDataR = audioFifo.getReadPointer(1);
-        
-        for (int i = 0; i < size1; ++i) {
+
+        for (int i = 0; i < size1; ++i)
+        {
             interleavedData[2 * i] = fifoDataL[start1 + i];
             interleavedData[2 * i + 1] = fifoDataR[start1 + i];
         }
-        if (size2 > 0) {
-            for (int i = 0; i < size2; ++i) {
+        if (size2 > 0)
+        {
+            for (int i = 0; i < size2; ++i)
+            {
                 interleavedData[2 * (size1 + i)] = fifoDataL[start2 + i];
                 interleavedData[2 * (size1 + i) + 1] = fifoDataR[start2 + i];
             }
         }
         abstractFifo.finishedRead(size1 + size2);
         const int readCount = size1 + size2; // How many samples we actually read from FIFO
-        
+
         // 4. Feed the time-stretcher
         timePitch.putInterleaved(interleavedData, framesToReadFromFifo);
-        
+
         // 5. Retrieve processed audio
         juce::AudioBuffer<float> tempOutput(1, numSamples * 2);
         int produced = timePitch.receiveInterleaved(tempOutput.getWritePointer(0), numSamples);
-        
+
         // 6. De-interleave into the output bus
         if (produced > 0)
         {
@@ -725,10 +914,12 @@ void VideoFileLoaderModule::processBlock(juce::AudioBuffer<float>& buffer, juce:
                     dest[i] = (ch == 0) ? processedData[i * 2] : processedData[i * 2 + 1];
                 }
             }
-            
+
             // THIS IS THE FIX: Advance the master clock by the number of samples consumed
-            currentAudioSamplePosition.store(currentAudioSamplePosition.load() + readCount);
-            
+            const juce::int64 updatedSamplePos = currentAudioSamplePosition.load() + readCount;
+            currentAudioSamplePosition.store(updatedSamplePos);
+            updateLastKnownNormalizedFromSamples(updatedSamplePos);
+
             // If we're the timeline master and playing, update transport position continuously
             // This ensures transport stays in sync regardless of processing order
             if (playing.load())
@@ -740,7 +931,7 @@ void VideoFileLoaderModule::processBlock(juce::AudioBuffer<float>& buffer, juce:
                     if (sourceRate > 0.0)
                     {
                         const juce::int64 currentPos = currentAudioSamplePosition.load();
-                        double newPosSeconds = (double)currentPos / sourceRate;
+                        double            newPosSeconds = (double)currentPos / sourceRate;
                         parentSynth->setTransportPositionSeconds(newPosSeconds);
                     }
                 }
@@ -762,8 +953,9 @@ juce::ValueTree VideoFileLoaderModule::getExtraStateTree() const
 
 void VideoFileLoaderModule::setExtraStateTree(const juce::ValueTree& state)
 {
-    if (!state.hasType("VideoFileLoaderState")) return;
-    
+    if (!state.hasType("VideoFileLoaderState"))
+        return;
+
     juce::String filePath = state.getProperty("videoFilePath", "").toString();
     if (filePath.isNotEmpty())
     {
@@ -774,11 +966,13 @@ void VideoFileLoaderModule::setExtraStateTree(const juce::ValueTree& state)
             // Also set currentVideoFile so prepareToPlay() will trigger reload
             // This ensures the video opens immediately when play is clicked after loading
             currentVideoFile = restoredFile;
-            juce::Logger::writeToLog("[VideoFileLoader] Restored video file from preset: " + filePath);
+            juce::Logger::writeToLog(
+                "[VideoFileLoader] Restored video file from preset: " + filePath);
         }
         else
         {
-            juce::Logger::writeToLog("[VideoFileLoader] Warning: Saved video file not found: " + filePath);
+            juce::Logger::writeToLog(
+                "[VideoFileLoader] Warning: Saved video file not found: " + filePath);
         }
     }
 }
@@ -787,24 +981,25 @@ void VideoFileLoaderModule::setExtraStateTree(const juce::ValueTree& state)
 ImVec2 VideoFileLoaderModule::getCustomNodeSize() const
 {
     // Return different width based on zoom level (0=240,1=480,2=960)
-    int level = zoomLevelParam ? (int) zoomLevelParam->load() : 1;
+    int level = zoomLevelParam ? (int)zoomLevelParam->load() : 1;
     level = juce::jlimit(0, 2, level);
-    const float widths[3] { 240.0f, 480.0f, 960.0f };
+    const float widths[3]{240.0f, 480.0f, 960.0f};
     return ImVec2(widths[level], 0.0f);
 }
 
-void VideoFileLoaderModule::drawParametersInNode(float itemWidth,
-                                                 const std::function<bool(const juce::String& paramId)>& isParamModulated,
-                                                 const std::function<void()>& onModificationEnded)
+void VideoFileLoaderModule::drawParametersInNode(
+    float                                                   itemWidth,
+    const std::function<bool(const juce::String& paramId)>& isParamModulated,
+    const std::function<void()>&                            onModificationEnded)
 {
     const auto& theme = ThemeManager::getInstance().getCurrentTheme();
     ImGui::PushItemWidth(itemWidth);
-    
+
     if (ImGui::Button("Load Video File...", ImVec2(itemWidth, 0)))
     {
         chooseVideoFile();
     }
-    
+
     if (currentVideoFile.existsAsFile())
     {
         const juce::String fileName = currentVideoFile.getFileName();
@@ -814,34 +1009,33 @@ void VideoFileLoaderModule::drawParametersInNode(float itemWidth,
     {
         ThemeText("No file loaded", theme.text.disabled);
     }
-    
+
     bool loop = loopParam->load() > 0.5f;
     if (ImGui::Checkbox("Loop", &loop))
     {
         *dynamic_cast<juce::AudioParameterBool*>(apvts.getParameter("loop")) = loop;
         onModificationEnded();
     }
-    
+
     // Transport sync and play/stop controls
     bool sync = syncParam ? (*syncParam > 0.5f) : true;
     if (ImGui::Checkbox("Sync to Transport", &sync))
     {
         syncToTransport.store(sync);
-        if (auto* p = dynamic_cast<juce::AudioParameterBool*>(apvts.getParameter("sync"))) *p = sync;
+        if (auto* p = dynamic_cast<juce::AudioParameterBool*>(apvts.getParameter("sync")))
+            *p = sync;
         if (sync)
         {
             playing.store(lastTransportPlaying.load());
-            // Ensure thread will (re)open current file if needed after transport resumes
-            if (currentVideoFile.existsAsFile())
-                videoFileToLoad = currentVideoFile;
         }
     }
 
     ImGui::SameLine();
     bool localPlaying = playing.load();
     bool localStopped = isStopped.load();
-    if (sync) ImGui::BeginDisabled();
-    
+    if (sync)
+        ImGui::BeginDisabled();
+
     // Play/Pause button: shows "Pause" when playing, "Play" when paused or stopped
     const char* playPauseBtn = localPlaying ? "Pause" : "Play";
     if (sync)
@@ -853,62 +1047,60 @@ void VideoFileLoaderModule::drawParametersInNode(float itemWidth,
     {
         if (localPlaying)
         {
-            // Pause: stop playing but keep position (not stopped)
-            playing.store(false);
-            isStopped.store(false);
+            juce::Logger::writeToLog("[VideoLoader UI] Play/Pause button - Pausing");
+            handlePauseRequest();
         }
         else
         {
-            // Play: start playing
-            // If was stopped (isStopped = true), run() thread will seek to start
-            // If was paused (isStopped = false), run() thread will resume from current position
-            // Explicitly preserve the paused state - if we were paused, ensure we stay paused
-            if (!localStopped)
-            {
-                // We were paused, so ensure isStopped stays false when resuming
-                isStopped.store(false);
-            }
-            // If we were stopped (localStopped = true), keep it true so run() thread can seek
+            juce::Logger::writeToLog(
+                "[VideoLoader UI] Play/Pause button - Playing, isStopped=" + juce::String(isStopped.load() ? "true" : "false") +
+                ", resumeFlag=" + juce::String(resumeAfterPrepare.load() ? "true" : "false"));
+            isStopped.store(false);
             playing.store(true);
         }
     }
-    
+
     // Stop button: reset to start position
     ImGui::SameLine();
     if (ImGui::Button("Stop"))
     {
         // Stop: reset position to start and mark as stopped
-        playing.store(false);
-        isStopped.store(true);
-        
+        handleStopRequest();
+
         // Immediately seek to start point
         float inN = inNormParam ? inNormParam->load() : 0.0f;
         pendingSeekNormalized.store(inN);
         needPreviewFrame.store(true);
-        
+
         // Also seek audio - clear FIFO and reset position
         const juce::ScopedLock audioLk(audioLock);
-        if (audioReader) {
+        if (audioReader)
+        {
             audioReadPosition = inN * audioReader->lengthInSamples;
-            currentAudioSamplePosition.store((juce::int64)audioReadPosition);
+            const juce::int64 newSamplePos = (juce::int64)audioReadPosition;
+            currentAudioSamplePosition.store(newSamplePos);
+            updateLastKnownNormalizedFromSamples(newSamplePos);
             audioReader->resetPosition();
             abstractFifo.reset();
             timePitch.reset();
         }
     }
-    
-    if (sync) ImGui::EndDisabled();
+
+    if (sync)
+        ImGui::EndDisabled();
 
     // Zoom buttons (+/-) across 3 levels
     bool zoomModulated = isParamModulated("zoomLevel");
-    int level = zoomLevelParam ? (int) zoomLevelParam->load() : 1;
+    int  level = zoomLevelParam ? (int)zoomLevelParam->load() : 1;
     level = juce::jlimit(0, 2, level);
-    float buttonWidth = (itemWidth / 2.0f) - 4.0f;
+    float      buttonWidth = (itemWidth / 2.0f) - 4.0f;
     const bool atMin = (level <= 0);
     const bool atMax = (level >= 2);
 
-    if (zoomModulated) ImGui::BeginDisabled();
-    if (atMin) ImGui::BeginDisabled();
+    if (zoomModulated)
+        ImGui::BeginDisabled();
+    if (atMin)
+        ImGui::BeginDisabled();
     if (ImGui::Button("-", ImVec2(buttonWidth, 0)))
     {
         int newLevel = juce::jmax(0, level - 1);
@@ -916,11 +1108,13 @@ void VideoFileLoaderModule::drawParametersInNode(float itemWidth,
             p->setValueNotifyingHost((float)newLevel / 2.0f);
         onModificationEnded();
     }
-    if (atMin) ImGui::EndDisabled();
+    if (atMin)
+        ImGui::EndDisabled();
 
     ImGui::SameLine();
 
-    if (atMax) ImGui::BeginDisabled();
+    if (atMax)
+        ImGui::BeginDisabled();
     if (ImGui::Button("+", ImVec2(buttonWidth, 0)))
     {
         int newLevel = juce::jmin(2, level + 1);
@@ -928,7 +1122,8 @@ void VideoFileLoaderModule::drawParametersInNode(float itemWidth,
             p->setValueNotifyingHost((float)newLevel / 2.0f);
         onModificationEnded();
     }
-    if (atMax) ImGui::EndDisabled();
+    if (atMax)
+        ImGui::EndDisabled();
     // Scroll-edit for zoom level
     if (!zoomModulated && ImGui::IsItemHovered())
     {
@@ -944,16 +1139,18 @@ void VideoFileLoaderModule::drawParametersInNode(float itemWidth,
             }
         }
     }
-    if (zoomModulated) ImGui::EndDisabled();
-    
+    if (zoomModulated)
+        ImGui::EndDisabled();
+
     const juce::String sourceIdText = juce::String::formatted("Source ID: %d", (int)getLogicalId());
     ThemeText(sourceIdText.toRawUTF8(), theme.text.section_header);
     {
-        int fcc = lastFourcc.load();
+        int          fcc = lastFourcc.load();
         juce::String codec = fourccToString(fcc);
         juce::String friendly = fourccFriendlyName(codec);
         juce::String ext = currentVideoFile.getFileExtension();
-        if (ext.startsWithChar('.')) ext = ext.substring(1);
+        if (ext.startsWithChar('.'))
+            ext = ext.substring(1);
         if (ext.isEmpty())
             ext = "unknown";
 
@@ -965,12 +1162,14 @@ void VideoFileLoaderModule::drawParametersInNode(float itemWidth,
 
     // ADD ENGINE SELECTION COMBO BOX
     bool engineModulated = isParamModulated("engine");
-    if (engineModulated) ImGui::BeginDisabled();
-    int engineIdx = engineParam ? engineParam->getIndex() : 1;
-    const char* items[] = { "RubberBand (High Quality)", "Naive (Low CPU)" };
+    if (engineModulated)
+        ImGui::BeginDisabled();
+    int         engineIdx = engineParam ? engineParam->getIndex() : 1;
+    const char* items[] = {"RubberBand (High Quality)", "Naive (Low CPU)"};
     if (ImGui::Combo("Engine", &engineIdx, items, 2))
     {
-        if (engineParam) *engineParam = engineIdx;
+        if (engineParam)
+            *engineParam = engineIdx;
         onModificationEnded();
     }
     // Scroll-edit for engine combo
@@ -987,13 +1186,15 @@ void VideoFileLoaderModule::drawParametersInNode(float itemWidth,
             }
         }
     }
-    if (engineModulated) ImGui::EndDisabled();
+    if (engineModulated)
+        ImGui::EndDisabled();
 
     // --- Playback speed (slider only) ---
-    bool speedModulated = isParamModulated("speed");
+    bool        speedModulated = isParamModulated("speed");
     const float speedFallback = speedParam ? speedParam->load() : 1.0f;
-    float spd = speedModulated ? getLiveParamValue("speed", speedFallback) : speedFallback;
-    if (speedModulated) ImGui::BeginDisabled();
+    float       spd = speedModulated ? getLiveParamValue("speed", speedFallback) : speedFallback;
+    if (speedModulated)
+        ImGui::BeginDisabled();
     if (ImGui::SliderFloat("Speed", &spd, 0.25f, 4.0f, "%.2fx"))
     {
         if (!speedModulated)
@@ -1002,21 +1203,26 @@ void VideoFileLoaderModule::drawParametersInNode(float itemWidth,
                 *p = spd;
         }
     }
-    if (ImGui::IsItemDeactivatedAfterEdit() && !speedModulated) onModificationEnded();
-    if (!speedModulated) adjustParamOnWheel(apvts.getParameter("speed"), "speed", spd);
-    if (speedModulated) ImGui::EndDisabled();
+    if (ImGui::IsItemDeactivatedAfterEdit() && !speedModulated)
+        onModificationEnded();
+    if (!speedModulated)
+        adjustParamOnWheel(apvts.getParameter("speed"), "speed", spd);
+    if (speedModulated)
+        ImGui::EndDisabled();
 
     // --- Trim / Timeline ---
     {
-        bool inModulated = isParamModulated("in");
-        bool outModulated = isParamModulated("out");
+        bool      inModulated = isParamModulated("in");
+        bool      outModulated = isParamModulated("out");
         const int tf = juce::jmax(1, totalFrames.load());
         float inN = inModulated ? getLiveParamValue("in", inNormParam ? inNormParam->load() : 0.0f)
                                 : (inNormParam ? inNormParam->load() : 0.0f);
-        float outN = outModulated ? getLiveParamValue("out", outNormParam ? outNormParam->load() : 1.0f)
-                                  : (outNormParam ? outNormParam->load() : 1.0f);
-        
-        if (inModulated) ImGui::BeginDisabled();
+        float outN = outModulated
+                         ? getLiveParamValue("out", outNormParam ? outNormParam->load() : 1.0f)
+                         : (outNormParam ? outNormParam->load() : 1.0f);
+
+        if (inModulated)
+            ImGui::BeginDisabled();
         if (ImGui::SliderFloat("Start", &inN, 0.0f, 1.0f, "%.3f"))
         {
             if (!inModulated)
@@ -1027,11 +1233,15 @@ void VideoFileLoaderModule::drawParametersInNode(float itemWidth,
                 pendingSeekNormalized.store(inN); // Use unified seek
             }
         }
-        if (ImGui::IsItemDeactivatedAfterEdit() && !inModulated) onModificationEnded();
-        if (!inModulated) adjustParamOnWheel(apvts.getParameter("in"), "in", inN);
-        if (inModulated) ImGui::EndDisabled();
+        if (ImGui::IsItemDeactivatedAfterEdit() && !inModulated)
+            onModificationEnded();
+        if (!inModulated)
+            adjustParamOnWheel(apvts.getParameter("in"), "in", inN);
+        if (inModulated)
+            ImGui::EndDisabled();
 
-        if (outModulated) ImGui::BeginDisabled();
+        if (outModulated)
+            ImGui::BeginDisabled();
         if (ImGui::SliderFloat("End", &outN, 0.0f, 1.0f, "%.3f"))
         {
             if (!outModulated)
@@ -1042,9 +1252,12 @@ void VideoFileLoaderModule::drawParametersInNode(float itemWidth,
                 onModificationEnded();
             }
         }
-        if (ImGui::IsItemDeactivatedAfterEdit() && !outModulated) onModificationEnded();
-        if (!outModulated) adjustParamOnWheel(apvts.getParameter("out"), "out", outN);
-        if (outModulated) ImGui::EndDisabled();
+        if (ImGui::IsItemDeactivatedAfterEdit() && !outModulated)
+            onModificationEnded();
+        if (!outModulated)
+            adjustParamOnWheel(apvts.getParameter("out"), "out", outN);
+        if (outModulated)
+            ImGui::EndDisabled();
 
         float pos = (tf > 1) ? ((float)lastPosFrame.load() / (float)tf) : 0.0f;
         // Clamp position UI between in/out
@@ -1054,9 +1267,11 @@ void VideoFileLoaderModule::drawParametersInNode(float itemWidth,
 
         // Position slider (manual scrub when not synced to transport)
         bool sliderChanged = false;
-        if (sync) ImGui::BeginDisabled();
+        if (sync)
+            ImGui::BeginDisabled();
         sliderChanged = ImGui::SliderFloat("Position", &pos, minPos, maxPos, "%.3f");
-        if (sync) ImGui::EndDisabled();
+        if (sync)
+            ImGui::EndDisabled();
         if (!sync)
         {
             if (sliderChanged)
@@ -1064,7 +1279,8 @@ void VideoFileLoaderModule::drawParametersInNode(float itemWidth,
                 pendingSeekNormalized.store(pos);
                 if (tf > 1)
                 {
-                    const int newFrame = (int)juce::jlimit(0, tf - 1, (int)std::round(pos * (float)(tf - 1)));
+                    const int newFrame =
+                        (int)juce::jlimit(0, tf - 1, (int)std::round(pos * (float)(tf - 1)));
                     lastPosFrame.store(newFrame);
                 }
             }
@@ -1074,13 +1290,14 @@ void VideoFileLoaderModule::drawParametersInNode(float itemWidth,
                 if (wheel != 0.0f)
                 {
                     const float step = 0.01f;
-                    const float newPos = juce::jlimit(minPos, maxPos, pos + (wheel > 0.0f ? step : -step));
+                    const float newPos =
+                        juce::jlimit(minPos, maxPos, pos + (wheel > 0.0f ? step : -step));
                     pendingSeekNormalized.store(newPos);
                 }
             }
         }
     }
-    
+
     ImGui::PopItemWidth();
 }
 
@@ -1096,7 +1313,7 @@ bool VideoFileLoaderModule::canProvideTimeline() const
 double VideoFileLoaderModule::getTimelinePositionSeconds() const
 {
     const juce::int64 audioPos = currentAudioSamplePosition.load();
-    const double sourceRate = sourceAudioSampleRate.load();
+    const double      sourceRate = sourceAudioSampleRate.load();
     if (sourceRate > 0.0)
         return (double)audioPos / sourceRate;
     return 0.0;
@@ -1107,16 +1324,14 @@ double VideoFileLoaderModule::getTimelineDurationSeconds() const
     return totalDurationMs.load() / 1000.0;
 }
 
-bool VideoFileLoaderModule::isTimelineActive() const
-{
-    return playing.load();
-}
+bool VideoFileLoaderModule::isTimelineActive() const { return playing.load(); }
 
 void VideoFileLoaderModule::forceStop()
 {
     // Force stop playback regardless of sync settings
     playing.store(false);
     isStopped.store(true);
+    resumeAfterPrepare.store(false);
     lastTransportPlaying.store(false);
 }
 
@@ -1127,74 +1342,186 @@ void VideoFileLoaderModule::setTimingInfo(const TransportState& state)
     // 1. VideoLoader scrubs → updates transport
     // 2. Transport broadcasts → VideoLoader receives update
     // 3. VideoLoader reacts → creates feedback loop
-    auto* parentSynth = getParent();
-    if (parentSynth && parentSynth->isModuleTimelineMaster(getLogicalId()))
-    {
-        // We're the timeline master - ignore transport (we drive it, not follow it)
-        return;
-    }
-    
+    auto*      parentSynth = getParent();
+    const bool isTimelineMaster =
+        parentSynth && parentSynth->isModuleTimelineMaster(getLogicalId());
+
     // Not the timeline master - accept transport updates normally
-    lastTransportPlaying.store(state.isPlaying);
-    if (syncToTransport.load())
+    const bool previousTransportPlaying = lastTransportPlaying.exchange(state.isPlaying);
+    const bool transportPlayEdge = state.isPlaying && !previousTransportPlaying;
+    const bool transportStopEdge = !state.isPlaying && previousTransportPlaying;
+    const TransportCommand lastCommand = state.lastCommand.load();
+
+    auto applyCommand = [&](TransportCommand command) {
+        if (command == TransportCommand::Stop)
+            handleStopRequest();
+        else
+            handlePauseRequest();
+    };
+
+    if (!syncToTransport.load())
     {
-        playing.store(state.isPlaying);
-        
-        // CRITICAL: Sync playback position to transport when following timeline
-        // This ensures VideoFileLoaderModule stays in sync with TempoClock
-        // BUT: Don't override position if we just looped (let loop reset take priority)
-        if (state.isPlaying && audioLoaded.load() && audioReader)
+        // DEBUG: Log transport state changes
+        juce::Logger::writeToLog(
+            "[VideoLoader setTimingInfo] Unsynced mode - isPlaying=" + juce::String(state.isPlaying ? "true" : "false") +
+            ", previousPlaying=" + juce::String(previousTransportPlaying ? "true" : "false") +
+            ", lastCommand=" + juce::String((int)lastCommand) +
+            ", transportStopEdge=" + juce::String(transportStopEdge ? "true" : "false") +
+            ", transportPlayEdge=" + juce::String(transportPlayEdge ? "true" : "false") +
+            ", isStopped=" + juce::String(isStopped.load() ? "true" : "false") +
+            ", resumeFlag=" + juce::String(resumeAfterPrepare.load() ? "true" : "false"));
+
+        if (transportStopEdge)
         {
-            const double sourceRate = sourceAudioSampleRate.load();
-            if (sourceRate > 0.0 && state.songPositionSeconds >= 0.0)
+            juce::Logger::writeToLog("[VideoLoader setTimingInfo] Transport stop edge - applying command: " + juce::String((int)lastCommand));
+            applyCommand(lastCommand);
+        }
+        else if (transportPlayEdge)
+        {
+            // DEBUG: Log resume attempt
+            const bool  shouldResume = resumeAfterPrepare.load();
+            const float savedPos = lastKnownNormalizedPosition.load();
+            juce::Logger::writeToLog(
+                "[VideoLoader setTimingInfo] Transport play edge detected, shouldResume=" +
+                juce::String(shouldResume ? "true" : "false") + ", savedPos=" + juce::String(savedPos, 3) +
+                ", isStopped=" + juce::String(isStopped.load() ? "true" : "false"));
+
+            // CRITICAL: Restore position if we're resuming from pause
+            if (shouldResume && savedPos >= 0.0f)
             {
-                // Calculate target sample position from transport
-                const juce::int64 targetSamplePos = (juce::int64)(state.songPositionSeconds * sourceRate);
-                
-                // Only update if position has changed significantly (avoid constant seeks)
-                const juce::int64 currentPos = currentAudioSamplePosition.load();
-                const juce::int64 diff = std::abs(targetSamplePos - currentPos);
-                
-                // CRITICAL FIX: Don't sync position if transport position is past the end
-                // This prevents transport from overriding loop reset
-                // Calculate end position to check bounds
-                const float startNormalized = inNormParam ? inNormParam->load() : 0.0f;
-                const float endNormalized = outNormParam ? outNormParam->load() : 1.0f;
-                const juce::int64 startSample = (juce::int64)(startNormalized * audioReader->lengthInSamples);
-                const juce::int64 endSample = (juce::int64)(endNormalized * audioReader->lengthInSamples);
-                
-                // Only sync if transport position is within valid range
-                // If transport is past the end, let the loop detection handle it
-                if (targetSamplePos >= startSample && targetSamplePos < endSample)
+                // Restore audio position
+                const juce::ScopedLock audioLk(audioLock);
+                if (audioReader && audioReader->lengthInSamples > 0)
                 {
-                    // Update if difference is more than 1 block of samples (prevents micro-seeks)
-                    if (diff > 512) // ~10ms at 48kHz
+                    const juce::int64 targetSamplePos =
+                        (juce::int64)(savedPos * audioReader->lengthInSamples);
+                    currentAudioSamplePosition.store(targetSamplePos);
+                    audioReadPosition = (double)targetSamplePos;
+                    updateLastKnownNormalizedFromSamples(targetSamplePos);
+
+                    // Reset processing to prevent stale audio
+                    audioReader->resetPosition();
+                    abstractFifo.reset();
+                    timePitch.reset();
+
+                    // Restore video position
+                    const int tf = totalFrames.load();
+                    if (tf > 1)
                     {
-                        const juce::ScopedLock audioLk(audioLock);
-                        if (audioReader)
-                        {
-                            // Update master clock to match transport
-                            currentAudioSamplePosition.store(targetSamplePos);
-                            // Update decoder read position
-                            audioReadPosition = (double)targetSamplePos;
-                            // Reset position for next read
-                            audioReader->resetPosition();
-                            // Clear FIFO to prevent stale audio
-                            abstractFifo.reset();
-                            // Reset time stretcher to prevent artifacts
-                            timePitch.reset();
-                        }
+                        const int targetFrame =
+                            juce::jlimit(0, tf - 1, (int)std::round(savedPos * (tf - 1)));
+                        pendingSeekFrame.store(targetFrame);
+                        lastPosFrame.store(targetFrame);
+                    }
+
+                    // CRITICAL: Also set pendingSeekNormalized so the unified seek system knows about the restoration
+                    // This ensures the run() thread and other systems recognize the restored position
+                    pendingSeekNormalized.store(savedPos);
+                    juce::Logger::writeToLog(
+                        "[VideoLoader Resume] Set pendingSeekNormalized to restored position: " +
+                        juce::String(savedPos, 3));
+
+                    const double sourceRate = sourceAudioSampleRate.load();
+                    if (sourceRate > 0.0)
+                    {
+                        const double posSeconds = (double)targetSamplePos / sourceRate;
+                        juce::Logger::writeToLog(
+                            "[VideoLoader Resume] Restored position: " +
+                            juce::String(targetSamplePos) + " samples (" +
+                            juce::String(posSeconds, 3) + "s)");
                     }
                 }
-                // If transport position is past the end, don't sync - let loop detection handle it
+                else
+                {
+                    juce::Logger::writeToLog(
+                        "[VideoLoader Resume] WARNING: Cannot restore position, no audio loaded");
+                }
+
+                // Clear the resume flag after restoring
+                resumeAfterPrepare.store(false);
             }
+            else
+            {
+                juce::Logger::writeToLog(
+                    "[VideoLoader Resume] No saved position to restore or not resuming");
+            }
+
+            isStopped.store(false);
+            playing.store(true);
         }
+        return;
+    }
+
+    if (transportStopEdge)
+        applyCommand(lastCommand);
+
+    playing.store(state.isPlaying);
+
+    // CRITICAL: Sync playback position to transport when following timeline
+    // This ensures VideoFileLoaderModule stays in sync with TempoClock
+    // BUT: Don't override position if we just looped (let loop reset take priority)
+    if (state.isPlaying && audioLoaded.load() && audioReader)
+    {
+        const double sourceRate = sourceAudioSampleRate.load();
+        if (sourceRate > 0.0 && state.songPositionSeconds >= 0.0)
+        {
+            // Calculate target sample position from transport
+            const juce::int64 targetSamplePos =
+                (juce::int64)(state.songPositionSeconds * sourceRate);
+
+            // Only update if position has changed significantly (avoid constant seeks)
+            const juce::int64 currentPos = currentAudioSamplePosition.load();
+            const juce::int64 diff = std::abs(targetSamplePos - currentPos);
+
+            // CRITICAL FIX: Don't sync position if transport position is past the end
+            // This prevents transport from overriding loop reset
+            // Calculate end position to check bounds
+            const float       startNormalized = inNormParam ? inNormParam->load() : 0.0f;
+            const float       endNormalized = outNormParam ? outNormParam->load() : 1.0f;
+            const juce::int64 startSample =
+                (juce::int64)(startNormalized * audioReader->lengthInSamples);
+            const juce::int64 endSample =
+                (juce::int64)(endNormalized * audioReader->lengthInSamples);
+
+            // Only sync if transport position is within valid range
+            // If transport is past the end, let the loop detection handle it
+            if (targetSamplePos >= startSample && targetSamplePos < endSample)
+            {
+                // Update if difference is more than 1 block of samples (prevents micro-seeks)
+                if (diff > 512) // ~10ms at 48kHz
+                {
+                    const juce::ScopedLock audioLk(audioLock);
+                    if (audioReader)
+                    {
+                        // Update master clock to match transport
+                        currentAudioSamplePosition.store(targetSamplePos);
+                        updateLastKnownNormalizedFromSamples(targetSamplePos);
+                        // Update decoder read position
+                        audioReadPosition = (double)targetSamplePos;
+                        // Reset position for next read
+                        audioReader->resetPosition();
+                        // Clear FIFO to prevent stale audio
+                        abstractFifo.reset();
+                        // Reset time stretcher to prevent artifacts
+                        timePitch.reset();
+                    }
+                }
+            }
+            // If transport position is past the end, don't sync - let loop detection handle it
+        }
+    }
+
+    if (isTimelineMaster)
+    {
+        // Timeline masters ignore transport-controlled position updates beyond play/pause mirroring
+        return;
     }
 }
 
 void VideoFileLoaderModule::drawIoPins(const NodePinHelpers& helpers)
 {
-    // Although getDynamicOutputPins takes precedence, this ensures correctness if it's ever used as a fallback.
+    // Although getDynamicOutputPins takes precedence, this ensures correctness if it's ever used as
+    // a fallback.
     helpers.drawAudioOutputPin("Source ID", 0);
     helpers.drawAudioOutputPin("Audio L", 1);
     helpers.drawAudioOutputPin("Audio R", 2);
@@ -1204,17 +1531,16 @@ void VideoFileLoaderModule::drawIoPins(const NodePinHelpers& helpers)
 std::vector<DynamicPinInfo> VideoFileLoaderModule::getDynamicOutputPins() const
 {
     std::vector<DynamicPinInfo> pins;
-    
+
     // CV Output: Bus 0, Channel 0 (mono - contains logical ID for video routing)
-    pins.push_back({ "Source ID", 0, PinDataType::Video });
-    
+    pins.push_back({"Source ID", 0, PinDataType::Video});
+
     // Audio Outputs: Bus 1, Channels 0-1 (stereo)
     // Note: Channel indices are absolute, so bus 1 channel 0 = absolute channel 1
     // (bus 0 has 1 channel, so bus 1 starts at absolute index 1)
     int bus1StartChannel = 1; // After bus 0's 1 channel
-    pins.push_back({ "Audio L", bus1StartChannel + 0, PinDataType::Audio });
-    pins.push_back({ "Audio R", bus1StartChannel + 1, PinDataType::Audio });
-    
+    pins.push_back({"Audio L", bus1StartChannel + 0, PinDataType::Audio});
+    pins.push_back({"Audio R", bus1StartChannel + 1, PinDataType::Audio});
+
     return pins;
 }
-

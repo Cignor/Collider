@@ -13,6 +13,9 @@
 #endif
 
 // <<< TRANSPORT STATE FOR GLOBAL CLOCK >>>
+// Transport commands for Play/Pause/Stop intent
+enum class TransportCommand : int { Play = 0, Pause = 1, Stop = 2 };
+
 // Transport state struct shared by all modules
 struct TransportState {
     bool isPlaying = false;
@@ -23,6 +26,8 @@ struct TransportState {
     std::atomic<int> globalDivisionIndex { -1 };
     // Flag to indicate if a Tempo Clock module is controlling the BPM (for UI feedback)
     std::atomic<bool> isTempoControlledByModule { false };
+    // Last transport command issued (Play/Pause/Stop)
+    std::atomic<TransportCommand> lastCommand { TransportCommand::Stop };
     
     // Global reset flag (Pulse)
     // When true, all time-based modules (LFOs, Sequencers) must reset phase to 0
@@ -38,6 +43,7 @@ struct TransportState {
         , songPositionSeconds(other.songPositionSeconds)
         , globalDivisionIndex(other.globalDivisionIndex.load())
         , isTempoControlledByModule(other.isTempoControlledByModule.load())
+        , lastCommand(other.lastCommand.load())
         , forceGlobalReset(other.forceGlobalReset.load())
     {}
     
@@ -52,6 +58,7 @@ struct TransportState {
             songPositionSeconds = other.songPositionSeconds;
             globalDivisionIndex.store(other.globalDivisionIndex.load());
             isTempoControlledByModule.store(other.isTempoControlledByModule.load());
+            lastCommand.store(other.lastCommand.load());
             forceGlobalReset.store(other.forceGlobalReset.load());
         }
         return *this;

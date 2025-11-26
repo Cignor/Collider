@@ -74,7 +74,16 @@ private:
             planarOutput.setSize (channels, juce::jmax (1, blockSize * 2));
         }
         void reset() { if (stretcher) stretcher->reset(); }
-        void setTimeStretchRatio (double ratio) { if (stretcher) stretcher->setTimeRatio (juce::jlimit(0.25,4.0,ratio)); }
+        // Treat incoming value as a SPEED multiplier (2.0 = twice as fast, 0.5 = half speed)
+        // Rubber Band's timeRatio is a DURATION multiplier (2.0 = twice as long, slower),
+        // so we invert the speed to get the correct internal ratio.
+        void setTimeStretchRatio (double speed)
+        {
+            if (! stretcher) return;
+            const double clampedSpeed = juce::jlimit (0.25, 4.0, speed);
+            const double timeRatio    = 1.0 / clampedSpeed;
+            stretcher->setTimeRatio (timeRatio);
+        }
         void setPitchSemitones (double semis) { if (stretcher) stretcher->setPitchScale (std::pow(2.0, juce::jlimit(-24.0,24.0,semis)/12.0)); }
         int putInterleaved (const float* inputLR, int frames)
         {

@@ -91,6 +91,7 @@ private:
 
     // Source ID (set by audio thread)
     std::atomic<juce::uint32> currentSourceId { 0 };
+    juce::uint32 cachedResolvedSourceId { 0 };
     
     // FIFO for communication
     ObjectDetectionResult lastResultForAudio;
@@ -100,6 +101,11 @@ private:
     // UI preview
     juce::Image latestFrameForGui;
     juce::CriticalSection imageLock;
+
+    cv::Mat lastFrameBgr;
+    juce::CriticalSection frameLock;
+
+    juce::uint32 storedLogicalId { 0 };
 };
 
 

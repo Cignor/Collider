@@ -59,21 +59,23 @@ void StrokeSequencerModuleProcessor::releaseResources() {}
 
 void StrokeSequencerModuleProcessor::setTimingInfo(const TransportState& state)
 {
-    // Check if the transport has just started playing
-    if (state.isPlaying && !wasPlaying)
+    ModuleProcessor::setTimingInfo(state);
+
+    const TransportCommand command = state.lastCommand.load();
+    if (command != lastTransportCommand)
     {
-        // Reset to the beginning when play is pressed
-        playheadPosition = 0.0;
-        phase = 0.0;
-        
-        // Initialize previous position to avoid spurious triggers on start
-        previousPlayheadPos = 0.0;
-        previousStrokeY = 0.5f; // Center
-        
-        juce::Logger::writeToLog("[StrokeSeq] Transport started - reset positions");
+        if (command == TransportCommand::Stop)
+        {
+            playheadPosition = 0.0;
+            phase = 0.0;
+            previousPlayheadPos = 0.0;
+            previousStrokeY = 0.5f;
+            juce::Logger::writeToLog("[StrokeSeq] Transport stop - reset positions");
+        }
+        lastTransportCommand = command;
     }
+
     wasPlaying = state.isPlaying;
-    
     m_currentTransport = state;
 }
 

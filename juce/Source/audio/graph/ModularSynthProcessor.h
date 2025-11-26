@@ -88,15 +88,10 @@ public:
     
     TransportState getTransportState() const { return m_transportState; }
     void setPlaying(bool playing) {
-        m_transportState.isPlaying = playing;
-        // Immediately broadcast timing change to modules even if audio callback is stopped
-        if (auto processors = activeAudioProcessors.load())
-        {
-            for (const auto& modulePtr : *processors)
-                if (modulePtr)
-                    modulePtr->setTimingInfo(m_transportState);
-        }
+        setPlayingWithCommand(playing, playing ? TransportCommand::Play : TransportCommand::Pause);
     }
+    void setPlayingWithCommand(bool playing, TransportCommand command);
+    void applyTransportCommand(TransportCommand command);
     void setBPM(double bpm) { m_transportState.bpm = juce::jlimit(20.0, 999.0, bpm); }
     void setGlobalDivisionIndex(int idx) { m_transportState.globalDivisionIndex.store(idx); }
     void setTempoControlledByModule(bool controlled) { m_transportState.isTempoControlledByModule.store(controlled); }
