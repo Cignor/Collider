@@ -119,6 +119,7 @@ private:
     
     // Source ID (read from input pin)
     std::atomic<juce::uint32> currentSourceId { 0 };
+    juce::uint32 cachedResolvedSourceId { 0 }; // For XML load before processBlock runs
     
     // Frame tracking
     std::atomic<int> currentFrameNumber { 0 };
@@ -165,6 +166,7 @@ private:
     
     // Timeline zoom (pixels per second)
     float zoomPixelsPerSecond = 50.0f;
+    float timelineScrollPixels = 0.0f;
     
     // Keyframe dragging state (UI thread only)
     int draggingKeyframeIndex { -1 };

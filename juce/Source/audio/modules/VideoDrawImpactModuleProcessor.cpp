@@ -112,27 +112,88 @@ void VideoDrawImpactModuleProcessor::processBlock(juce::AudioBuffer<float>& buff
 
 void VideoDrawImpactModuleProcessor::run()
 {
-    // Resolve our logical ID once at the start
-    juce::uint32 myLogicalId = storedLogicalId;
-    if (myLogicalId == 0 && parentSynth != nullptr)
-    {
-        for (const auto& info : parentSynth->getModulesInfo())
-        {
-            if (parentSynth->getModuleForLogical(info.first) == this)
-            {
-                myLogicalId = info.first;
-                storedLogicalId = myLogicalId;
-                break;
-            }
-        }
-    }
-    
     cv::Mat processedFrame;
     
     while (!threadShouldExit())
     {
+        // Resolve source ID as early as possible (handles XML load before processBlock runs)
         juce::uint32 sourceId = currentSourceId.load();
-        cv::Mat frame = VideoFrameManager::getInstance().getFrame(sourceId);
+        cv::Mat prefetchedFrame;
+        
+        if (sourceId == 0)
+        {
+            // Try cached resolved ID first
+            if (cachedResolvedSourceId != 0)
+            {
+                sourceId = cachedResolvedSourceId;
+            }
+            // Otherwise resolve via connection graph / fallback search
+            else if (parentSynth != nullptr)
+            {
+                auto snapshot = parentSynth->getConnectionSnapshot();
+                if (snapshot && !snapshot->empty())
+                {
+                    // Resolve our logical ID so we can find the upstream connection
+                    juce::uint32 myLogicalId = storedLogicalId;
+                    if (myLogicalId == 0)
+                    {
+                        for (const auto& info : parentSynth->getModulesInfo())
+                        {
+                            if (parentSynth->getModuleForLogical(info.first) == this)
+                            {
+                                myLogicalId = info.first;
+                                storedLogicalId = myLogicalId;
+                                break;
+                            }
+                        }
+                    }
+                    
+                    if (myLogicalId != 0)
+                    {
+                        for (const auto& conn : *snapshot)
+                        {
+                            if (conn.dstLogicalId == myLogicalId && conn.dstChan == 0)
+                            {
+                                sourceId = conn.srcLogicalId;
+                                cachedResolvedSourceId = sourceId;
+                                break;
+                            }
+                        }
+                    }
+                }
+                
+                // FINAL FALLBACK: search any video source that already has frames
+                if (sourceId == 0)
+                {
+                    for (const auto& info : parentSynth->getModulesInfo())
+                    {
+                        juce::String moduleType = info.second.toLowerCase();
+                        if (moduleType.contains("video") || moduleType.contains("webcam")
+                            || moduleType == "video_file_loader")
+                        {
+                            cv::Mat testFrame = VideoFrameManager::getInstance().getFrame(info.first);
+                            if (!testFrame.empty())
+                            {
+                                sourceId = info.first;
+                                cachedResolvedSourceId = sourceId;
+                                prefetchedFrame = testFrame;
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        else
+        {
+            if (cachedResolvedSourceId != 0 && cachedResolvedSourceId != sourceId)
+                cachedResolvedSourceId = 0;
+        }
+        
+        // Fetch frame from the VideoFrameManager (unless fallback already grabbed one)
+        cv::Mat frame = !prefetchedFrame.empty()
+                        ? prefetchedFrame
+                        : VideoFrameManager::getInstance().getFrame(sourceId);
         
         // Cache last good frame for paused/no-signal scenarios (like ColorTrackerModule)
         if (!frame.empty())
@@ -151,8 +212,6 @@ void VideoDrawImpactModuleProcessor::run()
         if (frame.empty())
         {
             // Wait longer when no frame is available (video might still be loading)
-            // This is especially important when loading from XML, as the video source
-            // needs time to open and produce the first frame
             wait(100);
             continue;
         }
@@ -203,18 +262,43 @@ void VideoDrawImpactModuleProcessor::run()
         // Clean up expired keyframes (when not timeline-driven)
         cleanupExpiredKeyframes();
         
-        // Publish processed frame
+        // Resolve logical ID continuously (parentSynth may become available later)
+        juce::uint32 myLogicalId = storedLogicalId;
+        if (myLogicalId == 0 && parentSynth != nullptr)
+        {
+            for (const auto& info : parentSynth->getModulesInfo())
+            {
+                if (parentSynth->getModuleForLogical(info.first) == this)
+                {
+                    myLogicalId = info.first;
+                    storedLogicalId = myLogicalId;
+                    break;
+                }
+            }
+        }
+        
+        // Update GUI preview regardless of passthrough state
+        updateGuiFrame(processedFrame);
+        
+        // Publish processed frame once we have a valid logical ID
         if (myLogicalId != 0)
             VideoFrameManager::getInstance().setFrame(myLogicalId, processedFrame);
-        
-        // Update GUI preview
-        updateGuiFrame(processedFrame);
         
         // Handle clear drawings button
         if (clearDrawingsParam && clearDrawingsParam->get())
         {
-            const juce::ScopedLock lock(drawingsLock);
-            activeDrawings.clear();
+            {
+                const juce::ScopedLock lock(drawingsLock);
+                activeDrawings.clear();
+            }
+            {
+                const juce::ScopedLock lock(timelineLock);
+                timelineKeyframes.clear();
+            }
+            {
+                const juce::ScopedLock lock(pendingOpsLock);
+                pendingDrawOps.clear();
+            }
             *clearDrawingsParam = false;  // Reset button
         }
         
@@ -314,23 +398,49 @@ bool VideoDrawImpactModuleProcessor::eraseKeyframesNear(double targetValue,
     const float clampedYTol = juce::jmax(0.0f, yTolerance);
     bool removed = false;
     
+    const double baseFrameDuration = juce::jmax(1e-4, lastFrameDurationSeconds.load());
+    const double fallbackPersistenceSeconds =
+        (framePersistenceParam ? juce::jmax(1, framePersistenceParam->get()) : 3) * baseFrameDuration;
+
+    auto intervalDelta = [&](double relative, double length, double wrap) -> double
+    {
+        auto single = [&](double rel) -> double
+        {
+            if (rel < 0.0)
+                return -rel;
+            if (rel > length)
+                return rel - length;
+            return 0.0;
+        };
+
+        double best = single(relative);
+        if (wrap > 0.0)
+        {
+            best = juce::jmin(best, single(relative + wrap));
+            best = juce::jmin(best, single(relative - wrap));
+        }
+        return best;
+    };
+
     auto newEnd = std::remove_if(timelineKeyframes.begin(), timelineKeyframes.end(),
         [&](const TimelineKeyframe& kf)
         {
-            double value = timelineMode ? kf.timeSeconds : static_cast<double>(kf.frameNumber);
-            double delta = std::abs(value - targetValue);
-            if (wrapLength > 0.0)
-            {
-                double wrapDelta = wrapLength - delta;
-                if (wrapDelta > 0.0)
-                    delta = juce::jmin(delta, wrapDelta);
-            }
+            double startValue = timelineMode ? kf.timeSeconds : static_cast<double>(kf.frameNumber);
+            double durationSeconds = kf.persistenceSeconds > 0.0 ? kf.persistenceSeconds : fallbackPersistenceSeconds;
+            if (durationSeconds <= 1e-6)
+                durationSeconds = fallbackPersistenceSeconds;
+
+            double lengthValue = timelineMode ? durationSeconds : juce::jmax(1.0, durationSeconds / baseFrameDuration);
+            double relative = targetValue - startValue;
+            double delta = intervalDelta(relative, lengthValue, timelineMode ? wrapLength : 0.0);
+
             if (delta <= clampedValueTol &&
                 std::abs(kf.normalizedY - normalizedY) <= clampedYTol)
             {
                 removed = true;
                 return true;
             }
+
             return false;
         });
     
@@ -622,6 +732,7 @@ juce::ValueTree VideoDrawImpactModuleProcessor::getExtraStateTree() const
     if (drawColorGParam) vt.setProperty("drawColorG", drawColorGParam->load(), nullptr);
     if (drawColorBParam) vt.setProperty("drawColorB", drawColorBParam->load(), nullptr);
     vt.setProperty("zoomPixelsPerSecond", zoomPixelsPerSecond, nullptr);
+    vt.setProperty("timelineScrollPixels", timelineScrollPixels, nullptr);
     
     // For integer parameters, convert from normalized value (0-1) to actual integer range
     if (auto* param = apvts.getParameter("framePersistence"))
@@ -704,6 +815,9 @@ void VideoDrawImpactModuleProcessor::setExtraStateTree(const juce::ValueTree& st
     // Restore zoom
     zoomPixelsPerSecond = (float)state.getProperty("zoomPixelsPerSecond", 50.0);
     zoomPixelsPerSecond = juce::jlimit(10.0f, 500.0f, zoomPixelsPerSecond); // Clamp to valid range
+    timelineScrollPixels = (float)state.getProperty("timelineScrollPixels", 0.0f);
+    if (!std::isfinite(timelineScrollPixels) || timelineScrollPixels < 0.0f)
+        timelineScrollPixels = 0.0f;
     
     updateDrawColorFromParams();
     
@@ -792,7 +906,19 @@ void VideoDrawImpactModuleProcessor::drawParametersInNode(float itemWidth,
     ImGui::PushID(this);
     
     const auto& theme = ThemeManager::getInstance().getCurrentTheme();
-    ImGui::PushItemWidth(itemWidth);
+    
+    const float baseNodeWidth = getCustomNodeSize().x > 0.0f ? getCustomNodeSize().x : 480.0f;
+    const float baseNodeHeight = 700.0f; // keep overall footprint stable and avoid clipping
+    const float paddingX = ImGui::GetStyle().WindowPadding.x;
+    const float contentWidth = juce::jmax(150.0f, baseNodeWidth - paddingX * 2.0f);
+    const ImU32 sectionBorderColor = ImGui::ColorConvertFloat4ToU32(theme.text.section_header);
+    const ImU32 disabledColor = ImGui::ColorConvertFloat4ToU32(theme.text.disabled);
+    const ImU32 accentColor = ImGui::ColorConvertFloat4ToU32(theme.accent);
+    ImGui::BeginChild("VideoDrawImpactContent",
+                      ImVec2(baseNodeWidth, baseNodeHeight),
+                      true,
+                      ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
+    ImGui::PushItemWidth(contentWidth);
     
     // Read data before any child windows (following visualization guide pattern)
     // Note: Video preview is handled centrally by ImGuiNodeEditorComponent
@@ -840,8 +966,8 @@ void VideoDrawImpactModuleProcessor::drawParametersInNode(float itemWidth,
     }
     
     // Calculate layout: color picker on left, palette on right
-    const float colorPickerWidth = itemWidth * 0.65f;  // 65% for color picker
-    const float paletteWidth = itemWidth - colorPickerWidth - 8.0f;  // Remaining space minus spacing
+    const float colorPickerWidth = contentWidth * 0.65f;  // 65% for color picker
+    const float paletteWidth = contentWidth - colorPickerWidth - 8.0f;  // Remaining space minus spacing
     const float swatchSize = 20.0f;  // Smaller swatches for compact layout
     const float spacing = 3.0f;
     const int cols = 3;  // 3 columns for better fit in narrow space
@@ -900,8 +1026,7 @@ void VideoDrawImpactModuleProcessor::drawParametersInNode(float itemWidth,
     // Create a group for the palette to keep it organized
     ImGui::BeginGroup();
     
-    // Compact label (optional, can be removed for even more space)
-    ImGui::TextDisabled("Used:");
+    ThemeText("Used Colors", theme.text.section_header);
     
     // Display color swatches in a compact grid (3 columns)
     for (int i = 0; i < MAX_COLOR_HISTORY; ++i)
@@ -921,7 +1046,7 @@ void VideoDrawImpactModuleProcessor::drawParametersInNode(float itemWidth,
             ImU32 colorU32 = ImGui::ColorConvertFloat4ToU32(color);
             
             ImGui::GetWindowDrawList()->AddRectFilled(pos, ImVec2(pos.x + size.x, pos.y + size.y), colorU32);
-            ImGui::GetWindowDrawList()->AddRect(pos, ImVec2(pos.x + size.x, pos.y + size.y), IM_COL32(200, 200, 200, 255), 0.0f, 0, 1.0f);
+            ImGui::GetWindowDrawList()->AddRect(pos, ImVec2(pos.x + size.x, pos.y + size.y), sectionBorderColor, 0.0f, 0, 1.0f);
             
             // Make it clickable
             ImGui::InvisibleButton(("##colorSwatch" + juce::String(i)).toRawUTF8(), size);
@@ -947,18 +1072,17 @@ void VideoDrawImpactModuleProcessor::drawParametersInNode(float itemWidth,
         else
         {
             // Draw empty rectangle placeholder (dashed border to show it's available)
-            ImU32 borderColor = IM_COL32(120, 120, 120, 150);
-            ImGui::GetWindowDrawList()->AddRect(pos, ImVec2(pos.x + size.x, pos.y + size.y), borderColor, 0.0f, 0, 1.0f);
+            ImGui::GetWindowDrawList()->AddRect(pos, ImVec2(pos.x + size.x, pos.y + size.y), disabledColor, 0.0f, 0, 1.0f);
             // Draw diagonal line to indicate empty
-            ImGui::GetWindowDrawList()->AddLine(pos, ImVec2(pos.x + size.x, pos.y + size.y), borderColor, 1.0f);
+            ImGui::GetWindowDrawList()->AddLine(pos, ImVec2(pos.x + size.x, pos.y + size.y), disabledColor, 1.0f);
             ImGui::Dummy(size);  // Reserve space
         }
     }
     
-    ImGui::EndGroup();
-    
-    ImGui::Spacing();
-    ImGui::TextDisabled("Left-click to draw, right-click to erase on the video preview.");
+ImGui::EndGroup();
+
+ImGui::Spacing();
+ThemeText("Left-click to draw, right-click to erase on the video preview.", theme.text.disabled);
     
     ImGui::Spacing();
     
@@ -989,10 +1113,22 @@ void VideoDrawImpactModuleProcessor::drawParametersInNode(float itemWidth,
     ImGui::Spacing();
     
     // Clear drawings button
-    if (ImGui::Button("Clear All Drawings", ImVec2(itemWidth, 0)))
+    if (ImGui::Button("Clear All Drawings", ImVec2(contentWidth, 0)))
     {
         if (clearDrawingsParam)
             *clearDrawingsParam = true;
+        {
+            const juce::ScopedLock lock(drawingsLock);
+            activeDrawings.clear();
+        }
+        {
+            const juce::ScopedLock lock(timelineLock);
+            timelineKeyframes.clear();
+        }
+        {
+            const juce::ScopedLock lock(pendingOpsLock);
+            pendingDrawOps.clear();
+        }
         onModificationEnded();
     }
     
@@ -1004,6 +1140,7 @@ void VideoDrawImpactModuleProcessor::drawParametersInNode(float itemWidth,
     // For now, show frame info
     if (!latestFrame.isNull())
     {
+        ThemeText("Frame Info", theme.text.section_header);
         ImGui::Text("Frame: %dx%d", frameWidth, frameHeight);
         ImGui::Text("Frame #: %d", currentFrameNumber.load());
         if (timelineStateUi.isValid)
@@ -1013,13 +1150,13 @@ void VideoDrawImpactModuleProcessor::drawParametersInNode(float itemWidth,
     }
     else
     {
-        ImGui::TextDisabled("No video input");
+        ThemeText("No video input", theme.text.warning);
     }
     
     ImGui::Spacing();
     
     // === TIMELINE ZOOM SECTION ===
-    ImGui::Text("Timeline Zoom:");
+    ThemeText("Timeline Zoom:", theme.text.section_header);
     ImGui::SameLine();
     ImGui::PushItemWidth(120);
     if (ImGui::SliderFloat("##zoom", &zoomPixelsPerSecond, 10.0f, 500.0f, "%.0f px/s"))
@@ -1049,36 +1186,32 @@ void VideoDrawImpactModuleProcessor::drawParametersInNode(float itemWidth,
     std::vector<TimelineKeyframe> keyframesCopy;
     int currentFrame = currentFrameNumber.load();
     int maxPersistence = framePersistenceParam ? framePersistenceParam->get() : 3;
+    int minFrameForDisplay = 0;
+    int maxFrameForDisplay = currentFrame;
     
     {
         const juce::ScopedLock lock(timelineLock);
         keyframesCopy = timelineKeyframes; // Copy for UI thread
     }
     
-    // Calculate timeline size
-    const float timelineHeight = 80.0f;
-    const ImVec2 graphSize(itemWidth, timelineHeight);
-    // Enable horizontal scrolling for zoom functionality (like MIDIPlayerModuleProcessor)
-    const ImGuiWindowFlags childFlags = ImGuiWindowFlags_HorizontalScrollbar;
+    const float timelineHeight = 90.0f;
+    const float sliderHeight = ImGui::GetFrameHeightWithSpacing();
+    const ImGuiWindowFlags timelineFlags = ImGuiWindowFlags_NoScrollbar;
     
-    // Begin timeline child window
-    if (ImGui::BeginChild("TimelineView", graphSize, false, childFlags))
+    if (ImGui::BeginChild("TimelineView",
+                          ImVec2(contentWidth, timelineHeight + sliderHeight),
+                          false,
+                          timelineFlags))
     {
+        const float timelineWidth = ImGui::GetContentRegionAvail().x;
         ImDrawList* drawList = ImGui::GetWindowDrawList();
-        float scrollX = ImGui::GetScrollX();
         
-        // Get theme colors (using resolveColor pattern like other modules)
         const auto resolveColor = [](ImU32 value, ImU32 fallback) { return value != 0 ? value : fallback; };
         ImU32 bgColor = resolveColor(theme.canvas.canvas_background, IM_COL32(30, 30, 30, 255));
         ImU32 gridColor = resolveColor(theme.canvas.grid_color, IM_COL32(60, 60, 60, 255));
-        ImU32 playheadColor = IM_COL32(255, 200, 0, 255); // Bright yellow-orange
-        ImU32 textColor = ImGui::ColorConvertFloat4ToU32(theme.text.section_header);
-        if (textColor == 0) textColor = IM_COL32(255, 255, 255, 255);
+        ImU32 playheadColor = IM_COL32(255, 200, 0, 255);
         
         const bool hasTimeline = timelineStateUi.isValid;
-        
-        // Calculate total timeline width based on zoom (like MIDIPlayerModuleProcessor)
-        // Must be calculated before scroll-to-zoom code uses it
         double totalDuration = hasTimeline ? juce::jmax(1e-3, timelineStateUi.durationSeconds) : 1.0;
         int minFrame = 0;
         int maxFrame = currentFrame;
@@ -1088,189 +1221,171 @@ void VideoDrawImpactModuleProcessor::drawParametersInNode(float itemWidth,
             maxFrame = currentFrame;
             for (const auto& kf : keyframesCopy)
             {
-                if (kf.frameNumber < minFrame) minFrame = kf.frameNumber;
-                if (kf.frameNumber > maxFrame) maxFrame = kf.frameNumber;
+                minFrame = juce::jmin(minFrame, kf.frameNumber);
+                maxFrame = juce::jmax(maxFrame, kf.frameNumber);
             }
             if (currentFrame > maxPersistence)
-            {
                 minFrame = juce::jmax(0, currentFrame - maxPersistence * 2);
-            }
-            // Estimate duration from frame range (assuming 30 FPS)
+            
             totalDuration = juce::jmax(1.0, (maxFrame - minFrame) / 30.0);
         }
+        minFrameForDisplay = minFrame;
+        maxFrameForDisplay = maxFrame;
         
-        // --- SCROLL-TO-ZOOM ON TIMELINE (centered on playhead) ---
-        // Handle scroll wheel for zooming (must be inside BeginChild context)
-        // Must be after totalDuration is calculated
+        const float totalWidth = juce::jmax(timelineWidth, (float)(totalDuration * zoomPixelsPerSecond));
+        const float maxScrollPixels = std::max(0.0f, totalWidth - timelineWidth);
+        timelineScrollPixels = juce::jlimit(0.0f, maxScrollPixels, timelineScrollPixels);
+        
         if (ImGui::IsWindowHovered())
         {
             const float wheel = ImGui::GetIO().MouseWheel;
-            if (wheel != 0.0f && !ImGui::IsAnyItemActive()) // Don't zoom while dragging sliders or keyframes
+            if (wheel != 0.0f && !ImGui::IsAnyItemActive())
             {
-                // Calculate playhead position in content space (before zoom change)
-                double playheadTime = hasTimeline ? timelineStateUi.positionSeconds : (currentFrame / 30.0);
-                const float oldPixelsPerSecond = zoomPixelsPerSecond;
-                const float playheadX_content = (float)(playheadTime * oldPixelsPerSecond);
-                
-                // Get current scroll position
-                const float oldScrollX = scrollX;
-                
-                // Calculate playhead position relative to visible window
-                const float playheadX_visible = playheadX_content - oldScrollX;
-                
-                // Apply zoom (zoom in when scrolling up, zoom out when scrolling down)
-                const float zoomStep = 10.0f; // 10 pixels per second per scroll step
-                const float newZoom = juce::jlimit(10.0f, 500.0f, zoomPixelsPerSecond + (wheel > 0.0f ? zoomStep : -zoomStep));
-                
-                if (newZoom != zoomPixelsPerSecond)
+                const bool panRequested = ImGui::GetIO().KeyShift || ImGui::GetIO().KeyAlt;
+                if (panRequested)
                 {
-                    // Calculate new playhead position in content space (after zoom change)
-                    const float newPixelsPerSecond = newZoom;
-                    const float newPlayheadX_content = (float)(playheadTime * newPixelsPerSecond);
+                    const float panStep = 30.0f;
+                    timelineScrollPixels = juce::jlimit(0.0f, maxScrollPixels,
+                        timelineScrollPixels - wheel * panStep);
+                }
+                else
+                {
+                    const double playheadTime = hasTimeline ? timelineStateUi.positionSeconds : (currentFrame / 30.0);
+                    const float playheadXContent = (float)(playheadTime * zoomPixelsPerSecond);
+                    const float playheadVisible = playheadXContent - timelineScrollPixels;
                     
-                    // Adjust scroll to keep playhead at the same visible position
-                    const float newScrollX = newPlayheadX_content - playheadX_visible;
-                    
-                    // Update zoom
-                    zoomPixelsPerSecond = newZoom;
-                    
-                    // Set new scroll position (clamped to valid range)
-                    const float totalWidth = (float)(totalDuration * newZoom);
-                    const float maxScroll = std::max(0.0f, totalWidth - graphSize.x);
-                    const float clampedScroll = juce::jlimit(0.0f, maxScroll, newScrollX);
-                    
-                    ImGui::SetScrollX(clampedScroll);
-                    scrollX = clampedScroll; // Update local scrollX for drawing calculations
+                    const float zoomStep = 10.0f;
+                    const float newZoom = juce::jlimit(10.0f, 500.0f,
+                                                       zoomPixelsPerSecond + (wheel > 0.0f ? zoomStep : -zoomStep));
+                    if (newZoom != zoomPixelsPerSecond)
+                    {
+                        zoomPixelsPerSecond = newZoom;
+                        const float newTotalWidth = juce::jmax(timelineWidth, (float)(totalDuration * newZoom));
+                        const float newMaxScroll = std::max(0.0f, newTotalWidth - timelineWidth);
+                        const float newPlayheadX = (float)(playheadTime * newZoom);
+                        timelineScrollPixels = juce::jlimit(0.0f, newMaxScroll, newPlayheadX - playheadVisible);
+                    }
                 }
             }
         }
         
-        const float totalWidth = (float)(totalDuration * zoomPixelsPerSecond);
+        const ImVec2 canvasStart = ImGui::GetCursorScreenPos();
+        ImGui::InvisibleButton("##timelineCanvas", ImVec2(timelineWidth, timelineHeight));
+        const ImVec2 canvasMin = ImGui::GetItemRectMin();
+        const ImVec2 canvasMax = ImVec2(canvasMin.x + timelineWidth, canvasMin.y + timelineHeight);
         
-        // CRITICAL: Reserve space for the ENTIRE timeline content so scrolling works properly
-        ImGui::Dummy(ImVec2(totalWidth, timelineHeight));
+        drawList->AddRectFilled(canvasMin, canvasMax, bgColor);
+        drawList->PushClipRect(canvasMin, canvasMax, true);
         
-        // Get the screen position for drawing (AFTER Dummy)
-        const ImVec2 timelineStartPos = ImGui::GetItemRectMin();
-        const ImVec2 p0 = timelineStartPos;
-        const ImVec2 p1 = ImVec2(p0.x + graphSize.x, p0.y + graphSize.y);
-        
-        // Draw background (only visible portion for performance)
-        const float visibleLeft = p0.x;
-        const float visibleRight = visibleLeft + graphSize.x;
-        drawList->AddRectFilled(
-            ImVec2(visibleLeft, p0.y),
-            ImVec2(visibleRight, p1.y),
-            bgColor
-        );
-        
-        // Clip rect
-        drawList->PushClipRect(p0, p1, true);
-        
-        const double displayStart = hasTimeline ? 0.0 : 0.0;
+        const double displayStart = 0.0;
         const double displayEnd = totalDuration;
         const double displayRange = juce::jmax(1e-6, displayEnd - displayStart);
+        const double visibleStartTime = timelineScrollPixels / zoomPixelsPerSecond;
+        const double visibleEndTime = (timelineScrollPixels + timelineWidth) / zoomPixelsPerSecond;
         
-        // Draw grid lines (scroll-aware culling for performance, like MIDIPlayerModuleProcessor)
         if (displayRange > 0.0)
         {
-            // Calculate visible time range based on scroll position
-            const double visibleStartTime = scrollX / zoomPixelsPerSecond;
-            const double visibleEndTime = (scrollX + graphSize.x) / zoomPixelsPerSecond;
-            
-            // Draw grid lines every 1 second (or adjust as needed)
-            const double gridStep = 1.0; // 1 second intervals
+            const double gridStep = 1.0;
             const double firstGridLine = std::floor(visibleStartTime / gridStep) * gridStep;
             const double lastGridLine = std::ceil(visibleEndTime / gridStep) * gridStep;
             
             for (double t = firstGridLine; t <= lastGridLine + 1e-6; t += gridStep)
             {
-                if (t < displayStart || t > displayEnd) continue;
+                if (t < displayStart || t > displayEnd)
+                    continue;
                 
-                // Calculate absolute position in content space
-                const float x = timelineStartPos.x + (float)(t * zoomPixelsPerSecond);
-                
-                // Only draw if visible
-                if (x >= visibleLeft && x <= visibleRight)
-                {
-                    drawList->AddLine(ImVec2(x, p0.y), ImVec2(x, p1.y), gridColor, 1.0f);
-                }
+                const float x = canvasMin.x + (float)(t * zoomPixelsPerSecond - timelineScrollPixels);
+                drawList->AddLine(ImVec2(x, canvasMin.y), ImVec2(x, canvasMax.y), gridColor, 1.0f);
             }
         }
         
-        // Handle right-click erasing on timeline (account for scroll and zoom)
         if (displayRange > 0.0 && ImGui::IsMouseDown(ImGuiMouseButton_Right))
         {
-            // Get mouse position relative to the child window (accounts for scrolling)
-            ImVec2 mousePos = ImGui::GetIO().MousePos;
-            ImVec2 windowPos = ImGui::GetWindowPos();
-            ImVec2 windowSize = ImGui::GetWindowSize();
-            
-            // Check if mouse is within the timeline window bounds
-            if (mousePos.x >= windowPos.x && mousePos.x <= windowPos.x + windowSize.x &&
-                mousePos.y >= windowPos.y && mousePos.y <= windowPos.y + windowSize.y)
+            const ImVec2 mousePos = ImGui::GetIO().MousePos;
+            if (mousePos.x >= canvasMin.x && mousePos.x <= canvasMax.x &&
+                mousePos.y >= canvasMin.y && mousePos.y <= canvasMax.y)
             {
-                // Convert mouse position to content space (accounting for scroll)
-                // Mouse X relative to window + scroll position = position in content space
-                float mouseXInContent = (mousePos.x - windowPos.x) + scrollX;
+                const float mouseXContent = (mousePos.x - canvasMin.x) + timelineScrollPixels;
+                double targetTime = juce::jlimit<double>(
+                    displayStart,
+                    displayEnd,
+                    static_cast<double>(mouseXContent) / static_cast<double>(zoomPixelsPerSecond));
+                double targetValue = hasTimeline ? targetTime : targetTime * 30.0;
+                float targetNormY = juce::jlimit(0.0f, 1.0f, (mousePos.y - canvasMin.y) / timelineHeight);
                 
-                // Convert content space position to timeline time
-                double targetTime = mouseXInContent / zoomPixelsPerSecond;
-                targetTime = juce::jlimit(displayStart, displayEnd, targetTime);
-                
-                // Convert to appropriate value based on timeline mode
-                double targetValue = hasTimeline ? targetTime : (targetTime * 30.0); // Assume 30 FPS for frame-based
-                
-                // Mouse Y relative to window (0 = top of timeline, windowSize.y = bottom)
-                float targetNormY = juce::jlimit(0.0f, 1.0f, (float)((mousePos.y - windowPos.y) / windowSize.y));
-                
-                double valueTolerance = hasTimeline 
-                    ? juce::jmax(0.1, 10.0 / zoomPixelsPerSecond)  // Time-based: ~10 pixels tolerance
-                    : juce::jmax(1.0, 10.0 / zoomPixelsPerSecond * 30.0); // Frame-based: convert to frames
-                float yTolerance = 0.08f;
+                const double valueTolerance = hasTimeline
+                    ? juce::jmax(0.1, 10.0 / zoomPixelsPerSecond)
+                    : juce::jmax(1.0, 10.0 / zoomPixelsPerSecond * 30.0);
+                const float yTolerance = 0.08f;
                 eraseKeyframesNear(targetValue, targetNormY, hasTimeline,
                                    valueTolerance, yTolerance,
                                    hasTimeline ? displayRange : 0.0);
             }
         }
         
-        // Draw keyframes (scroll-aware culling)
-        // Calculate visible time range based on scroll position
-        const double visibleStartTime = scrollX / zoomPixelsPerSecond;
-        const double visibleEndTime = (scrollX + graphSize.x) / zoomPixelsPerSecond;
+        const ImVec2 mousePos = ImGui::GetIO().MousePos;
+        const bool mouseInTimeline = mousePos.x >= canvasMin.x && mousePos.x <= canvasMax.x &&
+                                     mousePos.y >= canvasMin.y && mousePos.y <= canvasMax.y;
+        if (mouseInTimeline && ImGui::IsMouseDragging(ImGuiMouseButton_Middle))
+        {
+            timelineScrollPixels = juce::jlimit(0.0f,
+                                               maxScrollPixels,
+                                               timelineScrollPixels - ImGui::GetIO().MouseDelta.x);
+        }
+        const float hitRadius = 8.0f;
         
-        // Handle keyframe dragging
-        ImVec2 mousePos = ImGui::GetIO().MousePos;
-        bool mouseInTimeline = mousePos.x >= p0.x && mousePos.x <= p1.x &&
-                               mousePos.y >= p0.y && mousePos.y <= p1.y;
-        
-        // Check for drag start (left mouse button down on a keyframe)
-        const float hitRadius = 8.0f; // Hit detection radius in pixels
+        const double baseFrameDuration = juce::jmax(1e-4, lastFrameDurationSeconds.load());
+        const double fallbackPersistenceSeconds =
+            (framePersistenceParam ? juce::jmax(1, framePersistenceParam->get()) : 3) * baseFrameDuration;
+
+        auto computeMarkerRect = [&](const TimelineKeyframe& keyframe,
+                                     float startX,
+                                     float centerY,
+                                     ImVec2& outMin,
+                                     ImVec2& outMax) -> bool
+        {
+            double durationSeconds = keyframe.persistenceSeconds > 0.0
+                ? keyframe.persistenceSeconds
+                : fallbackPersistenceSeconds;
+            float markerWidth = juce::jmax(3.0f, (float)(durationSeconds * zoomPixelsPerSecond));
+            float halfHeight = juce::jmax(3.0f, keyframe.brushSize * 0.4f);
+
+            float clampedStart = juce::jmax(canvasMin.x, startX);
+            float clampedEnd = juce::jmin(canvasMax.x, startX + markerWidth);
+            if (clampedEnd <= clampedStart)
+                return false;
+
+            outMin = ImVec2(clampedStart, juce::jmax(canvasMin.y, centerY - halfHeight));
+            outMax = ImVec2(clampedEnd, juce::jmin(canvasMax.y, centerY + halfHeight));
+            return true;
+        };
+
         if (!isDraggingKeyframe && mouseInTimeline && ImGui::IsMouseClicked(ImGuiMouseButton_Left))
         {
-            // Find keyframe under mouse cursor
             for (size_t i = 0; i < keyframesCopy.size(); ++i)
             {
                 const auto& kf = keyframesCopy[i];
                 double keyTime = hasTimeline ? kf.timeSeconds : (kf.frameNumber / 30.0);
-                
-                // Skip if not visible
                 if (keyTime < visibleStartTime - 0.1 || keyTime > visibleEndTime + 0.1)
                     continue;
                 
-                float x = timelineStartPos.x + (float)(keyTime * zoomPixelsPerSecond);
-                if (x < visibleLeft || x > visibleRight)
-                    continue;
-                
-                float y = p0.y + (kf.normalizedY) * graphSize.y;
-                y = juce::jlimit(p0.y, p1.y, y);
-                
-                // Check if mouse is within hit radius
-                float dx = mousePos.x - x;
-                float dy = mousePos.y - y;
-                if (std::sqrt(dx * dx + dy * dy) <= hitRadius)
+                const float x = canvasMin.x + (float)(keyTime * zoomPixelsPerSecond - timelineScrollPixels);
+                const float y = canvasMin.y + juce::jlimit(0.0f, 1.0f, kf.normalizedY) * timelineHeight;
+                ImVec2 rectMin, rectMax;
+                bool hasRect = computeMarkerRect(kf, x, y, rectMin, rectMax);
+
+                bool insideRect = hasRect &&
+                    mousePos.x >= rectMin.x - hitRadius &&
+                    mousePos.x <= rectMax.x + hitRadius &&
+                    mousePos.y >= rectMin.y - hitRadius &&
+                    mousePos.y <= rectMax.y + hitRadius;
+
+                const float dx = mousePos.x - x;
+                const float dy = mousePos.y - y;
+                const bool insideCircle = std::sqrt(dx * dx + dy * dy) <= hitRadius;
+
+                if (insideRect || insideCircle)
                 {
-                    // Start dragging this keyframe
                     isDraggingKeyframe = true;
                     draggingKeyframeIndex = (int)i;
                     dragOffsetX = dx;
@@ -1280,36 +1395,23 @@ void VideoDrawImpactModuleProcessor::drawParametersInNode(float itemWidth,
             }
         }
         
-        // Handle drag update
         if (isDraggingKeyframe && ImGui::IsMouseDown(ImGuiMouseButton_Left))
         {
             if (draggingKeyframeIndex >= 0 && draggingKeyframeIndex < (int)keyframesCopy.size())
             {
-                // Calculate new position from mouse position (accounting for scroll)
-                // Don't subtract dragOffset - we want the keyframe to follow the mouse exactly
-                double newTime = (mousePos.x - timelineStartPos.x + scrollX) / zoomPixelsPerSecond;
-                newTime = juce::jlimit(displayStart, displayEnd, newTime);
-                
-                float newNormY = juce::jlimit(0.0f, 1.0f, (mousePos.y - p0.y) / graphSize.y);
-                
-                // Update keyframe position
+                double newTime = (mousePos.x - canvasMin.x + timelineScrollPixels) / zoomPixelsPerSecond;
+                newTime = juce::jlimit<double>(displayStart, displayEnd, newTime);
+                float newNormY = juce::jlimit(0.0f, 1.0f, (mousePos.y - canvasMin.y) / timelineHeight);
                 updateKeyframePosition(draggingKeyframeIndex, newTime, newNormY);
                 
-                // Update the copy for immediate visual feedback
-                if (draggingKeyframeIndex < (int)keyframesCopy.size())
-                {
-                    keyframesCopy[(size_t)draggingKeyframeIndex].timeSeconds = newTime;
-                    keyframesCopy[(size_t)draggingKeyframeIndex].normalizedY = newNormY;
-                    if (!hasTimeline)
-                    {
-                        keyframesCopy[(size_t)draggingKeyframeIndex].frameNumber = (int)std::round(newTime * 30.0);
-                    }
-                }
+                keyframesCopy[(size_t)draggingKeyframeIndex].timeSeconds = newTime;
+                keyframesCopy[(size_t)draggingKeyframeIndex].normalizedY = newNormY;
+                if (!hasTimeline)
+                    keyframesCopy[(size_t)draggingKeyframeIndex].frameNumber = (int)std::round(newTime * 30.0);
             }
         }
         else if (isDraggingKeyframe && ImGui::IsMouseReleased(ImGuiMouseButton_Left))
         {
-            // End drag - mark as modified for undo/redo
             onModificationEnded();
             isDraggingKeyframe = false;
             draggingKeyframeIndex = -1;
@@ -1318,121 +1420,94 @@ void VideoDrawImpactModuleProcessor::drawParametersInNode(float itemWidth,
         for (size_t i = 0; i < keyframesCopy.size(); ++i)
         {
             const auto& kf = keyframesCopy[i];
-            
-            // Calculate keyframe time
-            double keyTime = hasTimeline ? kf.timeSeconds : (kf.frameNumber / 30.0); // Assume 30 FPS for frame-based
-            
-            // Cull keyframes outside visible range
+            double keyTime = hasTimeline ? kf.timeSeconds : (kf.frameNumber / 30.0);
             if (keyTime < visibleStartTime - 0.1 || keyTime > visibleEndTime + 0.1)
                 continue;
             
-            // Calculate X position in content space (absolute, not relative to viewport)
-            float x = timelineStartPos.x + (float)(keyTime * zoomPixelsPerSecond);
+            const float x = canvasMin.x + (float)(keyTime * zoomPixelsPerSecond - timelineScrollPixels);
+            const float y = canvasMin.y + juce::jlimit(0.0f, 1.0f, kf.normalizedY) * timelineHeight;
             
-            // Only draw if visible
-            if (x < visibleLeft || x > visibleRight)
+            ImVec2 rectMin, rectMax;
+            bool hasRect = computeMarkerRect(kf, x, y, rectMin, rectMax);
+            if (!hasRect)
                 continue;
+
+            ImU32 keyframeColor = IM_COL32((int)kf.color[2], (int)kf.color[1], (int)kf.color[0], 255);
+            const bool draggingThis = isDraggingKeyframe && draggingKeyframeIndex == (int)i;
+            const ImU32 drawColor = draggingThis ? accentColor : keyframeColor;
             
-            // Calculate Y position based on normalized Y (0 = top, 1 = bottom)
-            float y = p0.y + (kf.normalizedY) * graphSize.y;
-            y = juce::jlimit(p0.y, p1.y, y);
-            
-            // Convert BGR to RGB for ImGui
-            ImU32 keyframeColor = IM_COL32(
-                (int)kf.color[2], // R
-                (int)kf.color[1], // G
-                (int)kf.color[0], // B
-                255
-            );
-            
-            // Highlight if being dragged
-            bool isDragging = isDraggingKeyframe && draggingKeyframeIndex == (int)i;
-            ImU32 drawColor = isDragging ? IM_COL32(255, 255, 0, 255) : keyframeColor; // Yellow when dragging
-            
-            // Draw keyframe mark (circle for draw, X for erase)
             if (kf.isErase)
             {
-                // Draw X mark for erase
-                const float markSize = 6.0f;
-                drawList->AddLine(ImVec2(x - markSize, y - markSize), ImVec2(x + markSize, y + markSize), drawColor, 2.0f);
-                drawList->AddLine(ImVec2(x - markSize, y + markSize), ImVec2(x + markSize, y - markSize), drawColor, 2.0f);
+                drawList->AddRect(rectMin, rectMax, drawColor, 3.0f, 0, 1.5f);
+                drawList->AddLine(rectMin, rectMax, drawColor, 1.5f);
+                drawList->AddLine(ImVec2(rectMin.x, rectMax.y), ImVec2(rectMax.x, rectMin.y), drawColor, 1.5f);
             }
             else
             {
-                // Draw filled circle for draw
-                drawList->AddCircleFilled(ImVec2(x, y), (float)kf.brushSize * 0.5f, drawColor);
-                drawList->AddCircle(ImVec2(x, y), (float)kf.brushSize * 0.5f, IM_COL32(255, 255, 255, 200), 1.0f);
+                drawList->AddRectFilled(rectMin, rectMax, drawColor, 3.0f);
+                drawList->AddRect(rectMin, rectMax, sectionBorderColor, 3.0f, 0, 1.0f);
             }
             
-            // Draw invisible button for easier hit detection
-            ImGui::SetCursorScreenPos(ImVec2(x - hitRadius, y - hitRadius));
-            ImGui::InvisibleButton(("##keyframe" + juce::String(i)).toRawUTF8(), ImVec2(hitRadius * 2, hitRadius * 2));
-            if (ImGui::IsItemHovered() && !isDraggingKeyframe)
+            if (!isDraggingKeyframe &&
+                mouseInTimeline &&
+                mousePos.x >= rectMin.x - hitRadius && mousePos.x <= rectMax.x + hitRadius &&
+                mousePos.y >= rectMin.y - hitRadius && mousePos.y <= rectMax.y + hitRadius)
             {
                 ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
             }
         }
         
-        // Draw playhead (current frame position, in content space)
         if (displayRange > 0.0)
         {
-            double playheadTime = hasTimeline ? timelineStateUi.positionSeconds : (currentFrame / 30.0); // Assume 30 FPS
-            playheadTime = juce::jlimit(displayStart, displayEnd, playheadTime);
-            
-            // Calculate playhead position in content space
-            float playheadX = timelineStartPos.x + (float)(playheadTime * zoomPixelsPerSecond);
-            
-            // Only draw if visible
-            if (playheadX >= visibleLeft && playheadX <= visibleRight)
-            {
-            
-            // Draw playhead line
-            drawList->AddLine(
-                ImVec2(playheadX, p0.y),
-                ImVec2(playheadX, p1.y),
-                playheadColor,
-                2.0f
-            );
-            
-                // Draw playhead triangle at top
-                const float triangleSize = 6.0f;
-                const ImVec2 triangleTop(playheadX, p0.y - triangleSize);
-                const ImVec2 triangleLeft(playheadX - triangleSize * 0.5f, p0.y);
-                const ImVec2 triangleRight(playheadX + triangleSize * 0.5f, p0.y);
-                drawList->AddTriangleFilled(triangleTop, triangleLeft, triangleRight, playheadColor);
-            }
+            double playheadTime = hasTimeline ? timelineStateUi.positionSeconds : (currentFrame / 30.0);
+            playheadTime = juce::jlimit<double>(displayStart, displayEnd, playheadTime);
+            const float playheadX = canvasMin.x + (float)(playheadTime * zoomPixelsPerSecond - timelineScrollPixels);
+            drawList->AddLine(ImVec2(playheadX, canvasMin.y),
+                              ImVec2(playheadX, canvasMax.y),
+                              playheadColor,
+                              2.0f);
+            const float triangleSize = 6.0f;
+            drawList->AddTriangleFilled(ImVec2(playheadX, canvasMin.y - triangleSize),
+                                        ImVec2(playheadX - triangleSize * 0.5f, canvasMin.y),
+                                        ImVec2(playheadX + triangleSize * 0.5f, canvasMin.y),
+                                        playheadColor);
         }
         
-        // Pop clip rect
         drawList->PopClipRect();
         
-        // Draw frame number labels at bottom
-        ImGui::SetCursorPos(ImVec2(4, graphSize.y - 20));
-        if (hasTimeline)
+        ImGui::SetCursorScreenPos(ImVec2(canvasStart.x,
+                                         canvasMin.y + timelineHeight + ImGui::GetStyle().ItemSpacing.y * 0.5f));
+        ImGui::PushItemWidth(timelineWidth);
+        float scrollNorm = maxScrollPixels > 0.0f ? timelineScrollPixels / maxScrollPixels : 0.0f;
+        if (ImGui::SliderFloat("##timelineScroll",
+                               &scrollNorm,
+                               0.0f,
+                               1.0f,
+                               "",
+                               ImGuiSliderFlags_NoInput))
         {
-            ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(textColor),
-                               "Time %.2fs / %.2fs",
-                               timelineStateUi.positionSeconds,
-                               timelineStateUi.durationSeconds);
+            timelineScrollPixels = scrollNorm * maxScrollPixels;
         }
-        else if (displayRange > 0.0)
-        {
-            juce::String frameText = juce::String::formatted("Frame %d-%d", minFrame, maxFrame);
-            ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(textColor), "%s", frameText.toRawUTF8());
-        }
-        else
-        {
-            ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(textColor), "No keyframes");
-        }
-        
-        // Invisible button for drag blocking
-        ImGui::SetCursorPos(ImVec2(0, 0));
-        ImGui::InvisibleButton("##timelineDrag", graphSize);
+        ImGui::PopItemWidth();
     }
-    ImGui::EndChild(); // CRITICAL: Must be OUTSIDE the if block!
-    ImGui::TextDisabled("Right-click the timeline to remove impact markers.");
+    ImGui::EndChild();
+    
+    if (timelineStateUi.isValid)
+    {
+        ThemeText(juce::String::formatted("Time %.2fs / %.2fs",
+                                          timelineStateUi.positionSeconds,
+                                          timelineStateUi.durationSeconds).toRawUTF8(),
+                  theme.text.section_header);
+    }
+    else
+    {
+        ThemeText(juce::String::formatted("Frame %d-%d", minFrameForDisplay, maxFrameForDisplay).toRawUTF8(),
+                  theme.text.section_header);
+    }
+    ThemeText("Right-click the timeline to remove impact markers.", theme.text.disabled);
     
     ImGui::PopItemWidth();
+    ImGui::EndChild();
     ImGui::PopID();
 }
 
