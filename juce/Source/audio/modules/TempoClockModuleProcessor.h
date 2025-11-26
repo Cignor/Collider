@@ -6,7 +6,7 @@ class TempoClockModuleProcessor : public ModuleProcessor
 {
 public:
     TempoClockModuleProcessor();
-    ~TempoClockModuleProcessor() override = default;
+    ~TempoClockModuleProcessor() override;
 
     // Parameter IDs for APVTS
     static constexpr auto paramIdBpm              = "bpm";

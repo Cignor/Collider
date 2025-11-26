@@ -26,6 +26,17 @@ TempoClockModuleProcessor::TempoClockModuleProcessor()
     beatsPerTimelineParam = apvts.getRawParameterValue(paramIdBeatsPerTimeline);
 }
 
+TempoClockModuleProcessor::~TempoClockModuleProcessor()
+{
+    // CRITICAL: Clean up global state when this module is destroyed
+    // This ensures that when a patch is cleared/loaded, the transport state is reset
+    if (auto* parent = getParent())
+    {
+        parent->setTimelineMaster(0);  // Clear timeline master flag
+        parent->setTempoControlledByModule(false);  // Release tempo control
+    }
+}
+
 juce::AudioProcessorValueTreeState::ParameterLayout TempoClockModuleProcessor::createParameterLayout()
 {
     std::vector<std::unique_ptr<juce::RangedAudioParameter>> params;

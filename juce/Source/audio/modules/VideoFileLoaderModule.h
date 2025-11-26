@@ -83,6 +83,8 @@ private:
     std::atomic<bool> needPreviewFrame { false };
     std::atomic<bool> lastPlaying { false }; // for play-edge detection
     std::atomic<int> lastFourcc { 0 }; // cached FOURCC
+    TransportCommand lastTransportCommand { TransportCommand::Stop }; // Track last command for transition detection
+    std::atomic<double> pausedNormalizedPosition { -1.0 }; // -1.0 = invalid, >= 0.0 = saved paused position
     std::atomic<int> pendingSeekFrame { -1 };
     std::atomic<int> lastPosFrame { 0 };
     std::atomic<double> totalDurationMs { 0.0 };
@@ -91,8 +93,7 @@ private:
     std::atomic<juce::int64> currentAudioSamplePosition { 0 }; // The master clock - only advanced by audio thread
     std::atomic<double> sourceAudioSampleRate { 44100.0 }; // Sample rate of the loaded file
     std::atomic<double> audioReaderLengthSamples { 0.0 };
-    std::atomic<float> lastKnownNormalizedPosition { 0.0f };
-    std::atomic<bool> resumeAfterPrepare { false };
+    std::atomic<float> lastKnownNormalizedPosition { 0.0f }; // Used for UI/reporting only, NOT for pause/resume
     
     // Unified, thread-safe seeking mechanism for both video and audio
     std::atomic<float> pendingSeekNormalized { -1.0f };
@@ -172,8 +173,5 @@ private:
     void loadAudioFromVideo();
 
     void updateLastKnownNormalizedFromSamples(juce::int64 samplePos);
-    void snapshotPlaybackStateForResume();
-    void handlePauseRequest();
-    void handleStopRequest();
 };
 
