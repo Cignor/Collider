@@ -112,6 +112,9 @@ juce::AudioProcessorValueTreeState::ParameterLayout SampleLoaderModuleProcessor:
     parameters.push_back(
         std::make_unique<juce::AudioParameterFloat>(
             "trigger_mod", "Trigger Mod", 0.0f, 1.0f, 0.0f));
+    parameters.push_back(
+        std::make_unique<juce::AudioParameterFloat>(
+            "randomize_mod", "Randomize Mod", 0.0f, 1.0f, 0.0f));
 
     parameters.push_back(
         std::make_unique<juce::AudioParameterFloat>(
@@ -224,6 +227,24 @@ void SampleLoaderModuleProcessor::processBlock(
     juce::AudioBuffer<float>& buffer,
     juce::MidiBuffer&         midiMessages)
 {
+    processorIsRendering.store(true, std::memory_order_relaxed);
+
+    // === DEFERRED SAMPLE LOADING ===
+    bool shouldLoadAfterBlock = false;
+    juce::String deferredRandomPath;
+    
+    if (hasPendingRandomSample.load())
+    {
+        const juce::ScopedLock lock(pendingRandomLock);
+        if (hasPendingRandomSample.load())
+        {
+            deferredRandomPath = pendingRandomSamplePath;
+            hasPendingRandomSample.store(false);
+            pendingRandomSamplePath.clear();
+            shouldLoadAfterBlock = !deferredRandomPath.isEmpty();
+        }
+    }
+
     // Get OUTPUT bus, but do NOT clear here.
     // Clearing at the start can zero input buses when buffers are aliased in AudioProcessorGraph.
     auto outBus = getBusBuffer(buffer, false, 0);
@@ -243,6 +264,7 @@ void SampleLoaderModuleProcessor::processBlock(
     if (currentProcessor == nullptr || currentSample == nullptr)
     {
         outBus.clear();
+        processorIsRendering.store(false, std::memory_order_relaxed);
         return;
     }
 
@@ -698,8 +720,8 @@ void SampleLoaderModuleProcessor::processBlock(
             const bool trigHigh = randTrigSignal[i] > 0.5f;
             if (trigHigh && !lastRandomizeTriggerHigh)
             {
-                randomizeSample(); // Call the existing randomize function
-                break;             // Only randomize once per block
+                queueRandomSampleFromCurrentFolder("CV trigger");
+                break; // Only randomize once per block
             }
             lastRandomizeTriggerHigh = trigHigh;
         }
@@ -831,10 +853,36 @@ void SampleLoaderModuleProcessor::processBlock(
         if (lastOutputValues[1])
             lastOutputValues[1]->store(peakAbs(1));
     }
+
+    if (shouldLoadAfterBlock && deferredRandomPath.isNotEmpty())
+    {
+        juce::Logger::writeToLog("[Sample Loader] Loading queued random sample: " + deferredRandomPath);
+        loadSample(juce::File(deferredRandomPath));
+        
+        if (shouldResumeAfterRandomLoad.exchange(false))
+        {
+            const juce::ScopedLock lock(processorSwapLock);
+            if (sampleProcessor != nullptr)
+            {
+                sampleProcessor->reset();
+                sampleProcessor->isPlaying = true;
+                juce::Logger::writeToLog("[Sample Loader] Auto-resumed playback after random swap");
+            }
+        }
+    }
+
+    processorIsRendering.store(false, std::memory_order_relaxed);
 }
 
 void SampleLoaderModuleProcessor::reset()
 {
+    // Clear any pending random queue on reset
+    {
+        const juce::ScopedLock lock(pendingRandomLock);
+        hasPendingRandomSample.store(false);
+        pendingRandomSamplePath.clear();
+    }
+    
     if (sampleProcessor != nullptr)
     {
         sampleProcessor->reset();
@@ -852,6 +900,13 @@ void SampleLoaderModuleProcessor::reset()
 
 void SampleLoaderModuleProcessor::forceStop()
 {
+    // Clear any pending random queue on force stop
+    {
+        const juce::ScopedLock lock(pendingRandomLock);
+        hasPendingRandomSample.store(false);
+        pendingRandomSamplePath.clear();
+    }
+    
     // Force stop the module's playback state
     isPlaying.store(false);
 
@@ -1118,6 +1173,13 @@ void SampleLoaderModuleProcessor::setTimingInfo(const TransportState& state)
 }
 void SampleLoaderModuleProcessor::loadSample(const juce::File& file)
 {
+    // Clear any pending random queue when manually loading a sample
+    {
+        const juce::ScopedLock lock(pendingRandomLock);
+        hasPendingRandomSample.store(false);
+        pendingRandomSamplePath.clear();
+    }
+    
     // CRASH PROTECTION: Validate file path safely
     juce::String filePath;
     try
@@ -1392,24 +1454,27 @@ void SampleLoaderModuleProcessor::updateSoundTouchSettings() {}
 
 void SampleLoaderModuleProcessor::randomizeSample()
 {
+    queueRandomSampleFromCurrentFolder("UI");
+}
+
+bool SampleLoaderModuleProcessor::queueRandomSampleFromCurrentFolder(const juce::String& sourceTag)
+{
     if (currentSamplePath.isEmpty())
-        return;
+        return false;
 
     juce::File currentFile(currentSamplePath);
     juce::File parentDir = currentFile.getParentDirectory();
 
     if (!parentDir.exists() || !parentDir.isDirectory())
-        return;
+        return false;
 
-    // Get all audio files in the same directory
     juce::Array<juce::File> audioFiles;
     parentDir.findChildFiles(
         audioFiles, juce::File::findFiles, true, "*.wav;*.mp3;*.flac;*.aiff;*.ogg");
 
     if (audioFiles.size() <= 1)
-        return;
+        return false;
 
-    // Remove current file from the list
     for (int i = audioFiles.size() - 1; i >= 0; --i)
     {
         if (audioFiles[i].getFullPathName() == currentSamplePath)
@@ -1420,14 +1485,42 @@ void SampleLoaderModuleProcessor::randomizeSample()
     }
 
     if (audioFiles.isEmpty())
-        return;
+        return false;
 
-    // Pick a random file
     juce::Random rng(juce::Time::getMillisecondCounterHiRes());
     juce::File   randomFile = audioFiles[rng.nextInt(audioFiles.size())];
 
-    DBG("[Sample Loader] Randomizing to: " + randomFile.getFullPathName());
-    loadSample(randomFile);
+    {
+        const juce::ScopedLock lock(pendingRandomLock);
+        pendingRandomSamplePath = randomFile.getFullPathName();
+        hasPendingRandomSample.store(true);
+    }
+
+    bool wasActivelyUsed = false;
+    {
+        const juce::ScopedLock lock(processorSwapLock);
+        if (sampleProcessor != nullptr &&
+            (sampleProcessor->isPlaying || processorIsRendering.load(std::memory_order_relaxed)))
+        {
+            wasActivelyUsed = true;
+            sampleProcessor->isPlaying = false;
+            shouldResumeAfterRandomLoad.store(true);
+        }
+    }
+
+    if (wasActivelyUsed)
+    {
+        juce::Logger::writeToLog(
+            "[Sample Loader] " + sourceTag + " stopped playback for random swap: " +
+            randomFile.getFileName());
+    }
+    else
+    {
+        juce::Logger::writeToLog(
+            "[Sample Loader] " + sourceTag + " queued random sample: " + randomFile.getFileName());
+    }
+
+    return true;
 }
 
 void SampleLoaderModuleProcessor::createSampleProcessor()
@@ -1450,13 +1543,24 @@ void SampleLoaderModuleProcessor::createSampleProcessor()
     const double startSample = startNorm * currentSample->stereo.getNumSamples();
     const double endSample = endNorm * currentSample->stereo.getNumSamples();
     newProcessor->setPlaybackRange(startSample, endSample);
+    newProcessor->resetPosition();
     
     // CRITICAL FIX: Initialize position based on sync mode
     if (pausedPosition >= 0.0 && !syncToTransport.load())
     {
-        // UNSYNCED: Use saved paused position
-        const double clampedPos = juce::jlimit(0.0, (double)currentSample->stereo.getNumSamples(), pausedPosition);
+        // UNSYNCED: Use saved paused position, but CLAMP to new sample bounds
+        const double maxValidPosition = (double)currentSample->stereo.getNumSamples() - 1.0;
+        const double clampedPos = juce::jlimit(0.0, maxValidPosition, pausedPosition);
         newProcessor->setCurrentPosition(clampedPos);
+        
+        // Log if we had to clamp (indicates sample switch)
+        if (pausedPosition > maxValidPosition)
+        {
+            juce::Logger::writeToLog(
+                "[Sample Loader] Clamped position from " + juce::String(pausedPosition) + 
+                " to " + juce::String(clampedPos) + " (new sample length: " + 
+                juce::String(currentSample->stereo.getNumSamples()) + ")");
+        }
     }
     else if (syncToTransport.load() && getParent())
     {
@@ -1504,7 +1608,8 @@ void SampleLoaderModuleProcessor::createSampleProcessor()
             targetSamplePos = sSamp + (progress * lSamp);
         }
         
-        targetSamplePos = juce::jlimit(0.0, totalSamples, targetSamplePos);
+        const double maxValidPosition = totalSamples - 1.0;
+        targetSamplePos = juce::jlimit(0.0, maxValidPosition, targetSamplePos);
         newProcessor->setCurrentPosition(targetSamplePos);
     }
     else
@@ -1838,6 +1943,11 @@ void SampleLoaderModuleProcessor::drawParametersInNode(
     if (ImGui::Button("Random", ImVec2(itemWidth * 0.48f, 0)))
     {
         randomizeSample();
+    }
+    if (hasPendingRandomSample.load())
+    {
+        ImGui::SameLine();
+        ImGui::TextColored(ImVec4(1.0f, 1.0f, 0.0f, 1.0f), "Queued");
     }
 
     // Range selection is now handled by the interactive spectrogram in the UI component

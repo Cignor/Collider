@@ -149,6 +149,15 @@ private:
     bool lastTriggerHigh { false };
     bool lastRandomizeTriggerHigh { false };
     
+    // Deferred sample loading queue
+    std::atomic<bool> hasPendingRandomSample { false };
+    juce::String pendingRandomSamplePath;
+    juce::CriticalSection pendingRandomLock;
+    std::atomic<bool> shouldResumeAfterRandomLoad { false };
+    std::atomic<bool> processorIsRendering { false };
+    
+    bool queueRandomSampleFromCurrentFolder(const juce::String& sourceTag);
+    
 #if defined(PRESET_CREATOR_UI)
     // Keep a persistent chooser so async callback remains valid
     std::unique_ptr<juce::FileChooser> fileChooser;
