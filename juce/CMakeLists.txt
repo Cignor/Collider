@@ -1431,6 +1431,23 @@ if(WIN32)
         endif()
     endif()
     
+    # Copy CUDA DLLs from vendor folder to PresetCreatorApp
+    if(EXISTS "${CMAKE_SOURCE_DIR}/../vendor/cuda")
+        file(GLOB CUDA_VENDOR_DLLS "${CMAKE_SOURCE_DIR}/../vendor/cuda/*.dll")
+        if(CUDA_VENDOR_DLLS)
+            foreach(DLL ${CUDA_VENDOR_DLLS})
+                get_filename_component(DLL_NAME ${DLL} NAME)
+                add_custom_command(
+                    TARGET PresetCreatorApp POST_BUILD
+                    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                            "${DLL}"
+                            "$<TARGET_FILE_DIR:PresetCreatorApp>"
+                    COMMENT "Copying ${DLL_NAME} to PresetCreatorApp"
+                )
+            endforeach()
+        endif()
+    endif()
+    
     # Continue with other files for ColliderApp
     add_custom_command(
         TARGET ColliderApp POST_BUILD
