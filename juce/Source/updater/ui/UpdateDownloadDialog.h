@@ -5,6 +5,12 @@
 #include "../UpdaterTypes.h"
 #include <vector>
 
+// Forward declaration
+namespace Updater
+{
+class VersionManager;
+}
+
 namespace Updater
 {
 
@@ -56,6 +62,11 @@ public:
      */
     void setDownloading(bool downloading) { isDownloading = downloading; }
 
+    /**
+     * Set VersionManager reference for hash comparison.
+     */
+    void setVersionManager(VersionManager* vm) { versionManager = vm; }
+
     // Callbacks
     std::function<void()> onStartDownload;
     std::function<void()> onCancelDownload;
@@ -68,6 +79,7 @@ private:
 
     UpdateInfo       updateInfo;
     DownloadProgress currentProgress;
+    VersionManager*  versionManager = nullptr; // For hash comparison
 
     // UI state
     char searchFilter[256] = {0};
@@ -90,6 +102,11 @@ private:
      * Get formatted file size string.
      */
     juce::String getFormattedFileSize(juce::int64 size) const;
+
+    /**
+     * Get local hash for a file (from VersionManager or calculate it).
+     */
+    juce::String getLocalHash(const juce::String& relativePath) const;
 };
 
 } // namespace Updater

@@ -4,7 +4,7 @@ namespace Updater
 {
 
 VersionManager::VersionManager()
-    : currentVersion("0.6.2") // Default version
+    : currentVersion("0.6.5") // Default version
       ,
       currentVariant("cuda") // Default variant
 {
@@ -100,9 +100,14 @@ bool VersionManager::loadVersionInfo()
 
     if (!versionFile.existsAsFile())
     {
-        DBG("Version file doesn't exist yet: " + versionFile.getFullPathName());
+        juce::Logger::writeToLog("VersionManager: installed_files.json doesn't exist yet: " + versionFile.getFullPathName());
+        juce::Logger::writeToLog("  This is normal for first run - file will be created when files are registered");
         return false;
     }
+
+    juce::Logger::writeToLog("VersionManager: Loading installed_files.json from: " + versionFile.getFullPathName());
+    juce::Logger::writeToLog("  File size: " + juce::String(versionFile.getSize()) + " bytes");
+    juce::Logger::writeToLog("  Modified: " + versionFile.getLastModificationTime().toString(true, true, true, true));
 
     auto jsonString = versionFile.loadFileAsString();
     auto json = juce::JSON::parse(jsonString);
@@ -116,6 +121,9 @@ bool VersionManager::loadVersionInfo()
         if (dateStr.isNotEmpty())
             lastUpdateCheck = juce::Time::fromISO8601(dateStr);
 
+        juce::Logger::writeToLog("  Loaded version: " + currentVersion);
+        juce::Logger::writeToLog("  Loaded variant: " + currentVariant);
+
         // Load installed files
         if (auto filesObj = obj->getProperty("files"))
         {
@@ -128,12 +136,31 @@ bool VersionManager::loadVersionInfo()
                     auto fileInfo = InstalledFileInfo::fromJson(prop.value);
                     installedFiles.set(prop.name.toString(), fileInfo);
                 }
+                
+                juce::Logger::writeToLog("  Loaded " + juce::String(installedFiles.size()) + " tracked files");
+                
+                // Log EXE if present
+                auto exePath = juce::File::getSpecialLocation(juce::File::currentExecutableFile);
+                auto exeName = exePath.getFileName();
+                if (installedFiles.contains(exeName))
+                {
+                    auto exeInfo = installedFiles[exeName];
+                    juce::Logger::writeToLog("  EXE tracked: " + exeName);
+                    juce::Logger::writeToLog("    Recorded hash: " + exeInfo.sha256);
+                    juce::Logger::writeToLog("    Recorded version: " + exeInfo.version);
+                    juce::Logger::writeToLog("    Installed date: " + exeInfo.installedDate.toString(true, true, true, true));
+                }
+                else
+                {
+                    juce::Logger::writeToLog("  EXE NOT tracked: " + exeName);
+                }
             }
         }
 
         return true;
     }
 
+    juce::Logger::writeToLog("  ❌ Failed to parse installed_files.json");
     return false;
 }
 

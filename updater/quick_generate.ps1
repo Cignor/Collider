@@ -38,14 +38,15 @@ $excludePatterns = @(
     ".*",               # Exclude root dotfiles (hidden/config)
     "*\.*",             # Exclude dotfiles in subdirectories
     "imgui.ini",        # ImGui config file (user-specific)
-    "PikonUpdater.exe"  # Updater tool (shipped with app, shouldn't be updated via updater)
+    "PikonUpdater.exe", # Updater tool (shipped with app, shouldn't be updated via updater)
+    "manifest.json"     # Manifest file itself (metadata, not a distributable file)
 )
 
 # Base URL for your OVH server
 $baseUrl = "https://pimpant.club/pikon-raditsz"
 
-# Output file
-$outputFile = "manifest.json"
+# Output file - save to build directory (exe folder) instead of root
+$outputFile = Join-Path $buildDir "manifest.json"
 
 Write-Host "Configured exclusions:" -ForegroundColor Yellow
 Write-Host "  Folders: $($excludeFolders -join ', ')" -ForegroundColor Gray
@@ -64,4 +65,5 @@ Write-Host ""
 Write-Host ""
 Write-Host "Quick generate complete!" -ForegroundColor Green
 Write-Host "Manifest saved to: $outputFile" -ForegroundColor Green
+Write-Host "  (Build directory: $buildDir)" -ForegroundColor Gray
 Write-Host ""

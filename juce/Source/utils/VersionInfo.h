@@ -17,10 +17,10 @@ public:
 
     // Version information
     static constexpr const char* VERSION = "0.6";
-    static constexpr const char* VERSION_FULL = "0.6.2-beta";
+    static constexpr const char* VERSION_FULL = "0.6.5-beta";
     static constexpr int         VERSION_MAJOR = 0;
     static constexpr int         VERSION_MINOR = 6;
-    static constexpr int         VERSION_PATCH = 2;
+    static constexpr int         VERSION_PATCH = 5;
 
     // Build information
     static constexpr const char* BUILD_TYPE = "Beta Test Release";

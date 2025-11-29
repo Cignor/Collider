@@ -1,4 +1,6 @@
 #include "UpdateDownloadDialog.h"
+#include "../HashVerifier.h"
+#include "../VersionManager.h"
 #include <algorithm>
 #include <vector>
 
@@ -165,13 +167,14 @@ void UpdateDownloadDialog::renderFileList()
 
     if (ImGui::BeginTable(
             "UpdateFilesTable",
-            4,
+            5,
             ImGuiTableFlags_Resizable | ImGuiTableFlags_ScrollY | ImGuiTableFlags_Borders |
                 ImGuiTableFlags_RowBg))
     {
         ImGui::TableSetupColumn("File Name", ImGuiTableColumnFlags_WidthStretch);
         ImGui::TableSetupColumn("Type", ImGuiTableColumnFlags_WidthFixed, 80.0f);
         ImGui::TableSetupColumn("Size", ImGuiTableColumnFlags_WidthFixed, 80.0f);
+        ImGui::TableSetupColumn("Hash (Local | Remote)", ImGuiTableColumnFlags_WidthStretch);
         ImGui::TableSetupColumn("Status", ImGuiTableColumnFlags_WidthFixed, 100.0f);
         ImGui::TableSetupScrollFreeze(0, 1);
         ImGui::TableHeadersRow();
@@ -200,8 +203,44 @@ void UpdateDownloadDialog::renderFileList()
             ImGui::TableSetColumnIndex(2);
             ImGui::Text("%s", getFormattedFileSize(file.size).toRawUTF8());
 
-            // Status
+            // Hash comparison
             ImGui::TableSetColumnIndex(3);
+            juce::String localHash = getLocalHash(file.relativePath);
+            juce::String remoteHash = file.sha256;
+            
+            if (localHash.isEmpty())
+            {
+                ImGui::TextColored(ImVec4(0.8f, 0.8f, 0.8f, 1.0f), "N/A");
+                ImGui::SameLine();
+                ImGui::Text("|");
+                ImGui::SameLine();
+                ImGui::TextColored(ImVec4(0.4f, 0.8f, 1.0f, 1.0f), "%s", remoteHash.substring(0, 16).toRawUTF8());
+            }
+            else
+            {
+                bool hashMatch = localHash.equalsIgnoreCase(remoteHash);
+                ImGui::TextColored(
+                    hashMatch ? ImVec4(0.5f, 1.0f, 0.5f, 1.0f) : ImVec4(1.0f, 0.4f, 0.4f, 1.0f),
+                    "%s", localHash.substring(0, 16).toRawUTF8());
+                ImGui::SameLine();
+                ImGui::Text("|");
+                ImGui::SameLine();
+                ImGui::TextColored(
+                    hashMatch ? ImVec4(0.5f, 1.0f, 0.5f, 1.0f) : ImVec4(1.0f, 0.4f, 0.4f, 1.0f),
+                    "%s", remoteHash.substring(0, 16).toRawUTF8());
+                
+                // Show full hash on hover
+                if (ImGui::IsItemHovered())
+                {
+                    ImGui::BeginTooltip();
+                    ImGui::Text("Local:  %s", localHash.toRawUTF8());
+                    ImGui::Text("Remote: %s", remoteHash.toRawUTF8());
+                    ImGui::EndTooltip();
+                }
+            }
+
+            // Status
+            ImGui::TableSetColumnIndex(4);
 
             bool needsUpdate = false;
             for (const auto& f : updateInfo.filesToDownload)
@@ -321,6 +360,40 @@ juce::String UpdateDownloadDialog::getFormattedFileSize(juce::int64 size) const
         return juce::String::formatted("%.1f KB", size / 1024.0);
     else
         return juce::String::formatted("%d B", (int)size);
+}
+
+juce::String UpdateDownloadDialog::getLocalHash(const juce::String& relativePath) const
+{
+    if (versionManager == nullptr)
+        return {};
+    
+    // First, try to get hash from VersionManager (installed_files.json)
+    if (versionManager->hasFile(relativePath))
+    {
+        auto fileInfo = versionManager->getFileInfo(relativePath);
+        return fileInfo.sha256;
+    }
+    
+    // If not tracked, try to calculate hash from disk
+    auto installDir = juce::File::getSpecialLocation(juce::File::currentExecutableFile).getParentDirectory();
+    auto localFile = installDir.getChildFile(relativePath);
+    
+    if (localFile.existsAsFile())
+    {
+        // Special handling for running EXE (can't hash locked file)
+        auto runningExePath = juce::File::getSpecialLocation(juce::File::currentExecutableFile);
+        if (localFile == runningExePath)
+        {
+            // Can't hash running EXE, but if it's tracked, we already got the hash above
+            // If not tracked, return empty (will show as N/A)
+            return {};
+        }
+        
+        // For other files, calculate hash
+        return HashVerifier::calculateSHA256(localFile);
+    }
+    
+    return {};
 }
 
 } // namespace Updater

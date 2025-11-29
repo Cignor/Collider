@@ -256,8 +256,11 @@ UpdateInfo UpdateChecker::compareVersions(const UpdateManifest& manifest)
                     // Hash mismatch, needs update
                     needsUpdate = true;
                     juce::Logger::writeToLog(
-                        "UpdateChecker: Running EXE hash mismatch: " + fileInfo.relativePath +
-                        " Local: " + localHash.substring(0, 16) + "... Remote: " + fileInfo.sha256.substring(0, 16) + "...");
+                        "UpdateChecker: Running EXE hash mismatch: " + fileInfo.relativePath);
+                    juce::Logger::writeToLog(
+                        "  Local hash:  " + localHash);
+                    juce::Logger::writeToLog(
+                        "  Remote hash: " + fileInfo.sha256);
                 }
             }
             else
@@ -308,8 +311,11 @@ UpdateInfo UpdateChecker::compareVersions(const UpdateManifest& manifest)
                     // Hash in record doesn't match - needs update
                     needsUpdate = true;
                     juce::Logger::writeToLog(
-                        "UpdateChecker: Running EXE hash in record doesn't match manifest: " + fileInfo.relativePath +
-                        " Record: " + installed.sha256.substring(0, 16) + "... Manifest: " + fileInfo.sha256.substring(0, 16) + "...");
+                        "UpdateChecker: Running EXE hash in record doesn't match manifest: " + fileInfo.relativePath);
+                    juce::Logger::writeToLog(
+                        "  Record hash:  " + installed.sha256);
+                    juce::Logger::writeToLog(
+                        "  Manifest hash: " + fileInfo.sha256);
                 }
             }
             else
