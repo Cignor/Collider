@@ -82,9 +82,13 @@ private:
     juce::String                                   currentVariant;
     juce::HashMap<juce::String, InstalledFileInfo> installedFiles;
     juce::Time                                     lastUpdateCheck;
+    mutable bool                                   versionInfoLoaded; // Lazy load flag
 
     // Get application data directory
     juce::File getAppDataDirectory() const;
+    
+    // Ensure version info is loaded (lazy loading)
+    void ensureVersionInfoLoaded() const;
 };
 
 } // namespace Updater

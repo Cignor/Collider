@@ -7,8 +7,11 @@ VersionManager::VersionManager()
     : currentVersion("0.6.5") // Default version
       ,
       currentVariant("cuda") // Default variant
+      ,
+      versionInfoLoaded(false) // Lazy load flag
 {
-    loadVersionInfo();
+    // Don't load version info during construction - lazy load it when first needed
+    // This prevents blocking startup with file I/O
 }
 
 VersionManager::~VersionManager() { saveVersionInfo(); }
@@ -17,13 +20,25 @@ juce::String VersionManager::getCurrentVersion() const { return currentVersion; 
 
 juce::String VersionManager::getCurrentVariant() const { return currentVariant; }
 
+void VersionManager::ensureVersionInfoLoaded() const
+{
+    if (!versionInfoLoaded)
+    {
+        // Cast away const to load (we're just loading data, not modifying logical state)
+        const_cast<VersionManager*>(this)->loadVersionInfo();
+        versionInfoLoaded = true;
+    }
+}
+
 const juce::HashMap<juce::String, InstalledFileInfo>& VersionManager::getInstalledFiles() const
 {
+    ensureVersionInfoLoaded();
     return installedFiles;
 }
 
 InstalledFileInfo VersionManager::getFileInfo(const juce::String& relativePath) const
 {
+    ensureVersionInfoLoaded();
     if (installedFiles.contains(relativePath))
         return installedFiles[relativePath];
 
@@ -32,6 +47,7 @@ InstalledFileInfo VersionManager::getFileInfo(const juce::String& relativePath) 
 
 bool VersionManager::hasFile(const juce::String& relativePath) const
 {
+    ensureVersionInfoLoaded();
     return installedFiles.contains(relativePath);
 }
 
@@ -96,12 +112,17 @@ bool VersionManager::saveVersionInfo()
 
 bool VersionManager::loadVersionInfo()
 {
+    // If already loaded, skip
+    if (versionInfoLoaded)
+        return true;
+        
     auto versionFile = getVersionFile();
 
     if (!versionFile.existsAsFile())
     {
         juce::Logger::writeToLog("VersionManager: installed_files.json doesn't exist yet: " + versionFile.getFullPathName());
         juce::Logger::writeToLog("  This is normal for first run - file will be created when files are registered");
+        versionInfoLoaded = true; // Mark as loaded even if file doesn't exist
         return false;
     }
 
@@ -157,10 +178,12 @@ bool VersionManager::loadVersionInfo()
             }
         }
 
+        versionInfoLoaded = true;
         return true;
     }
 
     juce::Logger::writeToLog("  ❌ Failed to parse installed_files.json");
+    versionInfoLoaded = true; // Mark as loaded even on error to prevent retry loops
     return false;
 }
 

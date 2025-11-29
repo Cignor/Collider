@@ -29,15 +29,11 @@ UpdateManager::UpdateManager()
 
     loadPreferences();
 
-    // Register the running executable (non-blocking)
-    // Do this after a short delay to not block startup
-    juce::Logger::writeToLog("=== SCHEDULING registerRunningExecutable() in 500ms ===");
-    DBG("=== SCHEDULING registerRunningExecutable() in 500ms ===");
-    juce::Timer::callAfterDelay(500, [this]() {
-        juce::Logger::writeToLog("=== TIMER FIRED - Calling registerRunningExecutable() ===");
-        DBG("=== TIMER FIRED - Calling registerRunningExecutable() ===");
-        registerRunningExecutable();
-    });
+    // Don't automatically register the running executable on startup
+    // This avoids loading installed_files.json and calculating expensive hashes
+    // Registration will happen when user actually checks for updates
+    juce::Logger::writeToLog("=== UpdateManager initialized (lazy registration on update check) ===");
+    DBG("=== UpdateManager initialized (lazy registration on update check) ===");
 }
 
 UpdateManager::~UpdateManager()
@@ -418,6 +414,8 @@ void UpdateManager::cacheManifest(const juce::String& manifestJson)
 
 void UpdateManager::registerRunningExecutable()
 {
+    // This function is only called when checking for updates (manual or automatic)
+    // It will trigger lazy loading of installed_files.json at this point
     juce::Logger::writeToLog("================================================");
     juce::Logger::writeToLog("=== REGISTER RUNNING EXECUTABLE START ===");
     DBG("================================================");
@@ -433,20 +431,24 @@ void UpdateManager::registerRunningExecutable()
     DBG("EXE Path: " + exePath.getFullPathName());
     DBG("EXE Exists: " + juce::String(exePath.existsAsFile() ? "YES" : "NO"));
     
-    if (exePath.existsAsFile())
+    if (!exePath.existsAsFile())
     {
-        juce::Logger::writeToLog("EXE Size: " + juce::String(exePath.getSize()) + " bytes");
-        juce::Logger::writeToLog("EXE Modified: " + exePath.getLastModificationTime().toString(true, true, true, true));
-        DBG("EXE Size: " + juce::String(exePath.getSize()) + " bytes");
-        DBG("EXE Modified: " + exePath.getLastModificationTime().toString(true, true, true, true));
+        juce::Logger::writeToLog("  ❌ EXE file not found, cannot register");
+        juce::Logger::writeToLog("================================================");
+        return;
     }
+    
+    auto exeSize = exePath.getSize();
+    auto exeModTime = exePath.getLastModificationTime();
+    juce::Logger::writeToLog("EXE Size: " + juce::String(exeSize) + " bytes");
+    juce::Logger::writeToLog("EXE Modified: " + exeModTime.toString(true, true, true, true));
+    DBG("EXE Size: " + juce::String(exeSize) + " bytes");
+    DBG("EXE Modified: " + exeModTime.toString(true, true, true, true));
 
-    // Calculate hash FIRST to see in logs (before checking if tracked)
-    auto exeHash = HashVerifier::calculateSHA256(exePath);
-    juce::Logger::writeToLog("EXE Hash (calculated): " + (exeHash.isEmpty() ? "[FAILED - file may be locked]" : exeHash));
-    DBG("EXE Hash (calculated): " + (exeHash.isEmpty() ? "[FAILED - file may be locked]" : exeHash));
+    // Declare exeHash at function scope so it's accessible throughout
+    juce::String exeHash;
 
-    // Check if already tracked
+    // Check if already tracked FIRST (fast check, lazy loads installed_files.json)
     if (versionManager->hasFile(exeName))
     {
         auto existingInfo = versionManager->getFileInfo(exeName);
@@ -455,8 +457,17 @@ void UpdateManager::registerRunningExecutable()
         juce::Logger::writeToLog("  Recorded version: " + existingInfo.version);
         juce::Logger::writeToLog("  Recorded date: " + existingInfo.installedDate.toString(true, true, true, true));
         
-        // Still calculate current hash to compare
-        auto exeHash = HashVerifier::calculateSHA256(exePath);
+        // OPTIMIZATION: Use file size + modification time as fast check before expensive hash
+        // If file size and mod time match, assume hash is still valid (very likely)
+        // Only calculate hash if size/time changed or we need to verify
+        bool needsHashCheck = true;
+        
+        // Fast check: compare file size (if we had it stored, but we don't currently)
+        // For now, we'll still do hash check but log that we're doing it
+        // TODO: Store file size in InstalledFileInfo for faster checks
+        
+        // Calculate hash only if needed (this is the expensive operation)
+        exeHash = HashVerifier::calculateSHA256(exePath);
         if (!exeHash.isEmpty())
         {
             juce::Logger::writeToLog("  Current EXE hash: " + exeHash);
@@ -563,7 +574,13 @@ void UpdateManager::registerRunningExecutable()
     juce::Logger::writeToLog("Executable NOT tracked - will attempt to register");
     DBG("Executable NOT tracked - will attempt to register");
 
-    // Hash already calculated above, check if it's valid
+    // Calculate hash if not already calculated (this is the expensive operation)
+    if (exeHash.isEmpty())
+    {
+        exeHash = HashVerifier::calculateSHA256(exePath);
+    }
+    
+    // Check if hash calculation succeeded
     if (exeHash.isEmpty())
     {
         juce::Logger::writeToLog("❌ Could not calculate hash (file may be locked)");
