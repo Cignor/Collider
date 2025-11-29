@@ -1009,6 +1009,28 @@ target_sources(PresetCreatorApp PRIVATE
     # Version and utilities
     Source/utils/VersionInfo.h
     
+    # Auto-updater system
+    Source/updater/UpdaterTypes.h
+    Source/updater/UpdaterTypes.cpp
+    Source/updater/HashVerifier.h
+    Source/updater/HashVerifier.cpp
+    Source/updater/VersionManager.h
+    Source/updater/VersionManager.cpp
+    Source/updater/UpdateChecker.h
+    Source/updater/UpdateChecker.cpp
+    Source/updater/FileDownloader.h
+    Source/updater/FileDownloader.cpp
+    Source/updater/UpdateApplier.h
+    Source/updater/UpdateApplier.cpp
+    Source/updater/UpdateManager.h
+    Source/updater/UpdateManager.cpp
+    Source/updater/ui/UpdateAvailableDialog.h
+    Source/updater/ui/UpdateAvailableDialog.cpp
+    Source/updater/ui/DownloadProgressDialog.h
+    Source/updater/ui/DownloadProgressDialog.cpp
+    Source/updater/ui/UpdateDownloadDialog.h
+    Source/updater/ui/UpdateDownloadDialog.cpp
+    
     # Theme system
     Source/preset_creator/theme/Theme.h
     Source/preset_creator/theme/ThemeManager.h
@@ -1333,6 +1355,7 @@ target_link_libraries(PresetCreatorApp PRIVATE
     juce::juce_audio_utils
     juce::juce_audio_formats
     juce::juce_dsp
+    juce::juce_cryptography
     imgui_impl_juce
     soundtouch
     box2d

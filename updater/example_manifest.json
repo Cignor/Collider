@@ -1,0 +1,84 @@
+{
+    "appName": "Pikon Raditsz",
+    "latestVersion": "1.0.0",
+    "releaseDate": "2025-11-28T16:00:00Z",
+    "minimumVersion": "0.9.0",
+    "updateUrl": "https://yoursite.com/updates/versions",
+    "variants": {
+        "standard": {
+            "displayName": "Standard (Lightweight)",
+            "files": {
+                "Pikon Raditsz.exe": {
+                    "size": 331350016,
+                    "sha256": "abc123def456...",
+                    "version": "1.0.0",
+                    "critical": true
+                },
+                "bass.dll": {
+                    "size": 123456,
+                    "sha256": "def456ghi789...",
+                    "version": "1.0.0",
+                    "critical": true
+                },
+                "avcodec-62.dll": {
+                    "size": 5678901,
+                    "sha256": "ghi789jkl012...",
+                    "version": "1.0.0",
+                    "critical": true
+                },
+                "presets/default.xml": {
+                    "size": 5432,
+                    "sha256": "jkl012mno345...",
+                    "version": "1.0.0",
+                    "critical": false
+                },
+                "presets/ambient_pad.xml": {
+                    "size": 6234,
+                    "sha256": "mno345pqr678...",
+                    "version": "1.0.0",
+                    "critical": false
+                },
+                "USER_MANUAL/getting_started.md": {
+                    "size": 12345,
+                    "sha256": "pqr678stu901...",
+                    "version": "1.0.0",
+                    "critical": false
+                }
+            }
+        },
+        "cuda": {
+            "displayName": "CUDA-Enabled (Full Features)",
+            "inheritsFrom": "standard",
+            "files": {
+                "cudart64_130.dll": {
+                    "size": 456789,
+                    "sha256": "stu901vwx234...",
+                    "version": "1.0.0",
+                    "critical": true
+                },
+                "cublas64_13.dll": {
+                    "size": 98765432,
+                    "sha256": "vwx234yz567...",
+                    "version": "1.0.0",
+                    "critical": true
+                },
+                "cublasLt64_13.dll": {
+                    "size": 87654321,
+                    "sha256": "yz567abc890...",
+                    "version": "1.0.0",
+                    "critical": true
+                },
+                "opencv_world4130.dll": {
+                    "size": 104857600,
+                    "sha256": "abc890def123...",
+                    "version": "1.0.0",
+                    "critical": true
+                }
+            }
+        }
+    },
+    "changelog": {
+        "url": "https://yoursite.com/updates/changelog.html#v1.0.0",
+        "summary": "Initial release with modular synthesis engine, video processing, and TTS features"
+    }
+}

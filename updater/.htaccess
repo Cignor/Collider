@@ -1,0 +1,69 @@
+# .htaccess for Pikon Raditsz Update Server
+# Place this file in: /public_html/updates/
+
+# Disable directory listing for security
+Options -Indexes
+
+# Force HTTPS for all update requests
+RewriteEngine On
+RewriteCond %{HTTPS} off
+RewriteRule ^(.*)$ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
+
+# Set proper MIME types
+AddType application/json .json
+AddType application/octet-stream .exe .dll
+AddType text/plain .txt .log
+AddType text/html .html .htm
+
+# Enable CORS for manifest.json (allows updater to fetch from any origin)
+<FilesMatch "manifest\.json$">
+    Header set Access-Control-Allow-Origin "*"
+    Header set Access-Control-Allow-Methods "GET, OPTIONS"
+    Header set Access-Control-Allow-Headers "Content-Type"
+</FilesMatch>
+
+# Cache control for different file types
+# Manifest: No cache (always check for updates)
+<FilesMatch "manifest\.json$">
+    Header set Cache-Control "no-cache, no-store, must-revalidate"
+    Header set Pragma "no-cache"
+    Header set Expires "0"
+</FilesMatch>
+
+# Binary files: Cache for 1 day (they're versioned, so safe to cache)
+<FilesMatch "\.(exe|dll|zip)$">
+    Header set Cache-Control "public, max-age=86400"
+</FilesMatch>
+
+# Presets and docs: Cache for 1 hour
+<FilesMatch "\.(xml|pdf|md|txt)$">
+    Header set Cache-Control "public, max-age=3600"
+</FilesMatch>
+
+# Security headers
+Header always set X-Content-Type-Options "nosniff"
+Header always set X-Frame-Options "DENY"
+Header always set X-XSS-Protection "1; mode=block"
+
+# Prevent access to sensitive files
+<FilesMatch "^\.">
+    Order allow,deny
+    Deny from all
+</FilesMatch>
+
+# Prevent access to backup files
+<FilesMatch "\.(bak|backup|old|tmp|swp)$">
+    Order allow,deny
+    Deny from all
+</FilesMatch>
+
+# Enable compression for text files
+<IfModule mod_deflate.c>
+    AddOutputFilterByType DEFLATE application/json
+    AddOutputFilterByType DEFLATE text/html
+    AddOutputFilterByType DEFLATE text/plain
+</IfModule>
+
+# Custom error pages (optional)
+# ErrorDocument 404 /updates/404.html
+# ErrorDocument 403 /updates/403.html

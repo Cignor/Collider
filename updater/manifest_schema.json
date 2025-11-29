@@ -1,0 +1,100 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Pikon Raditsz Update Manifest",
+  "description": "Schema for the auto-updater manifest file",
+  "type": "object",
+  "required": ["appName", "latestVersion", "releaseDate", "minimumVersion", "variants"],
+  "properties": {
+    "appName": {
+      "type": "string",
+      "description": "Application name"
+    },
+    "latestVersion": {
+      "type": "string",
+      "description": "Latest available version (semantic versioning)",
+      "pattern": "^\\d+\\.\\d+\\.\\d+$"
+    },
+    "releaseDate": {
+      "type": "string",
+      "description": "Release date in ISO 8601 format",
+      "format": "date-time"
+    },
+    "minimumVersion": {
+      "type": "string",
+      "description": "Minimum version that can auto-update (older versions must manual install)",
+      "pattern": "^\\d+\\.\\d+\\.\\d+$"
+    },
+    "updateUrl": {
+      "type": "string",
+      "description": "Base URL for update files",
+      "format": "uri"
+    },
+    "variants": {
+      "type": "object",
+      "description": "Different build variants (standard, cuda, etc.)",
+      "additionalProperties": {
+        "type": "object",
+        "required": ["displayName", "files"],
+        "properties": {
+          "displayName": {
+            "type": "string",
+            "description": "Human-readable variant name"
+          },
+          "inheritsFrom": {
+            "type": "string",
+            "description": "Inherit files from another variant"
+          },
+          "files": {
+            "type": "object",
+            "description": "Files in this variant (relative path -> file info)",
+            "additionalProperties": {
+              "type": "object",
+              "required": ["size", "sha256", "version"],
+              "properties": {
+                "size": {
+                  "type": "integer",
+                  "description": "File size in bytes"
+                },
+                "sha256": {
+                  "type": "string",
+                  "description": "SHA256 hash of the file",
+                  "pattern": "^[a-f0-9]{64}$"
+                },
+                "version": {
+                  "type": "string",
+                  "description": "Version when this file was last updated",
+                  "pattern": "^\\d+\\.\\d+\\.\\d+$"
+                },
+                "critical": {
+                  "type": "boolean",
+                  "description": "If true, requires restart to apply (exe/dll files)",
+                  "default": false
+                },
+                "url": {
+                  "type": "string",
+                  "description": "Override URL for this specific file (optional)",
+                  "format": "uri"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "changelog": {
+      "type": "object",
+      "description": "Changelog information",
+      "properties": {
+        "url": {
+          "type": "string",
+          "description": "URL to full changelog",
+          "format": "uri"
+        },
+        "summary": {
+          "type": "string",
+          "description": "Brief summary of changes in this version"
+        }
+      }
+    }
+  }
+}
