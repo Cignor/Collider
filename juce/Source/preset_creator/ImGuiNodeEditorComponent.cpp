@@ -1458,32 +1458,48 @@ void ImGuiNodeEditorComponent::renderImGui()
                 };
 
                 // Scan themes directory for all .json files
-                auto exeFile = juce::File::getSpecialLocation(juce::File::currentExecutableFile);
-                auto exeDir = exeFile.getParentDirectory();
-                auto themesDir = exeDir.getChildFile("themes");
-
                 std::vector<std::pair<juce::String, juce::String>>
                     foundThemes; // {displayName, filename}
 
-                if (themesDir.exists() && themesDir.isDirectory())
+                try
                 {
-                    juce::Array<juce::File> themeFiles;
-                    themesDir.findChildFiles(themeFiles, juce::File::findFiles, false, "*.json");
+                    auto exeFile = juce::File::getSpecialLocation(juce::File::currentExecutableFile);
+                    auto exeDir = exeFile.getParentDirectory();
+                    auto themesDir = exeDir.getChildFile("themes");
 
-                    for (const auto& themeFile : themeFiles)
+                    if (themesDir.exists() && themesDir.isDirectory())
                     {
-                        juce::String filename = themeFile.getFileName();
-                        // Skip hidden/system files
-                        if (filename.startsWithChar('.'))
-                            continue;
+                        juce::Array<juce::File> themeFiles;
+                        themesDir.findChildFiles(themeFiles, juce::File::findFiles, false, "*.json");
 
-                        juce::String displayName = filenameToDisplayName(filename);
-                        foundThemes.push_back({displayName, filename});
+                        for (const auto& themeFile : themeFiles)
+                        {
+                            juce::String filename = themeFile.getFileName();
+                            // Skip hidden/system files
+                            if (filename.startsWithChar('.'))
+                                continue;
+
+                            juce::String displayName = filenameToDisplayName(filename);
+                            foundThemes.push_back({displayName, filename});
+                        }
                     }
+                }
+                catch (const std::exception& e)
+                {
+                    juce::Logger::writeToLog("[Settings] Theme scan exception: " + juce::String(e.what()));
+                    // Continue - will show "No themes found" message
+                }
+                catch (...)
+                {
+                    juce::Logger::writeToLog("[Settings] Theme scan unknown exception");
+                    // Continue - will show "No themes found" message
                 }
 
                 // Also check source tree for development (fallback)
+                try
                 {
+                    auto exeFile = juce::File::getSpecialLocation(juce::File::currentExecutableFile);
+                    auto exeDir = exeFile.getParentDirectory();
                     auto sourceThemesDir = exeDir.getParentDirectory()
                                                .getParentDirectory()
                                                .getChildFile("Source")
@@ -1521,6 +1537,16 @@ void ImGuiNodeEditorComponent::renderImGui()
                             }
                         }
                     }
+                }
+                catch (const std::exception& e)
+                {
+                    juce::Logger::writeToLog("[Settings] Source theme scan exception: " + juce::String(e.what()));
+                    // Continue - only affects development fallback
+                }
+                catch (...)
+                {
+                    juce::Logger::writeToLog("[Settings] Source theme scan unknown exception");
+                    // Continue - only affects development fallback
                 }
 
                 // Sort themes alphabetically by display name
@@ -1560,15 +1586,47 @@ void ImGuiNodeEditorComponent::renderImGui()
 
 // Show CUDA device info
 #if WITH_CUDA_SUPPORT
-            int deviceCount = cv::cuda::getCudaEnabledDeviceCount();
-            if (deviceCount > 0)
+            // CRITICAL: Wrap in try-catch to prevent crashes on systems without NVIDIA GPU
+            // Even though WITH_CUDA_SUPPORT is defined, CUDA runtime libraries may not be available
+            int deviceCount = 0;
+            bool cudaQuerySuccess = false;
+            try
             {
-                ThemeText("CUDA Available", theme.text.success);
-                ImGui::Text("GPU Devices: %d", deviceCount);
+                deviceCount = cv::cuda::getCudaEnabledDeviceCount();
+                cudaQuerySuccess = true;
+            }
+            catch (const cv::Exception& e)
+            {
+                juce::Logger::writeToLog("[Settings] CUDA query failed: " + juce::String(e.what()));
+                cudaQuerySuccess = false;
+            }
+            catch (const std::exception& e)
+            {
+                juce::Logger::writeToLog("[Settings] CUDA query exception: " + juce::String(e.what()));
+                cudaQuerySuccess = false;
+            }
+            catch (...)
+            {
+                juce::Logger::writeToLog("[Settings] CUDA query unknown exception");
+                cudaQuerySuccess = false;
+            }
+            
+            if (cudaQuerySuccess)
+            {
+                if (deviceCount > 0)
+                {
+                    ThemeText("CUDA Available", theme.text.success);
+                    ImGui::Text("GPU Devices: %d", deviceCount);
+                }
+                else
+                {
+                    ThemeText("CUDA compiled but no devices found", theme.text.warning);
+                }
             }
             else
             {
-                ThemeText("CUDA compiled but no devices found", theme.text.warning);
+                ThemeText("CUDA not available", theme.text.warning);
+                ImGui::TextDisabled("CUDA runtime libraries not found or no NVIDIA GPU");
             }
 #endif
 #else

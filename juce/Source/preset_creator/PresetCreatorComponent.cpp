@@ -19,7 +19,12 @@ PresetCreatorComponent::PresetCreatorComponent(
     juce::Logger::writeToLog("Attempting to create ImGuiNodeEditorComponent...");
     editor.reset(new ImGuiNodeEditorComponent(deviceManager));
     juce::Logger::writeToLog("ImGuiNodeEditorComponent created.");
-    editor->onShowAudioSettings = [this]() { this->showAudioSettingsDialog(); };
+    // CRITICAL: Always dispatch to message thread since ImGui callbacks execute during rendering
+    editor->onShowAudioSettings = [this]() {
+        juce::MessageManager::callAsync([this]() {
+            this->showAudioSettingsDialog();
+        });
+    };
 
     // Initialize UpdateManager and wire callback
     updateManager = std::make_unique<Updater::UpdateManager>();
@@ -128,18 +133,98 @@ PresetCreatorComponent::PresetCreatorComponent(
 // ADD: Implementation of the audio settings dialog function
 void PresetCreatorComponent::showAudioSettingsDialog()
 {
-    auto* component = new juce::AudioDeviceSelectorComponent(
-        deviceManager, 0, 256, 0, 256, true, true, false, false);
+    // This function should only be called from the message thread (via callAsync)
+    // Additional safety check
+    if (!juce::MessageManager::getInstance()->isThisTheMessageThread())
+    {
+        juce::Logger::writeToLog("[AudioSettings] ERROR: Called from wrong thread, dispatching to message thread");
+        juce::MessageManager::callAsync([this]() { showAudioSettingsDialog(); });
+        return;
+    }
 
-    component->setSize(500, 450);
+    juce::Logger::writeToLog("[AudioSettings] Opening audio settings dialog...");
 
-    juce::DialogWindow::LaunchOptions o;
-    o.content.setOwned(component);
-    o.dialogTitle = "Audio Settings";
-    o.dialogBackgroundColour = juce::Colours::darkgrey;
-    o.escapeKeyTriggersCloseButton = true;
-    o.resizable = false;
-    o.launchAsync();
+    try
+    {
+        // Validate component is still attached and valid
+        if (!isVisible() && !isShowing())
+        {
+            juce::Logger::writeToLog("[AudioSettings] Warning: Component not visible, but proceeding");
+        }
+
+        // Validate deviceManager is accessible
+        try
+        {
+            const auto& deviceTypes = deviceManager.getAvailableDeviceTypes();
+            if (deviceTypes.isEmpty())
+            {
+                juce::Logger::writeToLog("[AudioSettings] Warning: No audio device types available");
+            }
+        }
+        catch (...)
+        {
+            juce::Logger::writeToLog("[AudioSettings] Warning: Could not query device types, but proceeding");
+        }
+
+        // Find parent window for proper dialog centering - use safe method
+        juce::Component* parentWindow = nullptr;
+        try
+        {
+            parentWindow = findParentComponentOfClass<juce::DocumentWindow>();
+            if (parentWindow == nullptr)
+            {
+                auto* topLevel = getTopLevelComponent();
+                parentWindow = dynamic_cast<juce::DocumentWindow*>(topLevel);
+            }
+        }
+        catch (...)
+        {
+            juce::Logger::writeToLog("[AudioSettings] Warning: Could not find parent window");
+        }
+
+        // Create the audio device selector component
+        auto* component = new juce::AudioDeviceSelectorComponent(
+            deviceManager, 0, 256, 0, 256, true, true, false, false);
+
+        component->setSize(500, 450);
+
+        juce::DialogWindow::LaunchOptions o;
+        o.content.setOwned(component);
+        o.dialogTitle = "Audio Settings";
+        o.dialogBackgroundColour = juce::Colours::darkgrey;
+        o.escapeKeyTriggersCloseButton = true;
+        o.resizable = false;
+        
+        // Set parent window if available (prevents crashes and ensures proper centering)
+        if (parentWindow != nullptr)
+        {
+            o.componentToCentreAround = parentWindow;
+            juce::Logger::writeToLog("[AudioSettings] Dialog parent window set");
+        }
+        else
+        {
+            juce::Logger::writeToLog("[AudioSettings] Warning: No parent window found, using default positioning");
+        }
+        
+        o.launchAsync();
+        juce::Logger::writeToLog("[AudioSettings] Dialog launched successfully");
+    }
+    catch (const std::exception& e)
+    {
+        juce::Logger::writeToLog("[AudioSettings] Exception: " + juce::String(e.what()));
+        juce::AlertWindow::showMessageBoxAsync(
+            juce::AlertWindow::WarningIcon,
+            "Audio Settings Error",
+            "Failed to open audio settings:\n" + juce::String(e.what()));
+    }
+    catch (...)
+    {
+        juce::Logger::writeToLog("[AudioSettings] Unknown exception occurred");
+        juce::AlertWindow::showMessageBoxAsync(
+            juce::AlertWindow::WarningIcon,
+            "Audio Settings Error",
+            "Failed to open audio settings due to an unexpected error.");
+    }
 }
 
 void PresetCreatorComponent::setWindowFileName(const juce::String& fileName)
