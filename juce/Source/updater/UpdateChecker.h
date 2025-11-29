@@ -47,6 +47,9 @@ private:
 
     // Helper to compare version strings (semantic versioning)
     static int compareVersionStrings(const juce::String& v1, const juce::String& v2);
+    
+    // Cache manifest locally for later use
+    void cacheManifestLocally(const juce::String& jsonString);
 };
 
 } // namespace Updater

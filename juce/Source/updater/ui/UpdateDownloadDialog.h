@@ -32,6 +32,11 @@ public:
     void open(const UpdateInfo& info);
 
     /**
+     * Show the dialog in "checking" state while update check is in progress.
+     */
+    void showChecking();
+
+    /**
      * Close the dialog.
      */
     void close() { isOpen = false; }
@@ -59,6 +64,7 @@ public:
 private:
     bool isOpen = false;
     bool isDownloading = false;
+    bool isChecking = false; // True while checking for updates
 
     UpdateInfo       updateInfo;
     DownloadProgress currentProgress;

@@ -1,5 +1,6 @@
 #include "UpdateDownloadDialog.h"
 #include <algorithm>
+#include <vector>
 
 namespace Updater
 {
@@ -11,8 +12,16 @@ void UpdateDownloadDialog::open(const UpdateInfo& info)
     updateInfo = info;
     isOpen = true;
     isDownloading = false;
+    isChecking = false; // Done checking, show results
     // Reset filter
     searchFilter[0] = 0;
+}
+
+void UpdateDownloadDialog::showChecking()
+{
+    isOpen = true;
+    isChecking = true;
+    isDownloading = false;
 }
 
 void UpdateDownloadDialog::setDownloadProgress(const DownloadProgress& progress)
@@ -28,13 +37,28 @@ void UpdateDownloadDialog::render()
     // Set window size and position
     ImGui::SetNextWindowSize(ImVec2(800, 600), ImGuiCond_FirstUseEver);
 
-    if (!ImGui::Begin("Software Update Available", &isOpen, ImGuiWindowFlags_None))
+    const char* windowTitle = isChecking ? "Checking for Updates..." : "Software Update Available";
+    if (!ImGui::Begin(windowTitle, &isOpen, ImGuiWindowFlags_None))
     {
         ImGui::End();
         return;
     }
 
-    // Header info
+    // Show checking state with centered message
+    if (isChecking)
+    {
+        ImGui::SetCursorPosX((ImGui::GetWindowWidth() - 300) * 0.5f);
+        ImGui::SetCursorPosY(ImGui::GetWindowHeight() * 0.4f);
+
+        ImGui::TextColored(ImVec4(0.4f, 0.8f, 1.0f, 1.0f), "Checking for updates, please wait...");
+
+        ImGui::SetCursorPosX((ImGui::GetWindowWidth() - 150) * 0.5f);
+        ImGui::TextDisabled("This may take a few seconds");
+
+        ImGui::End();
+        return;
+    }
+
     // Header info
     if (updateInfo.updateAvailable)
     {
@@ -108,6 +132,36 @@ void UpdateDownloadDialog::renderFileList()
             filteredIndices.push_back(i);
         }
     }
+
+    // Sort: Pending files first, then installed files
+    // Also prioritize critical files within each group
+    std::sort(filteredIndices.begin(), filteredIndices.end(), [this, &filesToShow](int a, int b) {
+        const auto& fileA = filesToShow.getReference(a);
+        const auto& fileB = filesToShow.getReference(b);
+        
+        // Check if files need updating
+        bool needsUpdateA = false;
+        bool needsUpdateB = false;
+        
+        for (const auto& f : updateInfo.filesToDownload)
+        {
+            if (f.relativePath == fileA.relativePath)
+                needsUpdateA = true;
+            if (f.relativePath == fileB.relativePath)
+                needsUpdateB = true;
+        }
+        
+        // Pending files come first
+        if (needsUpdateA != needsUpdateB)
+            return needsUpdateA; // true (pending) comes before false (installed)
+        
+        // Within same group, critical files first
+        if (fileA.critical != fileB.critical)
+            return fileA.critical; // true (critical) comes before false (non-critical)
+        
+        // Otherwise, alphabetical
+        return fileA.relativePath < fileB.relativePath;
+    });
 
     if (ImGui::BeginTable(
             "UpdateFilesTable",

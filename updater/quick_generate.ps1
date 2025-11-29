@@ -37,7 +37,8 @@ $excludePatterns = @(
     "*\logs\*",         # Exclude anything in logs folders
     ".*",               # Exclude root dotfiles (hidden/config)
     "*\.*",             # Exclude dotfiles in subdirectories
-    "imgui.ini"         # ImGui config file (user-specific)
+    "imgui.ini",        # ImGui config file (user-specific)
+    "PikonUpdater.exe"  # Updater tool (shipped with app, shouldn't be updated via updater)
 )
 
 # Base URL for your OVH server

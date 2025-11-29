@@ -114,11 +114,28 @@ bool UpdateApplier::applyUpdates(
     }
     else // UpdateType::OnRestart
     {
-        // Install ALL files immediately (both critical and non-critical)
-        // We already skip the running executable during download in UpdateChecker
+        // Install files that can be updated immediately
+        // SKIP the running executable - PikonUpdater will handle it after app exits
+        
+        auto runningExePath = juce::File::getSpecialLocation(juce::File::currentExecutableFile);
+        auto runningExeName = runningExePath.getFileName();
+        
+        int filesApplied = 0;
+        int filesSkipped = 0;
 
         for (const auto& fileInfo : files)
         {
+            // Skip the running executable - it will be handled by PikonUpdater
+            bool isRunningExe = (fileInfo.relativePath.equalsIgnoreCase(runningExeName) ||
+                                installDir.getChildFile(fileInfo.relativePath) == runningExePath);
+            
+            if (isRunningExe)
+            {
+                DBG("Skipping running executable: " + fileInfo.relativePath + " (will be handled by PikonUpdater)");
+                filesSkipped++;
+                continue;
+            }
+
             auto source = tempDirectory.getChildFile(fileInfo.relativePath);
             auto destination = installDir.getChildFile(fileInfo.relativePath);
 
@@ -147,12 +164,15 @@ bool UpdateApplier::applyUpdates(
 
             // Update version manager
             versionManager.updateFileRecord(fileInfo.relativePath, fileInfo);
+            filesApplied++;
         }
 
         // Save version info
         versionManager.saveVersionInfo();
 
-        DBG("All files installed successfully (" + juce::String(files.size()) + " files)");
+        DBG("Files applied: " + juce::String(filesApplied) + 
+            ", Files skipped (running EXE): " + juce::String(filesSkipped) +
+            " (will be handled by PikonUpdater)");
         return true;
     }
 }

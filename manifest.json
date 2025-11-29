@@ -7,7 +7,7 @@
                   },
     "updateUrl":  "https://pimpant.club/pikon-raditsz",
     "minimumVersion":  "0.6.0",
-    "releaseDate":  "2025-11-28T20:45:20Z",
+    "releaseDate":  "2025-11-29T15:00:36Z",
     "variants":  {
                      "cuda":  {
                                   "displayName":  "CUDA-Enabled (Full Features)",
@@ -3368,9 +3368,9 @@
                                                                        },
                                                 "Pikon Raditsz.exe":  {
                                                                           "critical":  true,
-                                                                          "sha256":  "a61130fabd0cbb9fb5b19f5da6938f4765b80f7c3898e834f85e1101cc3a2b27",
+                                                                          "sha256":  "564f7027ad348a848980c40e8ec2131a67f23c8f015f2609eaaf21eb46d1b503",
                                                                           "version":  "0.6.2-beta",
-                                                                          "size":  331227648
+                                                                          "size":  331245056
                                                                       },
                                                 "espeak-ng-data\\lang\\tai\\shn":  {
                                                                                        "critical":  false,

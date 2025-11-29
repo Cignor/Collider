@@ -1402,6 +1402,29 @@ if(PRESET_CREATOR_IMNODES_ZOOM)
     target_compile_definitions(PresetCreatorApp PRIVATE IMNODES_ZOOM_ENABLED=1)
 endif()
 
+# ============================================================================
+# PikonUpdater - Standalone update installer
+# ============================================================================
+add_executable(PikonUpdater
+    Source/updater/PikonUpdater/PikonUpdater.cpp
+)
+
+target_link_libraries(PikonUpdater
+    PRIVATE
+    juce::juce_core
+    juce::juce_cryptography
+)
+
+# Console app (not GUI)
+set_target_properties(PikonUpdater PROPERTIES
+    WIN32_EXECUTABLE FALSE
+)
+
+# Copy to output directory next to main app (same as PresetCreatorApp)
+set_target_properties(PikonUpdater PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/PresetCreatorApp_artefacts/$<CONFIG>"
+)
+
 if(WIN32)
     # Copy Piper executable and DLLs to output directories
     add_custom_command(

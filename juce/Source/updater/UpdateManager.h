@@ -97,6 +97,17 @@ private:
 
     // Temp directory for downloads
     juce::File getTempDirectory();
+    juce::File getInstallDirectory() const;
+
+    // Manifest caching
+    juce::String getCachedManifest();
+    void         cacheManifest(const juce::String& manifestJson);
+
+    // Self-registration
+    void registerRunningExecutable();
+
+    // Update manifest creation
+    juce::File createUpdateManifest(const juce::Array<FileInfo>& files, const juce::File& tempDir);
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(UpdateManager)
 };
