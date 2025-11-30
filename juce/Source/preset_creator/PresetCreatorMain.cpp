@@ -2,10 +2,15 @@
 #include "PresetCreatorComponent.h"
 #include "SplashScreenComponent.h"
 #include "../utils/RtLogger.h"
+#include "../utils/CudaDeviceCountCache.h"
 
 void PresetCreatorApplication::initialise(const juce::String&)
     {
         DBG("[PresetCreator] initialise() starting"); RtLogger::init();
+        
+        // Initialize CUDA device count cache ONCE at app startup
+        // This prevents concurrent CUDA queries during runtime
+        CudaDeviceCountCache::getDeviceCount();
         // Crash handler to capture unexpected exceptions
         std::set_terminate([]{
             auto bt = juce::SystemStats::getStackBacktrace();

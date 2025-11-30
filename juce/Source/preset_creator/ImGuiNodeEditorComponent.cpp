@@ -5,6 +5,7 @@
 #include "PresetValidator.h"
 #include "PresetAutoHealer.h"
 #include "../utils/VersionInfo.h"
+#include "../utils/CudaDeviceCountCache.h"
 
 #include <imgui.h>
 #include <imgui_internal.h>
@@ -14,6 +15,10 @@
 #include <cmath>
 #include <cstring>
 #include <juce_core/juce_core.h>
+#if JUCE_WINDOWS && WITH_CUDA_SUPPORT
+#include <windows.h>
+#include <excpt.h>
+#endif
 #include <unordered_map>
 #include <unordered_set>
 #include <set>
@@ -1358,281 +1363,306 @@ void ImGuiNodeEditorComponent::renderImGui()
         // ========================================================================
         if (ImGui::BeginMenu("Settings"))
         {
-            // Audio Settings
-            if (ImGui::MenuItem("Audio Settings..."))
+            // CRITICAL: Wrap entire Settings menu in try-catch to prevent crashes
+            // This catches any exceptions that might occur during menu rendering
+            try
             {
-                if (onShowAudioSettings)
-                    onShowAudioSettings();
-            }
-
-            // MIDI Device Manager
-            if (ImGui::MenuItem("MIDI Device Manager..."))
-            {
-                showMidiDeviceManager = !showMidiDeviceManager;
-            }
-
-            if (ImGui::MenuItem("Help Manager..."))
-            {
-                m_helpManager.open();
-                m_helpManager.setActiveTab(0); // Open to Shortcuts tab
-            }
-
-            if (ImGui::MenuItem("Download Piper Voices..."))
-            {
-                voiceDownloadDialog.open();
-            }
-
-            if (ImGui::MenuItem("Check for Updates..."))
-            {
-                if (onCheckForUpdates)
-                    onCheckForUpdates();
-            }
-
-            ImGui::Separator();
-
-            if (ImGui::BeginMenu("Theme"))
-            {
-                if (ImGui::MenuItem("Edit Current Theme..."))
+                // Audio Settings
+                if (ImGui::MenuItem("Audio Settings..."))
                 {
-                    themeEditor.open();
+                    if (onShowAudioSettings)
+                        onShowAudioSettings();
                 }
+
+                // MIDI Device Manager
+                if (ImGui::MenuItem("MIDI Device Manager..."))
+                {
+                    showMidiDeviceManager = !showMidiDeviceManager;
+                }
+
+                if (ImGui::MenuItem("Help Manager..."))
+                {
+                    m_helpManager.open();
+                    m_helpManager.setActiveTab(0); // Open to Shortcuts tab
+                }
+
+                if (ImGui::MenuItem("Download Piper Voices..."))
+                {
+                    voiceDownloadDialog.open();
+                }
+
+                if (ImGui::MenuItem("Check for Updates..."))
+                {
+                    if (onCheckForUpdates)
+                        onCheckForUpdates();
+                }
+
                 ImGui::Separator();
 
-                // Dynamic theme scanning - refreshes each time menu is opened
-                auto loadThemePreset = [&](const char* label, const juce::String& filename) {
-                    if (ImGui::MenuItem(label))
+                if (ImGui::BeginMenu("Theme"))
+                {
+                    if (ImGui::MenuItem("Edit Current Theme..."))
                     {
-                        juce::File presetFile;
-                        auto       exeFile =
+                        themeEditor.open();
+                    }
+                    ImGui::Separator();
+
+                    // Dynamic theme scanning - refreshes each time menu is opened
+                    auto loadThemePreset = [&](const char* label, const juce::String& filename) {
+                        if (ImGui::MenuItem(label))
+                        {
+                            juce::File presetFile;
+                            auto       exeFile =
+                                juce::File::getSpecialLocation(juce::File::currentExecutableFile);
+                            auto exeDir = exeFile.getParentDirectory();
+                            auto themesDir = exeDir.getChildFile("themes");
+                            auto candidate = themesDir.getChildFile(filename);
+
+                            if (candidate.existsAsFile())
+                            {
+                                if (ThemeManager::getInstance().loadTheme(candidate))
+                                {
+                                    // Save user preference
+                                    ThemeManager::getInstance().saveUserThemePreference(filename);
+                                    themeEditor.refreshThemeFromManager();
+                                    juce::Logger::writeToLog(
+                                        "[Theme] Loaded: " + juce::String(label));
+                                    s_themeToastText = "Theme Loaded: " + juce::String(label);
+                                    s_themeToastEndTime = ImGui::GetTime() + 2.0;
+                                }
+                            }
+                        }
+                    };
+
+                    // Helper to convert filename to display name
+                    auto filenameToDisplayName = [](const juce::String& filename) -> juce::String {
+                        juce::String name = filename;
+                        // Remove .json extension
+                        if (name.endsWithIgnoreCase(".json"))
+                            name = name.substring(0, name.length() - 5);
+
+                        // Special case for MoofyDark
+                        if (name.equalsIgnoreCase("MoofyDark"))
+                            return "Moofy Dark (Default)";
+
+                        // Convert camelCase/PascalCase to Title Case with spaces
+                        // e.g., "AtomOneLight" -> "Atom One Light", "ClassicTheme" -> "Classic
+                        // Theme"
+                        juce::String result;
+                        for (int i = 0; i < name.length(); ++i)
+                        {
+                            juce::juce_wchar c = name[i];
+                            // Insert space before uppercase letters (except first character)
+                            if (i > 0 && juce::CharacterFunctions::isUpperCase(c))
+                                result += " ";
+                            result += c;
+                        }
+
+                        // Handle special cases
+                        result = result.replace("Synthwave 84", "Synthwave '84");
+                        result = result.replace("Rosé Pine", "Rosé Pine Moon");
+                        result = result.replace("Night Owl", "Night Owl Neo");
+                        result = result.replace("Everforest", "Everforest Night");
+                        result = result.replace("Dracula Midnight", "Dracula Midnight");
+
+                        return result;
+                    };
+
+                    // Scan themes directory for all .json files
+                    std::vector<std::pair<juce::String, juce::String>>
+                        foundThemes; // {displayName, filename}
+
+                    try
+                    {
+                        auto exeFile =
                             juce::File::getSpecialLocation(juce::File::currentExecutableFile);
                         auto exeDir = exeFile.getParentDirectory();
                         auto themesDir = exeDir.getChildFile("themes");
-                        auto candidate = themesDir.getChildFile(filename);
 
-                        if (candidate.existsAsFile())
+                        if (themesDir.exists() && themesDir.isDirectory())
                         {
-                            if (ThemeManager::getInstance().loadTheme(candidate))
+                            juce::Array<juce::File> themeFiles;
+                            themesDir.findChildFiles(
+                                themeFiles, juce::File::findFiles, false, "*.json");
+
+                            for (const auto& themeFile : themeFiles)
                             {
-                                // Save user preference
-                                ThemeManager::getInstance().saveUserThemePreference(filename);
-                                themeEditor.refreshThemeFromManager();
-                                juce::Logger::writeToLog("[Theme] Loaded: " + juce::String(label));
-                                s_themeToastText = "Theme Loaded: " + juce::String(label);
-                                s_themeToastEndTime = ImGui::GetTime() + 2.0;
-                            }
-                        }
-                    }
-                };
+                                juce::String filename = themeFile.getFileName();
+                                // Skip hidden/system files
+                                if (filename.startsWithChar('.'))
+                                    continue;
 
-                // Helper to convert filename to display name
-                auto filenameToDisplayName = [](const juce::String& filename) -> juce::String {
-                    juce::String name = filename;
-                    // Remove .json extension
-                    if (name.endsWithIgnoreCase(".json"))
-                        name = name.substring(0, name.length() - 5);
-
-                    // Special case for MoofyDark
-                    if (name.equalsIgnoreCase("MoofyDark"))
-                        return "Moofy Dark (Default)";
-
-                    // Convert camelCase/PascalCase to Title Case with spaces
-                    // e.g., "AtomOneLight" -> "Atom One Light", "ClassicTheme" -> "Classic Theme"
-                    juce::String result;
-                    for (int i = 0; i < name.length(); ++i)
-                    {
-                        juce::juce_wchar c = name[i];
-                        // Insert space before uppercase letters (except first character)
-                        if (i > 0 && juce::CharacterFunctions::isUpperCase(c))
-                            result += " ";
-                        result += c;
-                    }
-
-                    // Handle special cases
-                    result = result.replace("Synthwave 84", "Synthwave '84");
-                    result = result.replace("Rosé Pine", "Rosé Pine Moon");
-                    result = result.replace("Night Owl", "Night Owl Neo");
-                    result = result.replace("Everforest", "Everforest Night");
-                    result = result.replace("Dracula Midnight", "Dracula Midnight");
-
-                    return result;
-                };
-
-                // Scan themes directory for all .json files
-                std::vector<std::pair<juce::String, juce::String>>
-                    foundThemes; // {displayName, filename}
-
-                try
-                {
-                    auto exeFile = juce::File::getSpecialLocation(juce::File::currentExecutableFile);
-                    auto exeDir = exeFile.getParentDirectory();
-                    auto themesDir = exeDir.getChildFile("themes");
-
-                    if (themesDir.exists() && themesDir.isDirectory())
-                    {
-                        juce::Array<juce::File> themeFiles;
-                        themesDir.findChildFiles(themeFiles, juce::File::findFiles, false, "*.json");
-
-                        for (const auto& themeFile : themeFiles)
-                        {
-                            juce::String filename = themeFile.getFileName();
-                            // Skip hidden/system files
-                            if (filename.startsWithChar('.'))
-                                continue;
-
-                            juce::String displayName = filenameToDisplayName(filename);
-                            foundThemes.push_back({displayName, filename});
-                        }
-                    }
-                }
-                catch (const std::exception& e)
-                {
-                    juce::Logger::writeToLog("[Settings] Theme scan exception: " + juce::String(e.what()));
-                    // Continue - will show "No themes found" message
-                }
-                catch (...)
-                {
-                    juce::Logger::writeToLog("[Settings] Theme scan unknown exception");
-                    // Continue - will show "No themes found" message
-                }
-
-                // Also check source tree for development (fallback)
-                try
-                {
-                    auto exeFile = juce::File::getSpecialLocation(juce::File::currentExecutableFile);
-                    auto exeDir = exeFile.getParentDirectory();
-                    auto sourceThemesDir = exeDir.getParentDirectory()
-                                               .getParentDirectory()
-                                               .getChildFile("Source")
-                                               .getChildFile("preset_creator")
-                                               .getChildFile("theme")
-                                               .getChildFile("presets");
-
-                    if (sourceThemesDir.exists() && sourceThemesDir.isDirectory())
-                    {
-                        juce::Array<juce::File> sourceThemeFiles;
-                        sourceThemesDir.findChildFiles(
-                            sourceThemeFiles, juce::File::findFiles, false, "*.json");
-
-                        for (const auto& themeFile : sourceThemeFiles)
-                        {
-                            juce::String filename = themeFile.getFileName();
-                            if (filename.startsWithChar('.'))
-                                continue;
-
-                            // Check if we already have this theme from exe/themes
-                            bool alreadyFound = false;
-                            for (const auto& existing : foundThemes)
-                            {
-                                if (existing.second.equalsIgnoreCase(filename))
-                                {
-                                    alreadyFound = true;
-                                    break;
-                                }
-                            }
-
-                            if (!alreadyFound)
-                            {
                                 juce::String displayName = filenameToDisplayName(filename);
                                 foundThemes.push_back({displayName, filename});
                             }
                         }
                     }
+                    catch (const std::exception& e)
+                    {
+                        juce::Logger::writeToLog(
+                            "[Settings] Theme scan exception: " + juce::String(e.what()));
+                        // Continue - will show "No themes found" message
+                    }
+                    catch (...)
+                    {
+                        juce::Logger::writeToLog("[Settings] Theme scan unknown exception");
+                        // Continue - will show "No themes found" message
+                    }
+
+                    // Also check source tree for development (fallback)
+                    try
+                    {
+                        auto exeFile =
+                            juce::File::getSpecialLocation(juce::File::currentExecutableFile);
+                        auto exeDir = exeFile.getParentDirectory();
+                        auto sourceThemesDir = exeDir.getParentDirectory()
+                                                   .getParentDirectory()
+                                                   .getChildFile("Source")
+                                                   .getChildFile("preset_creator")
+                                                   .getChildFile("theme")
+                                                   .getChildFile("presets");
+
+                        if (sourceThemesDir.exists() && sourceThemesDir.isDirectory())
+                        {
+                            juce::Array<juce::File> sourceThemeFiles;
+                            sourceThemesDir.findChildFiles(
+                                sourceThemeFiles, juce::File::findFiles, false, "*.json");
+
+                            for (const auto& themeFile : sourceThemeFiles)
+                            {
+                                juce::String filename = themeFile.getFileName();
+                                if (filename.startsWithChar('.'))
+                                    continue;
+
+                                // Check if we already have this theme from exe/themes
+                                bool alreadyFound = false;
+                                for (const auto& existing : foundThemes)
+                                {
+                                    if (existing.second.equalsIgnoreCase(filename))
+                                    {
+                                        alreadyFound = true;
+                                        break;
+                                    }
+                                }
+
+                                if (!alreadyFound)
+                                {
+                                    juce::String displayName = filenameToDisplayName(filename);
+                                    foundThemes.push_back({displayName, filename});
+                                }
+                            }
+                        }
+                    }
+                    catch (const std::exception& e)
+                    {
+                        juce::Logger::writeToLog(
+                            "[Settings] Source theme scan exception: " + juce::String(e.what()));
+                        // Continue - only affects development fallback
+                    }
+                    catch (...)
+                    {
+                        juce::Logger::writeToLog("[Settings] Source theme scan unknown exception");
+                        // Continue - only affects development fallback
+                    }
+
+                    // Sort themes alphabetically by display name
+                    std::sort(
+                        foundThemes.begin(), foundThemes.end(), [](const auto& a, const auto& b) {
+                            return a.first.compareIgnoreCase(b.first) < 0;
+                        });
+
+                    // Render menu items from dynamically found themes
+                    for (const auto& theme : foundThemes)
+                    {
+                        loadThemePreset(theme.first.toRawUTF8(), theme.second);
+                    }
+
+                    // If no themes found, show a message
+                    if (foundThemes.empty())
+                    {
+                        ImGui::TextDisabled("No themes found in themes/ directory");
+                    }
+
+                    ImGui::EndMenu();
                 }
-                catch (const std::exception& e)
+
+                ImGui::Separator();
+
+#if WITH_CUDA_SUPPORT
+                bool gpuEnabled = getGlobalGpuEnabled();
+                if (ImGui::Checkbox("Enable GPU Acceleration (CUDA)", &gpuEnabled))
                 {
-                    juce::Logger::writeToLog("[Settings] Source theme scan exception: " + juce::String(e.what()));
-                    // Continue - only affects development fallback
+                    setGlobalGpuEnabled(gpuEnabled);
+                    juce::Logger::writeToLog(
+                        "[Settings] Global GPU: " +
+                        juce::String(gpuEnabled ? "ENABLED" : "DISABLED"));
+                }
+
+                ImGui::TextDisabled("Computer vision nodes require GPU");
+
+                ImGui::Separator();
+
+                // Show CUDA device info - use global cache (queried once at app startup)
+                int deviceCount = CudaDeviceCountCache::getDeviceCount();
+                bool cudaQuerySuccess = (deviceCount > 0);
+
+                // Safe theme text rendering with fallback
+                try
+                {
+#if WITH_CUDA_SUPPORT
+                    if (cudaQuerySuccess)
+                    {
+                        if (deviceCount > 0)
+                        {
+                            ThemeText("CUDA Available", theme.text.success);
+                            ImGui::Text("GPU Devices: %d", deviceCount);
+                        }
+                        else
+                        {
+                            ThemeText("CUDA compiled but no devices found", theme.text.warning);
+                        }
+                    }
+                    else
+                    {
+                        ThemeText("CUDA not available", theme.text.warning);
+                        ImGui::TextDisabled("CUDA runtime libraries not found or no NVIDIA GPU");
+                    }
+#else
+                    ImGui::TextDisabled("GPU Acceleration: Not Compiled");
+                    ImGui::TextDisabled("Rebuild with CUDA support to enable");
+#endif
                 }
                 catch (...)
                 {
-                    juce::Logger::writeToLog("[Settings] Source theme scan unknown exception");
-                    // Continue - only affects development fallback
+                    // Fallback if ThemeText fails
+                    ImGui::TextColored(
+                        ImVec4(1.0f, 1.0f, 0.0f, 1.0f), "CUDA: Unable to query status");
                 }
-
-                // Sort themes alphabetically by display name
-                std::sort(foundThemes.begin(), foundThemes.end(), [](const auto& a, const auto& b) {
-                    return a.first.compareIgnoreCase(b.first) < 0;
-                });
-
-                // Render menu items from dynamically found themes
-                for (const auto& theme : foundThemes)
-                {
-                    loadThemePreset(theme.first.toRawUTF8(), theme.second);
-                }
-
-                // If no themes found, show a message
-                if (foundThemes.empty())
-                {
-                    ImGui::TextDisabled("No themes found in themes/ directory");
-                }
-
-                ImGui::EndMenu();
-            }
-
-            ImGui::Separator();
-
-#if WITH_CUDA_SUPPORT
-            bool gpuEnabled = getGlobalGpuEnabled();
-            if (ImGui::Checkbox("Enable GPU Acceleration (CUDA)", &gpuEnabled))
-            {
-                setGlobalGpuEnabled(gpuEnabled);
-                juce::Logger::writeToLog(
-                    "[Settings] Global GPU: " + juce::String(gpuEnabled ? "ENABLED" : "DISABLED"));
-            }
-
-            ImGui::TextDisabled("Computer vision nodes require GPU");
-
-            ImGui::Separator();
-
-// Show CUDA device info
-#if WITH_CUDA_SUPPORT
-            // CRITICAL: Wrap in try-catch to prevent crashes on systems without NVIDIA GPU
-            // Even though WITH_CUDA_SUPPORT is defined, CUDA runtime libraries may not be available
-            int deviceCount = 0;
-            bool cudaQuerySuccess = false;
-            try
-            {
-                deviceCount = cv::cuda::getCudaEnabledDeviceCount();
-                cudaQuerySuccess = true;
+#endif
             }
             catch (const cv::Exception& e)
             {
-                juce::Logger::writeToLog("[Settings] CUDA query failed: " + juce::String(e.what()));
-                cudaQuerySuccess = false;
+                juce::Logger::writeToLog(
+                    "[Settings] OpenCV exception in Settings menu: " + juce::String(e.what()));
+                ImGui::TextColored(
+                    ImVec4(1.0f, 0.0f, 0.0f, 1.0f), "Error: Settings menu failed to load");
+                ImGui::TextDisabled("Check log file for details");
             }
             catch (const std::exception& e)
             {
-                juce::Logger::writeToLog("[Settings] CUDA query exception: " + juce::String(e.what()));
-                cudaQuerySuccess = false;
+                juce::Logger::writeToLog(
+                    "[Settings] Exception in Settings menu: " + juce::String(e.what()));
+                ImGui::TextColored(
+                    ImVec4(1.0f, 0.0f, 0.0f, 1.0f), "Error: Settings menu failed to load");
+                ImGui::TextDisabled("Check log file for details");
             }
             catch (...)
             {
-                juce::Logger::writeToLog("[Settings] CUDA query unknown exception");
-                cudaQuerySuccess = false;
+                juce::Logger::writeToLog("[Settings] Unknown exception in Settings menu");
+                ImGui::TextColored(
+                    ImVec4(1.0f, 0.0f, 0.0f, 1.0f), "Error: Settings menu failed to load");
+                ImGui::TextDisabled("Check log file for details");
             }
-            
-            if (cudaQuerySuccess)
-            {
-                if (deviceCount > 0)
-                {
-                    ThemeText("CUDA Available", theme.text.success);
-                    ImGui::Text("GPU Devices: %d", deviceCount);
-                }
-                else
-                {
-                    ThemeText("CUDA compiled but no devices found", theme.text.warning);
-                }
-            }
-            else
-            {
-                ThemeText("CUDA not available", theme.text.warning);
-                ImGui::TextDisabled("CUDA runtime libraries not found or no NVIDIA GPU");
-            }
-#endif
-#else
-            ImGui::TextDisabled("GPU Acceleration: Not Compiled");
-            ImGui::TextDisabled("Rebuild with CUDA support to enable");
-#endif
 
             ImGui::EndMenu();
         }

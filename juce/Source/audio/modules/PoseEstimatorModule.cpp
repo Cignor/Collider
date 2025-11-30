@@ -1,8 +1,12 @@
 #include "PoseEstimatorModule.h"
 #include "../../video/VideoFrameManager.h"
 #include "../graph/ModularSynthProcessor.h"
+#include "../../utils/CudaDeviceCountCache.h"
 #include <opencv2/imgproc.hpp>
 #include <opencv2/dnn.hpp>
+#if WITH_CUDA_SUPPORT
+#include <opencv2/core/cuda.hpp>
+#endif
 
 #if defined(PRESET_CREATOR_UI)
 #include <imgui.h>
@@ -23,8 +27,9 @@ void PoseEstimatorModule::loadModel(int modelIndex)
 
     // 2. Look for the 'assets' folder next to the executable (fixed path as requested).
     juce::File assetsDir = appDir.getChildFile("assets");
-    juce::Logger::writeToLog("[PoseEstimator] Searching for assets in: " + assetsDir.getFullPathName());
-    
+    juce::Logger::writeToLog(
+        "[PoseEstimator] Searching for assets in: " + assetsDir.getFullPathName());
+
     // 3. Navigate to the specific model subdirectory.
     auto poseModelsDir = assetsDir.getChildFile("openpose_models").getChildFile("pose");
 
@@ -33,71 +38,104 @@ void PoseEstimatorModule::loadModel(int modelIndex)
 
     switch (modelIndex)
     {
-        case 0: // BODY_25
-            modelName = "BODY_25";
-            protoPath = poseModelsDir.getChildFile("body_25/pose_deploy.prototxt").getFullPathName();
-            modelPath = poseModelsDir.getChildFile("body_25/pose_iter_584000.caffemodel").getFullPathName();
-            break;
-        case 1: // COCO
-            modelName = "COCO";
-            protoPath = poseModelsDir.getChildFile("coco/pose_deploy_linevec.prototxt").getFullPathName();
-            modelPath = poseModelsDir.getChildFile("coco/pose_iter_440000.caffemodel").getFullPathName();
-            break;
-        case 2: // MPI
-            modelName = "MPI";
-            protoPath = poseModelsDir.getChildFile("mpi/pose_deploy_linevec.prototxt").getFullPathName();
-            modelPath = poseModelsDir.getChildFile("mpi/pose_iter_160000.caffemodel").getFullPathName();
-            break;
-        case 3: // MPI (Fast)
-        default:
-            modelName = "MPI (Fast)";
-            protoPath = poseModelsDir.getChildFile("mpi/pose_deploy_linevec_faster_4_stages.prototxt").getFullPathName();
-            modelPath = poseModelsDir.getChildFile("mpi/pose_iter_160000.caffemodel").getFullPathName();
-            break;
+    case 0: // BODY_25
+        modelName = "BODY_25";
+        protoPath = poseModelsDir.getChildFile("body_25/pose_deploy.prototxt").getFullPathName();
+        modelPath =
+            poseModelsDir.getChildFile("body_25/pose_iter_584000.caffemodel").getFullPathName();
+        break;
+    case 1: // COCO
+        modelName = "COCO";
+        protoPath =
+            poseModelsDir.getChildFile("coco/pose_deploy_linevec.prototxt").getFullPathName();
+        modelPath =
+            poseModelsDir.getChildFile("coco/pose_iter_440000.caffemodel").getFullPathName();
+        break;
+    case 2: // MPI
+        modelName = "MPI";
+        protoPath =
+            poseModelsDir.getChildFile("mpi/pose_deploy_linevec.prototxt").getFullPathName();
+        modelPath = poseModelsDir.getChildFile("mpi/pose_iter_160000.caffemodel").getFullPathName();
+        break;
+    case 3: // MPI (Fast)
+    default:
+        modelName = "MPI (Fast)";
+        protoPath = poseModelsDir.getChildFile("mpi/pose_deploy_linevec_faster_4_stages.prototxt")
+                        .getFullPathName();
+        modelPath = poseModelsDir.getChildFile("mpi/pose_iter_160000.caffemodel").getFullPathName();
+        break;
     }
 
     juce::Logger::writeToLog("[PoseEstimator] Attempting to load " + modelName + " model...");
     juce::Logger::writeToLog("  - Prototxt: " + protoPath);
     juce::Logger::writeToLog("  - Caffemodel: " + modelPath);
-    
+
     juce::File protoFile(protoPath);
     juce::File modelFile(modelPath);
 
-    if (protoFile.existsAsFile() && modelFile.existsAsFile()) {
-        try {
+    if (protoFile.existsAsFile() && modelFile.existsAsFile())
+    {
+        try
+        {
+            juce::Logger::writeToLog("[PoseEstimator] Loading model: " + modelName);
+
+            // NOTE: Mutex must be held by caller (loadModel is called from run() loop with mutex)
+            // OpenCV's destructor handles CUDA cleanup when old net is destroyed
+
+            // Load new net - OpenCV handles cleanup of old net automatically
             net = cv::dnn::readNetFromCaffe(protoPath.toStdString(), modelPath.toStdString());
-            
-            // CRITICAL: Set backend immediately after loading model
-            #if WITH_CUDA_SUPPORT
-                bool useGpu = useGpuParam ? useGpuParam->get() : false;
-                if (useGpu && cv::cuda::getCudaEnabledDeviceCount() > 0)
-                {
-                    net.setPreferableBackend(cv::dnn::DNN_BACKEND_CUDA);
-                    net.setPreferableTarget(cv::dnn::DNN_TARGET_CUDA);
-                    juce::Logger::writeToLog("[PoseEstimator] ✓ Model loaded with CUDA backend (GPU)");
-                }
-                else
-                {
-                    net.setPreferableBackend(cv::dnn::DNN_BACKEND_OPENCV);
-                    net.setPreferableTarget(cv::dnn::DNN_TARGET_CPU);
-                    juce::Logger::writeToLog("[PoseEstimator] Model loaded with CPU backend");
-                }
-            #else
+            juce::Logger::writeToLog("[PoseEstimator] Model loaded from files");
+
+            // Set backend for new model
+#if WITH_CUDA_SUPPORT
+            bool useGpu = useGpuParam ? useGpuParam->get() : false;
+            if (useGpu && CudaDeviceCountCache::isAvailable())
+            {
+                net.setPreferableBackend(cv::dnn::DNN_BACKEND_CUDA);
+                net.setPreferableTarget(cv::dnn::DNN_TARGET_CUDA);
+                juce::Logger::writeToLog("[PoseEstimator] ✓ Model loaded with CUDA backend (GPU)");
+            }
+            else
+            {
                 net.setPreferableBackend(cv::dnn::DNN_BACKEND_OPENCV);
                 net.setPreferableTarget(cv::dnn::DNN_TARGET_CPU);
-                juce::Logger::writeToLog("[PoseEstimator] Model loaded with CPU backend (CUDA not compiled)");
-            #endif
-            
+                juce::Logger::writeToLog("[PoseEstimator] Model loaded with CPU backend");
+            }
+#else
+            net.setPreferableBackend(cv::dnn::DNN_BACKEND_OPENCV);
+            net.setPreferableTarget(cv::dnn::DNN_TARGET_CPU);
+            juce::Logger::writeToLog(
+                "[PoseEstimator] Model loaded with CPU backend (CUDA not compiled)");
+#endif
+
             modelLoaded = true;
             juce::Logger::writeToLog("[PoseEstimator] SUCCESS: Loaded model: " + modelName);
-        } catch (const cv::Exception& e) {
-            juce::Logger::writeToLog("[PoseEstimator] FAILED: OpenCV exception while loading model: " + juce::String(e.what()));
+        }
+        catch (const cv::Exception& e)
+        {
+            juce::Logger::writeToLog(
+                "[PoseEstimator] FAILED: OpenCV exception: " + juce::String(e.what()));
             modelLoaded = false;
         }
-    } else {
-        juce::Logger::writeToLog("[PoseEstimator] FAILED: Could not find model files at the specified paths.");
-        if (!protoFile.existsAsFile()) juce::Logger::writeToLog("  - Missing file: " + protoPath);
-        if (!modelFile.existsAsFile()) juce::Logger::writeToLog("  - Missing file: " + modelPath);
+        catch (const std::exception& e)
+        {
+            juce::Logger::writeToLog(
+                "[PoseEstimator] FAILED: Standard exception: " + juce::String(e.what()));
+            modelLoaded = false;
+        }
+        catch (...)
+        {
+            juce::Logger::writeToLog("[PoseEstimator] FAILED: Unknown exception");
+            modelLoaded = false;
+        }
+    }
+    else
+    {
+        juce::Logger::writeToLog("[PoseEstimator] FAILED: Model files not found");
+        if (!protoFile.existsAsFile())
+            juce::Logger::writeToLog("  - Missing: " + protoPath);
+        if (!modelFile.existsAsFile())
+            juce::Logger::writeToLog("  - Missing: " + modelPath);
         modelLoaded = false;
     }
 }
@@ -114,10 +152,7 @@ void PoseEstimatorModule::setExtraStateTree(const juce::ValueTree& state)
     if (state.hasType("PoseEstimatorState"))
     {
         assetsPath = state.getProperty("assetsPath", "").toString();
-        if (assetsPath.isNotEmpty())
-        {
-            requestedModelIndex = modelChoiceParam ? modelChoiceParam->getIndex() : 3;
-        }
+        // Model will be loaded in the thread (always MPI Fast, index 3)
     }
 }
 
@@ -128,51 +163,53 @@ constexpr int POSE_NET_HEIGHT = 368;
 juce::AudioProcessorValueTreeState::ParameterLayout PoseEstimatorModule::createParameterLayout()
 {
     std::vector<std::unique_ptr<juce::RangedAudioParameter>> params;
-    
+
     // Source ID input (which video source to connect to)
-    params.push_back(std::make_unique<juce::AudioParameterFloat>(
-        "sourceId", "Source ID", 0.0f, 1000.0f, 0.0f));
-    
-    // Model choice (BODY_25, COCO, MPI, MPI Fast)
-    params.push_back(std::make_unique<juce::AudioParameterChoice>(
-        "model", "Model", juce::StringArray{ "BODY_25", "COCO", "MPI", "MPI (Fast)" }, 3));
+    params.push_back(
+        std::make_unique<juce::AudioParameterFloat>("sourceId", "Source ID", 0.0f, 1000.0f, 0.0f));
 
     // Model quality (affects blob size)
-    params.push_back(std::make_unique<juce::AudioParameterChoice>(
-        "quality", "Quality", juce::StringArray{ "Low (Fast)", "Medium (Default)" }, 1));
-    
+    params.push_back(
+        std::make_unique<juce::AudioParameterChoice>(
+            "quality", "Quality", juce::StringArray{"Low (Fast)", "Medium (Default)"}, 1));
+
     // Note: assets path is stored via extra state, not as a parameter
-    
+
     // Zoom level for UI: 0=Small(240),1=Normal(480),2=Large(960)
-    params.push_back(std::make_unique<juce::AudioParameterChoice>(
-        "zoomLevel", "Zoom Level", juce::StringArray{ "Small", "Normal", "Large" }, 1));
-    
+    params.push_back(
+        std::make_unique<juce::AudioParameterChoice>(
+            "zoomLevel", "Zoom Level", juce::StringArray{"Small", "Normal", "Large"}, 1));
+
     // Confidence threshold (0.0 - 1.0) - keypoints below this confidence will be ignored
-    params.push_back(std::make_unique<juce::AudioParameterFloat>(
-        "confidence", "Confidence", 0.0f, 1.0f, 0.1f));
-    
+    params.push_back(
+        std::make_unique<juce::AudioParameterFloat>("confidence", "Confidence", 0.0f, 1.0f, 0.1f));
+
     // Toggle skeleton drawing on preview
-    params.push_back(std::make_unique<juce::AudioParameterBool>(
-        "drawSkeleton", "Draw Skeleton", true));
-    
-    // GPU acceleration toggle - default from global setting
-    #if defined(PRESET_CREATOR_UI)
-        bool defaultGpu = ImGuiNodeEditorComponent::getGlobalGpuEnabled();
-    #else
-        bool defaultGpu = true; // Default to GPU for non-UI builds
-    #endif
-    params.push_back(std::make_unique<juce::AudioParameterBool>(
-        "useGpu", "Use GPU (CUDA)", defaultGpu));
-    
-    return { params.begin(), params.end() };
+    params.push_back(
+        std::make_unique<juce::AudioParameterBool>("drawSkeleton", "Draw Skeleton", true));
+
+// GPU acceleration toggle - default from global setting
+#if defined(PRESET_CREATOR_UI)
+    bool defaultGpu = ImGuiNodeEditorComponent::getGlobalGpuEnabled();
+#else
+    bool defaultGpu = true; // Default to GPU for non-UI builds
+#endif
+    params.push_back(
+        std::make_unique<juce::AudioParameterBool>("useGpu", "Use GPU (CUDA)", defaultGpu));
+
+    return {params.begin(), params.end()};
 }
 
 PoseEstimatorModule::PoseEstimatorModule()
-    : ModuleProcessor(BusesProperties()
-                     .withInput("Input", juce::AudioChannelSet::mono(), true)
-                     .withOutput("CV Out", juce::AudioChannelSet::discreteChannels(34), true) // 30 existing + 4 zone gates
-                     .withOutput("Video Out", juce::AudioChannelSet::mono(), true)    // PASSTHROUGH
-                     .withOutput("Cropped Out", juce::AudioChannelSet::mono(), true)), // CROPPED
+    : ModuleProcessor(
+          BusesProperties()
+              .withInput("Input", juce::AudioChannelSet::mono(), true)
+              .withOutput(
+                  "CV Out",
+                  juce::AudioChannelSet::discreteChannels(34),
+                  true) // 30 existing + 4 zone gates
+              .withOutput("Video Out", juce::AudioChannelSet::mono(), true)     // PASSTHROUGH
+              .withOutput("Cropped Out", juce::AudioChannelSet::mono(), true)), // CROPPED
       juce::Thread("Pose Estimator Thread"),
       apvts(*this, nullptr, "PoseEstimatorParams", createParameterLayout())
 {
@@ -180,22 +217,17 @@ PoseEstimatorModule::PoseEstimatorModule()
     sourceIdParam = apvts.getRawParameterValue("sourceId");
     zoomLevelParam = apvts.getRawParameterValue("zoomLevel");
     qualityParam = dynamic_cast<juce::AudioParameterChoice*>(apvts.getParameter("quality"));
-    modelChoiceParam = dynamic_cast<juce::AudioParameterChoice*>(apvts.getParameter("model"));
     confidenceThresholdParam = apvts.getRawParameterValue("confidence");
     drawSkeletonParam = dynamic_cast<juce::AudioParameterBool*>(apvts.getParameter("drawSkeleton"));
     useGpuParam = dynamic_cast<juce::AudioParameterBool*>(apvts.getParameter("useGpu"));
-    
+
     // Initialize FIFO buffer
     fifoBuffer.resize(16);
-    
-    // Defer initial model load to the thread (default to current selection or MPI Fast)
-    requestedModelIndex = modelChoiceParam ? modelChoiceParam->getIndex() : 3;
+
+    // Model will be loaded in the thread (always MPI Fast, index 3)
 }
 
-PoseEstimatorModule::~PoseEstimatorModule()
-{
-    stopThread(5000);
-}
+PoseEstimatorModule::~PoseEstimatorModule() { stopThread(5000); }
 
 void PoseEstimatorModule::prepareToPlay(double sampleRate, int samplesPerBlock)
 {
@@ -212,7 +244,7 @@ void PoseEstimatorModule::releaseResources()
 void PoseEstimatorModule::run()
 {
     juce::Logger::writeToLog("[PoseEstimator] Processing thread started");
-    
+
     // Resolve our logical ID once at the start
     juce::uint32 myLogicalId = storedLogicalId;
     if (myLogicalId == 0 && parentSynth != nullptr)
@@ -227,24 +259,31 @@ void PoseEstimatorModule::run()
             }
         }
     }
-    
-    #if WITH_CUDA_SUPPORT
-        bool lastGpuState = false; // Track GPU state to minimize backend switches
-        bool loggedGpuWarning = false; // Only warn once if no GPU available
-    #endif
-    
+
+#if WITH_CUDA_SUPPORT
+    bool lastGpuState = false;     // Track GPU state to minimize backend switches
+    bool loggedGpuWarning = false; // Only warn once if no GPU available
+#endif
+
     while (!threadShouldExit())
     {
-        // Handle deferred model reload requests from UI
-        int toLoad = requestedModelIndex.exchange(-1);
-        if (toLoad != -1)
+        // Load model once if not already loaded (always MPI Fast, index 3)
+        if (!modelLoaded)
         {
-            loadModel(toLoad);
+            std::lock_guard<std::mutex> lock(netMutex);
+            loadModel(3);  // MPI Fast
+            if (!modelLoaded)
+            {
+                // Model failed to load, wait and retry
+                wait(100);
+                continue;
+            }
         }
-        
+
+        // STEP 5: Resume video - normal frame processing
         // Get the source ID from the input cable (set by processBlock from the audio thread)
         juce::uint32 sourceId = currentSourceId.load();
-        
+
         // CRITICAL FIX for XML load: If sourceId is 0 (processBlock hasn't run yet),
         // use cached resolved source ID, or try to resolve it from the connection graph
         if (sourceId == 0)
@@ -274,7 +313,7 @@ void PoseEstimatorModule::run()
                             }
                         }
                     }
-                    
+
                     // Find connection to our input channel 0
                     if (myLogicalId != 0)
                     {
@@ -289,19 +328,22 @@ void PoseEstimatorModule::run()
                         }
                     }
                 }
-                
-                // FALLBACK: If connection resolution didn't work, try to find ANY video source with frames
-                // This handles cases where connection snapshot isn't ready yet or connection isn't found
+
+                // FALLBACK: If connection resolution didn't work, try to find ANY video source with
+                // frames This handles cases where connection snapshot isn't ready yet or connection
+                // isn't found
                 if (sourceId == 0)
                 {
                     for (const auto& info : parentSynth->getModulesInfo())
                     {
                         // Check if this is a video source module type
                         juce::String moduleType = info.second.toLowerCase();
-                        if (moduleType.contains("video") || moduleType.contains("webcam") || moduleType == "video_file_loader")
+                        if (moduleType.contains("video") || moduleType.contains("webcam") ||
+                            moduleType == "video_file_loader")
                         {
                             // Try to get a frame from this source to see if it's producing frames
-                            cv::Mat testFrame = VideoFrameManager::getInstance().getFrame(info.first);
+                            cv::Mat testFrame =
+                                VideoFrameManager::getInstance().getFrame(info.first);
                             if (!testFrame.empty())
                             {
                                 sourceId = info.first;
@@ -319,92 +361,114 @@ void PoseEstimatorModule::run()
             if (cachedResolvedSourceId != 0 && cachedResolvedSourceId != sourceId)
                 cachedResolvedSourceId = 0;
         }
-        
-        // Fetch frame from the VideoFrameManager (always attempt, even if sourceId == 0)
-        // This must happen BEFORE modelLoaded check to ensure frames are cached even during model loading
+
+        // Fetch frame from the VideoFrameManager
+        // NOTE: This only happens when modelLoaded=true (checked above), so no frame ops during model switch
+        // Frame fetching is skipped when modelLoaded=false, preventing CUDA operations during model switch
         cv::Mat frame = VideoFrameManager::getInstance().getFrame(sourceId);
+
+        // Check if input is actually connected (currentSourceId from processBlock is authoritative)
+        juce::uint32 actualSourceId = currentSourceId.load();
         
-        // Cache last good frame for paused/no-signal scenarios
-        if (!frame.empty())
+        if (actualSourceId == 0)
         {
+            // Input is disconnected - clear cached frame and don't display anything
+            const juce::ScopedLock lk(frameLock);
+            lastFrameBgr = cv::Mat();  // Clear cache
+            frame = cv::Mat();  // Ensure frame is empty
+        }
+        else if (!frame.empty())
+        {
+            // Valid input with fresh frame - cache it
             const juce::ScopedLock lk(frameLock);
             frame.copyTo(lastFrameBgr);
         }
         else
         {
-            // Use cached frame when no fresh frames are available (e.g., transport paused or during XML load)
+            // Valid input but frame temporarily empty (e.g., transport paused) - use cached frame
             const juce::ScopedLock lk(frameLock);
             if (!lastFrameBgr.empty())
                 frame = lastFrameBgr.clone();
         }
-        
+
         if (!frame.empty())
         {
-            // Only do pose estimation if model is loaded
-            if (modelLoaded)
+            // CRITICAL FIX: Acquire mutex FIRST before checking anything
+            // This eliminates TOCTOU race condition - check and use happen atomically
+            std::lock_guard<std::mutex> lock(netMutex);
+
+            // ONLY check modelLoaded inside mutex - this is the single source of truth
+            // If modelLoaded is true under mutex, net is guaranteed valid
+            // No model switch can happen while we hold the mutex
+            if (!modelLoaded)
             {
-            #if WITH_CUDA_SUPPORT
-                // Check if user wants GPU and if a CUDA device is available
-                bool useGpu = useGpuParam ? useGpuParam->get() : false;
-                if (useGpu && cv::cuda::getCudaEnabledDeviceCount() == 0)
+                // Mutex will be automatically released when lock_guard goes out of scope
+                continue;
+            }
+
+#if WITH_CUDA_SUPPORT
+            // Check if user wants GPU and if a CUDA device is available
+            bool useGpu = useGpuParam ? useGpuParam->get() : false;
+            if (useGpu && !CudaDeviceCountCache::isAvailable())
+            {
+                useGpu = false; // Fallback to CPU
+                if (!loggedGpuWarning)
                 {
-                    useGpu = false; // Fallback to CPU
-                    if (!loggedGpuWarning)
-                    {
-                        juce::Logger::writeToLog("[PoseEstimator] WARNING: GPU requested but no CUDA device found. Using CPU.");
-                        loggedGpuWarning = true;
-                    }
+                    juce::Logger::writeToLog(
+                        "[PoseEstimator] WARNING: GPU requested but no CUDA device found. "
+                        "Using CPU.");
+                    loggedGpuWarning = true;
                 }
-                
-                // Set DNN backend only when state changes (this is an expensive operation)
-                if (useGpu != lastGpuState)
+            }
+
+            // Set DNN backend only when state changes (this is an expensive operation)
+            if (useGpu != lastGpuState)
+            {
+                if (useGpu)
                 {
-                    if (useGpu)
-                    {
-                        net.setPreferableBackend(cv::dnn::DNN_BACKEND_CUDA);
-                        net.setPreferableTarget(cv::dnn::DNN_TARGET_CUDA);
-                        juce::Logger::writeToLog("[PoseEstimator] ✓ Switched to CUDA backend (GPU)");
-                    }
-                    else
-                    {
-                        net.setPreferableBackend(cv::dnn::DNN_BACKEND_OPENCV);
-                        net.setPreferableTarget(cv::dnn::DNN_TARGET_CPU);
-                        juce::Logger::writeToLog("[PoseEstimator] Switched to CPU backend");
-                    }
-                    lastGpuState = useGpu;
+                    net.setPreferableBackend(cv::dnn::DNN_BACKEND_CUDA);
+                    net.setPreferableTarget(cv::dnn::DNN_TARGET_CUDA);
+                    juce::Logger::writeToLog(
+                        "[PoseEstimator] ✓ Switched to CUDA backend (GPU)");
                 }
-            #endif
-            
+                else
+                {
+                    net.setPreferableBackend(cv::dnn::DNN_BACKEND_OPENCV);
+                    net.setPreferableTarget(cv::dnn::DNN_TARGET_CPU);
+                    juce::Logger::writeToLog("[PoseEstimator] Switched to CPU backend");
+                }
+                lastGpuState = useGpu;
+            }
+#endif
+
             // --- SIMPLIFIED AND CORRECTED LOGIC ---
-            // 1. Prepare image for the network. This happens on the CPU regardless of the backend.
-            int q = qualityParam ? qualityParam->getIndex() : 1;
+            // 1. Prepare image for the network. This happens on the CPU regardless of the
+            // backend.
+            int      q = qualityParam ? qualityParam->getIndex() : 1;
             cv::Size blobSize = (q == 0) ? cv::Size(224, 224) : cv::Size(368, 368);
-            cv::Mat inputBlob = cv::dnn::blobFromImage(
-                frame,
-                1.0 / 255.0,
-                blobSize,
-                cv::Scalar(0, 0, 0),
-                false,
-                false);
+            cv::Mat  inputBlob = cv::dnn::blobFromImage(
+                frame, 1.0 / 255.0, blobSize, cv::Scalar(0, 0, 0), false, false);
 
             // 2. Set the input and run the forward pass.
-            // This `forward()` call is where the GPU acceleration happens if the backend was set to CUDA.
+            // This `forward()` call is where the GPU acceleration happens if the backend was
+            // set to CUDA.
             net.setInput(inputBlob);
             cv::Mat netOutput = net.forward();
-            
+
             // --- END OF CORRECTION ---
-            
+
             // 3. Parse the output to extract keypoint coordinates
             PoseResult result;
             // Initialize zone hits to false
             for (int z = 0; z < 4; ++z)
                 result.zoneHits[z] = false;
-            
+
             parsePoseOutput(netOutput, frame.cols, frame.rows, result);
-            
+
             // Apply confidence threshold
-            result.isValid = (result.detectedPoints > 5); // Need at least 5 keypoints for valid pose
-            
+            result.isValid =
+                (result.detectedPoints > 5); // Need at least 5 keypoints for valid pose
+
             // Check zone hits: check if ANY detected keypoint is inside a zone
             if (result.isValid && result.detectedPoints > 0)
             {
@@ -412,7 +476,7 @@ void PoseEstimatorModule::run()
                 {
                     std::vector<ZoneRect> rects;
                     loadZoneRects(colorIdx, rects);
-                    
+
                     bool hit = false;
                     // Check each detected keypoint
                     for (int i = 0; i < MPI_NUM_KEYPOINTS; ++i)
@@ -420,11 +484,11 @@ void PoseEstimatorModule::run()
                         // Skip if keypoint not detected
                         if (result.keypoints[i][0] < 0 || result.keypoints[i][1] < 0)
                             continue;
-                        
+
                         // Normalize keypoint position to 0-1 range
                         float posX = result.keypoints[i][0] / (float)frame.cols;
                         float posY = result.keypoints[i][1] / (float)frame.rows;
-                        
+
                         // Check if this keypoint is inside any rectangle of this color zone
                         for (const auto& rect : rects)
                         {
@@ -435,13 +499,14 @@ void PoseEstimatorModule::run()
                                 break; // Found a keypoint in this zone
                             }
                         }
-                        
-                        if (hit) break; // Found a hit for this zone, check next zone
+
+                        if (hit)
+                            break; // Found a hit for this zone, check next zone
                     }
                     result.zoneHits[colorIdx] = hit;
                 }
             }
-            
+
             // 4. Push result to the audio thread via lock-free FIFO (UPDATED API)
             if (fifo.getFreeSpace() >= 1)
             {
@@ -451,7 +516,7 @@ void PoseEstimatorModule::run()
                     fifoBuffer[writeScope.startIndex1] = result;
                 }
             }
-            
+
             // 5. Draw the skeleton on the frame for UI preview (if enabled)
             if (drawSkeletonParam->get())
             {
@@ -460,15 +525,17 @@ void PoseEstimatorModule::run()
                 {
                     int idxA = pair.first;
                     int idxB = pair.second;
-                    
+
                     if (result.keypoints[idxA][0] >= 0 && result.keypoints[idxB][0] >= 0)
                     {
-                        cv::Point ptA((int)result.keypoints[idxA][0], (int)result.keypoints[idxA][1]);
-                        cv::Point ptB((int)result.keypoints[idxB][0], (int)result.keypoints[idxB][1]);
+                        cv::Point ptA(
+                            (int)result.keypoints[idxA][0], (int)result.keypoints[idxA][1]);
+                        cv::Point ptB(
+                            (int)result.keypoints[idxB][0], (int)result.keypoints[idxB][1]);
                         cv::line(frame, ptA, ptB, cv::Scalar(0, 255, 0), 3);
                     }
                 }
-                
+
                 // Draw keypoint circles
                 for (int i = 0; i < MPI_NUM_KEYPOINTS; ++i)
                 {
@@ -479,33 +546,40 @@ void PoseEstimatorModule::run()
                     }
                 }
             }
-            
+
             // --- CROP LOGIC ---
             std::vector<cv::Point> validPoints;
-            for (int i = 0; i < MPI_NUM_KEYPOINTS; ++i) {
-                if (result.keypoints[i][0] >= 0) {
-                    validPoints.emplace_back((int)result.keypoints[i][0], (int)result.keypoints[i][1]);
+            for (int i = 0; i < MPI_NUM_KEYPOINTS; ++i)
+            {
+                if (result.keypoints[i][0] >= 0)
+                {
+                    validPoints.emplace_back(
+                        (int)result.keypoints[i][0], (int)result.keypoints[i][1]);
                 }
             }
-            if (validPoints.size() > 2) {
+            if (validPoints.size() > 2)
+            {
                 cv::Rect box = cv::boundingRect(validPoints);
                 box &= cv::Rect(0, 0, frame.cols, frame.rows);
-                if (box.area() > 0) {
+                if (box.area() > 0)
+                {
                     cv::Mat cropped = frame(box);
                     VideoFrameManager::getInstance().setFrame(getSecondaryLogicalId(), cropped);
                 }
-            } else {
+            }
+            else
+            {
                 cv::Mat emptyFrame;
                 VideoFrameManager::getInstance().setFrame(getSecondaryLogicalId(), emptyFrame);
             }
-            }
-            
+
             // --- PASSTHROUGH LOGIC (always do this, even if model not loaded) ---
             // Resolve logical ID fresh each iteration (like ColorTrackerModule)
             // CRITICAL: During XML load, setLogicalId() is called AFTER prepareToPlay(),
             // so storedLogicalId might be 0 when thread starts. Always try to resolve.
             juce::uint32 frameId = storedLogicalId;
-            // Always try to resolve - parentSynth might not be ready or setLogicalId() might not have been called yet
+            // Always try to resolve - parentSynth might not be ready or setLogicalId() might not
+            // have been called yet
             if (parentSynth != nullptr)
             {
                 for (const auto& info : parentSynth->getModulesInfo())
@@ -519,44 +593,51 @@ void PoseEstimatorModule::run()
                     }
                 }
             }
-            // Always update GUI frame, even if frameId is 0 (frame will still be visible in node)
-            updateGuiFrame(frame);
+            // Only update GUI frame if model is loaded
+            if (modelLoaded)
+            {
+                updateGuiFrame(frame);
+            }
             // Only passthrough if we have a valid frameId
             if (frameId != 0)
                 VideoFrameManager::getInstance().setFrame(frameId, frame);
         }
-        
+
         // Run at ~15 FPS (pose estimation is computationally expensive)
         // Use shorter wait when model not loaded to check more frequently
         wait(modelLoaded ? 66 : 33);
     }
-    
+
     juce::Logger::writeToLog("[PoseEstimator] Processing thread stopped");
 }
 
-void PoseEstimatorModule::parsePoseOutput(const cv::Mat& netOutput, int frameWidth, int frameHeight, PoseResult& result)
+void PoseEstimatorModule::parsePoseOutput(
+    const cv::Mat& netOutput,
+    int            frameWidth,
+    int            frameHeight,
+    PoseResult&    result)
 {
     // OpenPose output format: [1, num_keypoints, height, width]
     // Each heatmap represents the probability of a keypoint at each location
-    
+
     int H = netOutput.size[2]; // Heatmap height
     int W = netOutput.size[3]; // Heatmap width
-    
+
     result.detectedPoints = 0;
     float confidenceThreshold = confidenceThresholdParam->load();
-    
+
     int numHeatmaps = netOutput.size[1];
     int count = juce::jmin(MPI_NUM_KEYPOINTS, numHeatmaps);
     for (int i = 0; i < count; ++i)
     {
         // CORRECTED: Create a Mat view from the 4D blob for OpenCV 4.x
         cv::Mat heatMap(H, W, CV_32F, (void*)netOutput.ptr<float>(0, i));
-        
+
         // Find the location of maximum confidence
-        double maxConfidence;
+        double    maxConfidence;
         cv::Point maxLoc;
         cv::minMaxLoc(heatMap, nullptr, &maxConfidence, nullptr, &maxLoc);
-        
+
         if (maxConfidence > confidenceThreshold)
         {
             // Scale the heatmap coordinates back to the original frame size
@@ -577,16 +658,15 @@ void PoseEstimatorModule::updateGuiFrame(const cv::Mat& frame)
 {
     cv::Mat bgraFrame;
     cv::cvtColor(frame, bgraFrame, cv::COLOR_BGR2BGRA);
-    
+
     const juce::ScopedLock lock(imageLock);
-    
-    if (latestFrameForGui.isNull() || 
-        latestFrameForGui.getWidth() != bgraFrame.cols || 
+
+    if (latestFrameForGui.isNull() || latestFrameForGui.getWidth() != bgraFrame.cols ||
         latestFrameForGui.getHeight() != bgraFrame.rows)
     {
         latestFrameForGui = juce::Image(juce::Image::ARGB, bgraFrame.cols, bgraFrame.rows, true);
     }
-    
+
     juce::Image::BitmapData destData(latestFrameForGui, juce::Image::BitmapData::writeOnly);
     memcpy(destData.data, bgraFrame.data, bgraFrame.total() * bgraFrame.elemSize());
 }
@@ -603,24 +683,25 @@ juce::String PoseEstimatorModule::serializeZoneRects(const std::vector<ZoneRect>
     juce::String result;
     for (size_t i = 0; i < rects.size(); ++i)
     {
-        if (i > 0) result += ";";
-        result += juce::String(rects[i].x, 4) + "," +
-                  juce::String(rects[i].y, 4) + "," +
-                  juce::String(rects[i].width, 4) + "," +
-                  juce::String(rects[i].height, 4);
+        if (i > 0)
+            result += ";";
+        result += juce::String(rects[i].x, 4) + "," + juce::String(rects[i].y, 4) + "," +
+                  juce::String(rects[i].width, 4) + "," + juce::String(rects[i].height, 4);
     }
     return result;
 }
 
 // Deserialize zone rectangles from string
-std::vector<PoseEstimatorModule::ZoneRect> PoseEstimatorModule::deserializeZoneRects(const juce::String& data)
+std::vector<PoseEstimatorModule::ZoneRect> PoseEstimatorModule::deserializeZoneRects(
+    const juce::String& data)
 {
     std::vector<ZoneRect> rects;
-    if (data.isEmpty()) return rects;
-    
+    if (data.isEmpty())
+        return rects;
+
     juce::StringArray rectStrings;
     rectStrings.addTokens(data, ";", "");
-    
+
     for (const auto& rectStr : rectStrings)
     {
         juce::StringArray coords;
@@ -642,7 +723,7 @@ std::vector<PoseEstimatorModule::ZoneRect> PoseEstimatorModule::deserializeZoneR
 void PoseEstimatorModule::loadZoneRects(int colorIndex, std::vector<ZoneRect>& rects) const
 {
     juce::String key = "zone_color_" + juce::String(colorIndex) + "_rects";
-    juce::var value = apvts.state.getProperty(key);
+    juce::var    value = apvts.state.getProperty(key);
     if (value.isString())
     {
         rects = deserializeZoneRects(value.toString());
@@ -667,39 +748,51 @@ std::vector<DynamicPinInfo> PoseEstimatorModule::getDynamicOutputPins() const
     // Bus 1: Video Out (1 channel)
     // Bus 2: Cropped Out (1 channel)
     std::vector<DynamicPinInfo> pins;
-    
+
     // Add all 15 keypoint pins
     const std::vector<std::string> keypointNames = {
-        "Head", "Neck", "R Shoulder", "R Elbow", "R Wrist",
-        "L Shoulder", "L Elbow", "L Wrist", "R Hip", "R Knee",
-        "R Ankle", "L Hip", "L Knee", "L Ankle", "Chest"
-    };
-    
+        "Head",
+        "Neck",
+        "R Shoulder",
+        "R Elbow",
+        "R Wrist",
+        "L Shoulder",
+        "L Elbow",
+        "L Wrist",
+        "R Hip",
+        "R Knee",
+        "R Ankle",
+        "L Hip",
+        "L Knee",
+        "L Ankle",
+        "Chest"};
+
     for (size_t i = 0; i < keypointNames.size(); ++i)
     {
         pins.emplace_back(keypointNames[i] + " X", static_cast<int>(i * 2), PinDataType::CV);
         pins.emplace_back(keypointNames[i] + " Y", static_cast<int>(i * 2 + 1), PinDataType::CV);
     }
-    
+
     // Add zone gate pins (channels 30-33)
     pins.emplace_back("Red Zone Gate", 30, PinDataType::Gate);
     pins.emplace_back("Green Zone Gate", 31, PinDataType::Gate);
     pins.emplace_back("Blue Zone Gate", 32, PinDataType::Gate);
     pins.emplace_back("Yellow Zone Gate", 33, PinDataType::Gate);
-    
+
     // Add Video Out and Cropped Out pins
     const int videoOutStartChannel = 34;
     const int croppedOutStartChannel = videoOutStartChannel + 1;
     pins.emplace_back("Video Out", videoOutStartChannel, PinDataType::Video);
     pins.emplace_back("Cropped Out", croppedOutStartChannel, PinDataType::Video);
-    
+
     return pins;
 }
 
 void PoseEstimatorModule::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midi)
 {
     juce::ignoreUnused(midi);
-    
+
+
     // Read Source ID from input pin (BEFORE clearing the buffer!)
     auto inputBuffer = getBusBuffer(buffer, true, 0);
     if (inputBuffer.getNumChannels() > 0 && inputBuffer.getNumSamples() > 0)
@@ -707,10 +800,10 @@ void PoseEstimatorModule::processBlock(juce::AudioBuffer<float>& buffer, juce::M
         float sourceIdFloat = inputBuffer.getSample(0, 0);
         currentSourceId.store((juce::uint32)sourceIdFloat);
     }
-    
+
     // Clear the buffer for output
     buffer.clear();
-    
+
     // --- BEGIN FIX: Find our own ID if it's not set ---
     juce::uint32 myLogicalId = storedLogicalId;
     if (myLogicalId == 0 && parentSynth != nullptr)
@@ -726,15 +819,16 @@ void PoseEstimatorModule::processBlock(juce::AudioBuffer<float>& buffer, juce::M
         }
     }
     // --- END FIX ---
-    
-    // Read ALL available results from FIFO to ensure latest result is used (like ColorTrackerModule)
+
+    // Read ALL available results from FIFO to ensure latest result is used (like
+    // ColorTrackerModule)
     while (fifo.getNumReady() > 0)
     {
         auto readScope = fifo.read(1);
         if (readScope.blockSize1 > 0)
             lastResultForAudio = fifoBuffer[readScope.startIndex1];
     }
-    
+
     // Map keypoint coordinates to output channels (bus 0 - CV Out)
     auto cvOutBus = getBusBuffer(buffer, false, 0);
     // Channel layout: [Head X, Head Y, Neck X, Neck Y, R Shoulder X, R Shoulder Y, ...]
@@ -742,19 +836,21 @@ void PoseEstimatorModule::processBlock(juce::AudioBuffer<float>& buffer, juce::M
     {
         int chX = i * 2;
         int chY = i * 2 + 1;
-        
+
         if (chY < cvOutBus.getNumChannels())
         {
-            // Normalize coordinates to 0-1 range based on typical video resolution (640x480 or similar)
-            // If keypoint not detected (negative value), output 0
-            float x_normalized = (lastResultForAudio.keypoints[i][0] >= 0) 
-                ? juce::jlimit(0.0f, 1.0f, lastResultForAudio.keypoints[i][0] / 640.0f)
-                : 0.0f;
-            
-            float y_normalized = (lastResultForAudio.keypoints[i][1] >= 0) 
-                ? juce::jlimit(0.0f, 1.0f, lastResultForAudio.keypoints[i][1] / 480.0f)
-                : 0.0f;
-            
+            // Normalize coordinates to 0-1 range based on typical video resolution (640x480 or
+            // similar) If keypoint not detected (negative value), output 0
+            float x_normalized =
+                (lastResultForAudio.keypoints[i][0] >= 0)
+                    ? juce::jlimit(0.0f, 1.0f, lastResultForAudio.keypoints[i][0] / 640.0f)
+                    : 0.0f;
+
+            float y_normalized =
+                (lastResultForAudio.keypoints[i][1] >= 0)
+                    ? juce::jlimit(0.0f, 1.0f, lastResultForAudio.keypoints[i][1] / 480.0f)
+                    : 0.0f;
+
             // Fill the entire buffer with the current value (DC signal)
             for (int sample = 0; sample < cvOutBus.getNumSamples(); ++sample)
             {
@@ -763,7 +859,7 @@ void PoseEstimatorModule::processBlock(juce::AudioBuffer<float>& buffer, juce::M
             }
         }
     }
-    
+
     // Output zone gates (channels 30-33)
     for (int z = 0; z < 4; ++z)
     {
@@ -776,7 +872,7 @@ void PoseEstimatorModule::processBlock(juce::AudioBuffer<float>& buffer, juce::M
                 cvOutBus.setSample(ch, s, gateValue);
         }
     }
-    
+
     // Passthrough Video ID on bus 1
     auto videoOutBus = getBusBuffer(buffer, false, 1);
     if (videoOutBus.getNumChannels() > 0)
@@ -785,7 +881,7 @@ void PoseEstimatorModule::processBlock(juce::AudioBuffer<float>& buffer, juce::M
         for (int s = 0; s < videoOutBus.getNumSamples(); ++s)
             videoOutBus.setSample(0, s, primaryId);
     }
-    
+
     // Output Cropped Out ID on bus 2
     auto croppedOutBus = getBusBuffer(buffer, false, 2);
     if (croppedOutBus.getNumChannels() > 0)
@@ -799,88 +895,65 @@ void PoseEstimatorModule::processBlock(juce::AudioBuffer<float>& buffer, juce::M
 #if defined(PRESET_CREATOR_UI)
 ImVec2 PoseEstimatorModule::getCustomNodeSize() const
 {
-    int level = zoomLevelParam ? (int) zoomLevelParam->load() : 1;
+    int level = zoomLevelParam ? (int)zoomLevelParam->load() : 1;
     level = juce::jlimit(0, 2, level);
-    const float widths[3] { 240.0f, 480.0f, 960.0f };
+    const float widths[3]{240.0f, 480.0f, 960.0f};
     return ImVec2(widths[level], 0.0f);
 }
 
-void PoseEstimatorModule::drawParametersInNode(float itemWidth,
-                                              const std::function<bool(const juce::String& paramId)>& isParamModulated,
-                                              const std::function<void()>& onModificationEnded)
+void PoseEstimatorModule::drawParametersInNode(
+    float                                                   itemWidth,
+    const std::function<bool(const juce::String& paramId)>& isParamModulated,
+    const std::function<void()>&                            onModificationEnded)
 {
     const auto& theme = ThemeManager::getInstance().getCurrentTheme();
     ImGui::PushItemWidth(itemWidth);
-    
-    // GPU ACCELERATION TOGGLE
-    #if WITH_CUDA_SUPPORT
-        bool cudaAvailable = (cv::cuda::getCudaEnabledDeviceCount() > 0);
-        
-        if (!cudaAvailable)
-        {
-            ImGui::BeginDisabled();
-        }
-        
-        bool useGpu = useGpuParam->get();
-        if (ImGui::Checkbox("⚡ Use GPU (CUDA)", &useGpu))
-        {
-            *useGpuParam = useGpu;
-            onModificationEnded();
-        }
-        
-        if (!cudaAvailable)
-        {
-            ImGui::EndDisabled();
-            if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
-            {
-                ImGui::SetTooltip("No CUDA-enabled GPU detected.\nCheck that your GPU supports CUDA and drivers are installed.");
-            }
-        }
-        else if (ImGui::IsItemHovered())
-        {
-            ImGui::SetTooltip("Enable GPU acceleration for pose detection.\nRequires CUDA-capable NVIDIA GPU.");
-        }
-    #else
-        ImGui::TextDisabled("🚫 GPU support not compiled");
-        if (ImGui::IsItemHovered())
-        {
-            ImGui::SetTooltip("OpenCV was built without CUDA support.\nRebuild with WITH_CUDA=ON to enable GPU acceleration.");
-        }
-    #endif
-    
-    // Only show Model selection (as requested)
-    bool modelMod = isParamModulated("model");
-    if (modelMod) ImGui::BeginDisabled();
-    if (modelChoiceParam)
+
+// GPU ACCELERATION TOGGLE
+#if WITH_CUDA_SUPPORT
+    bool cudaAvailable = CudaDeviceCountCache::isAvailable();
+
+    if (!cudaAvailable)
     {
-        int m = modelChoiceParam->getIndex();
-        if (ImGui::Combo("Model", &m, "BODY_25 (25 pts)\0COCO (18 pts)\0MPI (15 pts)\0MPI Fast (15 pts)\0\0"))
+        ImGui::BeginDisabled();
+    }
+
+    bool useGpu = useGpuParam->get();
+    if (ImGui::Checkbox("⚡ Use GPU (CUDA)", &useGpu))
+    {
+        *useGpuParam = useGpu;
+        onModificationEnded();
+    }
+
+    if (!cudaAvailable)
+    {
+        ImGui::EndDisabled();
+        if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
         {
-            if (!modelMod) *modelChoiceParam = m;
-            requestedModelIndex = m; // signal thread to reload
-            onModificationEnded();
-        }
-        // Scroll-edit for model combo
-        if (!modelMod && ImGui::IsItemHovered())
-        {
-            const float wheel = ImGui::GetIO().MouseWheel;
-            if (wheel != 0.0f)
-            {
-                const int newM = juce::jlimit(0, 3, m + (wheel > 0.0f ? -1 : 1));
-                if (newM != m)
-                {
-                    *modelChoiceParam = newM;
-                    requestedModelIndex = newM;
-                    onModificationEnded();
-                }
-            }
+            ImGui::SetTooltip(
+                "No CUDA-enabled GPU detected.\nCheck that your GPU supports CUDA and drivers are "
+                "installed.");
         }
     }
-    if (modelMod) ImGui::EndDisabled();
+    else if (ImGui::IsItemHovered())
+    {
+        ImGui::SetTooltip(
+            "Enable GPU acceleration for pose detection.\nRequires CUDA-capable NVIDIA GPU.");
+    }
+#else
+    ImGui::TextDisabled("🚫 GPU support not compiled");
+    if (ImGui::IsItemHovered())
+    {
+        ImGui::SetTooltip(
+            "OpenCV was built without CUDA support.\nRebuild with WITH_CUDA=ON to enable GPU "
+            "acceleration.");
+    }
+#endif
 
     // Blob size (maps to quality tiers)
     bool qualityMod = isParamModulated("quality");
-    if (qualityMod) ImGui::BeginDisabled();
+    if (qualityMod)
+        ImGui::BeginDisabled();
     if (qualityParam)
     {
         int blobSize = (qualityParam->getIndex() == 0) ? 224 : 368;
@@ -893,30 +966,41 @@ void PoseEstimatorModule::drawParametersInNode(float itemWidth,
                 onModificationEnded();
             }
         }
-        if (!qualityMod) adjustParamOnWheel(apvts.getParameter("quality"), "quality", (float)qualityParam->getIndex());
+        if (!qualityMod)
+            adjustParamOnWheel(
+                apvts.getParameter("quality"), "quality", (float)qualityParam->getIndex());
     }
-    if (qualityMod) ImGui::EndDisabled();
+    if (qualityMod)
+        ImGui::EndDisabled();
 
     // Confidence threshold
-    bool confidenceMod = isParamModulated("confidence");
+    bool  confidenceMod = isParamModulated("confidence");
     float confidenceFallback = confidenceThresholdParam ? confidenceThresholdParam->load() : 0.5f;
-    float confidence = confidenceMod ? getLiveParamValue("confidence", confidenceFallback) : confidenceFallback;
-    if (confidenceMod) ImGui::BeginDisabled();
+    float confidence =
+        confidenceMod ? getLiveParamValue("confidence", confidenceFallback) : confidenceFallback;
+    if (confidenceMod)
+        ImGui::BeginDisabled();
     if (ImGui::SliderFloat("Confidence", &confidence, 0.0f, 1.0f, "%.2f"))
     {
-        if (!confidenceMod) *dynamic_cast<juce::AudioParameterFloat*>(apvts.getParameter("confidence")) = confidence;
+        if (!confidenceMod)
+            *dynamic_cast<juce::AudioParameterFloat*>(apvts.getParameter("confidence")) =
+                confidence;
     }
-    if (ImGui::IsItemDeactivatedAfterEdit() && !confidenceMod) onModificationEnded();
-    if (!confidenceMod) adjustParamOnWheel(apvts.getParameter("confidence"), "confidence", confidence);
-    if (confidenceMod) ImGui::EndDisabled();
+    if (ImGui::IsItemDeactivatedAfterEdit() && !confidenceMod)
+        onModificationEnded();
+    if (!confidenceMod)
+        adjustParamOnWheel(apvts.getParameter("confidence"), "confidence", confidence);
+    if (confidenceMod)
+        ImGui::EndDisabled();
 
     // Restore Zoom (-/+) controls
-    int level = zoomLevelParam ? (int) zoomLevelParam->load() : 1;
+    int level = zoomLevelParam ? (int)zoomLevelParam->load() : 1;
     level = juce::jlimit(0, 2, level);
-    float buttonWidth = (itemWidth / 2.0f) - 4.0f;
+    float      buttonWidth = (itemWidth / 2.0f) - 4.0f;
     const bool atMin = (level <= 0);
     const bool atMax = (level >= 2);
-    if (atMin) ImGui::BeginDisabled();
+    if (atMin)
+        ImGui::BeginDisabled();
     if (ImGui::Button("-", ImVec2(buttonWidth, 0)))
     {
         int newLevel = juce::jmax(0, level - 1);
@@ -924,9 +1008,11 @@ void PoseEstimatorModule::drawParametersInNode(float itemWidth,
             p->setValueNotifyingHost((float)newLevel / 2.0f);
         onModificationEnded();
     }
-    if (atMin) ImGui::EndDisabled();
+    if (atMin)
+        ImGui::EndDisabled();
     ImGui::SameLine();
-    if (atMax) ImGui::BeginDisabled();
+    if (atMax)
+        ImGui::BeginDisabled();
     if (ImGui::Button("+", ImVec2(buttonWidth, 0)))
     {
         int newLevel = juce::jmin(2, level + 1);
@@ -934,16 +1020,18 @@ void PoseEstimatorModule::drawParametersInNode(float itemWidth,
             p->setValueNotifyingHost((float)newLevel / 2.0f);
         onModificationEnded();
     }
-    if (atMax) ImGui::EndDisabled();
-    
+    if (atMax)
+        ImGui::EndDisabled();
+
     // Status display
     if (modelLoaded)
     {
         ThemeText("Model: Loaded", theme.text.success);
-        ThemeText(juce::String::formatted("Keypoints: %d/%d",
-                                          lastResultForAudio.detectedPoints,
-                                          MPI_NUM_KEYPOINTS).toRawUTF8(),
-                  theme.text.section_header);
+        ThemeText(
+            juce::String::formatted(
+                "Keypoints: %d/%d", lastResultForAudio.detectedPoints, MPI_NUM_KEYPOINTS)
+                .toRawUTF8(),
+            theme.text.section_header);
     }
     else
     {
@@ -951,37 +1039,37 @@ void PoseEstimatorModule::drawParametersInNode(float itemWidth,
         ImGui::TextWrapped("Place model files in: assets/openpose_models/pose/mpi/");
     }
 
-    
     // Zone color palette (4 colors)
     static const ImVec4 ZONE_COLORS[4] = {
-        ImVec4(1.0f, 0.0f, 0.0f, 0.3f),  // Red - 30% opacity
-        ImVec4(0.0f, 1.0f, 0.0f, 0.3f),  // Green - 30% opacity
-        ImVec4(0.0f, 0.0f, 1.0f, 0.3f),  // Blue - 30% opacity
-        ImVec4(1.0f, 1.0f, 0.0f, 0.3f)   // Yellow - 30% opacity
+        ImVec4(1.0f, 0.0f, 0.0f, 0.3f), // Red - 30% opacity
+        ImVec4(0.0f, 1.0f, 0.0f, 0.3f), // Green - 30% opacity
+        ImVec4(0.0f, 0.0f, 1.0f, 0.3f), // Blue - 30% opacity
+        ImVec4(1.0f, 1.0f, 0.0f, 0.3f)  // Yellow - 30% opacity
     };
-    
+
     // Static state for mouse interaction (per-instance using logical ID)
-    static std::map<int, int> activeZoneColorIndexByNode;
-    static std::map<int, int> drawingZoneIndexByNode;
+    static std::map<int, int>   activeZoneColorIndexByNode;
+    static std::map<int, int>   drawingZoneIndexByNode;
     static std::map<int, float> dragStartXByNode;
     static std::map<int, float> dragStartYByNode;
-    
+
     int nodeId = (int)getLogicalId();
-    
+
     // Initialize active color index if not set
     if (activeZoneColorIndexByNode.find(nodeId) == activeZoneColorIndexByNode.end())
         activeZoneColorIndexByNode[nodeId] = 0;
-    
-    // Initialize drawingZoneIndex to -1 (not drawing) if not set - MUST do before accessing reference!
+
+    // Initialize drawingZoneIndex to -1 (not drawing) if not set - MUST do before accessing
+    // reference!
     if (drawingZoneIndexByNode.find(nodeId) == drawingZoneIndexByNode.end())
         drawingZoneIndexByNode[nodeId] = -1;
-    
+
     // Now safe to get references
-    int& activeZoneColorIndex = activeZoneColorIndexByNode[nodeId];
-    int& drawingZoneIndex = drawingZoneIndexByNode[nodeId];
+    int&   activeZoneColorIndex = activeZoneColorIndexByNode[nodeId];
+    int&   drawingZoneIndex = drawingZoneIndexByNode[nodeId];
     float& dragStartX = dragStartXByNode[nodeId];
     float& dragStartY = dragStartYByNode[nodeId];
-    
+
     // Color picker boxes
     ImGui::Text("Zone Colors:");
     ImGui::SameLine();
@@ -989,8 +1077,12 @@ void PoseEstimatorModule::drawParametersInNode(float itemWidth,
     {
         ImGui::PushID(c);
         ImVec4 color = ZONE_COLORS[c];
-        color.w = 1.0f;  // Full opacity for picker button
-        if (ImGui::ColorButton("##ZoneColor", color, ImGuiColorEditFlags_NoAlpha | ImGuiColorEditFlags_NoTooltip, ImVec2(20, 20)))
+        color.w = 1.0f; // Full opacity for picker button
+        if (ImGui::ColorButton(
+                "##ZoneColor",
+                color,
+                ImGuiColorEditFlags_NoAlpha | ImGuiColorEditFlags_NoTooltip,
+                ImVec2(20, 20)))
         {
             activeZoneColorIndex = c;
         }
@@ -999,67 +1091,73 @@ void PoseEstimatorModule::drawParametersInNode(float itemWidth,
             ImGui::SetTooltip("Click to select color %d", c + 1);
         }
         ImGui::PopID();
-        if (c < 3) ImGui::SameLine();
+        if (c < 3)
+            ImGui::SameLine();
     }
-    
-    
+
     // Video preview with zone overlays
     juce::Image frame = getLatestFrame();
     if (!frame.isNull())
     {
         // Use static map for texture management (per-module-instance textures)
         static std::unordered_map<int, std::unique_ptr<juce::OpenGLTexture>> localTextures;
-        
+
         if (localTextures.find(nodeId) == localTextures.end())
             localTextures[nodeId] = std::make_unique<juce::OpenGLTexture>();
-        
+
         auto* texture = localTextures[nodeId].get();
         texture->loadImage(frame);
-        
+
         if (texture->getTextureID() != 0)
         {
-            float ar = (float)frame.getHeight() / juce::jmax(1.0f, (float)frame.getWidth());
+            float  ar = (float)frame.getHeight() / juce::jmax(1.0f, (float)frame.getWidth());
             ImVec2 size(itemWidth, itemWidth * ar);
-            ImGui::Image((void*)(intptr_t)texture->getTextureID(), size, ImVec2(0, 1), ImVec2(1, 0));
-            
+            ImGui::Image(
+                (void*)(intptr_t)texture->getTextureID(), size, ImVec2(0, 1), ImVec2(1, 0));
+
             // Get image screen coordinates and size for interaction
-            ImVec2 imageRectMin = ImGui::GetItemRectMin();
-            ImVec2 imageRectMax = ImGui::GetItemRectMax();
-            ImVec2 imageSize = ImGui::GetItemRectSize();
+            ImVec2      imageRectMin = ImGui::GetItemRectMin();
+            ImVec2      imageRectMax = ImGui::GetItemRectMax();
+            ImVec2      imageSize = ImGui::GetItemRectSize();
             ImDrawList* drawList = ImGui::GetWindowDrawList();
-            
-            // Use InvisibleButton to capture mouse input and prevent node movement (like CropVideoModule)
+
+            // Use InvisibleButton to capture mouse input and prevent node movement (like
+            // CropVideoModule)
             ImGui::SetCursorScreenPos(imageRectMin);
             ImGui::InvisibleButton("##zone_interaction", imageSize);
-            
+
             ImVec2 mousePos = ImGui::GetMousePos();
-            
+
             // Draw zones - each color zone can have multiple rectangles
             for (int colorIdx = 0; colorIdx < 4; ++colorIdx)
             {
                 std::vector<ZoneRect> rects;
                 loadZoneRects(colorIdx, rects);
-                
+
                 ImVec4 color = ZONE_COLORS[colorIdx];
-                ImU32 fillColor = ImGui::ColorConvertFloat4ToU32(color);
-                ImU32 borderColor = ImGui::ColorConvertFloat4ToU32(ImVec4(color.x, color.y, color.z, 1.0f));
-                
+                ImU32  fillColor = ImGui::ColorConvertFloat4ToU32(color);
+                ImU32  borderColor =
+                    ImGui::ColorConvertFloat4ToU32(ImVec4(color.x, color.y, color.z, 1.0f));
+
                 for (const auto& rect : rects)
                 {
-                    ImVec2 zoneMin(imageRectMin.x + rect.x * imageSize.x,
-                                  imageRectMin.y + rect.y * imageSize.y);
-                    ImVec2 zoneMax(imageRectMin.x + (rect.x + rect.width) * imageSize.x,
-                                  imageRectMin.y + (rect.y + rect.height) * imageSize.y);
-                    
+                    ImVec2 zoneMin(
+                        imageRectMin.x + rect.x * imageSize.x,
+                        imageRectMin.y + rect.y * imageSize.y);
+                    ImVec2 zoneMax(
+                        imageRectMin.x + (rect.x + rect.width) * imageSize.x,
+                        imageRectMin.y + (rect.y + rect.height) * imageSize.y);
+
                     drawList->AddRectFilled(zoneMin, zoneMax, fillColor);
                     drawList->AddRect(zoneMin, zoneMax, borderColor, 0.0f, 0, 2.0f);
                 }
             }
-            
+
             // Draw keypoint positions (the points being checked for zone hits) - small red dots
-            // Use lastResultForAudio which is updated in processBlock() (safe to read from UI thread)
+            // Use lastResultForAudio which is updated in processBlock() (safe to read from UI
+            // thread)
             const PoseResult& uiResult = lastResultForAudio;
-            
+
             // Draw a small red dot at each detected keypoint
             ImU32 redColor = ImGui::ColorConvertFloat4ToU32(ImVec4(1.0f, 0.0f, 0.0f, 1.0f));
             for (int i = 0; i < MPI_NUM_KEYPOINTS; ++i)
@@ -1070,27 +1168,27 @@ void PoseEstimatorModule::drawParametersInNode(float itemWidth,
                     // Normalize keypoint position to 0-1 range (match what we do in zone detection)
                     float posX = uiResult.keypoints[i][0] / (float)frame.getWidth();
                     float posY = uiResult.keypoints[i][1] / (float)frame.getHeight();
-                    
+
                     // Convert normalized coordinates to screen coordinates
-                    float centerX = imageRectMin.x + posX * imageSize.x;
-                    float centerY = imageRectMin.y + posY * imageSize.y;
+                    float  centerX = imageRectMin.x + posX * imageSize.x;
+                    float  centerY = imageRectMin.y + posY * imageSize.y;
                     ImVec2 center(centerX, centerY);
-                    
+
                     // Draw small red dot (radius 3 pixels)
                     drawList->AddCircleFilled(center, 3.0f, redColor);
                 }
             }
-            
+
             // Mouse interaction - use InvisibleButton's hover state
             if (ImGui::IsItemHovered())
             {
                 // Normalize mouse position (0.0-1.0)
                 float mouseX = (mousePos.x - imageRectMin.x) / imageSize.x;
                 float mouseY = (mousePos.y - imageRectMin.y) / imageSize.y;
-                
+
                 // Check if Ctrl key is held
                 bool ctrlHeld = ImGui::GetIO().KeyCtrl;
-                
+
                 // Zone drawing: Only with Ctrl+Left-click
                 if (ctrlHeld)
                 {
@@ -1099,53 +1197,57 @@ void PoseEstimatorModule::drawParametersInNode(float itemWidth,
                     {
                         dragStartX = mouseX;
                         dragStartY = mouseY;
-                        drawingZoneIndex = activeZoneColorIndex;  // Drawing for the selected color
+                        drawingZoneIndex = activeZoneColorIndex; // Drawing for the selected color
                     }
-                    
+
                     // Ctrl+Left-drag: Update rectangle being drawn and show preview
-                    if (ImGui::IsMouseDragging(ImGuiMouseButton_Left) && drawingZoneIndex >= 0 && ctrlHeld)
+                    if (ImGui::IsMouseDragging(ImGuiMouseButton_Left) && drawingZoneIndex >= 0 &&
+                        ctrlHeld)
                     {
                         float dragEndX = mouseX;
                         float dragEndY = mouseY;
-                        
+
                         // Calculate rectangle from drag start to current position
                         float zx = juce::jmin(dragStartX, dragEndX);
                         float zy = juce::jmin(dragStartY, dragEndY);
                         float zw = std::abs(dragEndX - dragStartX);
                         float zh = std::abs(dragEndY - dragStartY);
-                        
+
                         // Clamp to image bounds
                         zx = juce::jlimit(0.0f, 1.0f, zx);
                         zy = juce::jlimit(0.0f, 1.0f, zy);
                         zw = juce::jlimit(0.01f, 1.0f - zx, zw);
                         zh = juce::jlimit(0.01f, 1.0f - zy, zh);
-                        
+
                         // Draw preview rectangle
-                        ImVec2 previewMin(imageRectMin.x + zx * imageSize.x,
-                                         imageRectMin.y + zy * imageSize.y);
-                        ImVec2 previewMax(imageRectMin.x + (zx + zw) * imageSize.x,
-                                         imageRectMin.y + (zy + zh) * imageSize.y);
-                        
+                        ImVec2 previewMin(
+                            imageRectMin.x + zx * imageSize.x, imageRectMin.y + zy * imageSize.y);
+                        ImVec2 previewMax(
+                            imageRectMin.x + (zx + zw) * imageSize.x,
+                            imageRectMin.y + (zy + zh) * imageSize.y);
+
                         ImVec4 previewColor = ZONE_COLORS[drawingZoneIndex];
-                        ImU32 previewFillColor = ImGui::ColorConvertFloat4ToU32(previewColor);
-                        ImU32 previewBorderColor = ImGui::ColorConvertFloat4ToU32(ImVec4(previewColor.x, previewColor.y, previewColor.z, 1.0f));
-                        
+                        ImU32  previewFillColor = ImGui::ColorConvertFloat4ToU32(previewColor);
+                        ImU32  previewBorderColor = ImGui::ColorConvertFloat4ToU32(
+                            ImVec4(previewColor.x, previewColor.y, previewColor.z, 1.0f));
+
                         drawList->AddRectFilled(previewMin, previewMax, previewFillColor);
-                        drawList->AddRect(previewMin, previewMax, previewBorderColor, 0.0f, 0, 2.0f);
+                        drawList->AddRect(
+                            previewMin, previewMax, previewBorderColor, 0.0f, 0, 2.0f);
                     }
-                    
+
                     // Ctrl+Left-release: Finish drawing - add rectangle to the color zone
                     if (ImGui::IsMouseReleased(ImGuiMouseButton_Left) && drawingZoneIndex >= 0)
                     {
                         float dragEndX = mouseX;
                         float dragEndY = mouseY;
-                        
+
                         // Calculate final rectangle
                         float zx = juce::jmin(dragStartX, dragEndX);
                         float zy = juce::jmin(dragStartY, dragEndY);
                         float zw = std::abs(dragEndX - dragStartX);
                         float zh = std::abs(dragEndY - dragStartY);
-                        
+
                         // Only add if rectangle is large enough
                         if (zw > 0.01f && zh > 0.01f)
                         {
@@ -1154,11 +1256,11 @@ void PoseEstimatorModule::drawParametersInNode(float itemWidth,
                             zy = juce::jlimit(0.0f, 1.0f, zy);
                             zw = juce::jlimit(0.01f, 1.0f - zx, zw);
                             zh = juce::jlimit(0.01f, 1.0f - zy, zh);
-                            
+
                             // Load existing rectangles for this color
                             std::vector<ZoneRect> rects;
                             loadZoneRects(drawingZoneIndex, rects);
-                            
+
                             // Add new rectangle
                             ZoneRect newRect;
                             newRect.x = zx;
@@ -1166,17 +1268,18 @@ void PoseEstimatorModule::drawParametersInNode(float itemWidth,
                             newRect.width = zw;
                             newRect.height = zh;
                             rects.push_back(newRect);
-                            
+
                             // Save back to APVTS
                             saveZoneRects(drawingZoneIndex, rects);
                             onModificationEnded();
                         }
-                        
+
                         drawingZoneIndex = -1;
                     }
                 }
-                
-                // Right-drag: Eraser mode (delete rectangles from color zones) - works regardless of Ctrl
+
+                // Right-drag: Eraser mode (delete rectangles from color zones) - works regardless
+                // of Ctrl
                 if (ImGui::IsMouseDragging(ImGuiMouseButton_Right))
                 {
                     // Check if mouse is inside any rectangle of any color zone
@@ -1184,14 +1287,15 @@ void PoseEstimatorModule::drawParametersInNode(float itemWidth,
                     {
                         std::vector<ZoneRect> rects;
                         loadZoneRects(colorIdx, rects);
-                        
+
                         // Check each rectangle and remove if mouse is inside
                         bool modified = false;
                         for (auto it = rects.begin(); it != rects.end();)
                         {
-                            bool inside = (mouseX >= it->x && mouseX <= it->x + it->width &&
-                                          mouseY >= it->y && mouseY <= it->y + it->height);
-                            
+                            bool inside =
+                                (mouseX >= it->x && mouseX <= it->x + it->width &&
+                                 mouseY >= it->y && mouseY <= it->y + it->height);
+
                             if (inside)
                             {
                                 it = rects.erase(it);
@@ -1202,7 +1306,7 @@ void PoseEstimatorModule::drawParametersInNode(float itemWidth,
                                 ++it;
                             }
                         }
-                        
+
                         if (modified)
                         {
                             saveZoneRects(colorIdx, rects);
@@ -1210,7 +1314,7 @@ void PoseEstimatorModule::drawParametersInNode(float itemWidth,
                         }
                     }
                 }
-                
+
                 // Show tooltip for zone drawing hints
                 ImGui::BeginTooltip();
                 ImGui::TextDisabled("Ctrl+Left-drag: Draw zone\nRight-drag: Erase zone");
@@ -1218,7 +1322,7 @@ void PoseEstimatorModule::drawParametersInNode(float itemWidth,
             }
         }
     }
-    
+
     ImGui::PopItemWidth();
 }
 
@@ -1226,7 +1330,7 @@ void PoseEstimatorModule::drawIoPins(const NodePinHelpers& helpers)
 {
     // Input: Source ID from video loader
     helpers.drawAudioInputPin("Source In", 0);
-    
+
     // Outputs: 30 pins (15 keypoints x 2 coordinates)
     for (int i = 0; i < MPI_NUM_KEYPOINTS; ++i)
     {
