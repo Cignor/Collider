@@ -1,9 +1,17 @@
 #include "ObjectDetectorModule.h"
 #include "../../video/VideoFrameManager.h"
 #include "../graph/ModularSynthProcessor.h"
+#include "../../utils/CudaDeviceCountCache.h"
 #include <opencv2/imgproc.hpp>
 #include <opencv2/dnn.hpp>
 #include <fstream>
+#include <atomic>
+#include <utility>  // For std::swap
+#include <juce_core/juce_core.h>
+
+#if WITH_CUDA_SUPPORT
+    #include <cuda_runtime.h>
+#endif
 
 #if defined(PRESET_CREATOR_UI)
 #include <imgui.h>
@@ -72,13 +80,96 @@ ObjectDetectorModule::ObjectDetectorModule()
     useGpuParam = dynamic_cast<juce::AudioParameterBool*>(apvts.getParameter("useGpu"));
     
     fifoBuffer.resize(16);
-    
-    loadModel();
+    // Model will be loaded lazily in run() loop (like HandTrackerModule/FaceTrackerModule)
 }
 
 ObjectDetectorModule::~ObjectDetectorModule()
 {
+    juce::Logger::writeToLog("[ObjectDetector][DESTRUCTOR] START: Destructor called (ptr=0x" + juce::String::toHexString((juce::pointer_sized_int)this) + ") L-ID=" + juce::String(storedLogicalId));
+    
+    // CRITICAL: Stop thread FIRST to ensure no CUDA operations are in progress
+    // DO NOT switch backend - switching backend doesn't release CUDA resources (cuBLAS handles)
+    // and can cause heap corruption when the net is destroyed
+    juce::Logger::writeToLog("[ObjectDetector][DESTRUCTOR] Step 1: Signaling thread to exit");
+    signalThreadShouldExit();
+    juce::Logger::writeToLog("[ObjectDetector][DESTRUCTOR] Step 2: About to stop thread (waiting max 5s)");
     stopThread(5000);
+    juce::Logger::writeToLog("[ObjectDetector][DESTRUCTOR] Step 3: Thread stopped successfully");
+    
+    // CRITICAL: Synchronize CUDA device BEFORE any cleanup
+    // This ensures ALL GPU operations (including cuBLAS) are complete before destroying handles
+    // This is the KEY fix to prevent heap corruption in cublasDestroy_v2
+    #if WITH_CUDA_SUPPORT
+        if (modelLoaded && CudaDeviceCountCache::isAvailable())
+        {
+            juce::Logger::writeToLog("[ObjectDetector][DESTRUCTOR] Step 4: Synchronizing CUDA device to ensure all operations complete");
+            cudaError_t err = cudaDeviceSynchronize();
+            if (err != cudaSuccess)
+            {
+                juce::Logger::writeToLog("[ObjectDetector][DESTRUCTOR] Step 4 ERROR: CUDA sync failed: " + juce::String(cudaGetErrorString(err)));
+            }
+            else
+            {
+                juce::Logger::writeToLog("[ObjectDetector][DESTRUCTOR] Step 4: CUDA synchronized successfully - all GPU operations complete");
+            }
+            
+            // Small delay to ensure CUDA cleanup completes after synchronization
+            juce::Thread::sleep(50);
+            juce::Logger::writeToLog("[ObjectDetector][DESTRUCTOR] Step 5: Waited for CUDA cleanup to complete");
+        }
+    #endif
+    
+    // Log CUDA/net state before cleanup
+    juce::Logger::writeToLog("[ObjectDetector][DESTRUCTOR] Step 6: Model loaded state: " + juce::String(modelLoaded ? "YES" : "NO"));
+    #if WITH_CUDA_SUPPORT
+        juce::Logger::writeToLog("[ObjectDetector][DESTRUCTOR] Step 7: CUDA available check: " + juce::String(CudaDeviceCountCache::isAvailable() ? "YES" : "NO"));
+    #endif
+    
+    juce::Logger::writeToLog("[ObjectDetector][DESTRUCTOR] Step 8: About to clear OpenCV objects");
+    // Clear OpenCV objects explicitly
+    {
+        const juce::ScopedLock lk(frameLock);
+        lastFrameBgr.release();
+        juce::Logger::writeToLog("[ObjectDetector][DESTRUCTOR] Step 9: lastFrameBgr released");
+    }
+    
+    // CRITICAL: The DOUBLE_FREE crash happens during net destruction
+    // After CUDA sync, we need to ensure all async cleanup completes before destructor exits
+    bool hadModel = modelLoaded;  // Save state before clearing
+    if (hadModel)
+    {
+        juce::Logger::writeToLog("[ObjectDetector][DESTRUCTOR] Step 10: Preparing network for automatic destruction");
+        
+        try
+        {
+            // Clear input to release any cached buffers (but don't destroy the net)
+            juce::Logger::writeToLog("[ObjectDetector][DESTRUCTOR] Step 10a: Clearing network inputs");
+            cv::Mat emptyBlob;
+            net.setInput(emptyBlob);
+            juce::Logger::writeToLog("[ObjectDetector][DESTRUCTOR] Step 10b: Network input cleared");
+        }
+        catch (...)
+        {
+            juce::Logger::writeToLog("[ObjectDetector][DESTRUCTOR] Step 10b: Failed to clear network input (non-critical)");
+        }
+        
+        modelLoaded = false;
+        juce::Logger::writeToLog("[ObjectDetector][DESTRUCTOR] Step 10c: Network prepared for automatic destruction");
+    }
+    
+    // CRITICAL: Additional delay before destructor exits to allow CUDA cleanup to complete
+    // The DOUBLE_FREE suggests async cleanup is still happening when net is destroyed
+    #if WITH_CUDA_SUPPORT
+        if (hadModel && CudaDeviceCountCache::isAvailable())
+        {
+            juce::Logger::writeToLog("[ObjectDetector][DESTRUCTOR] Step 11: Final wait before destructor exits (allowing CUDA async cleanup)");
+            juce::Thread::sleep(200);  // Longer wait for any async CUDA cleanup
+            juce::Logger::writeToLog("[ObjectDetector][DESTRUCTOR] Step 12: Final wait complete");
+        }
+    #endif
+    
+    juce::Logger::writeToLog("[ObjectDetector][DESTRUCTOR] COMPLETE: Destructor finished (ptr=0x" + juce::String::toHexString((juce::pointer_sized_int)this) + ")");
+    juce::Logger::writeToLog("[ObjectDetector][DESTRUCTOR] NOTE: Net will be destroyed automatically by RAII now");
 }
 
 void ObjectDetectorModule::prepareToPlay(double sampleRate, int samplesPerBlock)
@@ -89,8 +180,31 @@ void ObjectDetectorModule::prepareToPlay(double sampleRate, int samplesPerBlock)
 
 void ObjectDetectorModule::releaseResources()
 {
-    signalThreadShouldExit();
-    stopThread(5000);
+    juce::Logger::writeToLog("[ObjectDetector] releaseResources() called");
+    
+    // Stop inference when audio stops
+    if (isThreadRunning())
+    {
+        signalThreadShouldExit();
+        stopThread(5000);
+    }
+    
+    // CRITICAL: Synchronize CUDA to ensure operations complete before module might be removed
+    #if WITH_CUDA_SUPPORT
+        if (modelLoaded && CudaDeviceCountCache::isAvailable())
+        {
+            juce::Logger::writeToLog("[ObjectDetector] releaseResources() - Synchronizing CUDA device");
+            cudaError_t err = cudaDeviceSynchronize();
+            if (err != cudaSuccess)
+            {
+                juce::Logger::writeToLog("[ObjectDetector] releaseResources() ERROR: CUDA sync failed: " + juce::String(cudaGetErrorString(err)));
+            }
+            else
+            {
+                juce::Logger::writeToLog("[ObjectDetector] releaseResources() - CUDA synchronized successfully");
+            }
+        }
+    #endif
 }
 
 void ObjectDetectorModule::loadModel()
@@ -126,7 +240,7 @@ void ObjectDetectorModule::loadModel()
             // CRITICAL: Set backend immediately after loading model
             #if WITH_CUDA_SUPPORT
                 bool useGpu = useGpuParam ? useGpuParam->get() : false;
-                if (useGpu && cv::cuda::getCudaEnabledDeviceCount() > 0)
+                if (useGpu && CudaDeviceCountCache::isAvailable())
                 {
                     net.setPreferableBackend(cv::dnn::DNN_BACKEND_CUDA);
                     net.setPreferableTarget(cv::dnn::DNN_TARGET_CUDA);
@@ -179,22 +293,25 @@ void ObjectDetectorModule::loadModel()
 
 void ObjectDetectorModule::run()
 {
+    juce::Logger::writeToLog("[ObjectDetector][THREAD] run() started (ptr=0x" + juce::String::toHexString((juce::pointer_sized_int)this) + ") L-ID=" + juce::String(storedLogicalId));
+    
+    if (!modelLoaded)
+    {
+        juce::Logger::writeToLog("[ObjectDetector][THREAD] Model not loaded, calling loadModel()");
+        loadModel();
+    }
+    
     #if WITH_CUDA_SUPPORT
         bool lastGpuState = false; // Track GPU state to minimize backend switches
         bool loggedGpuWarning = false; // Only warn once if no GPU available
     #endif
     
+    juce::Logger::writeToLog("[ObjectDetector][THREAD] Entering main loop");
+    int loopIteration = 0;
     while (!threadShouldExit())
     {
         if (!modelLoaded)
-        {
             loadModel();
-            if (!modelLoaded)
-            {
-                wait(200);
-                continue;
-            }
-        }
         
         juce::uint32 sourceId = currentSourceId.load();
         cv::Mat prefetchedFrame;
@@ -291,7 +408,7 @@ void ObjectDetectorModule::run()
             #if WITH_CUDA_SUPPORT
                 // Check if user wants GPU and if CUDA device is available
                 useGpu = useGpuParam ? useGpuParam->get() : false;
-                if (useGpu && cv::cuda::getCudaEnabledDeviceCount() == 0)
+                if (useGpu && !CudaDeviceCountCache::isAvailable())
                 {
                     useGpu = false; // Fallback to CPU
                     if (!loggedGpuWarning)
@@ -320,6 +437,10 @@ void ObjectDetectorModule::run()
                 }
             #endif
             
+            // Check for exit before expensive operations
+            if (threadShouldExit())
+                break;
+            
             // Prepare input blob
             // NOTE: For DNN models, blobFromImage works on CPU
             // The GPU acceleration happens in net.forward() when backend is set to CUDA
@@ -330,11 +451,65 @@ void ObjectDetectorModule::run()
                 cv::Scalar(),
                 true,
                 false);
+            
+            // Check for exit again before CUDA operation
+            if (threadShouldExit())
+            {
+                juce::Logger::writeToLog("[ObjectDetector][THREAD] Exiting before net.setInput() - threadShouldExit() is true");
+                break;
+            }
+            
+            juce::Logger::writeToLog("[ObjectDetector][THREAD] About to call net.setInput() (ptr=0x" + juce::String::toHexString((juce::pointer_sized_int)this) + ")");
             net.setInput(blob);
+            juce::Logger::writeToLog("[ObjectDetector][THREAD] net.setInput() completed");
             
             // Forward through YOLO (GPU-accelerated if backend is CUDA)
+            // Wrap in try-catch to handle CUDA errors gracefully
             std::vector<cv::Mat> outs;
-            net.forward(outs, net.getUnconnectedOutLayersNames());
+            juce::Logger::writeToLog("[ObjectDetector][THREAD] About to call net.forward() (ptr=0x" + juce::String::toHexString((juce::pointer_sized_int)this) + ")");
+            try
+            {
+                net.forward(outs, net.getUnconnectedOutLayersNames());
+                juce::Logger::writeToLog("[ObjectDetector][THREAD] net.forward() completed successfully");
+            }
+            catch (const cv::Exception& e)
+            {
+                juce::Logger::writeToLog("[ObjectDetector][THREAD][CRASH] CUDA forward() failed: " + juce::String(e.what()) + " (ptr=0x" + juce::String::toHexString((juce::pointer_sized_int)this) + ") - falling back to CPU");
+                // Switch to CPU backend and retry once
+                try
+                {
+                    juce::Logger::writeToLog("[ObjectDetector][THREAD] Switching to CPU backend and retrying");
+                    net.setPreferableBackend(cv::dnn::DNN_BACKEND_OPENCV);
+                    net.setPreferableTarget(cv::dnn::DNN_TARGET_CPU);
+                    net.setInput(blob);
+                    net.forward(outs, net.getUnconnectedOutLayersNames());
+                    juce::Logger::writeToLog("[ObjectDetector][THREAD] CPU fallback succeeded");
+                }
+                catch (const std::exception& e2)
+                {
+                    juce::Logger::writeToLog("[ObjectDetector][THREAD][CRASH] CPU fallback also failed: " + juce::String(e2.what()) + " (ptr=0x" + juce::String::toHexString((juce::pointer_sized_int)this) + ")");
+                    wait(50);
+                    continue; // Skip this frame if CPU also fails
+                }
+                catch (...)
+                {
+                    juce::Logger::writeToLog("[ObjectDetector][THREAD][CRASH] CPU fallback failed with unknown exception (ptr=0x" + juce::String::toHexString((juce::pointer_sized_int)this) + ")");
+                    wait(50);
+                    continue; // Skip this frame if CPU also fails
+                }
+            }
+            catch (const std::exception& e)
+            {
+                juce::Logger::writeToLog("[ObjectDetector][THREAD][CRASH] Unknown std::exception in net.forward(): " + juce::String(e.what()) + " (ptr=0x" + juce::String::toHexString((juce::pointer_sized_int)this) + ")");
+                wait(50);
+                continue; // Skip this frame
+            }
+            catch (...)
+            {
+                juce::Logger::writeToLog("[ObjectDetector][THREAD][CRASH] Unknown error in net.forward() - skipping frame (ptr=0x" + juce::String::toHexString((juce::pointer_sized_int)this) + ")");
+                wait(50);
+                continue; // Skip this frame
+            }
             
             std::vector<int> classIds;
             std::vector<float> confidences;
@@ -478,7 +653,22 @@ void ObjectDetectorModule::run()
         
         // YOLO is heavy; ~10 FPS
         wait(100);
+        
+        loopIteration++;
+        if (loopIteration % 100 == 0) // Log every 100 iterations
+        {
+            juce::Logger::writeToLog("[ObjectDetector][THREAD] Loop iteration " + juce::String(loopIteration) + " (ptr=0x" + juce::String::toHexString((juce::pointer_sized_int)this) + ")");
+        }
     }
+    
+    juce::Logger::writeToLog("[ObjectDetector][THREAD] run() loop exited (ptr=0x" + juce::String::toHexString((juce::pointer_sized_int)this) + ") L-ID=" + juce::String(storedLogicalId) + " - threadShouldExit() returned true");
+    
+    // Log final state before thread ends
+    juce::Logger::writeToLog("[ObjectDetector][THREAD] Final state - modelLoaded: " + juce::String(modelLoaded ? "YES" : "NO"));
+    #if WITH_CUDA_SUPPORT
+        juce::Logger::writeToLog("[ObjectDetector][THREAD] Final state - CUDA available: " + juce::String(CudaDeviceCountCache::isAvailable() ? "YES" : "NO"));
+    #endif
+    juce::Logger::writeToLog("[ObjectDetector][THREAD] run() function ending (ptr=0x" + juce::String::toHexString((juce::pointer_sized_int)this) + ")");
 }
 
 void ObjectDetectorModule::updateGuiFrame(const cv::Mat& frame)
@@ -591,6 +781,47 @@ std::vector<DynamicPinInfo> ObjectDetectorModule::getDynamicOutputPins() const
     };
 }
 
+void ObjectDetectorModule::setTimingInfo(const TransportState& state)
+{
+    // CRITICAL: Check if thread is exiting (module being destroyed)
+    if (threadShouldExit())
+    {
+        // Throttle BLOCKED messages to once per second per module instance
+        static std::atomic<juce::int64> lastBlockedLogTime{0};
+        static std::atomic<juce::pointer_sized_int> lastBlockedPtr{0};
+        juce::int64 currentTime = juce::Time::currentTimeMillis();
+        if (lastBlockedPtr.load() != (juce::pointer_sized_int)this || (currentTime - lastBlockedLogTime.load() > 1000))
+        {
+            juce::Logger::writeToLog("[ObjectDetector][setTimingInfo] BLOCKED: Module is being destroyed (ptr=0x" + juce::String::toHexString((juce::pointer_sized_int)this) + ")");
+            lastBlockedLogTime.store(currentTime);
+            lastBlockedPtr.store((juce::pointer_sized_int)this);
+        }
+        return; // Don't process transport state during destruction
+    }
+    
+    // Only log state changes, not every call (reduce flooding)
+    static std::atomic<bool> lastIsPlaying{false};
+    static std::atomic<juce::pointer_sized_int> lastLoggedPtr{0};
+    bool shouldLog = false;
+    if (lastLoggedPtr.load() != (juce::pointer_sized_int)this)
+    {
+        lastLoggedPtr.store((juce::pointer_sized_int)this);
+        shouldLog = true;
+    }
+    else if (lastIsPlaying.load() != state.isPlaying)
+    {
+        shouldLog = true;
+        lastIsPlaying.store(state.isPlaying);
+    }
+    
+    if (shouldLog)
+    {
+        juce::Logger::writeToLog("[ObjectDetector][setTimingInfo] Called (ptr=0x" + juce::String::toHexString((juce::pointer_sized_int)this) + ") isPlaying=" + juce::String(state.isPlaying ? "true" : "false"));
+    }
+    
+    ModuleProcessor::setTimingInfo(state);
+}
+
 void ObjectDetectorModule::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midi)
 {
     juce::ignoreUnused(midi);
@@ -692,12 +923,45 @@ void ObjectDetectorModule::drawParametersInNode(float itemWidth,
                                                 const std::function<bool(const juce::String& paramId)>& isParamModulated,
                                                 const std::function<void()>& onModificationEnded)
 {
+    // CRITICAL: Check if thread is exiting (module being destroyed)
+    if (threadShouldExit())
+    {
+        // Throttle BLOCKED messages to once per second per module instance
+        static std::atomic<juce::int64> lastBlockedLogTime{0};
+        static std::atomic<juce::pointer_sized_int> lastBlockedPtr{0};
+        juce::int64 currentTime = juce::Time::currentTimeMillis();
+        if (lastBlockedPtr.load() != (juce::pointer_sized_int)this || (currentTime - lastBlockedLogTime.load() > 1000))
+        {
+            juce::Logger::writeToLog("[ObjectDetector][UI] BLOCKED: drawParametersInNode() called on module being destroyed (ptr=0x" + juce::String::toHexString((juce::pointer_sized_int)this) + ")");
+            lastBlockedLogTime.store(currentTime);
+            lastBlockedPtr.store((juce::pointer_sized_int)this);
+        }
+        return; // Don't render UI during destruction
+    }
+    
+    // Only log once per second to reduce flooding
+    static std::atomic<juce::int64> lastLogTime{0};
+    static std::atomic<juce::pointer_sized_int> lastLoggedPtr{0};
+    juce::int64 currentTime = juce::Time::currentTimeMillis();
+    bool shouldLog = false;
+    if (lastLoggedPtr.load() != (juce::pointer_sized_int)this || (currentTime - lastLogTime.load() > 1000))
+    {
+        shouldLog = true;
+        lastLogTime.store(currentTime);
+        lastLoggedPtr.store((juce::pointer_sized_int)this);
+    }
+    
+    if (shouldLog)
+    {
+        juce::Logger::writeToLog("[ObjectDetector][UI] drawParametersInNode() called (ptr=0x" + juce::String::toHexString((juce::pointer_sized_int)this) + ")");
+    }
+    
     const auto& theme = ThemeManager::getInstance().getCurrentTheme();
     ImGui::PushItemWidth(itemWidth);
     
     // GPU ACCELERATION TOGGLE
     #if WITH_CUDA_SUPPORT
-        bool cudaAvailable = (cv::cuda::getCudaEnabledDeviceCount() > 0);
+        bool cudaAvailable = CudaDeviceCountCache::isAvailable();
         
         if (!cudaAvailable)
         {

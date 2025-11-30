@@ -384,6 +384,18 @@ void MultiBandShaperModuleProcessor::drawParametersInNode(
                 {
                     const juce::String tooltip = juce::String((int)centerFreqs[band]) + " Hz\nDrive: " + juce::String(vizData.bandDriveValue[band].load(), 1) + "\nIn: " + juce::String(inputDb, 1) + " dB\nOut: " + juce::String(outputDb, 1) + " dB";
                     ImGui::SetTooltip("%s", tooltip.toRawUTF8());
+                    
+                    // Scroll-edit support: handle mouse wheel when hovered
+                    const float wheel = ImGui::GetIO().MouseWheel;
+                    if (wheel != 0.0f)
+                    {
+                        if (auto* p = dynamic_cast<juce::AudioParameterFloat*>(ap.getParameter(paramId)))
+                        {
+                            adjustParamOnWheel(p, paramId, vizData.bandDriveValue[band].load());
+                            vizData.bandDriveValue[band].store(p->get());
+                            onModificationEnded();
+                        }
+                    }
                 }
             }
             else

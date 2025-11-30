@@ -9,7 +9,6 @@
 #include <opencv2/cudawarping.hpp>
 #endif
 #include <juce_core/juce_core.h>
-#include <mutex>
 #include <juce_audio_processors/juce_audio_processors.h>
 #include <juce_graphics/juce_graphics.h>
 #if defined(PRESET_CREATOR_UI)
@@ -95,7 +94,7 @@ private:
         int            frameWidth,
         int            frameHeight,
         PoseResult&    result);
-    void loadModel(int modelIndex);
+    void loadModel();
 
     static juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout();
     juce::AudioProcessorValueTreeState                         apvts;
@@ -116,7 +115,6 @@ private:
     // Deep Neural Network for pose estimation
     cv::dnn::Net                net;
     bool                        modelLoaded = false;
-    std::mutex                  netMutex; // Protects 'net' from concurrent access
     juce::AudioParameterChoice* qualityParam = nullptr;
 
     // Source ID (read from input cable in audio thread, used by processing thread)

@@ -1,6 +1,7 @@
 #include "CropVideoModule.h"
 #include "../../video/VideoFrameManager.h"
 #include "../graph/ModularSynthProcessor.h"
+#include "../../utils/CudaDeviceCountCache.h"
 #include <opencv2/imgproc.hpp>
 #include <opencv2/dnn.hpp>
 #include <fstream>
@@ -124,7 +125,7 @@ void CropVideoModule::loadModels()
             // CRITICAL: Set backend immediately after loading model (matches ObjectDetectorModule)
             #if WITH_CUDA_SUPPORT
                 bool useGpu = useGpuParam ? useGpuParam->get() : false;
-                if (useGpu && cv::cuda::getCudaEnabledDeviceCount() > 0)
+                if (useGpu && CudaDeviceCountCache::isAvailable())
                 {
                     yoloNet.setPreferableBackend(cv::dnn::DNN_BACKEND_CUDA);
                     yoloNet.setPreferableTarget(cv::dnn::DNN_TARGET_CUDA);
@@ -359,7 +360,7 @@ void CropVideoModule::run()
             bool useGpu = false;
             #if WITH_CUDA_SUPPORT
                 useGpu = useGpuParam ? useGpuParam->get() : false;
-                if (useGpu && cv::cuda::getCudaEnabledDeviceCount() == 0)
+                if (useGpu && !CudaDeviceCountCache::isAvailable())
                 {
                     useGpu = false;
                     if (!loggedGpuWarning)
@@ -836,7 +837,7 @@ void CropVideoModule::drawParametersInNode(float itemWidth, const std::function<
     
     // --- GPU Checkbox ---
     #if WITH_CUDA_SUPPORT
-        bool cudaAvailable = (cv::cuda::getCudaEnabledDeviceCount() > 0);
+        bool cudaAvailable = CudaDeviceCountCache::isAvailable();
         if (!cudaAvailable) ImGui::BeginDisabled();
         
         bool useGpu = useGpuParam ? useGpuParam->get() : false;

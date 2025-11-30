@@ -1585,60 +1585,6 @@ void ImGuiNodeEditorComponent::renderImGui()
 
                     ImGui::EndMenu();
                 }
-
-                ImGui::Separator();
-
-#if WITH_CUDA_SUPPORT
-                bool gpuEnabled = getGlobalGpuEnabled();
-                if (ImGui::Checkbox("Enable GPU Acceleration (CUDA)", &gpuEnabled))
-                {
-                    setGlobalGpuEnabled(gpuEnabled);
-                    juce::Logger::writeToLog(
-                        "[Settings] Global GPU: " +
-                        juce::String(gpuEnabled ? "ENABLED" : "DISABLED"));
-                }
-
-                ImGui::TextDisabled("Computer vision nodes require GPU");
-
-                ImGui::Separator();
-
-                // Show CUDA device info - use global cache (queried once at app startup)
-                int deviceCount = CudaDeviceCountCache::getDeviceCount();
-                bool cudaQuerySuccess = (deviceCount > 0);
-
-                // Safe theme text rendering with fallback
-                try
-                {
-#if WITH_CUDA_SUPPORT
-                    if (cudaQuerySuccess)
-                    {
-                        if (deviceCount > 0)
-                        {
-                            ThemeText("CUDA Available", theme.text.success);
-                            ImGui::Text("GPU Devices: %d", deviceCount);
-                        }
-                        else
-                        {
-                            ThemeText("CUDA compiled but no devices found", theme.text.warning);
-                        }
-                    }
-                    else
-                    {
-                        ThemeText("CUDA not available", theme.text.warning);
-                        ImGui::TextDisabled("CUDA runtime libraries not found or no NVIDIA GPU");
-                    }
-#else
-                    ImGui::TextDisabled("GPU Acceleration: Not Compiled");
-                    ImGui::TextDisabled("Rebuild with CUDA support to enable");
-#endif
-                }
-                catch (...)
-                {
-                    // Fallback if ThemeText fails
-                    ImGui::TextColored(
-                        ImVec4(1.0f, 1.0f, 0.0f, 1.0f), "CUDA: Unable to query status");
-                }
-#endif
             }
             catch (const cv::Exception& e)
             {
@@ -1661,6 +1607,90 @@ void ImGuiNodeEditorComponent::renderImGui()
                 juce::Logger::writeToLog("[Settings] Unknown exception in Settings menu");
                 ImGui::TextColored(
                     ImVec4(1.0f, 0.0f, 0.0f, 1.0f), "Error: Settings menu failed to load");
+                ImGui::TextDisabled("Check log file for details");
+            }
+
+            ImGui::EndMenu();
+        }
+
+        // Video GPU menu
+        if (ImGui::BeginMenu("Video GPU"))
+        {
+            try
+            {
+#if WITH_CUDA_SUPPORT
+                bool gpuEnabled = getGlobalGpuEnabled();
+                if (ImGui::Checkbox("Enable GPU Acceleration (CUDA)", &gpuEnabled))
+                {
+                    setGlobalGpuEnabled(gpuEnabled);
+                    juce::Logger::writeToLog(
+                        "[Video GPU] Global GPU: " +
+                        juce::String(gpuEnabled ? "ENABLED" : "DISABLED"));
+                }
+
+                ImGui::TextDisabled("Computer vision nodes require GPU");
+
+                ImGui::Separator();
+
+                // Show CUDA device info - use global cache (queried once at app startup)
+                int deviceCount = CudaDeviceCountCache::getDeviceCount();
+                bool querySucceeded = CudaDeviceCountCache::querySucceeded();
+                bool cudaAvailable = CudaDeviceCountCache::isAvailable();
+
+                // Safe theme text rendering with fallback
+                try
+                {
+                    if (!querySucceeded)
+                    {
+                        // Query failed - CUDA not compiled or runtime error
+                        ThemeText("CUDA: Query failed", theme.text.warning);
+                        ImGui::TextDisabled("CUDA runtime libraries not found or not compiled");
+                    }
+                    else if (cudaAvailable)
+                    {
+                        // Query succeeded and devices are available
+                        ThemeText("CUDA Available", theme.text.success);
+                        ImGui::Text("GPU Devices: %d", deviceCount);
+                    }
+                    else
+                    {
+                        // Query succeeded but no devices found
+                        ThemeText("CUDA compiled but no devices found", theme.text.warning);
+                        ImGui::TextDisabled("Check NVIDIA GPU drivers and CUDA installation");
+                    }
+                }
+                catch (...)
+                {
+                    // Fallback if ThemeText fails
+                    ImGui::TextColored(
+                        ImVec4(1.0f, 1.0f, 0.0f, 1.0f), "CUDA: Unable to query status");
+                }
+#else
+                ImGui::TextDisabled("GPU Acceleration: Not Compiled");
+                ImGui::TextDisabled("Rebuild with CUDA support to enable");
+#endif
+            }
+            catch (const cv::Exception& e)
+            {
+                juce::Logger::writeToLog(
+                    "[Video GPU] OpenCV exception: " + juce::String(e.what()));
+                ImGui::TextColored(
+                    ImVec4(1.0f, 0.0f, 0.0f, 1.0f), "Error: Video GPU menu failed to load");
+                ImGui::TextDisabled("Check log file for details");
+            }
+            catch (const std::exception& e)
+            {
+                juce::Logger::writeToLog(
+                    "[Video GPU] Exception: " + juce::String(e.what()));
+                ImGui::TextColored(
+                    ImVec4(1.0f, 0.0f, 0.0f, 1.0f), "Error: Video GPU menu failed to load");
+                ImGui::TextDisabled("Check log file for details");
+            }
+            catch (...)
+            {
+                juce::Logger::writeToLog("[Video GPU] Unknown exception");
+                ImGui::TextColored(
+                    ImVec4(1.0f, 0.0f, 0.0f, 1.0f), "Error: Video GPU menu failed to load");
                 ImGui::TextDisabled("Check log file for details");
             }
 
@@ -3689,6 +3719,19 @@ void ImGuiNodeEditorComponent::renderImGui()
             {
                 if (auto* mp = synth->getModuleForLogical(lid))
                 {
+                    // Debug logging for ObjectDetectorModule (only once per second to reduce flooding)
+                    if (auto* objDet = dynamic_cast<ObjectDetectorModule*>(mp))
+                    {
+                        static std::atomic<juce::int64> lastLogTime{0};
+                        static std::atomic<juce::pointer_sized_int> lastLoggedPtr{0};
+                        juce::int64 currentTime = juce::Time::currentTimeMillis();
+                        if (lastLoggedPtr.load() != (juce::pointer_sized_int)objDet || (currentTime - lastLogTime.load() > 1000))
+                        {
+                            juce::Logger::writeToLog("[UI][drawParametersInNode] About to call drawParametersInNode() on ObjectDetectorModule (ptr=0x" + juce::String::toHexString((juce::pointer_sized_int)objDet) + ") logicalId=" + juce::String(lid));
+                            lastLogTime.store(currentTime);
+                            lastLoggedPtr.store((juce::pointer_sized_int)objDet);
+                        }
+                    }
                     ImGui::PushID((int)lid);
 #if JUCE_DEBUG
                     ImGuiStackBalanceChecker parameterStackGuard;
@@ -4225,6 +4268,7 @@ void ImGuiNodeEditorComponent::renderImGui()
                     {
                         // ObjectDetectorModule handles its own video preview rendering with zone
                         // interaction in drawParametersInNode
+                        // (Logging moved inside drawParametersInNode to reduce flooding)
                         objModule->drawParametersInNode(
                             nodeContentWidth, isParamModulated, onModificationEnded);
                     }

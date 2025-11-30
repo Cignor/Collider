@@ -1,6 +1,7 @@
 #include "HandTrackerModule.h"
 #include "../../video/VideoFrameManager.h"
 #include "../graph/ModularSynthProcessor.h"
+#include "../../utils/CudaDeviceCountCache.h"
 #include <opencv2/imgproc.hpp>
 
 #if defined(PRESET_CREATOR_UI)
@@ -84,7 +85,7 @@ void HandTrackerModule::loadModel()
             // CRITICAL: Set backend immediately after loading model
             #if WITH_CUDA_SUPPORT
                 bool useGpu = useGpuParam ? useGpuParam->get() : false;
-                if (useGpu && cv::cuda::getCudaEnabledDeviceCount() > 0)
+                if (useGpu && CudaDeviceCountCache::isAvailable())
                 {
                     net.setPreferableBackend(cv::dnn::DNN_BACKEND_CUDA);
                     net.setPreferableTarget(cv::dnn::DNN_TARGET_CUDA);
@@ -119,6 +120,9 @@ void HandTrackerModule::run()
     
     while (!threadShouldExit())
     {
+        if (!modelLoaded)
+            loadModel();
+        
         juce::uint32 sourceId = currentSourceId.load();
         cv::Mat prefetchedFrame;
         
@@ -208,7 +212,7 @@ void HandTrackerModule::run()
         #if WITH_CUDA_SUPPORT
             // Check if user wants GPU and if CUDA device is available
             useGpu = useGpuParam ? useGpuParam->get() : false;
-            if (useGpu && cv::cuda::getCudaEnabledDeviceCount() == 0)
+            if (useGpu && !CudaDeviceCountCache::isAvailable())
             {
                 useGpu = false; // Fallback to CPU
                 if (!loggedGpuWarning)
@@ -530,7 +534,7 @@ void HandTrackerModule::drawParametersInNode(float itemWidth,
     
     // GPU ACCELERATION TOGGLE
     #if WITH_CUDA_SUPPORT
-        bool cudaAvailable = (cv::cuda::getCudaEnabledDeviceCount() > 0);
+        bool cudaAvailable = CudaDeviceCountCache::isAvailable();
         
         if (!cudaAvailable)
         {

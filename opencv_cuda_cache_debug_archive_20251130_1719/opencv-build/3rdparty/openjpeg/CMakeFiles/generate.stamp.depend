@@ -1,0 +1,9 @@
+# CMake generation dependency list for this directory.
+C:/Program Files/CMake/share/cmake-4.1/Modules/CheckIncludeFile.cmake
+C:/Program Files/CMake/share/cmake-4.1/Modules/CheckIncludeFiles.cmake
+C:/Program Files/CMake/share/cmake-4.1/Modules/CheckSymbolExists.cmake
+C:/Program Files/CMake/share/cmake-4.1/Modules/TestBigEndian.cmake
+H:/0000_CODE/01_collider_pyo/juce/build/CMakeFiles/cmake.verify_globs
+H:/0000_CODE/01_collider_pyo/juce/build/_deps/opencv-src/3rdparty/openjpeg/CMakeLists.txt
+H:/0000_CODE/01_collider_pyo/juce/build/_deps/opencv-src/3rdparty/openjpeg/openjp2/opj_config.h.cmake.in
+H:/0000_CODE/01_collider_pyo/juce/build/_deps/opencv-src/3rdparty/openjpeg/openjp2/opj_config_private.h.cmake.in

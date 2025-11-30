@@ -14,13 +14,8 @@
  */
 class CudaDeviceCountCache
 {
-public:
-    /**
-     * Get the cached CUDA device count.
-     * First call will query CUDA (thread-safe), subsequent calls return cached value.
-     * Returns 0 if CUDA not compiled or no devices available.
-     */
-    static int getDeviceCount()
+private:
+    static int getCachedCount()
     {
         static int cachedCount = -1;
         static std::once_flag initFlag;
@@ -34,15 +29,36 @@ public:
             }
             catch (...)
             {
-                cachedCount = 0;
+                cachedCount = -1; // -1 indicates query failed
                 juce::Logger::writeToLog("[CudaCache] CUDA query failed - no NVIDIA GPU or CUDA runtime");
             }
 #else
-            cachedCount = 0;
+            cachedCount = -1; // -1 indicates CUDA not compiled
+            juce::Logger::writeToLog("[CudaCache] CUDA not compiled (WITH_CUDA_SUPPORT not defined)");
 #endif
         });
 
         return cachedCount;
+    }
+
+public:
+    /**
+     * Get the cached CUDA device count.
+     * First call will query CUDA (thread-safe), subsequent calls return cached value.
+     * Returns 0 if no devices available, -1 if query failed or CUDA not compiled.
+     */
+    static int getDeviceCount()
+    {
+        int count = getCachedCount();
+        return (count >= 0) ? count : 0; // Return 0 if query failed
+    }
+
+    /**
+     * Check if CUDA query was successful (doesn't mean devices are available)
+     */
+    static bool querySucceeded()
+    {
+        return getCachedCount() >= 0;
     }
 
     /**
@@ -50,7 +66,8 @@ public:
      */
     static bool isAvailable()
     {
-        return getDeviceCount() > 0;
+        int count = getCachedCount();
+        return count > 0;
     }
 };
 

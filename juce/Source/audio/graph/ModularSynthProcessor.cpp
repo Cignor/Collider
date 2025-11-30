@@ -99,9 +99,25 @@ void ModularSynthProcessor::setPlayingWithCommand(bool playing, TransportCommand
 
     if (auto processors = activeAudioProcessors.load())
     {
+        juce::Logger::writeToLog("[PATCH_SWITCH][setPlayingWithCommand] Broadcasting to " + juce::String(processors->size()) + " modules in activeAudioProcessors");
+        int moduleIndex = 0;
         for (const auto& modulePtr : *processors)
+        {
             if (modulePtr)
+            {
+                juce::Logger::writeToLog("[PATCH_SWITCH][setPlayingWithCommand] Calling setTimingInfo() on module #" + juce::String(moduleIndex) + " (ptr=0x" + juce::String::toHexString((juce::pointer_sized_int)modulePtr.get()) + ")");
                 modulePtr->setTimingInfo(m_transportState);
+                moduleIndex++;
+            }
+            else
+            {
+                juce::Logger::writeToLog("[PATCH_SWITCH][setPlayingWithCommand] WARNING: nullptr module at index " + juce::String(moduleIndex));
+            }
+        }
+    }
+    else
+    {
+        juce::Logger::writeToLog("[PATCH_SWITCH][setPlayingWithCommand] WARNING: activeAudioProcessors is nullptr!");
     }
 }
 
@@ -289,17 +305,36 @@ void ModularSynthProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce:
             // Iterate over the safe, shared list.
             for (const auto& modulePtr : *currentProcessors)
             {
-                // SAFETY NET + GRANULAR LOGGING
+                // SAFETY NET
                 if (modulePtr != nullptr)
                 {
-                    // Log the memory address before calling the function
-                    // juce::Logger::writeToLog("[AudioThread] Ticking module at 0x" + juce::String::toHexString((juce::pointer_sized_int)modulePtr.get()));
+                    // CRITICAL: Check if this is ObjectDetectorModule and if it's being destroyed
+                    if (auto* objDet = dynamic_cast<ObjectDetectorModule*>(modulePtr.get()))
+                    {
+                        if (objDet->isBeingDestroyed())
+                        {
+                            static std::atomic<juce::int64> lastWarningTime{0};
+                            juce::int64 currentTime = juce::Time::currentTimeMillis();
+                            if (currentTime - lastWarningTime.load() > 1000) // Only warn once per second
+                            {
+                                juce::Logger::writeToLog("[AudioThread][CRITICAL] Blocked setTimingInfo() on ObjectDetectorModule being destroyed (ptr=0x" + juce::String::toHexString((juce::pointer_sized_int)modulePtr.get()) + ")");
+                                lastWarningTime.store(currentTime);
+                            }
+                            continue; // Skip this module - it's being destroyed
+                        }
+                    }
                     modulePtr->setTimingInfo(m_transportState);
                 }
                 else
                 {
                     // This should never happen with the shared_ptr fix, but if it does, it's critical info.
-                    juce::Logger::writeToLog("[AudioThread] CRITICAL WARNING: Encountered nullptr in active processor list!");
+                    static std::atomic<juce::int64> lastWarningTime{0};
+                    juce::int64 currentTime = juce::Time::currentTimeMillis();
+                    if (currentTime - lastWarningTime.load() > 1000) // Only warn once per second
+                    {
+                        juce::Logger::writeToLog("[AudioThread] CRITICAL WARNING: Encountered nullptr in active processor list!");
+                        lastWarningTime.store(currentTime);
+                    }
                 }
             }
         }
@@ -482,7 +517,9 @@ void ModularSynthProcessor::getStateInformation(juce::MemoryBlock& destData)
 
 void ModularSynthProcessor::setStateInformation(const void* data, int sizeInBytes)
 {
-    juce::Logger::writeToLog("--- Restoring Snapshot ---");
+    juce::Logger::writeToLog("========================================");
+    juce::Logger::writeToLog("[PATCH_SWITCH] START: setStateInformation() called");
+    juce::Logger::writeToLog("========================================");
     std::unique_ptr<juce::XmlElement> xml (juce::XmlDocument::parse(juce::String::fromUTF8((const char*)data, (size_t)sizeInBytes)));
     if (!xml || !xml->hasTagName("ModularSynthPreset"))
     {
@@ -490,8 +527,9 @@ void ModularSynthProcessor::setStateInformation(const void* data, int sizeInByte
         return;
     }
 
+    juce::Logger::writeToLog("[PATCH_SWITCH] STEP 1: About to call clearAll() - destroying old modules");
     clearAll();
-    juce::Logger::writeToLog("[STATE] Cleared existing state.");
+    juce::Logger::writeToLog("[PATCH_SWITCH] STEP 2: clearAll() completed - old modules destroyed");
 
     juce::ValueTree root = juce::ValueTree::fromXml(*xml);
 
@@ -773,16 +811,20 @@ void ModularSynthProcessor::setStateInformation(const void* data, int sizeInByte
 
     // CRITICAL: Stop transport BEFORE commitChanges() to prevent auto-start during load
     // This ensures processBlock() sees transport as stopped and doesn't auto-start modules
-    juce::Logger::writeToLog("[STATE] Stopping transport before commitChanges()...");
+    juce::Logger::writeToLog("[PATCH_SWITCH] STEP 3: About to call applyTransportCommand(Stop) BEFORE commitChanges()");
+    juce::Logger::writeToLog("[PATCH_SWITCH] WARNING: This may call setTimingInfo() on modules that were just destroyed!");
     applyTransportCommand(TransportCommand::Stop); // Stop transport and broadcast to all modules
+    juce::Logger::writeToLog("[PATCH_SWITCH] STEP 4: applyTransportCommand(Stop) completed");
     
-    juce::Logger::writeToLog("[STATE] Calling commitChanges()...");
+    juce::Logger::writeToLog("[PATCH_SWITCH] STEP 5: About to call commitChanges() - creating new modules");
     commitChanges();
+    juce::Logger::writeToLog("[PATCH_SWITCH] STEP 6: commitChanges() completed - new modules created");
     
     // CRITICAL: Broadcast stopped transport state to all newly created modules
     // This ensures modules created during commitChanges() receive the stopped state
-    juce::Logger::writeToLog("[STATE] Broadcasting stopped transport state to all modules...");
+    juce::Logger::writeToLog("[PATCH_SWITCH] STEP 7: About to call applyTransportCommand(Stop) AFTER commitChanges()");
     applyTransportCommand(TransportCommand::Stop); // Broadcast again to ensure all modules receive stopped state
+    juce::Logger::writeToLog("[PATCH_SWITCH] STEP 8: applyTransportCommand(Stop) completed");
     
     // CRITICAL: Force stop all modules after patch load (safety net)
     // This ensures no modules are playing even if they auto-started during load
@@ -1167,7 +1209,7 @@ void ModularSynthProcessor::commitChanges()
     // --- FINAL THREAD-SAFE FIX: Rebuild the list of active processors for the audio thread ---
     auto newProcessors = std::make_shared<std::vector<std::shared_ptr<ModuleProcessor>>>();
     newProcessors->reserve(logicalIdToModule.size());
-    juce::Logger::writeToLog("[GraphSync] Building new processor list...");
+    juce::Logger::writeToLog("[PATCH_SWITCH][commitChanges] Building new processor list from " + juce::String(logicalIdToModule.size()) + " modules");
     for (const auto& pair : logicalIdToModule)
     {
         auto modIt = modules.find((juce::uint32)pair.second.nodeID.uid);
@@ -1180,13 +1222,17 @@ void ModularSynthProcessor::commitChanges()
                 // as long as this shared_ptr<ModuleProcessor> exists.
                 auto processor = std::shared_ptr<ModuleProcessor>(proc, [nodePtr](ModuleProcessor*) {});
                 newProcessors->push_back(processor);
-                juce::Logger::writeToLog("  [+] Adding module L-ID " + juce::String(pair.first) + 
-                                       " (ptr: 0x" + juce::String::toHexString((int64_t)proc) + ")");
+                juce::String moduleType = "unknown";
+                if (auto* objDet = dynamic_cast<ObjectDetectorModule*>(proc))
+                    moduleType = "ObjectDetector";
+                juce::Logger::writeToLog("[PATCH_SWITCH][commitChanges] Adding module L-ID " + juce::String(pair.first) + 
+                                       " type=" + moduleType + " (ptr: 0x" + juce::String::toHexString((int64_t)proc) + ")");
             }
         }
     }
+    juce::Logger::writeToLog("[PATCH_SWITCH][commitChanges] About to update activeAudioProcessors with " + juce::String(newProcessors->size()) + " modules");
     activeAudioProcessors.store(newProcessors);
-    juce::Logger::writeToLog("[GraphSync] Updated active processor list for audio thread with " + juce::String(newProcessors->size()) + " modules.");
+    juce::Logger::writeToLog("[PATCH_SWITCH][commitChanges] activeAudioProcessors updated - new modules are now active");
 
     updateConnectionSnapshot_Locked();
 }
@@ -1198,14 +1244,50 @@ void ModularSynthProcessor::clearAll()
 #if JUCE_DEBUG
         ScopedGraphMutation mutation(graphMutationDepth);
 #endif
-        juce::Logger::writeToLog("[GraphSync] clearAll() initiated - removing " + juce::String(logicalIdToModule.size()) + " modules");
+        juce::Logger::writeToLog("[PATCH_SWITCH][clearAll] Removing " + juce::String(logicalIdToModule.size()) + " modules");
+        
+        // CRITICAL: Clear activeAudioProcessors FIRST to prevent audio/UI threads from accessing modules during destruction
+        // This must happen BEFORE removeNode() to ensure no race conditions
+        juce::Logger::writeToLog("[PATCH_SWITCH][clearAll] Step 1: Clearing activeAudioProcessors to prevent access during destruction");
+        auto emptyProcessors = std::make_shared<std::vector<std::shared_ptr<ModuleProcessor>>>();
+        activeAudioProcessors.store(emptyProcessors);
+        juce::Logger::writeToLog("[PATCH_SWITCH][clearAll] Step 2: activeAudioProcessors cleared - modules are now inaccessible to audio/UI threads");
+        
+        // Now safe to remove nodes (destruction happens async, but modules are already inaccessible)
         for (const auto& kv : logicalIdToModule)
+        {
+            juce::Logger::writeToLog("[PATCH_SWITCH][clearAll] Removing module logicalId=" + juce::String(kv.first) + " type=" + kv.second.type);
+            
+            // Get module pointer before removal for logging
+            auto* node = internalGraph->getNodeForId(kv.second.nodeID);
+            if (node && node->getProcessor())
+            {
+                auto* modulePtr = dynamic_cast<ModuleProcessor*>(node->getProcessor());
+                if (modulePtr)
+                {
+                    juce::Logger::writeToLog("[PATCH_SWITCH][clearAll] Module ptr before removal: 0x" + juce::String::toHexString((juce::pointer_sized_int)modulePtr));
+                    
+                    // Check if it's ObjectDetectorModule
+                    if (auto* objDet = dynamic_cast<ObjectDetectorModule*>(modulePtr))
+                    {
+                        juce::Logger::writeToLog("[PATCH_SWITCH][clearAll] ObjectDetectorModule detected, isBeingDestroyed()=" + juce::String(objDet->isBeingDestroyed() ? "YES" : "NO"));
+                    }
+                }
+            }
+            
+            juce::Logger::writeToLog("[PATCH_SWITCH][clearAll] Step 3: About to call removeNode() for logicalId=" + juce::String(kv.first));
             internalGraph->removeNode(kv.second.nodeID, juce::AudioProcessorGraph::UpdateKind::none);
+            juce::Logger::writeToLog("[PATCH_SWITCH][clearAll] Step 4: removeNode() completed for logicalId=" + juce::String(kv.first) + " (destruction happens async, but module is already inaccessible)");
+        }
+        juce::Logger::writeToLog("[PATCH_SWITCH][clearAll] Step 5: Modules removed from graph, clearing maps");
         modules.clear();
         logicalIdToModule.clear();
         nextLogicalId = 1;
+        juce::Logger::writeToLog("[PATCH_SWITCH][clearAll] Step 6: Maps cleared, about to call commitChanges()");
     }
+    // commitChanges() will rebuild activeAudioProcessors from the (now empty) logicalIdToModule
     commitChanges();
+    juce::Logger::writeToLog("[PATCH_SWITCH][clearAll] Step 7: commitChanges() completed - activeAudioProcessors updated (should be empty now)");
 }
 
 void ModularSynthProcessor::clearAllConnections()

@@ -17,76 +17,26 @@
 #include <unordered_map>
 #endif
 
-void PoseEstimatorModule::loadModel(int modelIndex)
+void PoseEstimatorModule::loadModel()
 {
-    // --- THIS IS THE CORRECTED PATH LOGIC ---
-    // 1. Get the directory containing the running executable.
+    // Find assets next to executable (like ObjectDetectorModule)
     auto exeFile = juce::File::getSpecialLocation(juce::File::currentApplicationFile);
     auto appDir = exeFile.getParentDirectory();
-    juce::Logger::writeToLog("[PoseEstimator] Executable directory: " + appDir.getFullPathName());
-
-    // 2. Look for the 'assets' folder next to the executable (fixed path as requested).
     juce::File assetsDir = appDir.getChildFile("assets");
-    juce::Logger::writeToLog(
-        "[PoseEstimator] Searching for assets in: " + assetsDir.getFullPathName());
-
-    // 3. Navigate to the specific model subdirectory.
+    
     auto poseModelsDir = assetsDir.getChildFile("openpose_models").getChildFile("pose");
-
-    juce::String protoPath, modelPath;
-    juce::String modelName;
-
-    switch (modelIndex)
-    {
-    case 0: // BODY_25
-        modelName = "BODY_25";
-        protoPath = poseModelsDir.getChildFile("body_25/pose_deploy.prototxt").getFullPathName();
-        modelPath =
-            poseModelsDir.getChildFile("body_25/pose_iter_584000.caffemodel").getFullPathName();
-        break;
-    case 1: // COCO
-        modelName = "COCO";
-        protoPath =
-            poseModelsDir.getChildFile("coco/pose_deploy_linevec.prototxt").getFullPathName();
-        modelPath =
-            poseModelsDir.getChildFile("coco/pose_iter_440000.caffemodel").getFullPathName();
-        break;
-    case 2: // MPI
-        modelName = "MPI";
-        protoPath =
-            poseModelsDir.getChildFile("mpi/pose_deploy_linevec.prototxt").getFullPathName();
-        modelPath = poseModelsDir.getChildFile("mpi/pose_iter_160000.caffemodel").getFullPathName();
-        break;
-    case 3: // MPI (Fast)
-    default:
-        modelName = "MPI (Fast)";
-        protoPath = poseModelsDir.getChildFile("mpi/pose_deploy_linevec_faster_4_stages.prototxt")
-                        .getFullPathName();
-        modelPath = poseModelsDir.getChildFile("mpi/pose_iter_160000.caffemodel").getFullPathName();
-        break;
-    }
-
-    juce::Logger::writeToLog("[PoseEstimator] Attempting to load " + modelName + " model...");
-    juce::Logger::writeToLog("  - Prototxt: " + protoPath);
-    juce::Logger::writeToLog("  - Caffemodel: " + modelPath);
-
-    juce::File protoFile(protoPath);
-    juce::File modelFile(modelPath);
-
+    juce::File protoFile = poseModelsDir.getChildFile("mpi/pose_deploy_linevec_faster_4_stages.prototxt");
+    juce::File modelFile = poseModelsDir.getChildFile("mpi/pose_iter_160000.caffemodel");
+    
+    juce::Logger::writeToLog("[PoseEstimator] Assets directory: " + assetsDir.getFullPathName());
+    
     if (protoFile.existsAsFile() && modelFile.existsAsFile())
     {
         try
         {
-            juce::Logger::writeToLog("[PoseEstimator] Loading model: " + modelName);
-
-            // NOTE: Mutex must be held by caller (loadModel is called from run() loop with mutex)
-            // OpenCV's destructor handles CUDA cleanup when old net is destroyed
-
-            // Load new net - OpenCV handles cleanup of old net automatically
-            net = cv::dnn::readNetFromCaffe(protoPath.toStdString(), modelPath.toStdString());
-            juce::Logger::writeToLog("[PoseEstimator] Model loaded from files");
-
-            // Set backend for new model
+            net = cv::dnn::readNetFromCaffe(protoFile.getFullPathName().toStdString(), modelFile.getFullPathName().toStdString());
+            
+            // Set backend immediately after loading model (like ObjectDetectorModule)
 #if WITH_CUDA_SUPPORT
             bool useGpu = useGpuParam ? useGpuParam->get() : false;
             if (useGpu && CudaDeviceCountCache::isAvailable())
@@ -104,38 +54,21 @@ void PoseEstimatorModule::loadModel(int modelIndex)
 #else
             net.setPreferableBackend(cv::dnn::DNN_BACKEND_OPENCV);
             net.setPreferableTarget(cv::dnn::DNN_TARGET_CPU);
-            juce::Logger::writeToLog(
-                "[PoseEstimator] Model loaded with CPU backend (CUDA not compiled)");
+            juce::Logger::writeToLog("[PoseEstimator] Model loaded with CPU backend (CUDA not compiled)");
 #endif
-
+            
             modelLoaded = true;
-            juce::Logger::writeToLog("[PoseEstimator] SUCCESS: Loaded model: " + modelName);
+            juce::Logger::writeToLog("[PoseEstimator] MPI (Fast) model loaded successfully");
         }
         catch (const cv::Exception& e)
         {
-            juce::Logger::writeToLog(
-                "[PoseEstimator] FAILED: OpenCV exception: " + juce::String(e.what()));
-            modelLoaded = false;
-        }
-        catch (const std::exception& e)
-        {
-            juce::Logger::writeToLog(
-                "[PoseEstimator] FAILED: Standard exception: " + juce::String(e.what()));
-            modelLoaded = false;
-        }
-        catch (...)
-        {
-            juce::Logger::writeToLog("[PoseEstimator] FAILED: Unknown exception");
+            juce::Logger::writeToLog("[PoseEstimator] OpenCV exception: " + juce::String(e.what()));
             modelLoaded = false;
         }
     }
     else
     {
-        juce::Logger::writeToLog("[PoseEstimator] FAILED: Model files not found");
-        if (!protoFile.existsAsFile())
-            juce::Logger::writeToLog("  - Missing: " + protoPath);
-        if (!modelFile.existsAsFile())
-            juce::Logger::writeToLog("  - Missing: " + modelPath);
+        juce::Logger::writeToLog("[PoseEstimator] FAILED: Could not find MPI model files in " + assetsDir.getFullPathName());
         modelLoaded = false;
     }
 }
@@ -152,7 +85,6 @@ void PoseEstimatorModule::setExtraStateTree(const juce::ValueTree& state)
     if (state.hasType("PoseEstimatorState"))
     {
         assetsPath = state.getProperty("assetsPath", "").toString();
-        // Model will be loaded in the thread (always MPI Fast, index 3)
     }
 }
 
@@ -223,83 +155,56 @@ PoseEstimatorModule::PoseEstimatorModule()
 
     // Initialize FIFO buffer
     fifoBuffer.resize(16);
-
-    // Model will be loaded in the thread (always MPI Fast, index 3)
+    // Model will be loaded lazily in run() loop (like HandTrackerModule/FaceTrackerModule)
 }
 
-PoseEstimatorModule::~PoseEstimatorModule() { stopThread(5000); }
+PoseEstimatorModule::~PoseEstimatorModule()
+{
+    stopThread(5000);
+}
 
 void PoseEstimatorModule::prepareToPlay(double sampleRate, int samplesPerBlock)
 {
-    // Always start the processing thread; it handles model loading on demand.
     startThread(juce::Thread::Priority::normal);
 }
 
 void PoseEstimatorModule::releaseResources()
 {
+    // Just stop the thread - don't destroy resources here (they'll be reused on next prepareToPlay)
+    // Only the destructor should do final CUDA cleanup
     signalThreadShouldExit();
     stopThread(5000);
 }
 
 void PoseEstimatorModule::run()
 {
-    juce::Logger::writeToLog("[PoseEstimator] Processing thread started");
-
-    // Resolve our logical ID once at the start
-    juce::uint32 myLogicalId = storedLogicalId;
-    if (myLogicalId == 0 && parentSynth != nullptr)
-    {
-        for (const auto& info : parentSynth->getModulesInfo())
-        {
-            if (parentSynth->getModuleForLogical(info.first) == this)
-            {
-                myLogicalId = info.first;
-                storedLogicalId = myLogicalId; // Cache it
-                break;
-            }
-        }
-    }
-
+    if (!modelLoaded)
+        loadModel();
+    
 #if WITH_CUDA_SUPPORT
-    bool lastGpuState = false;     // Track GPU state to minimize backend switches
+    bool lastGpuState = false; // Track GPU state to minimize backend switches
     bool loggedGpuWarning = false; // Only warn once if no GPU available
 #endif
-
+    
     while (!threadShouldExit())
     {
-        // Load model once if not already loaded (always MPI Fast, index 3)
         if (!modelLoaded)
-        {
-            std::lock_guard<std::mutex> lock(netMutex);
-            loadModel(3);  // MPI Fast
-            if (!modelLoaded)
-            {
-                // Model failed to load, wait and retry
-                wait(100);
-                continue;
-            }
-        }
-
-        // STEP 5: Resume video - normal frame processing
-        // Get the source ID from the input cable (set by processBlock from the audio thread)
+            loadModel();
+        
         juce::uint32 sourceId = currentSourceId.load();
-
-        // CRITICAL FIX for XML load: If sourceId is 0 (processBlock hasn't run yet),
-        // use cached resolved source ID, or try to resolve it from the connection graph
+        cv::Mat prefetchedFrame;
+        
         if (sourceId == 0)
         {
-            // First try cached resolved ID
             if (cachedResolvedSourceId != 0)
             {
                 sourceId = cachedResolvedSourceId;
             }
-            // If no cache, try to resolve from connection graph (keep trying until it works)
             else if (parentSynth != nullptr)
             {
                 auto snapshot = parentSynth->getConnectionSnapshot();
                 if (snapshot && !snapshot->empty())
                 {
-                    // Resolve our logical ID first
                     juce::uint32 myLogicalId = storedLogicalId;
                     if (myLogicalId == 0)
                     {
@@ -313,8 +218,7 @@ void PoseEstimatorModule::run()
                             }
                         }
                     }
-
-                    // Find connection to our input channel 0
+                    
                     if (myLogicalId != 0)
                     {
                         for (const auto& conn : *snapshot)
@@ -322,32 +226,26 @@ void PoseEstimatorModule::run()
                             if (conn.dstLogicalId == myLogicalId && conn.dstChan == 0)
                             {
                                 sourceId = conn.srcLogicalId;
-                                cachedResolvedSourceId = sourceId; // Cache it
+                                cachedResolvedSourceId = sourceId;
                                 break;
                             }
                         }
                     }
                 }
-
-                // FALLBACK: If connection resolution didn't work, try to find ANY video source with
-                // frames This handles cases where connection snapshot isn't ready yet or connection
-                // isn't found
+                
                 if (sourceId == 0)
                 {
                     for (const auto& info : parentSynth->getModulesInfo())
                     {
-                        // Check if this is a video source module type
                         juce::String moduleType = info.second.toLowerCase();
-                        if (moduleType.contains("video") || moduleType.contains("webcam") ||
-                            moduleType == "video_file_loader")
+                        if (moduleType.contains("video") || moduleType.contains("webcam") || moduleType == "video_file_loader")
                         {
-                            // Try to get a frame from this source to see if it's producing frames
-                            cv::Mat testFrame =
-                                VideoFrameManager::getInstance().getFrame(info.first);
+                            cv::Mat testFrame = VideoFrameManager::getInstance().getFrame(info.first);
                             if (!testFrame.empty())
                             {
                                 sourceId = info.first;
-                                cachedResolvedSourceId = sourceId; // Cache it
+                                cachedResolvedSourceId = sourceId;
+                                prefetchedFrame = testFrame;
                                 break;
                             }
                         }
@@ -357,79 +255,50 @@ void PoseEstimatorModule::run()
         }
         else
         {
-            // If processBlock() has set sourceId, clear cached resolved ID (no longer needed)
             if (cachedResolvedSourceId != 0 && cachedResolvedSourceId != sourceId)
                 cachedResolvedSourceId = 0;
         }
-
-        // Fetch frame from the VideoFrameManager
-        // NOTE: This only happens when modelLoaded=true (checked above), so no frame ops during model switch
-        // Frame fetching is skipped when modelLoaded=false, preventing CUDA operations during model switch
-        cv::Mat frame = VideoFrameManager::getInstance().getFrame(sourceId);
-
-        // Check if input is actually connected (currentSourceId from processBlock is authoritative)
-        juce::uint32 actualSourceId = currentSourceId.load();
         
-        if (actualSourceId == 0)
+        cv::Mat frame = prefetchedFrame.empty()
+            ? VideoFrameManager::getInstance().getFrame(sourceId)
+            : prefetchedFrame;
+        
+        if (!frame.empty())
         {
-            // Input is disconnected - clear cached frame and don't display anything
-            const juce::ScopedLock lk(frameLock);
-            lastFrameBgr = cv::Mat();  // Clear cache
-            frame = cv::Mat();  // Ensure frame is empty
-        }
-        else if (!frame.empty())
-        {
-            // Valid input with fresh frame - cache it
             const juce::ScopedLock lk(frameLock);
             frame.copyTo(lastFrameBgr);
         }
         else
         {
-            // Valid input but frame temporarily empty (e.g., transport paused) - use cached frame
             const juce::ScopedLock lk(frameLock);
             if (!lastFrameBgr.empty())
                 frame = lastFrameBgr.clone();
         }
-
+        
         if (!frame.empty())
         {
-            // CRITICAL FIX: Acquire mutex FIRST before checking anything
-            // This eliminates TOCTOU race condition - check and use happen atomically
-            std::lock_guard<std::mutex> lock(netMutex);
-
-            // ONLY check modelLoaded inside mutex - this is the single source of truth
-            // If modelLoaded is true under mutex, net is guaranteed valid
-            // No model switch can happen while we hold the mutex
-            if (!modelLoaded)
-            {
-                // Mutex will be automatically released when lock_guard goes out of scope
-                continue;
-            }
-
+            bool useGpu = false;
+            
 #if WITH_CUDA_SUPPORT
-            // Check if user wants GPU and if a CUDA device is available
-            bool useGpu = useGpuParam ? useGpuParam->get() : false;
+            useGpu = useGpuParam ? useGpuParam->get() : false;
             if (useGpu && !CudaDeviceCountCache::isAvailable())
             {
-                useGpu = false; // Fallback to CPU
+                useGpu = false;
                 if (!loggedGpuWarning)
                 {
-                    juce::Logger::writeToLog(
-                        "[PoseEstimator] WARNING: GPU requested but no CUDA device found. "
-                        "Using CPU.");
+                    juce::Logger::writeToLog("[PoseEstimator] WARNING: GPU requested but no CUDA device found. Using CPU.");
                     loggedGpuWarning = true;
                 }
             }
-
-            // Set DNN backend only when state changes (this is an expensive operation)
+            
+            // Set DNN backend only when state changes (expensive operation)
             if (useGpu != lastGpuState)
             {
                 if (useGpu)
                 {
                     net.setPreferableBackend(cv::dnn::DNN_BACKEND_CUDA);
                     net.setPreferableTarget(cv::dnn::DNN_TARGET_CUDA);
-                    juce::Logger::writeToLog(
-                        "[PoseEstimator] ✓ Switched to CUDA backend (GPU)");
+                    juce::Logger::writeToLog("[PoseEstimator] ✓ Switched to CUDA backend (GPU)");
                 }
                 else
                 {
@@ -440,22 +309,52 @@ void PoseEstimatorModule::run()
                 lastGpuState = useGpu;
             }
 #endif
-
-            // --- SIMPLIFIED AND CORRECTED LOGIC ---
-            // 1. Prepare image for the network. This happens on the CPU regardless of the
-            // backend.
-            int      q = qualityParam ? qualityParam->getIndex() : 1;
+            
+            // Check for exit before expensive operations
+            if (threadShouldExit())
+                break;
+            
+            // Prepare input blob
+            int q = qualityParam ? qualityParam->getIndex() : 1;
             cv::Size blobSize = (q == 0) ? cv::Size(224, 224) : cv::Size(368, 368);
-            cv::Mat  inputBlob = cv::dnn::blobFromImage(
+            cv::Mat inputBlob = cv::dnn::blobFromImage(
                 frame, 1.0 / 255.0, blobSize, cv::Scalar(0, 0, 0), false, false);
-
-            // 2. Set the input and run the forward pass.
-            // This `forward()` call is where the GPU acceleration happens if the backend was
-            // set to CUDA.
+            
+            // Check for exit again before CUDA operation
+            if (threadShouldExit())
+                break;
+            
             net.setInput(inputBlob);
-            cv::Mat netOutput = net.forward();
-
-            // --- END OF CORRECTION ---
+            
+            // Wrap forward() in try-catch to handle CUDA errors gracefully
+            cv::Mat netOutput;
+            try
+            {
+                netOutput = net.forward();
+            }
+            catch (const cv::Exception& e)
+            {
+                juce::Logger::writeToLog("[PoseEstimator] CUDA forward() failed: " + juce::String(e.what()) + " - falling back to CPU");
+                // Switch to CPU backend and retry once
+                try
+                {
+                    net.setPreferableBackend(cv::dnn::DNN_BACKEND_OPENCV);
+                    net.setPreferableTarget(cv::dnn::DNN_TARGET_CPU);
+                    net.setInput(inputBlob);
+                    netOutput = net.forward();
+                }
+                catch (...)
+                {
+                    wait(50);
+                    continue; // Skip this frame if CPU also fails
+                }
+            }
+            catch (...)
+            {
+                juce::Logger::writeToLog("[PoseEstimator] Unknown error in net.forward() - skipping frame");
+                wait(50);
+                continue; // Skip this frame
+            }
 
             // 3. Parse the output to extract keypoint coordinates
             PoseResult result;
@@ -573,42 +472,34 @@ void PoseEstimatorModule::run()
                 VideoFrameManager::getInstance().setFrame(getSecondaryLogicalId(), emptyFrame);
             }
 
-            // --- PASSTHROUGH LOGIC (always do this, even if model not loaded) ---
-            // Resolve logical ID fresh each iteration (like ColorTrackerModule)
-            // CRITICAL: During XML load, setLogicalId() is called AFTER prepareToPlay(),
-            // so storedLogicalId might be 0 when thread starts. Always try to resolve.
-            juce::uint32 frameId = storedLogicalId;
-            // Always try to resolve - parentSynth might not be ready or setLogicalId() might not
-            // have been called yet
-            if (parentSynth != nullptr)
+            juce::uint32 myLogicalId = storedLogicalId;
+            if (myLogicalId == 0 && parentSynth != nullptr)
             {
                 for (const auto& info : parentSynth->getModulesInfo())
                 {
                     if (parentSynth->getModuleForLogical(info.first) == this)
                     {
-                        frameId = info.first;
-                        if (storedLogicalId != frameId)
-                            storedLogicalId = frameId; // Update cache if different
+                        myLogicalId = info.first;
+                        storedLogicalId = myLogicalId;
                         break;
                     }
                 }
             }
-            // Only update GUI frame if model is loaded
-            if (modelLoaded)
-            {
-                updateGuiFrame(frame);
-            }
-            // Only passthrough if we have a valid frameId
-            if (frameId != 0)
-                VideoFrameManager::getInstance().setFrame(frameId, frame);
+            
+            // Passthrough logic (like ObjectDetectorModule)
+            updateGuiFrame(frame);
+            if (myLogicalId != 0)
+                VideoFrameManager::getInstance().setFrame(myLogicalId, frame);
         }
-
+        else
+        {
+            wait(50);
+            continue;
+        }
+        
         // Run at ~15 FPS (pose estimation is computationally expensive)
-        // Use shorter wait when model not loaded to check more frequently
-        wait(modelLoaded ? 66 : 33);
+        wait(66);
     }
-
-    juce::Logger::writeToLog("[PoseEstimator] Processing thread stopped");
 }
 
 void PoseEstimatorModule::parsePoseOutput(
@@ -630,7 +521,6 @@ void PoseEstimatorModule::parsePoseOutput(
     int count = juce::jmin(MPI_NUM_KEYPOINTS, numHeatmaps);
     for (int i = 0; i < count; ++i)
     {
-        // CORRECTED: Create a Mat view from the 4D blob for OpenCV 4.x
         cv::Mat heatMap(H, W, CV_32F, (void*)netOutput.ptr<float>(0, i));
 
         // Find the location of maximum confidence
@@ -804,7 +694,6 @@ void PoseEstimatorModule::processBlock(juce::AudioBuffer<float>& buffer, juce::M
     // Clear the buffer for output
     buffer.clear();
 
-    // --- BEGIN FIX: Find our own ID if it's not set ---
     juce::uint32 myLogicalId = storedLogicalId;
     if (myLogicalId == 0 && parentSynth != nullptr)
     {
@@ -813,12 +702,11 @@ void PoseEstimatorModule::processBlock(juce::AudioBuffer<float>& buffer, juce::M
             if (parentSynth->getModuleForLogical(info.first) == this)
             {
                 myLogicalId = info.first;
-                storedLogicalId = myLogicalId; // Cache it
+                storedLogicalId = myLogicalId;
                 break;
             }
         }
     }
-    // --- END FIX ---
 
     // Read ALL available results from FIFO to ensure latest result is used (like
     // ColorTrackerModule)
@@ -1335,7 +1223,6 @@ void PoseEstimatorModule::drawIoPins(const NodePinHelpers& helpers)
     for (int i = 0; i < MPI_NUM_KEYPOINTS; ++i)
     {
         const std::string& name = MPI_KEYPOINT_NAMES[i];
-        // CORRECTED: Proper string conversion for ImGui
         juce::String xLabel = juce::String(name) + " X";
         juce::String yLabel = juce::String(name) + " Y";
         helpers.drawAudioOutputPin(xLabel.toRawUTF8(), i * 2);

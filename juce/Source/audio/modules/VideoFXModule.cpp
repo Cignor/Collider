@@ -1,6 +1,7 @@
 #include "VideoFXModule.h"
 #include "../../video/VideoFrameManager.h"
 #include "../graph/ModularSynthProcessor.h"
+#include "../../utils/CudaDeviceCountCache.h"
 #include <opencv2/imgproc.hpp>
 #if defined(WITH_CUDA_SUPPORT)
     #include <opencv2/cudaimgproc.hpp>
@@ -492,7 +493,7 @@ void VideoFXModule::run()
         
         const bool useGpu = useGpuParam ? useGpuParam->get() : false;
 #if defined(WITH_CUDA_SUPPORT)
-        const bool gpuAvailable = cv::cuda::getCudaEnabledDeviceCount() > 0;
+        const bool gpuAvailable = CudaDeviceCountCache::isAvailable();
 #else
         const bool gpuAvailable = false;
 #endif

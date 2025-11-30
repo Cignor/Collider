@@ -1,6 +1,7 @@
 #include "MovementDetectorModule.h"
 #include "../../video/VideoFrameManager.h"
 #include "../graph/ModularSynthProcessor.h"
+#include "../../utils/CudaDeviceCountCache.h"
 #include <opencv2/imgproc.hpp>
 #include <opencv2/video.hpp>
 
@@ -266,7 +267,7 @@ MovementResult MovementDetectorModule::analyzeFrame(const cv::Mat& inputFrame, j
         {
             bool useGpu = false;
             #if WITH_CUDA_SUPPORT
-                useGpu = useGpuParam->get() && (cv::cuda::getCudaEnabledDeviceCount() > 0);
+                useGpu = useGpuParam->get() && CudaDeviceCountCache::isAvailable();
             #endif
             
             std::vector<cv::Point2f> nextPoints;
@@ -798,7 +799,7 @@ void MovementDetectorModule::drawParametersInNode(float itemWidth,
     
     // GPU ACCELERATION TOGGLE
     #if WITH_CUDA_SUPPORT
-        bool cudaAvailable = (cv::cuda::getCudaEnabledDeviceCount() > 0);
+        bool cudaAvailable = CudaDeviceCountCache::isAvailable();
         
         if (!cudaAvailable)
         {

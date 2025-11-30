@@ -1,6 +1,7 @@
 #include "HumanDetectorModule.h"
 #include "../../video/VideoFrameManager.h"
 #include "../graph/ModularSynthProcessor.h"
+#include "../../utils/CudaDeviceCountCache.h"
 #include <opencv2/imgproc.hpp>
 #include <opencv2/objdetect.hpp>
 
@@ -273,7 +274,7 @@ DetectionResult HumanDetectorModule::analyzeFrame(const cv::Mat& inputFrame, juc
     bool useGpu = false;
     
     #if WITH_CUDA_SUPPORT
-        useGpu = useGpuParam ? (useGpuParam->get() && (cv::cuda::getCudaEnabledDeviceCount() > 0)) : false;
+        useGpu = useGpuParam ? (useGpuParam->get() && CudaDeviceCountCache::isAvailable()) : false;
     #endif
 
     if (mode == 0) // Face Detection
@@ -595,7 +596,7 @@ void HumanDetectorModule::drawParametersInNode(float itemWidth,
     
     // GPU ACCELERATION TOGGLE
     #if WITH_CUDA_SUPPORT
-        bool cudaAvailable = (cv::cuda::getCudaEnabledDeviceCount() > 0);
+        bool cudaAvailable = CudaDeviceCountCache::isAvailable();
         
         if (!cudaAvailable)
         {

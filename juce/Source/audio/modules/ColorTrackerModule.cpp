@@ -1,6 +1,7 @@
 #include "ColorTrackerModule.h"
 #include "../graph/ModularSynthProcessor.h"
 #include "../../video/VideoFrameManager.h"
+#include "../../utils/CudaDeviceCountCache.h"
 #include <opencv2/imgproc.hpp>
 
 #if defined(PRESET_CREATOR_UI)
@@ -91,7 +92,7 @@ void ColorTrackerModule::run()
         {
             bool useGpu = false;
             #if WITH_CUDA_SUPPORT
-                useGpu = useGpuParam->get() && (cv::cuda::getCudaEnabledDeviceCount() > 0);
+                useGpu = useGpuParam->get() && CudaDeviceCountCache::isAvailable();
             #endif
             
             cv::Mat hsv;
@@ -679,7 +680,7 @@ void ColorTrackerModule::drawParametersInNode(float itemWidth,
     
     // GPU ACCELERATION TOGGLE
     #if WITH_CUDA_SUPPORT
-        bool cudaAvailable = (cv::cuda::getCudaEnabledDeviceCount() > 0);
+        bool cudaAvailable = CudaDeviceCountCache::isAvailable();
         
         if (!cudaAvailable)
         {
