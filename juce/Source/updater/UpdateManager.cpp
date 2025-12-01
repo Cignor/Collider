@@ -22,7 +22,9 @@ UpdateManager::UpdateManager()
     updateApplier = std::make_unique<UpdateApplier>(*versionManager);
 
     // Setup ImGui dialog callbacks
-    updateDownloadDialog.onStartDownload = [this]() { startDownload(); };
+    updateDownloadDialog.onStartDownload = [this](const juce::Array<FileInfo>& selectedFiles) {
+        startDownload(selectedFiles);
+    };
     updateDownloadDialog.onCancelDownload = [this]() { cancelDownload(); };
     updateDownloadDialog.onSkipVersion = [this]() { skipVersion(); };
     updateDownloadDialog.setVersionManager(versionManager.get());
@@ -112,6 +114,12 @@ void UpdateManager::onUpdateCheckComplete(UpdateInfo info)
 
     // Always show the dialog so user can see status
     showUpdateAvailableDialog(info);
+
+    // Now that the latest manifest has been fetched and cached by UpdateChecker,
+    // register the running executable so VersionManager has an up-to-date record.
+    // This allows the hash column in the update dialog to show the correct local
+    // hash for Pikon Raditsz.exe even on first run after an update.
+    registerRunningExecutable();
 }
 
 void UpdateManager::showUpdateAvailableDialog(const UpdateInfo& info)
@@ -135,21 +143,48 @@ void UpdateManager::showDownloadProgressDialog()
 
 void UpdateManager::startDownload()
 {
+    // Legacy helper: start download for all pending files
+    startDownload(currentUpdateInfo.filesToDownload);
+}
+
+void UpdateManager::startDownload(const juce::Array<FileInfo>& selectedFiles)
+{
     if (isDownloading)
     {
         DBG("Download already in progress");
         return;
     }
 
+    if (selectedFiles.isEmpty())
+    {
+        juce::AlertWindow::showMessageBoxAsync(
+            juce::AlertWindow::WarningIcon,
+            "No Files Selected",
+            "No files were selected for update. Please select at least one file.",
+            "OK");
+        return;
+    }
+
     isDownloading = true;
     updateDownloadDialog.setDownloading(true);
-    // showDownloadProgressDialog(); // Disabled for ImGui
+
+    // Remember selection for this run
+    selectedFilesForCurrentRun = selectedFiles;
+    requiresRestartForCurrentRun = false;
+    for (const auto& f : selectedFilesForCurrentRun)
+    {
+        if (f.critical)
+        {
+            requiresRestartForCurrentRun = true;
+            break;
+        }
+    }
 
     auto tempDir = getTempDirectory();
     tempDir.createDirectory();
 
     fileDownloader->downloadFiles(
-        currentUpdateInfo.filesToDownload,
+        selectedFilesForCurrentRun,
         tempDir,
         [this](DownloadProgress progress) { onDownloadProgress(progress); },
         [this](bool success, juce::String error) { onDownloadComplete(success, error); });
@@ -176,49 +211,92 @@ void UpdateManager::onDownloadComplete(bool success, juce::String error)
     isDownloading = false;
     updateDownloadDialog.setDownloading(false);
 
-    if (!success)
+    // Get successfully downloaded files (even if some failed)
+    auto successfulDownloads = fileDownloader->getSuccessfulFiles();
+    
+    if (successfulDownloads.isEmpty())
     {
-        // closeDownloadProgressDialog();
+        // No files downloaded successfully
         juce::AlertWindow::showMessageBoxAsync(
             juce::AlertWindow::WarningIcon,
             "Download Failed",
-            "Failed to download update: " + error,
+            "Failed to download any files:\n\n" + error,
             "OK");
         return;
     }
 
-    // Apply the update
-    auto tempDir = getTempDirectory();
+    // Show warning if some files failed to download
+    if (!success && !error.isEmpty())
+    {
+        juce::String warning = "Some files failed to download, but continuing with " + 
+                              juce::String(successfulDownloads.size()) + " successful download(s):\n\n" + error;
+        juce::Logger::writeToLog(warning);
+    }
 
+    // Apply only the successfully downloaded files
+    auto tempDir = getTempDirectory();
+    
+    juce::Array<juce::String> failedApplies;
+    juce::Array<FileInfo> successfulApplies;
+    
     bool applied = updateApplier->applyUpdates(
-        currentUpdateInfo.filesToDownload,
+        successfulDownloads, // Only apply files that downloaded successfully
         tempDir,
         currentUpdateInfo.requiresRestart ? UpdateApplier::UpdateType::OnRestart
-                                          : UpdateApplier::UpdateType::Immediate);
+                                          : UpdateApplier::UpdateType::Immediate,
+        &failedApplies,
+        &successfulApplies);
 
-    if (!applied)
+    // Build summary message
+    juce::String summary;
+    const int totalRequested = selectedFilesForCurrentRun.isEmpty()
+                                   ? currentUpdateInfo.filesToDownload.size()
+                                   : selectedFilesForCurrentRun.size();
+
+    if (successfulApplies.size() == successfulDownloads.size() && failedApplies.isEmpty())
     {
-        DBG("Failed to apply updates");
+        // All successful downloads were applied
+        summary = "Update completed successfully!\n\n";
+        summary += juce::String(successfulApplies.size()) + " file(s) updated.";
+    }
+    else
+    {
+        // Partial success
+        summary = "Update completed with some issues:\n\n";
+        summary += "Successfully updated: " + juce::String(successfulApplies.size()) + " file(s)\n";
+        if (!failedApplies.isEmpty())
+            summary += "Failed to apply: " + juce::String(failedApplies.size()) + " file(s)\n";
+        if (successfulDownloads.size() < totalRequested)
+            summary += "Failed to download: " + juce::String(totalRequested - successfulDownloads.size()) + " file(s)\n";
+    }
+
+    if (!applied && successfulApplies.isEmpty())
+    {
+        // Nothing was applied
+        DBG("Failed to apply any updates");
         juce::AlertWindow::showMessageBoxAsync(
             juce::AlertWindow::WarningIcon,
             "Update Failed",
-            "Failed to install update. Please try again.",
+            "Downloaded files but failed to apply any updates:\n\n" + error,
             "OK");
         return;
     }
 
-    // Update version info
-    versionManager->setCurrentVersion(currentUpdateInfo.newVersion);
-    DBG("Updates applied successfully");
+    // Update version info (only if at least one file was applied)
+    if (!successfulApplies.isEmpty())
+    {
+        versionManager->setCurrentVersion(currentUpdateInfo.newVersion);
+        DBG("Updates applied: " + juce::String(successfulApplies.size()) + " file(s)");
+    }
 
-    // If update requires restart (EXE was updated), launch PikonUpdater.exe
-    if (currentUpdateInfo.requiresRestart)
+    // If update requires restart (EXE or other critical file was updated), launch PikonUpdater.exe
+    if (requiresRestartForCurrentRun && !successfulApplies.isEmpty())
     {
         DBG("Update requires restart - launching PikonUpdater.exe");
         
-        // Create update manifest for PikonUpdater
+        // Create update manifest for PikonUpdater using only successfully downloaded files
         auto updateManifest = createUpdateManifest(
-            currentUpdateInfo.filesToDownload, tempDir);
+            successfulDownloads, tempDir);
         
         // Get path to PikonUpdater.exe (shipped with app)
         auto updaterPath = juce::File::getSpecialLocation(
@@ -252,11 +330,11 @@ void UpdateManager::onDownloadComplete(bool success, juce::String error)
         
         DBG("Launching updater: " + cmdLine);
         
-        // Show message
+        // Show message with summary
         juce::AlertWindow::showMessageBoxAsync(
             juce::AlertWindow::InfoIcon,
             "Update Complete - Restarting",
-            "The application will now restart to complete the update.",
+            summary + "\n\nThe application will now restart to complete the update.",
             "OK");
         
         // Launch updater and quit after short delay
@@ -279,9 +357,9 @@ void UpdateManager::onDownloadComplete(bool success, juce::String error)
     }
     else
     {
-        // Non-critical files updated - show success message
+        // Non-critical files updated - show success message with summary
         juce::AlertWindow::showMessageBoxAsync(
-            juce::AlertWindow::InfoIcon, "Update Complete", "Update installed successfully!", "OK");
+            juce::AlertWindow::InfoIcon, "Update Complete", summary, "OK");
     }
 }
 

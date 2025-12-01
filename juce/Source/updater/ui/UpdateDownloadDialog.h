@@ -68,7 +68,9 @@ public:
     void setVersionManager(VersionManager* vm) { versionManager = vm; }
 
     // Callbacks
-    std::function<void()> onStartDownload;
+    // onStartDownload is called when the user clicks "Update Now" with the
+    // list of files they have selected (can be empty).
+    std::function<void(const juce::Array<FileInfo>&)> onStartDownload;
     std::function<void()> onCancelDownload;
     std::function<void()> onSkipVersion;
 
@@ -85,8 +87,10 @@ private:
     char searchFilter[256] = {0};
     bool showCriticalOnly = false;
 
-    // Selection state (if we want to allow partial updates, though usually updates are
-    // all-or-nothing) For now, we'll just show the files.
+    // Selection state for per-file updates.
+    // This array is parallel to updateInfo.filesToDownload; selection is only
+    // meaningful for files that actually need an update.
+    std::vector<bool> fileSelected;
 
     /**
      * Render the file list.
@@ -107,6 +111,12 @@ private:
      * Get local hash for a file (from VersionManager or calculate it).
      */
     juce::String getLocalHash(const juce::String& relativePath) const;
+
+    /**
+     * Helper to build the list of selected files based on fileSelected[]
+     * and updateInfo.filesToDownload.
+     */
+    juce::Array<FileInfo> getSelectedFiles() const;
 };
 
 } // namespace Updater

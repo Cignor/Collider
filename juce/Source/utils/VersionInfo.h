@@ -16,11 +16,11 @@ public:
     static constexpr const char* AUTHOR = "Monsieur Pimpant";
 
     // Version information
-    static constexpr const char* VERSION = "0.6";
-    static constexpr const char* VERSION_FULL = "0.6.5-beta";
+    static constexpr const char* VERSION = "0.7";
+    static constexpr const char* VERSION_FULL = "0.7.0-beta";
     static constexpr int         VERSION_MAJOR = 0;
-    static constexpr int         VERSION_MINOR = 6;
-    static constexpr int         VERSION_PATCH = 5;
+    static constexpr int         VERSION_MINOR = 7;
+    static constexpr int         VERSION_PATCH = 0;
 
     // Build information
     static constexpr const char* BUILD_TYPE = "Beta Test Release";

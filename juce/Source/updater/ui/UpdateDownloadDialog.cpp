@@ -17,6 +17,10 @@ void UpdateDownloadDialog::open(const UpdateInfo& info)
     isChecking = false; // Done checking, show results
     // Reset filter
     searchFilter[0] = 0;
+
+    // Initialise selection: all files that need an update are selected by default
+    fileSelected.clear();
+    fileSelected.resize((size_t) updateInfo.filesToDownload.size(), true);
 }
 
 void UpdateDownloadDialog::showChecking()
@@ -185,8 +189,45 @@ void UpdateDownloadDialog::renderFileList()
 
             ImGui::TableNextRow();
 
-            // File Name
+            // Determine if this file needs an update and its index in filesToDownload
+            bool needsUpdate = false;
+            int  downloadIndex = -1;
+            for (int i = 0; i < updateInfo.filesToDownload.size(); ++i)
+            {
+                const auto& f = updateInfo.filesToDownload.getReference(i);
+                if (f.relativePath == file.relativePath)
+                {
+                    needsUpdate = true;
+                    downloadIndex = i;
+                    break;
+                }
+            }
+
+            // File Name + small checkbox on the left (single line per item)
             ImGui::TableSetColumnIndex(0);
+            bool isSelected = (needsUpdate && downloadIndex >= 0 &&
+                               downloadIndex < (int) fileSelected.size() &&
+                               fileSelected[(size_t) downloadIndex]);
+
+            juce::String checkboxId = "##select_" + file.relativePath;
+            ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(2.0f, 2.0f)); // smaller checkbox
+            if (!needsUpdate || isDownloading)
+            {
+                ImGui::BeginDisabled();
+                ImGui::Checkbox(checkboxId.toRawUTF8(), &isSelected);
+                ImGui::EndDisabled();
+            }
+            else
+            {
+                if (ImGui::Checkbox(checkboxId.toRawUTF8(), &isSelected))
+                {
+                    if (downloadIndex >= 0 && downloadIndex < (int) fileSelected.size())
+                        fileSelected[(size_t) downloadIndex] = isSelected;
+                }
+            }
+            ImGui::PopStyleVar();
+
+            ImGui::SameLine();
             ImGui::Text("%s", file.relativePath.toRawUTF8());
             if (file.critical)
             {
@@ -242,16 +283,6 @@ void UpdateDownloadDialog::renderFileList()
             // Status
             ImGui::TableSetColumnIndex(4);
 
-            bool needsUpdate = false;
-            for (const auto& f : updateInfo.filesToDownload)
-            {
-                if (f.relativePath == file.relativePath)
-                {
-                    needsUpdate = true;
-                    break;
-                }
-            }
-
             if (isDownloading && currentProgress.currentFile == file.relativePath)
             {
                 ImGui::TextColored(ImVec4(1.0f, 1.0f, 0.0f, 1.0f), "Downloading...");
@@ -271,15 +302,35 @@ void UpdateDownloadDialog::renderFileList()
 
 void UpdateDownloadDialog::renderControls()
 {
-    // Summary stats
-    juce::int64 totalSize = updateInfo.totalDownloadSize;
-    int         fileCount = updateInfo.filesToDownload.size();
+    // Summary stats based on current selection
+    juce::int64 totalPendingSize = 0;
+    juce::int64 totalSelectedSize = 0;
+    int         pendingCount = updateInfo.filesToDownload.size();
+    int         selectedCount = 0;
+
+    for (int i = 0; i < updateInfo.filesToDownload.size(); ++i)
+    {
+        const auto& f = updateInfo.filesToDownload.getReference(i);
+        totalPendingSize += f.size;
+
+        bool selected = (i >= 0 && i < (int) fileSelected.size() && fileSelected[(size_t) i]);
+        if (selected)
+        {
+            selectedCount++;
+            totalSelectedSize += f.size;
+        }
+    }
 
     if (updateInfo.updateAvailable)
     {
-        ImGui::Text("Summary: %d files to update", fileCount);
+        ImGui::Text(
+            "Summary: %d selected of %d pending",
+            selectedCount,
+            pendingCount);
         ImGui::SameLine();
-        ImGui::Text("| Total Download Size: %s", getFormattedFileSize(totalSize).toRawUTF8());
+        ImGui::Text(
+            "| Selected Download Size: %s",
+            getFormattedFileSize(totalSelectedSize).toRawUTF8());
     }
     else
     {
@@ -314,6 +365,22 @@ void UpdateDownloadDialog::renderControls()
     }
     else
     {
+        // Selection helper buttons (only when not downloading)
+        if (updateInfo.updateAvailable)
+        {
+            if (ImGui::Button("Select All Pending", ImVec2(150, 30)))
+            {
+                fileSelected.assign(fileSelected.size(), true);
+            }
+            ImGui::SameLine();
+            if (ImGui::Button("Deselect All", ImVec2(150, 30)))
+            {
+                fileSelected.assign(fileSelected.size(), false);
+            }
+        }
+
+        ImGui::Spacing();
+
         // Action Buttons
         if (!updateInfo.updateAvailable)
             ImGui::BeginDisabled();
@@ -321,7 +388,10 @@ void UpdateDownloadDialog::renderControls()
         if (ImGui::Button("Update Now", ImVec2(150, 40)))
         {
             if (onStartDownload)
-                onStartDownload();
+            {
+                auto selected = getSelectedFiles();
+                onStartDownload(selected);
+            }
         }
 
         if (!updateInfo.updateAvailable)
@@ -394,6 +464,22 @@ juce::String UpdateDownloadDialog::getLocalHash(const juce::String& relativePath
     }
     
     return {};
+}
+
+juce::Array<FileInfo> UpdateDownloadDialog::getSelectedFiles() const
+{
+    juce::Array<FileInfo> result;
+
+    // fileSelected is parallel to updateInfo.filesToDownload
+    int numToDownload = updateInfo.filesToDownload.size();
+    for (int i = 0; i < numToDownload; ++i)
+    {
+        bool selected = (i >= 0 && i < (int) fileSelected.size() && fileSelected[(size_t) i]);
+        if (selected)
+            result.add(updateInfo.filesToDownload.getReference(i));
+    }
+
+    return result;
 }
 
 } // namespace Updater

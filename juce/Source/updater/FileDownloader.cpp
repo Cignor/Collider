@@ -31,16 +31,17 @@ public:
         for (const auto& file : files)
             progress.totalBytes += file.size;
 
-        bool         success = true;
-        juce::String errorMessage;
+        // Track successful and failed downloads
+        juce::Array<FileInfo> successfulFiles;
+        juce::Array<juce::String> failedFiles;
+        juce::String errorSummary;
 
-        // Download each file
+        // Download each file - continue even if one fails
         for (int i = 0; i < files.size(); ++i)
         {
             if (threadShouldExit())
             {
-                success = false;
-                errorMessage = "Download cancelled by user";
+                errorSummary = "Download cancelled by user";
                 break;
             }
 
@@ -50,22 +51,60 @@ public:
 
             auto destination = tempDir.getChildFile(fileInfo.relativePath);
 
-            if (!downloader->downloadFile(fileInfo, destination, progress, progressCallback))
+            if (downloader->downloadFile(fileInfo, destination, progress, progressCallback))
             {
-                success = false;
-                errorMessage = "Failed to download: " + fileInfo.relativePath;
-                break;
+                // Success - add to successful list
+                successfulFiles.add(fileInfo);
+                progress.filesCompleted = i + 1;
             }
-
-            progress.filesCompleted = i + 1;
+            else
+            {
+                // Failure - add to failed list but continue with other files
+                failedFiles.add(fileInfo.relativePath);
+                juce::String error = "Failed to download: " + fileInfo.relativePath;
+                DBG(error);
+                juce::Logger::writeToLog(error);
+                
+                if (errorSummary.isEmpty())
+                    errorSummary = "Some files failed to download:\n";
+                errorSummary += "  - " + fileInfo.relativePath + "\n";
+            }
         }
 
-        // Call completion callback on message thread
-        juce::MessageManager::callAsync([this, success, errorMessage]() {
+        // Determine overall success (true if at least one file succeeded, or all succeeded)
+        bool overallSuccess = !successfulFiles.isEmpty();
+        
+        // Build final error message
+        juce::String finalError;
+        if (!failedFiles.isEmpty())
+        {
+            finalError = "Download completed with " + juce::String(failedFiles.size()) + 
+                        " failure(s) out of " + juce::String(files.size()) + " file(s):\n";
+            for (const auto& failed : failedFiles)
+                finalError += "  - " + failed + "\n";
+            if (!errorSummary.isEmpty())
+                finalError += "\n" + errorSummary;
+        }
+        else if (!errorSummary.isEmpty())
+        {
+            finalError = errorSummary;
+        }
+
+        // Store successful files in member variable for later retrieval
+        this->successfulFiles = successfulFiles;
+        
+        // Also store in FileDownloader for access after thread completes
+        downloader->lastSuccessfulFiles = successfulFiles;
+
+        // Call completion callback on message thread with results
+        juce::MessageManager::callAsync([this, overallSuccess, finalError]() {
             if (completionCallback)
-                completionCallback(success, errorMessage);
+                completionCallback(overallSuccess, finalError);
         });
     }
+    
+    // Get successfully downloaded files (called after completion)
+    juce::Array<FileInfo> getSuccessfulFiles() const { return successfulFiles; }
 
 private:
     FileDownloader*                         downloader;
@@ -73,6 +112,7 @@ private:
     juce::File                              tempDir;
     std::function<void(DownloadProgress)>   progressCallback;
     std::function<void(bool, juce::String)> completionCallback;
+    juce::Array<FileInfo>                   successfulFiles; // Track successful downloads (set in run())
 };
 
 FileDownloader::FileDownloader() {}
@@ -88,6 +128,7 @@ void FileDownloader::downloadFiles(
     cancelDownload();
 
     shouldCancel = false;
+    lastSuccessfulFiles.clear(); // Clear previous results
     downloadThread = std::make_unique<DownloadThread>(
         this, files, tempDirectory, std::move(progressCallback), std::move(completionCallback));
 
@@ -108,6 +149,12 @@ void FileDownloader::cancelDownload()
 bool FileDownloader::isDownloading() const
 {
     return downloadThread != nullptr && downloadThread->isThreadRunning();
+}
+
+juce::Array<FileInfo> FileDownloader::getSuccessfulFiles() const
+{
+    // Return cached successful files (set by DownloadThread)
+    return lastSuccessfulFiles;
 }
 
 bool FileDownloader::downloadFile(

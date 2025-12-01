@@ -72,6 +72,11 @@ private:
     bool         isCheckingForUpdates = false;
     bool         isDownloading = false;
 
+    // Files selected for the current download run (subset of currentUpdateInfo.filesToDownload)
+    juce::Array<FileInfo> selectedFilesForCurrentRun;
+    // Whether the current run requires restart (based on selected files, not entire manifest)
+    bool requiresRestartForCurrentRun = false;
+
     // Callbacks
     void onUpdateCheckComplete(UpdateInfo info);
     void onDownloadProgress(DownloadProgress progress);
@@ -85,7 +90,10 @@ private:
     void closeDownloadProgressDialog();
 
     // User actions
+    // Start download for all pending files (legacy helper)
     void startDownload();
+    // Start download for a specific subset of files (selected by user)
+    void startDownload(const juce::Array<FileInfo>& selectedFiles);
     void cancelDownload();
     void skipVersion();
     void restartApplication();

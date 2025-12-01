@@ -28,12 +28,16 @@ public:
      * @param files Files to apply
      * @param tempDirectory Directory containing downloaded files
      * @param type Whether to apply immediately or on restart
-     * @return true if successful, false on error
+     * @return true if at least one file was applied successfully
+     * @param outFailedFiles Optional: list of files that failed to apply
+     * @param outSuccessfulFiles Optional: list of files that were applied successfully
      */
     bool applyUpdates(
         const juce::Array<FileInfo>& files,
         const juce::File&            tempDirectory,
-        UpdateType                   type);
+        UpdateType                   type,
+        juce::Array<juce::String>*   outFailedFiles = nullptr,
+        juce::Array<FileInfo>*       outSuccessfulFiles = nullptr);
 
     /**
      * Delete files that are no longer needed

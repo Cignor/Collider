@@ -5,104 +5,149 @@
 #include "../utils/CudaDeviceCountCache.h"
 
 void PresetCreatorApplication::initialise(const juce::String&)
-    {
-        DBG("[PresetCreator] initialise() starting"); RtLogger::init();
-        
-        // Initialize CUDA device count cache ONCE at app startup
-        // This prevents concurrent CUDA queries during runtime
-        CudaDeviceCountCache::getDeviceCount();
-        // Crash handler to capture unexpected exceptions
-        std::set_terminate([]{
-            auto bt = juce::SystemStats::getStackBacktrace();
-            juce::Logger::writeToLog("[PresetCreator][FATAL] terminate called. Backtrace:\n" + bt);
-            std::abort();
-        });
-        // Set up file logger for diagnostics
-        auto logsDir = juce::File::getSpecialLocation (juce::File::currentExecutableFile)
-                           .getParentDirectory().getChildFile ("juce").getChildFile ("logs");
-        logsDir.createDirectory();
-        auto logFile = logsDir.getChildFile ("preset_creator_" + juce::Time::getCurrentTime().formatted ("%Y-%m-%d_%H-%M-%S") + ".log");
-        fileLogger = std::make_unique<juce::FileLogger> (logFile, "Pikon Raditsz Session", 0);
-        juce::Logger::setCurrentLogger (fileLogger.get());
-        DBG("[PresetCreator] Logger initialised at: " + logFile.getFullPathName());
-        juce::Logger::writeToLog("PresetCreatorApplication::initialise called");
-        
-        // ADD: Load persistent audio settings
-        // Define where to store the settings file
-        auto appDataDir = juce::File::getSpecialLocation(juce::File::userApplicationDataDirectory)
-                                .getChildFile(getApplicationName());
-        appDataDir.createDirectory(); // Ensure the directory exists
-        auto settingsFile = appDataDir.getChildFile("audio_settings.xml");
+{
+    DBG("[PresetCreator] initialise() starting");
+    RtLogger::init();
 
-        std::unique_ptr<juce::XmlElement> savedState;
-        if (settingsFile.existsAsFile())
-        {
-            savedState = juce::XmlDocument::parse(settingsFile);
-            juce::Logger::writeToLog("Loading audio settings from: " + settingsFile.getFullPathName());
-        }
-        else
-        {
-            juce::Logger::writeToLog("No saved audio settings found, using defaults");
-        }
-        
-        // Pass the saved state to the device manager.
-        // It will automatically use the saved settings or fall back to defaults.
+    // Initialize CUDA device count cache ONCE at app startup
+    // This prevents concurrent CUDA queries during runtime
+    CudaDeviceCountCache::getDeviceCount();
+    // Crash handler to capture unexpected exceptions
+    std::set_terminate([] {
+        auto bt = juce::SystemStats::getStackBacktrace();
+        juce::Logger::writeToLog("[PresetCreator][FATAL] terminate called. Backtrace:\n" + bt);
+        std::abort();
+    });
+    // Set up file logger for diagnostics
+    auto logsDir = juce::File::getSpecialLocation(juce::File::currentExecutableFile)
+                       .getParentDirectory()
+                       .getChildFile("juce")
+                       .getChildFile("logs");
+    logsDir.createDirectory();
+    auto logFile = logsDir.getChildFile(
+        "preset_creator_" + juce::Time::getCurrentTime().formatted("%Y-%m-%d_%H-%M-%S") + ".log");
+    fileLogger = std::make_unique<juce::FileLogger>(logFile, "Pikon Raditsz Session", 0);
+    juce::Logger::setCurrentLogger(fileLogger.get());
+    DBG("[PresetCreator] Logger initialised at: " + logFile.getFullPathName());
+    juce::Logger::writeToLog("PresetCreatorApplication::initialise called");
+
+    // ADD: Load persistent audio settings
+    // Define where to store the settings file
+    auto appDataDir = juce::File::getSpecialLocation(juce::File::userApplicationDataDirectory)
+                          .getChildFile(getApplicationName());
+    appDataDir.createDirectory(); // Ensure the directory exists
+    auto settingsFile = appDataDir.getChildFile("audio_settings.xml");
+
+    std::unique_ptr<juce::XmlElement> savedState;
+    if (settingsFile.existsAsFile())
+    {
+        savedState = juce::XmlDocument::parse(settingsFile);
+        juce::Logger::writeToLog("Loading audio settings from: " + settingsFile.getFullPathName());
+    }
+    else
+    {
+        juce::Logger::writeToLog("No saved audio settings found, using defaults");
+    }
+
+    // Pass the saved state to the device manager.
+    // It will automatically use the saved settings or fall back to defaults.
+    // MODIFIED: Try ASIO first if no saved state
+    if (savedState != nullptr)
+    {
         audioDeviceManager.initialise(2, 2, savedState.get(), true);
-        
-        // Initialize plugin management
-        pluginFormatManager.addDefaultFormats();
-        
-        // Initialize application properties
-        juce::PropertiesFile::Options options;
-        options.applicationName = getApplicationName();
-        options.filenameSuffix = ".settings";
-        options.osxLibrarySubFolder = "Application Support";
-        options.folderName = appDataDir.getFullPathName();
-        appProperties = std::make_unique<juce::PropertiesFile>(options);
-        
-        // Define where to save the plugin list XML
-        auto deadMansPedalFile = appDataDir.getChildFile("blacklisted_plugins.txt");
-        pluginScanListFile = appDataDir.getChildFile("known_plugins.xml");
-        
-        // Load the list from the XML file
-        if (pluginScanListFile.existsAsFile())
+    }
+    else
+    {
+        bool asioSuccess = false;
+
+#if JUCE_ASIO
         {
-            auto pluginListXml = juce::XmlDocument::parse(pluginScanListFile);
-            if (pluginListXml != nullptr)
+            juce::Logger::writeToLog("Attempting to initialize ASIO audio backend...");
+            audioDeviceManager.setCurrentAudioDeviceType("ASIO", true);
+
+            if (audioDeviceManager.getCurrentAudioDeviceType() == "ASIO")
             {
-                knownPluginList.recreateFromXml(*pluginListXml);
-                juce::Logger::writeToLog("Loaded " + juce::String(knownPluginList.getNumTypes()) + " plugin(s) from cache");
+                // Try to initialize with default ASIO device
+                juce::String error = audioDeviceManager.initialise(0, 2, nullptr, true);
+                if (error.isEmpty())
+                {
+                    asioSuccess = true;
+                    juce::Logger::writeToLog("✓ ASIO audio initialized successfully");
+
+                    // Set a reasonable default buffer size if possible
+                    if (auto* device = audioDeviceManager.getCurrentAudioDevice())
+                    {
+                        juce::AudioDeviceManager::AudioDeviceSetup setup;
+                        audioDeviceManager.getAudioDeviceSetup(setup);
+                        setup.bufferSize = 256; // Recommended default
+                        audioDeviceManager.setAudioDeviceSetup(setup, true);
+                    }
+                }
+                else
+                {
+                    juce::Logger::writeToLog("⚠ ASIO initialization failed: " + error);
+                }
             }
         }
-        else
+#endif
+
+        if (!asioSuccess)
         {
-            juce::Logger::writeToLog("No cached plugin list found");
+            juce::Logger::writeToLog("Using default audio backend (WASAPI/DirectSound)");
+            audioDeviceManager.initialiseWithDefaultDevices(2, 2);
         }
-        
-        juce::Logger::writeToLog("Attempting to create MainWindow...");
-        mainWindow.reset (new MainWindow (getApplicationName(), 
-                                         audioDeviceManager,
-                                         pluginFormatManager,
-                                         knownPluginList));
-        juce::Logger::writeToLog("MainWindow created successfully");
-        
-        // Always ensure main window is visible
-        if (mainWindow != nullptr)
+    }
+
+    // Initialize plugin management
+    pluginFormatManager.addDefaultFormats();
+
+    // Initialize application properties
+    juce::PropertiesFile::Options options;
+    options.applicationName = getApplicationName();
+    options.filenameSuffix = ".settings";
+    options.osxLibrarySubFolder = "Application Support";
+    options.folderName = appDataDir.getFullPathName();
+    appProperties = std::make_unique<juce::PropertiesFile>(options);
+
+    // Define where to save the plugin list XML
+    auto deadMansPedalFile = appDataDir.getChildFile("blacklisted_plugins.txt");
+    pluginScanListFile = appDataDir.getChildFile("known_plugins.xml");
+
+    // Load the list from the XML file
+    if (pluginScanListFile.existsAsFile())
+    {
+        auto pluginListXml = juce::XmlDocument::parse(pluginScanListFile);
+        if (pluginListXml != nullptr)
         {
-            mainWindow->setVisible(true);
-            mainWindow->toFront(true);
-            juce::Logger::writeToLog("MainWindow made visible");
+            knownPluginList.recreateFromXml(*pluginListXml);
+            juce::Logger::writeToLog(
+                "Loaded " + juce::String(knownPluginList.getNumTypes()) + " plugin(s) from cache");
         }
-        
-        // Show splash screen if enabled (non-blocking, on top)
-        // Use callAsync to show splash after main window is fully initialized
-        if (SplashScreenComponent::shouldShowSplashScreen(appProperties.get()))
-        {
-            juce::MessageManager::callAsync([this]()
-            {
-                showSplashScreen();
-            });
-        }
+    }
+    else
+    {
+        juce::Logger::writeToLog("No cached plugin list found");
+    }
+
+    juce::Logger::writeToLog("Attempting to create MainWindow...");
+    mainWindow.reset(new MainWindow(
+        getApplicationName(), audioDeviceManager, pluginFormatManager, knownPluginList));
+    juce::Logger::writeToLog("MainWindow created successfully");
+
+    // Always ensure main window is visible
+    if (mainWindow != nullptr)
+    {
+        mainWindow->setVisible(true);
+        mainWindow->toFront(true);
+        juce::Logger::writeToLog("MainWindow made visible");
+    }
+
+    // Show splash screen if enabled (non-blocking, on top)
+    // Use callAsync to show splash after main window is fully initialized
+    if (SplashScreenComponent::shouldShowSplashScreen(appProperties.get()))
+    {
+        juce::MessageManager::callAsync([this]() { showSplashScreen(); });
+    }
 }
 
 void PresetCreatorApplication::showSplashScreen()
@@ -114,32 +159,33 @@ void PresetCreatorApplication::showSplashScreen()
             juce::Logger::writeToLog("[Splash] Cannot show splash - main window is null");
             return;
         }
-        
+
         // Ensure main window is visible first
         mainWindow->setVisible(true);
-        
+
         // Create splash screen component
         auto splash = std::make_unique<SplashScreenComponent>();
-        
+
         // Get bounds before moving ownership
         auto splashBounds = splash->getBounds();
-        juce::Logger::writeToLog("[Splash] Splash component created, size: " + juce::String(splashBounds.getWidth()) + "x" + juce::String(splashBounds.getHeight()));
-        
+        juce::Logger::writeToLog(
+            "[Splash] Splash component created, size: " + juce::String(splashBounds.getWidth()) +
+            "x" + juce::String(splashBounds.getHeight()));
+
         // Create a custom transparent window for the splash screen (no JUCE branding)
         splashWindowPtr = std::make_unique<TransparentSplashWindow>();
         juce::Logger::writeToLog("[Splash] Transparent window created");
-        
+
         // Set up dismiss callback for splash component
         auto* splashPtr = splash.get();
-        splashPtr->onDismiss = [this]()
-        {
+        splashPtr->onDismiss = [this]() {
             // Dismiss splash window
             if (splashWindowPtr != nullptr)
             {
                 splashWindowPtr->setVisible(false);
                 splashWindowPtr.reset();
             }
-            
+
             // Ensure main window is focused
             if (mainWindow != nullptr)
             {
@@ -147,31 +193,35 @@ void PresetCreatorApplication::showSplashScreen()
                 mainWindow->toFront(true);
             }
         };
-        
+
         // Add splash component to window (capture pointer before releasing ownership)
         auto* splashComponent = splash.get();
         splashWindowPtr->addAndMakeVisible(splash.release());
-        
+
         // Make window fullscreen to catch all mouse clicks
-        auto screenBounds = juce::Desktop::getInstance().getDisplays().getPrimaryDisplay()->userArea;
+        auto screenBounds =
+            juce::Desktop::getInstance().getDisplays().getPrimaryDisplay()->userArea;
         splashWindowPtr->setBounds(screenBounds);
-        
+
         // Center splash component in the fullscreen window
         splashBounds.setPosition(
             screenBounds.getCentreX() - splashBounds.getWidth() / 2,
-            screenBounds.getCentreY() - splashBounds.getHeight() / 2
-        );
+            screenBounds.getCentreY() - splashBounds.getHeight() / 2);
         if (splashComponent != nullptr)
         {
-            splashComponent->setBounds(splashBounds.translated(-screenBounds.getX(), -screenBounds.getY()));
+            splashComponent->setBounds(
+                splashBounds.translated(-screenBounds.getX(), -screenBounds.getY()));
         }
-        
+
         // Show splash
         splashWindowPtr->setVisible(true);
         splashWindowPtr->toFront(true);
-        
-        juce::Logger::writeToLog("[Splash] Window visible: " + juce::String(splashWindowPtr->isVisible() ? "yes" : "no"));
-        juce::Logger::writeToLog("[Splash] Window bounds: " + splashWindowPtr->getBounds().toString());
+
+        juce::Logger::writeToLog(
+            "[Splash] Window visible: " +
+            juce::String(splashWindowPtr->isVisible() ? "yes" : "no"));
+        juce::Logger::writeToLog(
+            "[Splash] Window bounds: " + splashWindowPtr->getBounds().toString());
         juce::Logger::writeToLog("[Splash] Splash screen shown successfully");
     }
     catch (const std::exception& e)
@@ -187,128 +237,136 @@ void PresetCreatorApplication::showSplashScreen()
 }
 
 void PresetCreatorApplication::shutdown()
-{ 
-        // Save persistent audio settings
-        std::unique_ptr<juce::XmlElement> currentState(audioDeviceManager.createStateXml());
+{
+    // Save persistent audio settings
+    std::unique_ptr<juce::XmlElement> currentState(audioDeviceManager.createStateXml());
 
-        if (currentState != nullptr)
-        {
-            // Define the same settings file path as in initialise()
-            auto appDataDir = juce::File::getSpecialLocation(juce::File::userApplicationDataDirectory)
-                                    .getChildFile(getApplicationName());
-            auto settingsFile = appDataDir.getChildFile("audio_settings.xml");
+    if (currentState != nullptr)
+    {
+        // Define the same settings file path as in initialise()
+        auto appDataDir = juce::File::getSpecialLocation(juce::File::userApplicationDataDirectory)
+                              .getChildFile(getApplicationName());
+        auto settingsFile = appDataDir.getChildFile("audio_settings.xml");
 
-            // Write the XML to the file
-            if (currentState->writeTo(settingsFile))
-            {
-                juce::Logger::writeToLog("Audio settings saved to: " + settingsFile.getFullPathName());
-            }
-            else
-            {
-                juce::Logger::writeToLog("Failed to save audio settings to: " + settingsFile.getFullPathName());
-            }
-        }
-        
-        // Save plugin list
-        if (auto pluginListXml = knownPluginList.createXml())
+        // Write the XML to the file
+        if (currentState->writeTo(settingsFile))
         {
-            if (pluginListXml->writeTo(pluginScanListFile))
-            {
-                juce::Logger::writeToLog("Plugin list saved to: " + pluginScanListFile.getFullPathName());
-            }
+            juce::Logger::writeToLog("Audio settings saved to: " + settingsFile.getFullPathName());
         }
-        
-        // Save window state and application properties
-        if (appProperties)
+        else
         {
-            if (mainWindow != nullptr && ! mainWindow->isFullScreen())
-                appProperties->setValue ("presetCreatorWindowState", mainWindow->getWindowStateAsString());
-            appProperties->saveIfNeeded();
+            juce::Logger::writeToLog(
+                "Failed to save audio settings to: " + settingsFile.getFullPathName());
         }
-        
-        RtLogger::shutdown(); 
-        mainWindow = nullptr; 
-        juce::Logger::setCurrentLogger (nullptr); 
-        fileLogger = nullptr; 
+    }
+
+    // Save plugin list
+    if (auto pluginListXml = knownPluginList.createXml())
+    {
+        if (pluginListXml->writeTo(pluginScanListFile))
+        {
+            juce::Logger::writeToLog(
+                "Plugin list saved to: " + pluginScanListFile.getFullPathName());
+        }
+    }
+
+    // Save window state and application properties
+    if (appProperties)
+    {
+        if (mainWindow != nullptr && !mainWindow->isFullScreen())
+            appProperties->setValue(
+                "presetCreatorWindowState", mainWindow->getWindowStateAsString());
+        appProperties->saveIfNeeded();
+    }
+
+    RtLogger::shutdown();
+    mainWindow = nullptr;
+    juce::Logger::setCurrentLogger(nullptr);
+    fileLogger = nullptr;
 }
 
-PresetCreatorApplication::MainWindow::MainWindow(juce::String name, 
-                                                 juce::AudioDeviceManager& adm,
-                                                 juce::AudioPluginFormatManager& fm,
-                                                 juce::KnownPluginList& kl)
-    : DocumentWindow(name,
-                     juce::Desktop::getInstance().getDefaultLookAndFeel()
-                         .findColour(ResizableWindow::backgroundColourId),
-                     DocumentWindow::allButtons),
-      deviceManager(adm),
-      pluginFormatManager(fm),
-      knownPluginList(kl)
+PresetCreatorApplication::MainWindow::MainWindow(
+    juce::String                    name,
+    juce::AudioDeviceManager&       adm,
+    juce::AudioPluginFormatManager& fm,
+    juce::KnownPluginList&          kl)
+    : DocumentWindow(
+          name,
+          juce::Desktop::getInstance().getDefaultLookAndFeel().findColour(
+              ResizableWindow::backgroundColourId),
+          DocumentWindow::allButtons),
+      deviceManager(adm), pluginFormatManager(fm), knownPluginList(kl)
 {
     juce::Logger::writeToLog("MainWindow constructor starting...");
     setUsingNativeTitleBar(true);
     juce::Logger::writeToLog("Attempting to create PresetCreatorComponent...");
-    setContentOwned(new PresetCreatorComponent(deviceManager, pluginFormatManager, knownPluginList), true);
+    setContentOwned(
+        new PresetCreatorComponent(deviceManager, pluginFormatManager, knownPluginList), true);
     juce::Logger::writeToLog("PresetCreatorComponent created and set.");
-    setResizable (true, true);
-    setResizeLimits (900, 600, 8192, 8192);
+    setResizable(true, true);
+    setResizeLimits(900, 600, 8192, 8192);
 
     // Try to restore previous window state from properties
     if (auto* props = PresetCreatorApplication::getApp().getProperties())
     {
-        auto state = props->getValue ("presetCreatorWindowState");
+        auto state = props->getValue("presetCreatorWindowState");
         if (state.isNotEmpty())
         {
-            if (! restoreWindowStateFromString (state))
-                centreWithSize (2600, 1080);
+            if (!restoreWindowStateFromString(state))
+                centreWithSize(2600, 1080);
         }
         else
         {
-            centreWithSize (2600, 1080);
+            centreWithSize(2600, 1080);
         }
     }
     else
     {
-        centreWithSize (2600, 1080);
+        centreWithSize(2600, 1080);
     }
     setVisible(true);
     toFront(true);
-    
+
     // Clamp to work area
     auto& displays = juce::Desktop::getInstance().getDisplays();
-    auto* display = displays.getDisplayForRect (getBounds());
-    if (display == nullptr) display = displays.getPrimaryDisplay();
-    if (display != nullptr) setBounds (getBounds().constrainedWithin (display->userArea));
+    auto* display = displays.getDisplayForRect(getBounds());
+    if (display == nullptr)
+        display = displays.getPrimaryDisplay();
+    if (display != nullptr)
+        setBounds(getBounds().constrainedWithin(display->userArea));
     juce::Logger::writeToLog("MainWindow setup complete");
 }
 
-bool PresetCreatorApplication::MainWindow::keyPressed (const juce::KeyPress& key)
+bool PresetCreatorApplication::MainWindow::keyPressed(const juce::KeyPress& key)
 {
     if (key.getKeyCode() == juce::KeyPress::F11Key)
     {
-        setFullScreen (! isFullScreen());
+        setFullScreen(!isFullScreen());
         return true;
     }
     if (key.getKeyCode() == juce::KeyPress::returnKey && key.getModifiers().isAltDown())
     {
         if (isFullScreen())
-            setFullScreen (false);
-        else if (! isMaximizedLike)
+            setFullScreen(false);
+        else if (!isMaximizedLike)
             applyMaximizeLike();
         else
             restoreFromMaximizeLike();
         return true;
     }
-    return DocumentWindow::keyPressed (key);
+    return DocumentWindow::keyPressed(key);
 }
 
 void PresetCreatorApplication::MainWindow::applyMaximizeLike()
 {
-    if (! isMaximizedLike)
+    if (!isMaximizedLike)
     {
         lastNormalBounds = getBounds();
         auto& displays = juce::Desktop::getInstance().getDisplays();
-        if (auto* d = displays.getDisplayForRect (getBounds())) setBounds (d->userArea);
-        else if (auto* p = displays.getPrimaryDisplay()) setBounds (p->userArea);
+        if (auto* d = displays.getDisplayForRect(getBounds()))
+            setBounds(d->userArea);
+        else if (auto* p = displays.getPrimaryDisplay())
+            setBounds(p->userArea);
         isMaximizedLike = true;
     }
 }
@@ -317,11 +375,10 @@ void PresetCreatorApplication::MainWindow::restoreFromMaximizeLike()
 {
     if (isMaximizedLike)
     {
-        if (! lastNormalBounds.isEmpty()) setBounds (lastNormalBounds);
+        if (!lastNormalBounds.isEmpty())
+            setBounds(lastNormalBounds);
         isMaximizedLike = false;
     }
 }
 
-START_JUCE_APPLICATION (PresetCreatorApplication)
-
-
+START_JUCE_APPLICATION(PresetCreatorApplication)

@@ -38,10 +38,16 @@ public:
      */
     bool isDownloading() const;
 
+    /**
+     * Get list of successfully downloaded files (call after completion)
+     */
+    juce::Array<FileInfo> getSuccessfulFiles() const;
+
 private:
     class DownloadThread;
     std::unique_ptr<DownloadThread> downloadThread;
     std::atomic<bool>               shouldCancel{false};
+    juce::Array<FileInfo>           lastSuccessfulFiles; // Cache of last successful downloads
 
     // Download a single file
     bool downloadFile(

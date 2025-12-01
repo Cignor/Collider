@@ -486,6 +486,38 @@ else()
 endif()
 
 # ==============================================================================
+# ASIO SDK Configuration (Windows-only low-latency audio)
+# ==============================================================================
+set(ASIO_SDK_DIR "${CMAKE_SOURCE_DIR}/../vendor/ASIOSDK" CACHE PATH "Path to ASIO SDK")
+
+if(WIN32)
+    if(EXISTS "${ASIO_SDK_DIR}/common/asio.h")
+        set(ASIO_SDK_FOUND TRUE)
+        message(STATUS "✓ ASIO SDK found at ${ASIO_SDK_DIR}")
+        message(STATUS "  - ASIO low-latency audio support will be enabled")
+        
+        # Store ASIO SDK paths as global variables for later use
+        set(ASIO_SDK_INCLUDE_DIRS
+            "${ASIO_SDK_DIR}/common"
+            "${ASIO_SDK_DIR}/host"
+            CACHE INTERNAL "ASIO SDK include directories"
+        )
+    else()
+        set(ASIO_SDK_FOUND FALSE)
+        message(WARNING 
+            "ASIO SDK not found at ${ASIO_SDK_DIR}\n"
+            "Low-latency ASIO audio support will NOT be available.\n"
+            "Download from https://www.steinberg.net/asiosdk\n"
+            "Extract to: ${ASIO_SDK_DIR}"
+        )
+    endif()
+else()
+    # ASIO is Windows-only (macOS uses CoreAudio, Linux uses ALSA/JACK)
+    set(ASIO_SDK_FOUND FALSE)
+    message(STATUS "ASIO not applicable on this platform (Windows-only)")
+endif()
+
+# ==============================================================================
 # FFmpeg (Pre-built vendor binaries - SIMPLIFIED!)
 # ==============================================================================
 # Windows: Download from https://github.com/BtbN/FFmpeg-Builds/releases
@@ -894,6 +926,8 @@ target_compile_definitions(ColliderApp PRIVATE
     $<$<BOOL:${USE_RUBBERBAND}>:USE_RUBBERBAND=1>
     $<$<NOT:$<BOOL:${USE_RUBBERBAND}>>:USE_RUBBERBAND=0>
     $<$<BOOL:${CUDA_SUPPORT_ENABLED}>:WITH_CUDA_SUPPORT=1>
+    # Enable ASIO if SDK is found
+    $<$<BOOL:${ASIO_SDK_FOUND}>:JUCE_ASIO=1>
 )
 
 target_link_libraries(ColliderApp PRIVATE
@@ -965,6 +999,9 @@ target_include_directories(ColliderApp PRIVATE
     $<$<BOOL:${CUDA_SUPPORT_ENABLED}>:${opencv_contrib_SOURCE_DIR}/modules/cudaobjdetect/include>
     $<$<BOOL:${CUDA_SUPPORT_ENABLED}>:${opencv_contrib_SOURCE_DIR}/modules/cudaoptflow/include>
     $<$<BOOL:${USE_RUBBERBAND}>:${RUBBERBAND_INCLUDE_DIR}>
+    # ASIO SDK headers (Windows only, conditional)
+    $<$<BOOL:${ASIO_SDK_FOUND}>:${ASIO_SDK_DIR}/common>
+    $<$<BOOL:${ASIO_SDK_FOUND}>:${ASIO_SDK_DIR}/host>
 )
 
 # ==============================================================================
@@ -1328,6 +1365,9 @@ target_include_directories(PresetCreatorApp PRIVATE
     $<$<BOOL:${CUDA_SUPPORT_ENABLED}>:${opencv_contrib_SOURCE_DIR}/modules/cudaobjdetect/include>
     $<$<BOOL:${CUDA_SUPPORT_ENABLED}>:${opencv_contrib_SOURCE_DIR}/modules/cudaoptflow/include>
     $<$<BOOL:${USE_RUBBERBAND}>:${RUBBERBAND_INCLUDE_DIR}>
+    # ASIO SDK headers (Windows only, conditional)
+    $<$<BOOL:${ASIO_SDK_FOUND}>:${ASIO_SDK_DIR}/common>
+    $<$<BOOL:${ASIO_SDK_FOUND}>:${ASIO_SDK_DIR}/host>
 )
 
 # This target also needs the compile definitions
@@ -1345,6 +1385,8 @@ target_compile_definitions(PresetCreatorApp PRIVATE
     $<$<BOOL:${USE_RUBBERBAND}>:USE_RUBBERBAND=1>
     $<$<NOT:$<BOOL:${USE_RUBBERBAND}>>:USE_RUBBERBAND=0>
     $<$<BOOL:${CUDA_SUPPORT_ENABLED}>:WITH_CUDA_SUPPORT=1>
+    # Enable ASIO if SDK is found
+    $<$<BOOL:${ASIO_SDK_FOUND}>:JUCE_ASIO=1>
 )
 
 target_link_libraries(PresetCreatorApp PRIVATE

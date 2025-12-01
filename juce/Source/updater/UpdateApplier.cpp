@@ -62,7 +62,9 @@ bool UpdateApplier::replaceFile(const juce::File& source, const juce::File& dest
 bool UpdateApplier::applyUpdates(
     const juce::Array<FileInfo>& files,
     const juce::File&            tempDirectory,
-    UpdateType                   type)
+    UpdateType                   type,
+    juce::Array<juce::String>*    outFailedFiles,
+    juce::Array<FileInfo>*        outSuccessfulFiles)
 {
     auto installDir = getInstallDirectory();
 
@@ -70,9 +72,12 @@ bool UpdateApplier::applyUpdates(
     DBG("Install directory: " + installDir.getFullPathName());
     DBG("Temp directory: " + tempDirectory.getFullPathName());
 
+    juce::Array<FileInfo> successfulFiles;
+    juce::Array<juce::String> failedFiles;
+
     if (type == UpdateType::Immediate)
     {
-        // Apply non-critical files immediately
+        // Apply non-critical files immediately - continue even if one fails
         for (const auto& fileInfo : files)
         {
             if (fileInfo.critical)
@@ -85,32 +90,47 @@ bool UpdateApplier::applyUpdates(
 
             if (!source.existsAsFile())
             {
-                DBG("Source file not found: " + source.getFullPathName());
-                return false;
+                juce::String error = "Source file not found: " + source.getFullPathName();
+                DBG(error);
+                juce::Logger::writeToLog(error);
+                if (outFailedFiles) outFailedFiles->add(fileInfo.relativePath);
+                failedFiles.add(fileInfo.relativePath);
+                continue; // Continue with next file
             }
 
             // Verify hash before applying
             if (!HashVerifier::verifyFile(source, fileInfo.sha256))
             {
-                DBG("Hash verification failed for: " + fileInfo.relativePath);
-                return false;
+                juce::String error = "Hash verification failed for: " + fileInfo.relativePath;
+                DBG(error);
+                juce::Logger::writeToLog(error);
+                if (outFailedFiles) outFailedFiles->add(fileInfo.relativePath);
+                failedFiles.add(fileInfo.relativePath);
+                continue; // Continue with next file
             }
 
             if (!replaceFile(source, destination))
             {
-                DBG("Failed to replace file: " + fileInfo.relativePath);
-                return false;
+                juce::String error = "Failed to replace file: " + fileInfo.relativePath;
+                DBG(error);
+                juce::Logger::writeToLog(error);
+                if (outFailedFiles) outFailedFiles->add(fileInfo.relativePath);
+                failedFiles.add(fileInfo.relativePath);
+                continue; // Continue with next file
             }
 
-            // Update version manager
+            // Success - update version manager
             versionManager.updateFileRecord(fileInfo.relativePath, fileInfo);
+            successfulFiles.add(fileInfo);
+            if (outSuccessfulFiles) outSuccessfulFiles->add(fileInfo);
         }
 
-        // Save version info
+        // Save version info (even if some files failed)
         versionManager.saveVersionInfo();
 
-        DBG("Immediate updates applied successfully");
-        return true;
+        DBG("Immediate updates: " + juce::String(successfulFiles.size()) + " succeeded, " + 
+            juce::String(failedFiles.size()) + " failed");
+        return !successfulFiles.isEmpty(); // Return true if at least one file succeeded
     }
     else // UpdateType::OnRestart
     {
@@ -120,7 +140,6 @@ bool UpdateApplier::applyUpdates(
         auto runningExePath = juce::File::getSpecialLocation(juce::File::currentExecutableFile);
         auto runningExeName = runningExePath.getFileName();
         
-        int filesApplied = 0;
         int filesSkipped = 0;
 
         for (const auto& fileInfo : files)
@@ -144,36 +163,49 @@ bool UpdateApplier::applyUpdates(
 
             if (!source.existsAsFile())
             {
-                DBG("Source file not found: " + source.getFullPathName());
-                return false;
+                juce::String error = "Source file not found: " + source.getFullPathName();
+                DBG(error);
+                juce::Logger::writeToLog(error);
+                if (outFailedFiles) outFailedFiles->add(fileInfo.relativePath);
+                failedFiles.add(fileInfo.relativePath);
+                continue; // Continue with next file
             }
 
             // Verify hash before applying
             if (!HashVerifier::verifyFile(source, fileInfo.sha256))
             {
-                DBG("Hash verification failed for: " + fileInfo.relativePath);
-                return false;
+                juce::String error = "Hash verification failed for: " + fileInfo.relativePath;
+                DBG(error);
+                juce::Logger::writeToLog(error);
+                if (outFailedFiles) outFailedFiles->add(fileInfo.relativePath);
+                failedFiles.add(fileInfo.relativePath);
+                continue; // Continue with next file
             }
 
             // Copy to install directory
             if (!replaceFile(source, destination))
             {
-                DBG("Failed to replace file: " + fileInfo.relativePath);
-                return false;
+                juce::String error = "Failed to replace file: " + fileInfo.relativePath;
+                DBG(error);
+                juce::Logger::writeToLog(error);
+                if (outFailedFiles) outFailedFiles->add(fileInfo.relativePath);
+                failedFiles.add(fileInfo.relativePath);
+                continue; // Continue with next file
             }
 
-            // Update version manager
+            // Success - update version manager
             versionManager.updateFileRecord(fileInfo.relativePath, fileInfo);
-            filesApplied++;
+            successfulFiles.add(fileInfo);
+            if (outSuccessfulFiles) outSuccessfulFiles->add(fileInfo);
         }
 
-        // Save version info
+        // Save version info (even if some files failed)
         versionManager.saveVersionInfo();
 
-        DBG("Files applied: " + juce::String(filesApplied) + 
-            ", Files skipped (running EXE): " + juce::String(filesSkipped) +
-            " (will be handled by PikonUpdater)");
-        return true;
+        DBG("Files applied: " + juce::String(successfulFiles.size()) + 
+            " succeeded, " + juce::String(failedFiles.size()) + " failed, " +
+            juce::String(filesSkipped) + " skipped (running EXE)");
+        return !successfulFiles.isEmpty(); // Return true if at least one file succeeded
     }
 }
 
