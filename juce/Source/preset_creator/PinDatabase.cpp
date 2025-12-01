@@ -1086,6 +1086,7 @@ db["random"] = ModulePinInfo(
     db["pose_estimator"] = ModulePinInfo();
     db["pose_estimator"].defaultWidth = NodeWidth::Exception; // Custom size with zoom support
     db["pose_estimator"].audioIns.emplace_back("Source In", 0, PinDataType::Video);
+    db["pose_estimator"].audioIns.emplace_back("Confidence Mod", 1, PinDataType::CV);
     // Programmatically add all 30 output pins (15 keypoints x 2 coordinates)
     const std::vector<std::string> keypointNames = {
         "Head", "Neck", "R Shoulder", "R Elbow", "R Wrist",
@@ -1105,6 +1106,8 @@ db["random"] = ModulePinInfo(
     // Add Video Out and Cropped Out pins (bus 1 and 2)
     db["pose_estimator"].audioOuts.emplace_back("Video Out", 0, PinDataType::Video);
     db["pose_estimator"].audioOuts.emplace_back("Cropped Out", 1, PinDataType::Video);
+    // Add modulation pin for confidence CV input
+    db["pose_estimator"].modIns.emplace_back("Confidence", "confidence_mod", PinDataType::CV);
 
     // Hand Tracker: 21 keypoints x 2 = 42 outs
     //   Channels 0-1: Wrist X/Y (absolute screen position)

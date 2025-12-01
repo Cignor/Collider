@@ -9052,8 +9052,33 @@ void ImGuiNodeEditorComponent::handleBeautifyLayout()
     }
 
     // --- STEP 4: Calculate Final Coordinates ---
-    const float COLUMN_WIDTH = 400.0f;
+    // NOTE: We intentionally size columns based on the *actual* node widths so
+    // that wide nodes (e.g. timeline / sampler / sequencer) do not overlap
+    // adjacent columns.
+    const float COLUMN_HORIZONTAL_PADDING = 80.0f;
     const float NODE_VERTICAL_PADDING = 50.0f;
+
+    // Compute per-column maximum width based on the current node sizes
+    std::vector<float> columnWidths(maxColumn + 1, 0.0f);
+    for (int c = 0; c <= maxColumn; ++c)
+    {
+        float maxWidth = 0.0f;
+        for (juce::uint32 lid : columns[c])
+        {
+            ImVec2 nodeSize = ImNodes::GetNodeDimensions((int)lid);
+            maxWidth = std::max(maxWidth, nodeSize.x);
+        }
+        columnWidths[c] = maxWidth;
+    }
+
+    // Compute column X positions as cumulative sum of widths + padding
+    std::vector<float> columnX(maxColumn + 1, 0.0f);
+    float accumulatedX = 0.0f;
+    for (int c = 0; c <= maxColumn; ++c)
+    {
+        columnX[c] = accumulatedX;
+        accumulatedX += columnWidths[c] + COLUMN_HORIZONTAL_PADDING;
+    }
 
     // Find the tallest column to center shorter ones
     float tallestColumnHeight = 0.0f;
@@ -9083,7 +9108,7 @@ void ImGuiNodeEditorComponent::handleBeautifyLayout()
 
         for (juce::uint32 lid : columns[c])
         {
-            float x = c * COLUMN_WIDTH;
+            float x = columnX[c];
             pendingNodePositions[(int)lid] = ImVec2(x, currentY);
 
             ImVec2 nodeSize = ImNodes::GetNodeDimensions((int)lid);
@@ -9091,8 +9116,8 @@ void ImGuiNodeEditorComponent::handleBeautifyLayout()
         }
     }
 
-    // Position the output node to the right of all other modules
-    float finalX = (maxColumn + 1) * COLUMN_WIDTH;
+    // Position the output node to the right of all other modules, respecting its width
+    float finalX = accumulatedX;
     float outputNodeY = (tallestColumnHeight - ImNodes::GetNodeDimensions(0).y) / 2.0f;
     pendingNodePositions[0] = ImVec2(finalX, outputNodeY);
     juce::Logger::writeToLog("[Beautify] Applied position to Output Node");

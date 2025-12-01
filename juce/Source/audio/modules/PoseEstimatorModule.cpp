@@ -17,7 +17,7 @@
 #include <unordered_map>
 #endif
 
-void PoseEstimatorModule::loadModel()
+void PoseEstimatorModule::loadModel(int modelIndex)
 {
     // Find assets next to executable (like ObjectDetectorModule)
     auto exeFile = juce::File::getSpecialLocation(juce::File::currentApplicationFile);
@@ -25,16 +25,47 @@ void PoseEstimatorModule::loadModel()
     juce::File assetsDir = appDir.getChildFile("assets");
     
     auto poseModelsDir = assetsDir.getChildFile("openpose_models").getChildFile("pose");
-    juce::File protoFile = poseModelsDir.getChildFile("mpi/pose_deploy_linevec_faster_4_stages.prototxt");
-    juce::File modelFile = poseModelsDir.getChildFile("mpi/pose_iter_160000.caffemodel");
+
+    juce::String protoPath, modelPath;
+    juce::String modelName;
+
+    switch (modelIndex)
+    {
+        case 0: // BODY_25
+            modelName = "BODY_25";
+            protoPath = poseModelsDir.getChildFile("body_25/pose_deploy.prototxt").getFullPathName();
+            modelPath = poseModelsDir.getChildFile("body_25/pose_iter_584000.caffemodel").getFullPathName();
+            break;
+        case 1: // COCO
+            modelName = "COCO";
+            protoPath = poseModelsDir.getChildFile("coco/pose_deploy_linevec.prototxt").getFullPathName();
+            modelPath = poseModelsDir.getChildFile("coco/pose_iter_440000.caffemodel").getFullPathName();
+            break;
+        case 2: // MPI
+            modelName = "MPI";
+            protoPath = poseModelsDir.getChildFile("mpi/pose_deploy_linevec.prototxt").getFullPathName();
+            modelPath = poseModelsDir.getChildFile("mpi/pose_iter_160000.caffemodel").getFullPathName();
+            break;
+        case 3: // MPI (Fast)
+        default:
+            modelName = "MPI (Fast)";
+            protoPath = poseModelsDir.getChildFile("mpi/pose_deploy_linevec_faster_4_stages.prototxt").getFullPathName();
+            modelPath = poseModelsDir.getChildFile("mpi/pose_iter_160000.caffemodel").getFullPathName();
+            break;
+    }
+
+    juce::Logger::writeToLog("[PoseEstimator] Attempting to load " + modelName + " model...");
+    juce::Logger::writeToLog("  - Prototxt: " + protoPath);
+    juce::Logger::writeToLog("  - Caffemodel: " + modelPath);
     
-    juce::Logger::writeToLog("[PoseEstimator] Assets directory: " + assetsDir.getFullPathName());
+    juce::File protoFile(protoPath);
+    juce::File modelFile(modelPath);
     
     if (protoFile.existsAsFile() && modelFile.existsAsFile())
     {
         try
         {
-            net = cv::dnn::readNetFromCaffe(protoFile.getFullPathName().toStdString(), modelFile.getFullPathName().toStdString());
+            net = cv::dnn::readNetFromCaffe(protoPath.toStdString(), modelPath.toStdString());
             
             // Set backend immediately after loading model (like ObjectDetectorModule)
 #if WITH_CUDA_SUPPORT
@@ -58,17 +89,19 @@ void PoseEstimatorModule::loadModel()
 #endif
             
             modelLoaded = true;
-            juce::Logger::writeToLog("[PoseEstimator] MPI (Fast) model loaded successfully");
+            juce::Logger::writeToLog("[PoseEstimator] SUCCESS: Loaded model: " + modelName);
         }
         catch (const cv::Exception& e)
         {
-            juce::Logger::writeToLog("[PoseEstimator] OpenCV exception: " + juce::String(e.what()));
+            juce::Logger::writeToLog("[PoseEstimator] FAILED: OpenCV exception while loading model: " + juce::String(e.what()));
             modelLoaded = false;
         }
     }
     else
     {
-        juce::Logger::writeToLog("[PoseEstimator] FAILED: Could not find MPI model files in " + assetsDir.getFullPathName());
+        juce::Logger::writeToLog("[PoseEstimator] FAILED: Could not find model files at the specified paths.");
+        if (!protoFile.existsAsFile()) juce::Logger::writeToLog("  - Missing file: " + protoPath);
+        if (!modelFile.existsAsFile()) juce::Logger::writeToLog("  - Missing file: " + modelPath);
         modelLoaded = false;
     }
 }
@@ -85,6 +118,10 @@ void PoseEstimatorModule::setExtraStateTree(const juce::ValueTree& state)
     if (state.hasType("PoseEstimatorState"))
     {
         assetsPath = state.getProperty("assetsPath", "").toString();
+        if (assetsPath.isNotEmpty())
+        {
+            requestedModelIndex = modelChoiceParam ? modelChoiceParam->getIndex() : 3;
+        }
     }
 }
 
@@ -99,6 +136,11 @@ juce::AudioProcessorValueTreeState::ParameterLayout PoseEstimatorModule::createP
     // Source ID input (which video source to connect to)
     params.push_back(
         std::make_unique<juce::AudioParameterFloat>("sourceId", "Source ID", 0.0f, 1000.0f, 0.0f));
+
+    // Model choice (BODY_25, COCO, MPI, MPI Fast)
+    params.push_back(
+        std::make_unique<juce::AudioParameterChoice>(
+            "model", "Model", juce::StringArray{"BODY_25", "COCO", "MPI", "MPI (Fast)"}, 3));
 
     // Model quality (affects blob size)
     params.push_back(
@@ -135,7 +177,7 @@ juce::AudioProcessorValueTreeState::ParameterLayout PoseEstimatorModule::createP
 PoseEstimatorModule::PoseEstimatorModule()
     : ModuleProcessor(
           BusesProperties()
-              .withInput("Input", juce::AudioChannelSet::mono(), true)
+              .withInput("Input", juce::AudioChannelSet::discreteChannels(2), true) // Source ID (ch 0) + Confidence Mod (ch 1)
               .withOutput(
                   "CV Out",
                   juce::AudioChannelSet::discreteChannels(34),
@@ -149,13 +191,19 @@ PoseEstimatorModule::PoseEstimatorModule()
     sourceIdParam = apvts.getRawParameterValue("sourceId");
     zoomLevelParam = apvts.getRawParameterValue("zoomLevel");
     qualityParam = dynamic_cast<juce::AudioParameterChoice*>(apvts.getParameter("quality"));
+    modelChoiceParam = dynamic_cast<juce::AudioParameterChoice*>(apvts.getParameter("model"));
     confidenceThresholdParam = apvts.getRawParameterValue("confidence");
     drawSkeletonParam = dynamic_cast<juce::AudioParameterBool*>(apvts.getParameter("drawSkeleton"));
     useGpuParam = dynamic_cast<juce::AudioParameterBool*>(apvts.getParameter("useGpu"));
 
     // Initialize FIFO buffer
     fifoBuffer.resize(16);
-    // Model will be loaded lazily in run() loop (like HandTrackerModule/FaceTrackerModule)
+    
+    // Defer initial model load to the thread (default to current selection or MPI Fast)
+    requestedModelIndex = modelChoiceParam ? modelChoiceParam->getIndex() : 3;
+    
+    // Initialize confidence threshold
+    currentConfidenceThreshold.store(confidenceThresholdParam ? confidenceThresholdParam->load() : 0.1f);
 }
 
 PoseEstimatorModule::~PoseEstimatorModule()
@@ -178,9 +226,6 @@ void PoseEstimatorModule::releaseResources()
 
 void PoseEstimatorModule::run()
 {
-    if (!modelLoaded)
-        loadModel();
-    
 #if WITH_CUDA_SUPPORT
     bool lastGpuState = false; // Track GPU state to minimize backend switches
     bool loggedGpuWarning = false; // Only warn once if no GPU available
@@ -188,8 +233,19 @@ void PoseEstimatorModule::run()
     
     while (!threadShouldExit())
     {
+        // Handle deferred model reload requests from UI
+        int toLoad = requestedModelIndex.exchange(-1);
+        if (toLoad != -1)
+        {
+            loadModel(toLoad);
+        }
+        
+        // Load model on first run if not loaded yet
         if (!modelLoaded)
-            loadModel();
+        {
+            int defaultModel = modelChoiceParam ? modelChoiceParam->getIndex() : 3;
+            loadModel(defaultModel);
+        }
         
         juce::uint32 sourceId = currentSourceId.load();
         cv::Mat prefetchedFrame;
@@ -515,7 +571,8 @@ void PoseEstimatorModule::parsePoseOutput(
     int W = netOutput.size[3]; // Heatmap width
 
     result.detectedPoints = 0;
-    float confidenceThreshold = confidenceThresholdParam->load();
+    // Use modulated confidence value from audio thread (or fallback to parameter)
+    float confidenceThreshold = currentConfidenceThreshold.load();
 
     int numHeatmaps = netOutput.size[1];
     int count = juce::jmin(MPI_NUM_KEYPOINTS, numHeatmaps);
@@ -678,20 +735,70 @@ std::vector<DynamicPinInfo> PoseEstimatorModule::getDynamicOutputPins() const
     return pins;
 }
 
+bool PoseEstimatorModule::getParamRouting(const juce::String& paramId, int& outBusIndex, int& outChannelIndexInBus) const
+{
+    outBusIndex = 0; // All modulation is on the single input bus
+    if (paramId == paramIdConfidenceMod)
+    {
+        outChannelIndexInBus = 1; // Confidence CV is on channel 1
+        return true;
+    }
+    return false;
+}
+
 void PoseEstimatorModule::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midi)
 {
     juce::ignoreUnused(midi);
 
-
-    // Read Source ID from input pin (BEFORE clearing the buffer!)
+    // ✅ CRITICAL: Read ALL inputs BEFORE clearing buffer (prevents buffer aliasing bug)
     auto inputBuffer = getBusBuffer(buffer, true, 0);
+    
+    // Read Source ID from input pin (channel 0)
+    float sourceIdFloat = 0.0f;
     if (inputBuffer.getNumChannels() > 0 && inputBuffer.getNumSamples() > 0)
     {
-        float sourceIdFloat = inputBuffer.getSample(0, 0);
-        currentSourceId.store((juce::uint32)sourceIdFloat);
+        sourceIdFloat = inputBuffer.getSample(0, 0);
     }
+    
+    // Read Confidence CV modulation (channel 1) if connected
+    const bool isConfidenceModConnected = isParamInputConnected(paramIdConfidenceMod);
+    const float* confidenceCV = nullptr;
+    if (isConfidenceModConnected && inputBuffer.getNumChannels() > 1)
+    {
+        confidenceCV = inputBuffer.getReadPointer(1);
+    }
+    
+    // Get base confidence value
+    const float baseConfidence = confidenceThresholdParam ? confidenceThresholdParam->load() : 0.1f;
+    
+    // Process confidence modulation per-sample
+    const int numSamples = buffer.getNumSamples();
+    float currentConfidence = baseConfidence;
+    
+    if (isConfidenceModConnected && confidenceCV)
+    {
+        // Use the last sample value (or average if needed)
+        // For pose estimation, we use a single threshold per frame, so use the last sample
+        const float cvValue = confidenceCV[numSamples - 1];
+        // CV is 0-1, map directly to confidence range (0.0-1.0)
+        currentConfidence = juce::jlimit(0.0f, 1.0f, cvValue);
+        
+        // Update telemetry for UI
+        setLiveParamValue("confidence_live", currentConfidence);
+    }
+    else
+    {
+        // No modulation, use base value
+        currentConfidence = baseConfidence;
+    }
+    
+    // Store modulated confidence for processing thread
+    currentConfidenceThreshold.store(currentConfidence);
+    
+    // Store source ID
+    currentSourceId.store((juce::uint32)sourceIdFloat);
 
-    // Clear the buffer for output
+    // ✅ Now safe to clear the buffer for output
     buffer.clear();
 
     juce::uint32 myLogicalId = storedLogicalId;
@@ -797,7 +904,7 @@ void PoseEstimatorModule::drawParametersInNode(
     const auto& theme = ThemeManager::getInstance().getCurrentTheme();
     ImGui::PushItemWidth(itemWidth);
 
-// GPU ACCELERATION TOGGLE
+    // GPU ACCELERATION TOGGLE
 #if WITH_CUDA_SUPPORT
     bool cudaAvailable = CudaDeviceCountCache::isAvailable();
 
@@ -838,6 +945,41 @@ void PoseEstimatorModule::drawParametersInNode(
     }
 #endif
 
+    // Model selection dropdown
+    bool modelMod = isParamModulated("model");
+    if (modelMod)
+        ImGui::BeginDisabled();
+    if (modelChoiceParam)
+    {
+        int m = modelChoiceParam->getIndex();
+        if (ImGui::Combo("Model", &m, "BODY_25 (25 pts)\0COCO (18 pts)\0MPI (15 pts)\0MPI Fast (15 pts)\0\0"))
+        {
+            if (!modelMod)
+            {
+                *modelChoiceParam = m;
+                requestedModelIndex = m; // signal thread to reload
+                onModificationEnded();
+            }
+        }
+        // Scroll-edit for model combo
+        if (!modelMod && ImGui::IsItemHovered())
+        {
+            const float wheel = ImGui::GetIO().MouseWheel;
+            if (wheel != 0.0f)
+            {
+                const int newM = juce::jlimit(0, 3, m + (wheel > 0.0f ? -1 : 1));
+                if (newM != m)
+                {
+                    *modelChoiceParam = newM;
+                    requestedModelIndex = newM;
+                    onModificationEnded();
+                }
+            }
+        }
+    }
+    if (modelMod)
+        ImGui::EndDisabled();
+
     // Blob size (maps to quality tiers)
     bool qualityMod = isParamModulated("quality");
     if (qualityMod)
@@ -861,25 +1003,30 @@ void PoseEstimatorModule::drawParametersInNode(
     if (qualityMod)
         ImGui::EndDisabled();
 
-    // Confidence threshold
-    bool  confidenceMod = isParamModulated("confidence");
-    float confidenceFallback = confidenceThresholdParam ? confidenceThresholdParam->load() : 0.5f;
-    float confidence =
-        confidenceMod ? getLiveParamValue("confidence", confidenceFallback) : confidenceFallback;
+    // Confidence threshold with CV modulation support
+    bool confidenceMod = isParamModulated(paramIdConfidenceMod);
+    float confidenceFallback = confidenceThresholdParam ? confidenceThresholdParam->load() : 0.1f;
+    float confidence = confidenceMod
+        ? getLiveParamValueFor(paramIdConfidenceMod, "confidence_live", confidenceFallback)
+        : confidenceFallback;
     if (confidenceMod)
         ImGui::BeginDisabled();
     if (ImGui::SliderFloat("Confidence", &confidence, 0.0f, 1.0f, "%.2f"))
     {
         if (!confidenceMod)
-            *dynamic_cast<juce::AudioParameterFloat*>(apvts.getParameter("confidence")) =
+            *dynamic_cast<juce::AudioParameterFloat*>(apvts.getParameter(paramIdConfidence)) =
                 confidence;
     }
     if (ImGui::IsItemDeactivatedAfterEdit() && !confidenceMod)
         onModificationEnded();
     if (!confidenceMod)
-        adjustParamOnWheel(apvts.getParameter("confidence"), "confidence", confidence);
+        adjustParamOnWheel(apvts.getParameter(paramIdConfidence), paramIdConfidence, confidence);
     if (confidenceMod)
+    {
         ImGui::EndDisabled();
+        ImGui::SameLine();
+        ImGui::TextUnformatted("(mod)");
+    }
 
     // Restore Zoom (-/+) controls
     int level = zoomLevelParam ? (int)zoomLevelParam->load() : 1;
@@ -1216,8 +1363,9 @@ void PoseEstimatorModule::drawParametersInNode(
 
 void PoseEstimatorModule::drawIoPins(const NodePinHelpers& helpers)
 {
-    // Input: Source ID from video loader
-    helpers.drawAudioInputPin("Source In", 0);
+    // Inputs: Source ID and Confidence CV modulation (using parallel pins layout)
+    helpers.drawParallelPins("Source In", 0, nullptr, -1);
+    helpers.drawParallelPins("Confidence Mod", 1, nullptr, -1);
 
     // Outputs: 30 pins (15 keypoints x 2 coordinates)
     for (int i = 0; i < MPI_NUM_KEYPOINTS; ++i)
@@ -1225,9 +1373,15 @@ void PoseEstimatorModule::drawIoPins(const NodePinHelpers& helpers)
         const std::string& name = MPI_KEYPOINT_NAMES[i];
         juce::String xLabel = juce::String(name) + " X";
         juce::String yLabel = juce::String(name) + " Y";
-        helpers.drawAudioOutputPin(xLabel.toRawUTF8(), i * 2);
-        helpers.drawAudioOutputPin(yLabel.toRawUTF8(), i * 2 + 1);
+        helpers.drawParallelPins(nullptr, -1, xLabel.toRawUTF8(), i * 2);
+        helpers.drawParallelPins(nullptr, -1, yLabel.toRawUTF8(), i * 2 + 1);
     }
-    helpers.drawAudioOutputPin("Video Out", 0); // Bus 1
+    // Zone gates and video outputs
+    helpers.drawParallelPins(nullptr, -1, "Red Zone Gate", 30);
+    helpers.drawParallelPins(nullptr, -1, "Green Zone Gate", 31);
+    helpers.drawParallelPins(nullptr, -1, "Blue Zone Gate", 32);
+    helpers.drawParallelPins(nullptr, -1, "Yellow Zone Gate", 33);
+    helpers.drawParallelPins(nullptr, -1, "Video Out", 34); // Bus 1, channel 0
+    helpers.drawParallelPins(nullptr, -1, "Cropped Out", 35); // Bus 2, channel 0
 }
 #endif

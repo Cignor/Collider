@@ -51,6 +51,9 @@ public:
 
     juce::AudioProcessorValueTreeState& getAPVTS() override { return apvts; }
 
+    // Parameter routing for CV modulation
+    bool getParamRouting(const juce::String& paramId, int& outBusIndex, int& outChannelIndexInBus) const override;
+
     // Persist extra state (e.g., assets path)
     juce::ValueTree getExtraStateTree() const override;
     void            setExtraStateTree(const juce::ValueTree& state) override;
@@ -94,7 +97,7 @@ private:
         int            frameWidth,
         int            frameHeight,
         PoseResult&    result);
-    void loadModel();
+    void loadModel(int modelIndex);
 
     static juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout();
     juce::AudioProcessorValueTreeState                         apvts;
@@ -116,12 +119,23 @@ private:
     cv::dnn::Net                net;
     bool                        modelLoaded = false;
     juce::AudioParameterChoice* qualityParam = nullptr;
+    juce::AudioParameterChoice* modelChoiceParam = nullptr;
+
+    // Signal for the background thread to reload the model
+    std::atomic<int> requestedModelIndex{-1};
+
+    // Parameter IDs for modulation
+    static constexpr auto paramIdConfidence = "confidence";
+    static constexpr auto paramIdConfidenceMod = "confidence_mod";
 
     // Source ID (read from input cable in audio thread, used by processing thread)
     std::atomic<juce::uint32> currentSourceId{0};
 
     // Cached resolved source ID from connection graph (for XML load before processBlock runs)
     juce::uint32 cachedResolvedSourceId{0};
+
+    // Modulated confidence value (set by audio thread, read by processing thread)
+    std::atomic<float> currentConfidenceThreshold{0.1f};
 
     // Lock-free FIFO for passing results from processing thread to audio thread
     PoseResult              lastResultForAudio;

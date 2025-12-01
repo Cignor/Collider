@@ -18,40 +18,65 @@ public:
     ~WebcamLoaderModule() override;
 
     const juce::String getName() const override { return "webcam_loader"; }
-    
+
     void prepareToPlay(double sampleRate, int samplesPerBlock) override;
     void releaseResources() override;
     void processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midi) override;
-    
+
     juce::AudioProcessorValueTreeState& getAPVTS() override { return apvts; }
 
     // For UI: get latest frame for preview
     juce::Image getLatestFrame();
 
 #if defined(PRESET_CREATOR_UI)
-    void drawParametersInNode(float itemWidth,
-                              const std::function<bool(const juce::String& paramId)>& isParamModulated,
-                              const std::function<void()>& onModificationEnded) override;
+    void drawParametersInNode(
+        float                                                   itemWidth,
+        const std::function<bool(const juce::String& paramId)>& isParamModulated,
+        const std::function<void()>&                            onModificationEnded) override;
     void drawIoPins(const NodePinHelpers& helpers) override;
-    
-    // Override to specify custom node width. Height is calculated dynamically based on video aspect ratio.
-    // Width changes based on zoom level (Small=240px, Normal=480px, Large=960px).
+
+    // Override to specify custom node width. Height is calculated dynamically based on video aspect
+    // ratio. Width changes based on zoom level (Small=240px, Normal=480px, Large=960px).
     ImVec2 getCustomNodeSize() const override;
 #endif
 
 private:
-    void run() override;
-    void updateGuiFrame(const cv::Mat& frame);
-    
+    void         run() override;
+    void         updateGuiFrame(const cv::Mat& frame);
+    juce::uint32 getMyLogicalId();
+    bool         openCameraWithTimeout(int index, int timeoutMs);
+
     static juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout();
-    juce::AudioProcessorValueTreeState apvts;
-    
+    juce::AudioProcessorValueTreeState                         apvts;
+
     std::atomic<float>* cameraIndexParam = nullptr;
     // 0 = Small (240), 1 = Normal (480), 2 = Large (960)
     std::atomic<float>* zoomLevelParam = nullptr;
-    
-    cv::VideoCapture videoCapture;
-    juce::Image latestFrameForGui;
-    juce::CriticalSection imageLock;
-};
 
+    // New parameters for explicit control
+    std::atomic<float>* resolutionParam = nullptr;
+    std::atomic<float>* fpsParam = nullptr;
+
+    // Phase 3: Advanced Controls
+    std::atomic<float>* autoExposureParam = nullptr;
+    std::atomic<float>* exposureParam = nullptr;
+    std::atomic<float>* autoFocusParam = nullptr;
+    std::atomic<float>* focusParam = nullptr;
+    std::atomic<float>* gainParam = nullptr;
+    std::atomic<float>* autoWBParam = nullptr;
+    std::atomic<float>* wbTemperatureParam = nullptr;
+
+    cv::VideoCapture      videoCapture;
+    juce::Image           latestFrameForGui;
+    juce::CriticalSection imageLock;
+
+    // Live webcam info
+    std::atomic<int>   actualWidth{0};
+    std::atomic<int>   actualHeight{0};
+    std::atomic<float> actualFps{0.0f};
+
+    // Lazy color conversion
+    cv::Mat latestFrameBgr;
+
+    juce::uint32 storedLogicalId = 0;
+};
