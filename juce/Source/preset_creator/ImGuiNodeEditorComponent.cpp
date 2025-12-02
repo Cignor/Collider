@@ -3199,6 +3199,7 @@ void ImGuiNodeEditorComponent::renderImGui()
             addModuleButton("Tempo Clock", "tempo_clock");
             addModuleButton("Snapshot Sequencer", "snapshot_sequencer");
             addModuleButton("Stroke Sequencer", "stroke_sequencer");
+            addModuleButton("Chord Arp", "chord_arp");
             addModuleButton("Timeline", "timeline");
         }
 
@@ -4007,6 +4008,30 @@ void ImGuiNodeEditorComponent::renderImGui()
                                 onModificationEnded();
                             }
                         }
+                        // Scroll-edit for Input Device combo
+                        if (!availableInputDevices.isEmpty()
+                            && ImGui::IsItemHovered())
+                        {
+                            const float wheel = ImGui::GetIO().MouseWheel;
+                            if (wheel != 0.0f)
+                            {
+                                const int maxIndex =
+                                    (int)availableInputDevices.size() - 1;
+                                int newIndex = juce::jlimit(
+                                    0,
+                                    maxIndex,
+                                    currentInputDeviceIndex
+                                        + (wheel > 0.0f ? -1 : 1));
+                                if (newIndex != currentInputDeviceIndex)
+                                {
+                                    currentInputDeviceIndex = newIndex;
+                                    setup.inputDeviceName =
+                                        availableInputDevices[currentInputDeviceIndex];
+                                    deviceManager.setAudioDeviceSetup(setup, true);
+                                    onModificationEnded();
+                                }
+                            }
+                        }
 
                         // Output Device
                         juce::StringArray availableOutputDevices;
@@ -4036,6 +4061,30 @@ void ImGuiNodeEditorComponent::renderImGui()
                                 onModificationEnded();
                             }
                         }
+                        // Scroll-edit for Output Device combo
+                        if (!availableOutputDevices.isEmpty()
+                            && ImGui::IsItemHovered())
+                        {
+                            const float wheel = ImGui::GetIO().MouseWheel;
+                            if (wheel != 0.0f)
+                            {
+                                const int maxIndex =
+                                    (int)availableOutputDevices.size() - 1;
+                                int newIndex = juce::jlimit(
+                                    0,
+                                    maxIndex,
+                                    currentOutputDeviceIndex
+                                        + (wheel > 0.0f ? -1 : 1));
+                                if (newIndex != currentOutputDeviceIndex)
+                                {
+                                    currentOutputDeviceIndex = newIndex;
+                                    setup.outputDeviceName =
+                                        availableOutputDevices[currentOutputDeviceIndex];
+                                    deviceManager.setAudioDeviceSetup(setup, true);
+                                    onModificationEnded();
+                                }
+                            }
+                        }
 
                         // --- Channel Count ---
                         auto* numChannelsParam = static_cast<juce::AudioParameterInt*>(
@@ -4050,6 +4099,21 @@ void ImGuiNodeEditorComponent::renderImGui()
                             *numChannelsParam = numChannels;
                             onModificationEnded();
                         }
+                        // Scroll-edit support for Channels (integer parameter)
+                        if (ImGui::IsItemHovered())
+                        {
+                            const float wheel = ImGui::GetIO().MouseWheel;
+                            if (wheel != 0.0f)
+                            {
+                                int newVal = numChannelsParam->get() + (wheel > 0.0f ? 1 : -1);
+                                newVal = juce::jlimit(1, AudioInputModuleProcessor::MAX_CHANNELS, newVal);
+                                if (newVal != numChannelsParam->get())
+                                {
+                                    *numChannelsParam = newVal;
+                                    onModificationEnded();
+                                }
+                            }
+                        }
 
                         // --- Threshold Sliders ---
                         auto* gateThreshParam = static_cast<juce::AudioParameterFloat*>(
@@ -4060,6 +4124,24 @@ void ImGuiNodeEditorComponent::renderImGui()
                             *gateThreshParam = gateThresh;
                             onModificationEnded();
                         }
+                        // Scroll-edit support for Gate Threshold
+                        if (ImGui::IsItemHovered())
+                        {
+                            const float wheel = ImGui::GetIO().MouseWheel;
+                            if (wheel != 0.0f)
+                            {
+                                const float step = 0.01f;
+                                float       newVal =
+                                    juce::jlimit(0.0f, 1.0f,
+                                                 gateThreshParam->get()
+                                                     + (wheel > 0.0f ? step : -step));
+                                if (newVal != gateThreshParam->get())
+                                {
+                                    *gateThreshParam = newVal;
+                                    onModificationEnded();
+                                }
+                            }
+                        }
 
                         auto* trigThreshParam = static_cast<juce::AudioParameterFloat*>(
                             apvts.getParameter("triggerThreshold"));
@@ -4069,6 +4151,24 @@ void ImGuiNodeEditorComponent::renderImGui()
                         {
                             *trigThreshParam = trigThresh;
                             onModificationEnded();
+                        }
+                        // Scroll-edit support for Trigger Threshold
+                        if (ImGui::IsItemHovered())
+                        {
+                            const float wheel = ImGui::GetIO().MouseWheel;
+                            if (wheel != 0.0f)
+                            {
+                                const float step = 0.01f;
+                                float       newVal =
+                                    juce::jlimit(0.0f, 1.0f,
+                                                 trigThreshParam->get()
+                                                     + (wheel > 0.0f ? step : -step));
+                                if (newVal != trigThreshParam->get())
+                                {
+                                    *trigThreshParam = newVal;
+                                    onModificationEnded();
+                                }
+                            }
                         }
 
                         ImGui::PopItemWidth();
@@ -4088,7 +4188,7 @@ void ImGuiNodeEditorComponent::renderImGui()
                             {
                                 auto* mappingParam = static_cast<juce::AudioParameterInt*>(
                                     apvts.getParameter("channelMap" + juce::String(i)));
-                                int selectedHwChannel = mappingParam->get();
+                                int   selectedHwChannel = mappingParam->get();
                                 selectedHwChannel = juce::jlimit(
                                     0, (int)hwChannelItems.size() - 1, selectedHwChannel);
 
@@ -4111,6 +4211,41 @@ void ImGuiNodeEditorComponent::renderImGui()
                                     synth->setAudioInputChannelMapping(
                                         synth->getNodeIdForLogical(lid), newMapping);
                                     onModificationEnded();
+                                }
+                                // Scroll-edit support for channel mapping combo
+                                if (ImGui::IsItemHovered())
+                                {
+                                    const float wheel = ImGui::GetIO().MouseWheel;
+                                    if (wheel != 0.0f)
+                                    {
+                                        const int maxIndex =
+                                            (int)hwChannelItems.size() - 1;
+                                        int newIndex = juce::jlimit(
+                                            0,
+                                            maxIndex,
+                                            selectedHwChannel
+                                                + (wheel > 0.0f ? -1 : 1));
+                                        if (newIndex != selectedHwChannel)
+                                        {
+                                            selectedHwChannel = newIndex;
+                                            *mappingParam = selectedHwChannel;
+
+                                            std::vector<int> newMapping(numChannels);
+                                            for (int j = 0; j < numChannels; ++j)
+                                            {
+                                                auto* p =
+                                                    static_cast<juce::AudioParameterInt*>(
+                                                        apvts.getParameter(
+                                                            "channelMap"
+                                                            + juce::String(j)));
+                                                newMapping[j] = p->get();
+                                            }
+                                            synth->setAudioInputChannelMapping(
+                                                synth->getNodeIdForLogical(lid),
+                                                newMapping);
+                                            onModificationEnded();
+                                        }
+                                    }
                                 }
                                 ImGui::PopItemWidth();
 
@@ -6663,6 +6798,8 @@ void ImGuiNodeEditorComponent::renderImGui()
                         addAtMouse("snapshot_sequencer");
                     if (ImGui::MenuItem("Stroke Sequencer"))
                         addAtMouse("stroke_sequencer");
+                    if (ImGui::MenuItem("Chord Arp"))
+                        addAtMouse("chord_arp");
                     if (ImGui::MenuItem("Timeline"))
                         addAtMouse("timeline");
                     ImGui::EndMenu();
@@ -11140,6 +11277,7 @@ void ImGuiNodeEditorComponent::drawInsertNodeOnLinkPopup()
             // Modulators
             {"S&H", "s_and_h"},
             {"Function Generator", "function_generator"},
+            {"Chord Arp", "chord_arp"},
             // Sequencers
             {"Timeline", "timeline"},
             // Analysis (CV outputs)
@@ -12861,7 +12999,7 @@ ImGuiNodeEditorComponent::ModuleCategory ImGuiNodeEditorComponent::getModuleCate
         return ModuleCategory::Utility;
 
     // --- 5. SEQUENCERS (Light Green) ---
-    if (lower.contains("sequencer") || lower.contains("tempo_clock") || lower == "timeline")
+    if (lower.contains("sequencer") || lower.contains("tempo_clock") || lower == "timeline" || lower == "chord_arp")
         return ModuleCategory::Seq;
 
     // --- 6. MIDI (Vibrant Purple) ---
@@ -12933,6 +13071,7 @@ std::map<juce::String, std::pair<const char*, const char*>> ImGuiNodeEditorCompo
         {"Sequencer", {"sequencer", "Step sequencer for creating patterns"}},
         {"Multi Sequencer", {"multi_sequencer", "Multi-track step sequencer"}},
         {"Stroke Sequencer", {"stroke_sequencer", "Freeform visual rhythmic and CV generator"}},
+        {"Chord Arp", {"chord_arp", "Harmony brain that generates chords and arpeggios from CV inputs"}},
         {"MIDI Player", {"midi_player", "Plays MIDI files"}},
         {"MIDI CV", {"midi_cv", "Converts MIDI Note/CC messages to CV signals. (Monophonic)"}},
         {"MIDI Faders", {"midi_faders", "Up to 16 MIDI faders with CC learning"}},

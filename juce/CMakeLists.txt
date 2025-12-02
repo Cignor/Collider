@@ -731,6 +731,8 @@ target_sources(ColliderApp PRIVATE
     Source/audio/modules/StepSequencerModuleProcessor.cpp
     Source/audio/modules/MultiSequencerModuleProcessor.h
     Source/audio/modules/MultiSequencerModuleProcessor.cpp
+    Source/audio/modules/ChordArpModuleProcessor.h
+    Source/audio/modules/ChordArpModuleProcessor.cpp
     Source/audio/modules/LagProcessorModuleProcessor.h
     Source/audio/modules/LagProcessorModuleProcessor.cpp
     Source/audio/modules/DeCrackleModuleProcessor.h
@@ -1201,6 +1203,8 @@ target_sources(PresetCreatorApp PRIVATE
     Source/audio/modules/VstHostModuleProcessor.cpp
     Source/audio/modules/MultiSequencerModuleProcessor.h
     Source/audio/modules/MultiSequencerModuleProcessor.cpp
+    Source/audio/modules/ChordArpModuleProcessor.h
+    Source/audio/modules/ChordArpModuleProcessor.cpp
     Source/audio/modules/LagProcessorModuleProcessor.h
     Source/audio/modules/LagProcessorModuleProcessor.cpp
     Source/audio/modules/DeCrackleModuleProcessor.h

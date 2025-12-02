@@ -76,6 +76,7 @@ void populateModuleDescriptions()
     descriptions["reroute"]             = "A polymorphic passthrough node. Pin color adapts to the input signal.";
     descriptions["comment"]             = "A plain text comment node for documentation.";
     descriptions["snapshot_sequencer"]  = "A sequencer that stores and recalls complete patch states.";
+    descriptions["chord_arp"]           = "Harmony brain node that generates chords and simple arpeggios from CV inputs.";
     // Analysis
     descriptions["scope"]               = "Visualizes an audio or CV signal.";
     descriptions["debug"]               = "A tool for logging signal value changes.";
@@ -901,6 +902,38 @@ db["random"] = ModulePinInfo(
         { AudioPin("Clock", 0, PinDataType::Gate), AudioPin("Reset", 1, PinDataType::Gate) },
         {}, // No audio outputs
         {}
+    );
+
+    // Chord / Arp harmony brain node
+    db["chord_arp"] = ModulePinInfo(
+        NodeWidth::Medium,
+        {
+            // Single unified input bus (bus 0) – indices match ChordArpModuleProcessor constructor
+            AudioPin("Degree In",     0, PinDataType::CV),
+            AudioPin("Root CV In",    1, PinDataType::CV),
+            AudioPin("Chord Mode Mod",2, PinDataType::CV),
+            AudioPin("Arp Rate Mod",  3, PinDataType::CV)
+        },
+        {
+            // Outputs: 4 voices (pitch/gate pairs) + arp pitch/gate
+            AudioPin("Pitch 1",   0, PinDataType::CV),
+            AudioPin("Gate 1",    1, PinDataType::Gate),
+            AudioPin("Pitch 2",   2, PinDataType::CV),
+            AudioPin("Gate 2",    3, PinDataType::Gate),
+            AudioPin("Pitch 3",   4, PinDataType::CV),
+            AudioPin("Gate 3",    5, PinDataType::Gate),
+            AudioPin("Pitch 4",   6, PinDataType::CV),
+            AudioPin("Gate 4",    7, PinDataType::Gate),
+            AudioPin("Arp Pitch", 8, PinDataType::CV),
+            AudioPin("Arp Gate",  9, PinDataType::Gate)
+        },
+        {
+            // Modulation pins for UI parameter disabling / highlighting
+            ModPin("Degree",     "degree_mod",    PinDataType::CV),
+            ModPin("Root CV",    "root_cv_mod",   PinDataType::CV),
+            ModPin("Chord Mode", "chordMode_mod", PinDataType::CV),
+            ModPin("Arp Rate",   "arpRate_mod",   PinDataType::CV)
+        }
     );
 
     db["midi_cv"] = ModulePinInfo(

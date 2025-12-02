@@ -66,6 +66,7 @@
 - [multi_sequencer](#multi_sequencer) - Advanced Multi-Output Sequencer
 - [snapshot_sequencer](#snapshot_sequencer) - Patch State Sequencer
 - [stroke_sequencer](#stroke_sequencer) - Gesture-Based Sequencer
+- [chord_arp](#chord_arp) - Chord & Arpeggiator Harmony Brain
 - [tempo_clock](#tempo_clock) - Global Clock Generator
 - [timeline](#timeline) - Automation Recorder and Playback
 
@@ -1448,6 +1449,58 @@ Routes an input signal to one of four outputs based on CV thresholds.
 ## 5. SEQUENCER NODES
 
 Sequencer nodes generate rhythmic and melodic patterns.
+
+### chord_arp
+**Chord & Arpeggiator Harmony Brain**
+
+Generates chords and arpeggios from simple CV inputs, acting as a compact “harmony brain” that can drive oscillators, samplers, or filters with musical pitch/gate patterns.
+
+#### Inputs
+- `Degree In` (CV) - Normalized degree control (0-1). Intended to select scale degree or chord position (behavior will expand in future versions).
+- `Root CV In` (CV) - Base pitch CV for the chord (0-1 range in the initial implementation).
+- `Chord Mode Mod` (CV) - Modulation input for chord mode selection.
+- `Arp Rate Mod` (CV) - Modulation input for arpeggiator rate.
+
+#### Outputs
+- `Pitch 1-4` (CV) - Four chord voice pitch outputs (normalized 0-1, typically mapped to V/Oct inputs via downstream modules).
+- `Gate 1-4` (Gate) - Per-voice gates, high while the node considers the chord “active”.
+- `Arp Pitch` (CV) - Single-note arp pitch output, cycling across active voices.
+- `Arp Gate` (Gate) - Short pulses when the arp steps to a new note.
+
+#### Parameters
+- `Scale` (Choice) - Musical scale (Major, Natural Minor, Harmonic Minor, Dorian, Mixolydian, Pent Maj, Pent Min).
+- `Key` (Choice) - Root key (C, C#, D, …, B).
+- `Chord Mode` (Choice) - Chord quality type (Triad, Seventh).
+- `Voicing` (Choice) - Voicing style (Close, Spread). Designed for richer voicing logic in future updates.
+- `Arp Mode` (Choice) - Arpeggiator behavior (Off, Up, Down, UpDown, Random).
+- `Arp Division` (Choice) - Musical rate division for arp steps (1/1 to 1/16).
+- `Use External Clock` (Bool) - When enabled, lets external clocking drive arp timing (planned; current skeleton uses internal timing derived from CV and transport).
+- `Voices` (1-4) - Number of active chord voices.
+
+#### Visualization
+- Embedded mini-visualizer at the top of the node shows:
+  - Text strip: `Degree` and `Root CV` values from the input CVs.
+  - Four voice bars: current chord voice pitches (1–4).
+  - Rightmost bar: current arpeggiated pitch.
+  - Colored border flash: `Arp Gate` activity (brief pulses when a new arp step fires).
+
+#### How to Use
+1. **Basic Chord Source**
+   - Connect `Pitch 1-4` to oscillator pitch CV inputs (e.g., `vco`, `polyvco`, or multiple voices via mixers).
+   - Connect `Gate 1-4` to envelope or VCA gate inputs for each voice.
+   - Set `Scale`, `Key`, `Chord Mode`, and `Voicing` to define the harmonic flavor.
+2. **Driving the Arp**
+   - Feed a steady or sequenced pitch into `Root CV In` (from `sequencer`, `multi_sequencer`, or `midi_cv`).
+   - Use `Arp Mode` and `Arp Division` to choose arp movement and speed.
+   - Use `Arp Pitch` / `Arp Gate` when you need a single melodic line instead of full chords.
+3. **Modulation & Performance**
+   - Patch slow CV into `Degree In` to sweep through harmonic positions.
+   - Use `Chord Mode Mod` and `Arp Rate Mod` with LFOs or envelopes to morph between chord types and arp rates over time.
+   - Combine with `tempo_clock` and `bpm_monitor` for transport-aware rhythmic patches.
+
+> Note: The initial implementation focuses on safe, musical scaffolding (normalized CV and basic chord offsets). Later updates will deepen theory-aware degree handling, voicing rules, and external clock integration.
+
+---
 
 ### sequencer
 **16-Step CV/Gate Sequencer**

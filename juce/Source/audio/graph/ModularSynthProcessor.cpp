@@ -50,6 +50,7 @@
 #include "../modules/BPMMonitorModuleProcessor.h"
 #include "../modules/ShapingOscillatorModuleProcessor.h"
 #include "../modules/MultiSequencerModuleProcessor.h"
+#include "../modules/ChordArpModuleProcessor.h"
 #include "../modules/LagProcessorModuleProcessor.h"
 #include "../modules/DeCrackleModuleProcessor.h"
 #include "../modules/CVMixerModuleProcessor.h"
@@ -946,6 +947,7 @@ namespace {
             reg("contour_detector", []{ return std::make_unique<ContourDetectorModule>(); });
             reg("crop_video", []{ return std::make_unique<CropVideoModule>(); });
             reg("stroke_sequencer", []{ return std::make_unique<StrokeSequencerModuleProcessor>(); });
+            reg("chord_arp", []{ return std::make_unique<ChordArpModuleProcessor>(); });
             
             // reg("meta_module", []{ return std::make_unique<MetaModuleProcessor>(); });
             // reg("meta module", []{ return std::make_unique<MetaModuleProcessor>(); });
