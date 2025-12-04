@@ -31,6 +31,7 @@
 - [waveshaper](#waveshaper) - Multi-Algorithm Waveshaper
 - [8bandshaper](#8bandshaper) - Multi-Band Waveshaper
 - [granulator](#granulator) - Granular Synthesizer/Effect
+- [spatial_granulator](#spatial_granulator) - Visual Canvas Granulator/Chorus
 - [harmonic_shaper](#harmonic_shaper) - Harmonic Content Shaper
 - [timepitch](#timepitch) - Time/Pitch Manipulation
 - [de_crackle](#de_crackle) - Click/Pop Reducer
@@ -69,6 +70,7 @@
 - [chord_arp](#chord_arp) - Chord & Arpeggiator Harmony Brain
 - [tempo_clock](#tempo_clock) - Global Clock Generator
 - [timeline](#timeline) - Automation Recorder and Playback
+- [automation_lane](#automation_lane) - Drawable Automation Curve Lane
 
 #### 6. MIDI NODES
 - [midi_cv](#midi_cv) - MIDI to CV Converter
@@ -737,6 +739,82 @@ A granular processor that plays small grains of audio for textural and rhythmic 
 5. Add spread for more random, evolving textures
 6. Modulate position with LFOs for scanning effects
 7. Great for creating ambient textures from any sound source
+
+---
+
+### spatial_granulator
+**Visual Canvas Granulator/Chorus**
+
+A hybrid granular synthesizer and chorus effect with a visual canvas interface. Paint dots on a square canvas where each dot represents a voice or grain spawner. Combines the textural qualities of granular synthesis with the spatial richness of chorus effects.
+
+#### Inputs
+- `In L` (Audio) - Left audio input (recorded to internal buffer)
+- `In R` (Audio) - Right audio input (recorded to internal buffer)
+
+#### Outputs
+- `Out L` (Audio) - Left processed output
+- `Out R` (Audio) - Right processed output
+
+#### Parameters
+- `Mix` (0-1) - Wet/dry balance (0=dry, 1=wet)
+- `Density` (0.1-100 Hz) - Grain spawning rate for Spray tool dots
+- `Grain Size` (5-500 ms) - Length of each grain spawned by Spray tool
+- `Buffer Length` (1-10 seconds) - Size of the internal recording buffer
+
+#### Canvas Controls
+- **Tools:**
+  - **Pen** - Draws static voices (chorus-like continuous playback)
+  - **Spray** - Spawns dynamic grains (granular synthesis with movement and "pop" effects)
+- **Colors (Color-Coded Parameters):**
+  - **Red** - Delay (0-2000ms). Larger dots = longer delay time
+  - **Green** - Volume (-60 to +12 dB). Larger dots = higher volume
+  - **Blue** - Pitch (-24 to +24 semitones). Larger dots = more pitch shift
+- **Canvas Axes:**
+  - **X-axis** - Panning (left = left, right = right)
+  - **Y-axis** - Buffer position (low = start of buffer, high = end of buffer)
+  - **Dot Size** - Controls both voice reproduction amount and color parameter intensity
+
+#### How to Use
+1. **Recording:** Audio is continuously recorded to the internal buffer (size set by Buffer Length parameter)
+2. **Pen Tool (Static Voices):**
+   - Click and drag to place dots on the canvas
+   - Each dot creates a continuous voice playing from the buffer
+   - Y-position determines where in the buffer to read from
+   - X-position controls stereo panning
+   - Color determines which parameter is active (Delay, Volume, or Pitch)
+   - Dot size controls volume and parameter intensity
+   - Great for creating thick, chorus-like textures
+3. **Spray Tool (Dynamic Grains):**
+   - Click and drag to place multiple dots (spray effect)
+   - Each dot spawns grains periodically based on Density parameter
+   - Grains have dynamic movement and "pop" effects for vibrant sound
+   - Y-position determines grain read position in buffer
+   - X-position controls grain panning
+   - Color determines which parameter is active per grain
+   - Great for creating evolving, granular textures
+4. **Color Selection:**
+   - Choose Red for delay effects (adds time-based spatialization)
+   - Choose Green for volume control (emphasize or de-emphasize voices)
+   - Choose Blue for pitch shifting (create harmonies and detuning)
+   - Larger dots increase the intensity of the color-coded parameter
+5. **Erasing:** Right-click and drag on the canvas to erase dots
+6. **Canvas Interaction:**
+   - Left-click/drag: Paint dots
+   - Right-click/drag: Erase dots
+   - Dots are static (no animation) - they represent fixed voice positions
+7. **Tips:**
+   - Use Pen tool with multiple dots for rich chorus effects
+   - Use Spray tool with high density for dense granular clouds
+   - Combine both tools on the same canvas for hybrid textures
+   - Experiment with dot placement for spatial effects
+   - Larger dots = more prominent voices/grains
+   - Color selection dramatically changes the character of the effect
+
+#### Visual Feedback
+- Dots are rendered as colored circles on the canvas
+- Dot size visually represents the size parameter
+- Color matches the selected color (Red/Green/Blue)
+- Grid and crosshair help with precise placement
 
 ---
 
@@ -1725,6 +1803,81 @@ A transport-synchronized automation recorder that captures and plays back CV, Ga
 - Thread-safe data access (audio thread + UI thread)
 - XML persistence via `getExtraStateTree()` / `setExtraStateTree()`
 - Dynamic I/O pins based on number of automation channels
+
+---
+
+### automation_lane
+**Drawable Automation Curve Lane**
+
+A drawable automation lane that allows you to draw and edit automation curves directly on an infinitely scrolling timeline. Features a fixed center playhead with the timeline scrolling underneath, similar to a traditional DAW automation lane. Ideal for creating complex, hand-drawn modulation curves with precise timing control.
+
+#### Outputs
+- `Value` (CV) - Main automation output (0-1 range)
+- `Inverted` (CV) - Inverted output (1-0 range)
+- `Bipolar` (CV) - Bipolar output (-1 to +1 range)
+- `Pitch` (CV) - Pitch CV output (0-10V range, V/Oct compatible)
+
+#### Parameters
+- `Rate` (0.01-20 Hz) - Playback rate in free mode
+- `Mode` (Choice) - Free (Hz) or Sync (tempo-synchronized)
+- `Division` (Choice) - Musical division when synced (1/32, 1/16, 1/8, 1/4, 1/2, 1 Bar, 2 Bars, 4 Bars, 8 Bars)
+- `Loop` (Bool) - Enable looping playback
+- `Record/Edit` (Choice) - Toggle between recording mode (auto-scroll) and edit mode (manual scroll)
+- `Zoom` (10-200 pixels/beat) - Timeline zoom level (UI only)
+
+#### How to Use
+1. **Drawing Automation:**
+   - Click and drag on the timeline canvas to draw automation curves
+   - Vertical position controls the output value (top = 1.0, bottom = 0.0)
+   - The timeline scrolls infinitely - draw as long as you need
+
+2. **Playback Modes:**
+   - **Free Mode:** Set rate in Hz for independent playback speed
+   - **Sync Mode:** Sync to global transport with musical divisions
+   - Enable Loop to repeat the automation pattern
+
+3. **Record vs Edit Mode:**
+   - **Record Mode:** Timeline auto-scrolls during playback, follow the playhead
+   - **Edit Mode:** Manual scrolling for precise editing of existing curves
+
+4. **Multiple Output Formats:**
+   - Use `Value` for standard 0-1 modulation
+   - Use `Inverted` for reverse modulation curves
+   - Use `Bipolar` for modulation centered around zero
+   - Use `Pitch` for V/Oct pitch control
+
+5. **Timeline Navigation:**
+   - Scroll horizontally to navigate the timeline
+   - Adjust zoom to see more or less detail
+   - Grid lines show beat divisions for reference
+   - Fixed center playhead makes it easy to see current position
+
+6. **Example Patches:**
+   - **Filter Sweeps:** Draw filter cutoff automation and connect to VCF
+   - **Volume Automation:** Use Value output to control VCA gain
+   - **Pitch Sequences:** Draw melodic lines and use Pitch output to VCO
+   - **Complex Modulation:** Combine with other modulators for layered automation
+
+7. **Tips:**
+   - Draw smooth curves by dragging slowly
+   - Use sync mode for tempo-locked automation
+   - Enable loop for repeating patterns
+   - Zoom out to see the big picture, zoom in for fine editing
+   - Perfect for creating evolving, non-repetitive modulation
+
+**Visual Features:**
+- Fixed center playhead (doesn't move, timeline scrolls underneath)
+- Infinite scrolling timeline (draw as long as needed)
+- Beat and bar grid lines for musical reference
+- Real-time curve visualization
+- Sample-accurate playback
+
+**Technical Details:**
+- Chunk-based storage for efficient handling of long automation data
+- Thread-safe data access between audio and UI threads
+- Sample-accurate interpolation during playback
+- Transport-synchronized when in Sync mode
+- XML persistence via `getExtraStateTree()` / `setExtraStateTree()`
 
 ---
 

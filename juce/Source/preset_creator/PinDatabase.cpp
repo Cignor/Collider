@@ -32,6 +32,7 @@ void populateModuleDescriptions()
     descriptions["delay"]               = "A stereo delay effect with modulation.";
     descriptions["reverb"]              = "A stereo reverb effect.";
     descriptions["chorus"]              = "A stereo chorus effect.";
+    descriptions["spatial_granulator"]   = "Visual canvas granulator/chorus with color-coded parameters (Red=Delay, Green=Volume, Blue=Pitch).";
     descriptions["phaser"]              = "A stereo phaser effect.";
     descriptions["compressor"]          = "Reduces the dynamic range of a signal.";
     descriptions["limiter"]             = "Prevents a signal from exceeding a set level.";
@@ -57,6 +58,7 @@ void populateModuleDescriptions()
     descriptions["random"]              = "A random value generator with internal sample & hold.";
     descriptions["s_and_h"]             = "A classic Sample and Hold module.";
     descriptions["function_generator"]  = "A complex, drawable envelope/LFO generator.";
+    descriptions["automation_lane"]     = "Draw automation curves on an infinitely scrolling timeline with fixed center playhead. Create complex hand-drawn modulation with precise timing control.";
     descriptions["shaping_oscillator"]  = "An oscillator with a built-in waveshaper.";
     // Utilities & Logic
     descriptions["vca"]                 = "A Voltage-Controlled Amplifier to control signal level.";
@@ -277,6 +279,26 @@ void populatePinDatabase()
           AudioPin("Mix Mod", 4, PinDataType::CV) },
         { AudioPin("Out L", 0, PinDataType::Audio), AudioPin("Out R", 1, PinDataType::Audio) },
         {}
+    );
+    db["spatial_granulator"] = ModulePinInfo(
+        NodeWidth::Medium,
+        { 
+            AudioPin("In L", 0, PinDataType::Audio), 
+            AudioPin("In R", 1, PinDataType::Audio),
+            AudioPin("Dry Mix Mod", 2, PinDataType::CV),
+            AudioPin("Pen Mix Mod", 3, PinDataType::CV),
+            AudioPin("Spray Mix Mod", 4, PinDataType::CV),
+            AudioPin("Density Mod", 5, PinDataType::CV),
+            AudioPin("Grain Size Mod", 6, PinDataType::CV)
+        },
+        { AudioPin("Out L", 0, PinDataType::Audio), AudioPin("Out R", 1, PinDataType::Audio) },
+        {
+            ModPin("Dry Mix", "dryMix_mod", PinDataType::CV),
+            ModPin("Pen Mix", "penMix_mod", PinDataType::CV),
+            ModPin("Spray Mix", "sprayMix_mod", PinDataType::CV),
+            ModPin("Density", "density_mod", PinDataType::CV),
+            ModPin("Grain Size", "grainSize_mod", PinDataType::CV)
+        }
     );
     db["phaser"] = ModulePinInfo(
         NodeWidth::Medium,
@@ -537,6 +559,18 @@ db["random"] = ModulePinInfo(
             ModPin("Value Mult", "valueMult_mod", PinDataType::CV),
             ModPin("Curve Select", "curveSelect_mod", PinDataType::CV)
         }
+    );
+    
+    db["automation_lane"] = ModulePinInfo(
+        NodeWidth::Big,
+        {}, // No inputs
+        {
+            AudioPin("Value", 0, PinDataType::CV),
+            AudioPin("Inverted", 1, PinDataType::CV),
+            AudioPin("Bipolar", 2, PinDataType::CV),
+            AudioPin("Pitch", 3, PinDataType::CV)
+        },
+        {}
     );
 
     ModulePinInfo multiSequencerPins(
@@ -912,7 +946,13 @@ db["random"] = ModulePinInfo(
             AudioPin("Degree In",     0, PinDataType::CV),
             AudioPin("Root CV In",    1, PinDataType::CV),
             AudioPin("Chord Mode Mod",2, PinDataType::CV),
-            AudioPin("Arp Rate Mod",  3, PinDataType::CV)
+            AudioPin("Arp Rate Mod",  3, PinDataType::CV),
+            AudioPin("Scale Mod",     4, PinDataType::CV),
+            AudioPin("Key Mod",       5, PinDataType::CV),
+            AudioPin("Voicing Mod",   6, PinDataType::CV),
+            AudioPin("Arp Mode Mod",  7, PinDataType::CV),
+            AudioPin("Range Mode Mod",8, PinDataType::CV),
+            AudioPin("Voices Mod",    9, PinDataType::CV)
         },
         {
             // Outputs: 4 voices (pitch/gate pairs) + arp pitch/gate
@@ -932,7 +972,13 @@ db["random"] = ModulePinInfo(
             ModPin("Degree",     "degree_mod",    PinDataType::CV),
             ModPin("Root CV",    "root_cv_mod",   PinDataType::CV),
             ModPin("Chord Mode", "chordMode_mod", PinDataType::CV),
-            ModPin("Arp Rate",   "arpRate_mod",   PinDataType::CV)
+            ModPin("Arp Rate",   "arpRate_mod",   PinDataType::CV),
+            ModPin("Scale",      "scale_mod",     PinDataType::CV),
+            ModPin("Key",        "key_mod",       PinDataType::CV),
+            ModPin("Voicing",    "voicing_mod",   PinDataType::CV),
+            ModPin("Arp Mode",   "arpMode_mod",   PinDataType::CV),
+            ModPin("Range Mode", "rangeMode_mod", PinDataType::CV),
+            ModPin("Voices",     "numVoices_mod", PinDataType::CV)
         }
     );
 

@@ -41,6 +41,7 @@ private:
     // Global controls
     juce::AudioParameterInt* numTracksParam { nullptr };
     juce::AudioParameterInt* numTracksMaxParam { nullptr }; // To bound modulation
+    std::atomic<float>* globalVolumeParam { nullptr }; // -60.0 to +6.0 dB
 
     // Per-track controls
     std::vector<std::atomic<float>*> trackGainParams;

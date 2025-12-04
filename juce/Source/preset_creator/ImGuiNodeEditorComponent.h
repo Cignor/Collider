@@ -32,6 +32,7 @@ class StrokeSequencerModuleProcessor;
 class AnimationModuleProcessor;
 class ColorTrackerModule;
 class MetaModuleProcessor;
+class ChordArpModuleProcessor;
 
 // Forward declaration (SavePresetJob is now in its own file to avoid circular dependencies)
 class SavePresetJob;
@@ -225,6 +226,11 @@ public:
     void handleColorTrackerAutoConnectSamplers(
         ColorTrackerModule* colorTracker,
         juce::uint32        colorTrackerLid);
+
+    // Chord Arp auto-connect handlers
+    void handleChordArpAutoConnectPolyVCO(
+        ChordArpModuleProcessor* chordArp,
+        juce::uint32             chordArpLid);
 
     void                      renderImGui();
     void                      handleDeletion();

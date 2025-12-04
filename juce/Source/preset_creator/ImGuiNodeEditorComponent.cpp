@@ -28,6 +28,7 @@
 #include <limits>
 #include <optional>
 #include "theme/ThemeManager.h"
+#include "../audio/modules/ChordArpModuleProcessor.h"
 
 namespace
 {
@@ -955,6 +956,10 @@ void ImGuiNodeEditorComponent::newOpenGLContextCreated()
         auto& ioImgui = ImGui::GetIO();
         ioNodes.EmulateThreeButtonMouse.Modifier = &ioImgui.KeyAlt;
         ioNodes.LinkDetachWithModifierClick.Modifier = &ioImgui.KeyCtrl;
+
+        // Log setup of modifiers
+        juce::Logger::writeToLog(
+            "ImGuiNodeEditor: Modifiers configured. Alt=Emulate3Btn, Ctrl=LinkDetach");
     }
     juce::Logger::writeToLog("ImGuiNodeEditor: ImNodes context created");
 }
@@ -1633,7 +1638,7 @@ void ImGuiNodeEditorComponent::renderImGui()
                 ImGui::Separator();
 
                 // Show CUDA device info - use global cache (queried once at app startup)
-                int deviceCount = CudaDeviceCountCache::getDeviceCount();
+                int  deviceCount = CudaDeviceCountCache::getDeviceCount();
                 bool querySucceeded = CudaDeviceCountCache::querySucceeded();
                 bool cudaAvailable = CudaDeviceCountCache::isAvailable();
 
@@ -1672,16 +1677,14 @@ void ImGuiNodeEditorComponent::renderImGui()
             }
             catch (const cv::Exception& e)
             {
-                juce::Logger::writeToLog(
-                    "[Video GPU] OpenCV exception: " + juce::String(e.what()));
+                juce::Logger::writeToLog("[Video GPU] OpenCV exception: " + juce::String(e.what()));
                 ImGui::TextColored(
                     ImVec4(1.0f, 0.0f, 0.0f, 1.0f), "Error: Video GPU menu failed to load");
                 ImGui::TextDisabled("Check log file for details");
             }
             catch (const std::exception& e)
             {
-                juce::Logger::writeToLog(
-                    "[Video GPU] Exception: " + juce::String(e.what()));
+                juce::Logger::writeToLog("[Video GPU] Exception: " + juce::String(e.what()));
                 ImGui::TextColored(
                     ImVec4(1.0f, 0.0f, 0.0f, 1.0f), "Error: Video GPU menu failed to load");
                 ImGui::TextDisabled("Check log file for details");
@@ -3127,6 +3130,7 @@ void ImGuiNodeEditorComponent::renderImGui()
             addModuleButton("Delay", "delay");
             addModuleButton("Reverb", "reverb");
             addModuleButton("Chorus", "chorus");
+            addModuleButton("Spatial Granulator", "spatial_granulator");
             addModuleButton("Phaser", "phaser");
             addModuleButton("Compressor", "compressor");
             addModuleButton("Limiter", "limiter");
@@ -3201,6 +3205,7 @@ void ImGuiNodeEditorComponent::renderImGui()
             addModuleButton("Stroke Sequencer", "stroke_sequencer");
             addModuleButton("Chord Arp", "chord_arp");
             addModuleButton("Timeline", "timeline");
+            addModuleButton("Automation Lane", "automation_lane");
         }
 
         // ═══════════════════════════════════════════════════════════════════════════════
@@ -3481,6 +3486,7 @@ void ImGuiNodeEditorComponent::renderImGui()
     }
     // Mouse coordinate display overlay (bottom-left)
     ImVec2 mouseScreenPos = ImGui::GetMousePos();
+    float  currentZoom = 1.0f;
     ImVec2 mouseGridPos = ImVec2(
         mouseScreenPos.x - canvas_p0.x - panning.x, mouseScreenPos.y - canvas_p0.y - panning.y);
     char posStr[32];
@@ -3539,6 +3545,9 @@ void ImGuiNodeEditorComponent::renderImGui()
             cutModeActive = true;
             cutStartGrid = mouseGridPos;
             cutEndGrid = mouseGridPos;
+            juce::Logger::writeToLog(
+                "[CutGesture] STARTED at Grid(" + juce::String(cutStartGrid.x) + ", " +
+                juce::String(cutStartGrid.y) + ")");
         }
         if (cutModeActive && rmbDown)
         {
@@ -3567,7 +3576,7 @@ void ImGuiNodeEditorComponent::renderImGui()
     // (Grid is already drawn with zero panning above, which is fine for background)
     // Begin the editor
     // +++ ADD THIS LINE AT THE START OF THE RENDER LOOP +++
-    attrPositions.clear(); // Clear the cache at the beginning of each frame.
+    // attrPositions.clear(); // REMOVED: Persist cache for off-screen pins
     auto cancelDragInsert = [this]() {
         dragInsertActive = false;
         dragInsertStartAttrId = -1;
@@ -3720,15 +3729,21 @@ void ImGuiNodeEditorComponent::renderImGui()
             {
                 if (auto* mp = synth->getModuleForLogical(lid))
                 {
-                    // Debug logging for ObjectDetectorModule (only once per second to reduce flooding)
+                    // Debug logging for ObjectDetectorModule (only once per second to reduce
+                    // flooding)
                     if (auto* objDet = dynamic_cast<ObjectDetectorModule*>(mp))
                     {
-                        static std::atomic<juce::int64> lastLogTime{0};
+                        static std::atomic<juce::int64>             lastLogTime{0};
                         static std::atomic<juce::pointer_sized_int> lastLoggedPtr{0};
                         juce::int64 currentTime = juce::Time::currentTimeMillis();
-                        if (lastLoggedPtr.load() != (juce::pointer_sized_int)objDet || (currentTime - lastLogTime.load() > 1000))
+                        if (lastLoggedPtr.load() != (juce::pointer_sized_int)objDet ||
+                            (currentTime - lastLogTime.load() > 1000))
                         {
-                            juce::Logger::writeToLog("[UI][drawParametersInNode] About to call drawParametersInNode() on ObjectDetectorModule (ptr=0x" + juce::String::toHexString((juce::pointer_sized_int)objDet) + ") logicalId=" + juce::String(lid));
+                            juce::Logger::writeToLog(
+                                "[UI][drawParametersInNode] About to call drawParametersInNode() "
+                                "on ObjectDetectorModule (ptr=0x" +
+                                juce::String::toHexString((juce::pointer_sized_int)objDet) +
+                                ") logicalId=" + juce::String(lid));
                             lastLogTime.store(currentTime);
                             lastLoggedPtr.store((juce::pointer_sized_int)objDet);
                         }
@@ -4009,19 +4024,14 @@ void ImGuiNodeEditorComponent::renderImGui()
                             }
                         }
                         // Scroll-edit for Input Device combo
-                        if (!availableInputDevices.isEmpty()
-                            && ImGui::IsItemHovered())
+                        if (!availableInputDevices.isEmpty() && ImGui::IsItemHovered())
                         {
                             const float wheel = ImGui::GetIO().MouseWheel;
                             if (wheel != 0.0f)
                             {
-                                const int maxIndex =
-                                    (int)availableInputDevices.size() - 1;
-                                int newIndex = juce::jlimit(
-                                    0,
-                                    maxIndex,
-                                    currentInputDeviceIndex
-                                        + (wheel > 0.0f ? -1 : 1));
+                                const int maxIndex = (int)availableInputDevices.size() - 1;
+                                int       newIndex = juce::jlimit(
+                                    0, maxIndex, currentInputDeviceIndex + (wheel > 0.0f ? -1 : 1));
                                 if (newIndex != currentInputDeviceIndex)
                                 {
                                     currentInputDeviceIndex = newIndex;
@@ -4062,19 +4072,16 @@ void ImGuiNodeEditorComponent::renderImGui()
                             }
                         }
                         // Scroll-edit for Output Device combo
-                        if (!availableOutputDevices.isEmpty()
-                            && ImGui::IsItemHovered())
+                        if (!availableOutputDevices.isEmpty() && ImGui::IsItemHovered())
                         {
                             const float wheel = ImGui::GetIO().MouseWheel;
                             if (wheel != 0.0f)
                             {
-                                const int maxIndex =
-                                    (int)availableOutputDevices.size() - 1;
-                                int newIndex = juce::jlimit(
+                                const int maxIndex = (int)availableOutputDevices.size() - 1;
+                                int       newIndex = juce::jlimit(
                                     0,
                                     maxIndex,
-                                    currentOutputDeviceIndex
-                                        + (wheel > 0.0f ? -1 : 1));
+                                    currentOutputDeviceIndex + (wheel > 0.0f ? -1 : 1));
                                 if (newIndex != currentOutputDeviceIndex)
                                 {
                                     currentOutputDeviceIndex = newIndex;
@@ -4106,7 +4113,8 @@ void ImGuiNodeEditorComponent::renderImGui()
                             if (wheel != 0.0f)
                             {
                                 int newVal = numChannelsParam->get() + (wheel > 0.0f ? 1 : -1);
-                                newVal = juce::jlimit(1, AudioInputModuleProcessor::MAX_CHANNELS, newVal);
+                                newVal = juce::jlimit(
+                                    1, AudioInputModuleProcessor::MAX_CHANNELS, newVal);
                                 if (newVal != numChannelsParam->get())
                                 {
                                     *numChannelsParam = newVal;
@@ -4131,10 +4139,10 @@ void ImGuiNodeEditorComponent::renderImGui()
                             if (wheel != 0.0f)
                             {
                                 const float step = 0.01f;
-                                float       newVal =
-                                    juce::jlimit(0.0f, 1.0f,
-                                                 gateThreshParam->get()
-                                                     + (wheel > 0.0f ? step : -step));
+                                float       newVal = juce::jlimit(
+                                    0.0f,
+                                    1.0f,
+                                    gateThreshParam->get() + (wheel > 0.0f ? step : -step));
                                 if (newVal != gateThreshParam->get())
                                 {
                                     *gateThreshParam = newVal;
@@ -4159,10 +4167,10 @@ void ImGuiNodeEditorComponent::renderImGui()
                             if (wheel != 0.0f)
                             {
                                 const float step = 0.01f;
-                                float       newVal =
-                                    juce::jlimit(0.0f, 1.0f,
-                                                 trigThreshParam->get()
-                                                     + (wheel > 0.0f ? step : -step));
+                                float       newVal = juce::jlimit(
+                                    0.0f,
+                                    1.0f,
+                                    trigThreshParam->get() + (wheel > 0.0f ? step : -step));
                                 if (newVal != trigThreshParam->get())
                                 {
                                     *trigThreshParam = newVal;
@@ -4188,7 +4196,7 @@ void ImGuiNodeEditorComponent::renderImGui()
                             {
                                 auto* mappingParam = static_cast<juce::AudioParameterInt*>(
                                     apvts.getParameter("channelMap" + juce::String(i)));
-                                int   selectedHwChannel = mappingParam->get();
+                                int selectedHwChannel = mappingParam->get();
                                 selectedHwChannel = juce::jlimit(
                                     0, (int)hwChannelItems.size() - 1, selectedHwChannel);
 
@@ -4218,13 +4226,11 @@ void ImGuiNodeEditorComponent::renderImGui()
                                     const float wheel = ImGui::GetIO().MouseWheel;
                                     if (wheel != 0.0f)
                                     {
-                                        const int maxIndex =
-                                            (int)hwChannelItems.size() - 1;
-                                        int newIndex = juce::jlimit(
+                                        const int maxIndex = (int)hwChannelItems.size() - 1;
+                                        int       newIndex = juce::jlimit(
                                             0,
                                             maxIndex,
-                                            selectedHwChannel
-                                                + (wheel > 0.0f ? -1 : 1));
+                                            selectedHwChannel + (wheel > 0.0f ? -1 : 1));
                                         if (newIndex != selectedHwChannel)
                                         {
                                             selectedHwChannel = newIndex;
@@ -4233,16 +4239,13 @@ void ImGuiNodeEditorComponent::renderImGui()
                                             std::vector<int> newMapping(numChannels);
                                             for (int j = 0; j < numChannels; ++j)
                                             {
-                                                auto* p =
-                                                    static_cast<juce::AudioParameterInt*>(
-                                                        apvts.getParameter(
-                                                            "channelMap"
-                                                            + juce::String(j)));
+                                                auto* p = static_cast<juce::AudioParameterInt*>(
+                                                    apvts.getParameter(
+                                                        "channelMap" + juce::String(j)));
                                                 newMapping[j] = p->get();
                                             }
                                             synth->setAudioInputChannelMapping(
-                                                synth->getNodeIdForLogical(lid),
-                                                newMapping);
+                                                synth->getNodeIdForLogical(lid), newMapping);
                                             onModificationEnded();
                                         }
                                     }
@@ -4669,7 +4672,10 @@ void ImGuiNodeEditorComponent::renderImGui()
                 // Calculate the exact center and cache it.
                 float centerX = (pinMin.x + pinMax.x) * 0.5f;
                 float centerY = (pinMin.y + pinMax.y) * 0.5f;
-                attrPositions[attr] = ImVec2(centerX, centerY);
+                // Cache pin position in GRID SPACE
+                attrPositions[attr] = ImVec2(
+                    centerX - lastCanvasP0.x - lastEditorPanning.x,
+                    centerY - lastCanvasP0.y - lastEditorPanning.y);
                 // --- END OF FIX ---
 
                 ImNodes::PopColorStyle(); // Restore default color
@@ -4760,7 +4766,10 @@ void ImGuiNodeEditorComponent::renderImGui()
                     ImVec2 pinMax = ImGui::GetItemRectMax();
                     float  centerY = (pinMin.y + pinMax.y) * 0.5f;
                     float  x_pos = pinMax.x;
-                    attrPositions[attr] = ImVec2(x_pos, centerY);
+                    // Cache pin position in GRID SPACE
+                    attrPositions[attr] = ImVec2(
+                        x_pos - lastCanvasP0.x - lastEditorPanning.x,
+                        centerY - lastCanvasP0.y - lastEditorPanning.y);
                 }
 
                 ImNodes::PopColorStyle();
@@ -4819,6 +4828,19 @@ void ImGuiNodeEditorComponent::renderImGui()
                         jassert(gImNodesInputDepth >= 0);
 #endif
                         ImNodes::PopColorStyle();
+
+                        // --- CACHE PIN POSITION FOR CUT GESTURE ---
+                        {
+                            ImVec2 pinMin = ImGui::GetItemRectMin();
+                            ImVec2 pinMax = ImGui::GetItemRectMax();
+                            float  centerY = (pinMin.y + pinMax.y) * 0.5f;
+                            // Input pins are on the left
+                            // Cache pin position in GRID SPACE
+                            attrPositions[inAttr] = ImVec2(
+                                pinMin.x - lastCanvasP0.x - lastEditorPanning.x,
+                                centerY - lastCanvasP0.y - lastEditorPanning.y);
+                        }
+
                         hasItemOnLine = true;
                     }
 
@@ -4862,7 +4884,10 @@ void ImGuiNodeEditorComponent::renderImGui()
                         ImVec2      pinMax = ImGui::GetItemRectMax();
                         const float yCenter = pinMin.y + (pinMax.y - pinMin.y) * 0.5f;
                         const float xPos = pinMax.x;
-                        attrPositions[outAttr] = ImVec2(xPos, yCenter);
+                        // Cache pin position in GRID SPACE
+                        attrPositions[outAttr] = ImVec2(
+                            xPos - lastCanvasP0.x - lastEditorPanning.x,
+                            yCenter - lastCanvasP0.y - lastEditorPanning.y);
                     }
 
                     if (inLabel == nullptr && outLabel == nullptr)
@@ -5340,6 +5365,11 @@ void ImGuiNodeEditorComponent::renderImGui()
                 insertNodeBetween("granulator");
                 ImGui::CloseCurrentPopup();
             }
+            if (ImGui::MenuItem("Spatial Granulator"))
+            {
+                insertNodeBetween("spatial_granulator");
+                ImGui::CloseCurrentPopup();
+            }
             if (ImGui::MenuItem("Harmonic Shaper"))
             {
                 insertNodeBetween("harmonic_shaper");
@@ -5426,6 +5456,14 @@ void ImGuiNodeEditorComponent::renderImGui()
 #endif
             ImGui::Text("In L");
             ImNodes::EndInputAttribute();
+
+            // Cache pin position for cut gesture (Input pins are to the left of text)
+            {
+                ImVec2 pinMin = ImGui::GetItemRectMin();
+                ImVec2 pinMax = ImGui::GetItemRectMax();
+                float  centerY = (pinMin.y + pinMax.y) * 0.5f;
+                attrPositions[a] = ImVec2(pinMin.x, centerY);
+            }
 #if JUCE_DEBUG
             --gImNodesInputDepth;
             jassert(gImNodesInputDepth >= 0);
@@ -5449,6 +5487,14 @@ void ImGuiNodeEditorComponent::renderImGui()
 #endif
             ImGui::Text("In R");
             ImNodes::EndInputAttribute();
+
+            // Cache pin position for cut gesture (Input pins are to the left of text)
+            {
+                ImVec2 pinMin = ImGui::GetItemRectMin();
+                ImVec2 pinMax = ImGui::GetItemRectMax();
+                float  centerY = (pinMin.y + pinMax.y) * 0.5f;
+                attrPositions[a] = ImVec2(pinMin.x, centerY);
+            }
 #if JUCE_DEBUG
             --gImNodesInputDepth;
             jassert(gImNodesInputDepth >= 0);
@@ -5505,26 +5551,33 @@ void ImGuiNodeEditorComponent::renderImGui()
             const int dstAttr = c.dstIsOutput ? encodePinId({0, c.dstChan, true})
                                               : encodePinId({c.dstLogicalId, c.dstChan, true});
 
+            // CRITICAL FIX: Always add connections to linkIdToAttrs, even if pins aren't in
+            // availableAttrs This allows cutting CV cables, dynamic pins, and connections that
+            // exist but pins weren't drawn The availableAttrs check was preventing valid
+            // connections from being cuttable
             if (!availableAttrs.count(srcAttr) || !availableAttrs.count(dstAttr))
             {
-                static std::unordered_set<std::string> skipOnce;
+                static std::unordered_set<std::string> warnOnce;
                 const std::string                      key =
                     std::to_string((int)c.srcLogicalId) + ":" + std::to_string(c.srcChan) + "->" +
                     (c.dstIsOutput ? std::string("0") : std::to_string((int)c.dstLogicalId)) + ":" +
                     std::to_string(c.dstChan);
-                if (skipOnce.insert(key).second)
+                if (warnOnce.insert(key).second)
                 {
                     juce::Logger::writeToLog(
-                        juce::String("[ImNodes][SKIP] missing attr: srcPresent=") +
+                        juce::String(
+                            "[ImNodes][WARN] Connection pins not in availableAttrs (may be "
+                            "dynamic/CV): srcPresent=") +
                         (availableAttrs.count(srcAttr) ? "1" : "0") +
                         " dstPresent=" + (availableAttrs.count(dstAttr) ? "1" : "0") +
                         " srcKey=(lid=" + juce::String((int)c.srcLogicalId) +
                         ",ch=" + juce::String(c.srcChan) + ")" +
                         " dstKey=(lid=" + juce::String(c.dstIsOutput ? 0 : (int)c.dstLogicalId) +
                         ",ch=" + juce::String(c.dstChan) + ",in=1) id(s)=" + juce::String(srcAttr) +
-                        "," + juce::String(dstAttr));
+                        "," + juce::String(dstAttr) +
+                        " - Adding to linkIdToAttrs anyway for cut gesture");
                 }
-                continue;
+                // Continue to add connection - don't skip it!
             }
 
             const int linkId = linkIdOf(srcAttr, dstAttr);
@@ -5727,6 +5780,9 @@ void ImGuiNodeEditorComponent::renderImGui()
         {
             cutModeActive = false;
             cutJustPerformed = true;
+            juce::Logger::writeToLog(
+                "[CutGesture] ENDED at Grid(" + juce::String(cutEndGrid.x) + ", " +
+                juce::String(cutEndGrid.y) + ")");
 
             struct Hit
             {
@@ -5738,6 +5794,7 @@ void ImGuiNodeEditorComponent::renderImGui()
             std::vector<Hit> hits;
             hits.reserve(linkIdToAttrs.size());
 
+            // More robust segment intersection with point-to-segment distance fallback
             auto segmentIntersect = [](const ImVec2& p,
                                        const ImVec2& p2,
                                        const ImVec2& q,
@@ -5750,16 +5807,61 @@ void ImGuiNodeEditorComponent::renderImGui()
                 const float qmpx = q.x - p.x;
                 const float qmpy = q.y - p.y;
                 const float qmpxr = qmpx * r.y - qmpy * r.x;
-                if (std::abs(rxs) < 1e-6f && std::abs(qmpxr) < 1e-6f)
-                    return false; // colinear
-                if (std::abs(rxs) < 1e-6f)
-                    return false; // parallel
+
+                // More lenient epsilon for near-parallel/colinear cases
+                const float epsilon = 1e-4f;
+
+                if (std::abs(rxs) < epsilon)
+                {
+                    // Parallel or colinear - use point-to-segment distance check
+                    // Check if cut line endpoints are close to cable segment
+                    auto pointToSegmentDistSq = [](const ImVec2& pt,
+                                                   const ImVec2& segStart,
+                                                   const ImVec2& segEnd) -> float {
+                        ImVec2 seg = ImVec2(segEnd.x - segStart.x, segEnd.y - segStart.y);
+                        float  segLenSq = seg.x * seg.x + seg.y * seg.y;
+                        if (segLenSq < 1e-6f)
+                        {
+                            // Degenerate segment - just distance to point
+                            float dx = pt.x - segStart.x;
+                            float dy = pt.y - segStart.y;
+                            return dx * dx + dy * dy;
+                        }
+                        float t = juce::jlimit(
+                            0.0f,
+                            1.0f,
+                            ((pt.x - segStart.x) * seg.x + (pt.y - segStart.y) * seg.y) / segLenSq);
+                        ImVec2 closest = ImVec2(segStart.x + t * seg.x, segStart.y + t * seg.y);
+                        float  dx = pt.x - closest.x;
+                        float  dy = pt.y - closest.y;
+                        return dx * dx + dy * dy;
+                    };
+
+                    // Check if cut line is close to cable (within 10 pixels)
+                    const float thresholdSq = 100.0f; // 10 pixels squared
+                    float       dist1Sq = pointToSegmentDistSq(q, p, p2);
+                    float       dist2Sq = pointToSegmentDistSq(q2, p, p2);
+                    if (dist1Sq < thresholdSq || dist2Sq < thresholdSq)
+                    {
+                        // Use midpoint of cable segment as intersection point
+                        tOut = 0.5f;
+                        ptOut = ImVec2((p.x + p2.x) * 0.5f, (p.y + p2.y) * 0.5f);
+                        return true;
+                    }
+                    return false;
+                }
+
                 const float t = (qmpx * s.y - qmpy * s.x) / rxs;
                 const float u = (qmpx * r.y - qmpy * r.x) / rxs;
-                if (t >= 0.0f && t <= 1.0f && u >= 0.0f && u <= 1.0f)
+
+                // More lenient bounds check - allow slight overshoot
+                const float margin = 0.01f;
+                if (t >= -margin && t <= (1.0f + margin) && u >= -margin && u <= (1.0f + margin))
                 {
-                    tOut = t;
-                    ptOut = ImVec2(p.x + t * r.x, p.y + t * r.y);
+                    // Clamp to valid range
+                    float tClamped = juce::jlimit(0.0f, 1.0f, t);
+                    tOut = tClamped;
+                    ptOut = ImVec2(p.x + tClamped * r.x, p.y + tClamped * r.y);
                     return true;
                 }
                 return false;
@@ -5769,13 +5871,26 @@ void ImGuiNodeEditorComponent::renderImGui()
             auto maxf = [](float x, float y) { return x > y ? x : y; };
 
             // Build hits
+            juce::Logger::writeToLog(
+                "[CutGesture] Starting cut detection. linkIdToAttrs.size()=" +
+                juce::String(linkIdToAttrs.size()) +
+                " attrPositions.size()=" + juce::String(attrPositions.size()));
+            int checkedCount = 0;
+            int skippedInvalidAttr = 0;
+            int skippedNoPositions = 0;
+            int skippedBBox = 0;
+            int skippedIntersect = 0;
+            int skippedEndpoint = 0;
             for (const auto& kv : linkIdToAttrs)
             {
                 const int linkId = kv.first;
                 const int srcAttr = kv.second.first;
                 const int dstAttr = kv.second.second;
                 if (srcAttr == 0 || dstAttr == 0)
+                {
+                    skippedInvalidAttr++;
                     continue;
+                }
 
                 LinkInfo li;
                 li.linkId = linkId;
@@ -5785,15 +5900,13 @@ void ImGuiNodeEditorComponent::renderImGui()
 
                 // Prefer actual pin attribute positions if available; fallback to node centers
                 ImVec2 a, b;
+                bool   usingPinPositions = false;
                 auto   attrToGrid = [this](int attr) -> ImVec2 {
                     auto it = attrPositions.find(attr);
                     if (it != attrPositions.end())
                     {
-                        // attrPositions stores screen-space; convert to grid-space
-                        const ImVec2 scr = it->second;
-                        return ImVec2(
-                            scr.x - lastCanvasP0.x - lastEditorPanning.x,
-                            scr.y - lastCanvasP0.y - lastEditorPanning.y);
+                        // attrPositions now stores GRID-SPACE, so return directly
+                        return it->second;
                     }
                     return ImVec2(FLT_MAX, FLT_MAX);
                 };
@@ -5803,32 +5916,135 @@ void ImGuiNodeEditorComponent::renderImGui()
                 {
                     a = aGrid;
                     b = bGrid;
+                    usingPinPositions = true;
                 }
                 else
                 {
+                    skippedNoPositions++;
+                    // Fallback to node centers - but this might fail for output node (logicalId 0)
+                    juce::Logger::writeToLog(
+                        "[CutGesture] WARNING: Link " + juce::String(linkId) +
+                        " missing pin positions. Falling back to node centers. " +
+                        "Src: " + juce::String((int)li.srcPin.logicalId) + ":" +
+                        juce::String(li.srcPin.channel) +
+                        " Dst: " + juce::String((int)li.dstPin.logicalId) + ":" +
+                        juce::String(li.dstPin.channel));
+
                     a = ImNodes::GetNodeGridSpacePos((int)li.srcPin.logicalId);
                     b = ImNodes::GetNodeGridSpacePos((int)li.dstPin.logicalId);
+
+                    juce::Logger::writeToLog(
+                        "[CutGesture] Fallback Coords: A(" + juce::String(a.x) + "," +
+                        juce::String(a.y) + ") B(" + juce::String(b.x) + "," + juce::String(b.y) +
+                        ")");
                 }
                 ImVec2 c = cutStartGrid;
                 ImVec2 d = cutEndGrid;
 
-                ImVec2 abMin{minf(a.x, b.x), minf(a.y, b.y)};
-                ImVec2 abMax{maxf(a.x, b.x), maxf(a.y, b.y)};
-                ImVec2 cdMin{minf(c.x, d.x), minf(c.y, d.y)};
-                ImVec2 cdMax{maxf(c.x, d.x), maxf(c.y, d.y)};
+                // More lenient bounding box check - add padding to account for cable thickness and
+                // imprecision
+                const float bboxPadding = 20.0f; // pixels of padding
+                ImVec2      abMin{minf(a.x, b.x) - bboxPadding, minf(a.y, b.y) - bboxPadding};
+                ImVec2      abMax{maxf(a.x, b.x) + bboxPadding, maxf(a.y, b.y) + bboxPadding};
+                ImVec2      cdMin{minf(c.x, d.x), minf(c.y, d.y)};
+                ImVec2      cdMax{maxf(c.x, d.x), maxf(c.y, d.y)};
                 if (abMax.x < cdMin.x || cdMax.x < abMin.x || abMax.y < cdMin.y ||
                     cdMax.y < abMin.y)
+                {
+                    skippedBBox++;
+                    // Optional: log why we skipped bbox for debugging specific cables
+                    // juce::Logger::writeToLog("[CutGesture] Skip BBox: Link " +
+                    // juce::String(linkId));
                     continue;
+                }
+
+                juce::Logger::writeToLog(
+                    "[CutGesture] Checking Link " + juce::String(linkId) + " A(" +
+                    juce::String(a.x) + "," + juce::String(a.y) + ") " + " B(" + juce::String(b.x) +
+                    "," + juce::String(b.y) + ") " + " Cut(" + juce::String(c.x) + "," +
+                    juce::String(c.y) + "->" + juce::String(d.x) + "," + juce::String(d.y) + ")");
 
                 float  t = 0.0f;
                 ImVec2 pt{};
-                if (segmentIntersect(a, b, c, d, t, pt))
+                bool   hit = segmentIntersect(a, b, c, d, t, pt);
+
+                // Fallback: if intersection fails, check if cut line is close to cable using
+                // point-to-segment distance
+                if (!hit)
                 {
-                    if (t <= cutEndpointTEpsilon || t >= (1.0f - cutEndpointTEpsilon))
+                    auto pointToSegmentDistSq =
+                        [](const ImVec2& pt,
+                           const ImVec2& segStart,
+                           const ImVec2& segEnd) -> std::pair<float, float> {
+                        ImVec2 seg = ImVec2(segEnd.x - segStart.x, segEnd.y - segStart.y);
+                        float  segLenSq = seg.x * seg.x + seg.y * seg.y;
+                        if (segLenSq < 1e-6f)
+                        {
+                            float dx = pt.x - segStart.x;
+                            float dy = pt.y - segStart.y;
+                            return {dx * dx + dy * dy, 0.5f};
+                        }
+                        float t = juce::jlimit(
+                            0.0f,
+                            1.0f,
+                            ((pt.x - segStart.x) * seg.x + (pt.y - segStart.y) * seg.y) / segLenSq);
+                        ImVec2 closest = ImVec2(segStart.x + t * seg.x, segStart.y + t * seg.y);
+                        float  dx = pt.x - closest.x;
+                        float  dy = pt.y - closest.y;
+                        return {dx * dx + dy * dy, t};
+                    };
+
+                    // Check distance from cut line midpoint to cable segment
+                    ImVec2 cutMid = ImVec2((c.x + d.x) * 0.5f, (c.y + d.y) * 0.5f);
+                    auto [distSq, tOnCable] = pointToSegmentDistSq(cutMid, a, b);
+
+                    // If cut line is within 15 pixels of cable, consider it a hit
+                    const float thresholdSq = 225.0f; // 15 pixels squared
+                    if (distSq < thresholdSq && tOnCable > 0.005f && tOnCable < 0.995f)
+                    {
+                        hit = true;
+                        t = tOnCable;
+                        pt = ImVec2(a.x + t * (b.x - a.x), a.y + t * (b.y - a.y));
+                        juce::Logger::writeToLog(
+                            "[CutGesture] FALLBACK HIT (distance-based): linkId=" +
+                            juce::String(linkId) + " dist=" + juce::String(std::sqrt(distSq), 1) +
+                            "px");
+                    }
+                }
+
+                if (hit)
+                {
+                    // Only skip if intersection is extremely close to endpoints (within 0.5% of
+                    // cable length) This prevents cutting right at the pins but allows cutting very
+                    // close to them
+                    if (t <= 0.005f || t >= 0.995f)
+                    {
+                        skippedEndpoint++;
                         continue;
+                    }
+                    checkedCount++;
+                    PinDataType srcType = getPinDataTypeForPin(li.srcPin);
+                    juce::Logger::writeToLog(
+                        "[CutGesture] HIT: linkId=" + juce::String(linkId) +
+                        " srcLid=" + juce::String((int)li.srcPin.logicalId) +
+                        " ch=" + juce::String(li.srcPin.channel) +
+                        " dstLid=" + juce::String((int)li.dstPin.logicalId) +
+                        " ch=" + juce::String(li.dstPin.channel) +
+                        " type=" + juce::String(static_cast<int>(srcType)) + " usingPinPos=" +
+                        juce::String(usingPinPositions ? 1 : 0) + " t=" + juce::String(t, 3));
                     hits.push_back(Hit{linkId, t, pt, li});
                 }
+                else
+                {
+                    skippedIntersect++;
+                }
             }
+            juce::Logger::writeToLog(
+                "[CutGesture] Summary: checked=" + juce::String(checkedCount) +
+                " skippedInvalidAttr=" + juce::String(skippedInvalidAttr) + " skippedNoPositions=" +
+                juce::String(skippedNoPositions) + " skippedBBox=" + juce::String(skippedBBox) +
+                " skippedIntersect=" + juce::String(skippedIntersect) + " skippedEndpoint=" +
+                juce::String(skippedEndpoint) + " totalHits=" + juce::String(hits.size()));
 
             // Merge per-link
             std::sort(hits.begin(), hits.end(), [](const Hit& x, const Hit& y) {
@@ -5859,21 +6075,26 @@ void ImGuiNodeEditorComponent::renderImGui()
             if (!merged.empty())
             {
                 pushSnapshot();
-                const ImVec2 dir =
-                    ImVec2(cutEndGrid.x - cutStartGrid.x, cutEndGrid.y - cutStartGrid.y);
-                float  len = std::sqrt(dir.x * dir.x + dir.y * dir.y);
-                ImVec2 n = (len > 1e-6f) ? ImVec2(dir.x / len, dir.y / len) : ImVec2(1.0f, 0.0f);
-                float  stagger = 0.0f;
                 for (const auto& h : merged)
                 {
-                    // Place by cursor intersection: convert grid -> screen for positioning API
-                    ImVec2 gridPos = ImVec2(
-                        h.posGrid.x + n.x * 12.0f + stagger, h.posGrid.y + n.y * 12.0f + stagger);
+                    // Ultra-simple positioning: use midpoint of cut line (where user dragged)
+                    // This is the most reliable - user's cut gesture defines the position
+                    ImVec2 cutMidpointGrid = ImVec2(
+                        (cutStartGrid.x + cutEndGrid.x) * 0.5f,
+                        (cutStartGrid.y + cutEndGrid.y) * 0.5f);
+
+                    // Convert to screen space
                     ImVec2 screenPos = ImVec2(
-                        lastCanvasP0.x + lastEditorPanning.x + gridPos.x,
-                        lastCanvasP0.y + lastEditorPanning.y + gridPos.y);
+                        lastCanvasP0.x + lastEditorPanning.x + cutMidpointGrid.x,
+                        lastCanvasP0.y + lastEditorPanning.y + cutMidpointGrid.y);
+
+                    juce::Logger::writeToLog(
+                        "[CutGesture] Inserting reroute at cut midpoint: grid=(" +
+                        juce::String(cutMidpointGrid.x, 1) + "," +
+                        juce::String(cutMidpointGrid.y, 1) + ") screen=(" +
+                        juce::String(screenPos.x, 1) + "," + juce::String(screenPos.y, 1) + ")");
+
                     insertNodeOnLink("reroute", h.link, screenPos);
-                    stagger += 6.0f;
                 }
                 graphNeedsRebuild = true;
             }
@@ -6320,8 +6541,9 @@ void ImGuiNodeEditorComponent::renderImGui()
     }
     // Fallback: If user right-clicked and a link was hovered this frame, open popup using cached
     // hover
+    // Exclude Alt+Right-click to allow cut-by-line gesture to work
     if (ImGui::IsMouseClicked(ImGuiMouseButton_Right) && lastHoveredLinkId != -1 &&
-        !ImGui::IsPopupOpen("InsertNodeOnLinkPopup"))
+        !ImGui::IsPopupOpen("InsertNodeOnLinkPopup") && !ImGui::GetIO().KeyAlt)
     {
         int id = lastHoveredLinkId;
         linkToInsertOn = {};
@@ -6701,6 +6923,8 @@ void ImGuiNodeEditorComponent::renderImGui()
                         addAtMouse("reverb");
                     if (ImGui::MenuItem("Chorus"))
                         addAtMouse("chorus");
+                    if (ImGui::MenuItem("Spatial Granulator"))
+                        addAtMouse("spatial_granulator");
                     if (ImGui::MenuItem("Phaser"))
                         addAtMouse("phaser");
                     if (ImGui::MenuItem("Compressor"))
@@ -6802,6 +7026,8 @@ void ImGuiNodeEditorComponent::renderImGui()
                         addAtMouse("chord_arp");
                     if (ImGui::MenuItem("Timeline"))
                         addAtMouse("timeline");
+                    if (ImGui::MenuItem("Automation Lane"))
+                        addAtMouse("automation_lane");
                     ImGui::EndMenu();
                 }
 
@@ -9210,7 +9436,7 @@ void ImGuiNodeEditorComponent::handleBeautifyLayout()
 
     // Compute column X positions as cumulative sum of widths + padding
     std::vector<float> columnX(maxColumn + 1, 0.0f);
-    float accumulatedX = 0.0f;
+    float              accumulatedX = 0.0f;
     for (int c = 0; c <= maxColumn; ++c)
     {
         columnX[c] = accumulatedX;
@@ -10635,6 +10861,71 @@ void ImGuiNodeEditorComponent::handleColorTrackerAutoConnectSamplers(
         " colors to Sample Loaders.");
 }
 
+void ImGuiNodeEditorComponent::handleChordArpAutoConnectPolyVCO(
+    ChordArpModuleProcessor* chordArp,
+    juce::uint32             chordArpLid)
+{
+    if (!synth || !chordArp)
+        return;
+
+    // 1. Get ChordArp info
+    auto   arpNodeId = synth->getNodeIdForLogical(chordArpLid);
+    ImVec2 arpPos = ImNodes::GetNodeGridSpacePos((int)chordArpLid);
+
+    // 2. Create PolyVCO (4 voices default)
+    auto polyVcoNodeId = synth->addModule("polyvco");
+    auto polyVcoLid = synth->getLogicalIdForNode(polyVcoNodeId);
+    pendingNodePositions[(int)polyVcoLid] = ImVec2(arpPos.x + 400.0f, arpPos.y);
+
+    // Set PolyVCO voices to 4
+    if (auto* vco = dynamic_cast<PolyVCOModuleProcessor*>(synth->getModuleForLogical(polyVcoLid)))
+    {
+        if (auto* p =
+                dynamic_cast<juce::AudioParameterInt*>(vco->getAPVTS().getParameter("numVoices")))
+            *p = 4;
+    }
+
+    // 3. Create Track Mixer (4 tracks)
+    auto mixerNodeId = synth->addModule("track_mixer");
+    auto mixerLid = synth->getLogicalIdForNode(mixerNodeId);
+    pendingNodePositions[(int)mixerLid] = ImVec2(arpPos.x + 800.0f, arpPos.y);
+
+    if (auto* mixer =
+            dynamic_cast<TrackMixerModuleProcessor*>(synth->getModuleForLogical(mixerLid)))
+    {
+        if (auto* p =
+                dynamic_cast<juce::AudioParameterInt*>(mixer->getAPVTS().getParameter("numTracks")))
+            *p = 4;
+    }
+
+    // 4. Connect ChordArp -> PolyVCO
+    // ChordArp outputs: Pitch 1-4 (0, 2, 4, 6), Gate 1-4 (1, 3, 5, 7)
+    for (int i = 0; i < 4; ++i)
+    {
+        // Pitch
+        synth->connect(arpNodeId, i * 2, polyVcoNodeId, 1 + i);
+
+        // Gate
+        // Gate Mod index: 1 + MAX_VOICES*2 + i
+        int gateModIdx = 1 + PolyVCOModuleProcessor::MAX_VOICES * 2 + i;
+        synth->connect(arpNodeId, i * 2 + 1, polyVcoNodeId, gateModIdx);
+    }
+
+    // 5. Connect PolyVCO -> Mixer
+    for (int i = 0; i < 4; ++i)
+    {
+        synth->connect(polyVcoNodeId, i, mixerNodeId, i);
+    }
+
+    // 6. Connect Mixer -> Output
+    auto outputNodeId = synth->getOutputNodeID();
+    synth->connect(mixerNodeId, 0, outputNodeId, 0);
+    synth->connect(mixerNodeId, 1, outputNodeId, 1);
+
+    graphNeedsRebuild = true;
+    juce::Logger::writeToLog("[ChordArp Auto-Connect] Connected 4 voices to PolyVCO.");
+}
+
 // Add this exact helper function to the class
 void ImGuiNodeEditorComponent::parsePinName(
     const juce::String& fullName,
@@ -10981,6 +11272,17 @@ void ImGuiNodeEditorComponent::handleAutoConnectionRequests()
             }
         }
 
+        // --- Check ChordArp Flags ---
+        if (auto* chordArp = dynamic_cast<ChordArpModuleProcessor*>(module))
+        {
+            if (chordArp->autoConnectVCOTriggered.exchange(false))
+            {
+                handleChordArpAutoConnectPolyVCO(chordArp, modInfo.first);
+                pushSnapshot();
+                return;
+            }
+        }
+
         // --- Check StrokeSequencer Flags ---
         if (auto* strokeSeq = dynamic_cast<StrokeSequencerModuleProcessor*>(module))
         {
@@ -11239,11 +11541,13 @@ void ImGuiNodeEditorComponent::drawInsertNodeOnLinkPopup()
             {"Limiter", "limiter"},
             {"Noise Gate", "gate"},
             {"Drive", "drive"},
+            {"Spatial Granulator", "spatial_granulator"},
             {"Bit Crusher", "bit_crusher"},
             {"Graphic EQ", "graphic_eq"},
             {"Waveshaper", "waveshaper"},
             {"8-Band Shaper", "8bandshaper"},
             {"Granulator", "granulator"},
+            {"Spatial Granulator", "spatial_granulator"},
             {"Harmonic Shaper", "harmonic_shaper"},
             {"Time/Pitch Shifter", "timepitch"},
             {"De-Crackle", "de_crackle"},
@@ -11405,10 +11709,21 @@ void ImGuiNodeEditorComponent::insertNodeOnLink(
     const ImVec2&       position)
 {
     if (synth == nullptr)
+    {
+        juce::Logger::writeToLog("[InsertNodeOnLink] ERROR: synth is nullptr");
         return;
+    }
 
     PinDataType srcType = getPinDataTypeForPin(linkInfo.srcPin);
     PinDataType dstType = getPinDataTypeForPin(linkInfo.dstPin);
+    juce::Logger::writeToLog(
+        "[InsertNodeOnLink] Inserting " + nodeType + " on link " + juce::String(linkInfo.linkId) +
+        " srcLid=" + juce::String((int)linkInfo.srcPin.logicalId) +
+        " srcCh=" + juce::String(linkInfo.srcPin.channel) +
+        " dstLid=" + juce::String((int)linkInfo.dstPin.logicalId) +
+        " dstCh=" + juce::String(linkInfo.dstPin.channel) +
+        " srcType=" + juce::String(static_cast<int>(srcType)) +
+        " dstType=" + juce::String(static_cast<int>(dstType)));
 
     // 1. Create and Position the New Node
     // Check if this is a VST plugin by checking against known plugins
@@ -11454,9 +11769,13 @@ void ImGuiNodeEditorComponent::insertNodeOnLink(
         newNodeId = synth->addModule(nodeType);
         if (newNodeId.uid == 0)
         {
-            juce::Logger::writeToLog("[InsertNode] ERROR: Failed to create module: " + nodeType);
+            juce::Logger::writeToLog(
+                "[InsertNodeOnLink] ERROR: Failed to create module: " + nodeType);
             return; // Don't disconnect if node creation failed
         }
+        juce::Logger::writeToLog(
+            "[InsertNodeOnLink] Created module " + nodeType +
+            " with nodeId=" + juce::String(newNodeId.uid));
     }
 
     juce::String nodeName = isVst ? nodeType : juce::String(nodeType).replaceCharacter('_', ' ');
@@ -11487,12 +11806,11 @@ void ImGuiNodeEditorComponent::insertNodeOnLink(
 
     pendingNodeScreenPositions[(int)newNodeLid] = position;
 
-    if (!linkInfo.srcPin.isMod)
-    {
-        if (auto* reroute =
-                dynamic_cast<RerouteModuleProcessor*>(synth->getModuleForLogical(newNodeLid)))
-            reroute->setPassthroughType(srcType);
-    }
+    // Always set passthrough type for reroute nodes based on source pin data type
+    // (isMod flag is unreliable, so we use the actual pin data type instead)
+    if (auto* reroute =
+            dynamic_cast<RerouteModuleProcessor*>(synth->getModuleForLogical(newNodeLid)))
+        reroute->setPassthroughType(srcType);
 
     // 2. Get Original Connection Points
     auto originalSrcNodeId = synth->getNodeIdForLogical(linkInfo.srcPin.logicalId);
@@ -11501,8 +11819,12 @@ void ImGuiNodeEditorComponent::insertNodeOnLink(
                                  : synth->getNodeIdForLogical(linkInfo.dstPin.logicalId);
 
     // 3. Disconnect the Original Link (only after node is confirmed created)
-    synth->disconnect(
+    bool disconnectSuccess = synth->disconnect(
         originalSrcNodeId, linkInfo.srcPin.channel, originalDstNodeId, linkInfo.dstPin.channel);
+    if (!disconnectSuccess)
+    {
+        juce::Logger::writeToLog("[InsertNodeOnLink] WARNING: Failed to disconnect original link");
+    }
 
     // 4. Configure newly inserted node if necessary (e.g., MapRange)
     int newNodeOutputChannel = 0;
@@ -11518,8 +11840,21 @@ void ImGuiNodeEditorComponent::insertNodeOnLink(
     }
 
     // 5. Reconnect through the New Node
-    synth->connect(originalSrcNodeId, linkInfo.srcPin.channel, newNodeId, 0);
-    synth->connect(newNodeId, newNodeOutputChannel, originalDstNodeId, linkInfo.dstPin.channel);
+    bool connect1Success = synth->connect(originalSrcNodeId, linkInfo.srcPin.channel, newNodeId, 0);
+    bool connect2Success =
+        synth->connect(newNodeId, newNodeOutputChannel, originalDstNodeId, linkInfo.dstPin.channel);
+
+    if (!connect1Success || !connect2Success)
+    {
+        juce::Logger::writeToLog(
+            "[InsertNodeOnLink] ERROR: Failed to reconnect. connect1=" +
+            juce::String(connect1Success ? "OK" : "FAIL") +
+            " connect2=" + juce::String(connect2Success ? "OK" : "FAIL"));
+    }
+    else
+    {
+        juce::Logger::writeToLog("[InsertNodeOnLink] SUCCESS: Node inserted and reconnected");
+    }
 
     if (getTypeForLogical(newNodeLid).equalsIgnoreCase("reroute"))
         updateRerouteTypeFromConnections((juce::uint32)newNodeLid);
@@ -11733,12 +12068,11 @@ void ImGuiNodeEditorComponent::insertNodeBetween(
 
     pendingNodePositions[(int)newNodeLid] = newNodePos;
 
-    if (!srcPin.isMod)
-    {
-        if (auto* reroute =
-                dynamic_cast<RerouteModuleProcessor*>(synth->getModuleForLogical(newNodeLid)))
-            reroute->setPassthroughType(srcType);
-    }
+    // Always set passthrough type for reroute nodes based on source pin data type
+    // (isMod flag is unreliable, so we use the actual pin data type instead)
+    if (auto* reroute =
+            dynamic_cast<RerouteModuleProcessor*>(synth->getModuleForLogical(newNodeLid)))
+        reroute->setPassthroughType(srcType);
 
     auto originalSrcNodeId = synth->getNodeIdForLogical(srcPin.logicalId);
     auto originalDstNodeId = (dstPin.logicalId == 0) ? synth->getOutputNodeID()
@@ -12980,8 +13314,9 @@ ImGuiNodeEditorComponent::ModuleCategory ImGuiNodeEditorComponent::getModuleCate
         lower.contains("limiter") || lower == "gate" || lower.contains("drive") ||
         lower.contains("bit_crusher") || lower.contains("crusher") || lower.contains("eq") ||
         lower.contains("waveshaper") || lower.contains("8bandshaper") ||
-        lower.contains("granulator") || lower.contains("harmonic_shaper") ||
-        lower.contains("timepitch") || lower.contains("crackle"))
+        lower.contains("granulator") || lower.contains("spatial_granulator") ||
+        lower.contains("harmonic_shaper") || lower.contains("timepitch") ||
+        lower.contains("crackle"))
         return ModuleCategory::Effect;
 
     // --- 3. MODULATORS (Blue) ---
@@ -12999,7 +13334,8 @@ ImGuiNodeEditorComponent::ModuleCategory ImGuiNodeEditorComponent::getModuleCate
         return ModuleCategory::Utility;
 
     // --- 5. SEQUENCERS (Light Green) ---
-    if (lower.contains("sequencer") || lower.contains("tempo_clock") || lower == "timeline" || lower == "chord_arp")
+    if (lower.contains("sequencer") || lower.contains("tempo_clock") || lower == "timeline" ||
+        lower == "chord_arp" || lower == "automation_lane")
         return ModuleCategory::Seq;
 
     // --- 6. MIDI (Vibrant Purple) ---
@@ -13071,7 +13407,8 @@ std::map<juce::String, std::pair<const char*, const char*>> ImGuiNodeEditorCompo
         {"Sequencer", {"sequencer", "Step sequencer for creating patterns"}},
         {"Multi Sequencer", {"multi_sequencer", "Multi-track step sequencer"}},
         {"Stroke Sequencer", {"stroke_sequencer", "Freeform visual rhythmic and CV generator"}},
-        {"Chord Arp", {"chord_arp", "Harmony brain that generates chords and arpeggios from CV inputs"}},
+        {"Chord Arp",
+         {"chord_arp", "Harmony brain that generates chords and arpeggios from CV inputs"}},
         {"MIDI Player", {"midi_player", "Plays MIDI files"}},
         {"MIDI CV", {"midi_cv", "Converts MIDI Note/CC messages to CV signals. (Monophonic)"}},
         {"MIDI Faders", {"midi_faders", "Up to 16 MIDI faders with CC learning"}},
@@ -13162,6 +13499,8 @@ std::map<juce::String, std::pair<const char*, const char*>> ImGuiNodeEditorCompo
         {"Waveshaper", {"waveshaper", "Waveshaping distortion"}},
         {"8-Band Shaper", {"8bandshaper", "8-band spectral shaper"}},
         {"Granulator", {"granulator", "Granular synthesis effect"}},
+        {"Spatial Granulator",
+         {"spatial_granulator", "Visual canvas granulator/chorus with color-coded parameters"}},
         {"Harmonic Shaper", {"harmonic_shaper", "Harmonic content shaper"}},
         {"Time/Pitch Shifter", {"timepitch", "Time stretching and pitch shifting"}},
         {"De-Crackle", {"de_crackle", "Removes clicks and pops"}},
@@ -13176,6 +13515,7 @@ std::map<juce::String, std::pair<const char*, const char*>> ImGuiNodeEditorCompo
           "Global clock with BPM control, transport (play/stop/reset), division, swing, and "
           "clock/gate outputs. Use External Takeover to drive the master transport."}},
         {"Function Generator", {"function_generator", "Custom function curves"}},
+        {"Automation Lane", {"automation_lane", "Draw automation curves on scrolling timeline"}},
         {"Shaping Oscillator", {"shaping_oscillator", "Oscillator with waveshaping"}},
 
         // Utilities

@@ -785,6 +785,8 @@ target_sources(ColliderApp PRIVATE
     Source/audio/modules/MultiBandShaperModuleProcessor.cpp
     Source/audio/modules/GranulatorModuleProcessor.h
     Source/audio/modules/GranulatorModuleProcessor.cpp
+    Source/audio/modules/SpatialGranulatorModuleProcessor.h
+    Source/audio/modules/SpatialGranulatorModuleProcessor.cpp
     Source/audio/modules/HarmonicShaperModuleProcessor.h
     Source/audio/modules/HarmonicShaperModuleProcessor.cpp
     Source/audio/modules/ValueModuleProcessor.h
@@ -858,6 +860,8 @@ target_sources(ColliderApp PRIVATE
     Source/audio/modules/BPMMonitorModuleProcessor.cpp
     Source/audio/modules/AnimationModuleProcessor.h
     Source/audio/modules/AnimationModuleProcessor.cpp
+    Source/audio/modules/AutomationLaneModuleProcessor.h
+    Source/audio/modules/AutomationLaneModuleProcessor.cpp
     Source/video/VideoFrameManager.h
     Source/video/CameraEnumerator.h
     Source/audio/modules/WebcamLoaderModule.h
@@ -1150,6 +1154,8 @@ target_sources(PresetCreatorApp PRIVATE
     Source/audio/modules/MultiBandShaperModuleProcessor.cpp
     Source/audio/modules/GranulatorModuleProcessor.h
     Source/audio/modules/GranulatorModuleProcessor.cpp
+    Source/audio/modules/SpatialGranulatorModuleProcessor.h
+    Source/audio/modules/SpatialGranulatorModuleProcessor.cpp
     Source/audio/modules/HarmonicShaperModuleProcessor.h
     Source/audio/modules/HarmonicShaperModuleProcessor.cpp
     Source/audio/modules/ValueModuleProcessor.h
@@ -1267,6 +1273,8 @@ target_sources(PresetCreatorApp PRIVATE
     Source/audio/modules/BPMMonitorModuleProcessor.cpp
     Source/audio/modules/AnimationModuleProcessor.h
     Source/audio/modules/AnimationModuleProcessor.cpp
+    Source/audio/modules/AutomationLaneModuleProcessor.h
+    Source/audio/modules/AutomationLaneModuleProcessor.cpp
     Source/video/VideoFrameManager.h
     Source/video/CameraEnumerator.h
     Source/audio/modules/WebcamLoaderModule.h

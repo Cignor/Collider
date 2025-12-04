@@ -46,7 +46,7 @@ juce::AudioProcessorValueTreeState::ParameterLayout SampleSfxModuleProcessor::cr
     
     // --- Selection Mode ---
     parameters.push_back(std::make_unique<juce::AudioParameterChoice>(
-        "selectionMode", "Selection Mode", juce::StringArray { "Sequential", "Random" }, 0));
+        "selectionMode", "Selection Mode", juce::StringArray { "Sequential", "Random", "Off" }, 0));
     
     // --- Pitch Variation (small range: ±2 semitones) ---
     parameters.push_back(std::make_unique<juce::AudioParameterFloat>(
@@ -609,10 +609,15 @@ void SampleSfxModuleProcessor::queueNextSample()
         if (folderSamples.isEmpty())
             return;
         
-        const bool randomMode = selectionModeParam && (selectionModeParam->load() > 0.5f);
+        const int mode = selectionModeParam ? ((int)selectionModeParam->load()) : 0;
         nextIndex = currentSampleIndex;
         
-        if (randomMode)
+        if (mode == 0)
+        {
+            // Sequential: wrap around
+            nextIndex = (currentSampleIndex + 1) % folderSamples.size();
+        }
+        else if (mode == 1)
         {
             // Random selection (exclude current if > 1 sample)
             juce::Random rng(juce::Time::getMillisecondCounterHiRes());
@@ -623,10 +628,10 @@ void SampleSfxModuleProcessor::queueNextSample()
                 } while (nextIndex == currentSampleIndex && folderSamples.size() > 2);
             }
         }
-        else
+        else // mode == 2 (Off)
         {
-            // Sequential: wrap around
-            nextIndex = (currentSampleIndex + 1) % folderSamples.size();
+            // Off mode: keep current sample (repeat itself)
+            nextIndex = currentSampleIndex;
         }
     }
 
@@ -919,30 +924,30 @@ void SampleSfxModuleProcessor::drawParametersInNode(float itemWidth, const std::
     
     ImGui::Spacing();
     
-    // Selection mode (Sequential/Random)
-    int mode = selectionModeParam ? ((int)selectionModeParam->load()) : 0;
-    const char* items[] = { "Sequential", "Random" };
-    if (ImGui::Combo("Selection Mode", &mode, items, 2))
+    // Selection mode (Sequential/Random/Off)
+    auto* selectionModeChoice = dynamic_cast<juce::AudioParameterChoice*>(apvts.getParameter("selectionMode"));
+    int mode = selectionModeChoice ? selectionModeChoice->getIndex() : 0;
+    const char* items[] = { "Sequential", "Random", "Off" };
+    if (ImGui::Combo("Selection Mode", &mode, items, 3))
     {
-        if (auto* p = apvts.getParameter("selectionMode"))
-            p->setValueNotifyingHost((float)mode);
-        onModificationEnded();
+        if (selectionModeChoice)
+        {
+            *selectionModeChoice = mode;
+            onModificationEnded();
+        }
     }
-    // Scroll wheel support for combo (scroll down advances, scroll up goes back)
-    if (ImGui::IsItemHovered())
+    // Scroll wheel support for combo (matches pattern from other modules)
+    if (selectionModeChoice && ImGui::IsItemHovered())
     {
         const float wheel = ImGui::GetIO().MouseWheel;
         if (wheel != 0.0f)
         {
-            const int newMode = juce::jlimit(0, 1, mode + (wheel > 0.0f ? -1 : 1));
+            const int newMode = juce::jlimit(0, 2, mode + (wheel > 0.0f ? -1 : 1));
             if (newMode != mode)
             {
                 mode = newMode;
-                if (auto* p = apvts.getParameter("selectionMode"))
-                {
-                    p->setValueNotifyingHost((float)mode);
-                    onModificationEnded();
-                }
+                *selectionModeChoice = mode;
+                onModificationEnded();
             }
         }
     }

@@ -142,7 +142,7 @@ private:
     std::atomic<float>* pitchVariationModParam { nullptr };
     std::atomic<float>* gateParam { nullptr };
     std::atomic<float>* gateModParam { nullptr };
-    std::atomic<float>* selectionModeParam { nullptr };  // 0 = Sequential, 1 = Random
+    std::atomic<float>* selectionModeParam { nullptr };  // 0 = Sequential, 1 = Random, 2 = Off
     std::atomic<float>* rangeStartParam { nullptr };
     std::atomic<float>* rangeEndParam { nullptr };
     std::atomic<float>* rangeStartModParam { nullptr };

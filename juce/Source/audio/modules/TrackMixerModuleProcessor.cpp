@@ -13,6 +13,7 @@ TrackMixerModuleProcessor::TrackMixerModuleProcessor()
 {
     numTracksParam = dynamic_cast<juce::AudioParameterInt*>(apvts.getParameter("numTracks"));
     numTracksMaxParam = dynamic_cast<juce::AudioParameterInt*>(apvts.getParameter("numTracks_max"));
+    globalVolumeParam = apvts.getRawParameterValue("globalVolume");
 
     trackGainParams.resize(MAX_TRACKS);
     trackPanParams.resize(MAX_TRACKS);
@@ -36,6 +37,8 @@ juce::AudioProcessorValueTreeState::ParameterLayout TrackMixerModuleProcessor::c
     std::vector<std::unique_ptr<juce::RangedAudioParameter>> p;
     p.push_back(std::make_unique<juce::AudioParameterInt>("numTracks", "Num Tracks", 2, MAX_TRACKS, 8));
     p.push_back(std::make_unique<juce::AudioParameterInt>("numTracks_max", "Num Tracks Max", 2, MAX_TRACKS, MAX_TRACKS));
+    p.push_back(std::make_unique<juce::AudioParameterFloat>("globalVolume", "Global Volume",
+        juce::NormalisableRange<float>(-60.0f, 6.0f, 0.1f), 0.0f));
 
     for (int i = 1; i <= MAX_TRACKS; ++i)
     {
@@ -149,6 +152,11 @@ void TrackMixerModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
         }
     }
     
+    // Apply global volume to the mix
+    const float globalVolumeDb = globalVolumeParam->load();
+    const float globalVolumeLin = juce::Decibels::decibelsToGain(globalVolumeDb);
+    mixBus.applyGain(globalVolumeLin);
+    
     // Copy the final mixed signal to the output
     outBus.copyFrom(0, 0, mixBus, 0, 0, numSamples);
     if (outBus.getNumChannels() > 1)
@@ -261,6 +269,23 @@ void TrackMixerModuleProcessor::drawParametersInNode(float itemWidth, const std:
         ImGui::EndDisabled();
         ImGui::SameLine();
         ImGui::TextUnformatted("(mod)");
+    }
+
+    ImGui::Spacing();
+
+    // --- Global Volume Slider ---
+    auto* globalVolumeParamPtr = dynamic_cast<juce::AudioParameterFloat*>(ap.getParameter("globalVolume"));
+    if (globalVolumeParamPtr)
+    {
+        float volumeValue = globalVolumeParamPtr->get();
+        ImGui::PushItemWidth(itemWidth);
+        if (ImGui::SliderFloat("Volume", &volumeValue, -60.0f, 6.0f, "%.1f dB"))
+        {
+            *globalVolumeParamPtr = volumeValue;
+        }
+        adjustParamOnWheel(ap.getParameter("globalVolume"), "globalVolume", volumeValue);
+        if (ImGui::IsItemDeactivatedAfterEdit()) { onModificationEnded(); }
+        ImGui::PopItemWidth();
     }
 
     ImGui::Spacing();
