@@ -14,6 +14,7 @@ public:
     static constexpr auto paramIdAttack = "attack";
     static constexpr auto paramIdRelease = "release";
     static constexpr auto paramIdMakeup = "makeup";
+    static constexpr auto paramIdMix = "mix";
 
     // Virtual IDs for modulation inputs
     static constexpr auto paramIdThresholdMod = "threshold_mod";
@@ -21,6 +22,7 @@ public:
     static constexpr auto paramIdAttackMod = "attack_mod";
     static constexpr auto paramIdReleaseMod = "release_mod";
     static constexpr auto paramIdMakeupMod = "makeup_mod";
+    static constexpr auto paramIdMixMod = "mix_mod";
 
     CompressorModuleProcessor();
     ~CompressorModuleProcessor() override = default;
@@ -54,6 +56,9 @@ private:
     // The core JUCE DSP Compressor object
     juce::dsp::Compressor<float> compressor;
     juce::AudioBuffer<float> dryBuffer;
+    
+    // Smoothed values to prevent zipper noise
+    juce::SmoothedValue<float> smoothedMix;
 
     // Cached atomic pointers to parameters
     std::atomic<float>* thresholdParam { nullptr };
@@ -61,6 +66,7 @@ private:
     std::atomic<float>* attackParam { nullptr };
     std::atomic<float>* releaseParam { nullptr };
     std::atomic<float>* makeupParam { nullptr };
+    std::atomic<float>* mixParam { nullptr };
     
     // Relative modulation parameters
     std::atomic<float>* relativeThresholdModParam { nullptr };

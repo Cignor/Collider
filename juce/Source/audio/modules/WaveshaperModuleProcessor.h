@@ -34,6 +34,8 @@ public:
             case 0: return "In L";
             case 1: return "In R";
             case 2: return "Drive Mod";
+            case 3: return "Type Mod";
+            case 4: return "Mix Mod";
             default: return juce::String("In ") + juce::String(channel + 1);
         }
     }
@@ -61,9 +63,13 @@ private:
     
     juce::AudioParameterFloat* driveParam { nullptr };
     juce::AudioParameterChoice* typeParam { nullptr };
+    juce::AudioParameterFloat* mixParam { nullptr };
     
     // Relative modulation parameters
     std::atomic<float>* relativeDriveModParam { nullptr };
+    
+    // Smoothed values to prevent zipper noise
+    juce::SmoothedValue<float> smoothedMix;
 
 #if defined(PRESET_CREATOR_UI)
     struct VizData

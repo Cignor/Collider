@@ -19,7 +19,7 @@ juce::AudioProcessorValueTreeState::ParameterLayout DriveModuleProcessor::create
 
 DriveModuleProcessor::DriveModuleProcessor()
     : ModuleProcessor(BusesProperties()
-          .withInput("Audio In", juce::AudioChannelSet::stereo(), true)
+          .withInput("Inputs", juce::AudioChannelSet::discreteChannels(4), true) // 0-1: Audio In, 2: Drive Mod, 3: Mix Mod
           .withOutput("Audio Out", juce::AudioChannelSet::stereo(), true)),
       apvts(*this, nullptr, "DriveParams", createParameterLayout())
 {
@@ -32,8 +32,10 @@ DriveModuleProcessor::DriveModuleProcessor()
     lastOutputValues.push_back(std::make_unique<std::atomic<float>>(0.0f)); // Out R
 }
 
-void DriveModuleProcessor::prepareToPlay(double /*sampleRate*/, int samplesPerBlock)
+void DriveModuleProcessor::prepareToPlay(double sampleRate, int samplesPerBlock)
 {
+    smoothedDrive.reset(sampleRate, 0.01);
+    smoothedMix.reset(sampleRate, 0.01);
     tempBuffer.setSize(2, samplesPerBlock);
 #if defined(PRESET_CREATOR_UI)
     vizDryBuffer.setSize(2, samplesPerBlock);
@@ -49,11 +51,21 @@ void DriveModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::
 {
     juce::ignoreUnused(midi);
     
+    // Get pointers to modulation CV inputs from unified input bus
+    const bool isDriveMod = isParamInputConnected(paramIdDrive);
+    const bool isMixMod = isParamInputConnected(paramIdMix);
     auto inBus = getBusBuffer(buffer, true, 0);
     auto outBus = getBusBuffer(buffer, false, 0);
     
-    const float driveAmount = driveParam->load();
-    const float mixAmount = mixParam->load();
+    // SAFE: Read input pointers BEFORE any output operations
+    const float* driveCV = isDriveMod && inBus.getNumChannels() > 2 ? inBus.getReadPointer(2) : nullptr;
+    const float* mixCV = isMixMod && inBus.getNumChannels() > 3 ? inBus.getReadPointer(3) : nullptr;
+    
+    // Get base parameter values ONCE
+    const float baseDrive = driveParam != nullptr ? driveParam->load() : 0.0f;
+    const float baseMix = mixParam != nullptr ? mixParam->load() : 0.5f;
+    const bool relativeDriveMode = relativeDriveModParam && relativeDriveModParam->load() > 0.5f;
+    const bool relativeMixMode = relativeMixModParam && relativeMixModParam->load() > 0.5f;
 
     // Copy input to output
     const int numInputChannels = inBus.getNumChannels();
@@ -90,47 +102,111 @@ void DriveModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::
     vizDryBuffer.makeCopyOf(outBus);
 #endif
 
-    // If drive is zero and mix is fully dry, we can skip processing entirely.
-    if (driveAmount <= 0.001f && mixAmount <= 0.001f)
-    {
-        // Update output values for tooltips
-        if (lastOutputValues.size() >= 2)
-        {
-            if (lastOutputValues[0]) lastOutputValues[0]->store(outBus.getSample(0, buffer.getNumSamples() - 1));
-            if (lastOutputValues[1] && numChannels > 1) lastOutputValues[1]->store(outBus.getSample(1, buffer.getNumSamples() - 1));
-        }
-        return;
-    }
-
-    // --- Dry/Wet Mix Implementation (inspired by VoiceProcessor.cpp) ---
-    // 1. Make a copy of the original (dry) signal.
+    // Store dry signal for mixing
     tempBuffer.makeCopyOf(outBus);
 
-    // 2. Apply the distortion to the temporary buffer to create the wet signal.
-    const float k = juce::jlimit(0.0f, 10.0f, driveAmount) * 5.0f;
-    for (int ch = 0; ch < tempBuffer.getNumChannels(); ++ch)
+    // Process with per-sample modulation
+    for (int i = 0; i < numSamples; ++i)
     {
-        auto* data = tempBuffer.getWritePointer(ch);
-        for (int i = 0; i < tempBuffer.getNumSamples(); ++i)
+        // PER-SAMPLE: Calculate effective drive FOR THIS SAMPLE
+        float currentDrive = baseDrive;
+        if (isDriveMod && driveCV != nullptr) {
+            const float cv = juce::jlimit(0.0f, 1.0f, driveCV[i]);
+            if (relativeDriveMode) {
+                // RELATIVE: CV modulates around base value (±2.0 range centered at base)
+                const float range = 2.0f;
+                const float offset = (cv - 0.5f) * (range * 2.0f);
+                currentDrive = juce::jlimit(0.0f, 2.0f, baseDrive + offset);
+            } else {
+                // ABSOLUTE: CV directly maps to drive (0-2)
+                currentDrive = juce::jmap(cv, 0.0f, 2.0f);
+            }
+        }
+        smoothedDrive.setTargetValue(currentDrive);
+        const float driveAmount = smoothedDrive.getNextValue();
+        
+        // PER-SAMPLE: Calculate effective mix FOR THIS SAMPLE
+        float currentMix = baseMix;
+        if (isMixMod && mixCV != nullptr) {
+            const float cv = juce::jlimit(0.0f, 1.0f, mixCV[i]);
+            if (relativeMixMode) {
+                // RELATIVE: CV modulates around base value (±1.0 range centered at base)
+                const float range = 1.0f;
+                const float offset = (cv - 0.5f) * (range * 2.0f);
+                currentMix = juce::jlimit(0.0f, 1.0f, baseMix + offset);
+            } else {
+                // ABSOLUTE: CV directly maps to mix (0-1)
+                currentMix = cv;
+            }
+        }
+        smoothedMix.setTargetValue(currentMix);
+        const float mixAmount = smoothedMix.getNextValue();
+        
+        // Apply distortion to wet signal
+        const float k = juce::jlimit(0.0f, 10.0f, driveAmount) * 5.0f;
+        const float dryLevel = 1.0f - mixAmount;
+        const float wetLevel = mixAmount;
+        
+        for (int ch = 0; ch < numChannels; ++ch)
+        {
+            const float drySample = tempBuffer.getSample(ch, i);
+            const float wetSample = std::tanh(k * drySample);
+            outBus.setSample(ch, i, dryLevel * drySample + wetLevel * wetSample);
+        }
+    }
+    
+    // Update live parameter values for telemetry
+    if (numSamples > 0) {
+        float finalDrive = baseDrive;
+        if (isDriveMod && driveCV != nullptr) {
+            const float cv = juce::jlimit(0.0f, 1.0f, driveCV[numSamples - 1]);
+            if (relativeDriveMode) {
+                const float range = 2.0f;
+                const float offset = (cv - 0.5f) * (range * 2.0f);
+                finalDrive = juce::jlimit(0.0f, 2.0f, baseDrive + offset);
+            } else {
+                finalDrive = juce::jmap(cv, 0.0f, 2.0f);
+            }
+        }
+        setLiveParamValue("drive_live", finalDrive);
+        
+        float finalMix = baseMix;
+        if (isMixMod && mixCV != nullptr) {
+            const float cv = juce::jlimit(0.0f, 1.0f, mixCV[numSamples - 1]);
+            if (relativeMixMode) {
+                const float range = 1.0f;
+                const float offset = (cv - 0.5f) * (range * 2.0f);
+                finalMix = juce::jlimit(0.0f, 1.0f, baseMix + offset);
+            } else {
+                finalMix = cv;
+            }
+        }
+        setLiveParamValue("mix_live", finalMix);
+    }
+
+#if defined(PRESET_CREATOR_UI)
+    // Create wet buffer for visualization (apply distortion to dry signal)
+    vizWetBuffer.makeCopyOf(tempBuffer);
+    float finalDriveForViz = baseDrive;
+    if (isDriveMod && driveCV != nullptr && numSamples > 0) {
+        const float cv = juce::jlimit(0.0f, 1.0f, driveCV[numSamples - 1]);
+        if (relativeDriveMode) {
+            const float range = 2.0f;
+            const float offset = (cv - 0.5f) * (range * 2.0f);
+            finalDriveForViz = juce::jlimit(0.0f, 2.0f, baseDrive + offset);
+        } else {
+            finalDriveForViz = juce::jmap(cv, 0.0f, 2.0f);
+        }
+    }
+    const float k = juce::jlimit(0.0f, 10.0f, finalDriveForViz) * 5.0f;
+    for (int ch = 0; ch < vizWetBuffer.getNumChannels(); ++ch)
+    {
+        auto* data = vizWetBuffer.getWritePointer(ch);
+        for (int i = 0; i < vizWetBuffer.getNumSamples(); ++i)
         {
             data[i] = std::tanh(k * data[i]);
         }
     }
-
-    // 3. Blend the dry and wet signals in the main output buffer.
-    const float dryLevel = 1.0f - mixAmount;
-    const float wetLevel = mixAmount;
-
-    for (int ch = 0; ch < numChannels; ++ch)
-    {
-        // First, scale the original (dry) signal down.
-        outBus.applyGain(ch, 0, buffer.getNumSamples(), dryLevel);
-        // Then, add the scaled wet signal from our temporary buffer.
-        outBus.addFrom(ch, 0, tempBuffer, ch, 0, buffer.getNumSamples(), wetLevel);
-    }
-
-#if defined(PRESET_CREATOR_UI)
-    vizWetBuffer.makeCopyOf(tempBuffer);
 
     auto captureWaveform = [&](const juce::AudioBuffer<float>& source, std::array<std::atomic<float>, VizData::waveformPoints>& dest)
     {
@@ -161,8 +237,33 @@ void DriveModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::
     }
     const float harmonicEnergy = (visualSamples > 0) ? juce::jlimit(0.0f, 1.0f, diffAccum / (float)visualSamples) : 0.0f;
     vizData.harmonicEnergy.store(harmonicEnergy);
-    vizData.currentDrive.store(driveAmount);
-    vizData.currentMix.store(mixAmount);
+    
+    // Store final values for visualization (use last sample's values)
+    float finalDrive = baseDrive;
+    if (isDriveMod && driveCV != nullptr && numSamples > 0) {
+        const float cv = juce::jlimit(0.0f, 1.0f, driveCV[numSamples - 1]);
+        if (relativeDriveMode) {
+            const float range = 2.0f;
+            const float offset = (cv - 0.5f) * (range * 2.0f);
+            finalDrive = juce::jlimit(0.0f, 2.0f, baseDrive + offset);
+        } else {
+            finalDrive = juce::jmap(cv, 0.0f, 2.0f);
+        }
+    }
+    vizData.currentDrive.store(finalDrive);
+    
+    float finalMix = baseMix;
+    if (isMixMod && mixCV != nullptr && numSamples > 0) {
+        const float cv = juce::jlimit(0.0f, 1.0f, mixCV[numSamples - 1]);
+        if (relativeMixMode) {
+            const float range = 1.0f;
+            const float offset = (cv - 0.5f) * (range * 2.0f);
+            finalMix = juce::jlimit(0.0f, 1.0f, baseMix + offset);
+        } else {
+            finalMix = cv;
+        }
+    }
+    vizData.currentMix.store(finalMix);
 
     float outputPeak = 0.0f;
     for (int ch = 0; ch < numChannels; ++ch)
@@ -178,17 +279,25 @@ void DriveModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::
     }
 }
 
-bool DriveModuleProcessor::getParamRouting(const juce::String& /*paramId*/, int& /*outBusIndex*/, int& /*outChannelIndexInBus*/) const
+bool DriveModuleProcessor::getParamRouting(const juce::String& paramId, int& outBusIndex, int& outChannelIndexInBus) const
 {
-    // No modulation inputs in this version
+    outBusIndex = 0; // All modulation is on the single input bus
+    
+    if (paramId == paramIdDrive) { outChannelIndexInBus = 2; return true; }
+    if (paramId == paramIdMix) { outChannelIndexInBus = 3; return true; }
     return false;
 }
 
 juce::String DriveModuleProcessor::getAudioInputLabel(int channel) const
 {
-    if (channel == 0) return "In L";
-    if (channel == 1) return "In R";
-    return {};
+    switch (channel)
+    {
+        case 0: return "In L";
+        case 1: return "In R";
+        case 2: return "Drive Mod";
+        case 3: return "Mix Mod";
+        default: return juce::String("In ") + juce::String(channel + 1);
+    }
 }
 
 juce::String DriveModuleProcessor::getAudioOutputLabel(int channel) const
@@ -199,7 +308,7 @@ juce::String DriveModuleProcessor::getAudioOutputLabel(int channel) const
 }
 
 #if defined(PRESET_CREATOR_UI)
-void DriveModuleProcessor::drawParametersInNode(float itemWidth, const std::function<bool(const juce::String&)>&, const std::function<void()>& onModificationEnded)
+void DriveModuleProcessor::drawParametersInNode(float itemWidth, const std::function<bool(const juce::String& paramId)>& isParamModulated, const std::function<void()>& onModificationEnded)
 {
     const auto& theme = ThemeManager::getInstance().getCurrentTheme();
     auto& ap = getAPVTS();
@@ -212,11 +321,17 @@ void DriveModuleProcessor::drawParametersInNode(float itemWidth, const std::func
     };
 
     auto drawSlider = [&](const char* label, const juce::String& paramId, float min, float max, const char* format, const char* tooltip) {
+        bool isModulated = isParamModulated(paramId);
         float value = ap.getRawParameterValue(paramId)->load();
+        if (isModulated) {
+            value = getLiveParamValueFor(paramId, paramId + "_live", value);
+            ImGui::BeginDisabled();
+        }
         if (ImGui::SliderFloat(label, &value, min, max, format))
-            *dynamic_cast<juce::AudioParameterFloat*>(ap.getParameter(paramId)) = value;
-        adjustParamOnWheel(ap.getParameter(paramId), paramId, value);
+            if (!isModulated) *dynamic_cast<juce::AudioParameterFloat*>(ap.getParameter(paramId)) = value;
+        if (!isModulated) adjustParamOnWheel(ap.getParameter(paramId), paramId, value);
         if (ImGui::IsItemDeactivatedAfterEdit()) { onModificationEnded(); }
+        if (isModulated) { ImGui::EndDisabled(); ImGui::SameLine(); ImGui::TextUnformatted("(mod)"); }
         if (tooltip) { ImGui::SameLine(); HelpMarker(tooltip); }
     };
 
@@ -303,6 +418,13 @@ void DriveModuleProcessor::drawIoPins(const NodePinHelpers& helpers)
 {
     helpers.drawParallelPins("In L", 0, "Out L", 0);
     helpers.drawParallelPins("In R", 1, "Out R", 1);
+    
+    // CV modulation pins
+    int busIdx, chanInBus;
+    if (getParamRouting(paramIdDrive, busIdx, chanInBus))
+        helpers.drawParallelPins("Drive Mod", getChannelIndexInProcessBlockBuffer(true, busIdx, chanInBus), nullptr, -1);
+    if (getParamRouting(paramIdMix, busIdx, chanInBus))
+        helpers.drawParallelPins("Mix Mod", getChannelIndexInProcessBlockBuffer(true, busIdx, chanInBus), nullptr, -1);
 }
 #endif
 

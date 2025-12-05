@@ -47,6 +47,10 @@ private:
     std::atomic<float>* mixParam { nullptr };
     std::atomic<float>* relativeDriveModParam { nullptr };
     std::atomic<float>* relativeMixModParam { nullptr };
+    
+    // Smoothed values to prevent zipper noise
+    juce::SmoothedValue<float> smoothedDrive;
+    juce::SmoothedValue<float> smoothedMix;
 
 #if defined(PRESET_CREATOR_UI)
     struct VizData

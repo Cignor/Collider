@@ -1131,6 +1131,8 @@ void ImGuiNodeEditorComponent::renderImGui()
     {
         const ImGuiIO& io = ImGui::GetIO();
         const float    currentZoom = ImNodes::EditorContextGetZoom();
+        lastZoom = currentZoom; // Cache for use in other methods
+
         if (io.KeyCtrl && io.MouseWheel != 0.0f)
         {
             const float zoomFactor = 1.0f + (io.MouseWheel * 0.1f);
@@ -1139,6 +1141,8 @@ void ImGuiNodeEditorComponent::renderImGui()
             juce::Logger::writeToLog("[Zoom] New Zoom: " + juce::String(newZoom, 2) + "x");
         }
     }
+#else
+    lastZoom = 1.0f;
 #endif
     // --- END ZOOM CONTROL HANDLER ---
 
@@ -9508,9 +9512,13 @@ void ImGuiNodeEditorComponent::handleConnectSelectedToTrackMixer()
 
     // 2. Find the geometric center of the selected nodes to position our new modules.
     float totalX = 0.0f, maxX = 0.0f, totalY = 0.0f;
+    bool  anyValidPos = false;
     for (int lid : selectedNodeLids)
     {
         ImVec2 pos = ImNodes::GetNodeGridSpacePos(lid);
+        if (pos.x != 0.0f || pos.y != 0.0f)
+            anyValidPos = true;
+
         totalX += pos.x;
         totalY += pos.y;
         if (pos.x > maxX)
@@ -9519,6 +9527,23 @@ void ImGuiNodeEditorComponent::handleConnectSelectedToTrackMixer()
         }
     }
     ImVec2 centerPos = ImVec2(totalX / numSelectedNodes, totalY / numSelectedNodes);
+
+    // FIX: If positions are all (0,0) (e.g. not yet rendered), fallback to visible screen center
+    if (!anyValidPos || (centerPos.x == 0.0f && centerPos.y == 0.0f))
+    {
+        // Calculate center of visible area in grid space
+        // Center = (-panning + canvasSize/2) / zoom
+        ImVec2 visibleCenter;
+        visibleCenter.x = (-lastEditorPanning.x + (lastCanvasSize.x * 0.5f)) / lastZoom;
+        visibleCenter.y = (-lastEditorPanning.y + (lastCanvasSize.y * 0.5f)) / lastZoom;
+
+        centerPos = visibleCenter;
+        maxX = visibleCenter.x; // Place mixer relative to this fallback
+
+        juce::Logger::writeToLog(
+            "[AutoConnect] Nodes have invalid positions (0,0). Fallback to screen center: " +
+            juce::String(centerPos.x) + ", " + juce::String(centerPos.y));
+    }
 
     // 3. Compute the TOTAL number of Audio outputs across ALL selected nodes.
     //    This defines how many mixer tracks we need.
@@ -9536,7 +9561,76 @@ void ImGuiNodeEditorComponent::handleConnectSelectedToTrackMixer()
         if (auto* mp = synth->getModuleForLogical((juce::uint32)lid))
         {
             // AudioProcessor::getTotalNumOutputChannels() returns AUDIO channel count
-            const int audioCh = mp->getTotalNumOutputChannels();
+            int audioCh = mp->getTotalNumOutputChannels();
+
+            // --- SPECIAL CASE FIXES ---
+            // Some modules (like tts_performer) expose control signals as audio outputs.
+            // We only want to connect the actual audio output (usually ch 0).
+            if (mp->getName().equalsIgnoreCase("tts_performer"))
+            {
+                audioCh = 1; // Force to 1 channel (Audio Out)
+                juce::Logger::writeToLog(
+                    "[AutoConnect] Limiting tts_performer to 1 output channel.");
+            }
+            else if (mp->getName().equalsIgnoreCase("polyvco"))
+            {
+                // Dynamic PolyVCO logic: use the "numVoices" parameter to determine active outputs
+                if (auto* poly = dynamic_cast<PolyVCOModuleProcessor*>(mp))
+                {
+                    if (auto* param = dynamic_cast<juce::AudioParameterInt*>(
+                            poly->getAPVTS().getParameter("numVoices")))
+                    {
+                        audioCh = param->get();
+                        juce::Logger::writeToLog(
+                            "[AutoConnect] PolyVCO detected. Active voices: " +
+                            juce::String(audioCh));
+                    }
+                    else
+                    {
+                        audioCh = 1; // Fallback
+                        juce::Logger::writeToLog(
+                            "[AutoConnect] PolyVCO detected but numVoices param not found. "
+                            "Defaulting to 1.");
+                    }
+                }
+            }
+            else if (mp->getName().equalsIgnoreCase("physics"))
+            {
+                audioCh = 2; // Limit to L/R audio outputs, ignoring triggers/CV
+                juce::Logger::writeToLog("[AutoConnect] Limiting physics to 2 output channels.");
+            }
+
+            // --- EXCLUSIONS (CV/Control modules that shouldn't connect to audio mixer) ---
+            static const std::vector<juce::String> excludedModules = {
+                "midi_player",
+                "multi_sequencer",
+                "step_sequencer",
+                "stroke_sequencer",
+                "snapshot_sequencer",
+                "pose_estimator",
+                "hand_tracker",
+                "face_tracker",
+                "object_detector",
+                "movement_detector",
+                "contour_detector",
+                "color_tracker",
+                "midi_buttons",
+                "midi_faders",
+                "midi_knobs",
+                "midi_pads"};
+
+            for (const auto& excluded : excludedModules)
+            {
+                if (mp->getName().equalsIgnoreCase(excluded))
+                {
+                    audioCh = 0;
+                    juce::Logger::writeToLog(
+                        "[AutoConnect] Skipping " + mp->getName() + " (CV/Control source).");
+                    break;
+                }
+            }
+            // --------------------------
+
             if (audioCh > 0)
             {
                 nodesWithAudio.push_back({(juce::uint32)lid, audioCh});
@@ -9566,13 +9660,13 @@ void ImGuiNodeEditorComponent::handleConnectSelectedToTrackMixer()
         }
     }
     // Position it slightly to the right of the center of the selection.
-    pendingNodePositions[(int)valueLid] = ImVec2(centerPos.x + 400.0f, centerPos.y);
+    pendingNodePositions[(int)valueLid] = ImVec2(maxX + 200.0f, centerPos.y - 100.0f);
 
     // 4. Create the Track Mixer node.
     auto mixerNodeId = synth->addModule("track_mixer");
     auto mixerLid = synth->getLogicalIdForNode(mixerNodeId);
     // Position it to the right of the right-most selected node for a clean signal flow.
-    pendingNodePositions[(int)mixerLid] = ImVec2(maxX + 800.0f, centerPos.y);
+    pendingNodePositions[(int)mixerLid] = ImVec2(maxX + 600.0f, centerPos.y);
     juce::Logger::writeToLog(
         "[AutoConnect] Created Track Mixer with logical ID " + juce::String(mixerLid));
 
@@ -10349,6 +10443,49 @@ void ImGuiNodeEditorComponent::handleMultiSequencerAutoConnectVCO(
     synth->connect(seqNodeId, 6, mixerNodeId, 64); // Num Steps -> Num Tracks Mod
 
     // Connect Mixer -> Main Output
+    auto outputNodeId = synth->getOutputNodeID();
+    synth->connect(mixerNodeId, 0, outputNodeId, 0); // Out L
+    synth->connect(mixerNodeId, 1, outputNodeId, 1); // Out R
+
+    graphNeedsRebuild = true;
+}
+
+void ImGuiNodeEditorComponent::handlePolyVCOAutoConnectTrackMixer(
+    PolyVCOModuleProcessor* polyVco,
+    juce::uint32            polyVcoLid)
+{
+    if (!synth || !polyVco)
+        return;
+
+    // 1. Get PolyVCO info
+    auto   vcoNodeId = synth->getNodeIdForLogical(polyVcoLid);
+    ImVec2 vcoPos = ImNodes::GetNodeGridSpacePos((int)polyVcoLid);
+    int    numVoices = 8;
+    if (auto* param =
+            dynamic_cast<juce::AudioParameterInt*>(polyVco->getAPVTS().getParameter("numVoices")))
+    {
+        numVoices = param->get();
+    }
+
+    // 2. CREATE the Track Mixer
+    auto mixerNodeId = synth->addModule("track_mixer");
+    auto mixerLid = synth->getLogicalIdForNode(mixerNodeId);
+    pendingNodePositions[(int)mixerLid] = ImVec2(vcoPos.x + 400.0f, vcoPos.y);
+    if (auto* mixer =
+            dynamic_cast<TrackMixerModuleProcessor*>(synth->getModuleForLogical(mixerLid)))
+    {
+        if (auto* p =
+                dynamic_cast<juce::AudioParameterInt*>(mixer->getAPVTS().getParameter("numTracks")))
+            p->setValueNotifyingHost(p->convertTo0to1((float)numVoices));
+    }
+
+    // 3. Connect Audio: PolyVCO -> Mixer (connect all active voices)
+    for (int i = 0; i < numVoices; ++i)
+    {
+        synth->connect(vcoNodeId, i, mixerNodeId, i); // Freq N -> Audio N
+    }
+
+    // 4. Connect Mixer -> Main Output
     auto outputNodeId = synth->getOutputNodeID();
     synth->connect(mixerNodeId, 0, outputNodeId, 0); // Out L
     synth->connect(mixerNodeId, 1, outputNodeId, 1); // Out R
@@ -11278,6 +11415,17 @@ void ImGuiNodeEditorComponent::handleAutoConnectionRequests()
             if (chordArp->autoConnectVCOTriggered.exchange(false))
             {
                 handleChordArpAutoConnectPolyVCO(chordArp, modInfo.first);
+                pushSnapshot();
+                return;
+            }
+        }
+
+        // --- Check PolyVCO Flags ---
+        if (auto* polyVco = dynamic_cast<PolyVCOModuleProcessor*>(module))
+        {
+            if (polyVco->autoConnectTrackMixerTriggered.exchange(false))
+            {
+                handlePolyVCOAutoConnectTrackMixer(polyVco, modInfo.first);
                 pushSnapshot();
                 return;
             }

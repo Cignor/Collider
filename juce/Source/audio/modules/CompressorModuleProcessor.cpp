@@ -13,6 +13,7 @@ juce::AudioProcessorValueTreeState::ParameterLayout CompressorModuleProcessor::c
     params.push_back(std::make_unique<juce::AudioParameterFloat>(paramIdAttack, "Attack", 0.1f, 200.0f, 10.0f));
     params.push_back(std::make_unique<juce::AudioParameterFloat>(paramIdRelease, "Release", 5.0f, 1000.0f, 100.0f));
     params.push_back(std::make_unique<juce::AudioParameterFloat>(paramIdMakeup, "Makeup Gain", -12.0f, 12.0f, 0.0f));
+    params.push_back(std::make_unique<juce::AudioParameterFloat>(paramIdMix, "Mix", 0.0f, 1.0f, 1.0f));
     
     // Relative modulation parameters
     params.push_back(std::make_unique<juce::AudioParameterBool>("relativeThresholdMod", "Relative Threshold Mod", true));
@@ -26,7 +27,7 @@ juce::AudioProcessorValueTreeState::ParameterLayout CompressorModuleProcessor::c
 
 CompressorModuleProcessor::CompressorModuleProcessor()
     : ModuleProcessor(BusesProperties()
-          .withInput("Inputs", juce::AudioChannelSet::discreteChannels(7), true) // 0-1: Audio In, 2-6: Threshold/Ratio/Attack/Release/Makeup Mods
+          .withInput("Inputs", juce::AudioChannelSet::discreteChannels(8), true) // 0-1: Audio In, 2-6: Threshold/Ratio/Attack/Release/Makeup Mods, 7: Mix Mod
           .withOutput("Audio Out", juce::AudioChannelSet::stereo(), true)),
       apvts(*this, nullptr, "CompressorParams", createParameterLayout())
 {
@@ -35,6 +36,7 @@ CompressorModuleProcessor::CompressorModuleProcessor()
     attackParam = apvts.getRawParameterValue(paramIdAttack);
     releaseParam = apvts.getRawParameterValue(paramIdRelease);
     makeupParam = apvts.getRawParameterValue(paramIdMakeup);
+    mixParam = apvts.getRawParameterValue(paramIdMix);
     relativeThresholdModParam = apvts.getRawParameterValue("relativeThresholdMod");
     relativeRatioModParam = apvts.getRawParameterValue("relativeRatioMod");
     relativeAttackModParam = apvts.getRawParameterValue("relativeAttackMod");
@@ -54,6 +56,7 @@ void CompressorModuleProcessor::prepareToPlay(double sampleRate, int samplesPerB
 
     compressor.prepare(spec);
     compressor.reset();
+    smoothedMix.reset(sampleRate, 0.01);
     dryBuffer.setSize(2, samplesPerBlock);
 }
 
@@ -61,8 +64,16 @@ void CompressorModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
 {
     juce::ignoreUnused(midi);
     
+    // Get pointers to modulation CV inputs from unified input bus
+    const bool isMixMod = isParamInputConnected(paramIdMixMod);
     auto inBus = getBusBuffer(buffer, true, 0);
     auto outBus = getBusBuffer(buffer, false, 0);
+    
+    // SAFE: Read input pointers BEFORE any output operations
+    const float* mixCV = isMixMod && inBus.getNumChannels() > 7 ? inBus.getReadPointer(7) : nullptr;
+    
+    // Get base parameter values ONCE
+    const float baseMix = mixParam != nullptr ? mixParam->load() : 1.0f;
 
     // Copy input to output for in-place processing
     const int numInputChannels = inBus.getNumChannels();
@@ -245,6 +256,30 @@ void CompressorModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
     // Apply makeup gain
     const float makeupGain = juce::Decibels::decibelsToGain(finalMakeup);
     outBus.applyGain(makeupGain);
+    
+    // Apply dry/wet mix
+    for (int i = 0; i < numSamples; ++i)
+    {
+        float currentMix = baseMix;
+        if (isMixMod && mixCV != nullptr) {
+            const float cv = juce::jlimit(0.0f, 1.0f, mixCV[i]);
+            currentMix = cv;
+        }
+        smoothedMix.setTargetValue(currentMix);
+        const float mix = smoothedMix.getNextValue();
+        const float dry = 1.0f - mix;
+        
+        if (outL != nullptr && dryL != nullptr) {
+            const float wetL = outL[i];
+            const float drySampleL = dryL[i];
+            outL[i] = dry * drySampleL + mix * wetL;
+        }
+        if (outR != nullptr && outR != outL && dryR != nullptr) {
+            const float wetR = outR[i];
+            const float drySampleR = dryR[i];
+            outR[i] = dry * drySampleR + mix * wetR;
+        }
+    }
 
     // Update visualization data (input/output levels relative to -60..0 dB)
     const float inputDb = juce::Decibels::gainToDecibels(inputPeak, -90.0f);
@@ -268,6 +303,16 @@ void CompressorModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
     setLiveParamValue("release_live", finalRelease);
     setLiveParamValue("makeup_live", finalMakeup);
     
+    // Update live mix value for telemetry
+    if (numSamples > 0) {
+        float finalMix = baseMix;
+        if (isMixMod && mixCV != nullptr) {
+            const float cv = juce::jlimit(0.0f, 1.0f, mixCV[numSamples - 1]);
+            finalMix = cv;
+        }
+        setLiveParamValue("mix_live", finalMix);
+    }
+    
     if (lastOutputValues.size() >= 2)
     {
         if (lastOutputValues[0]) lastOutputValues[0]->store(outBus.getSample(0, buffer.getNumSamples() - 1));
@@ -284,6 +329,7 @@ bool CompressorModuleProcessor::getParamRouting(const juce::String& paramId, int
     if (paramId == paramIdAttackMod)    { outChannelIndexInBus = 4; return true; }
     if (paramId == paramIdReleaseMod)   { outChannelIndexInBus = 5; return true; }
     if (paramId == paramIdMakeupMod)    { outChannelIndexInBus = 6; return true; }
+    if (paramId == paramIdMixMod)       { outChannelIndexInBus = 7; return true; }
     return false;
 }
 
@@ -297,6 +343,7 @@ juce::String CompressorModuleProcessor::getAudioInputLabel(int channel) const
     if (channel == 4) return "Attack Mod";
     if (channel == 5) return "Release Mod";
     if (channel == 6) return "Makeup Mod";
+    if (channel == 7) return "Mix Mod";
     return {};
 }
 
@@ -366,6 +413,7 @@ void CompressorModuleProcessor::drawParametersInNode(float itemWidth, const std:
     ImGui::Spacing();
 
     drawSlider("Makeup", paramIdMakeup, paramIdMakeupMod, -12.0f, 12.0f, "%.1f dB", "Output gain compensation (-12 to +12 dB)");
+    drawSlider("Mix", paramIdMix, paramIdMixMod, 0.0f, 1.0f, "%.2f", "Wet/dry balance (0=dry, 1=wet)");
 
     ImGui::Spacing();
     ImGui::Spacing();
@@ -529,6 +577,7 @@ void CompressorModuleProcessor::drawIoPins(const NodePinHelpers& helpers)
     helpers.drawParallelPins("Attack Mod", 4, nullptr, -1);
     helpers.drawParallelPins("Release Mod", 5, nullptr, -1);
     helpers.drawParallelPins("Makeup Mod", 6, nullptr, -1);
+    helpers.drawParallelPins("Mix Mod", 7, nullptr, -1);
 }
 #endif
 
@@ -540,12 +589,13 @@ std::vector<DynamicPinInfo> CompressorModuleProcessor::getDynamicInputPins() con
     pins.push_back({"In L", 0, PinDataType::Audio});
     pins.push_back({"In R", 1, PinDataType::Audio});
     
-    // Modulation inputs (channels 2-6)
+    // Modulation inputs (channels 2-7)
     pins.push_back({"Thresh Mod", 2, PinDataType::CV});
     pins.push_back({"Ratio Mod", 3, PinDataType::CV});
     pins.push_back({"Attack Mod", 4, PinDataType::CV});
     pins.push_back({"Release Mod", 5, PinDataType::CV});
     pins.push_back({"Makeup Mod", 6, PinDataType::CV});
+    pins.push_back({"Mix Mod", 7, PinDataType::CV});
     
     return pins;
 }

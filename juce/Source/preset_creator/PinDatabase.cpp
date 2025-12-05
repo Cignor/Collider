@@ -185,9 +185,9 @@ void populatePinDatabase()
         NodeWidth::Medium,
         { AudioPin("In L", 0, PinDataType::Audio), AudioPin("In R", 1, PinDataType::Audio), AudioPin("Thresh Mod", 2, PinDataType::CV),
           AudioPin("Ratio Mod", 3, PinDataType::CV), AudioPin("Attack Mod", 4, PinDataType::CV), AudioPin("Release Mod", 5, PinDataType::CV),
-          AudioPin("Makeup Mod", 6, PinDataType::CV) },
+          AudioPin("Makeup Mod", 6, PinDataType::CV), AudioPin("Mix Mod", 7, PinDataType::CV) },
         { AudioPin("Out L", 0, PinDataType::Audio), AudioPin("Out R", 1, PinDataType::Audio) },
-        {}
+        { ModPin("Mix", "mix_mod", PinDataType::CV) }
     );
 
     // --- Modulators ---
@@ -281,7 +281,7 @@ void populatePinDatabase()
         {}
     );
     db["spatial_granulator"] = ModulePinInfo(
-        NodeWidth::Medium,
+        NodeWidth::Exception, // Custom size for 16:9 canvas
         { 
             AudioPin("In L", 0, PinDataType::Audio), 
             AudioPin("In R", 1, PinDataType::Audio),
@@ -314,9 +314,9 @@ void populatePinDatabase()
         { AudioPin("In L", 0, PinDataType::Audio), AudioPin("In R", 1, PinDataType::Audio),
           AudioPin("Thresh Mod", 2, PinDataType::CV), AudioPin("Ratio Mod", 3, PinDataType::CV),
           AudioPin("Attack Mod", 4, PinDataType::CV), AudioPin("Release Mod", 5, PinDataType::CV),
-          AudioPin("Makeup Mod", 6, PinDataType::CV) },
+          AudioPin("Makeup Mod", 6, PinDataType::CV), AudioPin("Mix Mod", 7, PinDataType::CV) },
         { AudioPin("Out L", 0, PinDataType::Audio), AudioPin("Out R", 1, PinDataType::Audio) },
-        {}
+        { ModPin("Mix", "mix_mod", PinDataType::CV) }
     );
     db["recorder"] = ModulePinInfo(
         NodeWidth::Medium,
@@ -327,9 +327,10 @@ void populatePinDatabase()
     db["limiter"] = ModulePinInfo(
         NodeWidth::Medium,
         { AudioPin("In L", 0, PinDataType::Audio), AudioPin("In R", 1, PinDataType::Audio),
-          AudioPin("Thresh Mod", 2, PinDataType::CV), AudioPin("Release Mod", 3, PinDataType::CV) },
+          AudioPin("Thresh Mod", 2, PinDataType::CV), AudioPin("Release Mod", 3, PinDataType::CV),
+          AudioPin("Mix Mod", 4, PinDataType::CV) },
         { AudioPin("Out L", 0, PinDataType::Audio), AudioPin("Out R", 1, PinDataType::Audio) },
-        {}
+        { ModPin("Mix", "mix_mod", PinDataType::CV) }
     );
     db["gate"] = ModulePinInfo(
         NodeWidth::Small,
@@ -339,9 +340,9 @@ void populatePinDatabase()
     );
     db["drive"] = ModulePinInfo(
         NodeWidth::Small,
-        { AudioPin("In L", 0, PinDataType::Audio), AudioPin("In R", 1, PinDataType::Audio) },
+        { AudioPin("In L", 0, PinDataType::Audio), AudioPin("In R", 1, PinDataType::Audio), AudioPin("Drive Mod", 2, PinDataType::CV), AudioPin("Mix Mod", 3, PinDataType::CV) },
         { AudioPin("Out L", 0, PinDataType::Audio), AudioPin("Out R", 1, PinDataType::Audio) },
-        {}
+        { ModPin("Drive", "drive", PinDataType::CV), ModPin("Mix", "mix", PinDataType::CV) }
     );
     db["bit_crusher"] = ModulePinInfo(
         NodeWidth::Small,
@@ -357,17 +358,47 @@ void populatePinDatabase()
     );
     db["timepitch"] = ModulePinInfo(
         NodeWidth::Medium,
-        { AudioPin("In L", 0, PinDataType::Audio), AudioPin("In R", 1, PinDataType::Audio), AudioPin("Speed Mod", 2, PinDataType::CV), AudioPin("Pitch Mod", 3, PinDataType::CV) },
+        { AudioPin("In L", 0, PinDataType::Audio), AudioPin("In R", 1, PinDataType::Audio), AudioPin("Speed Mod", 2, PinDataType::CV), AudioPin("Pitch Mod", 3, PinDataType::CV), AudioPin("Mix Mod", 4, PinDataType::CV) },
         { AudioPin("Out L", 0, PinDataType::Audio), AudioPin("Out R", 1, PinDataType::Audio) },
-        {}
+        { ModPin("Mix", "mix_mod", PinDataType::CV) }
     );
     db["waveshaper"] = ModulePinInfo(
         NodeWidth::Medium,
-        { AudioPin("In L", 0, PinDataType::Audio), AudioPin("In R", 1, PinDataType::Audio), AudioPin("Drive Mod", 2, PinDataType::CV), AudioPin("Type Mod", 3, PinDataType::CV) },
+        { AudioPin("In L", 0, PinDataType::Audio), AudioPin("In R", 1, PinDataType::Audio), AudioPin("Drive Mod", 2, PinDataType::CV), AudioPin("Type Mod", 3, PinDataType::CV), AudioPin("Mix Mod", 4, PinDataType::CV) },
         { AudioPin("Out L", 0, PinDataType::Audio), AudioPin("Out R", 1, PinDataType::Audio) },
-        {}
+        { ModPin("Drive", "drive", PinDataType::CV), ModPin("Type", "type", PinDataType::CV), ModPin("Mix", "mix", PinDataType::CV) }
     );
     db["8bandshaper"] = ModulePinInfo(
+        NodeWidth::Big,
+        {
+            AudioPin("In L", 0, PinDataType::Audio),
+            AudioPin("In R", 1, PinDataType::Audio),
+            AudioPin("Drive 1 Mod", 2, PinDataType::CV),
+            AudioPin("Drive 2 Mod", 3, PinDataType::CV),
+            AudioPin("Drive 3 Mod", 4, PinDataType::CV),
+            AudioPin("Drive 4 Mod", 5, PinDataType::CV),
+            AudioPin("Drive 5 Mod", 6, PinDataType::CV),
+            AudioPin("Drive 6 Mod", 7, PinDataType::CV),
+            AudioPin("Drive 7 Mod", 8, PinDataType::CV),
+            AudioPin("Drive 8 Mod", 9, PinDataType::CV),
+            AudioPin("Gain Mod", 10, PinDataType::CV),
+            AudioPin("Mix Mod", 11, PinDataType::CV)
+        },
+        { AudioPin("Out L", 0, PinDataType::Audio), AudioPin("Out R", 1, PinDataType::Audio) },
+        {
+            ModPin("Drive 1", "drive_1", PinDataType::CV),
+            ModPin("Drive 2", "drive_2", PinDataType::CV),
+            ModPin("Drive 3", "drive_3", PinDataType::CV),
+            ModPin("Drive 4", "drive_4", PinDataType::CV),
+            ModPin("Drive 5", "drive_5", PinDataType::CV),
+            ModPin("Drive 6", "drive_6", PinDataType::CV),
+            ModPin("Drive 7", "drive_7", PinDataType::CV),
+            ModPin("Drive 8", "drive_8", PinDataType::CV),
+            ModPin("Output Gain", "outputGain", PinDataType::CV),
+            ModPin("Mix", "mix", PinDataType::CV)
+        }
+    );
+    db["old_8bandshaper"] = ModulePinInfo(
         NodeWidth::Big,
         {
             AudioPin("In L", 0, PinDataType::Audio),
@@ -395,10 +426,11 @@ void populatePinDatabase()
             AudioPin("Size Mod", 4, PinDataType::CV),
             AudioPin("Position Mod", 5, PinDataType::CV),
             AudioPin("Pitch Mod", 6, PinDataType::CV),
-            AudioPin("Gate Mod", 7, PinDataType::CV)
+            AudioPin("Gate Mod", 7, PinDataType::CV),
+            AudioPin("Mix Mod", 8, PinDataType::CV)
         },
         { AudioPin("Out L", 0, PinDataType::Audio), AudioPin("Out R", 1, PinDataType::Audio) },
-        {}
+        { ModPin("Mix", "mix_mod", PinDataType::CV) }
     );
     db["mixer"] = ModulePinInfo(
         NodeWidth::Small,
@@ -510,9 +542,9 @@ db["random"] = ModulePinInfo(
     );
     db["shaping_oscillator"] = ModulePinInfo(
         NodeWidth::Medium,
-        { AudioPin("In L", 0, PinDataType::Audio), AudioPin("In R", 1, PinDataType::Audio), AudioPin("Freq Mod", 2, PinDataType::CV), AudioPin("Wave Mod", 3, PinDataType::CV), AudioPin("Drive Mod", 4, PinDataType::CV) },
+        { AudioPin("In L", 0, PinDataType::Audio), AudioPin("In R", 1, PinDataType::Audio), AudioPin("Freq Mod", 2, PinDataType::CV), AudioPin("Wave Mod", 3, PinDataType::CV), AudioPin("Drive Mod", 4, PinDataType::CV), AudioPin("Dry/Wet Mod", 5, PinDataType::CV) },
         { AudioPin("Out L", 0, PinDataType::Audio), AudioPin("Out R", 1, PinDataType::Audio) },
-        { ModPin("Frequency", "frequency_mod", PinDataType::CV), ModPin("Waveform", "waveform_mod", PinDataType::CV), ModPin("Drive", "drive_mod", PinDataType::CV) }
+        { ModPin("Frequency", "frequency_mod", PinDataType::CV), ModPin("Waveform", "waveform_mod", PinDataType::CV), ModPin("Drive", "drive_mod", PinDataType::CV), ModPin("Dry/Wet", "dryWet_mod", PinDataType::CV) }
     );
     db["harmonic_shaper"] = ModulePinInfo(
         NodeWidth::Medium,

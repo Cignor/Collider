@@ -15,6 +15,8 @@ public:
     static constexpr const char* paramIdEngine    = "engine";
     static constexpr const char* paramIdSpeedMod  = "speed_mod";
     static constexpr const char* paramIdPitchMod  = "pitch_mod";
+    static constexpr const char* paramIdMix       = "mix";
+    static constexpr const char* paramIdMixMod    = "mix_mod";
     static constexpr const char* paramIdBufferSeconds = "buffer_seconds";
 
     TimePitchModuleProcessor();
@@ -36,6 +38,7 @@ public:
             case 1: return "In R";
             case 2: return "Speed Mod";
             case 3: return "Pitch Mod";
+            case 4: return "Mix Mod";
             default: return juce::String("In ") + juce::String(channel + 1);
         }
     }
@@ -70,6 +73,7 @@ private:
     std::atomic<float>* pitchParam { nullptr };
     std::atomic<float>* speedModParam { nullptr };
     std::atomic<float>* pitchModParam { nullptr };
+    std::atomic<float>* mixParam { nullptr };
     std::atomic<float>* bufferSecondsParam { nullptr };
     juce::AudioParameterChoice* engineParam { nullptr };
     double sr { 48000.0 };
@@ -93,6 +97,7 @@ private:
     // Smoothed parameters for zipper-free modulation
     juce::SmoothedValue<float> speedSm;
     juce::SmoothedValue<float> pitchSm;
+    juce::SmoothedValue<float> smoothedMix;
     TimePitchProcessor::Mode lastMode { TimePitchProcessor::Mode::RubberBand };
 
 #if defined(PRESET_CREATOR_UI)

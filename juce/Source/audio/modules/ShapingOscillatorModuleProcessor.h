@@ -16,10 +16,12 @@ public:
     static constexpr auto paramIdFrequency    = "frequency";
     static constexpr auto paramIdWaveform     = "waveform";
     static constexpr auto paramIdDrive        = "drive";
+    static constexpr auto paramIdDryWet       = "dryWet";
     // Virtual modulation target IDs (no APVTS parameters required)
     static constexpr auto paramIdFrequencyMod = "frequency_mod";
     static constexpr auto paramIdWaveformMod  = "waveform_mod";
     static constexpr auto paramIdDriveMod     = "drive_mod";
+    static constexpr auto paramIdDryWetMod    = "dryWet_mod";
 
     ShapingOscillatorModuleProcessor();
     ~ShapingOscillatorModuleProcessor() override = default;
@@ -54,12 +56,14 @@ private:
     std::atomic<float>* frequencyParam { nullptr };
     std::atomic<float>* waveformParam  { nullptr };
     std::atomic<float>* driveParam     { nullptr };
+    std::atomic<float>* dryWetParam    { nullptr };
     std::atomic<float>* relativeFreqModParam { nullptr };
     std::atomic<float>* relativeDriveModParam { nullptr };
 
     // Smoothed values to prevent zipper noise
     juce::SmoothedValue<float> smoothedFrequency;
     juce::SmoothedValue<float> smoothedDrive;
+    juce::SmoothedValue<float> smoothedDryWet;
 
     int currentWaveform = -1;
 

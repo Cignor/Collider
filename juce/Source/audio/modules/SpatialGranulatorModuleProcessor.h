@@ -21,6 +21,11 @@ public:
     static constexpr auto paramIdRedAmount = "redAmount";
     static constexpr auto paramIdGreenAmount = "greenAmount";
     static constexpr auto paramIdBlueAmount = "blueAmount";
+    static constexpr auto paramIdYellowAmount = "yellowAmount";
+    static constexpr auto paramIdCyanAmount = "cyanAmount";
+    static constexpr auto paramIdMagentaAmount = "magentaAmount";
+    static constexpr auto paramIdOrangeAmount = "orangeAmount";
+    static constexpr auto paramIdPurpleAmount = "purpleAmount";
     
     // CV Modulation parameter IDs (for getParamRouting) - Virtual IDs, NOT in APVTS
     static constexpr auto paramIdDryMixMod = "dryMix_mod";
@@ -36,13 +41,18 @@ public:
         Spray   // Grain spawner (produces dynamic grains)
     };
 
-    // Color IDs (fixed set of 3)
+    // Color IDs (8 total effects)
     enum class ColorID
     {
-        Red,      // Delay time
-        Green,    // Volume level
+        Red,      // Delay
+        Green,    // Filter
         Blue,     // Pitch shift
-        COUNT = 3
+        Yellow,   // Reverb/Decay
+        Cyan,     // Distortion/Drive
+        Magenta,  // Chorus/Modulation
+        Orange,   // Bitcrusher/Downsampling
+        Purple,   // Tremolo/Vibrato
+        COUNT = 8
     };
 
     // Dot structure
@@ -72,6 +82,7 @@ public:
 
     // --- UI & Routing Overrides ---
 #if defined(PRESET_CREATOR_UI)
+    ImVec2 getCustomNodeSize() const override { return ImVec2(720.0f, 0.0f); } // 720px width for 16:9 canvas (10% smaller)
     void drawParametersInNode(float itemWidth, const std::function<bool(const juce::String& paramId)>& isParamModulated, const std::function<void()>& onModificationEnded) override;
     void drawIoPins(const NodePinHelpers& helpers) override;
     bool usesCustomPinLayout() const override { return true; }
@@ -95,7 +106,7 @@ private:
     // Color parameter mapping
     struct ColorParameterMapping
     {
-        enum class ParameterType { Delay, Volume, Pitch, None };
+        enum class ParameterType { Delay, Volume, Pitch, Filter, Reverb, Distortion, Chorus, Bitcrusher, Tremolo, None };
         ParameterType paramType;
         float minValue;
         float maxValue;
@@ -104,10 +115,15 @@ private:
         {
             switch (color)
             {
-                case ColorID::Red:    return { ParameterType::Delay, 0.0f, 2000.0f }; // 0-2000ms
-                case ColorID::Green:  return { ParameterType::Volume, -12.0f, 12.0f }; // -12 to +12 dB
-                case ColorID::Blue:   return { ParameterType::Pitch, -24.0f, 24.0f };  // -24 to +24 semitones
-                default:              return { ParameterType::None, 0.0f, 0.0f };
+                case ColorID::Red:     return { ParameterType::Delay, 0.0f, 2000.0f }; // 0-2000ms
+                case ColorID::Green:   return { ParameterType::Filter, 20.0f, 20000.0f }; // 20-20000 Hz cutoff
+                case ColorID::Blue:    return { ParameterType::Pitch, -24.0f, 24.0f };  // -24 to +24 semitones
+                case ColorID::Yellow:  return { ParameterType::Reverb, 0.0f, 1.0f }; // 0-1 room size
+                case ColorID::Cyan:    return { ParameterType::Distortion, 0.0f, 1.0f }; // 0-1 drive amount
+                case ColorID::Magenta: return { ParameterType::Chorus, 0.0f, 1.0f }; // 0-1 modulation depth
+                case ColorID::Orange:  return { ParameterType::Bitcrusher, 1.0f, 16.0f }; // 1-16 bit depth
+                case ColorID::Purple:  return { ParameterType::Tremolo, 0.0f, 10.0f }; // 0-10 Hz modulation rate
+                default:               return { ParameterType::None, 0.0f, 0.0f };
             }
         }
     };
@@ -123,6 +139,11 @@ private:
     std::atomic<float>* redAmountParam { nullptr };
     std::atomic<float>* greenAmountParam { nullptr };
     std::atomic<float>* blueAmountParam { nullptr };
+    std::atomic<float>* yellowAmountParam { nullptr };
+    std::atomic<float>* cyanAmountParam { nullptr };
+    std::atomic<float>* magentaAmountParam { nullptr };
+    std::atomic<float>* orangeAmountParam { nullptr };
+    std::atomic<float>* purpleAmountParam { nullptr };
 
     // --- Grain State (for Spray tool) ---
     struct Grain
@@ -143,10 +164,39 @@ private:
         ColorID color { ColorID::Red };
         float size { 0.5f };
         float delayTimeMs { 0.0f };
+        float delayFeedback { 0.0f }; // Feedback amount (0.0 = no feedback, 0.95 = high feedback)
         float volume { 1.0f };
         float pitchOffset { 0.0f };
+        // Filter for Green color
+        float filterCutoffHz { 20000.0f }; // Cutoff frequency in Hz
+        float filterResonance { 0.707f }; // Resonance/Q (0.707 = no resonance, higher = more resonance)
+        // Simple filter state for grains (one-pole lowpass)
+        float filterState { 0.0f }; // Filter state for per-grain filtering
+        // Reverb for Yellow color
+        float reverbRoomSize { 0.0f }; // 0-1 room size
+        float reverbDecay { 0.0f }; // Decay time (0-1)
+        std::vector<float> reverbBuffer; // Simple reverb buffer
+        int reverbWritePos { 0 };
+        // Distortion for Cyan color
+        float distortionDrive { 0.0f }; // 0-1 drive amount
+        float distortionTone { 0.5f }; // 0-1 tone (lowpass filter cutoff)
+        // Chorus for Magenta color
+        float chorusDelayMs { 0.0f }; // Delay time in ms
+        float chorusDepth { 0.0f }; // Modulation depth (0-1)
+        float chorusLfoPhase { 0.0f }; // LFO phase accumulator
+        std::vector<float> chorusBuffer; // Chorus delay buffer
+        int chorusWritePos { 0 };
+        // Bitcrusher for Orange color
+        float bitcrusherBits { 16.0f }; // Bit depth (1-16)
+        float bitcrusherDownsample { 1.0f }; // Downsample factor (1 = no downsampling)
+        float bitcrusherLastSample { 0.0f }; // Last quantized sample
+        int bitcrusherCounter { 0 }; // Downsample counter
+        // Tremolo for Purple color
+        float tremoloRate { 0.0f }; // Modulation rate in Hz (0-10)
+        float tremoloDepth { 0.5f }; // Modulation depth (0-1)
+        float tremoloPhase { 0.0f }; // LFO phase accumulator
     };
-    std::array<Grain, 128> grainPool; // Larger pool for multiple spray dots
+    std::array<Grain, 384> grainPool; // Larger pool for multiple spray dots (3x increase: 128 -> 384)
     juce::Random random;
 
     // --- Voice State (for Pen tool) ---
@@ -161,12 +211,44 @@ private:
         std::vector<float> delayBuffer;
         int delayWritePos { 0 };
         float delayTimeMs { 0.0f };
+        float delayFeedback { 0.0f }; // Feedback amount (0.0 = no feedback, 1.0 = full feedback)
         // Pitch shifter for Blue color
         double pitchRatio { 1.0 };
         double pitchPhase { 0.0 };
         std::vector<float> pitchBuffer;
+        // Filter for Green color
+        juce::dsp::StateVariableTPTFilter<float> filter;
+        float filterCutoffHz { 20000.0f }; // Cutoff frequency in Hz
+        float filterResonance { 0.707f }; // Resonance/Q (0.707 = no resonance, higher = more resonance)
+        // Reverb for Yellow color
+        float reverbRoomSize { 0.0f }; // 0-1 room size
+        float reverbDecay { 0.0f }; // Decay time (0-1)
+        std::vector<float> reverbBufferL; // Simple reverb buffer L
+        std::vector<float> reverbBufferR; // Simple reverb buffer R
+        int reverbWritePos { 0 };
+        // Distortion for Cyan color
+        float distortionDrive { 0.0f }; // 0-1 drive amount
+        float distortionTone { 0.5f }; // 0-1 tone (lowpass filter cutoff)
+        juce::dsp::IIR::Filter<float> distortionToneFilter; // Tone filter
+        // Chorus for Magenta color
+        float chorusDelayMs { 0.0f }; // Delay time in ms
+        float chorusDepth { 0.0f }; // Modulation depth (0-1)
+        float chorusLfoPhase { 0.0f }; // LFO phase accumulator
+        std::vector<float> chorusBufferL; // Chorus delay buffer L
+        std::vector<float> chorusBufferR; // Chorus delay buffer R
+        int chorusWritePos { 0 };
+        // Bitcrusher for Orange color
+        float bitcrusherBits { 16.0f }; // Bit depth (1-16)
+        float bitcrusherDownsample { 1.0f }; // Downsample factor (1 = no downsampling)
+        float bitcrusherLastSampleL { 0.0f }; // Last quantized sample L
+        float bitcrusherLastSampleR { 0.0f }; // Last quantized sample R
+        int bitcrusherCounter { 0 }; // Downsample counter
+        // Tremolo for Purple color
+        float tremoloRate { 0.0f }; // Modulation rate in Hz (0-10)
+        float tremoloDepth { 0.5f }; // Modulation depth (0-1)
+        float tremoloPhase { 0.0f }; // LFO phase accumulator
     };
-    std::array<Voice, 64> voicePool; // Pool for Pen tool voices
+    std::array<Voice, 192> voicePool; // Pool for Pen tool voices (3x increase: 64 -> 192)
 
     // --- Audio Buffering ---
     juce::AudioBuffer<float> sourceBuffer;

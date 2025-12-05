@@ -9,6 +9,7 @@ juce::AudioProcessorValueTreeState::ParameterLayout LimiterModuleProcessor::crea
 
     params.push_back(std::make_unique<juce::AudioParameterFloat>(paramIdThreshold, "Threshold", -20.0f, 0.0f, 0.0f));
     params.push_back(std::make_unique<juce::AudioParameterFloat>(paramIdRelease, "Release", 1.0f, 200.0f, 10.0f));
+    params.push_back(std::make_unique<juce::AudioParameterFloat>(paramIdMix, "Mix", 0.0f, 1.0f, 1.0f));
     
     // Relative modulation parameters
     params.push_back(std::make_unique<juce::AudioParameterBool>("relativeThresholdMod", "Relative Threshold Mod", true));
@@ -19,12 +20,13 @@ juce::AudioProcessorValueTreeState::ParameterLayout LimiterModuleProcessor::crea
 
 LimiterModuleProcessor::LimiterModuleProcessor()
     : ModuleProcessor(BusesProperties()
-          .withInput("Inputs", juce::AudioChannelSet::discreteChannels(4), true) // 0-1: Audio In, 2: Threshold Mod, 3: Release Mod
+          .withInput("Inputs", juce::AudioChannelSet::discreteChannels(5), true) // 0-1: Audio In, 2: Threshold Mod, 3: Release Mod, 4: Mix Mod
           .withOutput("Audio Out", juce::AudioChannelSet::stereo(), true)),
       apvts(*this, nullptr, "LimiterParams", createParameterLayout())
 {
     thresholdParam = apvts.getRawParameterValue(paramIdThreshold);
     releaseParam = apvts.getRawParameterValue(paramIdRelease);
+    mixParam = apvts.getRawParameterValue(paramIdMix);
     relativeThresholdModParam = apvts.getRawParameterValue("relativeThresholdMod");
     relativeReleaseModParam = apvts.getRawParameterValue("relativeReleaseMod");
 
@@ -44,6 +46,8 @@ void LimiterModuleProcessor::prepareToPlay(double sampleRate, int samplesPerBloc
 
     limiter.prepare(spec);
     limiter.reset();
+    smoothedMix.reset(sampleRate, 0.01);
+    dryBuffer.setSize(2, samplesPerBlock);
 
     vizHistoryIndex = 0;
     for (auto& v : vizData.inputHistory) v.store(-60.0f);
@@ -59,8 +63,23 @@ void LimiterModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce
 {
     juce::ignoreUnused(midi);
     
+    // Get pointers to modulation CV inputs from unified input bus
+    const bool isMixMod = isParamInputConnected(paramIdMixMod);
     auto inBus = getBusBuffer(buffer, true, 0);
     auto outBus = getBusBuffer(buffer, false, 0);
+    
+    // SAFE: Read input pointers BEFORE any output operations
+    const float* mixCV = isMixMod && inBus.getNumChannels() > 4 ? inBus.getReadPointer(4) : nullptr;
+    
+    // Get base parameter values ONCE
+    const float baseMix = mixParam != nullptr ? mixParam->load() : 1.0f;
+
+    // Store dry signal for mixing
+    if (buffer.getNumSamples() > dryBuffer.getNumSamples())
+        dryBuffer.setSize(2, buffer.getNumSamples(), false, false, true);
+    dryBuffer.clear();
+    for (int ch = 0; ch < juce::jmin(2, inBus.getNumChannels()); ++ch)
+        dryBuffer.copyFrom(ch, 0, inBus, ch, 0, buffer.getNumSamples());
 
     // Copy input to output for in-place processing
     const int numInputChannels = inBus.getNumChannels();
@@ -133,6 +152,26 @@ void LimiterModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce
     juce::dsp::AudioBlock<float> block(outBus);
     juce::dsp::ProcessContextReplacing<float> context(block);
     limiter.process(context);
+    
+    // Apply dry/wet mix
+    for (int i = 0; i < numSamples; ++i)
+    {
+        float currentMix = baseMix;
+        if (isMixMod && mixCV != nullptr) {
+            const float cv = juce::jlimit(0.0f, 1.0f, mixCV[i]);
+            currentMix = cv;
+        }
+        smoothedMix.setTargetValue(currentMix);
+        const float mix = smoothedMix.getNextValue();
+        const float dry = 1.0f - mix;
+        
+        for (int ch = 0; ch < juce::jmin(2, outBus.getNumChannels()); ++ch)
+        {
+            const float wetSample = outBus.getSample(ch, i);
+            const float drySample = dryBuffer.getSample(ch, i);
+            outBus.setSample(ch, i, dry * drySample + mix * wetSample);
+        }
+    }
 
     // Visualization capture (simple peak levels and gain reduction)
     float inputPeak = -60.0f;
@@ -163,6 +202,16 @@ void LimiterModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce
     setLiveParamValue("threshold_live", finalThreshold);
     setLiveParamValue("release_live", finalRelease);
     
+    // Update live mix value for telemetry
+    if (numSamples > 0) {
+        float finalMix = baseMix;
+        if (isMixMod && mixCV != nullptr) {
+            const float cv = juce::jlimit(0.0f, 1.0f, mixCV[numSamples - 1]);
+            finalMix = cv;
+        }
+        setLiveParamValue("mix_live", finalMix);
+    }
+    
     if (lastOutputValues.size() >= 2)
     {
         if (lastOutputValues[0]) lastOutputValues[0]->store(outBus.getSample(0, buffer.getNumSamples() - 1));
@@ -176,6 +225,7 @@ bool LimiterModuleProcessor::getParamRouting(const juce::String& paramId, int& o
     
     if (paramId == paramIdThresholdMod) { outChannelIndexInBus = 2; return true; }
     if (paramId == paramIdReleaseMod)   { outChannelIndexInBus = 3; return true; }
+    if (paramId == paramIdMixMod)       { outChannelIndexInBus = 4; return true; }
     return false;
 }
 
@@ -185,6 +235,7 @@ juce::String LimiterModuleProcessor::getAudioInputLabel(int channel) const
     if (channel == 1) return "In R";
     if (channel == 2) return "Thresh Mod";
     if (channel == 3) return "Release Mod";
+    if (channel == 4) return "Mix Mod";
     return {};
 }
 
@@ -349,6 +400,7 @@ void LimiterModuleProcessor::drawParametersInNode(float itemWidth, const std::fu
 
     drawSlider("Threshold", paramIdThreshold, paramIdThresholdMod, -20.0f, 0.0f, "%.1f dB", "Maximum output level (-20 to 0 dB)\nSignal peaks above this are limited");
     drawSlider("Release", paramIdRelease, paramIdReleaseMod, 1.0f, 200.0f, "%.0f ms", "Release time (1-200 ms)\nHow fast the limiter recovers");
+    drawSlider("Mix", paramIdMix, paramIdMixMod, 0.0f, 1.0f, "%.2f", "Wet/dry balance (0=dry, 1=wet)");
 
     ImGui::Spacing();
     ImGui::Spacing();
@@ -393,6 +445,7 @@ void LimiterModuleProcessor::drawIoPins(const NodePinHelpers& helpers)
     helpers.drawParallelPins("In R", 1, "Out R", 1);
     helpers.drawParallelPins("Thresh Mod", 2, nullptr, -1);
     helpers.drawParallelPins("Release Mod", 3, nullptr, -1);
+    helpers.drawParallelPins("Mix Mod", 4, nullptr, -1);
 }
 #endif
 
@@ -404,9 +457,10 @@ std::vector<DynamicPinInfo> LimiterModuleProcessor::getDynamicInputPins() const
     pins.push_back({"In L", 0, PinDataType::Audio});
     pins.push_back({"In R", 1, PinDataType::Audio});
     
-    // Modulation inputs (channels 2-3)
+    // Modulation inputs (channels 2-4)
     pins.push_back({"Thresh Mod", 2, PinDataType::CV});
     pins.push_back({"Release Mod", 3, PinDataType::CV});
+    pins.push_back({"Mix Mod", 4, PinDataType::CV});
     
     return pins;
 }

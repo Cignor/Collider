@@ -33,6 +33,7 @@ class AnimationModuleProcessor;
 class ColorTrackerModule;
 class MetaModuleProcessor;
 class ChordArpModuleProcessor;
+class PolyVCOModuleProcessor;
 
 // Forward declaration (SavePresetJob is now in its own file to avoid circular dependencies)
 class SavePresetJob;
@@ -218,6 +219,11 @@ public:
     void handleMultiSequencerAutoConnectVCO(
         MultiSequencerModuleProcessor* sequencer,
         juce::uint32                   sequencerLid);
+
+    // PolyVCO auto-connect handlers
+    void handlePolyVCOAutoConnectTrackMixer(
+        PolyVCOModuleProcessor* polyVco,
+        juce::uint32            polyVcoLid);
 
     // Color Tracker auto-connect handlers
     void handleColorTrackerAutoConnectPolyVCO(
@@ -727,6 +733,7 @@ private:
     ImVec2 lastCanvasP0;                  // Cached top-left corner of the canvas
     ImVec2 lastCanvasSize;                // Cached size of the canvas
     ImVec2 lastEditorPanning{0.0f, 0.0f}; // Cached ImNodes panning for manual grid
+    float  lastZoom{1.0f};                // Cached ImNodes zoom level
     bool hasRenderedAtLeastOnce{false}; // Tracks whether the node editor has completed a full frame
 
     // Eyedropper state

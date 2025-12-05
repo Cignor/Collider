@@ -737,6 +737,16 @@ void PolyVCOModuleProcessor::drawParametersInNode(float itemWidth, const std::fu
         
         ImGui::EndTable();
     }
+    
+    ImGui::Spacing();
+    ImGui::Spacing();
+    
+    // === AUTO-CONNECT BUTTON ===
+    if (ImGui::Button("Connect to Track Mixer", ImVec2(itemWidth, 0))) 
+    { 
+        autoConnectTrackMixerTriggered = true; 
+    }
+    
     ImGui::PopID();
 }
 #endif

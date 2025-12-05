@@ -21,6 +21,10 @@ juce::AudioProcessorValueTreeState::ParameterLayout ShapingOscillatorModuleProce
         paramIdDrive, "Drive",
         juce::NormalisableRange<float>(1.0f, 50.0f, 0.01f, 0.5f), 1.0f));
 
+    params.push_back(std::make_unique<juce::AudioParameterFloat>(
+        paramIdDryWet, "Dry/Wet",
+        juce::NormalisableRange<float>(0.0f, 1.0f, 0.01f), 1.0f));
+
     params.push_back(std::make_unique<juce::AudioParameterBool>(
         "relativeFreqMod", "Relative Freq Mod", true));
     
@@ -32,13 +36,14 @@ juce::AudioProcessorValueTreeState::ParameterLayout ShapingOscillatorModuleProce
 
 ShapingOscillatorModuleProcessor::ShapingOscillatorModuleProcessor()
     : ModuleProcessor(BusesProperties()
-                        .withInput("Inputs", juce::AudioChannelSet::discreteChannels(5), true)
+                        .withInput("Inputs", juce::AudioChannelSet::discreteChannels(6), true)
                         .withOutput("Output", juce::AudioChannelSet::stereo(), true)),
       apvts(*this, nullptr, "ShapingOscillatorParams", createParameterLayout())
 {
     frequencyParam = apvts.getRawParameterValue(paramIdFrequency);
     waveformParam  = apvts.getRawParameterValue(paramIdWaveform);
     driveParam     = apvts.getRawParameterValue(paramIdDrive);
+    dryWetParam    = apvts.getRawParameterValue(paramIdDryWet);
     relativeFreqModParam = apvts.getRawParameterValue("relativeFreqMod");
     relativeDriveModParam = apvts.getRawParameterValue("relativeDriveMod");
 
@@ -55,6 +60,7 @@ void ShapingOscillatorModuleProcessor::prepareToPlay(double sampleRate, int samp
 
     smoothedFrequency.reset(sampleRate, 0.01);
     smoothedDrive.reset(sampleRate, 0.01);
+    smoothedDryWet.reset(sampleRate, 0.01);
 
 #if defined(PRESET_CREATOR_UI)
     vizRawOscBuffer.setSize(1, vizBufferSize, false, true, true);
@@ -79,12 +85,14 @@ void ShapingOscillatorModuleProcessor::processBlock(juce::AudioBuffer<float>& bu
     const bool isFreqMod  = isParamInputConnected(paramIdFrequencyMod);
     const bool isWaveMod  = isParamInputConnected(paramIdWaveformMod);
     const bool isDriveMod = isParamInputConnected(paramIdDriveMod);
+    const bool isDryWetMod = isParamInputConnected(paramIdDryWetMod);
 
     const float* audioInL = inBus.getNumChannels() > 0 ? inBus.getReadPointer(0) : nullptr;
     const float* audioInR = inBus.getNumChannels() > 1 ? inBus.getReadPointer(1) : nullptr;
     const float* freqCV   = isFreqMod  && inBus.getNumChannels() > 2 ? inBus.getReadPointer(2) : nullptr;
     const float* waveCV   = isWaveMod  && inBus.getNumChannels() > 3 ? inBus.getReadPointer(3) : nullptr;
     const float* driveCV  = isDriveMod && inBus.getNumChannels() > 4 ? inBus.getReadPointer(4) : nullptr;
+    const float* dryWetCV = isDryWetMod && inBus.getNumChannels() > 5 ? inBus.getReadPointer(5) : nullptr;
 
     auto* outL = outBus.getWritePointer(0);
     auto* outR = outBus.getNumChannels() > 1 ? outBus.getWritePointer(1) : outL;
@@ -92,6 +100,7 @@ void ShapingOscillatorModuleProcessor::processBlock(juce::AudioBuffer<float>& bu
     const float baseFrequency = frequencyParam != nullptr ? frequencyParam->load() : 440.0f;
     const int   baseWaveform  = waveformParam  != nullptr ? (int) waveformParam->load()  : 0;
     const float baseDrive     = driveParam     != nullptr ? driveParam->load()     : 1.0f;
+    const float baseDryWet    = dryWetParam    != nullptr ? dryWetParam->load()    : 1.0f;
     const bool relativeFreqMode = relativeFreqModParam != nullptr && relativeFreqModParam->load() > 0.5f;
     const bool relativeDriveMode = relativeDriveModParam != nullptr && relativeDriveModParam->load() > 0.5f;
 
@@ -143,8 +152,16 @@ void ShapingOscillatorModuleProcessor::processBlock(juce::AudioBuffer<float>& bu
             }
         }
 
+        float currentDryWet = baseDryWet;
+        if (isDryWetMod && dryWetCV)
+        {
+            const float cv = juce::jlimit(0.0f, 1.0f, dryWetCV[i]);
+            currentDryWet = cv;
+        }
+
         smoothedFrequency.setTargetValue(currentFreq);
         smoothedDrive.setTargetValue(currentDrive);
+        smoothedDryWet.setTargetValue(currentDryWet);
 
         if (currentWaveform != currentWave)
         {
@@ -163,8 +180,13 @@ void ShapingOscillatorModuleProcessor::processBlock(juce::AudioBuffer<float>& bu
         const float inL = audioInL ? audioInL[i] : 1.0f;
         const float inR = audioInR ? audioInR[i] : (audioInL ? inL : 1.0f); // Use L if only L exists, otherwise 1.0
         
-        outL[i] = shaped * inL;
-        outR[i] = shaped * inR;
+        const float wet = smoothedDryWet.getNextValue();
+        const float dry = 1.0f - wet;
+        const float wetSignalL = shaped * inL;
+        const float wetSignalR = shaped * inR;
+        
+        outL[i] = dry * inL + wet * wetSignalL;
+        outR[i] = dry * inR + wet * wetSignalR;
 
 #if defined(PRESET_CREATOR_UI)
         // Capture raw oscillator and shaped signals into circular buffers
@@ -181,6 +203,7 @@ void ShapingOscillatorModuleProcessor::processBlock(juce::AudioBuffer<float>& bu
             setLiveParamValue("frequency_live", smoothedFrequency.getCurrentValue());
             setLiveParamValue("waveform_live", (float) currentWave);
             setLiveParamValue("drive_live", smoothedDrive.getCurrentValue());
+            setLiveParamValue("dryWet_live", smoothedDryWet.getCurrentValue());
         }
     }
 
@@ -234,6 +257,10 @@ void ShapingOscillatorModuleProcessor::drawParametersInNode (float itemWidth,
     const bool driveIsMod = isParamModulated(paramIdDriveMod);
     float drive = driveIsMod ? getLiveParamValueFor(paramIdDriveMod, "drive_live", driveParam ? driveParam->load() : 1.0f)
                              : (driveParam ? driveParam->load() : 1.0f);
+
+    const bool dryWetIsMod = isParamModulated(paramIdDryWetMod);
+    float dryWet = dryWetIsMod ? getLiveParamValueFor(paramIdDryWetMod, "dryWet_live", dryWetParam ? dryWetParam->load() : 1.0f)
+                               : (dryWetParam ? dryWetParam->load() : 1.0f);
 
     ImGui::PushItemWidth(itemWidth);
 
@@ -319,6 +346,16 @@ void ShapingOscillatorModuleProcessor::drawParametersInNode (float itemWidth,
     if (ImGui::IsItemDeactivatedAfterEdit()) onModificationEnded();
     if (driveIsMod) { ImGui::EndDisabled(); ImGui::SameLine(); ImGui::TextUnformatted("(mod)"); }
     if (ImGui::IsItemHovered()) ImGui::SetTooltip("Waveshaping amount (1=clean, 50=extreme)");
+
+    if (dryWetIsMod) ImGui::BeginDisabled();
+    if (ImGui::SliderFloat("Dry/Wet", &dryWet, 0.0f, 1.0f, "%.2f"))
+    {
+        if (!dryWetIsMod) if (auto* p = dynamic_cast<juce::AudioParameterFloat*>(ap.getParameter(paramIdDryWet))) *p = dryWet;
+    }
+    if (!dryWetIsMod) adjustParamOnWheel(ap.getParameter(paramIdDryWet), "dryWet", dryWet);
+    if (ImGui::IsItemDeactivatedAfterEdit()) onModificationEnded();
+    if (dryWetIsMod) { ImGui::EndDisabled(); ImGui::SameLine(); ImGui::TextUnformatted("(mod)"); }
+    if (ImGui::IsItemHovered()) ImGui::SetTooltip("Mix between dry input (0.0) and wet processed signal (1.0)");
 
     ImGui::Spacing();
     ImGui::Spacing();
@@ -433,6 +470,7 @@ void ShapingOscillatorModuleProcessor::drawIoPins(const NodePinHelpers& helpers)
     helpers.drawParallelPins("Freq Mod", 2, nullptr, -1);
     helpers.drawParallelPins("Wave Mod", 3, nullptr, -1);
     helpers.drawParallelPins("Drive Mod", 4, nullptr, -1);
+    helpers.drawParallelPins("Dry/Wet Mod", 5, nullptr, -1);
 }
 
 juce::String ShapingOscillatorModuleProcessor::getAudioInputLabel(int channel) const
@@ -444,6 +482,7 @@ juce::String ShapingOscillatorModuleProcessor::getAudioInputLabel(int channel) c
         case 2: return "Freq Mod";
         case 3: return "Wave Mod";
         case 4: return "Drive Mod";
+        case 5: return "Dry/Wet Mod";
         default: return {};
     }
 }
@@ -466,5 +505,6 @@ bool ShapingOscillatorModuleProcessor::getParamRouting(const juce::String& param
     if (paramId == paramIdFrequencyMod) { outChannelIndexInBus = 2; return true; }
     if (paramId == paramIdWaveformMod)  { outChannelIndexInBus = 3; return true; }
     if (paramId == paramIdDriveMod)     { outChannelIndexInBus = 4; return true; }
+    if (paramId == paramIdDryWetMod)    { outChannelIndexInBus = 5; return true; }
     return false;
 }

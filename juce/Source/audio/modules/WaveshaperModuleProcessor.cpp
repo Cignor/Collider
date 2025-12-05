@@ -13,6 +13,9 @@ juce::AudioProcessorValueTreeState::ParameterLayout WaveshaperModuleProcessor::c
     p.push_back(std::make_unique<juce::AudioParameterChoice>("type", "Type",
         juce::StringArray{ "Soft Clip (tanh)", "Hard Clip", "Foldback" }, 0));
     
+    p.push_back(std::make_unique<juce::AudioParameterFloat>("mix", "Mix",
+        juce::NormalisableRange<float>(0.0f, 1.0f, 0.01f), 1.0f));
+    
     // Relative modulation parameters
     p.push_back(std::make_unique<juce::AudioParameterBool>("relativeDriveMod", "Relative Drive Mod", true));
     
@@ -21,12 +24,13 @@ juce::AudioProcessorValueTreeState::ParameterLayout WaveshaperModuleProcessor::c
 
 WaveshaperModuleProcessor::WaveshaperModuleProcessor()
     : ModuleProcessor(BusesProperties()
-                        .withInput("Inputs", juce::AudioChannelSet::discreteChannels(4), true) // 0-1: Audio In, 2: Drive Mod, 3: Type Mod
+                        .withInput("Inputs", juce::AudioChannelSet::discreteChannels(5), true) // 0-1: Audio In, 2: Drive Mod, 3: Type Mod, 4: Mix Mod
                         .withOutput("Out", juce::AudioChannelSet::stereo(), true)),
       apvts(*this, nullptr, "WaveshaperParams", createParameterLayout())
 {
     driveParam = dynamic_cast<juce::AudioParameterFloat*>(apvts.getParameter("drive"));
     typeParam = dynamic_cast<juce::AudioParameterChoice*>(apvts.getParameter("type"));
+    mixParam = dynamic_cast<juce::AudioParameterFloat*>(apvts.getParameter("mix"));
     relativeDriveModParam = apvts.getRawParameterValue("relativeDriveMod");
     
     // Initialize output value tracking for tooltips
@@ -44,7 +48,7 @@ WaveshaperModuleProcessor::WaveshaperModuleProcessor()
 
 void WaveshaperModuleProcessor::prepareToPlay(double sampleRate, int samplesPerBlock)
 {
-    juce::ignoreUnused(sampleRate);
+    smoothedMix.reset(sampleRate, 0.01);
 #if defined(PRESET_CREATOR_UI)
     dryBlockTemp.setSize(2, samplesPerBlock);
     dryBlockTemp.clear();
@@ -62,13 +66,19 @@ void WaveshaperModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
     // Get pointers to modulation CV inputs from unified input bus
     const bool isDriveMod = isParamInputConnected("drive");
     const bool isTypeMod = isParamInputConnected("type");
+    const bool isMixMod = isParamInputConnected("mix");
     auto inBus = getBusBuffer(buffer, true, 0);
+    auto outBus = getBusBuffer(buffer, false, 0);
+    
+    // SAFE: Read input pointers BEFORE any output operations
     const float* driveCV = isDriveMod && inBus.getNumChannels() > 2 ? inBus.getReadPointer(2) : nullptr;
     const float* typeCV = isTypeMod && inBus.getNumChannels() > 3 ? inBus.getReadPointer(3) : nullptr;
+    const float* mixCV = isMixMod && inBus.getNumChannels() > 4 ? inBus.getReadPointer(4) : nullptr;
 
     // Get base parameter values ONCE
     const float baseDrive = driveParam != nullptr ? driveParam->get() : 1.0f;
     const int baseType = typeParam != nullptr ? typeParam->getIndex() : 0;
+    const float baseMix = mixParam != nullptr ? mixParam->get() : 1.0f;
     const bool relativeDriveMode = relativeDriveModParam && relativeDriveModParam->load() > 0.5f;
     
     const int numSamples = buffer.getNumSamples();
@@ -82,12 +92,20 @@ void WaveshaperModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
         dryBlockTemp.copyFrom(ch, 0, buffer, ch, 0, numSamples);
 #endif
 
+    // Store dry signal for mixing (always needed for dry/wet)
+    juce::AudioBuffer<float> dryBuffer;
+    dryBuffer.setSize(2, numSamples, false, false, true);
+    for (int ch = 0; ch < juce::jmin(2, buffer.getNumChannels()); ++ch)
+        dryBuffer.copyFrom(ch, 0, buffer, ch, 0, numSamples);
+
+    // Process waveshaping first, then apply dry/wet mix
     for (int ch = 0; ch < buffer.getNumChannels(); ++ch)
     {
         float* data = buffer.getWritePointer(ch);
+        
         for (int i = 0; i < buffer.getNumSamples(); ++i)
         {
-            // PER-SAMPLE FIX: Calculate effective drive FOR THIS SAMPLE
+            // PER-SAMPLE: Calculate effective drive FOR THIS SAMPLE
             float drive = baseDrive;
             if (isDriveMod && driveCV != nullptr) {
                 const float cv = juce::jlimit(0.0f, 1.0f, driveCV[i]);
@@ -103,7 +121,7 @@ void WaveshaperModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
                 drive = juce::jlimit(1.0f, 100.0f, drive);
             }
             
-            // PER-SAMPLE FIX: Calculate effective type FOR THIS SAMPLE
+            // PER-SAMPLE: Calculate effective type FOR THIS SAMPLE
             int type = baseType;
             if (isTypeMod && typeCV != nullptr) {
                 const float cv = juce::jlimit(0.0f, 1.0f, typeCV[i]);
@@ -111,6 +129,7 @@ void WaveshaperModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
                 type = static_cast<int>(cv * 3.0f) % 3;
             }
             
+            // Process waveshaping (this becomes the wet signal)
             float s = data[i] * drive;
             
             switch (type)
@@ -125,6 +144,29 @@ void WaveshaperModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
                     data[i] = std::abs(std::abs(std::fmod(s - 1.0f, 4.0f)) - 2.0f) - 1.0f;
                     break;
             }
+        }
+    }
+    
+    // Apply dry/wet mix (after processing)
+    for (int ch = 0; ch < juce::jmin(2, buffer.getNumChannels()); ++ch)
+    {
+        float* wetData = buffer.getWritePointer(ch);
+        const float* dryData = dryBuffer.getReadPointer(ch);
+        
+        for (int i = 0; i < numSamples; ++i)
+        {
+            // PER-SAMPLE: Calculate effective mix FOR THIS SAMPLE
+            float currentMix = baseMix;
+            if (isMixMod && mixCV != nullptr) {
+                const float cv = juce::jlimit(0.0f, 1.0f, mixCV[i]);
+                currentMix = cv;
+            }
+            smoothedMix.setTargetValue(currentMix);
+            const float mix = smoothedMix.getNextValue();
+            const float dry = 1.0f - mix;
+            
+            // Mix dry and wet
+            wetData[i] = dry * dryData[i] + mix * wetData[i];
         }
     }
     
@@ -151,6 +193,13 @@ void WaveshaperModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
         finalType = static_cast<int>(cv * 3.0f) % 3;
     }
     setLiveParamValue("type_live", static_cast<float>(finalType));
+    
+    float finalMix = baseMix;
+    if (isMixMod && mixCV != nullptr) {
+        const float cv = juce::jlimit(0.0f, 1.0f, mixCV[buffer.getNumSamples() - 1]);
+        finalMix = cv;
+    }
+    setLiveParamValue("mix_live", finalMix);
 
 #if defined(PRESET_CREATOR_UI)
     vizData.liveDrive.store(finalDrive);
@@ -437,6 +486,23 @@ void WaveshaperModuleProcessor::drawParametersInNode(float itemWidth, const std:
 
     ImGui::Spacing();
 
+    // Mix
+    bool isMixModulated = isParamModulated("mix");
+    float mix = 1.0f;
+    if (auto* p = dynamic_cast<juce::AudioParameterFloat*>(ap.getParameter("mix"))) mix = *p;
+    if (isMixModulated) {
+        mix = getLiveParamValueFor("mix", "mix_live", mix);
+        ImGui::BeginDisabled();
+    }
+    if (ImGui::SliderFloat("Mix", &mix, 0.0f, 1.0f, "%.2f")) if (!isMixModulated) if (auto* p = dynamic_cast<juce::AudioParameterFloat*>(ap.getParameter("mix"))) *p = mix;
+    if (!isMixModulated) adjustParamOnWheel(ap.getParameter("mix"), "mix", mix);
+    if (ImGui::IsItemDeactivatedAfterEdit()) { onModificationEnded(); }
+    if (isMixModulated) { ImGui::EndDisabled(); ImGui::SameLine(); ImGui::TextUnformatted("(mod)"); }
+    ImGui::SameLine();
+    HelpMarker("Wet/dry balance (0=dry, 1=wet)");
+
+    ImGui::Spacing();
+
     // === RELATIVE MODULATION SECTION ===
     ThemeText("CV Input Modes", theme.modulation.frequency);
     ImGui::Spacing();
@@ -480,9 +546,10 @@ std::vector<DynamicPinInfo> WaveshaperModuleProcessor::getDynamicInputPins() con
     pins.push_back({"In L", 0, PinDataType::Audio});
     pins.push_back({"In R", 1, PinDataType::Audio});
     
-    // Modulation inputs (channels 2-3)
+    // Modulation inputs (channels 2-4)
     pins.push_back({"Drive Mod", 2, PinDataType::CV});
     pins.push_back({"Type Mod", 3, PinDataType::CV});
+    pins.push_back({"Mix Mod", 4, PinDataType::CV});
     
     return pins;
 }
@@ -505,5 +572,6 @@ bool WaveshaperModuleProcessor::getParamRouting(const juce::String& paramId, int
     
     if (paramId == "drive") { outChannelIndexInBus = 2; return true; }
     if (paramId == "type") { outChannelIndexInBus = 3; return true; }
+    if (paramId == "mix") { outChannelIndexInBus = 4; return true; }
     return false;
 }

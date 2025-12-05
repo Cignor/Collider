@@ -11,10 +11,12 @@ public:
     // Parameter IDs
     static constexpr auto paramIdThreshold = "threshold";
     static constexpr auto paramIdRelease = "release";
+    static constexpr auto paramIdMix = "mix";
 
     // Virtual IDs for modulation inputs
     static constexpr auto paramIdThresholdMod = "threshold_mod";
     static constexpr auto paramIdReleaseMod = "release_mod";
+    static constexpr auto paramIdMixMod = "mix_mod";
 
     LimiterModuleProcessor();
     ~LimiterModuleProcessor() override = default;
@@ -47,10 +49,15 @@ private:
 
     // The core JUCE DSP Limiter object
     juce::dsp::Limiter<float> limiter;
+    juce::AudioBuffer<float> dryBuffer;
+    
+    // Smoothed values to prevent zipper noise
+    juce::SmoothedValue<float> smoothedMix;
 
     // Cached atomic pointers to parameters
     std::atomic<float>* thresholdParam { nullptr };
     std::atomic<float>* releaseParam { nullptr };
+    std::atomic<float>* mixParam { nullptr };
     
     // Relative modulation parameters
     std::atomic<float>* relativeThresholdModParam { nullptr };

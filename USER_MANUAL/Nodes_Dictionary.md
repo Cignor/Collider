@@ -510,6 +510,7 @@ Reduces the dynamic range of audio signals, making quiet parts louder and loud p
 - `Attack Mod` (CV) - Attack time modulation
 - `Release Mod` (CV) - Release time modulation
 - `Makeup Mod` (CV) - Makeup gain modulation
+- `Mix Mod` (CV) - Wet/dry mix modulation
 
 #### Outputs
 - `Out L` (Audio) - Left compressed output
@@ -518,9 +519,15 @@ Reduces the dynamic range of audio signals, making quiet parts louder and loud p
 #### Parameters
 - `Threshold` (-60 to 0 dB) - Level above which compression starts
 - `Ratio` (1:1 to 20:1) - Amount of compression
-- `Attack` (0.1-100 ms) - How quickly compression engages
-- `Release` (10-1000 ms) - How quickly compression disengages
-- `Makeup Gain` (0-24 dB) - Output gain to compensate for level reduction
+- `Attack` (0.1-200 ms) - How quickly compression engages
+- `Release` (5-1000 ms) - How quickly compression disengages
+- `Makeup Gain` (-12 to +12 dB) - Output gain to compensate for level reduction
+- `Mix` (0-1) - Wet/dry balance (0=dry, 1=wet)
+- `Relative Threshold Mod` (Bool) - When enabled, CV modulates ±30 dB around slider. When disabled, CV directly maps to -60 to 0 dB range
+- `Relative Ratio Mod` (Bool) - When enabled, CV modulates around slider (0.25x-4x). When disabled, CV directly maps to 1:1 to 20:1 range
+- `Relative Attack Mod` (Bool) - When enabled, CV modulates around slider (0.25x-4x). When disabled, CV directly maps to 0.1-200 ms range
+- `Relative Release Mod` (Bool) - When enabled, CV modulates around slider (0.25x-4x). When disabled, CV directly maps to 5-1000 ms range
+- `Relative Makeup Mod` (Bool) - When enabled, CV modulates ±12 dB around slider. When disabled, CV directly maps to -12 to +12 dB range
 
 #### How to Use
 1. Set threshold to the level where you want compression to start
@@ -528,7 +535,9 @@ Reduces the dynamic range of audio signals, making quiet parts louder and loud p
 3. Use fast attack to catch transients, slow attack to preserve punch
 4. Set release to taste (fast for pumping effects, slow for smooth)
 5. Adjust makeup gain to match the output level to the input
-6. Great for controlling dynamics, adding sustain, and gluing mixes together
+6. Adjust mix to blend processed signal with dry input (0.0 = 100% dry, 1.0 = 100% wet)
+7. Use Relative Mod toggles to choose between musical (relative) or full-range (absolute) CV modulation
+8. Great for controlling dynamics, adding sustain, and gluing mixes together
 
 ---
 
@@ -542,17 +551,23 @@ Prevents audio from exceeding a set level, acting as a "brick wall" for peaks.
 - `In R` (Audio) - Right audio input
 - `Thresh Mod` (CV) - Threshold modulation
 - `Release Mod` (CV) - Release time modulation
+- `Mix Mod` (CV) - Wet/dry mix modulation
 
 #### Outputs
 - `Out L` (Audio) - Left limited output
 - `Out R` (Audio) - Right limited output
 
 #### Parameters
-- `Threshold` (-60 to 0 dB) - Maximum allowed level
-- `Release` (10-1000 ms) - Recovery time
+- `Threshold` (-20 to 0 dB) - Maximum allowed level
+- `Release` (1-200 ms) - Recovery time
+- `Mix` (0-1) - Wet/dry balance (0=dry, 1=wet)
+- `Relative Threshold Mod` (Bool) - When enabled, CV modulates ±10 dB around slider. When disabled, CV directly maps to -20 to 0 dB range
+- `Relative Release Mod` (Bool) - When enabled, CV modulates around slider (0.25x-4x). When disabled, CV directly maps to 1-200 ms range
 
 #### How to Use
 1. Set threshold to the maximum level you want to allow
+2. Adjust mix to blend processed signal with dry input (0.0 = 100% dry, 1.0 = 100% wet)
+3. Use Relative Mod toggles to choose between musical (relative) or full-range (absolute) CV modulation
 2. Adjust release time (fast for transparent, slow for smoother)
 3. Use at the end of your signal chain to prevent clipping
 4. Essential for mastering and protecting speakers
@@ -591,27 +606,29 @@ Silences signals below a threshold, useful for removing background noise or crea
 ### drive
 **Waveshaping Distortion**
 
-A waveshaping distortion effect that adds harmonic content and saturation.
+A simple waveshaping distortion effect using tanh saturation.
 
 #### Inputs
 - `In L` (Audio) - Left audio input
 - `In R` (Audio) - Right audio input
+- `Drive Mod` (CV) - Drive amount modulation
+- `Mix Mod` (CV) - Wet/dry mix modulation
 
 #### Outputs
 - `Out L` (Audio) - Left distorted output
 - `Out R` (Audio) - Right distorted output
 
 #### Parameters
-- `Drive` (0-100) - Amount of distortion
-- `Type` (Choice) - Distortion algorithm (Soft clip, Hard clip, Foldback, etc.)
-- `Output Gain` (-12 to +12 dB) - Output level compensation
+- `Drive` (0-2) - Amount of distortion
+- `Mix` (0-1) - Dry/wet mix (0=dry, 1=wet)
+- `Relative Drive Mod` (Bool) - When enabled, CV modulates around slider. When disabled, CV directly maps to 0-2 range
+- `Relative Mix Mod` (Bool) - When enabled, CV modulates around slider. When disabled, CV directly maps to 0-1 range
 
 #### How to Use
-1. Start with low drive and gradually increase
-2. Try different distortion types for various tonal characters
-3. Adjust output gain to compensate for level changes
-4. Great for adding grit and harmonic richness
-5. Use before or after filters for different tonal results
+1. Increase drive to add saturation
+2. Adjust mix to blend processed signal with dry input (0.0 = 100% dry, 1.0 = 100% wet)
+3. Use Relative Mod toggles to choose between musical (relative) or full-range (absolute) CV modulation
+4. Great for adding warmth and character
 
 ---
 
@@ -657,21 +674,25 @@ A distortion effect with multiple waveshaping algorithms for varied saturation a
 - `In R` (Audio) - Right audio input
 - `Drive Mod` (CV) - Drive amount modulation
 - `Type Mod` (CV) - Algorithm selection modulation
+- `Mix Mod` (CV) - Wet/dry mix modulation
 
 #### Outputs
 - `Out L` (Audio) - Left waveshaped output
 - `Out R` (Audio) - Right waveshaped output
 
 #### Parameters
-- `Drive` (0-100) - Amount of waveshaping
-- `Type` (Choice) - Waveshaping algorithm (Soft Clip, Hard Clip, Foldback, etc.)
-- `Mix` (0-1) - Wet/dry balance
+- `Drive` (1-100) - Amount of waveshaping
+- `Type` (Choice) - Waveshaping algorithm (Soft Clip, Hard Clip, Foldback)
+- `Mix` (0-1) - Wet/dry balance (0=dry, 1=wet)
+- `Relative Drive Mod` (Bool) - When enabled, CV modulates ±3 octaves around slider. When disabled, CV directly maps to 1-100 range
 
 #### How to Use
 1. Choose a waveshaping algorithm
 2. Gradually increase drive to add saturation
 3. Try different algorithms for different characters
-4. Use mix to blend with the dry signal
+4. Adjust mix to blend processed signal with dry input (0.0 = 100% dry, 1.0 = 100% wet)
+5. Use Relative Drive Mod toggle to choose between musical (relative) or full-range (absolute) CV modulation
+6. Great for parallel processing or subtle saturation effects
 
 ---
 
@@ -685,20 +706,26 @@ A multi-band waveshaper that applies frequency-specific distortion across 8 band
 - `In R` (Audio) - Right audio input
 - `Drive 1-8 Mod` (CV) - Per-band drive modulation
 - `Gain Mod` (CV) - Output gain modulation
+- `Mix Mod` (CV) - Wet/dry mix modulation
 
 #### Outputs
 - `Out L` (Audio) - Left processed output
 - `Out R` (Audio) - Right processed output
 
 #### Parameters
-- `Drive Band 1-8` (0-10) - Drive amount for each frequency band
+- `Drive Band 1-8` (0-100) - Drive amount for each frequency band
 - `Output Gain` (-24 to +24 dB) - Overall output level
+- `Mix` (0-1) - Wet/dry balance (0=dry, 1=wet)
+- `Relative Drive Mod 1-8` (Bool) - When enabled, CV modulates ±3 octaves around slider. When disabled, CV directly maps to 0-100 range
+- `Relative Gain Mod` (Bool) - When enabled, CV modulates ±24 dB around slider. When disabled, CV directly maps to -24 to +24 dB range
 
 #### How to Use
 1. Adjust individual band drives to add selective distortion
 2. Drive bass frequencies differently than highs for balanced distortion
-3. Great for adding harmonics to specific frequency ranges
-4. Use sparingly for subtle enhancement or aggressively for heavy distortion
+3. Adjust mix to blend processed signal with dry input (0.0 = 100% dry, 1.0 = 100% wet)
+4. Use Relative Mod toggles to choose between musical (relative) or full-range (absolute) CV modulation
+5. Great for adding harmonics to specific frequency ranges
+6. Use sparingly for subtle enhancement or aggressively for heavy distortion
 
 ---
 
@@ -716,6 +743,7 @@ A granular processor that plays small grains of audio for textural and rhythmic 
 - `Position Mod` (CV) - Playback position modulation
 - `Pitch Mod` (CV) - Pitch modulation
 - `Gate Mod` (CV) - Gate amount modulation
+- `Mix Mod` (CV) - Wet/dry mix modulation
 
 #### Outputs
 - `Out L` (Audio) - Left granulated output
@@ -730,6 +758,11 @@ A granular processor that plays small grains of audio for textural and rhythmic 
 - `Pitch Random` (0-12 semitones) - Random pitch variation per grain
 - `Pan Random` (0-1) - Random stereo placement per grain
 - `Gate` (0-1) - Overall output level/gate
+- `Mix` (0-1) - Wet/dry balance (0=dry, 1=wet)
+- `Relative Density Mod` (Bool) - When enabled, CV modulates around slider (0.5x-2x). When disabled, CV directly maps to 0.1-100 Hz range
+- `Relative Size Mod` (Bool) - When enabled, CV modulates around slider (0.1x-2x). When disabled, CV directly maps to 5-500 ms range
+- `Relative Position Mod` (Bool) - When enabled, CV adds offset to slider (±0.5 range). When disabled, CV directly maps to 0-1 range
+- `Relative Pitch Mod` (Bool) - When enabled, CV adds offset to slider (±12 st). When disabled, CV directly maps to -24 to +24 st range
 
 #### How to Use
 1. Audio is continuously recorded to a 2-second buffer
@@ -750,28 +783,48 @@ A hybrid granular synthesizer and chorus effect with a visual canvas interface. 
 #### Inputs
 - `In L` (Audio) - Left audio input (recorded to internal buffer)
 - `In R` (Audio) - Right audio input (recorded to internal buffer)
+- `Dry Mix Mod` (CV) - Dry mix level modulation
+- `Pen Mix Mod` (CV) - Pen voices mix level modulation
+- `Spray Mix Mod` (CV) - Spray grains mix level modulation
+- `Density Mod` (CV) - Grain density modulation
+- `Grain Size Mod` (CV) - Grain size modulation
 
 #### Outputs
 - `Out L` (Audio) - Left processed output
 - `Out R` (Audio) - Right processed output
 
 #### Parameters
-- `Mix` (0-1) - Wet/dry balance (0=dry, 1=wet)
+- `Dry Mix` (0-1) - Original input signal level (0=silent, 1=full)
+- `Pen Mix` (0-1) - Pen tool voices mix level (0=silent, 1=full)
+- `Spray Mix` (0-1) - Spray tool grains mix level (0=silent, 1=full)
 - `Density` (0.1-100 Hz) - Grain spawning rate for Spray tool dots
 - `Grain Size` (5-500 ms) - Length of each grain spawned by Spray tool
 - `Buffer Length` (1-10 seconds) - Size of the internal recording buffer
+- `Red Amount` (0-1) - Delay effect intensity multiplier
+- `Green Amount` (0-1) - Filter effect intensity multiplier
+- `Blue Amount` (0-1) - Pitch effect intensity multiplier
 
 #### Canvas Controls
 - **Tools:**
   - **Pen** - Draws static voices (chorus-like continuous playback)
   - **Spray** - Spawns dynamic grains (granular synthesis with movement and "pop" effects)
 - **Colors (Color-Coded Parameters):**
-  - **Red** - Delay (0-2000ms). Larger dots = longer delay time
-  - **Green** - Volume (-60 to +12 dB). Larger dots = higher volume
-  - **Blue** - Pitch (-24 to +24 semitones). Larger dots = more pitch shift
+  - **Red (Delay)** - Grid-based delay control:
+    - X-axis: Delay time (0-2000ms, left=short, right=long)
+    - Y-axis: Feedback amount (0.0-0.95, bottom=none, top=maximum)
+    - Dot size: Controls delay intensity (scaled by Red Amount slider)
+  - **Green (Filter)** - Grid-based filter control:
+    - X-axis: Cutoff frequency (20Hz-20kHz logarithmic, left=low, right=high)
+    - Y-axis: Resonance/Q (0.707-10.0, bottom=smooth, top=sharp)
+    - Dot size: Controls filter intensity (scaled by Green Amount slider)
+  - **Blue (Pitch)** - Grid-based pitch control:
+    - X+Y position: Pitch shift (-24 to +24 semitones)
+      - Bottom-left (0,0) = -24 semitones (low)
+      - Top-right (1,1) = +24 semitones (high)
+    - Dot size: Controls pitch shift intensity (scaled by Blue Amount slider)
 - **Canvas Axes:**
-  - **X-axis** - Panning (left = left, right = right)
-  - **Y-axis** - Buffer position (low = start of buffer, high = end of buffer)
+  - **X-axis** - Panning (left = left, right = right) + Color-specific grid control
+  - **Y-axis** - Buffer position (low = start of buffer, high = end of buffer) + Color-specific grid control
   - **Dot Size** - Controls both voice reproduction amount and color parameter intensity
 
 #### How to Use
@@ -781,8 +834,8 @@ A hybrid granular synthesizer and chorus effect with a visual canvas interface. 
    - Each dot creates a continuous voice playing from the buffer
    - Y-position determines where in the buffer to read from
    - X-position controls stereo panning
-   - Color determines which parameter is active (Delay, Volume, or Pitch)
-   - Dot size controls volume and parameter intensity
+   - Color determines which parameter is active (Delay, Filter, or Pitch)
+   - Dot size controls voice amplitude and parameter intensity
    - Great for creating thick, chorus-like textures
 3. **Spray Tool (Dynamic Grains):**
    - Click and drag to place multiple dots (spray effect)
@@ -792,29 +845,50 @@ A hybrid granular synthesizer and chorus effect with a visual canvas interface. 
    - X-position controls grain panning
    - Color determines which parameter is active per grain
    - Great for creating evolving, granular textures
-4. **Color Selection:**
-   - Choose Red for delay effects (adds time-based spatialization)
-   - Choose Green for volume control (emphasize or de-emphasize voices)
-   - Choose Blue for pitch shifting (create harmonies and detuning)
+4. **Color Selection and Grid Control:**
+   - **Red (Delay):** Place dots horizontally to control delay time, vertically to control feedback. Bottom-left = short delay, no feedback. Top-right = long delay, maximum feedback.
+   - **Green (Filter):** Place dots horizontally to control cutoff frequency, vertically to control resonance. Bottom-left = low cutoff, smooth. Top-right = high cutoff, sharp resonance.
+   - **Blue (Pitch):** Place dots diagonally to control pitch. Bottom-left = -24 semitones (low), top-right = +24 semitones (high). The average of X and Y positions determines pitch.
+   - Use the color amount sliders (Red Amount, Green Amount, Blue Amount) to scale the intensity of each effect
    - Larger dots increase the intensity of the color-coded parameter
-5. **Erasing:** Right-click and drag on the canvas to erase dots
-6. **Canvas Interaction:**
+5. **Mix Controls:**
+   - Adjust `Dry Mix` to blend the original input signal
+   - Adjust `Pen Mix` to control the level of Pen tool voices
+   - Adjust `Spray Mix` to control the level of Spray tool grains
+   - All three can be mixed independently for flexible sound design
+6. **CV Modulation:**
+   - Connect CV sources to modulation inputs for automated control
+   - `Dry Mix Mod`, `Pen Mix Mod`, `Spray Mix Mod` control respective mix levels
+   - `Density Mod` and `Grain Size Mod` control Spray tool behavior
+   - Modulation indicators show when parameters are being modulated
+7. **Erasing:** Right-click and drag on the canvas to erase dots
+8. **Canvas Interaction:**
    - Left-click/drag: Paint dots
    - Right-click/drag: Erase dots
    - Dots are static (no animation) - they represent fixed voice positions
-7. **Tips:**
+9. **Tips:**
    - Use Pen tool with multiple dots for rich chorus effects
    - Use Spray tool with high density for dense granular clouds
    - Combine both tools on the same canvas for hybrid textures
    - Experiment with dot placement for spatial effects
+   - Use grid-based color control to create musical intervals and harmonies
    - Larger dots = more prominent voices/grains
    - Color selection dramatically changes the character of the effect
+   - Adjust color amount sliders to fine-tune effect intensity
 
 #### Visual Feedback
 - Dots are rendered as colored circles on the canvas
 - Dot size visually represents the size parameter
 - Color matches the selected color (Red/Green/Blue)
 - Grid and crosshair help with precise placement
+- Real-time visualization shows output waveform, active voice/grain counts, buffer fill level, and output level
+
+#### Performance & Limits
+- **Pen Tool Voices:** Up to 192 simultaneous active voices (each Pen dot can have one active voice)
+- **Spray Tool Grains:** Up to 384 simultaneous active grains (shared across all Spray dots)
+- When limits are reached, new voices/grains will not activate until existing ones finish
+- CPU usage increases with more active voices/grains, especially when effects are enabled
+- Monitor performance when using many dots with color-coded effects active
 
 ---
 
@@ -855,6 +929,7 @@ Real-time pitch and time manipulation using the RubberBand library for high-qual
 - `In R` (Audio) - Right audio input
 - `Speed Mod` (CV) - Playback speed modulation
 - `Pitch Mod` (CV) - Pitch shift modulation
+- `Mix Mod` (CV) - Wet/dry mix modulation
 
 #### Outputs
 - `Out L` (Audio) - Left processed output
@@ -863,13 +938,17 @@ Real-time pitch and time manipulation using the RubberBand library for high-qual
 #### Parameters
 - `Speed` (0.25x to 4x) - Playback speed without affecting pitch
 - `Pitch` (-24 to +24 semitones) - Pitch shift without affecting tempo
-- `Formant` (Bool) - Preserve formants when pitch shifting
+- `Mix` (0-1) - Wet/dry balance (0=dry, 1=wet)
+- `Engine` (Choice) - Processing engine (RubberBand or Naive)
+- `Buffer Headroom` (0.25-8 s) - Internal buffer size for time stretching
 
 #### How to Use
 1. Adjust speed to time-stretch audio (0.5x=half speed, 2x=double speed)
 2. Adjust pitch to transpose audio independently
-3. Enable formant preservation for natural-sounding vocal pitch shifts
-4. Great for creative effects and sound design
+3. Adjust mix to blend processed signal with dry input (0.0 = 100% dry, 1.0 = 100% wet)
+4. Increase buffer headroom for safer slowdowns (adds latency)
+5. Use Flush Buffer button to reset playback
+6. Great for creative effects and sound design
 
 ---
 
@@ -1101,21 +1180,29 @@ An oscillator with integrated waveshaping for generating harmonically rich tones
 - `Freq Mod` (CV) - Frequency modulation
 - `Wave Mod` (CV) - Waveform modulation
 - `Drive Mod` (CV) - Drive modulation
+- `Dry/Wet Mod` (CV) - Dry/wet mix modulation
 
 #### Outputs
-- `Out` (Audio) - Shaped oscillator output
+- `Out L` (Audio) - Shaped oscillator output left channel
+- `Out R` (Audio) - Shaped oscillator output right channel
 
 #### Parameters
 - `Frequency` (20 Hz - 20 kHz) - Oscillator frequency
-- `Waveform` (Choice) - Base waveform
-- `Drive` (0-10) - Waveshaping amount
+- `Waveform` (Choice) - Base waveform (Sine, Saw, Square)
+- `Drive` (1-50) - Waveshaping amount (1=clean, 50=extreme)
+- `Dry/Wet` (0-1) - Mix between dry input (0.0) and wet processed signal (1.0)
+- `Relative Freq Mod` (Bool) - When enabled, CV modulates ±4 octaves around slider. When disabled, CV directly maps to 20 Hz - 20 kHz range
+- `Relative Drive Mod` (Bool) - When enabled, CV modulates around slider drive. When disabled, CV directly maps to full drive range
 
 #### How to Use
 1. Set frequency for desired pitch
 2. Choose base waveform
 3. Increase drive to add harmonics via waveshaping
-4. Can also process external audio through the shaper
-5. Great for thick, harmonically rich tones
+4. Adjust dry/wet to blend between input and processed signal (0.0 = 100% dry, 1.0 = 100% wet)
+5. Use Relative Freq Mod and Relative Drive Mod toggles to choose between musical (relative) or full-range (absolute) CV modulation
+6. Can also process external audio through the shaper
+7. Great for thick, harmonically rich tones
+8. Use dry/wet for parallel processing or subtle effect blending
 
 ---
 

@@ -16,6 +16,7 @@ public:
     static constexpr auto paramIdPitchRandom  = "pitchRandom";
     static constexpr auto paramIdPanRandom    = "panRandom";
     static constexpr auto paramIdGate         = "gate";
+    static constexpr auto paramIdMix          = "mix";
 
     // Virtual IDs for modulation inputs, used for routing
     static constexpr auto paramIdTriggerIn    = "trigger_in_mod";
@@ -24,6 +25,7 @@ public:
     static constexpr auto paramIdPositionMod  = "position_mod";
     static constexpr auto paramIdPitchMod     = "pitch_mod";
     static constexpr auto paramIdGateMod      = "gate_mod";
+    static constexpr auto paramIdMixMod       = "mix_mod";
 
     // Relative modulation mode parameters
     static constexpr auto paramIdRelativeDensityMod  = "relativeDensityMod";
@@ -69,6 +71,7 @@ private:
     std::atomic<float>* pitchRandomParam  { nullptr };
     std::atomic<float>* panRandomParam    { nullptr };
     std::atomic<float>* gateParam         { nullptr };
+    std::atomic<float>* mixParam          { nullptr };
     
     // Relative modulation mode parameters
     std::atomic<float>* relativeDensityModParam  { nullptr };
@@ -96,7 +99,7 @@ private:
     double densityPhase { 0.0 }; // Phase accumulator for density-based grain spawning
 
     // --- Parameter Smoothing ---
-    juce::SmoothedValue<float> smoothedDensity, smoothedSize, smoothedPosition, smoothedPitch, smoothedGate;
+    juce::SmoothedValue<float> smoothedDensity, smoothedSize, smoothedPosition, smoothedPitch, smoothedGate, smoothedMix;
 
     // --- CV De-stepping State (for modules that are block-constant) ---
     float prevDensityCv { std::numeric_limits<float>::quiet_NaN() };
@@ -104,6 +107,7 @@ private:
     float prevPositionCv{ std::numeric_limits<float>::quiet_NaN() };
     float prevPitchCv   { std::numeric_limits<float>::quiet_NaN() };
     float prevGateCv    { std::numeric_limits<float>::quiet_NaN() };
+    float prevMixCv     { std::numeric_limits<float>::quiet_NaN() };
 
     // --- Visualization Data (thread-safe, updated from audio thread) ---
     struct VizData

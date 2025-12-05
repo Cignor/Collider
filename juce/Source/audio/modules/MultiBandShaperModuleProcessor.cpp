@@ -26,6 +26,10 @@ juce::AudioProcessorValueTreeState::ParameterLayout MultiBandShaperModuleProcess
         "outputGain", "Output Gain",
         juce::NormalisableRange<float>(-24.0f, 24.0f, 0.1f), 0.0f));
     
+    params.push_back(std::make_unique<juce::AudioParameterFloat>(
+        "mix", "Mix",
+        juce::NormalisableRange<float>(0.0f, 1.0f, 0.01f), 1.0f));
+    
     // Relative modulation parameters
     for (int i = 0; i < NUM_BANDS; ++i)
     {
@@ -40,7 +44,7 @@ juce::AudioProcessorValueTreeState::ParameterLayout MultiBandShaperModuleProcess
 
 MultiBandShaperModuleProcessor::MultiBandShaperModuleProcessor()
     : ModuleProcessor(BusesProperties()
-          .withInput("Inputs", juce::AudioChannelSet::discreteChannels(2 + NUM_BANDS + 1), true) // 0-1: Audio In, 2-9: Drive Mods, 10: Gain Mod
+          .withInput("Inputs", juce::AudioChannelSet::discreteChannels(2 + NUM_BANDS + 2), true) // 0-1: Audio In, 2-9: Drive Mods, 10: Gain Mod, 11: Mix Mod
           .withOutput("Out", juce::AudioChannelSet::stereo(), true)),
       apvts(*this, nullptr, "MultiBandShaperParams", createParameterLayout())
 {
@@ -50,6 +54,7 @@ MultiBandShaperModuleProcessor::MultiBandShaperModuleProcessor()
         relativeDriveModParams[i] = apvts.getRawParameterValue("relativeDriveMod_" + juce::String(i + 1));
     }
     outputGainParam = apvts.getRawParameterValue("outputGain");
+    mixParam = apvts.getRawParameterValue("mix");
     relativeGainModParam = apvts.getRawParameterValue("relativeGainMod");
 
     lastOutputValues.push_back(std::make_unique<std::atomic<float>>(0.0f));
@@ -58,6 +63,7 @@ MultiBandShaperModuleProcessor::MultiBandShaperModuleProcessor()
 
 void MultiBandShaperModuleProcessor::prepareToPlay(double sampleRate, int samplesPerBlock)
 {
+    smoothedMix.reset(sampleRate, 0.01);
     juce::dsp::ProcessSpec spec { sampleRate, (juce::uint32)samplesPerBlock, 1 }; // Mono spec for each filter
 
     const float q = 1.41f; // Standard Q value for reasonable band separation
@@ -103,10 +109,26 @@ void MultiBandShaperModuleProcessor::releaseResources()
 
 void MultiBandShaperModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffer&)
 {
+    // Get pointers to modulation CV inputs from unified input bus
+    const bool isMixMod = isParamInputConnected("mix");
     auto inBus = getBusBuffer(buffer, true, 0);
     auto outBus = getBusBuffer(buffer, false, 0);
+    
+    // SAFE: Read input pointers BEFORE any output operations
+    const int mixModChannel = 2 + NUM_BANDS + 1; // Channel 11
+    const float* mixCV = isMixMod && inBus.getNumChannels() > mixModChannel ? inBus.getReadPointer(mixModChannel) : nullptr;
+    
+    // Get base parameter values ONCE
+    const float baseMix = mixParam != nullptr ? mixParam->load() : 1.0f;
 
     const int numSamples = buffer.getNumSamples();
+    
+    // Store dry signal for mixing
+    juce::AudioBuffer<float> dryBuffer;
+    dryBuffer.setSize(2, numSamples, false, false, true);
+    for (int ch = 0; ch < juce::jmin(2, inBus.getNumChannels()); ++ch)
+        dryBuffer.copyFrom(ch, 0, inBus, ch, 0, numSamples);
+    
     sumBuffer.clear();
 
 #if defined(PRESET_CREATOR_UI)
@@ -236,6 +258,36 @@ void MultiBandShaperModuleProcessor::processBlock(juce::AudioBuffer<float>& buff
     outBus.copyFrom(1, 0, sumBuffer, 1, 0, numSamples);
     outBus.applyGain(finalGain);
     
+    // Apply dry/wet mix
+    for (int i = 0; i < numSamples; ++i)
+    {
+        float currentMix = baseMix;
+        if (isMixMod && mixCV != nullptr) {
+            const float cv = juce::jlimit(0.0f, 1.0f, mixCV[i]);
+            currentMix = cv;
+        }
+        smoothedMix.setTargetValue(currentMix);
+        const float mix = smoothedMix.getNextValue();
+        const float dry = 1.0f - mix;
+        
+        for (int ch = 0; ch < juce::jmin(2, outBus.getNumChannels()); ++ch)
+        {
+            const float drySample = dryBuffer.getSample(ch, i);
+            const float wetSample = outBus.getSample(ch, i);
+            outBus.setSample(ch, i, dry * drySample + mix * wetSample);
+        }
+    }
+    
+    // Update live parameter value for telemetry
+    if (numSamples > 0) {
+        float finalMix = baseMix;
+        if (isMixMod && mixCV != nullptr) {
+            const float cv = juce::jlimit(0.0f, 1.0f, mixCV[numSamples - 1]);
+            finalMix = cv;
+        }
+        setLiveParamValue("mix_live", finalMix);
+    }
+    
     if (lastOutputValues[0]) lastOutputValues[0]->store(outBus.getSample(0, numSamples - 1));
     if (lastOutputValues[1]) lastOutputValues[1]->store(outBus.getSample(1, numSamples - 1));
 
@@ -272,6 +324,11 @@ bool MultiBandShaperModuleProcessor::getParamRouting(const juce::String& paramId
         outChannelIndexInBus = 2 + NUM_BANDS; // Channel 10 for output gain
         return true;
     }
+    if (paramId == "mix")
+    {
+        outChannelIndexInBus = 2 + NUM_BANDS + 1; // Channel 11 for mix
+        return true;
+    }
     return false;
 }
 
@@ -291,6 +348,10 @@ juce::String MultiBandShaperModuleProcessor::getAudioInputLabel(int channel) con
     if (modChannel == NUM_BANDS)
     {
         return "Gain Mod";
+    }
+    if (modChannel == NUM_BANDS + 1)
+    {
+        return "Mix Mod";
     }
     
     return {};
@@ -484,6 +545,33 @@ void MultiBandShaperModuleProcessor::drawParametersInNode(
     if (ImGui::IsItemHovered())
         ImGui::SetTooltip("ON: CV modulates ±24 dB around slider\nOFF: CV sets gain directly (-24 to +24 dB)");
 
+    ImGui::Spacing();
+    ThemeText("Mix", theme.text.section_header);
+    ImGui::Spacing();
+    
+    auto* mixParamPtr = dynamic_cast<juce::AudioParameterFloat*>(ap.getParameter("mix"));
+    const bool isMixModulated = isParamModulated("mix");
+    float mix = mixParamPtr != nullptr ? mixParamPtr->get() : 1.0f;
+    if (isMixModulated) {
+        mix = getLiveParamValueFor("mix", "mix_live", mix);
+        ImGui::BeginDisabled();
+    }
+    ImGui::PushItemWidth(itemWidth);
+    if (ImGui::SliderFloat("Mix", &mix, 0.0f, 1.0f, "%.2f"))
+    {
+        if (!isMixModulated && mixParamPtr != nullptr) *mixParamPtr = mix;
+    }
+    if (!isMixModulated && mixParamPtr != nullptr) adjustParamOnWheel(mixParamPtr, "mix", mix);
+    if (ImGui::IsItemDeactivatedAfterEdit() && !isMixModulated) onModificationEnded();
+    if (isMixModulated) { ImGui::EndDisabled(); ImGui::SameLine(); ImGui::TextUnformatted("(mod)"); }
+    ImGui::PopItemWidth();
+    ImGui::SameLine();
+    auto HelpMarker = [](const char* desc) {
+        ImGui::TextDisabled("(?)");
+        if (ImGui::BeginItemTooltip()) { ImGui::PushTextWrapPos(ImGui::GetFontSize() * 35.0f); ImGui::TextUnformatted(desc); ImGui::PopTextWrapPos(); ImGui::EndTooltip(); }
+    };
+    HelpMarker("Wet/dry balance (0=dry, 1=wet)");
+
     ImGui::PopID();
 }
 
@@ -514,6 +602,15 @@ void MultiBandShaperModuleProcessor::drawIoPins(const NodePinHelpers& helpers)
                                  nullptr,
                                  -1);
     }
+    
+    // Draw mix modulation input
+    if (getParamRouting("mix", busIdx, chanInBus))
+    {
+        helpers.drawParallelPins("Mix Mod",
+                                 getChannelIndexInProcessBlockBuffer(true, busIdx, chanInBus),
+                                 nullptr,
+                                 -1);
+    }
 }
 #endif
 
@@ -533,6 +630,9 @@ std::vector<DynamicPinInfo> MultiBandShaperModuleProcessor::getDynamicInputPins(
     
     // Output gain modulation (channel 10)
     pins.push_back({"Gain Mod", 2 + NUM_BANDS, PinDataType::CV});
+    
+    // Mix modulation (channel 11)
+    pins.push_back({"Mix Mod", 2 + NUM_BANDS + 1, PinDataType::CV});
     
     return pins;
 }

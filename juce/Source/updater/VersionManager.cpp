@@ -4,7 +4,7 @@ namespace Updater
 {
 
 VersionManager::VersionManager()
-    : currentVersion("0.7.0") // Default version
+    : currentVersion("0.8.0") // Default version
       ,
       currentVariant("cuda") // Default variant
       ,

@@ -15,6 +15,7 @@ juce::AudioProcessorValueTreeState::ParameterLayout GranulatorModuleProcessor::c
     p.push_back(std::make_unique<juce::AudioParameterFloat>(paramIdPitchRandom, "Pitch Rand", 0.0f, 12.0f, 0.0f));
     p.push_back(std::make_unique<juce::AudioParameterFloat>(paramIdPanRandom, "Pan Rand", 0.0f, 1.0f, 0.0f));
     p.push_back(std::make_unique<juce::AudioParameterFloat>(paramIdGate, "Gate", 0.0f, 1.0f, 1.0f));
+    p.push_back(std::make_unique<juce::AudioParameterFloat>(paramIdMix, "Mix", 0.0f, 1.0f, 1.0f));
     
     // Relative modulation mode parameters (default: true = relative mode)
     p.push_back(std::make_unique<juce::AudioParameterBool>(paramIdRelativeDensityMod, "Relative Density Mod", true));
@@ -27,7 +28,7 @@ juce::AudioProcessorValueTreeState::ParameterLayout GranulatorModuleProcessor::c
 
 GranulatorModuleProcessor::GranulatorModuleProcessor()
     : ModuleProcessor(BusesProperties()
-          .withInput("Inputs", juce::AudioChannelSet::discreteChannels(8), true) // Audio L/R, Trig, Density, Size, Position, Pitch, Gate
+          .withInput("Inputs", juce::AudioChannelSet::discreteChannels(9), true) // Audio L/R, Trig, Density, Size, Position, Pitch, Gate, Mix
           .withOutput("Output", juce::AudioChannelSet::stereo(), true)),
       apvts(*this, nullptr, "GranulatorParams", createParameterLayout())
 {
@@ -39,6 +40,7 @@ GranulatorModuleProcessor::GranulatorModuleProcessor()
     pitchRandomParam  = apvts.getRawParameterValue(paramIdPitchRandom);
     panRandomParam    = apvts.getRawParameterValue(paramIdPanRandom);
     gateParam         = apvts.getRawParameterValue(paramIdGate);
+    mixParam          = apvts.getRawParameterValue(paramIdMix);
     
     relativeDensityModParam  = apvts.getRawParameterValue(paramIdRelativeDensityMod);
     relativeSizeModParam     = apvts.getRawParameterValue(paramIdRelativeSizeMod);
@@ -67,6 +69,7 @@ void GranulatorModuleProcessor::prepareToPlay(double sampleRate, int)
     smoothedPosition.reset(sampleRate, 0.05);
     smoothedPitch.reset(sampleRate, 0.05);
     smoothedGate.reset(sampleRate, 0.002);
+    smoothedMix.reset(sampleRate, 0.01);
 
     densityPhase = 0.0;
 
@@ -98,23 +101,36 @@ void GranulatorModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
     const bool hasPositionMod = isParamInputConnected(paramIdPositionMod);
     const bool hasPitchMod = isParamInputConnected(paramIdPitchMod);
     const bool hasGateMod = isParamInputConnected(paramIdGateMod);
+    const bool hasMixMod = isParamInputConnected(paramIdMixMod);
 
+    // SAFE: Read input pointers BEFORE any output operations
     const float* trigCVPtr   = (isTriggerConnected && inBus.getNumChannels() > 2) ? inBus.getReadPointer(2) : nullptr;
     const float* densityPtr  = (hasDensityMod   && inBus.getNumChannels() > 3) ? inBus.getReadPointer(3) : nullptr;
     const float* sizePtr     = (hasSizeMod      && inBus.getNumChannels() > 4) ? inBus.getReadPointer(4) : nullptr;
     const float* posPtr      = (hasPositionMod  && inBus.getNumChannels() > 5) ? inBus.getReadPointer(5) : nullptr;
     const float* pitchPtr    = (hasPitchMod     && inBus.getNumChannels() > 6) ? inBus.getReadPointer(6) : nullptr;
     const float* gatePtr     = (hasGateMod      && inBus.getNumChannels() > 7) ? inBus.getReadPointer(7) : nullptr;
+    const float* mixPtr      = (hasMixMod       && inBus.getNumChannels() > 8) ? inBus.getReadPointer(8) : nullptr;
+    
+    // Get base parameter values ONCE
+    const float baseMix = mixParam != nullptr ? mixParam->load() : 1.0f;
+    
+    // Store dry signal for mixing
+    juce::AudioBuffer<float> dryBuffer;
+    dryBuffer.setSize(2, numSamples, false, false, true);
+    for (int ch = 0; ch < juce::jmin(2, inBus.getNumChannels()); ++ch)
+        dryBuffer.copyFrom(ch, 0, inBus, ch, 0, numSamples);
 
     // EXTRA SAFETY: Copy CV channels we use into local buffers BEFORE any output writes,
     // so later writes cannot affect reads even if buffers alias (see DEBUG_INPUT_IMPORTANT.md).
-    juce::HeapBlock<float> trigCV, densityCV, sizeCV, posCV, pitchCV, gateCV;
+    juce::HeapBlock<float> trigCV, densityCV, sizeCV, posCV, pitchCV, gateCV, mixCV;
     if (trigCVPtr)   { trigCV.malloc(numSamples);   std::memcpy(trigCV.get(),   trigCVPtr,   sizeof(float) * (size_t)numSamples); }
     if (densityPtr)  { densityCV.malloc(numSamples);std::memcpy(densityCV.get(),densityPtr,  sizeof(float) * (size_t)numSamples); }
     if (sizePtr)     { sizeCV.malloc(numSamples);   std::memcpy(sizeCV.get(),   sizePtr,     sizeof(float) * (size_t)numSamples); }
     if (posPtr)      { posCV.malloc(numSamples);    std::memcpy(posCV.get(),    posPtr,      sizeof(float) * (size_t)numSamples); }
     if (pitchPtr)    { pitchCV.malloc(numSamples);  std::memcpy(pitchCV.get(),  pitchPtr,    sizeof(float) * (size_t)numSamples); }
     if (gatePtr)     { gateCV.malloc(numSamples);   std::memcpy(gateCV.get(),   gatePtr,     sizeof(float) * (size_t)numSamples); }
+    if (mixPtr)      { mixCV.malloc(numSamples);    std::memcpy(mixCV.get(),    mixPtr,      sizeof(float) * (size_t)numSamples); }
 
     // Get base parameters
     const float baseDensity = densityParam->load();
@@ -191,6 +207,13 @@ void GranulatorModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
         return buf[i];
     };
 
+    // Normalize CV to [0,1] range (handle both unipolar and bipolar)
+    auto normalizeCV = [](float cv) -> float {
+        return (cv >= 0.0f && cv <= 1.0f) 
+            ? juce::jlimit(0.0f, 1.0f, cv)
+            : juce::jlimit(0.0f, 1.0f, (cv + 1.0f) * 0.5f);
+    };
+
     for (int i = 0; i < numSamples; ++i)
     {
         // 1. Record incoming audio to circular buffer
@@ -211,13 +234,6 @@ void GranulatorModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
         float positionCvSample = posCV.get()     ? sampleCvOrRamp(posCV,     prevPositionCv,i) : std::numeric_limits<float>::quiet_NaN();
         float pitchCvSample    = pitchCV.get()   ? sampleCvOrRamp(pitchCV,   prevPitchCv,   i) : std::numeric_limits<float>::quiet_NaN();
         float gateCvSample     = gateCV.get()    ? sampleCvOrRamp(gateCV,    prevGateCv,    i) : std::numeric_limits<float>::quiet_NaN();
-
-        // Normalize CV to [0,1] range (handle both unipolar and bipolar)
-        auto normalizeCV = [](float cv) -> float {
-            return (cv >= 0.0f && cv <= 1.0f) 
-                ? juce::jlimit(0.0f, 1.0f, cv)
-                : juce::jlimit(0.0f, 1.0f, (cv + 1.0f) * 0.5f);
-        };
 
         // Apply CV with relative/absolute mode
         float density = baseDensity;
@@ -290,6 +306,15 @@ void GranulatorModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
 
         float gate = std::isfinite(gateCvSample) ? juce::jlimit(0.0f, 1.0f, normalizeCV(gateCvSample)) : baseGate;
         
+        // Calculate mix with CV modulation
+        float mixCvSample = mixCV.get() ? sampleCvOrRamp(mixCV, prevMixCv, i) : std::numeric_limits<float>::quiet_NaN();
+        float currentMix = baseMix;
+        if (std::isfinite(mixCvSample)) {
+            const float cv01 = normalizeCV(mixCvSample);
+            currentMix = juce::jlimit(0.0f, 1.0f, cv01); // CV directly maps to mix (0-1)
+        }
+        smoothedMix.setTargetValue(currentMix);
+        
         // ✅ CRITICAL FIX: Advance ALL smoothed values every sample (like Gate does)
         // This makes all CV inputs respond continuously, not just when grains spawn
         smoothedDensity.setTargetValue(density);
@@ -355,9 +380,15 @@ void GranulatorModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
             }
         }
         
-        // 6. Apply gate and write to output (using already-computed currentGate)
-        outBus.setSample(0, i, sampleL * currentGate);
-        outBus.setSample(1, i, sampleR * currentGate);
+        // 6. Apply gate and mix, then write to output
+        const float mix = smoothedMix.getNextValue();
+        const float dry = 1.0f - mix;
+        const float wetL = sampleL * currentGate;
+        const float wetR = sampleR * currentGate;
+        const float dryL = dryBuffer.getSample(0, i);
+        const float dryR = dryBuffer.getSample(1, i);
+        outBus.setSample(0, i, dry * dryL + mix * wetL);
+        outBus.setSample(1, i, dry * dryR + mix * wetR);
 
         sourceWritePos = (sourceWritePos + 1) % sourceBuffer.getNumSamples();
 
@@ -414,6 +445,17 @@ void GranulatorModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
     if (posCV.get())      prevPositionCv = posCV[numSamples - 1];
     if (pitchCV.get())    prevPitchCv    = pitchCV[numSamples - 1];
     if (gateCV.get())     prevGateCv     = gateCV[numSamples - 1];
+    if (mixCV.get())      prevMixCv      = mixCV[numSamples - 1];
+    
+    // Update live parameter value for telemetry
+    if (numSamples > 0) {
+        float finalMix = baseMix;
+        if (mixCV.get() != nullptr) {
+            const float cv = juce::jlimit(0.0f, 1.0f, normalizeCV(mixCV[numSamples - 1]));
+            finalMix = cv;
+        }
+        setLiveParamValue("mix_live", finalMix);
+    }
     
     // Update telemetry (use getCurrentValue since we've already advanced all smoothed values)
     setLiveParamValue("density_live", smoothedDensity.getCurrentValue());
@@ -689,6 +731,9 @@ void GranulatorModuleProcessor::drawParametersInNode(float itemWidth, const std:
     drawSlider("Pitch Rand", paramIdPitchRandom, "", 0.0f, 12.0f, "%.1f st");
     drawSlider("Pan Rand", paramIdPanRandom, "", 0.0f, 1.0f, "%.2f");
     drawSlider("Gate", paramIdGate, paramIdGateMod, 0.0f, 1.0f, "%.2f");
+    drawSlider("Mix", paramIdMix, paramIdMixMod, 0.0f, 1.0f, "%.2f");
+    ImGui::SameLine();
+    HelpMarker("Wet/dry balance (0=dry, 1=wet)");
 
     ImGui::PopItemWidth();
 }
@@ -703,6 +748,7 @@ void GranulatorModuleProcessor::drawIoPins(const NodePinHelpers& helpers)
     helpers.drawParallelPins("Position Mod", 5, nullptr, -1);
     helpers.drawParallelPins("Pitch Mod", 6, nullptr, -1);
     helpers.drawParallelPins("Gate Mod", 7, nullptr, -1);
+    helpers.drawParallelPins("Mix Mod", 8, nullptr, -1);
 }
 #endif
 
@@ -721,6 +767,7 @@ std::vector<DynamicPinInfo> GranulatorModuleProcessor::getDynamicInputPins() con
     pins.push_back({"Position Mod", 5, PinDataType::CV});
     pins.push_back({"Pitch Mod", 6, PinDataType::CV});
     pins.push_back({"Gate Mod", 7, PinDataType::CV});
+    pins.push_back({"Mix Mod", 8, PinDataType::CV});
     
     return pins;
 }
@@ -745,6 +792,7 @@ bool GranulatorModuleProcessor::getParamRouting(const juce::String& paramId, int
     if (paramId == paramIdPositionMod)  { outChannelIndexInBus = 5; return true; }
     if (paramId == paramIdPitchMod)     { outChannelIndexInBus = 6; return true; }
     if (paramId == paramIdGateMod)      { outChannelIndexInBus = 7; return true; }
+    if (paramId == paramIdMixMod)       { outChannelIndexInBus = 8; return true; }
     return false;
 }
 
@@ -759,6 +807,7 @@ juce::String GranulatorModuleProcessor::getAudioInputLabel(int channel) const
         case 5: return "Position Mod";
         case 6: return "Pitch Mod";
         case 7: return "Gate Mod";
+        case 8: return "Mix Mod";
         default: return {};
     }
 }

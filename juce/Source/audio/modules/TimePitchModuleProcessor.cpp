@@ -20,13 +20,14 @@ juce::AudioProcessorValueTreeState::ParameterLayout TimePitchModuleProcessor::cr
     p.push_back (std::make_unique<juce::AudioParameterChoice> (paramIdEngine, "Engine", juce::StringArray { "RubberBand", "Naive" }, 0));
     p.push_back (std::make_unique<juce::AudioParameterFloat> (paramIdSpeedMod, "Speed Mod", juce::NormalisableRange<float> (0.25f, 4.0f, 0.0001f, 0.5f), 1.0f));
     p.push_back (std::make_unique<juce::AudioParameterFloat> (paramIdPitchMod, "Pitch Mod", juce::NormalisableRange<float> (-24.0f, 24.0f, 0.01f), 0.0f));
+    p.push_back (std::make_unique<juce::AudioParameterFloat> (paramIdMix, "Mix", juce::NormalisableRange<float> (0.0f, 1.0f, 0.01f), 1.0f));
     p.push_back (std::make_unique<juce::AudioParameterFloat> (paramIdBufferSeconds, "Buffer Headroom", juce::NormalisableRange<float> (0.25f, 8.0f, 0.01f), 5.0f));
     return { p.begin(), p.end() };
 }
 
 TimePitchModuleProcessor::TimePitchModuleProcessor()
     : ModuleProcessor (BusesProperties()
-        .withInput ("Inputs", juce::AudioChannelSet::discreteChannels(4), true) // ch0 L in, ch1 R in, ch2 Speed Mod, ch3 Pitch Mod
+        .withInput ("Inputs", juce::AudioChannelSet::discreteChannels(5), true) // ch0 L in, ch1 R in, ch2 Speed Mod, ch3 Pitch Mod, ch4 Mix Mod
         .withOutput("Out", juce::AudioChannelSet::stereo(), true)),
       apvts (*this, nullptr, "TimePitchParams", createParameterLayout())
 {
@@ -34,6 +35,7 @@ TimePitchModuleProcessor::TimePitchModuleProcessor()
     pitchParam     = apvts.getRawParameterValue (paramIdPitch);
     speedModParam  = apvts.getRawParameterValue (paramIdSpeedMod);
     pitchModParam  = apvts.getRawParameterValue (paramIdPitchMod);
+    mixParam       = apvts.getRawParameterValue (paramIdMix);
     bufferSecondsParam = apvts.getRawParameterValue (paramIdBufferSeconds);
     engineParam    = dynamic_cast<juce::AudioParameterChoice*>(apvts.getParameter (paramIdEngine));
 
@@ -44,6 +46,7 @@ TimePitchModuleProcessor::TimePitchModuleProcessor()
     // Initialize smoothed values
     speedSm.reset(1.0f);
     pitchSm.reset(0.0f);
+    smoothedMix.reset(1.0f);
 
 #if defined(PRESET_CREATOR_UI)
     for (auto& v : vizData.speedHistory) v.store (1.0f);
@@ -79,6 +82,8 @@ void TimePitchModuleProcessor::prepareToPlay (double sampleRate, int samplesPerB
     ensureCapacity (interleavedInput, samplesPerBlock, 2, interleavedInputCapacityFrames);
     ensureCapacity (interleavedOutput, samplesPerBlock * 2, 2, interleavedOutputCapacityFrames); // some headroom
     timePitch.reset();
+    
+    smoothedMix.reset(sampleRate, 0.01);
     
     // Initialize auto-drop cooldown (200ms) and overlap window (15ms for crossfade)
     autoDropCooldownSamples = (int) (sampleRate * 0.2);
@@ -169,9 +174,21 @@ void TimePitchModuleProcessor::processBlock (juce::AudioBuffer<float>& buffer, j
     // Get pointers to modulation CV inputs
     const bool isSpeedMod = isParamInputConnected(paramIdSpeedMod);
     const bool isPitchMod = isParamInputConnected(paramIdPitchMod);
+    const bool isMixMod = isParamInputConnected(paramIdMixMod);
     
+    // SAFE: Read input pointers BEFORE any output operations
     const float* speedCV = isSpeedMod && inBus.getNumChannels() > 2 ? inBus.getReadPointer(2) : nullptr;
     const float* pitchCV = isPitchMod && inBus.getNumChannels() > 3 ? inBus.getReadPointer(3) : nullptr;
+    const float* mixCV = isMixMod && inBus.getNumChannels() > 4 ? inBus.getReadPointer(4) : nullptr;
+    
+    // Get base parameter values ONCE
+    const float baseMix = mixParam != nullptr ? mixParam->load() : 1.0f;
+    
+    // Store dry signal for mixing
+    juce::AudioBuffer<float> dryBuffer;
+    dryBuffer.setSize(2, numSamples, false, false, true);
+    for (int ch = 0; ch < juce::jmin(2, inBus.getNumChannels()); ++ch)
+        dryBuffer.copyFrom(ch, 0, inBus, ch, 0, numSamples);
     
     // Process in slices to reduce engine reconfig cost
     const int sliceSize = 32;
@@ -388,8 +405,39 @@ void TimePitchModuleProcessor::processBlock (juce::AudioBuffer<float>& buffer, j
             const float* outLR = interleavedOutput.getData();
             float* L = outBus.getNumChannels() > 0 ? outBus.getWritePointer (0) : buffer.getWritePointer(0);
             float* R = outBus.getNumChannels() > 1 ? outBus.getWritePointer (1) : L;
-            for (int i = 0; i < outFrames; ++i) { L[i] = outLR[2*i+0]; if (R) R[i] = outLR[2*i+1]; }
+            
+            // Apply dry/wet mix
+            for (int i = 0; i < outFrames; ++i)
+            {
+                // Calculate mix with CV modulation
+                float currentMix = baseMix;
+                if (isMixMod && mixCV != nullptr) {
+                    const float cv = juce::jlimit(0.0f, 1.0f, mixCV[i]);
+                    currentMix = cv;
+                }
+                smoothedMix.setTargetValue(currentMix);
+                const float mix = smoothedMix.getNextValue();
+                const float dry = 1.0f - mix;
+                
+                const float wetL = outLR[2*i+0];
+                const float wetR = outLR[2*i+1];
+                const float dryL = dryBuffer.getSample(0, i);
+                const float dryR = dryBuffer.getSample(1, i);
+                
+                L[i] = dry * dryL + mix * wetL;
+                if (R) R[i] = dry * dryR + mix * wetR;
+            }
         }
+    }
+    
+    // Update live parameter value for telemetry
+    if (numSamples > 0) {
+        float finalMix = baseMix;
+        if (isMixMod && mixCV != nullptr) {
+            const float cv = juce::jlimit(0.0f, 1.0f, mixCV[numSamples - 1]);
+            finalMix = cv;
+        }
+        setLiveParamValue("mix_live", finalMix);
     }
 
 #if defined(PRESET_CREATOR_UI)
@@ -432,6 +480,7 @@ bool TimePitchModuleProcessor::getParamRouting(const juce::String& paramId, int&
     outBusIndex = 0;
     if (paramId == paramIdSpeedMod) { outChannelIndexInBus = 2; return true; }  // Speed Mod
     if (paramId == paramIdPitchMod) { outChannelIndexInBus = 3; return true; }  // Pitch Mod
+    if (paramId == paramIdMixMod) { outChannelIndexInBus = 4; return true; }  // Mix Mod
     return false;
 }
 
@@ -664,6 +713,28 @@ void TimePitchModuleProcessor::drawParametersInNode (float itemWidth,
     if (ImGui::IsItemDeactivatedAfterEdit()) onModificationEnded();
     if (piMod) { ImGui::PopStyleColor(); ImGui::EndDisabled(); }
 
+    // Mix slider
+    bool mixMod = isParamModulated (paramIdMixMod);
+    if (mixMod) {
+        ImGui::BeginDisabled();
+        ImGui::PushStyleColor (ImGuiCol_FrameBg, ImVec4 (1, 1, 0, 0.3f));
+    }
+    float mix = mixParam ? mixParam->load() : 1.0f;
+    if (mixMod) {
+        mix = getLiveParamValueFor (paramIdMixMod, "mix_live", mix);
+    }
+    if (ImGui::SliderFloat ("Mix", &mix, 0.0f, 1.0f, "%.2f"))
+        if (!mixMod) if (auto* p = dynamic_cast<juce::AudioParameterFloat*>(ap.getParameter (paramIdMix))) *p = mix;
+    if (!mixMod) adjustParamOnWheel (ap.getParameter (paramIdMix), paramIdMix, mix);
+    if (ImGui::IsItemDeactivatedAfterEdit()) onModificationEnded();
+    if (mixMod) { ImGui::PopStyleColor(); ImGui::EndDisabled(); ImGui::SameLine(); ImGui::TextUnformatted("(mod)"); }
+    ImGui::SameLine();
+    auto HelpMarker = [](const char* desc) {
+        ImGui::TextDisabled("(?)");
+        if (ImGui::BeginItemTooltip()) { ImGui::PushTextWrapPos(ImGui::GetFontSize() * 35.0f); ImGui::TextUnformatted(desc); ImGui::PopTextWrapPos(); ImGui::EndTooltip(); }
+    };
+    HelpMarker("Wet/dry balance (0=dry, 1=wet)");
+
     int engineIdx = engineParam != nullptr ? engineParam->getIndex() : 0;
     const char* items[] = { "RubberBand", "Naive" };
     if (ImGui::Combo ("Engine", &engineIdx, items, 2))
@@ -720,6 +791,7 @@ void TimePitchModuleProcessor::drawIoPins (const NodePinHelpers& helpers)
     helpers.drawParallelPins ("In R", 1, "Out R", 1);
     helpers.drawParallelPins ("Speed Mod", 2, nullptr, -1);
     helpers.drawParallelPins ("Pitch Mod", 3, nullptr, -1);
+    helpers.drawParallelPins ("Mix Mod", 4, nullptr, -1);
 }
 #endif
 
@@ -731,9 +803,10 @@ std::vector<DynamicPinInfo> TimePitchModuleProcessor::getDynamicInputPins() cons
     pins.push_back({"In L", 0, PinDataType::Audio});
     pins.push_back({"In R", 1, PinDataType::Audio});
     
-    // Modulation inputs (channels 2-3)
+    // Modulation inputs (channels 2-4)
     pins.push_back({"Speed Mod", 2, PinDataType::CV});
     pins.push_back({"Pitch Mod", 3, PinDataType::CV});
+    pins.push_back({"Mix Mod", 4, PinDataType::CV});
     
     return pins;
 }

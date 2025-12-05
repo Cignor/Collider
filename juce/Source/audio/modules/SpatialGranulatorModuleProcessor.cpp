@@ -32,6 +32,11 @@ juce::AudioProcessorValueTreeState::ParameterLayout SpatialGranulatorModuleProce
     p.push_back(std::make_unique<juce::AudioParameterFloat>(paramIdRedAmount, "Red Amount", 0.0f, 1.0f, 1.0f));
     p.push_back(std::make_unique<juce::AudioParameterFloat>(paramIdGreenAmount, "Green Amount", 0.0f, 1.0f, 1.0f));
     p.push_back(std::make_unique<juce::AudioParameterFloat>(paramIdBlueAmount, "Blue Amount", 0.0f, 1.0f, 1.0f));
+    p.push_back(std::make_unique<juce::AudioParameterFloat>(paramIdYellowAmount, "Yellow Amount", 0.0f, 1.0f, 1.0f));
+    p.push_back(std::make_unique<juce::AudioParameterFloat>(paramIdCyanAmount, "Cyan Amount", 0.0f, 1.0f, 1.0f));
+    p.push_back(std::make_unique<juce::AudioParameterFloat>(paramIdMagentaAmount, "Magenta Amount", 0.0f, 1.0f, 1.0f));
+    p.push_back(std::make_unique<juce::AudioParameterFloat>(paramIdOrangeAmount, "Orange Amount", 0.0f, 1.0f, 1.0f));
+    p.push_back(std::make_unique<juce::AudioParameterFloat>(paramIdPurpleAmount, "Purple Amount", 0.0f, 1.0f, 1.0f));
 
     return {p.begin(), p.end()};
 }
@@ -53,6 +58,11 @@ SpatialGranulatorModuleProcessor::SpatialGranulatorModuleProcessor()
     redAmountParam = apvts.getRawParameterValue(paramIdRedAmount);
     greenAmountParam = apvts.getRawParameterValue(paramIdGreenAmount);
     blueAmountParam = apvts.getRawParameterValue(paramIdBlueAmount);
+    yellowAmountParam = apvts.getRawParameterValue(paramIdYellowAmount);
+    cyanAmountParam = apvts.getRawParameterValue(paramIdCyanAmount);
+    magentaAmountParam = apvts.getRawParameterValue(paramIdMagentaAmount);
+    orangeAmountParam = apvts.getRawParameterValue(paramIdOrangeAmount);
+    purpleAmountParam = apvts.getRawParameterValue(paramIdPurpleAmount);
 
     lastOutputValues.push_back(std::make_unique<std::atomic<float>>(0.0f));
     lastOutputValues.push_back(std::make_unique<std::atomic<float>>(0.0f));
@@ -125,6 +135,51 @@ void SpatialGranulatorModuleProcessor::prepareToPlay(double sampleRate, int)
         voice.delayBuffer.resize(maxDelaySamples, 0.0f);
         std::fill(voice.delayBuffer.begin(), voice.delayBuffer.end(), 0.0f);
         std::fill(voice.pitchBuffer.begin(), voice.pitchBuffer.end(), 0.0f);
+        
+        // Prepare filter for Green color
+        juce::dsp::ProcessSpec filterSpec { sampleRate, 512, 1 }; // Use 512 as default block size
+        voice.filter.prepare(filterSpec);
+        voice.filter.setType(juce::dsp::StateVariableTPTFilterType::lowpass);
+        voice.filterCutoffHz = 20000.0f;
+        voice.filterResonance = 0.707f;
+        
+        // Initialize Reverb buffers (Yellow color) - simple delay-based reverb
+        const int reverbSize = (int)(sampleRate * 0.5f); // 500ms reverb buffer
+        voice.reverbBufferL.resize(reverbSize, 0.0f);
+        voice.reverbBufferR.resize(reverbSize, 0.0f);
+        std::fill(voice.reverbBufferL.begin(), voice.reverbBufferL.end(), 0.0f);
+        std::fill(voice.reverbBufferR.begin(), voice.reverbBufferR.end(), 0.0f);
+        voice.reverbWritePos = 0;
+        
+        // Initialize Chorus buffers (Magenta color) - 50ms max delay
+        const int chorusSize = (int)(sampleRate * 0.05f); // 50ms chorus buffer
+        voice.chorusBufferL.resize(chorusSize, 0.0f);
+        voice.chorusBufferR.resize(chorusSize, 0.0f);
+        std::fill(voice.chorusBufferL.begin(), voice.chorusBufferL.end(), 0.0f);
+        std::fill(voice.chorusBufferR.begin(), voice.chorusBufferR.end(), 0.0f);
+        voice.chorusWritePos = 0;
+        
+        // Initialize Distortion tone filter (Cyan color) - reuse filterSpec
+        voice.distortionToneFilter.prepare(filterSpec);
+        voice.distortionToneFilter.coefficients = juce::dsp::IIR::Coefficients<float>::makeLowPass(sampleRate, 20000.0f);
+        voice.distortionToneFilter.reset();
+    }
+    
+    // Initialize grain effect buffers
+    for (auto& grain : grainPool)
+    {
+        grain.isActive = false;
+        // Initialize Reverb buffer (Yellow color) - simplified for grains
+        const int reverbSize = (int)(sampleRate * 0.2f); // 200ms reverb buffer for grains
+        grain.reverbBuffer.resize(reverbSize, 0.0f);
+        std::fill(grain.reverbBuffer.begin(), grain.reverbBuffer.end(), 0.0f);
+        grain.reverbWritePos = 0;
+        
+        // Initialize Chorus buffer (Magenta color) - 50ms max delay
+        const int chorusSize = (int)(sampleRate * 0.05f); // 50ms chorus buffer
+        grain.chorusBuffer.resize(chorusSize, 0.0f);
+        std::fill(grain.chorusBuffer.begin(), grain.chorusBuffer.end(), 0.0f);
+        grain.chorusWritePos = 0;
     }
 }
 
@@ -312,6 +367,29 @@ void SpatialGranulatorModuleProcessor::processBlock(
                                 currentSourceBufferSize;
                             voice.delayWritePos = 0;
                             voice.pitchPhase = 0.0;
+                            voice.delayFeedback = 0.0f; // Initialize feedback
+                            voice.filterCutoffHz = 20000.0f; // Initialize filter (no filtering)
+                            voice.filterResonance = 0.707f;
+                            voice.filter.reset(); // Reset filter state
+                            
+                            // Initialize new effect states
+                            voice.reverbRoomSize = 0.0f;
+                            voice.reverbDecay = 0.0f;
+                            voice.reverbWritePos = 0;
+                            voice.distortionDrive = 0.0f;
+                            voice.distortionTone = 0.5f;
+                            voice.chorusDelayMs = 0.0f;
+                            voice.chorusDepth = 0.0f;
+                            voice.chorusLfoPhase = 0.0f;
+                            voice.chorusWritePos = 0;
+                            voice.bitcrusherBits = 16.0f;
+                            voice.bitcrusherDownsample = 1.0f;
+                            voice.bitcrusherLastSampleL = 0.0f;
+                            voice.bitcrusherLastSampleR = 0.0f;
+                            voice.bitcrusherCounter = 0;
+                            voice.tremoloRate = 0.0f;
+                            voice.tremoloDepth = 0.0f;
+                            voice.tremoloPhase = 0.0f;
                         }
                     }
 
@@ -324,20 +402,148 @@ void SpatialGranulatorModuleProcessor::processBlock(
                     const float colorValue = getColorParameterValue(dot.color, dot.size);
                     switch (dot.color)
                     {
-                    case ColorID::Red: // Delay
-                        voice.delayTimeMs = colorValue;
+                    case ColorID::Red: // Delay - grid-based: X = delay time, Y = feedback
+                        {
+                            // X-axis: Delay time (left = short delay, right = long delay)
+                            // Map X (0-1) to delay time (0-2000ms)
+                            const float maxDelayMs = 2000.0f;
+                            voice.delayTimeMs = dot.x * maxDelayMs;
+                            
+                            // Y-axis: Delay feedback (bottom = no feedback, top = high feedback)
+                            // Map Y (0-1) to feedback amount (0.0 = no feedback, 0.95 = high feedback)
+                            voice.delayFeedback = dot.y * 0.95f; // Cap at 0.95 to prevent infinite feedback
+                            
+                            // Apply red amount scaling to both parameters
+                            const float redAmount = redAmountParam ? redAmountParam->load() : 1.0f;
+                            voice.delayTimeMs *= redAmount;
+                            voice.delayFeedback *= redAmount;
+                        }
                         voice.volume = 1.0f;
                         voice.pitchRatio = 1.0;
                         break;
-                    case ColorID::Green: // Volume
-                        voice.volume = juce::Decibels::decibelsToGain(colorValue);
+                    case ColorID::Green: // Filter - grid-based: X = cutoff, Y = resonance
+                        {
+                            // X-axis: Cutoff frequency (left = low, right = high)
+                            // Map X (0-1) to cutoff frequency (20 Hz to 20000 Hz, logarithmic)
+                            const float minCutoffHz = 20.0f;
+                            const float maxCutoffHz = 20000.0f;
+                            // Use logarithmic mapping for more musical control
+                            voice.filterCutoffHz = minCutoffHz * std::pow(maxCutoffHz / minCutoffHz, dot.x);
+                            
+                            // Y-axis: Resonance/Q (bottom = low, top = high)
+                            // Map Y (0-1) to resonance (0.707 = no resonance, 10.0 = high resonance)
+                            voice.filterResonance = juce::jmap(dot.y, 0.707f, 10.0f);
+                            
+                            // Apply green amount scaling to both parameters
+                            const float greenAmount = greenAmountParam ? greenAmountParam->load() : 1.0f;
+                            // For cutoff: interpolate between max (no filter) and calculated cutoff
+                            voice.filterCutoffHz = juce::jmap(greenAmount, maxCutoffHz, voice.filterCutoffHz);
+                            // For resonance: interpolate between 0.707 (no resonance) and calculated resonance
+                            voice.filterResonance = juce::jmap(greenAmount, 0.707f, voice.filterResonance);
+                            
+                            // Update filter parameters
+                            voice.filter.setCutoffFrequency(voice.filterCutoffHz);
+                            voice.filter.setResonance(voice.filterResonance);
+                        }
+                        voice.volume = 1.0f; // Volume is now controlled by dot.size only
                         voice.delayTimeMs = 0.0f;
                         voice.pitchRatio = 1.0;
                         break;
-                    case ColorID::Blue: // Pitch
-                        voice.pitchRatio = std::pow(2.0, colorValue / 12.0);
+                    case ColorID::Blue: // Pitch - grid-based: bottom-left = low, top-right = high
+                        {
+                            // Calculate pitch from position: (x + y) / 2 maps bottom-left (0,0) to 0.0 and top-right (1,1) to 1.0
+                            const float pitchPosition = (dot.x + dot.y) * 0.5f; // 0.0 (bottom-left) to 1.0 (top-right)
+                            // Map to semitones: -24 (low) to +24 (high)
+                            float pitchSemitones = juce::jmap(pitchPosition, -24.0f, 24.0f);
+                            // Apply blue amount scaling
+                            const float blueAmount = blueAmountParam ? blueAmountParam->load() : 1.0f;
+                            pitchSemitones *= blueAmount;
+                            // Convert to pitch ratio
+                            voice.pitchRatio = std::pow(2.0, pitchSemitones / 12.0);
+                        }
                         voice.volume = 1.0f;
                         voice.delayTimeMs = 0.0f;
+                        break;
+                    case ColorID::Yellow: // Reverb - grid-based: X = room size, Y = decay
+                        {
+                            // X-axis: Room size (left = small, right = large)
+                            voice.reverbRoomSize = dot.x; // 0-1
+                            // Y-axis: Decay time (bottom = short, top = long)
+                            voice.reverbDecay = dot.y; // 0-1
+                            // Apply yellow amount scaling
+                            const float yellowAmount = yellowAmountParam ? yellowAmountParam->load() : 1.0f;
+                            voice.reverbRoomSize *= yellowAmount;
+                            voice.reverbDecay *= yellowAmount;
+                        }
+                        voice.volume = 1.0f;
+                        voice.delayTimeMs = 0.0f;
+                        voice.pitchRatio = 1.0;
+                        break;
+                    case ColorID::Cyan: // Distortion - grid-based: X = drive, Y = tone
+                        {
+                            // X-axis: Drive amount (left = clean, right = distorted)
+                            voice.distortionDrive = dot.x; // 0-1
+                            // Y-axis: Tone (bottom = dark, top = bright)
+                            voice.distortionTone = dot.y; // 0-1
+                            // Apply cyan amount scaling
+                            const float cyanAmount = cyanAmountParam ? cyanAmountParam->load() : 1.0f;
+                            voice.distortionDrive *= cyanAmount;
+                            voice.distortionTone *= cyanAmount;
+                        }
+                        voice.volume = 1.0f;
+                        voice.delayTimeMs = 0.0f;
+                        voice.pitchRatio = 1.0;
+                        break;
+                    case ColorID::Magenta: // Chorus - grid-based: X = delay time, Y = depth
+                        {
+                            // X-axis: Delay time (left = short, right = long)
+                            voice.chorusDelayMs = dot.x * 50.0f; // 0-50ms
+                            // Y-axis: Modulation depth (bottom = shallow, top = deep)
+                            voice.chorusDepth = dot.y; // 0-1
+                            // Apply magenta amount scaling
+                            const float magentaAmount = magentaAmountParam ? magentaAmountParam->load() : 1.0f;
+                            voice.chorusDelayMs *= magentaAmount;
+                            voice.chorusDepth *= magentaAmount;
+                            voice.chorusLfoPhase = 0.0f; // Reset LFO phase
+                        }
+                        voice.volume = 1.0f;
+                        voice.delayTimeMs = 0.0f;
+                        voice.pitchRatio = 1.0;
+                        break;
+                    case ColorID::Orange: // Bitcrusher - grid-based: X = bit depth, Y = downsample
+                        {
+                            // X-axis: Bit depth (left = low bits, right = high bits)
+                            voice.bitcrusherBits = juce::jmap(dot.x, 1.0f, 16.0f); // 1-16 bits
+                            // Y-axis: Downsample factor (bottom = no downsampling, top = heavy downsampling)
+                            voice.bitcrusherDownsample = juce::jmap(dot.y, 1.0f, 16.0f); // 1-16x downsampling
+                            // Apply orange amount scaling
+                            const float orangeAmount = orangeAmountParam ? orangeAmountParam->load() : 1.0f;
+                            // Interpolate between full quality (16 bits, 1x) and calculated values
+                            voice.bitcrusherBits = juce::jmap(orangeAmount, 16.0f, voice.bitcrusherBits);
+                            voice.bitcrusherDownsample = juce::jmap(orangeAmount, 1.0f, voice.bitcrusherDownsample);
+                            voice.bitcrusherLastSampleL = 0.0f;
+                            voice.bitcrusherLastSampleR = 0.0f;
+                            voice.bitcrusherCounter = 0;
+                        }
+                        voice.volume = 1.0f;
+                        voice.delayTimeMs = 0.0f;
+                        voice.pitchRatio = 1.0;
+                        break;
+                    case ColorID::Purple: // Tremolo - grid-based: X = rate, Y = depth
+                        {
+                            // X-axis: Modulation rate (left = slow, right = fast)
+                            voice.tremoloRate = dot.x * 10.0f; // 0-10 Hz
+                            // Y-axis: Modulation depth (bottom = shallow, top = deep)
+                            voice.tremoloDepth = dot.y; // 0-1
+                            // Apply purple amount scaling
+                            const float purpleAmount = purpleAmountParam ? purpleAmountParam->load() : 1.0f;
+                            voice.tremoloRate *= purpleAmount;
+                            voice.tremoloDepth *= purpleAmount;
+                            voice.tremoloPhase = 0.0f; // Reset LFO phase
+                        }
+                        voice.volume = 1.0f;
+                        voice.delayTimeMs = 0.0f;
+                        voice.pitchRatio = 1.0;
                         break;
                     default:
                         voice.volume = 1.0f;
@@ -456,6 +662,109 @@ void SpatialGranulatorModuleProcessor::processBlock(
                     float sR = sourceBuffer.getSample(1, readPosInt) * (1.0f - fraction) +
                                sourceBuffer.getSample(1, readPosNext) * fraction;
 
+                    // Apply filter if needed (Green color) - simple one-pole lowpass for grains
+                    if (grain.filterCutoffHz < 20000.0f)
+                    {
+                        // Calculate filter coefficient from cutoff frequency
+                        const float omega = 2.0f * juce::MathConstants<float>::pi * grain.filterCutoffHz / sr;
+                        const float alpha = std::sin(omega) / (1.0f + std::cos(omega));
+                        const float a0 = 1.0f + alpha;
+                        const float b1 = alpha / a0;
+                        const float a1 = (1.0f - alpha) / a0;
+                        
+                        // Apply one-pole lowpass filter
+                        float filteredL = a1 * sL + b1 * grain.filterState;
+                        grain.filterState = filteredL;
+                        sL = filteredL;
+                        sR = filteredL; // Mono filter for simplicity
+                    }
+
+                    // Apply Reverb if needed (Yellow color) - simplified for grains
+                    if (grain.reverbRoomSize > 0.0f && !grain.reverbBuffer.empty())
+                    {
+                        const int reverbSize = (int)grain.reverbBuffer.size();
+                        const int delaySamples = juce::jlimit(0, reverbSize - 1, (int)(grain.reverbRoomSize * reverbSize * 0.5f));
+                        const int readPos = (grain.reverbWritePos - delaySamples + reverbSize) % reverbSize;
+                        
+                        float reverb = grain.reverbBuffer[readPos] * grain.reverbDecay;
+                        grain.reverbBuffer[grain.reverbWritePos] = sL + reverb;
+                        grain.reverbWritePos = (grain.reverbWritePos + 1) % reverbSize;
+                        
+                        sL = sL * (1.0f - grain.reverbRoomSize) + reverb * grain.reverbRoomSize;
+                        sR = sL; // Mono reverb for grains
+                    }
+
+                    // Apply Distortion if needed (Cyan color)
+                    if (grain.distortionDrive > 0.0f)
+                    {
+                        const float drive = grain.distortionDrive * 10.0f;
+                        sL *= drive;
+                        sR *= drive;
+                        sL = std::tanh(sL);
+                        sR = std::tanh(sR);
+                        // Simple tone control
+                        if (grain.distortionTone < 1.0f)
+                        {
+                            const float toneCutoff = juce::jmap(grain.distortionTone, 2000.0f, 20000.0f);
+                            const float alpha = 1.0f / (1.0f + sr / (toneCutoff * 2.0f * juce::MathConstants<float>::pi));
+                            sL = sL * (1.0f - alpha) + grain.filterState * alpha;
+                            sR = sL;
+                            grain.filterState = sL; // Reuse filterState for tone
+                        }
+                    }
+
+                    // Apply Chorus if needed (Magenta color) - simplified for grains
+                    if (grain.chorusDepth > 0.0f && !grain.chorusBuffer.empty())
+                    {
+                        const float lfoRate = 1.5f;
+                        grain.chorusLfoPhase += lfoRate / sr;
+                        if (grain.chorusLfoPhase > 1.0f) grain.chorusLfoPhase -= 1.0f;
+                        
+                        const float lfo = std::sin(grain.chorusLfoPhase * 2.0f * juce::MathConstants<float>::pi);
+                        const int chorusSize = (int)grain.chorusBuffer.size();
+                        const int baseDelay = juce::jmin((int)(grain.chorusDelayMs * sr / 1000.0f), chorusSize - 1);
+                        const int modDelay = juce::jlimit(0, chorusSize - 1, baseDelay + (int)(lfo * grain.chorusDepth * baseDelay * 0.5f));
+                        const int readPos = (grain.chorusWritePos - modDelay + chorusSize) % chorusSize;
+                        
+                        float chorus = grain.chorusBuffer[readPos];
+                        grain.chorusBuffer[grain.chorusWritePos] = sL;
+                        grain.chorusWritePos = (grain.chorusWritePos + 1) % chorusSize;
+                        
+                        sL = sL * 0.5f + chorus * 0.5f;
+                        sR = sL;
+                    }
+
+                    // Apply Bitcrusher if needed (Orange color)
+                    if (grain.bitcrusherBits < 16.0f || grain.bitcrusherDownsample > 1.0f)
+                    {
+                        grain.bitcrusherCounter++;
+                        if (grain.bitcrusherCounter >= (int)grain.bitcrusherDownsample)
+                        {
+                            grain.bitcrusherCounter = 0;
+                            const float quantizeLevels = std::pow(2.0f, grain.bitcrusherBits);
+                            sL = std::floor(sL * quantizeLevels + 0.5f) / quantizeLevels;
+                            sR = sL;
+                            grain.bitcrusherLastSample = sL;
+                        }
+                        else
+                        {
+                            sL = grain.bitcrusherLastSample;
+                            sR = sL;
+                        }
+                    }
+
+                    // Apply Tremolo if needed (Purple color)
+                    if (grain.tremoloRate > 0.0f && grain.tremoloDepth > 0.0f)
+                    {
+                        grain.tremoloPhase += grain.tremoloRate / sr;
+                        if (grain.tremoloPhase > 1.0f) grain.tremoloPhase -= 1.0f;
+                        
+                        const float lfo = 0.5f + 0.5f * std::sin(grain.tremoloPhase * 2.0f * juce::MathConstants<float>::pi);
+                        const float modAmount = 1.0f - grain.tremoloDepth + (lfo * grain.tremoloDepth);
+                        sL *= modAmount;
+                        sR *= modAmount;
+                    }
+
                     // Update envelope
                     grain.envelope += grain.envelopeIncrement;
                     if (grain.envelope > 1.0f)
@@ -538,7 +847,7 @@ void SpatialGranulatorModuleProcessor::processBlock(
                         sL = voice.delayBuffer[delayReadPos];
                         sR = sL; // Mono delay for simplicity
 
-                        // Write current sample to delay buffer
+                        // Write current sample + feedback to delay buffer
                         int   readPosInt = (int)voice.readPosition;
                         float fraction = (float)(voice.readPosition - readPosInt);
                         readPosInt =
@@ -548,7 +857,8 @@ void SpatialGranulatorModuleProcessor::processBlock(
 
                         float inputL = sourceBuffer.getSample(0, readPosInt) * (1.0f - fraction) +
                                        sourceBuffer.getSample(0, readPosNext) * fraction;
-                        voice.delayBuffer[voice.delayWritePos] = inputL;
+                        // Add feedback: mix input with delayed signal
+                        voice.delayBuffer[voice.delayWritePos] = inputL + (sL * voice.delayFeedback);
                         voice.delayWritePos = (voice.delayWritePos + 1) % delayBufferSize;
                     }
                     else
@@ -566,6 +876,23 @@ void SpatialGranulatorModuleProcessor::processBlock(
                              sourceBuffer.getSample(0, readPosNext) * fraction;
                         sR = sourceBuffer.getSample(1, readPosInt) * (1.0f - fraction) +
                              sourceBuffer.getSample(1, readPosNext) * fraction;
+                    }
+
+                    // Apply filter if needed (Green color)
+                    if (voice.filterCutoffHz < 20000.0f)
+                    {
+                        // Update filter parameters (they may have changed)
+                        voice.filter.setCutoffFrequency(voice.filterCutoffHz);
+                        voice.filter.setResonance(voice.filterResonance);
+                        
+                        // Process through filter (mono processing for simplicity)
+                        juce::AudioBuffer<float> filterBuffer(1, 1);
+                        filterBuffer.setSample(0, 0, sL);
+                        juce::dsp::AudioBlock<float> block(filterBuffer);
+                        juce::dsp::ProcessContextReplacing<float> context(block);
+                        voice.filter.process(context);
+                        sL = filterBuffer.getSample(0, 0);
+                        sR = sL; // Mono filter for simplicity
                     }
 
                     // Apply pitch shift if needed (Blue color)
@@ -589,6 +916,112 @@ void SpatialGranulatorModuleProcessor::processBlock(
                         voice.pitchPhase += voice.pitchRatio;
                         if (voice.pitchPhase >= pitchBufferSize)
                             voice.pitchPhase -= pitchBufferSize;
+                    }
+
+                    // Apply Reverb if needed (Yellow color)
+                    if (voice.reverbRoomSize > 0.0f && !voice.reverbBufferL.empty())
+                    {
+                        const int reverbSize = (int)voice.reverbBufferL.size();
+                        const int delaySamples = juce::jlimit(0, reverbSize - 1, (int)(voice.reverbRoomSize * reverbSize * 0.5f));
+                        const int readPos = (voice.reverbWritePos - delaySamples + reverbSize) % reverbSize;
+                        
+                        float reverbL = voice.reverbBufferL[readPos] * voice.reverbDecay;
+                        float reverbR = voice.reverbBufferR[readPos] * voice.reverbDecay;
+                        
+                        voice.reverbBufferL[voice.reverbWritePos] = sL + reverbL;
+                        voice.reverbBufferR[voice.reverbWritePos] = sR + reverbR;
+                        voice.reverbWritePos = (voice.reverbWritePos + 1) % reverbSize;
+                        
+                        sL = sL * (1.0f - voice.reverbRoomSize) + reverbL * voice.reverbRoomSize;
+                        sR = sR * (1.0f - voice.reverbRoomSize) + reverbR * voice.reverbRoomSize;
+                    }
+
+                    // Apply Distortion if needed (Cyan color)
+                    if (voice.distortionDrive > 0.0f)
+                    {
+                        // Soft clipping distortion
+                        const float drive = voice.distortionDrive * 10.0f; // 0-10x gain
+                        sL *= drive;
+                        sR *= drive;
+                        // Soft clip: tanh
+                        sL = std::tanh(sL);
+                        sR = std::tanh(sR);
+                        // Tone control using IIR filter
+                        if (voice.distortionTone < 1.0f)
+                        {
+                            const float toneCutoff = juce::jmap(voice.distortionTone, 2000.0f, 20000.0f);
+                            // Update filter coefficients if needed
+                            voice.distortionToneFilter.coefficients = juce::dsp::IIR::Coefficients<float>::makeLowPass(sr, toneCutoff);
+                            // Process through filter
+                            juce::AudioBuffer<float> filterBuf(1, 1);
+                            filterBuf.setSample(0, 0, sL);
+                            juce::dsp::AudioBlock<float> block(filterBuf);
+                            juce::dsp::ProcessContextReplacing<float> context(block);
+                            voice.distortionToneFilter.process(context);
+                            sL = filterBuf.getSample(0, 0);
+                            // Process right channel
+                            filterBuf.setSample(0, 0, sR);
+                            voice.distortionToneFilter.process(context);
+                            sR = filterBuf.getSample(0, 0);
+                        }
+                    }
+
+                    // Apply Chorus if needed (Magenta color)
+                    if (voice.chorusDepth > 0.0f && !voice.chorusBufferL.empty())
+                    {
+                        const float lfoRate = 1.5f; // Fixed LFO rate in Hz
+                        voice.chorusLfoPhase += lfoRate / sr;
+                        if (voice.chorusLfoPhase > 1.0f) voice.chorusLfoPhase -= 1.0f;
+                        
+                        const float lfo = std::sin(voice.chorusLfoPhase * 2.0f * juce::MathConstants<float>::pi);
+                        const int chorusSize = (int)voice.chorusBufferL.size();
+                        const int baseDelay = juce::jmin((int)(voice.chorusDelayMs * sr / 1000.0f), chorusSize - 1);
+                        const int modDelay = juce::jlimit(0, chorusSize - 1, baseDelay + (int)(lfo * voice.chorusDepth * baseDelay * 0.5f));
+                        const int readPos = (voice.chorusWritePos - modDelay + chorusSize) % chorusSize;
+                        
+                        float chorusL = voice.chorusBufferL[readPos];
+                        float chorusR = voice.chorusBufferR[readPos];
+                        
+                        voice.chorusBufferL[voice.chorusWritePos] = sL;
+                        voice.chorusBufferR[voice.chorusWritePos] = sR;
+                        voice.chorusWritePos = (voice.chorusWritePos + 1) % chorusSize;
+                        
+                        sL = sL * 0.5f + chorusL * 0.5f;
+                        sR = sR * 0.5f + chorusR * 0.5f;
+                    }
+
+                    // Apply Bitcrusher if needed (Orange color)
+                    if (voice.bitcrusherBits < 16.0f || voice.bitcrusherDownsample > 1.0f)
+                    {
+                        voice.bitcrusherCounter++;
+                        if (voice.bitcrusherCounter >= (int)voice.bitcrusherDownsample)
+                        {
+                            voice.bitcrusherCounter = 0;
+                            // Quantize
+                            const float quantizeLevels = std::pow(2.0f, voice.bitcrusherBits);
+                            sL = std::floor(sL * quantizeLevels + 0.5f) / quantizeLevels;
+                            sR = std::floor(sR * quantizeLevels + 0.5f) / quantizeLevels;
+                            voice.bitcrusherLastSampleL = sL;
+                            voice.bitcrusherLastSampleR = sR;
+                        }
+                        else
+                        {
+                            // Hold last sample (downsampling)
+                            sL = voice.bitcrusherLastSampleL;
+                            sR = voice.bitcrusherLastSampleR;
+                        }
+                    }
+
+                    // Apply Tremolo if needed (Purple color)
+                    if (voice.tremoloRate > 0.0f && voice.tremoloDepth > 0.0f)
+                    {
+                        voice.tremoloPhase += voice.tremoloRate / sr;
+                        if (voice.tremoloPhase > 1.0f) voice.tremoloPhase -= 1.0f;
+                        
+                        const float lfo = 0.5f + 0.5f * std::sin(voice.tremoloPhase * 2.0f * juce::MathConstants<float>::pi);
+                        const float modAmount = 1.0f - voice.tremoloDepth + (lfo * voice.tremoloDepth);
+                        sL *= modAmount;
+                        sR *= modAmount;
                     }
 
                     // Apply volume and panning
@@ -819,20 +1252,128 @@ void SpatialGranulatorModuleProcessor::launchGrain(
     const float colorValue = getColorParameterValue(dot.color, dot.size);
     switch (dot.color)
     {
-    case ColorID::Red: // Delay
-        grain.delayTimeMs = colorValue;
+    case ColorID::Red: // Delay - grid-based: X = delay time, Y = feedback
+        {
+            // X-axis: Delay time (left = short delay, right = long delay)
+            // Map X (0-1) to delay time (0-2000ms)
+            const float maxDelayMs = 2000.0f;
+            grain.delayTimeMs = dot.x * maxDelayMs;
+            
+            // Y-axis: Delay feedback (bottom = no feedback, top = high feedback)
+            // Map Y (0-1) to feedback amount (0.0 = no feedback, 0.95 = high feedback)
+            grain.delayFeedback = dot.y * 0.95f; // Cap at 0.95 to prevent infinite feedback
+            
+            // Apply red amount scaling to both parameters
+            const float redAmount = redAmountParam ? redAmountParam->load() : 1.0f;
+            grain.delayTimeMs *= redAmount;
+            grain.delayFeedback *= redAmount;
+        }
         grain.volume = 1.0f;
         grain.pitchOffset = 0.0f;
         break;
-    case ColorID::Green: // Volume
-        grain.volume = juce::Decibels::decibelsToGain(colorValue);
+    case ColorID::Green: // Filter - grid-based: X = cutoff, Y = resonance
+        {
+            // X-axis: Cutoff frequency (left = low, right = high)
+            // Map X (0-1) to cutoff frequency (20 Hz to 20000 Hz, logarithmic)
+            const float minCutoffHz = 20.0f;
+            const float maxCutoffHz = 20000.0f;
+            // Use logarithmic mapping for more musical control
+            grain.filterCutoffHz = minCutoffHz * std::pow(maxCutoffHz / minCutoffHz, dot.x);
+            
+            // Y-axis: Resonance/Q (bottom = low, top = high)
+            // Map Y (0-1) to resonance (0.707 = no resonance, 10.0 = high resonance)
+            grain.filterResonance = juce::jmap(dot.y, 0.707f, 10.0f);
+            
+                            // Apply green amount scaling to both parameters
+                            const float greenAmount = greenAmountParam ? greenAmountParam->load() : 1.0f;
+                            // For cutoff: interpolate between max (no filter) and calculated cutoff
+                            grain.filterCutoffHz = juce::jmap(greenAmount, maxCutoffHz, grain.filterCutoffHz);
+                            // For resonance: interpolate between 0.707 (no resonance) and calculated resonance
+                            grain.filterResonance = juce::jmap(greenAmount, 0.707f, grain.filterResonance);
+                            // Initialize filter state
+                            grain.filterState = 0.0f;
+        }
+        grain.volume = 1.0f; // Volume is now controlled by dot.size only
         grain.delayTimeMs = 0.0f;
         grain.pitchOffset = 0.0f;
         break;
-    case ColorID::Blue: // Pitch
-        grain.pitchOffset = colorValue;
+    case ColorID::Blue: // Pitch - grid-based: bottom-left = low, top-right = high
+        {
+            // Calculate pitch from position: (x + y) / 2 maps bottom-left (0,0) to 0.0 and top-right (1,1) to 1.0
+            const float pitchPosition = (dot.x + dot.y) * 0.5f; // 0.0 (bottom-left) to 1.0 (top-right)
+            // Map to semitones: -24 (low) to +24 (high)
+            float pitchSemitones = juce::jmap(pitchPosition, -24.0f, 24.0f);
+            // Apply blue amount scaling
+            const float blueAmount = blueAmountParam ? blueAmountParam->load() : 1.0f;
+            pitchSemitones *= blueAmount;
+            grain.pitchOffset = pitchSemitones;
+        }
         grain.volume = 1.0f;
         grain.delayTimeMs = 0.0f;
+        break;
+    case ColorID::Yellow: // Reverb - grid-based: X = room size, Y = decay
+        {
+            grain.reverbRoomSize = dot.x; // 0-1
+            grain.reverbDecay = dot.y; // 0-1
+            const float yellowAmount = yellowAmountParam ? yellowAmountParam->load() : 1.0f;
+            grain.reverbRoomSize *= yellowAmount;
+            grain.reverbDecay *= yellowAmount;
+        }
+        grain.volume = 1.0f;
+        grain.delayTimeMs = 0.0f;
+        grain.pitchOffset = 0.0f;
+        break;
+    case ColorID::Cyan: // Distortion - grid-based: X = drive, Y = tone
+        {
+            grain.distortionDrive = dot.x; // 0-1
+            grain.distortionTone = dot.y; // 0-1
+            const float cyanAmount = cyanAmountParam ? cyanAmountParam->load() : 1.0f;
+            grain.distortionDrive *= cyanAmount;
+            grain.distortionTone *= cyanAmount;
+        }
+        grain.volume = 1.0f;
+        grain.delayTimeMs = 0.0f;
+        grain.pitchOffset = 0.0f;
+        break;
+    case ColorID::Magenta: // Chorus - grid-based: X = delay time, Y = depth
+        {
+            grain.chorusDelayMs = dot.x * 50.0f; // 0-50ms
+            grain.chorusDepth = dot.y; // 0-1
+            const float magentaAmount = magentaAmountParam ? magentaAmountParam->load() : 1.0f;
+            grain.chorusDelayMs *= magentaAmount;
+            grain.chorusDepth *= magentaAmount;
+            grain.chorusLfoPhase = 0.0f;
+        }
+        grain.volume = 1.0f;
+        grain.delayTimeMs = 0.0f;
+        grain.pitchOffset = 0.0f;
+        break;
+    case ColorID::Orange: // Bitcrusher - grid-based: X = bit depth, Y = downsample
+        {
+            grain.bitcrusherBits = juce::jmap(dot.x, 1.0f, 16.0f); // 1-16 bits
+            grain.bitcrusherDownsample = juce::jmap(dot.y, 1.0f, 16.0f); // 1-16x
+            const float orangeAmount = orangeAmountParam ? orangeAmountParam->load() : 1.0f;
+            grain.bitcrusherBits = juce::jmap(orangeAmount, 16.0f, grain.bitcrusherBits);
+            grain.bitcrusherDownsample = juce::jmap(orangeAmount, 1.0f, grain.bitcrusherDownsample);
+            grain.bitcrusherLastSample = 0.0f;
+            grain.bitcrusherCounter = 0;
+        }
+        grain.volume = 1.0f;
+        grain.delayTimeMs = 0.0f;
+        grain.pitchOffset = 0.0f;
+        break;
+    case ColorID::Purple: // Tremolo - grid-based: X = rate, Y = depth
+        {
+            grain.tremoloRate = dot.x * 10.0f; // 0-10 Hz
+            grain.tremoloDepth = dot.y; // 0-1
+            const float purpleAmount = purpleAmountParam ? purpleAmountParam->load() : 1.0f;
+            grain.tremoloRate *= purpleAmount;
+            grain.tremoloDepth *= purpleAmount;
+            grain.tremoloPhase = 0.0f;
+        }
+        grain.volume = 1.0f;
+        grain.delayTimeMs = 0.0f;
+        grain.pitchOffset = 0.0f;
         break;
     default:
         grain.volume = 1.0f;
@@ -851,6 +1392,24 @@ void SpatialGranulatorModuleProcessor::launchGrain(
     // Dynamic movement setup
     grain.movementOffset = 0.0f;
     grain.movementVelocity = (random.nextFloat() - 0.5f) * 0.1f;
+
+    // Initialize new effect states
+    grain.reverbRoomSize = 0.0f;
+    grain.reverbDecay = 0.0f;
+    grain.reverbWritePos = 0;
+    grain.distortionDrive = 0.0f;
+    grain.distortionTone = 0.5f;
+    grain.chorusDelayMs = 0.0f;
+    grain.chorusDepth = 0.0f;
+    grain.chorusLfoPhase = 0.0f;
+    grain.chorusWritePos = 0;
+    grain.bitcrusherBits = 16.0f;
+    grain.bitcrusherDownsample = 1.0f;
+    grain.bitcrusherLastSample = 0.0f;
+    grain.bitcrusherCounter = 0;
+    grain.tremoloRate = 0.0f;
+    grain.tremoloDepth = 0.0f;
+    grain.tremoloPhase = 0.0f;
 
     grain.isActive = true;
 }
@@ -876,6 +1435,21 @@ float SpatialGranulatorModuleProcessor::getColorParameterValue(ColorID color, fl
             break;
         case ColorID::Blue:
             amount = blueAmountParam ? blueAmountParam->load() : 1.0f;
+            break;
+        case ColorID::Yellow:
+            amount = yellowAmountParam ? yellowAmountParam->load() : 1.0f;
+            break;
+        case ColorID::Cyan:
+            amount = cyanAmountParam ? cyanAmountParam->load() : 1.0f;
+            break;
+        case ColorID::Magenta:
+            amount = magentaAmountParam ? magentaAmountParam->load() : 1.0f;
+            break;
+        case ColorID::Orange:
+            amount = orangeAmountParam ? orangeAmountParam->load() : 1.0f;
+            break;
+        case ColorID::Purple:
+            amount = purpleAmountParam ? purpleAmountParam->load() : 1.0f;
             break;
         default:
             break;
@@ -1141,7 +1715,7 @@ void SpatialGranulatorModuleProcessor::drawParametersInNode(
     ImGui::PushStyleColor(ImGuiCol_FrameBgHovered, ImVec4(0.9f, 0.3f, 0.3f, 0.4f));
     ImGui::PushStyleColor(ImGuiCol_FrameBgActive, ImVec4(1.0f, 0.4f, 0.4f, 0.5f));
     ImGui::PushStyleColor(ImGuiCol_SliderGrab, ImVec4(1.0f, 0.5f, 0.5f, 1.0f));
-    if (ImGui::SliderFloat("Red Amount", &redAmount, 0.0f, 1.0f, "%.2f"))
+    if (ImGui::SliderFloat("Delay Amount", &redAmount, 0.0f, 1.0f, "%.2f"))
     {
         *dynamic_cast<juce::AudioParameterFloat*>(ap.getParameter(paramIdRedAmount)) = redAmount;
     }
@@ -1149,14 +1723,14 @@ void SpatialGranulatorModuleProcessor::drawParametersInNode(
     adjustParamOnWheel(ap.getParameter(paramIdRedAmount), paramIdRedAmount, redAmount);
     if (ImGui::IsItemDeactivatedAfterEdit())
         onModificationEnded();
-    HelpMarker("Controls the intensity of Delay effect for red dots.\n0 = no delay, 1 = full delay (0-2000ms).");
+    HelpMarker("Controls the intensity of Delay effect.\n0 = no delay, 1 = full delay range (0-2000ms delay time, 0-0.95 feedback).");
 
     float greenAmount = greenAmountParam ? greenAmountParam->load() : 1.0f;
     ImGui::PushStyleColor(ImGuiCol_FrameBg, ImVec4(0.2f, 0.8f, 0.2f, 0.3f));
     ImGui::PushStyleColor(ImGuiCol_FrameBgHovered, ImVec4(0.3f, 0.9f, 0.3f, 0.4f));
     ImGui::PushStyleColor(ImGuiCol_FrameBgActive, ImVec4(0.4f, 1.0f, 0.4f, 0.5f));
     ImGui::PushStyleColor(ImGuiCol_SliderGrab, ImVec4(0.5f, 1.0f, 0.5f, 1.0f));
-    if (ImGui::SliderFloat("Green Amount", &greenAmount, 0.0f, 1.0f, "%.2f"))
+    if (ImGui::SliderFloat("Filter Amount", &greenAmount, 0.0f, 1.0f, "%.2f"))
     {
         *dynamic_cast<juce::AudioParameterFloat*>(ap.getParameter(paramIdGreenAmount)) = greenAmount;
     }
@@ -1164,14 +1738,14 @@ void SpatialGranulatorModuleProcessor::drawParametersInNode(
     adjustParamOnWheel(ap.getParameter(paramIdGreenAmount), paramIdGreenAmount, greenAmount);
     if (ImGui::IsItemDeactivatedAfterEdit())
         onModificationEnded();
-    HelpMarker("Controls the intensity of Volume effect for green dots.\n0 = no volume change, 1 = full volume range (-12 to +12 dB).");
+    HelpMarker("Controls the intensity of Filter effect.\n0 = no filtering, 1 = full filter range.\nX-axis = Cutoff frequency (left=20Hz, right=20kHz)\nY-axis = Resonance (bottom=0.707, top=10.0)");
 
     float blueAmount = blueAmountParam ? blueAmountParam->load() : 1.0f;
     ImGui::PushStyleColor(ImGuiCol_FrameBg, ImVec4(0.2f, 0.2f, 0.8f, 0.3f));
     ImGui::PushStyleColor(ImGuiCol_FrameBgHovered, ImVec4(0.3f, 0.3f, 0.9f, 0.4f));
     ImGui::PushStyleColor(ImGuiCol_FrameBgActive, ImVec4(0.4f, 0.4f, 1.0f, 0.5f));
     ImGui::PushStyleColor(ImGuiCol_SliderGrab, ImVec4(0.5f, 0.5f, 1.0f, 1.0f));
-    if (ImGui::SliderFloat("Blue Amount", &blueAmount, 0.0f, 1.0f, "%.2f"))
+    if (ImGui::SliderFloat("Pitch Amount", &blueAmount, 0.0f, 1.0f, "%.2f"))
     {
         *dynamic_cast<juce::AudioParameterFloat*>(ap.getParameter(paramIdBlueAmount)) = blueAmount;
     }
@@ -1179,7 +1753,82 @@ void SpatialGranulatorModuleProcessor::drawParametersInNode(
     adjustParamOnWheel(ap.getParameter(paramIdBlueAmount), paramIdBlueAmount, blueAmount);
     if (ImGui::IsItemDeactivatedAfterEdit())
         onModificationEnded();
-    HelpMarker("Controls the intensity of Pitch effect for blue dots.\n0 = no pitch shift, 1 = full pitch range (-24 to +24 semitones).");
+    HelpMarker("Controls the intensity of Pitch effect.\n0 = no pitch shift, 1 = full pitch range (-24 to +24 semitones).");
+
+    float yellowAmount = yellowAmountParam ? yellowAmountParam->load() : 1.0f;
+    ImGui::PushStyleColor(ImGuiCol_FrameBg, ImVec4(0.8f, 0.8f, 0.2f, 0.3f));
+    ImGui::PushStyleColor(ImGuiCol_FrameBgHovered, ImVec4(0.9f, 0.9f, 0.3f, 0.4f));
+    ImGui::PushStyleColor(ImGuiCol_FrameBgActive, ImVec4(1.0f, 1.0f, 0.4f, 0.5f));
+    ImGui::PushStyleColor(ImGuiCol_SliderGrab, ImVec4(1.0f, 1.0f, 0.5f, 1.0f));
+    if (ImGui::SliderFloat("Reverb Amount", &yellowAmount, 0.0f, 1.0f, "%.2f"))
+    {
+        *dynamic_cast<juce::AudioParameterFloat*>(ap.getParameter(paramIdYellowAmount)) = yellowAmount;
+    }
+    ImGui::PopStyleColor(4);
+    adjustParamOnWheel(ap.getParameter(paramIdYellowAmount), paramIdYellowAmount, yellowAmount);
+    if (ImGui::IsItemDeactivatedAfterEdit())
+        onModificationEnded();
+    HelpMarker("Controls the intensity of Reverb effect.\n0 = no reverb, 1 = full reverb range (room size 0-1, decay 0-1).");
+
+    float cyanAmount = cyanAmountParam ? cyanAmountParam->load() : 1.0f;
+    ImGui::PushStyleColor(ImGuiCol_FrameBg, ImVec4(0.2f, 0.8f, 0.8f, 0.3f));
+    ImGui::PushStyleColor(ImGuiCol_FrameBgHovered, ImVec4(0.3f, 0.9f, 0.9f, 0.4f));
+    ImGui::PushStyleColor(ImGuiCol_FrameBgActive, ImVec4(0.4f, 1.0f, 1.0f, 0.5f));
+    ImGui::PushStyleColor(ImGuiCol_SliderGrab, ImVec4(0.5f, 1.0f, 1.0f, 1.0f));
+    if (ImGui::SliderFloat("Distortion Amount", &cyanAmount, 0.0f, 1.0f, "%.2f"))
+    {
+        *dynamic_cast<juce::AudioParameterFloat*>(ap.getParameter(paramIdCyanAmount)) = cyanAmount;
+    }
+    ImGui::PopStyleColor(4);
+    adjustParamOnWheel(ap.getParameter(paramIdCyanAmount), paramIdCyanAmount, cyanAmount);
+    if (ImGui::IsItemDeactivatedAfterEdit())
+        onModificationEnded();
+    HelpMarker("Controls the intensity of Distortion effect.\n0 = no distortion, 1 = full distortion range (drive 0-1, tone 0-1).");
+
+    float magentaAmount = magentaAmountParam ? magentaAmountParam->load() : 1.0f;
+    ImGui::PushStyleColor(ImGuiCol_FrameBg, ImVec4(0.8f, 0.2f, 0.8f, 0.3f));
+    ImGui::PushStyleColor(ImGuiCol_FrameBgHovered, ImVec4(0.9f, 0.3f, 0.9f, 0.4f));
+    ImGui::PushStyleColor(ImGuiCol_FrameBgActive, ImVec4(1.0f, 0.4f, 1.0f, 0.5f));
+    ImGui::PushStyleColor(ImGuiCol_SliderGrab, ImVec4(1.0f, 0.5f, 1.0f, 1.0f));
+    if (ImGui::SliderFloat("Chorus Amount", &magentaAmount, 0.0f, 1.0f, "%.2f"))
+    {
+        *dynamic_cast<juce::AudioParameterFloat*>(ap.getParameter(paramIdMagentaAmount)) = magentaAmount;
+    }
+    ImGui::PopStyleColor(4);
+    adjustParamOnWheel(ap.getParameter(paramIdMagentaAmount), paramIdMagentaAmount, magentaAmount);
+    if (ImGui::IsItemDeactivatedAfterEdit())
+        onModificationEnded();
+    HelpMarker("Controls the intensity of Chorus effect.\n0 = no chorus, 1 = full chorus range (delay 0-50ms, depth 0-1).");
+
+    float orangeAmount = orangeAmountParam ? orangeAmountParam->load() : 1.0f;
+    ImGui::PushStyleColor(ImGuiCol_FrameBg, ImVec4(0.8f, 0.5f, 0.2f, 0.3f));
+    ImGui::PushStyleColor(ImGuiCol_FrameBgHovered, ImVec4(0.9f, 0.6f, 0.3f, 0.4f));
+    ImGui::PushStyleColor(ImGuiCol_FrameBgActive, ImVec4(1.0f, 0.7f, 0.4f, 0.5f));
+    ImGui::PushStyleColor(ImGuiCol_SliderGrab, ImVec4(1.0f, 0.8f, 0.5f, 1.0f));
+    if (ImGui::SliderFloat("Bitcrusher Amount", &orangeAmount, 0.0f, 1.0f, "%.2f"))
+    {
+        *dynamic_cast<juce::AudioParameterFloat*>(ap.getParameter(paramIdOrangeAmount)) = orangeAmount;
+    }
+    ImGui::PopStyleColor(4);
+    adjustParamOnWheel(ap.getParameter(paramIdOrangeAmount), paramIdOrangeAmount, orangeAmount);
+    if (ImGui::IsItemDeactivatedAfterEdit())
+        onModificationEnded();
+    HelpMarker("Controls the intensity of Bitcrusher effect.\n0 = no bitcrushing, 1 = full bitcrush range (bits 1-16, downsample 1-16x).");
+
+    float purpleAmount = purpleAmountParam ? purpleAmountParam->load() : 1.0f;
+    ImGui::PushStyleColor(ImGuiCol_FrameBg, ImVec4(0.6f, 0.2f, 0.8f, 0.3f));
+    ImGui::PushStyleColor(ImGuiCol_FrameBgHovered, ImVec4(0.7f, 0.3f, 0.9f, 0.4f));
+    ImGui::PushStyleColor(ImGuiCol_FrameBgActive, ImVec4(0.8f, 0.4f, 1.0f, 0.5f));
+    ImGui::PushStyleColor(ImGuiCol_SliderGrab, ImVec4(0.9f, 0.5f, 1.0f, 1.0f));
+    if (ImGui::SliderFloat("Tremolo Amount", &purpleAmount, 0.0f, 1.0f, "%.2f"))
+    {
+        *dynamic_cast<juce::AudioParameterFloat*>(ap.getParameter(paramIdPurpleAmount)) = purpleAmount;
+    }
+    ImGui::PopStyleColor(4);
+    adjustParamOnWheel(ap.getParameter(paramIdPurpleAmount), paramIdPurpleAmount, purpleAmount);
+    if (ImGui::IsItemDeactivatedAfterEdit())
+        onModificationEnded();
+    HelpMarker("Controls the intensity of Tremolo effect.\n0 = no tremolo, 1 = full tremolo range (rate 0-10 Hz, depth 0-1).");
 
     ImGui::Spacing();
 
@@ -1207,6 +1856,35 @@ void SpatialGranulatorModuleProcessor::drawParametersInNode(
     }
     if (isSprayActive)
         ImGui::PopStyleColor();
+    
+    ImGui::SameLine();
+    ImGui::PushStyleColor(ImGuiCol_Button, IM_COL32(200, 50, 50, 255));
+    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, IM_COL32(255, 70, 70, 255));
+    ImGui::PushStyleColor(ImGuiCol_ButtonActive, IM_COL32(255, 100, 100, 255));
+    if (ImGui::Button("Clear Canvas", ImVec2(100, 0)))
+    {
+        // Clear all dots with thread safety
+        {
+            const juce::ScopedWriteLock lock(dotsLock);
+            dots.clear();
+        }
+        // Also clear density phases map
+        dotDensityPhases.clear();
+        
+        // Deactivate all active voices and grains for clean reset
+        for (auto& voice : voicePool)
+        {
+            voice.isActive = false;
+        }
+        for (auto& grain : grainPool)
+        {
+            grain.isActive = false;
+        }
+        
+        onModificationEnded();
+    }
+    ImGui::PopStyleColor(3);
+    HelpMarker("Clear all dots from the canvas and start fresh.");
 
     // Color selection buttons
     ImGui::Spacing();
@@ -1215,43 +1893,121 @@ void SpatialGranulatorModuleProcessor::drawParametersInNode(
     const bool isRedActive = (activeColor == ColorID::Red);
     if (isRedActive)
         ImGui::PushStyleColor(ImGuiCol_Button, activeColorBg);
-    if (ImGui::Button("Red", ImVec2(60, 0)))
+    ImGui::PushStyleColor(ImGuiCol_Button, IM_COL32(255, 100, 100, 255));
+    if (ImGui::Button("Delay", ImVec2(60, 0)))
     {
         activeColor = ColorID::Red;
     }
+    ImGui::PopStyleColor();
     if (isRedActive)
         ImGui::PopStyleColor();
-    HelpMarker("Red = Delay. Controls delay time for each voice/grain.\nLarger dots = longer delay (0-2000ms).");
+    HelpMarker("Delay. Controls delay time for each voice/grain.\nX-axis = Delay time (left=short, right=long, 0-2000ms)\nY-axis = Feedback (bottom=none, top=maximum, 0-0.95)\nLarger dots = more intensity.");
 
     ImGui::SameLine();
     const bool isGreenActive = (activeColor == ColorID::Green);
     if (isGreenActive)
         ImGui::PushStyleColor(ImGuiCol_Button, activeColorBg);
-    if (ImGui::Button("Green", ImVec2(60, 0)))
+    ImGui::PushStyleColor(ImGuiCol_Button, IM_COL32(100, 255, 100, 255));
+    if (ImGui::Button("Filter", ImVec2(60, 0)))
     {
         activeColor = ColorID::Green;
     }
+    ImGui::PopStyleColor();
     if (isGreenActive)
         ImGui::PopStyleColor();
-    HelpMarker("Green = Volume. Controls output level for each voice/grain.\nLarger dots = higher volume (-60 to +12 dB).");
+    HelpMarker("Filter. Controls lowpass filtering for each voice/grain.\nX-axis = Cutoff frequency (left=low, right=high, 20Hz-20kHz)\nY-axis = Resonance/Q (bottom=low, top=high, 0.707-10.0)\nLarger dots = more intensity.");
 
     ImGui::SameLine();
     const bool isBlueActive = (activeColor == ColorID::Blue);
     if (isBlueActive)
         ImGui::PushStyleColor(ImGuiCol_Button, activeColorBg);
-    if (ImGui::Button("Blue", ImVec2(60, 0)))
+    ImGui::PushStyleColor(ImGuiCol_Button, IM_COL32(100, 100, 255, 255));
+    if (ImGui::Button("Pitch", ImVec2(60, 0)))
     {
         activeColor = ColorID::Blue;
     }
+    ImGui::PopStyleColor();
     if (isBlueActive)
         ImGui::PopStyleColor();
-    HelpMarker("Blue = Pitch. Controls pitch shift for each voice/grain.\nLarger dots = more pitch shift (-24 to +24 semitones).");
+    HelpMarker("Pitch. Controls pitch shift for each voice/grain.\nX+Y position = Pitch shift (bottom-left=-24st, top-right=+24st)\nLarger dots = more intensity.");
+
+    ImGui::SameLine();
+    const bool isYellowActive = (activeColor == ColorID::Yellow);
+    if (isYellowActive)
+        ImGui::PushStyleColor(ImGuiCol_Button, activeColorBg);
+    ImGui::PushStyleColor(ImGuiCol_Button, IM_COL32(255, 255, 100, 255));
+    if (ImGui::Button("Reverb", ImVec2(60, 0)))
+    {
+        activeColor = ColorID::Yellow;
+    }
+    ImGui::PopStyleColor();
+    if (isYellowActive)
+        ImGui::PopStyleColor();
+    HelpMarker("Reverb. Controls reverb/decay for each voice/grain.\nX-axis = Room size (left=small, right=large, 0-1)\nY-axis = Decay time (bottom=short, top=long, 0-1)\nLarger dots = more intensity.");
+
+    ImGui::SameLine();
+    const bool isCyanActive = (activeColor == ColorID::Cyan);
+    if (isCyanActive)
+        ImGui::PushStyleColor(ImGuiCol_Button, activeColorBg);
+    ImGui::PushStyleColor(ImGuiCol_Button, IM_COL32(100, 255, 255, 255));
+    if (ImGui::Button("Distort", ImVec2(60, 0)))
+    {
+        activeColor = ColorID::Cyan;
+    }
+    ImGui::PopStyleColor();
+    if (isCyanActive)
+        ImGui::PopStyleColor();
+    HelpMarker("Distortion. Controls drive and tone for each voice/grain.\nX-axis = Drive amount (left=clean, right=distorted, 0-1)\nY-axis = Tone (bottom=dark, top=bright, 0-1)\nLarger dots = more intensity.");
+
+    ImGui::NewLine();
+    const bool isMagentaActive = (activeColor == ColorID::Magenta);
+    if (isMagentaActive)
+        ImGui::PushStyleColor(ImGuiCol_Button, activeColorBg);
+    ImGui::PushStyleColor(ImGuiCol_Button, IM_COL32(255, 100, 255, 255));
+    if (ImGui::Button("Chorus", ImVec2(60, 0)))
+    {
+        activeColor = ColorID::Magenta;
+    }
+    ImGui::PopStyleColor();
+    if (isMagentaActive)
+        ImGui::PopStyleColor();
+    HelpMarker("Chorus. Controls modulation for each voice/grain.\nX-axis = Delay time (left=short, right=long, 0-50ms)\nY-axis = Modulation depth (bottom=shallow, top=deep, 0-1)\nLarger dots = more intensity.");
+
+    ImGui::SameLine();
+    const bool isOrangeActive = (activeColor == ColorID::Orange);
+    if (isOrangeActive)
+        ImGui::PushStyleColor(ImGuiCol_Button, activeColorBg);
+    ImGui::PushStyleColor(ImGuiCol_Button, IM_COL32(255, 165, 0, 255));
+    if (ImGui::Button("Crush", ImVec2(60, 0)))
+    {
+        activeColor = ColorID::Orange;
+    }
+    ImGui::PopStyleColor();
+    if (isOrangeActive)
+        ImGui::PopStyleColor();
+    HelpMarker("Bitcrusher. Controls bit depth and downsampling.\nX-axis = Bit depth (left=low bits, right=high bits, 1-16)\nY-axis = Downsample factor (bottom=none, top=heavy, 1-16x)\nLarger dots = more intensity.");
+
+    ImGui::SameLine();
+    const bool isPurpleActive = (activeColor == ColorID::Purple);
+    if (isPurpleActive)
+        ImGui::PushStyleColor(ImGuiCol_Button, activeColorBg);
+    ImGui::PushStyleColor(ImGuiCol_Button, IM_COL32(200, 100, 255, 255));
+    if (ImGui::Button("Tremolo", ImVec2(60, 0)))
+    {
+        activeColor = ColorID::Purple;
+    }
+    ImGui::PopStyleColor();
+    if (isPurpleActive)
+        ImGui::PopStyleColor();
+    HelpMarker("Tremolo. Controls amplitude modulation for each voice/grain.\nX-axis = Modulation rate (left=slow, right=fast, 0-10 Hz)\nY-axis = Modulation depth (bottom=shallow, top=deep, 0-1)\nLarger dots = more intensity.");
 
     ImGui::Spacing();
 
-    // Canvas
-    const float            canvasSize = itemWidth;
-    const ImVec2           canvasSizeVec(canvasSize, canvasSize);
+    // Canvas with 16:9 aspect ratio
+    // Use most of the available width, but maintain 16:9 ratio
+    const float canvasWidth = itemWidth * 0.95f; // Use 95% of available width
+    const float canvasHeight = canvasWidth * 9.0f / 16.0f; // 16:9 aspect ratio
+    const ImVec2 canvasSizeVec(canvasWidth, canvasHeight);
     const ImGuiWindowFlags childFlags =
         ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse;
 
@@ -1269,7 +2025,7 @@ void SpatialGranulatorModuleProcessor::drawParametersInNode(
 
         // Use GetCursorScreenPos() like StrokeSequencer does for accurate mouse position
         const ImVec2 canvas_p0 = ImGui::GetCursorScreenPos();
-        const ImVec2 canvas_p1 = ImVec2(canvas_p0.x + canvasSize, canvas_p0.y + canvasSize);
+        const ImVec2 canvas_p1 = ImVec2(canvas_p0.x + canvasWidth, canvas_p0.y + canvasHeight);
 
         // Get theme colors
         ImU32       bgColor = theme.canvas.canvas_background == 0 ? IM_COL32(30, 30, 30, 255)
@@ -1287,24 +2043,24 @@ void SpatialGranulatorModuleProcessor::drawParametersInNode(
         {
             float pos = (float)i / (float)gridDivisions;
             // Vertical lines
-            float x = canvas_p0.x + pos * canvasSize;
+            float x = canvas_p0.x + pos * canvasWidth;
             draw_list->AddLine(
                 ImVec2(x, canvas_p0.y), ImVec2(x, canvas_p1.y), IM_COL32(60, 60, 60, 255), 1.0f);
             // Horizontal lines
-            float y = canvas_p0.y + pos * canvasSize;
+            float y = canvas_p0.y + pos * canvasHeight;
             draw_list->AddLine(
                 ImVec2(canvas_p0.x, y), ImVec2(canvas_p1.x, y), IM_COL32(60, 60, 60, 255), 1.0f);
         }
 
         // Draw center crosshair
         draw_list->AddLine(
-            ImVec2(canvas_p0.x + canvasSize * 0.5f, canvas_p0.y),
-            ImVec2(canvas_p0.x + canvasSize * 0.5f, canvas_p1.y),
+            ImVec2(canvas_p0.x + canvasWidth * 0.5f, canvas_p0.y),
+            ImVec2(canvas_p0.x + canvasWidth * 0.5f, canvas_p1.y),
             IM_COL32(100, 100, 100, 255),
             1.0f);
         draw_list->AddLine(
-            ImVec2(canvas_p0.x, canvas_p0.y + canvasSize * 0.5f),
-            ImVec2(canvas_p1.x, canvas_p0.y + canvasSize * 0.5f),
+            ImVec2(canvas_p0.x, canvas_p0.y + canvasHeight * 0.5f),
+            ImVec2(canvas_p1.x, canvas_p0.y + canvasHeight * 0.5f),
             IM_COL32(100, 100, 100, 255),
             1.0f);
 
@@ -1313,9 +2069,9 @@ void SpatialGranulatorModuleProcessor::drawParametersInNode(
             const juce::ScopedReadLock lock(dotsLock);
             for (const auto& dot : dots)
             {
-                float x = canvas_p0.x + dot.x * canvasSize;
-                float y = canvas_p0.y + (1.0f - dot.y) * canvasSize; // Invert Y
-                float radius = dot.size * canvasSize * 0.1f; // Scale size to reasonable radius
+                float x = canvas_p0.x + dot.x * canvasWidth;
+                float y = canvas_p0.y + (1.0f - dot.y) * canvasHeight; // Invert Y
+                float radius = dot.size * juce::jmin(canvasWidth, canvasHeight) * 0.1f; // Scale size to reasonable radius
 
                 ImU32 color = IM_COL32(128, 128, 128, 255);
                 switch (dot.color)
@@ -1328,6 +2084,21 @@ void SpatialGranulatorModuleProcessor::drawParametersInNode(
                     break;
                 case ColorID::Blue:
                     color = IM_COL32(0, 0, 255, 255);
+                    break;
+                case ColorID::Yellow:
+                    color = IM_COL32(255, 255, 0, 255);
+                    break;
+                case ColorID::Cyan:
+                    color = IM_COL32(0, 255, 255, 255);
+                    break;
+                case ColorID::Magenta:
+                    color = IM_COL32(255, 0, 255, 255);
+                    break;
+                case ColorID::Orange:
+                    color = IM_COL32(255, 165, 0, 255);
+                    break;
+                case ColorID::Purple:
+                    color = IM_COL32(200, 100, 255, 255);
                     break;
                 default:
                     break;
@@ -1365,8 +2136,8 @@ void SpatialGranulatorModuleProcessor::drawParametersInNode(
         {
             const float eraseRadius = 0.08f; // Erase threshold in normalized coordinates (8% of
                                              // canvas - larger for easier erasing)
-            float mouseX = juce::jlimit(0.0f, 1.0f, mouse_pos_in_canvas.x / canvasSize);
-            float mouseY = juce::jlimit(0.0f, 1.0f, 1.0f - mouse_pos_in_canvas.y / canvasSize);
+            float mouseX = juce::jlimit(0.0f, 1.0f, mouse_pos_in_canvas.x / canvasWidth);
+            float mouseY = juce::jlimit(0.0f, 1.0f, 1.0f - mouse_pos_in_canvas.y / canvasHeight);
 
             const juce::ScopedWriteLock lock(dotsLock);
             const size_t                dotsBefore = dots.size();
@@ -1395,9 +2166,9 @@ void SpatialGranulatorModuleProcessor::drawParametersInNode(
                            ImGui::IsMouseDragging(ImGuiMouseButton_Left)))
         {
             // Use mouse_pos_in_canvas which is already calculated relative to canvas
-            float x = juce::jlimit(0.0f, 1.0f, mouse_pos_in_canvas.x / canvasSize);
+            float x = juce::jlimit(0.0f, 1.0f, mouse_pos_in_canvas.x / canvasWidth);
             float y =
-                juce::jlimit(0.0f, 1.0f, 1.0f - mouse_pos_in_canvas.y / canvasSize); // Invert Y
+                juce::jlimit(0.0f, 1.0f, 1.0f - mouse_pos_in_canvas.y / canvasHeight); // Invert Y
 
             Dot newDot;
             newDot.x = x;

@@ -48,10 +48,14 @@ private:
     // A parameter pointer for each band's drive
     std::array<std::atomic<float>*, NUM_BANDS> driveParams;
     std::atomic<float>* outputGainParam { nullptr };
+    std::atomic<float>* mixParam { nullptr };
     
     // Relative modulation parameters (one for each band + one for output gain)
     std::array<std::atomic<float>*, NUM_BANDS> relativeDriveModParams;
     std::atomic<float>* relativeGainModParam { nullptr };
+    
+    // Smoothed values to prevent zipper noise
+    juce::SmoothedValue<float> smoothedMix;
 
     // Pre-allocated working buffers to avoid real-time memory allocation
     juce::AudioBuffer<float> bandBuffer;
