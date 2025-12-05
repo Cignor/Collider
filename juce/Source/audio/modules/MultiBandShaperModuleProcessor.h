@@ -23,6 +23,10 @@ public:
     void processBlock(juce::AudioBuffer<float>&, juce::MidiBuffer&) override;
 
     juce::AudioProcessorValueTreeState& getAPVTS() override { return apvts; }
+    
+    // Extra state for preset management
+    juce::ValueTree getExtraStateTree() const override;
+    void setExtraStateTree(const juce::ValueTree& state) override;
 
 #if defined(PRESET_CREATOR_UI)
     void drawParametersInNode(float itemWidth, const std::function<bool(const juce::String&)>&, const std::function<void()>&) override;
@@ -80,6 +84,12 @@ private:
     VizData vizData;
     std::array<double, NUM_BANDS> vizAccumInput {};
     std::array<double, NUM_BANDS> vizAccumOutput {};
+    
+    // Preset management state
+    juce::String activePresetName;
+    int selectedPresetIndex = -1;
+    int selectedStandardPresetIndex = 0; // Track which standard preset is selected (0-11)
+    char presetNameBuffer[128] = "";
 #endif
 
     // Center frequencies for the 8 bands

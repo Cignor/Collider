@@ -1,4 +1,7 @@
 #include "GraphicEQModuleProcessor.h"
+#if defined(PRESET_CREATOR_UI)
+#include "../../preset_creator/ControllerPresetManager.h"
+#endif
 
 juce::AudioProcessorValueTreeState::ParameterLayout GraphicEQModuleProcessor::createParameterLayout()
 {
@@ -760,6 +763,231 @@ void GraphicEQModuleProcessor::drawParametersInNode(float itemWidth, const std::
 
     ImGui::PopStyleVar(3);
     ImGui::PopItemWidth();
+    
+    // === EQ PRESET MANAGEMENT ===
+    ImGui::Spacing();
+    ImGui::Spacing();
+    ThemeText("EQ PRESETS", theme.text.section_header);
+    ImGui::Spacing();
+    
+    auto& presetManager = ControllerPresetManager::get();
+    
+    // Standard presets (built-in)
+    struct StandardPreset {
+        const char* name;
+        float bands[8]; // dB values for 8 bands
+    };
+    
+    static const StandardPreset standardPresets[] = {
+        { "Flat", { 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f } },
+        { "Rock", { 4.0f, 3.0f, 0.0f, -1.0f, 0.0f, 2.0f, 4.0f, 3.0f } },
+        { "Pop", { 2.0f, 1.0f, 0.0f, 1.0f, 3.0f, 4.0f, 5.0f, 4.0f } },
+        { "Jazz", { 3.0f, 2.0f, 1.0f, 0.0f, -1.0f, 0.0f, 2.0f, 3.0f } },
+        { "Classical", { 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 2.0f, 3.0f, 2.0f } },
+        { "Opera", { -2.0f, 0.0f, 1.0f, 3.0f, 5.0f, 4.0f, 2.0f, 1.0f } },
+        { "Electronic", { 6.0f, 4.0f, 0.0f, -2.0f, 0.0f, 2.0f, 5.0f, 6.0f } },
+        { "Hip Hop", { 8.0f, 6.0f, 2.0f, 0.0f, 1.0f, 2.0f, 3.0f, 2.0f } },
+        { "Country", { 2.0f, 1.0f, 0.0f, 0.0f, 1.0f, 2.0f, 3.0f, 2.0f } },
+        { "Vocal", { -4.0f, -2.0f, 0.0f, 2.0f, 6.0f, 5.0f, 2.0f, 0.0f } },
+        { "Bass Boost", { 10.0f, 8.0f, 4.0f, 0.0f, -2.0f, -4.0f, -4.0f, -4.0f } },
+        { "Treble Boost", { -4.0f, -2.0f, 0.0f, 0.0f, 0.0f, 2.0f, 6.0f, 10.0f } }
+    };
+    const int numStandardPresets = sizeof(standardPresets) / sizeof(standardPresets[0]);
+    
+    // Get saved presets
+    const auto& savedPresetNames = presetManager.getPresetNamesFor(ControllerPresetManager::ModuleType::GraphicEQ);
+    
+    // UI SYNCHRONIZATION: On first draw after loading, find the index for the saved preset name
+    if (activeEQPresetName.isNotEmpty())
+    {
+        selectedEQPresetIndex = savedPresetNames.indexOf(activeEQPresetName);
+        if (selectedEQPresetIndex >= 0)
+        {
+            // Found saved preset, clear standard preset selection
+            selectedStandardPresetIndex = -1;
+        }
+        else
+        {
+            // Saved preset not found, clear it
+            activeEQPresetName = "";
+            selectedEQPresetIndex = -1;
+        }
+        activeEQPresetName = ""; // Clear so we only do this once
+    }
+    
+    // Create combined list: standard presets + saved presets
+    juce::StringArray allPresetNames;
+    for (int i = 0; i < numStandardPresets; ++i)
+        allPresetNames.add(standardPresets[i].name);
+    allPresetNames.add("---"); // Separator
+    for (const auto& name : savedPresetNames)
+        allPresetNames.add(name);
+    
+    // Create C-style array for ImGui combo
+    std::vector<const char*> comboItems;
+    for (const auto& name : allPresetNames)
+        comboItems.push_back(name.toRawUTF8());
+    
+    if (comboItems.empty())
+        comboItems.push_back("<no presets>");
+    
+    // Preset dropdown with scroll-edit support
+    ImGui::SetNextItemWidth(200);
+    // Calculate current selection based on saved state
+    int comboSelection = 0;
+    if (selectedEQPresetIndex >= 0 && selectedEQPresetIndex < savedPresetNames.size())
+    {
+        // A saved preset is selected
+        comboSelection = numStandardPresets + 1 + selectedEQPresetIndex; // +1 for separator
+    }
+    else
+    {
+        // Standard preset is selected (or default to first)
+        comboSelection = juce::jlimit(0, numStandardPresets - 1, selectedStandardPresetIndex);
+    }
+    
+    // Helper lambda to apply preset selection
+    auto applyPresetSelection = [&](int selection)
+    {
+        juce::Logger::writeToLog("[GraphicEQ] applyPresetSelection called with selection: " + juce::String(selection));
+        
+        if (selection < numStandardPresets)
+        {
+            // Standard preset selected
+            juce::Logger::writeToLog("[GraphicEQ] Applying standard preset: " + juce::String(selection) + " (" + juce::String(standardPresets[selection].name) + ")");
+            const auto& preset = standardPresets[selection];
+            for (int i = 0; i < 8; ++i)
+            {
+                juce::String paramId = "gainBand" + juce::String(i + 1);
+                if (auto* p = dynamic_cast<juce::AudioParameterFloat*>(ap.getParameter(paramId)))
+                {
+                    *p = preset.bands[i];
+                    juce::Logger::writeToLog("[GraphicEQ] Set band " + juce::String(i + 1) + " to " + juce::String(preset.bands[i], 2) + " dB");
+                }
+            }
+            selectedEQPresetIndex = -1; // Clear saved preset selection
+            selectedStandardPresetIndex = selection; // Track which standard preset is selected
+            activeEQPresetName = "";
+            onModificationEnded();
+        }
+        else if (selection > numStandardPresets) // Skip separator
+        {
+            // Saved preset selected
+            int savedIndex = selection - numStandardPresets - 1;
+            if (savedIndex >= 0 && savedIndex < savedPresetNames.size())
+            {
+                juce::Logger::writeToLog("[GraphicEQ] Applying saved preset: " + savedPresetNames[savedIndex]);
+                activeEQPresetName = savedPresetNames[savedIndex];
+                juce::ValueTree presetData = presetManager.loadPreset(ControllerPresetManager::ModuleType::GraphicEQ, activeEQPresetName);
+                setExtraStateTree(presetData);
+                selectedEQPresetIndex = savedIndex;
+                selectedStandardPresetIndex = -1; // Clear standard preset selection
+                onModificationEnded();
+            }
+        }
+    };
+    
+    if (ImGui::Combo("##EQPreset", &comboSelection, comboItems.data(), (int)comboItems.size()))
+    {
+        juce::Logger::writeToLog("[GraphicEQ] Combo clicked, selection changed to: " + juce::String(comboSelection));
+        applyPresetSelection(comboSelection);
+    }
+    
+    // Scroll-edit support for preset dropdown (following guide pattern, same as StrokeSequencer)
+    if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenBlockedByPopup))
+    {
+        const float wheel = ImGui::GetIO().MouseWheel;
+        if (wheel != 0.0f)
+        {
+            juce::Logger::writeToLog("[GraphicEQ] Scroll detected, wheel: " + juce::String(wheel, 3) + ", current selection: " + juce::String(comboSelection));
+            
+            const int maxIndex = (int)comboItems.size() - 1;
+            // Follow guide pattern: wheel > 0.0f (scroll down) gives -1, wheel < 0.0f (scroll up) gives +1
+            // This means scroll down moves to previous item (lower index), scroll up moves to next item (higher index)
+            const int delta = wheel > 0.0f ? -1 : 1;
+            int newSelection = juce::jlimit(0, maxIndex, comboSelection + delta);
+            
+            juce::Logger::writeToLog("[GraphicEQ] Calculated newSelection: " + juce::String(newSelection) + " (delta: " + juce::String(delta) + ")");
+            
+            // Skip separator when scrolling
+            if (newSelection == numStandardPresets)
+            {
+                newSelection = wheel > 0.0f ? numStandardPresets - 1 : numStandardPresets + 1;
+                newSelection = juce::jlimit(0, maxIndex, newSelection);
+                juce::Logger::writeToLog("[GraphicEQ] Skipped separator, adjusted newSelection to: " + juce::String(newSelection));
+            }
+            
+            if (newSelection != comboSelection)
+            {
+                juce::Logger::writeToLog("[GraphicEQ] Selection changed from " + juce::String(comboSelection) + " to " + juce::String(newSelection));
+                comboSelection = newSelection;
+                applyPresetSelection(comboSelection);
+            }
+            else
+            {
+                juce::Logger::writeToLog("[GraphicEQ] Selection unchanged, clamped at boundary");
+            }
+        }
+    }
+    
+    // "Save" button
+    ImGui::SameLine();
+    ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.2f, 0.7f, 0.3f, 0.8f));
+    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.3f, 0.8f, 0.4f, 0.95f));
+    ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 1.0f, 1.0f, 1.0f));
+    if (ImGui::Button("Save##eqpreset"))
+    {
+        ImGui::OpenPopup("Save EQ Preset");
+    }
+    ImGui::PopStyleColor(3);
+    
+    // "Delete" button
+    ImGui::SameLine();
+    if (selectedEQPresetIndex >= 0 && selectedEQPresetIndex < savedPresetNames.size())
+    {
+        ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.8f, 0.2f, 0.2f, 0.8f));
+        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.9f, 0.3f, 0.3f, 0.95f));
+        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 1.0f, 1.0f, 1.0f));
+        if (ImGui::Button("Delete##eqpreset"))
+        {
+            presetManager.deletePreset(ControllerPresetManager::ModuleType::GraphicEQ, savedPresetNames[selectedEQPresetIndex]);
+            selectedEQPresetIndex = -1;
+            activeEQPresetName = "";
+        }
+        ImGui::PopStyleColor(3);
+    }
+    
+    // Save popup
+    if (ImGui::BeginPopup("Save EQ Preset"))
+    {
+        ImGui::InputText("Preset Name", eqPresetNameBuffer, sizeof(eqPresetNameBuffer));
+        if (ImGui::Button("Save New##confirm"))
+        {
+            juce::String name(eqPresetNameBuffer);
+            if (name.isNotEmpty())
+            {
+                presetManager.savePreset(ControllerPresetManager::ModuleType::GraphicEQ, name, getExtraStateTree());
+                activeEQPresetName = name;
+                selectedEQPresetIndex = savedPresetNames.indexOf(activeEQPresetName);
+                if (selectedEQPresetIndex < 0)
+                {
+                    // Preset was just created, need to refresh
+                    const auto& updatedNames = presetManager.getPresetNamesFor(ControllerPresetManager::ModuleType::GraphicEQ);
+                    selectedEQPresetIndex = updatedNames.indexOf(activeEQPresetName);
+                }
+                memset(eqPresetNameBuffer, 0, sizeof(eqPresetNameBuffer));
+                ImGui::CloseCurrentPopup();
+                onModificationEnded();
+            }
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("Cancel##eqpreset"))
+        {
+            ImGui::CloseCurrentPopup();
+        }
+        ImGui::EndPopup();
+    }
+    
     ImGui::PopID();
 }
 
@@ -841,5 +1069,110 @@ void GraphicEQModuleProcessor::setStateInformation(const void* data, int sizeInB
         if (xmlState->hasTagName(apvts.state.getType()))
             // ...replace the current APVTS state with the new one.
             apvts.replaceState(juce::ValueTree::fromXml(*xmlState));
+}
+
+juce::ValueTree GraphicEQModuleProcessor::getExtraStateTree() const
+{
+    juce::ValueTree state("GraphicEQState");
+    
+#if defined(PRESET_CREATOR_UI)
+    // Save the active preset name (for saved presets)
+    if (selectedEQPresetIndex >= 0)
+    {
+        auto& presetManager = ControllerPresetManager::get();
+        const auto& presetNames = presetManager.getPresetNamesFor(ControllerPresetManager::ModuleType::GraphicEQ);
+        if (selectedEQPresetIndex < presetNames.size())
+            state.setProperty("eqPreset", presetNames[selectedEQPresetIndex], nullptr);
+    }
+    
+    // Save which standard preset is selected (for standard presets)
+    if (selectedStandardPresetIndex >= 0 && selectedStandardPresetIndex < 12)
+    {
+        state.setProperty("selectedStandardPresetIndex", selectedStandardPresetIndex, nullptr);
+    }
+    
+    // Save all 8 band gain values
+    for (int i = 0; i < 8; ++i)
+    {
+        juce::String paramId = "gainBand" + juce::String(i + 1);
+        if (bandGainParams[i] != nullptr)
+            state.setProperty(paramId, bandGainParams[i]->load(), nullptr);
+    }
+    
+    // Save output level
+    if (outputLevelParam != nullptr)
+        state.setProperty("outputLevel", outputLevelParam->load(), nullptr);
+    
+    // Save gate and trigger thresholds
+    if (gateThresholdParam != nullptr)
+        state.setProperty("gateThreshold", gateThresholdParam->load(), nullptr);
+    if (triggerThresholdParam != nullptr)
+        state.setProperty("triggerThreshold", triggerThresholdParam->load(), nullptr);
+#endif
+    
+    return state;
+}
+
+void GraphicEQModuleProcessor::setExtraStateTree(const juce::ValueTree& state)
+{
+    if (state.hasType("GraphicEQState"))
+    {
+#if defined(PRESET_CREATOR_UI)
+        // Load the preset name for UI synchronization
+        activeEQPresetName = state.getProperty("eqPreset", "").toString();
+        
+        // Load which standard preset is selected
+        selectedStandardPresetIndex = state.getProperty("selectedStandardPresetIndex", 0);
+        if (selectedStandardPresetIndex < 0 || selectedStandardPresetIndex >= 12)
+            selectedStandardPresetIndex = 0; // Default to Flat if invalid
+        
+        // If a saved preset name was loaded, try to find its index
+        if (activeEQPresetName.isNotEmpty())
+        {
+            auto& presetManager = ControllerPresetManager::get();
+            const auto& presetNames = presetManager.getPresetNamesFor(ControllerPresetManager::ModuleType::GraphicEQ);
+            selectedEQPresetIndex = presetNames.indexOf(activeEQPresetName);
+            if (selectedEQPresetIndex >= 0)
+            {
+                // Found saved preset, clear standard preset selection
+                selectedStandardPresetIndex = -1;
+            }
+            else
+            {
+                // Saved preset not found, clear it
+                activeEQPresetName = "";
+                selectedEQPresetIndex = -1;
+            }
+        }
+        else
+        {
+            // No saved preset, use standard preset
+            selectedEQPresetIndex = -1;
+        }
+        
+        // Load all 8 band gain values
+        for (int i = 0; i < 8; ++i)
+        {
+            juce::String paramId = "gainBand" + juce::String(i + 1);
+            float value = state.getProperty(paramId, 0.0f);
+            if (auto* p = dynamic_cast<juce::AudioParameterFloat*>(apvts.getParameter(paramId)))
+                *p = value;
+        }
+        
+        // Load output level
+        if (auto* p = dynamic_cast<juce::AudioParameterFloat*>(apvts.getParameter("outputLevel")))
+            *p = state.getProperty("outputLevel", 0.0f);
+        
+        // Load gate and trigger thresholds
+        if (auto* p = dynamic_cast<juce::AudioParameterFloat*>(apvts.getParameter("gateThreshold")))
+            *p = state.getProperty("gateThreshold", -30.0f);
+        if (auto* p = dynamic_cast<juce::AudioParameterFloat*>(apvts.getParameter("triggerThreshold")))
+            *p = state.getProperty("triggerThreshold", -6.0f);
+        
+        juce::Logger::writeToLog("[GraphicEQ] Loaded state - selectedStandardPresetIndex: " + juce::String(selectedStandardPresetIndex) + 
+                                 ", selectedEQPresetIndex: " + juce::String(selectedEQPresetIndex) + 
+                                 ", activeEQPresetName: " + activeEQPresetName);
+#endif
+    }
 }
 

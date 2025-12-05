@@ -51,35 +51,38 @@ juce::AudioProcessorValueTreeState::ParameterLayout AutomationLaneModuleProcesso
         std::make_unique<juce::AudioParameterChoice>(
             paramIdMode, "Mode", juce::StringArray{"Free (Hz)", "Sync"}, 1));
     params.push_back(std::make_unique<juce::AudioParameterBool>(paramIdLoop, "Loop", true));
+
+    // Zoom is purely visual, but we save it as a parameter for convenience
     params.push_back(
         std::make_unique<juce::AudioParameterFloat>(
             paramIdZoom, "Zoom", 10.0f, 200.0f, 50.0f)); // Pixels per beat
+
     params.push_back(
         std::make_unique<juce::AudioParameterChoice>(
             paramIdRecordMode, "Record Mode", juce::StringArray{"Record", "Edit"}, 0));
 
-    // Division choices: 1/32, 1/16, 1/8, 1/4, 1/2, 1, 2, 4, 8
-    juce::StringArray divs = {
-        "1/32", "1/16", "1/8", "1/4", "1/2", "1 Bar", "2 Bars", "4 Bars", "8 Bars"};
+    // Speed Division choices: 1/32 to 8x
+    // This controls how fast the playhead moves relative to the global transport
+    juce::StringArray divs = {"1/32", "1/16", "1/8", "1/4", "1/2", "1x", "2x", "4x", "8x"};
     params.push_back(
         std::make_unique<juce::AudioParameterChoice>(
-            paramIdDivision, "Division", divs, 3)); // Default 1/4
+            paramIdDivision, "Speed", divs, 5)); // Default 1x
 
     // Duration mode: User Choice, 1 Bar, 4 Bars, 8 Bars, 16 Bars, 32 Bars
     juce::StringArray durationModes = {
-        "User Choice", "1 Bar", "4 Bars", "8 Bars", "16 Bars", "32 Bars"};
+        "User Choice", "1 Bar", "2 Bars", "4 Bars", "8 Bars", "16 Bars", "32 Bars"};
     params.push_back(
         std::make_unique<juce::AudioParameterChoice>(
-            paramIdDurationMode, "Duration", durationModes, 0)); // Default User Choice
+            paramIdDurationMode, "Duration", durationModes, 3)); // Default 4 Bars
 
     // Custom duration in beats (for User Choice mode)
     params.push_back(
         std::make_unique<juce::AudioParameterFloat>(
             paramIdCustomDuration,
             "Custom Duration (beats)",
-            4.0f,
+            1.0f,
             256.0f,
-            32.0f)); // Default 32 beats
+            16.0f)); // Default 16 beats
 
     return {params.begin(), params.end()};
 }
@@ -91,6 +94,19 @@ void AutomationLaneModuleProcessor::prepareToPlay(double sr, int samplesPerBlock
 
 void AutomationLaneModuleProcessor::setTimingInfo(const TransportState& state)
 {
+    ModuleProcessor::setTimingInfo(state);
+
+    const TransportCommand command = state.lastCommand.load();
+    if (command != lastTransportCommand)
+    {
+        if (command == TransportCommand::Stop)
+        {
+            // Reset phase to 0 when transport stops
+            currentPhase = 0.0;
+        }
+        lastTransportCommand = command;
+    }
+
     m_currentTransport = state;
 }
 
@@ -118,51 +134,73 @@ void AutomationLaneModuleProcessor::processBlock(
     if (!modeParam || !rateParam || !loopParam)
         return;
 
-    bool  isSync = *modeParam > 0.5f;
-    float rateHz = *rateParam;
-
-    // Calculate phase increment
-    double phaseInc = 0.0;
-    if (!isSync)
-    {
-        phaseInc = (rateHz / sampleRate);
-    }
+    const bool   isSync = *modeParam > 0.5f;
+    const float  rateHz = *rateParam;
+    const bool   isLooping = *loopParam > 0.5f;
+    const double targetDuration = getTargetDuration();
 
     for (int i = 0; i < numSamples; ++i)
     {
+        // Check Global Reset (pulse from Timeline Master loop)
+        if (m_currentTransport.forceGlobalReset.load())
+        {
+            currentPhase = 0.0;
+        }
+
         double currentBeat = 0.0;
 
-        if (isSync)
+        // --- ROBUST SYNC LOGIC (Matching StepSequencer) ---
+        if (isSync && m_currentTransport.isPlaying)
         {
-            if (m_currentTransport.isPlaying)
+            // SYNC MODE: Use the global beat position with division
+            int divisionIndex = (int)*divisionParam;
+
+            // Use global division if a Tempo Clock has override enabled
+            // IMPORTANT: Read from parent's LIVE transport state, not cached copy
+            if (getParent())
             {
-                // Sync Mode: Lock to host transport
-                currentBeat = m_currentTransport.songPositionBeats;
+                int globalDiv = getParent()->getTransportState().globalDivisionIndex.load();
+                if (globalDiv >= 0)
+                    divisionIndex = globalDiv;
             }
-            else
-            {
-                // Transport stopped: stay at current position
-                currentBeat = m_currentTransport.songPositionBeats;
-            }
+
+            // Map indices to speed multipliers
+            // "1/32", "1/16", "1/8", "1/4", "1/2", "1x", "2x", "4x", "8x"
+            static const double speedMultipliers[] = {
+                1.0 / 32.0, 1.0 / 16.0, 1.0 / 8.0, 1.0 / 4.0, 1.0 / 2.0, 1.0, 2.0, 4.0, 8.0};
+
+            const double speed = speedMultipliers[juce::jlimit(0, 8, divisionIndex)];
+
+            // Calculate beat position: (GlobalBeats * Speed)
+            currentBeat = m_currentTransport.songPositionBeats * speed;
         }
         else
         {
-            // Free Mode: LFO behavior - use target duration
-            double duration = getTargetDuration();
+            // FREE-RUNNING MODE or TRANSPORT STOPPED
+            if (m_currentTransport.isPlaying)
+            {
+                // Calculate phase increment based on Hz
+                // In free mode, rateHz is cycles per second.
+                // We map 1 cycle to 'targetDuration' beats.
+                const double phaseInc = (sampleRate > 0.0 ? (double)rateHz / sampleRate : 0.0);
+                currentPhase += phaseInc;
+                if (currentPhase >= 1.0)
+                    currentPhase -= 1.0;
+            }
 
-            // Increment phase (0..1)
-            currentPhase += (rateHz / sampleRate);
-            if (currentPhase >= 1.0)
-                currentPhase -= 1.0;
-
-            currentBeat = currentPhase * duration;
+            // Map 0..1 phase to 0..Duration beats
+            currentBeat = currentPhase * targetDuration;
         }
 
-        // Loop logic - use target duration
-        double loopDuration = getTargetDuration();
-        if (isSync && *loopParam > 0.5f && loopDuration > 0)
+        // Loop logic
+        if (isLooping && targetDuration > 0)
         {
-            currentBeat = std::fmod(currentBeat, loopDuration);
+            currentBeat = std::fmod(currentBeat, targetDuration);
+        }
+        else if (!isLooping && currentBeat > targetDuration)
+        {
+            // Clamp to end if not looping
+            currentBeat = targetDuration;
         }
 
         // Sample lookup
@@ -172,7 +210,16 @@ void AutomationLaneModuleProcessor::processBlock(
         {
             double beatInChunk = currentBeat - chunk->startBeat;
             int    sampleIndex = static_cast<int>(beatInChunk * chunk->samplesPerBeat);
-            if (sampleIndex >= 0 && sampleIndex < (int)chunk->samples.size())
+
+            // Linear interpolation for smoother playback
+            if (sampleIndex >= 0 && sampleIndex < (int)chunk->samples.size() - 1)
+            {
+                float frac = (float)(beatInChunk * chunk->samplesPerBeat - sampleIndex);
+                float s0 = chunk->samples[sampleIndex];
+                float s1 = chunk->samples[sampleIndex + 1];
+                value = s0 + frac * (s1 - s0);
+            }
+            else if (sampleIndex >= 0 && sampleIndex < (int)chunk->samples.size())
             {
                 value = chunk->samples[sampleIndex];
             }
@@ -192,8 +239,51 @@ void AutomationLaneModuleProcessor::processBlock(
 
 std::optional<RhythmInfo> AutomationLaneModuleProcessor::getRhythmInfo() const
 {
-    return std::nullopt;
+    RhythmInfo info;
+    info.displayName = "Automation Lane #" + juce::String(getLogicalId());
+    info.sourceType = "automation";
+
+    const bool syncEnabled = modeParam != nullptr ? (modeParam->load() > 0.5f) : true;
+    info.isSynced = syncEnabled;
+
+    TransportState transport;
+    bool           hasTransport = false;
+    if (getParent())
+    {
+        transport = getParent()->getTransportState();
+        hasTransport = true;
+    }
+
+    if (syncEnabled)
+    {
+        info.isActive = hasTransport ? transport.isPlaying : false;
+        if (info.isActive)
+        {
+            int divisionIndex = divisionParam != nullptr ? (int)divisionParam->load() : 5;
+            int globalDiv = transport.globalDivisionIndex.load();
+            if (globalDiv >= 0)
+                divisionIndex = globalDiv;
+
+            static const double multipliers[] = {
+                1.0 / 32.0, 1.0 / 16.0, 1.0 / 8.0, 1.0 / 4.0, 1.0 / 2.0, 1.0, 2.0, 4.0, 8.0};
+            const double speed = multipliers[juce::jlimit(0, 8, divisionIndex)];
+
+            // BPM is relative to the speed multiplier
+            info.bpm = static_cast<float>(transport.bpm * speed);
+        }
+    }
+    else
+    {
+        info.isActive = true;
+        const float rate = rateParam != nullptr ? rateParam->load() : 1.0f;
+        double      duration = getTargetDuration();
+        info.bpm = (rate / static_cast<float>(duration)) * 60.0f;
+    }
+
+    return info;
 }
+
+void AutomationLaneModuleProcessor::forceStop() { currentPhase = 0.0; }
 
 // --- State Management ---
 
@@ -213,7 +303,6 @@ juce::ValueTree AutomationLaneModuleProcessor::getExtraStateTree() const
             chunkVt.setProperty("numBeats", chunk->numBeats, nullptr);
             chunkVt.setProperty("samplesPerBeat", chunk->samplesPerBeat, nullptr);
 
-            // Serialize samples to MemoryBlock
             if (!chunk->samples.empty())
             {
                 juce::MemoryBlock mb;
@@ -225,6 +314,10 @@ juce::ValueTree AutomationLaneModuleProcessor::getExtraStateTree() const
         }
     }
 
+    vt.setProperty("mode", modeParam != nullptr ? modeParam->load() : 1.0f, nullptr);
+    vt.setProperty(
+        "rate_division", divisionParam != nullptr ? divisionParam->load() : 5.0f, nullptr);
+
     return vt;
 }
 
@@ -235,7 +328,6 @@ void AutomationLaneModuleProcessor::setExtraStateTree(const juce::ValueTree& vt)
         auto newState = std::make_shared<AutomationState>();
         newState->totalDurationBeats = vt.getProperty("totalDurationBeats", 32.0);
 
-        // Load chunks
         for (const auto& chunkVt : vt)
         {
             if (chunkVt.hasType("Chunk"))
@@ -247,7 +339,6 @@ void AutomationLaneModuleProcessor::setExtraStateTree(const juce::ValueTree& vt)
                 auto chunk = std::make_shared<AutomationChunk>(
                     startBeat, static_cast<int>(numBeats), static_cast<int>(samplesPerBeat));
 
-                // Load samples
                 if (chunkVt.hasProperty("samples"))
                 {
                     juce::MemoryBlock* mb = chunkVt.getProperty("samples").getBinaryData();
@@ -259,7 +350,6 @@ void AutomationLaneModuleProcessor::setExtraStateTree(const juce::ValueTree& vt)
                     }
                 }
 
-                // Fallback if samples failed to load or were empty but size is defined
                 if (chunk->samples.empty())
                 {
                     chunk->samples.resize((size_t)(numBeats * samplesPerBeat), 0.5f);
@@ -269,7 +359,6 @@ void AutomationLaneModuleProcessor::setExtraStateTree(const juce::ValueTree& vt)
             }
         }
 
-        // Ensure at least one chunk exists
         if (newState->chunks.empty())
         {
             auto firstChunk = std::make_shared<AutomationChunk>(0.0, 32, 256);
@@ -277,6 +366,12 @@ void AutomationLaneModuleProcessor::setExtraStateTree(const juce::ValueTree& vt)
         }
 
         updateState(newState);
+
+        if (auto* p = dynamic_cast<juce::AudioParameterFloat*>(apvts.getParameter(paramIdMode)))
+            *p = (float)vt.getProperty("mode", 1.0f);
+        if (auto* p =
+                dynamic_cast<juce::AudioParameterChoice*>(apvts.getParameter(paramIdDivision)))
+            *p = (int)vt.getProperty("rate_division", 5);
     }
 }
 
@@ -315,26 +410,40 @@ AutomationState::Ptr AutomationLaneModuleProcessor::getState() const { return ac
 double AutomationLaneModuleProcessor::getTargetDuration() const
 {
     if (!durationModeParam || !customDurationParam)
-        return 32.0; // Default fallback
+        return 32.0;
 
-    int durationModeIndex = (int)*durationModeParam;
+    // Get the index from AudioParameterChoice - use getIndex() for correct value
+    int durationModeIndex = 0;
+    if (auto* choiceParam = dynamic_cast<juce::AudioParameterChoice*>(apvts.getParameter(paramIdDurationMode)))
+    {
+        durationModeIndex = choiceParam->getIndex();
+    }
+    else
+    {
+        // Fallback to raw value cast if parameter type is wrong
+        durationModeIndex = (int)*durationModeParam;
+    }
 
+    // Map duration mode index to beats
+    // Index 0: User Choice, 1: 1 Bar, 2: 2 Bars, 3: 4 Bars, 4: 8 Bars, 5: 16 Bars, 6: 32 Bars
     switch (durationModeIndex)
     {
-    case 0: // User Choice
-        return (double)*customDurationParam;
-    case 1: // 1 Bar
-        return 4.0;
-    case 2: // 4 Bars
-        return 16.0;
-    case 3: // 8 Bars
-        return 32.0;
-    case 4: // 16 Bars
-        return 64.0;
-    case 5: // 32 Bars
-        return 128.0;
+    case 0:
+        return (double)*customDurationParam; // User Choice
+    case 1:
+        return 4.0; // 1 Bar = 4 beats
+    case 2:
+        return 8.0; // 2 Bars = 8 beats  
+    case 3:
+        return 16.0; // 4 Bars = 16 beats
+    case 4:
+        return 32.0; // 8 Bars = 32 beats
+    case 5:
+        return 64.0; // 16 Bars = 64 beats
+    case 6:
+        return 128.0; // 32 Bars = 128 beats
     default:
-        return 32.0; // Default fallback
+        return 16.0;
     }
 }
 
@@ -344,37 +453,28 @@ void AutomationLaneModuleProcessor::ensureChunkExistsAt(double beat)
     if (!state)
         return;
 
-    // Check if chunk already exists
     if (state->findChunkAt(beat))
         return;
 
-    // Determine chunk parameters
-    // We use fixed 32-beat chunks for now
     const double chunkDuration = 32.0;
     const int    samplesPerBeat = 256;
+    double       chunkStart = std::floor(beat / chunkDuration) * chunkDuration;
 
-    double chunkStart = std::floor(beat / chunkDuration) * chunkDuration;
-
-    // Double check if we have a chunk starting here
     for (const auto& chunk : state->chunks)
     {
         if (std::abs(chunk->startBeat - chunkStart) < 0.001)
             return;
     }
 
-    // Create new state
     auto newState = std::make_shared<AutomationState>();
     newState->chunks = state->chunks;
 
-    // Create new chunk
     auto newChunk =
         std::make_shared<AutomationChunk>(chunkStart, (int)chunkDuration, samplesPerBeat);
     newState->chunks.push_back(newChunk);
 
-    // Sort chunks
     std::sort(newState->chunks.begin(), newState->chunks.end(), compareChunks);
 
-    // Update total duration
     double maxDuration = 0.0;
     if (!newState->chunks.empty())
     {
@@ -386,7 +486,6 @@ void AutomationLaneModuleProcessor::ensureChunkExistsAt(double beat)
     updateState(newState);
 }
 
-// Thread-safe helper to modify chunk samples
 void AutomationLaneModuleProcessor::modifyChunkSamplesThreadSafe(
     AutomationChunk::Ptr chunk,
     int                  startSampleIndex,
@@ -399,7 +498,6 @@ void AutomationLaneModuleProcessor::modifyChunkSamplesThreadSafe(
         endSampleIndex >= (int)chunk->samples.size())
         return;
 
-    // Create new state with cloned chunk
     AutomationState::Ptr state = activeState.load();
     if (!state)
         return;
@@ -407,20 +505,16 @@ void AutomationLaneModuleProcessor::modifyChunkSamplesThreadSafe(
     auto newState = std::make_shared<AutomationState>();
     newState->totalDurationBeats = state->totalDurationBeats;
 
-    // Clone all chunks, replacing the one we're modifying
-    // Use startBeat as unique identifier for chunk matching
     double targetStartBeat = chunk->startBeat;
 
     for (const auto& oldChunk : state->chunks)
     {
         if (std::abs(oldChunk->startBeat - targetStartBeat) < 0.001)
         {
-            // Clone this chunk with modifications
             auto newChunk = std::make_shared<AutomationChunk>(
                 chunk->startBeat, chunk->numBeats, chunk->samplesPerBeat);
-            newChunk->samples = chunk->samples; // Copy samples
+            newChunk->samples = chunk->samples;
 
-            // Apply interpolation between start and end
             if (startSampleIndex <= endSampleIndex)
             {
                 for (int i = startSampleIndex;
@@ -434,12 +528,10 @@ void AutomationLaneModuleProcessor::modifyChunkSamplesThreadSafe(
                     newChunk->samples[i] = juce::jmap(t, startValue, endValue);
                 }
             }
-
             newState->chunks.push_back(newChunk);
         }
         else
         {
-            // Copy other chunks as-is (share pointers is fine, chunks are immutable)
             newState->chunks.push_back(oldChunk);
         }
     }
@@ -450,444 +542,569 @@ void AutomationLaneModuleProcessor::modifyChunkSamplesThreadSafe(
 // --- UI Implementation ---
 
 #if defined(PRESET_CREATOR_UI)
+
+// Helper for tooltips
+static void HelpMarker(const char* desc)
+{
+    ImGui::TextDisabled("(?)");
+    if (ImGui::BeginItemTooltip())
+    {
+        ImGui::PushTextWrapPos(ImGui::GetFontSize() * 35.0f);
+        ImGui::TextUnformatted(desc);
+        ImGui::PopTextWrapPos();
+        ImGui::EndTooltip();
+    }
+}
+
 void AutomationLaneModuleProcessor::drawParametersInNode(
     float                                           itemWidth,
     const std::function<bool(const juce::String&)>& checkHover,
     const std::function<void()>&                    markEdited)
 {
     const auto& theme = ThemeManager::getInstance().getCurrentTheme();
+    auto&       ap = getAPVTS();
 
-    ImGui::Text("Automation Lane");
-
-    // --- Top Controls ---
-    ImGui::PushItemWidth(80);
-
-    // Rate / Sync Control - add null checks
     if (!modeParam || !rateParam || !divisionParam || !loopParam || !durationModeParam ||
         !customDurationParam)
     {
-        ImGui::PopItemWidth();
         ImGui::Text("Initializing...");
         return;
     }
 
-    bool  isSync = *modeParam > 0.5f;
-    float currentDivision = 1.0f; // Default 1 beat
+    // --- 1. TOOLBAR AREA ---
+    ImGui::PushID("Toolbar");
 
-    if (isSync)
+    // Row 1: Sync | Speed | Duration
+    bool syncEnabled = *modeParam > 0.5f;
+    if (ImGui::Checkbox("Sync", &syncEnabled))
     {
-        // Sync Mode: Show Division
-        int         divIndex = (int)*divisionParam;
-        const char* divs[] = {
-            "1/32", "1/16", "1/8", "1/4", "1/2", "1 Bar", "2 Bars", "4 Bars", "8 Bars"};
+        float newVal = syncEnabled ? 1.0f : 0.0f;
+        *modeParam = newVal;
+        ap.getParameter(paramIdMode)->setValueNotifyingHost(newVal);
+        markEdited();
+    }
+    ImGui::SameLine();
 
-        // Map index to beats
-        switch (divIndex)
+    if (syncEnabled)
+    {
+        // Speed Combo
+        ImGui::SetNextItemWidth(80);
+        int globalDiv =
+            getParent() ? getParent()->getTransportState().globalDivisionIndex.load() : -1;
+        bool        isGlobal = globalDiv >= 0;
+        int         divIndex = isGlobal ? globalDiv : (int)*divisionParam;
+        const char* divs[] = {"1/32", "1/16", "1/8", "1/4", "1/2", "1x", "2x", "4x", "8x"};
+
+        if (isGlobal)
+            ImGui::BeginDisabled();
+        if (ImGui::Combo("##speed", &divIndex, divs, 9))
         {
-        case 0:
-            currentDivision = 0.125f;
-            break; // 1/32
-        case 1:
-            currentDivision = 0.25f;
-            break; // 1/16
-        case 2:
-            currentDivision = 0.5f;
-            break; // 1/8
-        case 3:
-            currentDivision = 1.0f;
-            break; // 1/4 (1 Beat)
-        case 4:
-            currentDivision = 2.0f;
-            break; // 1/2
-        case 5:
-            currentDivision = 4.0f;
-            break; // 1 Bar
-        case 6:
-            currentDivision = 8.0f;
-            break; // 2 Bars
-        case 7:
-            currentDivision = 16.0f;
-            break; // 4 Bars
-        case 8:
-            currentDivision = 32.0f;
-            break; // 8 Bars
+            if (!isGlobal)
+            {
+                *divisionParam = (float)divIndex;
+                ap.getParameter(paramIdDivision)
+                    ->setValueNotifyingHost(
+                        ap.getParameterRange(paramIdDivision).convertTo0to1((float)divIndex));
+                markEdited();
+            }
         }
-
-        if (ImGui::Combo("##div", &divIndex, divs, 9))
+        // Scroll-edit for Speed Combo
+        if (!isGlobal && ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenBlockedByPopup))
         {
-            *divisionParam = (float)divIndex;
-            apvts.getParameter(paramIdDivision)
-                ->setValueNotifyingHost(
-                    apvts.getParameterRange(paramIdDivision).convertTo0to1((float)divIndex));
+            const float wheel = ImGui::GetIO().MouseWheel;
+            if (wheel != 0.0f)
+            {
+                // wheel > 0.0f (scroll down) gives -1, wheel < 0.0f (scroll up) gives +1
+                const int delta = wheel > 0.0f ? -1 : 1;
+                int newIndex = juce::jlimit(0, 8, divIndex + delta);
+                if (newIndex != divIndex)
+                {
+                    *divisionParam = (float)newIndex;
+                    ap.getParameter(paramIdDivision)
+                        ->setValueNotifyingHost(
+                            ap.getParameterRange(paramIdDivision).convertTo0to1((float)newIndex));
+                    markEdited();
+                }
+            }
+        }
+        if (isGlobal)
+        {
+            ImGui::EndDisabled();
+            if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
+                ImGui::SetTooltip("Controlled by Tempo Clock");
         }
         if (ImGui::IsItemHovered())
-            ImGui::SetTooltip("Grid Division");
+            ImGui::SetTooltip("Playback Speed Multiplier");
     }
     else
     {
-        // Free Mode: Show Hz
+        ImGui::SetNextItemWidth(80);
         float rate = *rateParam;
         if (ImGui::DragFloat("##rate", &rate, 0.01f, 0.01f, 20.0f, "%.2f Hz"))
         {
             *rateParam = rate;
-            apvts.getParameter(paramIdRate)
-                ->setValueNotifyingHost(apvts.getParameterRange(paramIdRate).convertTo0to1(rate));
+            ap.getParameter(paramIdRate)
+                ->setValueNotifyingHost(ap.getParameterRange(paramIdRate).convertTo0to1(rate));
+            markEdited();
         }
+        // Scroll-edit for Rate DragFloat
+        adjustParamOnWheel(ap.getParameter(paramIdRate), paramIdRate, rate);
+        if (ImGui::IsItemHovered())
+            ImGui::SetTooltip("Playback Rate in Hz");
     }
 
     ImGui::SameLine();
 
-    // Record Mode Toggle
-    bool isRec = *apvts.getRawParameterValue(paramIdRecordMode) < 0.5f; // 0=Rec, 1=Edit
-    if (ImGui::Button(isRec ? "REC" : "EDIT"))
+    // Duration Combo
+    ImGui::SetNextItemWidth(100);
+    int         durIndex = (int)*durationModeParam;
+    const char* durModes[] = {"User", "1 Bar", "2 Bars", "4 Bars", "8 Bars", "16 Bars", "32 Bars"};
+    if (ImGui::Combo("##dur", &durIndex, durModes, 7))
+    {
+        *durationModeParam = (float)durIndex;
+        ap.getParameter(paramIdDurationMode)
+            ->setValueNotifyingHost(
+                ap.getParameterRange(paramIdDurationMode).convertTo0to1((float)durIndex));
+        markEdited();
+    }
+    // Scroll-edit for Duration Combo
+    if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenBlockedByPopup))
+    {
+        const float wheel = ImGui::GetIO().MouseWheel;
+        if (wheel != 0.0f)
+        {
+            // wheel > 0.0f (scroll down) gives -1, wheel < 0.0f (scroll up) gives +1
+            const int delta = wheel > 0.0f ? -1 : 1;
+            int newIndex = juce::jlimit(0, 6, durIndex + delta);
+            if (newIndex != durIndex)
+            {
+                *durationModeParam = (float)newIndex;
+                ap.getParameter(paramIdDurationMode)
+                    ->setValueNotifyingHost(
+                        ap.getParameterRange(paramIdDurationMode).convertTo0to1((float)newIndex));
+                markEdited();
+            }
+        }
+    }
+    if (ImGui::IsItemHovered())
+        ImGui::SetTooltip("Total Loop Duration");
+
+    // Row 2: Zoom | Rec/Edit | Custom Duration (if applicable)
+
+    // Zoom Slider
+    float currentZoom = *apvts.getRawParameterValue(paramIdZoom);
+    ImGui::SetNextItemWidth(100);
+    if (ImGui::SliderFloat("##zoom", &currentZoom, 10.0f, 200.0f, "Zoom: %.0f"))
+    {
+        *apvts.getRawParameterValue(paramIdZoom) = currentZoom;
+        ap.getParameter(paramIdZoom)
+            ->setValueNotifyingHost(ap.getParameterRange(paramIdZoom).convertTo0to1(currentZoom));
+        markEdited();
+    }
+    // Scroll-edit for Zoom Slider
+    adjustParamOnWheel(ap.getParameter(paramIdZoom), paramIdZoom, currentZoom);
+    if (ImGui::IsItemHovered())
+        ImGui::SetTooltip("Horizontal Zoom (Pixels per Beat)");
+
+    ImGui::SameLine();
+
+    // Record/Edit Mode
+    bool isRec = *apvts.getRawParameterValue(paramIdRecordMode) < 0.5f;
+    if (ImGui::Button(isRec ? "REC" : "EDIT", ImVec2(50, 0)))
     {
         float newVal = isRec ? 1.0f : 0.0f;
         apvts.getParameter(paramIdRecordMode)->setValueNotifyingHost(newVal);
+        markEdited();
     }
     if (ImGui::IsItemHovered())
-        ImGui::SetTooltip(isRec ? "Recording Mode (Auto-scroll)" : "Edit Mode (Manual scroll)");
+        ImGui::SetTooltip("Toggle Record/Edit Mode");
 
-    ImGui::PopItemWidth();
-
-    // --- Manual Value Slider (Monitor/Record) ---
-    // For now, just a visual monitor of the current output value
-    static float manualValue = 0.5f;
-    ImGui::PushItemWidth(itemWidth - 10);
-    ImGui::SliderFloat("##manual", &manualValue, 0.0f, 1.0f, "Value: %.2f");
-    ImGui::PopItemWidth();
-
-    // --- Duration Control ---
-    ImGui::PushItemWidth(120);
-    int         durationModeIndex = (int)*durationModeParam;
-    const char* durationModes[] = {
-        "User Choice", "1 Bar", "4 Bars", "8 Bars", "16 Bars", "32 Bars"};
-
-    if (ImGui::Combo("##duration", &durationModeIndex, durationModes, 6))
+    // Custom Duration Slider (only if User Choice is selected)
+    if (durIndex == 0)
     {
-        *durationModeParam = (float)durationModeIndex;
-        apvts.getParameter(paramIdDurationMode)
-            ->setValueNotifyingHost(apvts.getParameterRange(paramIdDurationMode)
-                                        .convertTo0to1((float)durationModeIndex));
-    }
-    if (ImGui::IsItemHovered())
-        ImGui::SetTooltip("Timeline Duration");
-
-    ImGui::SameLine();
-
-    // Show custom duration input if User Choice is selected
-    if (durationModeIndex == 0) // User Choice
-    {
+        ImGui::SameLine();
+        ImGui::SetNextItemWidth(100);
         float customDur = *customDurationParam;
-        ImGui::PushItemWidth(80);
-        if (ImGui::DragFloat("##customDur", &customDur, 1.0f, 4.0f, 256.0f, "%.0f beats"))
+        if (ImGui::DragFloat("##customDur", &customDur, 1.0f, 1.0f, 256.0f, "%.0f Beats"))
         {
             *customDurationParam = customDur;
-            apvts.getParameter(paramIdCustomDuration)
+            ap.getParameter(paramIdCustomDuration)
                 ->setValueNotifyingHost(
-                    apvts.getParameterRange(paramIdCustomDuration).convertTo0to1(customDur));
+                    ap.getParameterRange(paramIdCustomDuration).convertTo0to1(customDur));
+            markEdited();
         }
-        ImGui::PopItemWidth();
+        // Scroll-edit for Custom Duration DragFloat
+        adjustParamOnWheel(ap.getParameter(paramIdCustomDuration), paramIdCustomDuration, customDur);
         if (ImGui::IsItemHovered())
             ImGui::SetTooltip("Custom Duration in Beats");
     }
 
-    ImGui::PopItemWidth();
+    ImGui::PopID(); // End Toolbar
 
-    // --- Timeline Canvas ---
-    // Read data BEFORE BeginChild (following VCO pattern)
-    AutomationState::Ptr state = activeState.load();
-    auto*                zoomParam = apvts.getRawParameterValue(paramIdZoom);
+    ImGui::Spacing();
 
-    if (!state || !zoomParam)
+    // --- 2. TIMELINE & EDITOR AREA ---
+
+    const float  timelineHeight = 30.0f;
+    const float  editorHeight = 200.0f;
+    const float  pixelsPerBeat = currentZoom;
+    const double totalDuration = getTargetDuration();
+    const float  totalWidth = (float)(totalDuration * pixelsPerBeat);
+
+    // Scrollable Child Window
+    // IMPORTANT: Using ImGuiWindowFlags_NoMove to prevent the child window itself from being
+    // draggable but allowing content scrolling.
+    ImGui::BeginChild(
+        "TimelineEditor",
+        ImVec2(itemWidth, editorHeight + timelineHeight),
+        true,
+        ImGuiWindowFlags_HorizontalScrollbar | ImGuiWindowFlags_NoMove);
+
+    ImDrawList*  drawList = ImGui::GetWindowDrawList();
+    const ImVec2 windowPos = ImGui::GetCursorScreenPos();
+    const float  scrollX = ImGui::GetScrollX();
+
+    // Reserve space for content
+    ImGui::Dummy(ImVec2(totalWidth, editorHeight + timelineHeight));
+
+    // --- A. Ruler ---
+    const ImVec2 rulerStart = windowPos;
+    const float  visibleLeft = scrollX;
+    const float  visibleRight = scrollX + itemWidth;
+
+    // Draw Ruler Background
+    drawList->AddRectFilled(
+        rulerStart,
+        ImVec2(rulerStart.x + std::max(itemWidth, totalWidth), rulerStart.y + timelineHeight),
+        IM_COL32(40, 40, 40, 255));
+
+    // Draw Ruler Ticks (Optimized culling)
+    const int startBeat = (int)(visibleLeft / pixelsPerBeat);
+    const int endBeat = (int)(visibleRight / pixelsPerBeat) + 1;
+
+    for (int b = startBeat; b <= endBeat; ++b)
     {
-        ImGui::Text("Initializing...");
-        return;
+        float x = rulerStart.x + b * pixelsPerBeat;
+        bool  isBar = (b % 4 == 0);
+        float h = isBar ? timelineHeight : timelineHeight * 0.5f;
+
+        drawList->AddLine(
+            ImVec2(x, rulerStart.y + timelineHeight - h),
+            ImVec2(x, rulerStart.y + timelineHeight),
+            isBar ? IM_COL32(150, 150, 150, 255) : IM_COL32(80, 80, 80, 255));
+
+        if (isBar)
+        {
+            char buf[16];
+            snprintf(buf, 16, "%d", b / 4); // Start at 0 instead of 1
+            drawList->AddText(ImVec2(x + 3, rulerStart.y), IM_COL32(180, 180, 180, 255), buf);
+        }
     }
 
-    // Get target duration and prepare chunks
-    double targetDuration = getTargetDuration();
-    ensureChunkExistsAt(0.0);
-    ensureChunkExistsAt(targetDuration - 0.1);
-    state = activeState.load(); // Reload after chunk creation
+    // --- B. Automation Curve Editor ---
+    const ImVec2 editorStart = ImVec2(windowPos.x, windowPos.y + timelineHeight);
 
-    float zoom = *zoomParam;
-    float totalBeats = (float)targetDuration;
-    float totalWidth = totalBeats * zoom;
+    // Draw Background Grid
+    drawList->AddRectFilled(
+        editorStart,
+        ImVec2(editorStart.x + std::max(itemWidth, totalWidth), editorStart.y + editorHeight),
+        IM_COL32(20, 20, 20, 255));
 
-    // Calculate playhead position
-    double currentBeat = 0.0;
-    if (isSync && m_currentTransport.isPlaying)
+    // Draw Horizontal Grid Lines (0, 0.5, 1.0)
+    float y05 = editorStart.y + editorHeight * 0.5f;
+    drawList->AddLine(
+        ImVec2(editorStart.x, y05),
+        ImVec2(editorStart.x + std::max(itemWidth, totalWidth), y05),
+        IM_COL32(50, 50, 50, 255));
+
+    // Draw Vertical Grid Lines
+    for (int b = startBeat; b <= endBeat; ++b)
     {
-        currentBeat = m_currentTransport.songPositionBeats;
+        float x = editorStart.x + b * pixelsPerBeat;
+        drawList->AddLine(
+            ImVec2(x, editorStart.y),
+            ImVec2(x, editorStart.y + editorHeight),
+            IM_COL32(30, 30, 30, 255));
+    }
+
+    // Draw Curve
+    AutomationState::Ptr state = activeState.load();
+    if (state)
+    {
+        for (const auto& chunk : state->chunks)
+        {
+            // Culling: check if chunk is visible
+            float chunkStartX = editorStart.x + (float)(chunk->startBeat * pixelsPerBeat);
+            float chunkWidth = (float)(chunk->numBeats * pixelsPerBeat);
+
+            if (chunkStartX + chunkWidth < windowPos.x + visibleLeft ||
+                chunkStartX > windowPos.x + visibleRight)
+                continue;
+
+            // Draw samples
+            const auto& samples = chunk->samples;
+            if (samples.empty())
+                continue;
+
+            // Optimization: Don't draw every sample if zoomed out
+            int step = 1;
+            if (pixelsPerBeat < 20.0f)
+                step = 4;
+
+            for (size_t i = 0; i < samples.size() - step; i += step)
+            {
+                float b1 = (float)i / chunk->samplesPerBeat;
+                float b2 = (float)(i + step) / chunk->samplesPerBeat;
+
+                float x1 = chunkStartX + b1 * pixelsPerBeat;
+                float x2 = chunkStartX + b2 * pixelsPerBeat;
+
+                // Vertical culling
+                if (x2 < windowPos.x + visibleLeft || x1 > windowPos.x + visibleRight)
+                    continue;
+
+                float val1 = samples[i];
+                float val2 = samples[i + step];
+
+                float py1 = editorStart.y + editorHeight * (1.0f - val1);
+                float py2 = editorStart.y + editorHeight * (1.0f - val2);
+
+                drawList->AddLine(
+                    ImVec2(x1, py1), ImVec2(x2, py2), IM_COL32(100, 200, 255, 255), 2.0f);
+            }
+        }
+    }
+
+    // --- C. Playhead ---
+    double currentBeat = 0.0;
+    if (syncEnabled && m_currentTransport.isPlaying)
+    {
+        int divisionIndex = (int)*divisionParam;
+        if (getParent())
+        {
+            int globalDiv = getParent()->getTransportState().globalDivisionIndex.load();
+            if (globalDiv >= 0)
+                divisionIndex = globalDiv;
+        }
+        static const double multipliers[] = {
+            1.0 / 32.0, 1.0 / 16.0, 1.0 / 8.0, 1.0 / 4.0, 1.0 / 2.0, 1.0, 2.0, 4.0, 8.0};
+        const double speed = multipliers[juce::jlimit(0, 8, divisionIndex)];
+        currentBeat = m_currentTransport.songPositionBeats * speed;
     }
     else
     {
-        currentBeat = currentPhase;
+        currentBeat = currentPhase * totalDuration;
     }
 
-    // Loop wrapping for display
-    double loopDuration = getTargetDuration();
-    if (isSync && *loopParam > 0.5f && loopDuration > 0)
+    // Wrap for looping
+    const bool isLooping = loopParam != nullptr ? (*loopParam > 0.5f) : true;
+    if (isLooping && totalDuration > 0)
+        currentBeat = std::fmod(currentBeat, totalDuration);
+
+    float playheadX = editorStart.x + (float)(currentBeat * pixelsPerBeat);
+    if (playheadX >= windowPos.x + visibleLeft && playheadX <= windowPos.x + visibleRight)
     {
-        currentBeat = std::fmod(currentBeat, loopDuration);
-    }
-
-    // Use PushID for unique scoping (following VCO pattern)
-    ImGui::PushID(this);
-
-    const float            timelineHeight = 150.0f;
-    const ImVec2           graphSize(itemWidth, timelineHeight);
-    const ImGuiWindowFlags childFlags =
-        ImGuiWindowFlags_HorizontalScrollbar | ImGuiWindowFlags_AlwaysHorizontalScrollbar |
-        ImGuiWindowFlags_NoScrollWithMouse;
-
-    if (ImGui::BeginChild("AutomationLaneTimeline", graphSize, false, childFlags))
-    {
-        // Calculate available height for content (excluding scrollbar)
-        float canvasHeight = ImGui::GetContentRegionAvail().y;
-
-        // Create dummy for horizontal scrolling (must be inside child)
-        ImGui::Dummy(ImVec2(totalWidth, canvasHeight));
-
-        ImDrawList*  drawList = ImGui::GetWindowDrawList();
-        const ImVec2 p0 = ImGui::GetWindowPos();
-        const ImVec2 p1 = ImVec2(p0.x + graphSize.x, p0.y + graphSize.y);
-
-        // Get scroll position
-        float scrollX = ImGui::GetScrollX();
-        float visibleW = graphSize.x;
-
-        // Background - use theme colors
-        const auto resolveColor = [](ImU32 value, ImU32 fallback) {
-            return value != 0 ? value : fallback;
-        };
-        const ImU32 bgColor =
-            resolveColor(theme.canvas.canvas_background, IM_COL32(30, 30, 30, 255));
-        const ImU32 frameColor =
-            resolveColor(theme.canvas.node_frame, IM_COL32(150, 150, 150, 255));
-
-        drawList->AddRectFilled(p0, p1, bgColor);
-        drawList->AddRect(p0, p1, frameColor);
-
-        // Clip to graph area
-        drawList->PushClipRect(p0, p1, true);
-
-        // Grid Lines (Based on Division)
-        double gridStep = currentDivision;
-        // If grid is too dense, double it until it's reasonable
-        while (gridStep * zoom < 10.0f)
-            gridStep *= 2.0;
-
-        int firstGridIdx = (int)((scrollX / zoom) / gridStep);
-        int lastGridIdx = (int)(((scrollX + visibleW) / zoom) / gridStep) + 1;
-
-        for (int i = firstGridIdx; i <= lastGridIdx; ++i)
-        {
-            double beat = i * gridStep;
-            float  x = p0.x + (float)(beat * zoom) - scrollX;
-
-            // Determine line style
-            bool isBar = (std::fmod(beat, 4.0) < 0.001);
-            bool isBeat = (std::fmod(beat, 1.0) < 0.001);
-
-            ImU32 color = IM_COL32(50, 50, 50, 255);
-            if (isBar)
-                color = IM_COL32(100, 100, 100, 255);
-            else if (isBeat)
-                color = IM_COL32(70, 70, 70, 255);
-
-            drawList->AddLine(ImVec2(x, p0.y), ImVec2(x, p1.y), color);
-
-            if (isBar)
-            {
-                char buf[16];
-                sprintf(buf, "%d", (int)(beat / 4) + 1);
-                drawList->AddText(ImVec2(x + 2, p0.y), IM_COL32(150, 150, 150, 255), buf);
-            }
-        }
-
-        // Draw Chunks
-        for (const auto& chunk : state->chunks)
-        {
-            // Culling
-            float chunkStartX = p0.x + (float)(chunk->startBeat * zoom) - scrollX;
-            float chunkEndX = chunkStartX + (float)(chunk->numBeats * zoom);
-
-            if (chunkEndX < p0.x || chunkStartX > p1.x)
-                continue;
-
-            // Draw Curve
-            if (chunk->samples.size() > 1)
-            {
-                for (size_t i = 0; i < chunk->samples.size() - 1; ++i)
-                {
-                    float b1 = (float)i / chunk->samplesPerBeat;
-                    float b2 = (float)(i + 1) / chunk->samplesPerBeat;
-
-                    float x1 = chunkStartX + (b1 * zoom);
-                    float x2 = chunkStartX + (b2 * zoom);
-
-                    // Optimization: Skip if pixel x1 == x2
-                    if ((int)x1 == (int)x2)
-                        continue;
-
-                    float y1 = p0.y + canvasHeight * (1.0f - chunk->samples[i]);
-                    float y2 = p0.y + canvasHeight * (1.0f - chunk->samples[i + 1]);
-
-                    // Clamp Y values
-                    y1 = juce::jlimit(p0.y, p0.y + canvasHeight, y1);
-                    y2 = juce::jlimit(p0.y, p0.y + canvasHeight, y2);
-
-                    // Use bright blue color - bold
-                    drawList->AddLine(
-                        ImVec2(x1, y1), ImVec2(x2, y2), IM_COL32(100, 150, 255, 255), 4.0f);
-                }
-            }
-        }
-
-        // Playhead
-        float playheadX = p0.x + (float)(currentBeat * zoom) - scrollX;
-        playheadX = juce::jlimit(p0.x, p1.x, playheadX);
         drawList->AddLine(
-            ImVec2(playheadX, p0.y),
-            ImVec2(playheadX, p0.y + canvasHeight),
+            ImVec2(playheadX, rulerStart.y),
+            ImVec2(playheadX, editorStart.y + editorHeight),
             IM_COL32(255, 255, 0, 200),
             2.0f);
+    }
 
-        drawList->PopClipRect();
+    // --- D. Interaction (Draw on Canvas) ---
+    if (!isRec)
+    {
+        // Use InvisibleButton to capture mouse events without visual interference
+        // This prevents the click from falling through to the node editor background
+        ImGui::SetCursorPos(ImVec2(0, timelineHeight)); // Position relative to child window
+        ImGui::InvisibleButton("##CanvasInteraction", ImVec2(std::max(itemWidth, totalWidth), editorHeight));
 
-        // Auto-scroll
-        if (m_currentTransport.isPlaying && isRec)
-        {
-            float targetScroll = (float)(currentBeat * zoom) - (visibleW * 0.5f);
-            if (targetScroll < 0)
-                targetScroll = 0;
-            ImGui::SetScrollX(targetScroll);
-        }
-
-        // Mouse interaction for drawing - use InvisibleButton to prevent node dragging
-        ImGui::SetCursorPos(ImVec2(0, 0));
-        ImGui::InvisibleButton(
-            "##automationLaneCanvasDrag", graphSize, ImGuiButtonFlags_MouseButtonLeft);
-        const bool is_hovered = ImGui::IsItemHovered();
-        const bool is_active = ImGui::IsItemActive();
-
-        if (is_hovered && ImGui::IsMouseClicked(ImGuiMouseButton_Left))
-        {
-            isDragging = true;
-            ImVec2 mousePos = ImGui::GetMousePos();
-            lastMousePosInCanvas = ImVec2(mousePos.x - p0.x + scrollX, mousePos.y - p0.y);
-        }
-
-        if (ImGui::IsMouseReleased(ImGuiMouseButton_Left))
-        {
-            if (isDragging)
-                markEdited(); // Notify undo system
-            isDragging = false;
-            lastMousePosInCanvas = ImVec2(-1, -1);
-        }
-
-        if (isDragging && is_active)
+        // --- START NEW TOOLTIP CODE ---
+        if (ImGui::IsItemHovered())
         {
             ImVec2 mousePos = ImGui::GetMousePos();
-            ImVec2 current_pos = ImVec2(mousePos.x - p0.x + scrollX, mousePos.y - p0.y);
+            float relX = mousePos.x - editorStart.x;
+            float relY = mousePos.y - editorStart.y;
+            
+            // Calculate Data
+            double beat = relX / pixelsPerBeat;
+            float val = 1.0f - (relY / editorHeight);
+            val = juce::jlimit(0.0f, 1.0f, val); 
+            
+            // 1. Draw Crosshair (Visual Feedback)
+            // Vertical Line (Time)
+            drawList->AddLine(
+                ImVec2(mousePos.x, editorStart.y), 
+                ImVec2(mousePos.x, editorStart.y + editorHeight), 
+                IM_COL32(255, 255, 255, 50));
+            
+            // Horizontal Line (Value)
+            drawList->AddLine(
+                ImVec2(editorStart.x, mousePos.y), 
+                ImVec2(editorStart.x + std::max(itemWidth, totalWidth), mousePos.y), 
+                IM_COL32(255, 255, 255, 50));
 
-            // Calculate beat positions for last and current mouse positions
-            double beat0 = lastMousePosInCanvas.x / zoom;
-            double beat1 = current_pos.x / zoom;
+            // 2. Rich Tooltip (Data Display)
+            ImGui::BeginTooltip();
+            // Header: Time Info
+            ImGui::TextColored(ImVec4(1.0f, 0.8f, 0.2f, 1.0f), "Time: %.2f Beats", beat);
+            
+            // Calculate Bar.Beat format (assuming 4/4 for display)
+            int bar = (int)(beat / 4.0) + 1;
+            double beatInBar = std::fmod(beat, 4.0) + 1.0;
+            ImGui::TextDisabled("Position: %d.%02d", bar, (int)(beatInBar * 100)); // e.g. 1.50
+            
+            ImGui::Separator();
+            
+            // Value Info
+            ImGui::Text("Value (0-1):   %.3f", val);
+            ImGui::Text("Bipolar (-1/1): %.3f", (val * 2.0f) - 1.0f);
+            ImGui::TextColored(ImVec4(0.4f, 0.8f, 1.0f, 1.0f), "CV Output:      %.2f V", val * 10.0f);
+            
+            ImGui::EndTooltip();
+        }
+        // --- END NEW TOOLTIP CODE ---
 
-            // Ensure chunks exist at both positions
-            ensureChunkExistsAt(beat0);
-            ensureChunkExistsAt(beat1);
-            state = activeState.load(); // Reload after potential chunk creation
+        // Capture interaction with interpolation for smooth drawing
+        // Check mouse state every frame to ensure smooth drawing even with fast mouse movement
+        bool isMouseDown = ImGui::IsItemActive() && ImGui::IsMouseDown(0);
+        
+        if (isMouseDown)
+        {
+            ImVec2 mousePos = ImGui::GetMousePos();
+            float  relX = mousePos.x - editorStart.x;
+            float  relY = mousePos.y - editorStart.y;
 
-            if (state)
+            double currentBeat = relX / pixelsPerBeat;
+            float  currentVal = 1.0f - (relY / editorHeight);
+            currentVal = juce::jlimit(0.0f, 1.0f, currentVal);
+
+            // Check if this is the start of a new drag (lastMousePosInCanvas is invalid)
+            bool isNewDrag = (lastMousePosInCanvas.x < 0.0f || lastMousePosInCanvas.y < 0.0f);
+            
+            // Also check if mouse has moved significantly (to avoid redundant updates)
+            bool mouseMoved = isNewDrag;
+            if (!isNewDrag)
             {
-                // Find chunks at both positions
-                auto chunk0 = state->findChunkAt(beat0);
-                auto chunk1 = state->findChunkAt(beat1);
-
-                if (chunk0 && chunk1)
+                float dx = mousePos.x - lastMousePosInCanvas.x;
+                float dy = mousePos.y - lastMousePosInCanvas.y;
+                mouseMoved = (std::abs(dx) > 0.5f || std::abs(dy) > 0.5f); // Threshold to avoid micro-movements
+            }
+            
+            if (isNewDrag)
+            {
+                // First point: just draw at current position with larger radius
+                lastMousePosInCanvas = mousePos;
+                
+                ensureChunkExistsAt(currentBeat);
+                state = activeState.load();
+                auto chunk = state->findChunkAt(currentBeat);
+                if (chunk)
                 {
-                    // Normalize Y values (0-1, with 0 at top, 1 at bottom)
-                    float y0 =
-                        1.0f - juce::jlimit(0.0f, 1.0f, lastMousePosInCanvas.y / canvasHeight);
-                    float y1 = 1.0f - juce::jlimit(0.0f, 1.0f, current_pos.y / canvasHeight);
-
-                    // Handle drawing within a single chunk
-                    if (chunk0.get() == chunk1.get())
+                    double beatInChunk = currentBeat - chunk->startBeat;
+                    int    sampleIdx = (int)(beatInChunk * chunk->samplesPerBeat);
+                    int    radius = 8; // Larger radius for initial point
+                    modifyChunkSamplesThreadSafe(
+                        chunk, sampleIdx - radius, sampleIdx + radius, currentVal, currentVal);
+                    markEdited();
+                }
+            }
+            else if (mouseMoved)
+            {
+                // Interpolate between last position and current position
+                float lastRelX = lastMousePosInCanvas.x - editorStart.x;
+                float lastRelY = lastMousePosInCanvas.y - editorStart.y;
+                
+                double lastBeat = lastRelX / pixelsPerBeat;
+                float  lastVal = 1.0f - (lastRelY / editorHeight);
+                lastVal = juce::jlimit(0.0f, 1.0f, lastVal);
+                
+                // Ensure we have chunks for both start and end points
+                ensureChunkExistsAt(lastBeat);
+                ensureChunkExistsAt(currentBeat);
+                state = activeState.load();
+                
+                // Find chunks and sample indices for both positions
+                auto lastChunk = state->findChunkAt(lastBeat);
+                auto currentChunk = state->findChunkAt(currentBeat);
+                
+                if (lastChunk && currentChunk)
+                {
+                    // Calculate sample indices
+                    double lastBeatInChunk = lastBeat - lastChunk->startBeat;
+                    double currentBeatInChunk = currentBeat - currentChunk->startBeat;
+                    
+                    int lastSampleIdx = (int)(lastBeatInChunk * lastChunk->samplesPerBeat);
+                    int currentSampleIdx = (int)(currentBeatInChunk * currentChunk->samplesPerBeat);
+                    
+                    // Handle same chunk vs different chunks
+                    int radius = 5; // Radius for smooth drawing
+                    
+                    if (lastChunk == currentChunk)
                     {
-                        double beatInChunk0 = beat0 - chunk0->startBeat;
-                        double beatInChunk1 = beat1 - chunk0->startBeat;
-
-                        int sampleIdx0 = static_cast<int>(beatInChunk0 * chunk0->samplesPerBeat);
-                        int sampleIdx1 = static_cast<int>(beatInChunk1 * chunk0->samplesPerBeat);
-
-                        sampleIdx0 = juce::jlimit(0, (int)chunk0->samples.size() - 1, sampleIdx0);
-                        sampleIdx1 = juce::jlimit(0, (int)chunk0->samples.size() - 1, sampleIdx1);
-
-                        if (sampleIdx0 > sampleIdx1)
-                            std::swap(sampleIdx0, sampleIdx1);
-
-                        // Modify samples with interpolation
-                        modifyChunkSamplesThreadSafe(chunk0, sampleIdx0, sampleIdx1, y0, y1);
-                        state = activeState.load(); // Reload after modification
+                        // Same chunk: fill all samples between the two indices with radius
+                        int startIdx = juce::jmin(lastSampleIdx, currentSampleIdx) - radius;
+                        int endIdx = juce::jmax(lastSampleIdx, currentSampleIdx) + radius;
+                        startIdx = juce::jmax(0, startIdx);
+                        endIdx = juce::jmin((int)lastChunk->samples.size() - 1, endIdx);
+                        
+                        float startVal = (lastSampleIdx < currentSampleIdx) ? lastVal : currentVal;
+                        float endVal = (lastSampleIdx < currentSampleIdx) ? currentVal : lastVal;
+                        
+                        // Fill every sample in the range with interpolation
+                        // modifyChunkSamplesThreadSafe already handles interpolation between startVal and endVal
+                        modifyChunkSamplesThreadSafe(
+                            lastChunk, startIdx, endIdx, startVal, endVal);
                     }
                     else
                     {
-                        // Cross-chunk drawing: handle each chunk separately
-                        // First chunk: from beat0 to chunk0 end
+                        // Different chunks: fill from last position to end of last chunk,
+                        // then from start of current chunk to current position
+                        
+                        // Fill to end of last chunk (with radius at start)
+                        int lastChunkEndIdx = (int)lastChunk->samples.size() - 1;
+                        int lastStartIdx = juce::jmax(0, lastSampleIdx - radius);
+                        int lastEndIdx = juce::jmin(lastChunkEndIdx, lastSampleIdx + radius);
+                        if (lastStartIdx <= lastEndIdx)
                         {
-                            double beatInChunk0 = beat0 - chunk0->startBeat;
-                            int    sampleIdx0 =
-                                static_cast<int>(beatInChunk0 * chunk0->samplesPerBeat);
-                            int sampleIdx1 = (int)chunk0->samples.size() - 1;
-
-                            sampleIdx0 =
-                                juce::jlimit(0, (int)chunk0->samples.size() - 1, sampleIdx0);
-                            sampleIdx1 =
-                                juce::jlimit(0, (int)chunk0->samples.size() - 1, sampleIdx1);
-
-                            // Interpolate to chunk boundary
-                            double chunkEndBeat = chunk0->startBeat + chunk0->numBeats;
-                            float  t = (chunkEndBeat - beat0) / (beat1 - beat0);
-                            float  yBoundary = juce::jmap((float)t, y0, y1);
-
                             modifyChunkSamplesThreadSafe(
-                                chunk0, sampleIdx0, sampleIdx1, y0, yBoundary);
+                                lastChunk, lastStartIdx, lastEndIdx, lastVal, lastVal);
                         }
-
-                        // Second chunk: from chunk1 start to beat1
+                        
+                        // Fill from start of current chunk to current position (with radius at end)
+                        int currentStartIdx = juce::jmax(0, currentSampleIdx - radius);
+                        int currentEndIdx = juce::jmin((int)currentChunk->samples.size() - 1, currentSampleIdx + radius);
+                        if (currentStartIdx <= currentEndIdx)
                         {
-                            double beatInChunk1 = beat1 - chunk1->startBeat;
-                            int    sampleIdx0 = 0;
-                            int    sampleIdx1 =
-                                static_cast<int>(beatInChunk1 * chunk1->samplesPerBeat);
-
-                            sampleIdx0 =
-                                juce::jlimit(0, (int)chunk1->samples.size() - 1, sampleIdx0);
-                            sampleIdx1 =
-                                juce::jlimit(0, (int)chunk1->samples.size() - 1, sampleIdx1);
-
-                            // Interpolate from chunk boundary
-                            double chunkStartBeat = chunk1->startBeat;
-                            float  t = (chunkStartBeat - beat0) / (beat1 - beat0);
-                            float  yBoundary = juce::jmap((float)t, y0, y1);
-
                             modifyChunkSamplesThreadSafe(
-                                chunk1, sampleIdx0, sampleIdx1, yBoundary, y1);
+                                currentChunk, currentStartIdx, currentEndIdx, lastVal, currentVal);
                         }
-
-                        state = activeState.load(); // Reload after modifications
                     }
                 }
+                else if (currentChunk)
+                {
+                    // Fallback: just draw at current position
+                    double beatInChunk = currentBeat - currentChunk->startBeat;
+                    int    sampleIdx = (int)(beatInChunk * currentChunk->samplesPerBeat);
+                    int    radius = 5;
+                    modifyChunkSamplesThreadSafe(
+                        currentChunk, sampleIdx - radius, sampleIdx + radius, currentVal, currentVal);
+                }
+                
+                markEdited();
+                // Update last position immediately after processing
+                lastMousePosInCanvas = mousePos;
             }
-
-            lastMousePosInCanvas = current_pos;
+        }
+        else
+        {
+            // Mouse released: reset last position to invalidate next drag
+            lastMousePosInCanvas = ImVec2(-1.0f, -1.0f);
         }
     }
-    ImGui::EndChild(); // CRITICAL: Must be OUTSIDE the if block!
 
-    ImGui::PopID();
+    ImGui::EndChild();
 }
+
 #endif
+

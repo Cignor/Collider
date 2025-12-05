@@ -1,6 +1,7 @@
 #include "MultiBandShaperModuleProcessor.h"
 #if defined(PRESET_CREATOR_UI)
 #include "../../preset_creator/theme/ThemeManager.h"
+#include "../../preset_creator/ControllerPresetManager.h"
 #endif
 #include <cmath>
 
@@ -366,6 +367,208 @@ void MultiBandShaperModuleProcessor::drawParametersInNode(
     const auto& theme = ThemeManager::getInstance().getCurrentTheme();
     auto& ap = getAPVTS();
     ImGui::PushID(this);
+    
+    auto& presetManager = ControllerPresetManager::get();
+    
+    // Define 12 standard presets (drive values for 8 bands: 60Hz, 150Hz, 400Hz, 1kHz, 2.4kHz, 5kHz, 10kHz, 16kHz)
+    struct StandardPreset
+    {
+        const char* name;
+        std::array<float, NUM_BANDS> drives;
+    };
+    const StandardPreset standardPresets[] = {
+        { "Flat", { 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f } },
+        { "Bass Heavy", { 50.0f, 40.0f, 20.0f, 5.0f, 2.0f, 1.0f, 1.0f, 1.0f } },
+        { "Bright", { 1.0f, 1.0f, 2.0f, 5.0f, 20.0f, 40.0f, 50.0f, 45.0f } },
+        { "Warm", { 15.0f, 25.0f, 30.0f, 20.0f, 10.0f, 5.0f, 2.0f, 1.0f } },
+        { "Aggressive", { 60.0f, 60.0f, 60.0f, 60.0f, 60.0f, 60.0f, 60.0f, 60.0f } },
+        { "Subtle", { 5.0f, 5.0f, 5.0f, 5.0f, 5.0f, 5.0f, 5.0f, 5.0f } },
+        { "Mid Focus", { 2.0f, 5.0f, 40.0f, 50.0f, 45.0f, 30.0f, 10.0f, 5.0f } },
+        { "Vintage", { 10.0f, 15.0f, 35.0f, 40.0f, 35.0f, 20.0f, 10.0f, 5.0f } },
+        { "Modern", { 45.0f, 35.0f, 15.0f, 10.0f, 15.0f, 30.0f, 45.0f, 50.0f } },
+        { "Smooth", { 8.0f, 12.0f, 15.0f, 18.0f, 15.0f, 12.0f, 8.0f, 5.0f } },
+        { "Punchy", { 30.0f, 45.0f, 50.0f, 40.0f, 20.0f, 10.0f, 5.0f, 2.0f } },
+        { "Airy", { 1.0f, 1.0f, 2.0f, 3.0f, 5.0f, 25.0f, 45.0f, 50.0f } }
+    };
+    const int numStandardPresets = sizeof(standardPresets) / sizeof(standardPresets[0]);
+    
+    // Get saved presets
+    const auto& savedPresetNames = presetManager.getPresetNamesFor(ControllerPresetManager::ModuleType::MultiBandShaper);
+    
+    // UI SYNCHRONIZATION: On first draw after loading, find the index for the saved preset name
+    if (activePresetName.isNotEmpty())
+    {
+        selectedPresetIndex = savedPresetNames.indexOf(activePresetName);
+        if (selectedPresetIndex >= 0)
+        {
+            // Found saved preset, clear standard preset selection
+            selectedStandardPresetIndex = -1;
+        }
+        else
+        {
+            // Saved preset not found, clear it
+            activePresetName = "";
+            selectedPresetIndex = -1;
+        }
+        activePresetName = ""; // Clear so we only do this once
+    }
+    
+    // Create combined list: standard presets + saved presets
+    juce::StringArray allPresetNames;
+    for (int i = 0; i < numStandardPresets; ++i)
+        allPresetNames.add(standardPresets[i].name);
+    allPresetNames.add("---"); // Separator
+    for (const auto& name : savedPresetNames)
+        allPresetNames.add(name);
+    
+    // Create C-style array for ImGui combo
+    std::vector<const char*> comboItems;
+    for (const auto& name : allPresetNames)
+        comboItems.push_back(name.toRawUTF8());
+    
+    if (comboItems.empty())
+        comboItems.push_back("<no presets>");
+    
+    // Preset dropdown with scroll-edit support
+    // Calculate current selection based on saved state
+    int comboSelection = 0;
+    if (selectedPresetIndex >= 0 && selectedPresetIndex < savedPresetNames.size())
+    {
+        // A saved preset is selected
+        comboSelection = numStandardPresets + 1 + selectedPresetIndex; // +1 for separator
+    }
+    else
+    {
+        // Standard preset is selected (or default to first)
+        comboSelection = juce::jlimit(0, numStandardPresets - 1, selectedStandardPresetIndex);
+    }
+    
+    // Helper lambda to apply preset selection
+    auto applyPresetSelection = [&](int selection)
+    {
+        if (selection < numStandardPresets)
+        {
+            // Standard preset selected
+            const auto& preset = standardPresets[selection];
+            for (int i = 0; i < NUM_BANDS; ++i)
+            {
+                juce::String paramId = "drive_" + juce::String(i + 1);
+                if (auto* p = dynamic_cast<juce::AudioParameterFloat*>(ap.getParameter(paramId)))
+                    *p = preset.drives[i];
+            }
+            selectedPresetIndex = -1; // Clear saved preset selection
+            selectedStandardPresetIndex = selection; // Track which standard preset is selected
+            activePresetName = "";
+            onModificationEnded();
+        }
+        else if (selection > numStandardPresets) // Skip separator
+        {
+            // Saved preset selected
+            int savedIndex = selection - numStandardPresets - 1;
+            if (savedIndex >= 0 && savedIndex < savedPresetNames.size())
+            {
+                activePresetName = savedPresetNames[savedIndex];
+                juce::ValueTree presetData = presetManager.loadPreset(ControllerPresetManager::ModuleType::MultiBandShaper, activePresetName);
+                setExtraStateTree(presetData);
+                selectedPresetIndex = savedIndex;
+                selectedStandardPresetIndex = -1; // Clear standard preset selection
+                onModificationEnded();
+            }
+        }
+    };
+    
+    ThemeText("PRESETS", theme.text.section_header);
+    ImGui::SetNextItemWidth(itemWidth * 0.5f); // Constrain dropdown width to 50% of node width
+    if (ImGui::Combo("##MultiBandPreset", &comboSelection, comboItems.data(), (int)comboItems.size()))
+    {
+        applyPresetSelection(comboSelection);
+    }
+    
+    // Scroll-edit support for preset dropdown
+    if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenBlockedByPopup))
+    {
+        const float wheel = ImGui::GetIO().MouseWheel;
+        if (wheel != 0.0f)
+        {
+            const int maxIndex = (int)comboItems.size() - 1;
+            // Follow guide pattern: wheel > 0.0f (scroll down) gives -1, wheel < 0.0f (scroll up) gives +1
+            const int delta = wheel > 0.0f ? -1 : 1;
+            int newSelection = juce::jlimit(0, maxIndex, comboSelection + delta);
+            
+            // Skip separator when scrolling
+            if (newSelection == numStandardPresets)
+            {
+                newSelection = wheel > 0.0f ? numStandardPresets - 1 : numStandardPresets + 1;
+                newSelection = juce::jlimit(0, maxIndex, newSelection);
+            }
+            
+            if (newSelection != comboSelection)
+            {
+                comboSelection = newSelection;
+                applyPresetSelection(comboSelection);
+            }
+        }
+    }
+    
+    // "Save" button - on same line but constrained
+    ImGui::SameLine(0, 4.0f);
+    ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.2f, 0.7f, 0.3f, 0.8f));
+    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.3f, 0.8f, 0.4f, 0.95f));
+    ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 1.0f, 1.0f, 1.0f));
+    if (ImGui::Button("Save##multibandpreset"))
+    {
+        ImGui::OpenPopup("Save MultiBand Preset");
+    }
+    ImGui::PopStyleColor(3);
+    
+    // "Delete" button - on same line
+    if (selectedPresetIndex >= 0 && selectedPresetIndex < savedPresetNames.size())
+    {
+        ImGui::SameLine(0, 4.0f);
+        ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.8f, 0.2f, 0.2f, 0.8f));
+        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.9f, 0.3f, 0.3f, 0.95f));
+        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 1.0f, 1.0f, 1.0f));
+        if (ImGui::Button("Delete##multibandpreset"))
+        {
+            presetManager.deletePreset(ControllerPresetManager::ModuleType::MultiBandShaper, savedPresetNames[selectedPresetIndex]);
+            selectedPresetIndex = -1;
+            activePresetName = "";
+        }
+        ImGui::PopStyleColor(3);
+    }
+    
+    // Save popup
+    if (ImGui::BeginPopup("Save MultiBand Preset"))
+    {
+        ImGui::InputText("Preset Name", presetNameBuffer, sizeof(presetNameBuffer));
+        if (ImGui::Button("Save New##confirm"))
+        {
+            juce::String name(presetNameBuffer);
+            if (name.isNotEmpty())
+            {
+                presetManager.savePreset(ControllerPresetManager::ModuleType::MultiBandShaper, name, getExtraStateTree());
+                activePresetName = name;
+                selectedPresetIndex = savedPresetNames.indexOf(activePresetName);
+                if (selectedPresetIndex < 0)
+                {
+                    // Preset was just created, need to refresh
+                    const auto& updatedNames = presetManager.getPresetNamesFor(ControllerPresetManager::ModuleType::MultiBandShaper);
+                    selectedPresetIndex = updatedNames.indexOf(activePresetName);
+                }
+                memset(presetNameBuffer, 0, sizeof(presetNameBuffer));
+                ImGui::CloseCurrentPopup();
+                onModificationEnded();
+            }
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("Cancel##multibandpreset"))
+        {
+            ImGui::CloseCurrentPopup();
+        }
+        ImGui::EndPopup();
+    }
+    
+    ImGui::Spacing();
 
     const ImU32 panelBg = ThemeManager::getInstance().getCanvasBackground();
     const ImU32 inputColor = ImGui::ColorConvertFloat4ToU32(theme.modulation.frequency);
@@ -646,5 +849,127 @@ std::vector<DynamicPinInfo> MultiBandShaperModuleProcessor::getDynamicOutputPins
     pins.push_back({"Out R", 1, PinDataType::Audio});
     
     return pins;
+}
+
+juce::ValueTree MultiBandShaperModuleProcessor::getExtraStateTree() const
+{
+    juce::ValueTree state("MultiBandShaperState");
+    
+#if defined(PRESET_CREATOR_UI)
+    // Save the active preset name (for saved presets)
+    if (selectedPresetIndex >= 0)
+    {
+        auto& presetManager = ControllerPresetManager::get();
+        const auto& presetNames = presetManager.getPresetNamesFor(ControllerPresetManager::ModuleType::MultiBandShaper);
+        if (selectedPresetIndex < presetNames.size())
+            state.setProperty("preset", presetNames[selectedPresetIndex], nullptr);
+    }
+    
+    // Save which standard preset is selected (for standard presets)
+    if (selectedStandardPresetIndex >= 0 && selectedStandardPresetIndex < 12)
+    {
+        state.setProperty("selectedStandardPresetIndex", selectedStandardPresetIndex, nullptr);
+    }
+    
+    // Save all 8 band drive values
+    for (int i = 0; i < NUM_BANDS; ++i)
+    {
+        juce::String paramId = "drive_" + juce::String(i + 1);
+        if (driveParams[i] != nullptr)
+            state.setProperty(paramId, driveParams[i]->load(), nullptr);
+    }
+    
+    // Save output gain
+    if (outputGainParam != nullptr)
+        state.setProperty("outputGain", outputGainParam->load(), nullptr);
+    
+    // Save mix
+    if (mixParam != nullptr)
+        state.setProperty("mix", mixParam->load(), nullptr);
+    
+    // Save relative modulation parameters
+    for (int i = 0; i < NUM_BANDS; ++i)
+    {
+        juce::String paramId = "relativeDriveMod_" + juce::String(i + 1);
+        if (relativeDriveModParams[i] != nullptr)
+            state.setProperty(paramId, relativeDriveModParams[i]->load() > 0.5f, nullptr);
+    }
+    if (relativeGainModParam != nullptr)
+        state.setProperty("relativeGainMod", relativeGainModParam->load() > 0.5f, nullptr);
+#endif
+    
+    return state;
+}
+
+void MultiBandShaperModuleProcessor::setExtraStateTree(const juce::ValueTree& state)
+{
+    if (state.hasType("MultiBandShaperState"))
+    {
+#if defined(PRESET_CREATOR_UI)
+        // Load the preset name for UI synchronization
+        activePresetName = state.getProperty("preset", "").toString();
+        
+        // Load which standard preset is selected
+        selectedStandardPresetIndex = state.getProperty("selectedStandardPresetIndex", 0);
+        if (selectedStandardPresetIndex < 0 || selectedStandardPresetIndex >= 12)
+            selectedStandardPresetIndex = 0; // Default to Flat if invalid
+        
+        // If a saved preset name was loaded, try to find its index
+        if (activePresetName.isNotEmpty())
+        {
+            auto& presetManager = ControllerPresetManager::get();
+            const auto& presetNames = presetManager.getPresetNamesFor(ControllerPresetManager::ModuleType::MultiBandShaper);
+            selectedPresetIndex = presetNames.indexOf(activePresetName);
+            if (selectedPresetIndex >= 0)
+            {
+                // Found saved preset, clear standard preset selection
+                selectedStandardPresetIndex = -1;
+            }
+            else
+            {
+                // Saved preset not found, clear it
+                activePresetName = "";
+                selectedPresetIndex = -1;
+            }
+        }
+        else
+        {
+            // No saved preset, use standard preset
+            selectedPresetIndex = -1;
+        }
+        
+        // Load all 8 band drive values
+        for (int i = 0; i < NUM_BANDS; ++i)
+        {
+            juce::String paramId = "drive_" + juce::String(i + 1);
+            float value = state.getProperty(paramId, 1.0f);
+            if (auto* p = dynamic_cast<juce::AudioParameterFloat*>(apvts.getParameter(paramId)))
+                *p = value;
+        }
+        
+        // Load output gain
+        if (auto* p = dynamic_cast<juce::AudioParameterFloat*>(apvts.getParameter("outputGain")))
+            *p = state.getProperty("outputGain", 0.0f);
+        
+        // Load mix
+        if (auto* p = dynamic_cast<juce::AudioParameterFloat*>(apvts.getParameter("mix")))
+            *p = state.getProperty("mix", 1.0f);
+        
+        // Load relative modulation parameters
+        for (int i = 0; i < NUM_BANDS; ++i)
+        {
+            juce::String paramId = "relativeDriveMod_" + juce::String(i + 1);
+            bool value = state.getProperty(paramId, true);
+            if (auto* p = dynamic_cast<juce::AudioParameterBool*>(apvts.getParameter(paramId)))
+                *p = value;
+        }
+        if (auto* p = dynamic_cast<juce::AudioParameterBool*>(apvts.getParameter("relativeGainMod")))
+            *p = state.getProperty("relativeGainMod", true);
+        
+        juce::Logger::writeToLog("[MultiBandShaper] Loaded state - selectedStandardPresetIndex: " + juce::String(selectedStandardPresetIndex) + 
+                                 ", selectedPresetIndex: " + juce::String(selectedPresetIndex) + 
+                                 ", activePresetName: " + activePresetName);
+#endif
+    }
 }
 

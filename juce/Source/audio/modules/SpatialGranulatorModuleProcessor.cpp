@@ -48,7 +48,6 @@ SpatialGranulatorModuleProcessor::SpatialGranulatorModuleProcessor()
               .withOutput("Output", juce::AudioChannelSet::stereo(), true)),
       apvts(*this, nullptr, "SpatialGranulatorParams", createParameterLayout())
 {
-    juce::Logger::writeToLog("[SPATIAL_GRAN] ===== CONSTRUCTOR CALLED =====");
     dryMixParam = apvts.getRawParameterValue(paramIdDryMix);
     penMixParam = apvts.getRawParameterValue(paramIdPenMix);
     sprayMixParam = apvts.getRawParameterValue(paramIdSprayMix);
@@ -95,11 +94,8 @@ SpatialGranulatorModuleProcessor::SpatialGranulatorModuleProcessor()
 
 void SpatialGranulatorModuleProcessor::prepareToPlay(double sampleRate, int)
 {
-    juce::Logger::writeToLog("[SPATIAL_GRAN] ===== prepareToPlay CALLED =====");
-    juce::Logger::writeToLog("[SPATIAL_GRAN] sampleRate = " + juce::String(sampleRate));
     const float bufferLengthSeconds = bufferLengthParam ? bufferLengthParam->load() : 2.0f;
     const int   bufferSize = (int)(sampleRate * bufferLengthSeconds);
-    juce::Logger::writeToLog("[SPATIAL_GRAN] bufferSize = " + juce::String(bufferSize));
 
     sourceBuffer.setSize(2, bufferSize);
     sourceBuffer.clear();
@@ -191,7 +187,6 @@ void SpatialGranulatorModuleProcessor::processBlock(
     if (firstProcessBlock)
     {
         firstProcessBlock = false;
-        juce::Logger::writeToLog("[SPATIAL_GRAN] === processBlock called for first time ===");
     }
     
     auto inBus = getBusBuffer(buffer, true, 0);
@@ -250,37 +245,11 @@ void SpatialGranulatorModuleProcessor::processBlock(
     const bool densityModActive = isParamInputConnected(paramIdDensityMod);
     const bool grainSizeModActive = isParamInputConnected(paramIdGrainSizeMod);
     
-    // Log connection status (ALWAYS LOG - no throttling)
-    static int logCounter = 0;
-    static bool firstLog = true;
-    logCounter++;
-    if (firstLog || (logCounter % 10 == 0)) // Log every 10 blocks instead of 100
-    {
-        firstLog = false;
-        juce::Logger::writeToLog("[SPATIAL_GRAN] === CV Input Status (block " + juce::String(logCounter) + ") ===");
-        juce::Logger::writeToLog("[SPATIAL_GRAN] inBus.getNumChannels() = " + juce::String(inBus.getNumChannels()));
-        juce::Logger::writeToLog("[SPATIAL_GRAN] dryMixModActive = " + juce::String(dryMixModActive ? "true" : "false"));
-        juce::Logger::writeToLog("[SPATIAL_GRAN] penMixModActive = " + juce::String(penMixModActive ? "true" : "false"));
-        juce::Logger::writeToLog("[SPATIAL_GRAN] sprayMixModActive = " + juce::String(sprayMixModActive ? "true" : "false"));
-        juce::Logger::writeToLog("[SPATIAL_GRAN] densityModActive = " + juce::String(densityModActive ? "true" : "false"));
-        juce::Logger::writeToLog("[SPATIAL_GRAN] grainSizeModActive = " + juce::String(grainSizeModActive ? "true" : "false"));
-    }
-    
     const float* dryMixCV = (dryMixModActive && inBus.getNumChannels() > 2) ? inBus.getReadPointer(2) : nullptr;
     const float* penMixCV = (penMixModActive && inBus.getNumChannels() > 3) ? inBus.getReadPointer(3) : nullptr;
     const float* sprayMixCV = (sprayMixModActive && inBus.getNumChannels() > 4) ? inBus.getReadPointer(4) : nullptr;
     const float* densityCV = (densityModActive && inBus.getNumChannels() > 5) ? inBus.getReadPointer(5) : nullptr;
     const float* grainSizeCV = (grainSizeModActive && inBus.getNumChannels() > 6) ? inBus.getReadPointer(6) : nullptr;
-    
-    // Log CV pointer status (ALWAYS LOG - same as above)
-    if (firstLog || (logCounter % 10 == 0))
-    {
-        juce::Logger::writeToLog("[SPATIAL_GRAN] dryMixCV = " + juce::String(dryMixCV != nullptr ? "valid" : "null"));
-        juce::Logger::writeToLog("[SPATIAL_GRAN] penMixCV = " + juce::String(penMixCV != nullptr ? "valid" : "null"));
-        juce::Logger::writeToLog("[SPATIAL_GRAN] sprayMixCV = " + juce::String(sprayMixCV != nullptr ? "valid" : "null"));
-        juce::Logger::writeToLog("[SPATIAL_GRAN] densityCV = " + juce::String(densityCV != nullptr ? "valid" : "null"));
-        juce::Logger::writeToLog("[SPATIAL_GRAN] grainSizeCV = " + juce::String(grainSizeCV != nullptr ? "valid" : "null"));
-    }
 
     // Get parameters (base values)
     const float baseDryMix = dryMixParam ? dryMixParam->load() : 1.0f;
@@ -576,9 +545,6 @@ void SpatialGranulatorModuleProcessor::processBlock(
                 const float cv01 = juce::jlimit(0.0f, 1.0f, (densityCV[i] + 1.0f) * 0.5f); // Normalize CV to 0-1
                 // Map CV (0-1) to density range (0.1-100 Hz, logarithmic)
                 densityValue = juce::jmap(cv01, 0.1f, 100.0f);
-                // Log CV value (ALWAYS LOG - first sample every 10 blocks)
-                if (i == 0 && (firstLog || logCounter % 10 == 0))
-                    juce::Logger::writeToLog("[SPATIAL_GRAN] densityCV[" + juce::String(i) + "] = " + juce::String(densityCV[i]) + " -> cv01 = " + juce::String(cv01) + " -> densityValue = " + juce::String(densityValue));
             }
             else
             {
@@ -593,9 +559,6 @@ void SpatialGranulatorModuleProcessor::processBlock(
                 const float cv01 = juce::jlimit(0.0f, 1.0f, (grainSizeCV[i] + 1.0f) * 0.5f); // Normalize CV to 0-1
                 // Map CV (0-1) to grain size range (5-500 ms)
                 grainSizeValue = juce::jmap(cv01, 5.0f, 500.0f);
-                // Log CV value (ALWAYS LOG - first sample every 10 blocks)
-                if (i == 0 && (firstLog || logCounter % 10 == 0))
-                    juce::Logger::writeToLog("[SPATIAL_GRAN] grainSizeCV[" + juce::String(i) + "] = " + juce::String(grainSizeCV[i]) + " -> cv01 = " + juce::String(cv01) + " -> grainSizeValue = " + juce::String(grainSizeValue));
             }
             const float currentGrainSizeMs = grainSizeValue;
             
@@ -1048,9 +1011,6 @@ void SpatialGranulatorModuleProcessor::processBlock(
         {
             const float cv01 = juce::jlimit(0.0f, 1.0f, (dryMixCV[i] + 1.0f) * 0.5f); // Normalize CV to 0-1
             dryMixValue = cv01;
-            // Log CV value (ALWAYS LOG - first sample every 10 blocks)
-            if (i == 0 && (firstLog || logCounter % 10 == 0))
-                juce::Logger::writeToLog("[SPATIAL_GRAN] dryMixCV[" + juce::String(i) + "] = " + juce::String(dryMixCV[i]) + " -> cv01 = " + juce::String(cv01));
         }
         else
         {
@@ -1064,9 +1024,6 @@ void SpatialGranulatorModuleProcessor::processBlock(
         {
             const float cv01 = juce::jlimit(0.0f, 1.0f, (penMixCV[i] + 1.0f) * 0.5f); // Normalize CV to 0-1
             penMixValue = cv01;
-            // Log CV value (ALWAYS LOG - first sample every 10 blocks)
-            if (i == 0 && (firstLog || logCounter % 10 == 0))
-                juce::Logger::writeToLog("[SPATIAL_GRAN] penMixCV[" + juce::String(i) + "] = " + juce::String(penMixCV[i]) + " -> cv01 = " + juce::String(cv01));
         }
         else
         {
@@ -1080,9 +1037,6 @@ void SpatialGranulatorModuleProcessor::processBlock(
         {
             const float cv01 = juce::jlimit(0.0f, 1.0f, (sprayMixCV[i] + 1.0f) * 0.5f); // Normalize CV to 0-1
             sprayMixValue = cv01;
-            // Log CV value (throttled - first sample every 100 blocks)
-            if (i == 0 && (firstLog || logCounter % 10 == 0))
-                juce::Logger::writeToLog("[SPATIAL_GRAN] sprayMixCV[" + juce::String(i) + "] = " + juce::String(sprayMixCV[i]) + " -> cv01 = " + juce::String(cv01));
         }
         else
         {

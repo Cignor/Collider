@@ -14,7 +14,6 @@
 // --- Data Model ---
 
 // A single chunk of automation data
-// Removed ReferenceCountedObject inheritance to use with std::shared_ptr
 struct AutomationChunk
 {
     using Ptr = std::shared_ptr<AutomationChunk>;
@@ -32,7 +31,6 @@ struct AutomationChunk
 };
 
 // Immutable state container for thread-safe access
-// Removed ReferenceCountedObject inheritance to use with std::shared_ptr
 struct AutomationState
 {
     using Ptr = std::shared_ptr<AutomationState>;
@@ -65,8 +63,10 @@ public:
     static constexpr auto paramIdZoom = "zoom";      // UI only, pixels per beat
     static constexpr auto paramIdRecordMode = "rec"; // Record vs Edit
     static constexpr auto paramIdDivision = "div";   // Sync division
-    static constexpr auto paramIdDurationMode = "durationMode"; // Duration mode: User Choice, 1 Bar, 4 Bars, etc.
-    static constexpr auto paramIdCustomDuration = "customDuration"; // Custom duration in beats (for User Choice)
+    static constexpr auto paramIdDurationMode =
+        "durationMode"; // Duration mode: User Choice, 1 Bar, 4 Bars, etc.
+    static constexpr auto paramIdCustomDuration =
+        "customDuration"; // Custom duration in beats (for User Choice)
 
     // Output IDs
     enum
@@ -102,7 +102,7 @@ public:
     // --- UI drawing functions ---
 #if defined(PRESET_CREATOR_UI)
     ImVec2 getCustomNodeSize() const override { return ImVec2(650.0f, 0.0f); }
-    
+
     void drawParametersInNode(
         float itemWidth,
         const std::function<bool(const juce::String&)>&,
@@ -124,11 +124,14 @@ public:
     bool getParamRouting(const juce::String& paramId, int& outBusIndex, int& outChannelIndexInBus)
         const override;
 
+    void forceStop() override;
+
     // --- DSP State ---
     double currentPhase{0.0}; // Current playback position in beats (or phase 0-1 for loop?)
     double sampleRate{44100.0};
 
-    TransportState m_currentTransport;
+    TransportState   m_currentTransport;
+    TransportCommand lastTransportCommand{TransportCommand::Stop};
 
     // --- Parameters ---
     std::atomic<float>* rateParam{nullptr};
@@ -139,15 +142,15 @@ public:
     std::atomic<float>* customDurationParam{nullptr};
 
     // --- Internal Helpers ---
-    float getSampleAt(double beat);
-    void  ensureChunkExistsAt(double beat);
+    float  getSampleAt(double beat);
+    void   ensureChunkExistsAt(double beat);
     double getTargetDuration() const; // Get target duration based on duration mode
-    void  modifyChunkSamplesThreadSafe(
-        AutomationChunk::Ptr chunk, 
-        int startSampleIndex, 
-        int endSampleIndex, 
-        float startValue, 
-        float endValue);
+    void   modifyChunkSamplesThreadSafe(
+          AutomationChunk::Ptr chunk,
+          int                  startSampleIndex,
+          int                  endSampleIndex,
+          float                startValue,
+          float                endValue);
 
     // Thread-safe state access
     void                 updateState(AutomationState::Ptr newState);
@@ -164,9 +167,9 @@ private:
 
 #if defined(PRESET_CREATOR_UI)
     // UI State (not saved in APVTS)
-    float scrollX{0.0f};
-    bool  isDragging{false};
-    bool  isPlaying{false};
+    float  scrollX{0.0f};
+    bool   isDragging{false};
+    bool   isPlaying{false};
     ImVec2 lastMousePosInCanvas; // For smooth drawing interpolation - initialized in constructor
 #endif
 };

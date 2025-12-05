@@ -15,7 +15,9 @@ public:
         Knobs,
         Buttons,
         JogWheel,
-        StrokeSequencer
+        StrokeSequencer,
+        GraphicEQ,
+        MultiBandShaper
     };
 
     // Get the singleton instance of the manager.

@@ -15,6 +15,8 @@ ControllerPresetManager::ControllerPresetManager()
     getDirectoryForType(ModuleType::Buttons);
     getDirectoryForType(ModuleType::JogWheel);
     getDirectoryForType(ModuleType::StrokeSequencer);
+    getDirectoryForType(ModuleType::GraphicEQ);
+    getDirectoryForType(ModuleType::MultiBandShaper);
 
     // 3. Perform an initial scan to populate the cache.
     scanAllPresets();
@@ -80,6 +82,8 @@ juce::File ControllerPresetManager::getDirectoryForType(ModuleType type)
         case ModuleType::Buttons:         subfolderName = "MidiButtons";      break;
         case ModuleType::JogWheel:        subfolderName = "MidiJogWheel";     break;
         case ModuleType::StrokeSequencer: subfolderName = "StrokeSequencer";  break;
+        case ModuleType::GraphicEQ:       subfolderName = "GraphicEQ";        break;
+        case ModuleType::MultiBandShaper: subfolderName = "MultiBandShaper";  break;
     }
     
     auto dir = rootDirectory.getChildFile(subfolderName);
@@ -92,7 +96,7 @@ juce::File ControllerPresetManager::getDirectoryForType(ModuleType type)
 void ControllerPresetManager::scanAllPresets()
 {
     presetCache.clear();
-    for (int i = 0; i <= (int)ModuleType::StrokeSequencer; ++i)
+    for (int i = 0; i <= (int)ModuleType::MultiBandShaper; ++i)
     {
         auto type = (ModuleType)i;
         auto dir = getDirectoryForType(type);

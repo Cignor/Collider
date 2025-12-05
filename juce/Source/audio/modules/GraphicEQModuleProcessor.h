@@ -31,6 +31,10 @@ public:
     void setStateInformation(const void* data, int sizeInBytes) override;
 
     juce::AudioProcessorValueTreeState& getAPVTS() override { return apvts; }
+    
+    // Extra state for preset management
+    juce::ValueTree getExtraStateTree() const override;
+    void setExtraStateTree(const juce::ValueTree& state) override;
 
 #if defined(PRESET_CREATOR_UI)
     void drawParametersInNode(float itemWidth, const std::function<bool(const juce::String& paramId)>& isParamModulated, const std::function<void()>& onModificationEnded) override;
@@ -92,6 +96,12 @@ private:
     VizData vizData;
     std::array<juce::dsp::IIR::Filter<float>, 8> vizBandFilters;
     std::array<float, 8> vizBandAccum { { 0.0f } };
+    
+    // Preset management state
+    juce::String activeEQPresetName;
+    int selectedEQPresetIndex = -1;
+    int selectedStandardPresetIndex = 0; // Track which standard preset is selected (0-11)
+    char eqPresetNameBuffer[128] = "";
 #endif
 };
 
