@@ -1848,11 +1848,13 @@ void SpatialGranulatorModuleProcessor::drawParametersInNode(
     if (isRedActive)
         ImGui::PushStyleColor(ImGuiCol_Button, activeColorBg);
     ImGui::PushStyleColor(ImGuiCol_Button, IM_COL32(255, 100, 100, 255));
+    ImGui::PushStyleColor(ImGuiCol_Text, IM_COL32(0, 0, 0, 255)); // Dark text for readability
     if (ImGui::Button("Delay", ImVec2(60, 0)))
     {
         activeColor = ColorID::Red;
     }
-    ImGui::PopStyleColor();
+    ImGui::PopStyleColor(); // Text
+    ImGui::PopStyleColor(); // Button
     if (isRedActive)
         ImGui::PopStyleColor();
     HelpMarker("Delay. Controls delay time for each voice/grain.\nX-axis = Delay time (left=short, right=long, 0-2000ms)\nY-axis = Feedback (bottom=none, top=maximum, 0-0.95)\nLarger dots = more intensity.");
@@ -1862,11 +1864,13 @@ void SpatialGranulatorModuleProcessor::drawParametersInNode(
     if (isGreenActive)
         ImGui::PushStyleColor(ImGuiCol_Button, activeColorBg);
     ImGui::PushStyleColor(ImGuiCol_Button, IM_COL32(100, 255, 100, 255));
+    ImGui::PushStyleColor(ImGuiCol_Text, IM_COL32(0, 0, 0, 255)); // Dark text for readability
     if (ImGui::Button("Filter", ImVec2(60, 0)))
     {
         activeColor = ColorID::Green;
     }
-    ImGui::PopStyleColor();
+    ImGui::PopStyleColor(); // Text
+    ImGui::PopStyleColor(); // Button
     if (isGreenActive)
         ImGui::PopStyleColor();
     HelpMarker("Filter. Controls lowpass filtering for each voice/grain.\nX-axis = Cutoff frequency (left=low, right=high, 20Hz-20kHz)\nY-axis = Resonance/Q (bottom=low, top=high, 0.707-10.0)\nLarger dots = more intensity.");
@@ -1876,11 +1880,13 @@ void SpatialGranulatorModuleProcessor::drawParametersInNode(
     if (isBlueActive)
         ImGui::PushStyleColor(ImGuiCol_Button, activeColorBg);
     ImGui::PushStyleColor(ImGuiCol_Button, IM_COL32(100, 100, 255, 255));
+    ImGui::PushStyleColor(ImGuiCol_Text, IM_COL32(255, 255, 255, 255)); // White text for dark blue
     if (ImGui::Button("Pitch", ImVec2(60, 0)))
     {
         activeColor = ColorID::Blue;
     }
-    ImGui::PopStyleColor();
+    ImGui::PopStyleColor(); // Text
+    ImGui::PopStyleColor(); // Button
     if (isBlueActive)
         ImGui::PopStyleColor();
     HelpMarker("Pitch. Controls pitch shift for each voice/grain.\nX+Y position = Pitch shift (bottom-left=-24st, top-right=+24st)\nLarger dots = more intensity.");
@@ -1890,11 +1896,13 @@ void SpatialGranulatorModuleProcessor::drawParametersInNode(
     if (isYellowActive)
         ImGui::PushStyleColor(ImGuiCol_Button, activeColorBg);
     ImGui::PushStyleColor(ImGuiCol_Button, IM_COL32(255, 255, 100, 255));
+    ImGui::PushStyleColor(ImGuiCol_Text, IM_COL32(0, 0, 0, 255)); // Dark text for readability
     if (ImGui::Button("Reverb", ImVec2(60, 0)))
     {
         activeColor = ColorID::Yellow;
     }
-    ImGui::PopStyleColor();
+    ImGui::PopStyleColor(); // Text
+    ImGui::PopStyleColor(); // Button
     if (isYellowActive)
         ImGui::PopStyleColor();
     HelpMarker("Reverb. Controls reverb/decay for each voice/grain.\nX-axis = Room size (left=small, right=large, 0-1)\nY-axis = Decay time (bottom=short, top=long, 0-1)\nLarger dots = more intensity.");
@@ -1904,11 +1912,13 @@ void SpatialGranulatorModuleProcessor::drawParametersInNode(
     if (isCyanActive)
         ImGui::PushStyleColor(ImGuiCol_Button, activeColorBg);
     ImGui::PushStyleColor(ImGuiCol_Button, IM_COL32(100, 255, 255, 255));
+    ImGui::PushStyleColor(ImGuiCol_Text, IM_COL32(0, 0, 0, 255)); // Dark text for readability
     if (ImGui::Button("Distort", ImVec2(60, 0)))
     {
         activeColor = ColorID::Cyan;
     }
-    ImGui::PopStyleColor();
+    ImGui::PopStyleColor(); // Text
+    ImGui::PopStyleColor(); // Button
     if (isCyanActive)
         ImGui::PopStyleColor();
     HelpMarker("Distortion. Controls drive and tone for each voice/grain.\nX-axis = Drive amount (left=clean, right=distorted, 0-1)\nY-axis = Tone (bottom=dark, top=bright, 0-1)\nLarger dots = more intensity.");
@@ -1918,11 +1928,13 @@ void SpatialGranulatorModuleProcessor::drawParametersInNode(
     if (isMagentaActive)
         ImGui::PushStyleColor(ImGuiCol_Button, activeColorBg);
     ImGui::PushStyleColor(ImGuiCol_Button, IM_COL32(255, 100, 255, 255));
+    ImGui::PushStyleColor(ImGuiCol_Text, IM_COL32(0, 0, 0, 255)); // Dark text for readability
     if (ImGui::Button("Chorus", ImVec2(60, 0)))
     {
         activeColor = ColorID::Magenta;
     }
-    ImGui::PopStyleColor();
+    ImGui::PopStyleColor(); // Text
+    ImGui::PopStyleColor(); // Button
     if (isMagentaActive)
         ImGui::PopStyleColor();
     HelpMarker("Chorus. Controls modulation for each voice/grain.\nX-axis = Delay time (left=short, right=long, 0-50ms)\nY-axis = Modulation depth (bottom=shallow, top=deep, 0-1)\nLarger dots = more intensity.");
@@ -1932,11 +1944,13 @@ void SpatialGranulatorModuleProcessor::drawParametersInNode(
     if (isOrangeActive)
         ImGui::PushStyleColor(ImGuiCol_Button, activeColorBg);
     ImGui::PushStyleColor(ImGuiCol_Button, IM_COL32(255, 165, 0, 255));
+    ImGui::PushStyleColor(ImGuiCol_Text, IM_COL32(0, 0, 0, 255)); // Dark text for readability
     if (ImGui::Button("Crush", ImVec2(60, 0)))
     {
         activeColor = ColorID::Orange;
     }
-    ImGui::PopStyleColor();
+    ImGui::PopStyleColor(); // Text
+    ImGui::PopStyleColor(); // Button
     if (isOrangeActive)
         ImGui::PopStyleColor();
     HelpMarker("Bitcrusher. Controls bit depth and downsampling.\nX-axis = Bit depth (left=low bits, right=high bits, 1-16)\nY-axis = Downsample factor (bottom=none, top=heavy, 1-16x)\nLarger dots = more intensity.");
@@ -1946,11 +1960,13 @@ void SpatialGranulatorModuleProcessor::drawParametersInNode(
     if (isPurpleActive)
         ImGui::PushStyleColor(ImGuiCol_Button, activeColorBg);
     ImGui::PushStyleColor(ImGuiCol_Button, IM_COL32(200, 100, 255, 255));
+    ImGui::PushStyleColor(ImGuiCol_Text, IM_COL32(255, 255, 255, 255)); // White text for dark purple
     if (ImGui::Button("Tremolo", ImVec2(60, 0)))
     {
         activeColor = ColorID::Purple;
     }
-    ImGui::PopStyleColor();
+    ImGui::PopStyleColor(); // Text
+    ImGui::PopStyleColor(); // Button
     if (isPurpleActive)
         ImGui::PopStyleColor();
     HelpMarker("Tremolo. Controls amplitude modulation for each voice/grain.\nX-axis = Modulation rate (left=slow, right=fast, 0-10 Hz)\nY-axis = Modulation depth (bottom=shallow, top=deep, 0-1)\nLarger dots = more intensity.");

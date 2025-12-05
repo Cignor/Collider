@@ -574,6 +574,14 @@ void ImGuiNodeEditorComponent::registerShortcuts()
         shortcutFileSaveAsRequested);
 
     registerAction(
+        ShortcutActionIds::fileNewCanvas,
+        "New Canvas",
+        "Start with a clean canvas, clearing any loaded preset.",
+        "File",
+        {ImGuiKey_N, true, true, false, false},
+        shortcutNewCanvasRequested);
+
+    registerAction(
         ShortcutActionIds::fileOpen,
         "Load Preset",
         "Open a preset from disk.",
@@ -910,6 +918,7 @@ void ImGuiNodeEditorComponent::unregisterShortcuts()
     shortcutManager.unregisterAction(ShortcutActionIds::fileRandomizeConnections);
     shortcutManager.unregisterAction(ShortcutActionIds::fileRandomizePatch);
     shortcutManager.unregisterAction(ShortcutActionIds::fileOpen);
+    shortcutManager.unregisterAction(ShortcutActionIds::fileNewCanvas);
     shortcutManager.unregisterAction(ShortcutActionIds::fileSaveAs);
     shortcutManager.unregisterAction(ShortcutActionIds::fileSave);
 }
@@ -1259,6 +1268,10 @@ void ImGuiNodeEditorComponent::renderImGui()
     {
         if (ImGui::BeginMenu("File"))
         {
+            if (ImGui::MenuItem("New Canvas", "Ctrl+Shift+N"))
+            {
+                newCanvas();
+            }
             if (ImGui::MenuItem("Save Preset", "Ctrl+S"))
             {
                 if (currentPresetFile.existsAsFile())
@@ -7482,6 +7495,10 @@ void ImGuiNodeEditorComponent::renderImGui()
                 else
                     startSaveDialog();
             }
+            if (consumeShortcutFlag(shortcutNewCanvasRequested))
+            {
+                newCanvas();
+            }
             if (consumeShortcutFlag(shortcutFileOpenRequested))
             {
                 startLoadDialog();
@@ -9012,6 +9029,36 @@ void ImGuiNodeEditorComponent::startLoadDialog()
             }
         });
 }
+
+void ImGuiNodeEditorComponent::newCanvas()
+{
+    if (synth == nullptr)
+        return;
+
+    // Clear the synth state (removes all modules and connections)
+    synth->clearAll();
+
+    // Clear undo/redo stacks
+    undoStack.clear();
+    redoStack.clear();
+
+    // Clear the current preset file reference
+    currentPresetFile = juce::File();
+
+    // Reset patch dirty flag
+    isPatchDirty = false;
+
+    // Push a snapshot of the empty state for undo/redo
+    pushSnapshot();
+
+    // Notify the user
+    NotificationManager::post(
+        NotificationManager::Type::Info,
+        "New canvas created - ready to start fresh");
+
+    juce::Logger::writeToLog("[NewCanvas] Cleared synth state and started fresh canvas");
+}
+
 void ImGuiNodeEditorComponent::handleRandomizePatch()
 {
     if (synth == nullptr)

@@ -304,6 +304,20 @@ void QuantizerModuleProcessor::drawParametersInNode(float itemWidth, const std::
     }
     if (ImGui::Combo("Scale", &scale, scales)) if (!isScaleModulated) if (auto* p = dynamic_cast<juce::AudioParameterChoice*>(ap.getParameter("scale"))) *p = scale;
     if (ImGui::IsItemDeactivatedAfterEdit()) onModificationEnded();
+    // Scroll wheel editing for Scale combo
+    if (!isScaleModulated && ImGui::IsItemHovered()) {
+        const float wheel = ImGui::GetIO().MouseWheel;
+        if (wheel != 0.0f) {
+            const int maxIndex = 4; // 5 scales: 0-4
+            const int newIndex = juce::jlimit(0, maxIndex, scale + (wheel > 0.0f ? -1 : 1));
+            if (newIndex != scale) {
+                if (auto* p = dynamic_cast<juce::AudioParameterChoice*>(ap.getParameter("scale"))) {
+                    *p = newIndex;
+                    onModificationEnded();
+                }
+            }
+        }
+    }
     if (isScaleModulated) { ImGui::EndDisabled(); ImGui::SameLine(); ImGui::TextUnformatted("(mod)"); }
 
     // Root Note Combo Box
@@ -314,6 +328,20 @@ void QuantizerModuleProcessor::drawParametersInNode(float itemWidth, const std::
     }
     if (ImGui::Combo("Root", &root, notes)) if (!isRootModulated) if (auto* p = dynamic_cast<juce::AudioParameterInt*>(ap.getParameter("rootNote"))) *p = root;
     if (ImGui::IsItemDeactivatedAfterEdit()) onModificationEnded();
+    // Scroll wheel editing for Root combo
+    if (!isRootModulated && ImGui::IsItemHovered()) {
+        const float wheel = ImGui::GetIO().MouseWheel;
+        if (wheel != 0.0f) {
+            const int maxIndex = 11; // 12 notes: 0-11
+            const int newIndex = juce::jlimit(0, maxIndex, root + (wheel > 0.0f ? -1 : 1));
+            if (newIndex != root) {
+                if (auto* p = dynamic_cast<juce::AudioParameterInt*>(ap.getParameter("rootNote"))) {
+                    *p = newIndex;
+                    onModificationEnded();
+                }
+            }
+        }
+    }
     if (isRootModulated) { ImGui::EndDisabled(); ImGui::SameLine(); ImGui::TextUnformatted("(mod)"); }
     
     ImGui::PopItemWidth();

@@ -145,6 +145,7 @@ public:
     unsigned int getImU32ForType(PinDataType type);
     const char*  pinDataTypeToString(PinDataType type);
 
+    void newCanvas();
     void handleRandomizePatch();
     void handleRandomizeConnections();
     void handleConnectSelectedToTrackMixer();
@@ -429,6 +430,7 @@ public:
         static inline const juce::Identifier fileSave{"actions.file.save"};
         static inline const juce::Identifier fileSaveAs{"actions.file.saveAs"};
         static inline const juce::Identifier fileOpen{"actions.file.open"};
+        static inline const juce::Identifier fileNewCanvas{"actions.file.newCanvas"};
         static inline const juce::Identifier fileRandomizePatch{"actions.file.randomizePatch"};
         static inline const juce::Identifier fileRandomizeConnections{
             "actions.file.randomizeConnections"};
@@ -472,6 +474,7 @@ public:
     std::atomic<bool> shortcutFileSaveRequested{false};
     std::atomic<bool> shortcutFileSaveAsRequested{false};
     std::atomic<bool> shortcutFileOpenRequested{false};
+    std::atomic<bool> shortcutNewCanvasRequested{false};
     std::atomic<bool> shortcutRandomizePatchRequested{false};
     std::atomic<bool> shortcutRandomizeConnectionsRequested{false};
     std::atomic<bool> shortcutBeautifyLayoutRequested{false};

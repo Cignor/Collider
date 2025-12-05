@@ -478,6 +478,51 @@ void MultiSequencerModuleProcessor::drawParametersInNode (float itemWidth, const
     if (stepsAreModulated) { ImGui::EndDisabled(); ImGui::SameLine(); ImGui::TextUnformatted("(mod)"); }
 
     const int shown = juce::jlimit(1, MAX_STEPS, displayedSteps);
+
+    // Randomize button
+    ImGui::Spacing();
+    ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.3f, 0.5f, 0.8f, 0.8f));
+    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.4f, 0.6f, 0.9f, 0.95f));
+    ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.2f, 0.4f, 0.7f, 1.0f));
+    if (ImGui::Button("🎲 Randomize", ImVec2(itemWidth, 0)))
+    {
+        juce::Random random(juce::Time::currentTimeMillis());
+        
+        for (int i = 0; i < shown; ++i)
+        {
+            const int stepNum = i + 1;
+            const juce::String stepId = "step" + juce::String(stepNum);
+            
+            // Randomize melody (pitch) - only if not modulated
+            const juce::String modPid = stepId + "_mod";
+            if (!isParamInputConnected(modPid))
+            {
+                if (auto* p = dynamic_cast<juce::AudioParameterFloat*>(ap.getParameter(stepId)))
+                    *p = random.nextFloat();
+            }
+            
+            // Randomize gate level - only if not modulated
+            const juce::String gateModPid = stepId + "_gate_mod";
+            if (!isParamInputConnected(gateModPid))
+            {
+                if (auto* p = dynamic_cast<juce::AudioParameterFloat*>(ap.getParameter(stepId + "_gate")))
+                    *p = random.nextFloat();
+            }
+            
+            // Randomize trigger - only if not modulated
+            const juce::String trigModPid = stepId + "_trig_mod";
+            if (!isParamInputConnected(trigModPid))
+            {
+                if (auto* p = dynamic_cast<juce::AudioParameterBool*>(ap.getParameter(stepId + "_trig")))
+                    *p = random.nextBool();
+            }
+        }
+        
+        onModificationEnded();
+    }
+    ImGui::PopStyleColor(3);
+    if (ImGui::IsItemHovered())
+        ImGui::SetTooltip("Randomize melody, gate levels, and triggers for all active steps\n(Skips steps that are modulated)");
     // Calculate responsive step width based on itemWidth and spacing
     const float spacing = 4.0f;
     const float sliderW = (itemWidth - spacing * (shown - 1)) / (float)shown;
