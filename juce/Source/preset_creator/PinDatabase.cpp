@@ -601,7 +601,8 @@ db["random"] = ModulePinInfo(
             AudioPin("Value", 0, PinDataType::CV),
             AudioPin("Inverted", 1, PinDataType::CV),
             AudioPin("Bipolar", 2, PinDataType::CV),
-            AudioPin("Pitch", 3, PinDataType::CV)
+            AudioPin("Pitch", 3, PinDataType::CV),
+            AudioPin("Trigger", 4, PinDataType::Gate)
         },
         {}
     );

@@ -338,41 +338,57 @@ void MathModuleProcessor::drawParametersInNode (float itemWidth, const std::func
             output[i] = vizData.outputWaveform[i].load();
         }
         
+        // Determine operation type: single-input vs dual-input
+        int currentOp = vizData.currentOperation.load();
+        // Single-input operations: 7 (Sqrt), 8 (Sin), 9 (Cos), 10 (Tan), 11 (Abs), 13 (Fract), 14 (Int)
+        bool isSingleInputOp = (currentOp >= 7 && currentOp <= 11) || (currentOp >= 13 && currentOp <= 14);
+        
         // Draw waveforms
         const float halfHeight = graphSize.y * 0.5f;
         const float scale = halfHeight * 0.9f; // Leave 10% margin
         
-        // Input A waveform (cyan/blue)
-        ImU32 colorA = ImGui::ColorConvertFloat4ToU32(ImVec4(0.0f, 0.8f, 1.0f, 0.8f));
+        // Visual styling constants
+        const float originalAlpha = 0.5f;        // Faded original signals
+        const float originalThickness = 1.0f;   // Thinner lines for originals
+        const float transformedAlpha = 1.0f;    // Bright transformed output
+        const float transformedThickness = 2.5f; // Thicker line for output
+        const float verticalOffset = 2.0f;      // Offset output downward to show it's "on top"
+        
+        // Input A waveform (cyan/blue) - shown as original for all operations
+        ImU32 colorA = ImGui::ColorConvertFloat4ToU32(ImVec4(0.0f, 0.8f, 1.0f, originalAlpha));
         for (int i = 1; i < VizData::waveformPoints; ++i)
         {
             float x0 = p0.x + (float)(i - 1) / (float)(VizData::waveformPoints - 1) * graphSize.x;
             float x1 = p0.x + (float)i / (float)(VizData::waveformPoints - 1) * graphSize.x;
             float y0 = juce::jlimit(p0.y, p1.y, centerY - inputA[i - 1] * scale);
             float y1 = juce::jlimit(p0.y, p1.y, centerY - inputA[i] * scale);
-            drawList->AddLine(ImVec2(x0, y0), ImVec2(x1, y1), colorA, 1.5f);
+            drawList->AddLine(ImVec2(x0, y0), ImVec2(x1, y1), colorA, originalThickness);
         }
         
-        // Input B waveform (magenta/pink)
-        ImU32 colorB = ImGui::ColorConvertFloat4ToU32(ImVec4(1.0f, 0.3f, 0.8f, 0.8f));
+        // Input B waveform (magenta/pink) - shown as original only for dual-input operations
+        if (!isSingleInputOp)
+        {
+            ImU32 colorB = ImGui::ColorConvertFloat4ToU32(ImVec4(1.0f, 0.3f, 0.8f, originalAlpha));
+            for (int i = 1; i < VizData::waveformPoints; ++i)
+            {
+                float x0 = p0.x + (float)(i - 1) / (float)(VizData::waveformPoints - 1) * graphSize.x;
+                float x1 = p0.x + (float)i / (float)(VizData::waveformPoints - 1) * graphSize.x;
+                float y0 = juce::jlimit(p0.y, p1.y, centerY - inputB[i - 1] * scale);
+                float y1 = juce::jlimit(p0.y, p1.y, centerY - inputB[i] * scale);
+                drawList->AddLine(ImVec2(x0, y0), ImVec2(x1, y1), colorB, originalThickness);
+            }
+        }
+        
+        // Output waveform (white/yellow) - always shown as transformed (bright, thick, offset)
+        ImU32 colorOut = ImGui::ColorConvertFloat4ToU32(ImVec4(1.0f, 1.0f, 0.6f, transformedAlpha));
         for (int i = 1; i < VizData::waveformPoints; ++i)
         {
             float x0 = p0.x + (float)(i - 1) / (float)(VizData::waveformPoints - 1) * graphSize.x;
             float x1 = p0.x + (float)i / (float)(VizData::waveformPoints - 1) * graphSize.x;
-            float y0 = juce::jlimit(p0.y, p1.y, centerY - inputB[i - 1] * scale);
-            float y1 = juce::jlimit(p0.y, p1.y, centerY - inputB[i] * scale);
-            drawList->AddLine(ImVec2(x0, y0), ImVec2(x1, y1), colorB, 1.5f);
-        }
-        
-        // Output waveform (white/yellow)
-        ImU32 colorOut = ImGui::ColorConvertFloat4ToU32(ImVec4(1.0f, 1.0f, 0.6f, 1.0f));
-        for (int i = 1; i < VizData::waveformPoints; ++i)
-        {
-            float x0 = p0.x + (float)(i - 1) / (float)(VizData::waveformPoints - 1) * graphSize.x;
-            float x1 = p0.x + (float)i / (float)(VizData::waveformPoints - 1) * graphSize.x;
-            float y0 = juce::jlimit(p0.y, p1.y, centerY - output[i - 1] * scale);
-            float y1 = juce::jlimit(p0.y, p1.y, centerY - output[i] * scale);
-            drawList->AddLine(ImVec2(x0, y0), ImVec2(x1, y1), colorOut, 2.0f);
+            // Add vertical offset to show output is "on top" of the original
+            float y0 = juce::jlimit(p0.y, p1.y, centerY - output[i - 1] * scale + verticalOffset);
+            float y1 = juce::jlimit(p0.y, p1.y, centerY - output[i] * scale + verticalOffset);
+            drawList->AddLine(ImVec2(x0, y0), ImVec2(x1, y1), colorOut, transformedThickness);
         }
         
         drawList->PopClipRect();
@@ -383,7 +399,7 @@ void MathModuleProcessor::drawParametersInNode (float itemWidth, const std::func
             "Sqrt(A)", "Sin(A)", "Cos(A)", "Tan(A)", "Abs(A)", "Modulo",
             "Fract(A)", "Int(A)", "A > B", "A < B"
         };
-        int currentOp = vizData.currentOperation.load();
+        // currentOp already declared above for operation type detection
         if (currentOp >= 0 && currentOp < 17)
         {
             ImGui::SetCursorPos(ImVec2(4, 4));
@@ -413,6 +429,156 @@ void MathModuleProcessor::drawParametersInNode (float itemWidth, const std::func
         // Invisible drag blocker
         ImGui::SetCursorPos(ImVec2(0, 0));
         ImGui::InvisibleButton("##mathWaveformDrag", graphSize);
+    }
+    ImGui::EndChild();
+
+    ImGui::Spacing();
+
+    // Pedagogical Visualization - Example of how the operation transforms a simple signal
+    const float pedagogicalHeight = 120.0f;
+    const ImVec2 pedagogicalSize(itemWidth, pedagogicalHeight);
+    
+    if (ImGui::BeginChild("MathPedagogicalViz", pedagogicalSize, false, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse))
+    {
+        ImDrawList* drawList = ImGui::GetWindowDrawList();
+        const ImVec2 p0 = ImGui::GetWindowPos();
+        const ImVec2 p1 = ImVec2(p0.x + pedagogicalSize.x, p0.y + pedagogicalSize.y);
+        
+        // Background
+        const auto& freqColors = theme.modules.frequency_graph;
+        const auto resolveColor = [](ImU32 value, ImU32 fallback) { return value != 0 ? value : fallback; };
+        const ImU32 bgColor = resolveColor(freqColors.background, IM_COL32(18, 20, 24, 255));
+        drawList->AddRectFilled(p0, p1, bgColor);
+        
+        // Grid lines
+        const ImU32 gridColor = resolveColor(freqColors.grid, IM_COL32(50, 55, 65, 255));
+        const float centerY = p0.y + pedagogicalSize.y * 0.5f;
+        drawList->AddLine(ImVec2(p0.x, centerY), ImVec2(p1.x, centerY), gridColor, 1.0f);
+        drawList->AddLine(ImVec2(p0.x, p0.y), ImVec2(p1.x, p0.y), gridColor, 1.0f);
+        drawList->AddLine(ImVec2(p0.x, p1.y), ImVec2(p1.x, p1.y), gridColor, 1.0f);
+        
+        // Clip to graph area
+        drawList->PushClipRect(p0, p1, true);
+        
+        // Generate animated demo signals
+        const int numPoints = VizData::waveformPoints;
+        std::array<float, VizData::waveformPoints> demoA, demoB, demoOutput;
+        
+        // Animation phase based on time
+        const float time = static_cast<float>(ImGui::GetTime());
+        const float animationSpeed = 0.3f; // Cycles per second
+        const float phase = time * animationSpeed * juce::MathConstants<float>::twoPi;
+        
+        // Get current operation
+        int currentOp = vizData.currentOperation.load();
+        bool isSingleInputOp = (currentOp >= 7 && currentOp <= 11) || (currentOp >= 13 && currentOp <= 14);
+        
+        // Generate Input A: 1.5 cycles sine wave, amplitude 0.8
+        const float cyclesA = 1.5f;
+        const float amplitudeA = 0.8f;
+        for (int i = 0; i < numPoints; ++i)
+        {
+            const float x = (float)i / (float)(numPoints - 1);
+            demoA[i] = std::sin(x * cyclesA * juce::MathConstants<float>::twoPi + phase) * amplitudeA;
+        }
+        
+        // Generate Input B: 1.0 cycle sine wave, amplitude 0.5, 90° phase offset (for dual-input ops)
+        const float cyclesB = 1.0f;
+        const float amplitudeB = 0.5f;
+        const float phaseOffsetB = juce::MathConstants<float>::pi * 0.5f; // 90 degrees
+        for (int i = 0; i < numPoints; ++i)
+        {
+            const float x = (float)i / (float)(numPoints - 1);
+            demoB[i] = std::sin(x * cyclesB * juce::MathConstants<float>::twoPi + phase + phaseOffsetB) * amplitudeB;
+        }
+        
+        // Apply current operation to compute output
+        for (int i = 0; i < numPoints; ++i)
+        {
+            const float valA = demoA[i];
+            const float valB = demoB[i];
+            float result = 0.0f;
+            
+            switch (currentOp)
+            {
+                case 0:  result = valA + valB; break; // Add
+                case 1:  result = valA - valB; break; // Subtract
+                case 2:  result = valA * valB; break; // Multiply
+                case 3:  result = (std::abs(valB) < 1e-9f) ? 0.0f : (valA / valB); break; // Divide
+                case 4:  result = std::min(valA, valB); break; // Min
+                case 5:  result = std::max(valA, valB); break; // Max
+                case 6:  result = std::pow(valA, valB); break; // Power
+                case 7:  result = std::sqrt(std::abs(valA)); break; // Sqrt(A)
+                case 8:  result = std::sin(valA * juce::MathConstants<float>::twoPi); break; // Sin(A)
+                case 9:  result = std::cos(valA * juce::MathConstants<float>::twoPi); break; // Cos(A)
+                case 10: result = std::tan(valA * juce::MathConstants<float>::pi); break; // Tan(A)
+                case 11: result = std::abs(valA); break; // Abs(A)
+                case 12: result = (std::abs(valB) < 1e-9f) ? 0.0f : std::fmod(valA, valB); break; // Modulo
+                case 13: result = valA - std::trunc(valA); break; // Fract(A)
+                case 14: result = std::trunc(valA); break; // Int(A)
+                case 15: result = (valA > valB) ? 1.0f : 0.0f; break; // A > B
+                case 16: result = (valA < valB) ? 1.0f : 0.0f; break; // A < B
+            }
+            
+            // Clamp result to reasonable range for visualization
+            demoOutput[i] = juce::jlimit(-2.0f, 2.0f, result);
+        }
+        
+        // Draw waveforms with same styling as live visualization
+        const float halfHeight = pedagogicalSize.y * 0.5f;
+        const float scale = halfHeight * 0.9f;
+        
+        const float originalAlpha = 0.5f;
+        const float originalThickness = 1.0f;
+        const float transformedAlpha = 1.0f;
+        const float transformedThickness = 2.5f;
+        const float verticalOffset = 2.0f;
+        
+        // Input A waveform (cyan/blue) - shown for all operations
+        ImU32 colorA = ImGui::ColorConvertFloat4ToU32(ImVec4(0.0f, 0.8f, 1.0f, originalAlpha));
+        for (int i = 1; i < numPoints; ++i)
+        {
+            float x0 = p0.x + (float)(i - 1) / (float)(numPoints - 1) * pedagogicalSize.x;
+            float x1 = p0.x + (float)i / (float)(numPoints - 1) * pedagogicalSize.x;
+            float y0 = juce::jlimit(p0.y, p1.y, centerY - demoA[i - 1] * scale);
+            float y1 = juce::jlimit(p0.y, p1.y, centerY - demoA[i] * scale);
+            drawList->AddLine(ImVec2(x0, y0), ImVec2(x1, y1), colorA, originalThickness);
+        }
+        
+        // Input B waveform (magenta/pink) - shown only for dual-input operations
+        if (!isSingleInputOp)
+        {
+            ImU32 colorB = ImGui::ColorConvertFloat4ToU32(ImVec4(1.0f, 0.3f, 0.8f, originalAlpha));
+            for (int i = 1; i < numPoints; ++i)
+            {
+                float x0 = p0.x + (float)(i - 1) / (float)(numPoints - 1) * pedagogicalSize.x;
+                float x1 = p0.x + (float)i / (float)(numPoints - 1) * pedagogicalSize.x;
+                float y0 = juce::jlimit(p0.y, p1.y, centerY - demoB[i - 1] * scale);
+                float y1 = juce::jlimit(p0.y, p1.y, centerY - demoB[i] * scale);
+                drawList->AddLine(ImVec2(x0, y0), ImVec2(x1, y1), colorB, originalThickness);
+            }
+        }
+        
+        // Output waveform (white/yellow) - always shown as transformed
+        ImU32 colorOut = ImGui::ColorConvertFloat4ToU32(ImVec4(1.0f, 1.0f, 0.6f, transformedAlpha));
+        for (int i = 1; i < numPoints; ++i)
+        {
+            float x0 = p0.x + (float)(i - 1) / (float)(numPoints - 1) * pedagogicalSize.x;
+            float x1 = p0.x + (float)i / (float)(numPoints - 1) * pedagogicalSize.x;
+            float y0 = juce::jlimit(p0.y, p1.y, centerY - demoOutput[i - 1] * scale + verticalOffset);
+            float y1 = juce::jlimit(p0.y, p1.y, centerY - demoOutput[i] * scale + verticalOffset);
+            drawList->AddLine(ImVec2(x0, y0), ImVec2(x1, y1), colorOut, transformedThickness);
+        }
+        
+        drawList->PopClipRect();
+        
+        // Label to indicate this is an example
+        ImGui::SetCursorPos(ImVec2(4, 4));
+        ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 0.8f), "Example");
+        
+        // Invisible drag blocker
+        ImGui::SetCursorPos(ImVec2(0, 0));
+        ImGui::InvisibleButton("##mathPedagogicalDrag", pedagogicalSize);
     }
     ImGui::EndChild();
 

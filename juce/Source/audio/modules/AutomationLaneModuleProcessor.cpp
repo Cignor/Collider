@@ -15,7 +15,7 @@ static bool compareChunks(const AutomationChunk::Ptr& a, const AutomationChunk::
 
 AutomationLaneModuleProcessor::AutomationLaneModuleProcessor()
     : ModuleProcessor(
-          BusesProperties().withOutput("Output", juce::AudioChannelSet::discreteChannels(4), true)),
+          BusesProperties().withOutput("Output", juce::AudioChannelSet::discreteChannels(5), true)),
       apvts(*this, nullptr, "AutomationLaneParams", createParameterLayout())
 {
     // Initialize default state with one empty chunk
@@ -33,6 +33,8 @@ AutomationLaneModuleProcessor::AutomationLaneModuleProcessor()
     divisionParam = apvts.getRawParameterValue(paramIdDivision);
     durationModeParam = apvts.getRawParameterValue(paramIdDurationMode);
     customDurationParam = apvts.getRawParameterValue(paramIdCustomDuration);
+    triggerThresholdParam = apvts.getRawParameterValue(paramIdTriggerThreshold);
+    triggerEdgeParam = apvts.getRawParameterValue(paramIdTriggerEdge);
 
 #if defined(PRESET_CREATOR_UI)
     // Initialize UI state
@@ -84,12 +86,30 @@ juce::AudioProcessorValueTreeState::ParameterLayout AutomationLaneModuleProcesso
             256.0f,
             16.0f)); // Default 16 beats
 
+    // Trigger threshold (0.0 to 1.0)
+    params.push_back(
+        std::make_unique<juce::AudioParameterFloat>(
+            paramIdTriggerThreshold,
+            "Trigger Threshold",
+            juce::NormalisableRange<float>(0.0f, 1.0f),
+            0.5f));
+
+    // Trigger edge selection (Rising, Falling, Both)
+    juce::StringArray edgeChoices = {"Rising", "Falling", "Both"};
+    params.push_back(
+        std::make_unique<juce::AudioParameterChoice>(
+            paramIdTriggerEdge, "Trigger Edge", edgeChoices, 0)); // Default Rising
+
     return {params.begin(), params.end()};
 }
 
 void AutomationLaneModuleProcessor::prepareToPlay(double sr, int samplesPerBlock)
 {
     sampleRate = sr;
+    // Reset trigger state
+    triggerPulseRemaining = 0;
+    previousValue = -1.0f; // Use -1 as sentinel to indicate uninitialized
+    lastValueAboveThreshold = false;
 }
 
 void AutomationLaneModuleProcessor::setTimingInfo(const TransportState& state)
@@ -103,6 +123,10 @@ void AutomationLaneModuleProcessor::setTimingInfo(const TransportState& state)
         {
             // Reset phase to 0 when transport stops
             currentPhase = 0.0;
+            // Reset trigger state
+            triggerPulseRemaining = 0;
+            previousValue = -1.0f; // Mark as uninitialized
+            lastValueAboveThreshold = false;
         }
         lastTransportCommand = command;
     }
@@ -117,6 +141,10 @@ void AutomationLaneModuleProcessor::processBlock(
     const int numSamples = buffer.getNumSamples();
     const int numChannels = buffer.getNumChannels();
 
+    // Clear trigger output channel first
+    if (numChannels > OUTPUT_TRIGGER)
+        buffer.clear(OUTPUT_TRIGGER, 0, numSamples);
+    
     // Get output pointers only if channels exist
     auto* outValue = (numChannels > OUTPUT_VALUE) ? buffer.getWritePointer(OUTPUT_VALUE) : nullptr;
     auto* outInverted =
@@ -124,6 +152,7 @@ void AutomationLaneModuleProcessor::processBlock(
     auto* outBipolar =
         (numChannels > OUTPUT_BIPOLAR) ? buffer.getWritePointer(OUTPUT_BIPOLAR) : nullptr;
     auto* outPitch = (numChannels > OUTPUT_PITCH) ? buffer.getWritePointer(OUTPUT_PITCH) : nullptr;
+    auto* outTrigger = (numChannels > OUTPUT_TRIGGER) ? buffer.getWritePointer(OUTPUT_TRIGGER) : nullptr;
 
     // Atomic load of the state
     AutomationState::Ptr state = activeState.load();
@@ -131,13 +160,16 @@ void AutomationLaneModuleProcessor::processBlock(
         return;
 
     // Null checks for parameter pointers
-    if (!modeParam || !rateParam || !loopParam)
+    if (!modeParam || !rateParam || !loopParam || !triggerThresholdParam || !triggerEdgeParam)
         return;
 
     const bool   isSync = *modeParam > 0.5f;
     const float  rateHz = *rateParam;
     const bool   isLooping = *loopParam > 0.5f;
     const double targetDuration = getTargetDuration();
+    const float  triggerThreshold = triggerThresholdParam ? triggerThresholdParam->load() : 0.5f;
+    const int    triggerEdgeMode = triggerEdgeParam ? (int)triggerEdgeParam->load() : 0;
+    double       previousBeat = -1.0; // Track previous beat for loop detection
 
     for (int i = 0; i < numSamples; ++i)
     {
@@ -192,10 +224,14 @@ void AutomationLaneModuleProcessor::processBlock(
             currentBeat = currentPhase * targetDuration;
         }
 
-        // Loop logic
+        // Loop logic - check if we just wrapped
+        bool justWrapped = false;
         if (isLooping && targetDuration > 0)
         {
-            currentBeat = std::fmod(currentBeat, targetDuration);
+            double wrappedBeat = std::fmod(currentBeat, targetDuration);
+            if (previousBeat >= 0.0 && wrappedBeat < previousBeat)
+                justWrapped = true; // Loop wrapped
+            currentBeat = wrappedBeat;
         }
         else if (!isLooping && currentBeat > targetDuration)
         {
@@ -225,6 +261,58 @@ void AutomationLaneModuleProcessor::processBlock(
             }
         }
 
+        // Trigger detection (only when transport is playing)
+        if (outTrigger)
+        {
+            if (m_currentTransport.isPlaying && !justWrapped)
+            {
+                // Initialize previousValue if uninitialized (first sample or after reset)
+                if (previousValue < 0.0f)
+                {
+                    previousValue = value;
+                    lastValueAboveThreshold = (value > triggerThreshold);
+                    outTrigger[i] = 0.0f; // No trigger on initialization
+                }
+                else
+                {
+                    // Check for threshold crossing
+                    bool crossingDetected = lineSegmentCrossesThreshold(previousValue, value, triggerThreshold, triggerEdgeMode);
+                    
+                    if (crossingDetected)
+                    {
+                        triggerPulseRemaining = (int)(sampleRate * 0.001); // 1ms pulse
+                    }
+
+                    // Output trigger signal
+                    outTrigger[i] = (triggerPulseRemaining > 0) ? 1.0f : 0.0f;
+                    
+                    if (triggerPulseRemaining > 0)
+                        --triggerPulseRemaining;
+
+                    // Update state for next sample
+                    previousValue = value;
+                    lastValueAboveThreshold = (value > triggerThreshold);
+                }
+            }
+            else
+            {
+                // Clear trigger output when not playing or on wrap
+                outTrigger[i] = 0.0f;
+                
+                // Reset state on wrap or when transport stops
+                if (justWrapped)
+                {
+                    previousValue = value; // Keep current value on wrap
+                    lastValueAboveThreshold = (value > triggerThreshold);
+                }
+                else if (!m_currentTransport.isPlaying)
+                {
+                    previousValue = -1.0f; // Mark as uninitialized when stopped
+                    lastValueAboveThreshold = false;
+                }
+            }
+        }
+
         // Output
         if (outValue)
             outValue[i] = value;
@@ -234,6 +322,9 @@ void AutomationLaneModuleProcessor::processBlock(
             outBipolar[i] = (value * 2.0f) - 1.0f;
         if (outPitch)
             outPitch[i] = (value * 10.0f); // 0-10V range
+
+        // Store current beat for next iteration
+        previousBeat = currentBeat;
     }
 }
 
@@ -395,6 +486,8 @@ juce::String AutomationLaneModuleProcessor::getAudioOutputLabel(int channel) con
         return "Bipolar";
     case OUTPUT_PITCH:
         return "Pitch";
+    case OUTPUT_TRIGGER:
+        return "Trigger";
     default:
         return {};
     }
@@ -445,6 +538,28 @@ double AutomationLaneModuleProcessor::getTargetDuration() const
     default:
         return 16.0;
     }
+}
+
+bool AutomationLaneModuleProcessor::lineSegmentCrossesThreshold(float prevValue, float currValue, float threshold, int edgeMode) const
+{
+    // Check if line segment from (prevValue) to (currValue) crosses threshold
+    // Edge mode: 0=Rising, 1=Falling, 2=Both
+    
+    const float d1 = prevValue - threshold;
+    const float d2 = currValue - threshold;
+    
+    // Check if values are on opposite sides of threshold (crossing detected)
+    if (d1 * d2 < 0.0f) // Opposite signs = crossing
+    {
+        if (edgeMode == 0) // Rising: crossing from below to above
+            return (d1 < 0.0f && d2 > 0.0f);
+        else if (edgeMode == 1) // Falling: crossing from above to below
+            return (d1 > 0.0f && d2 < 0.0f);
+        else // Both: crossing in either direction
+            return true;
+    }
+    
+    return false;
 }
 
 void AutomationLaneModuleProcessor::ensureChunkExistsAt(double beat)
@@ -565,7 +680,7 @@ void AutomationLaneModuleProcessor::drawParametersInNode(
     auto&       ap = getAPVTS();
 
     if (!modeParam || !rateParam || !divisionParam || !loopParam || !durationModeParam ||
-        !customDurationParam)
+        !customDurationParam || !triggerThresholdParam || !triggerEdgeParam)
     {
         ImGui::Text("Initializing...");
         return;
@@ -743,6 +858,71 @@ void AutomationLaneModuleProcessor::drawParametersInNode(
 
     ImGui::Spacing();
 
+    // --- TRIGGER CONTROLS ---
+    if (!triggerThresholdParam || !triggerEdgeParam)
+    {
+        ImGui::Text("Initializing trigger parameters...");
+    }
+    else
+    {
+        ImGui::PushItemWidth(itemWidth - 100);
+        
+        // Trigger Threshold Slider
+        float trigThresh = *triggerThresholdParam;
+        if (ImGui::SliderFloat("Trigger Threshold", &trigThresh, 0.0f, 1.0f, "%.2f"))
+        {
+            *triggerThresholdParam = trigThresh;
+            ap.getParameter(paramIdTriggerThreshold)
+                ->setValueNotifyingHost(
+                    ap.getParameterRange(paramIdTriggerThreshold).convertTo0to1(trigThresh));
+            markEdited();
+        }
+        // Scroll-edit for Trigger Threshold Slider
+        adjustParamOnWheel(ap.getParameter(paramIdTriggerThreshold), paramIdTriggerThreshold, trigThresh);
+        if (ImGui::IsItemHovered())
+            ImGui::SetTooltip("Threshold level for trigger output");
+        
+        ImGui::SameLine();
+        
+        // Edge Selection Combo
+        ImGui::SetNextItemWidth(80);
+        int edgeIndex = (int)*triggerEdgeParam;
+        const char* edges[] = {"Rising", "Falling", "Both"};
+        if (ImGui::Combo("##edge", &edgeIndex, edges, 3))
+        {
+            *triggerEdgeParam = (float)edgeIndex;
+            ap.getParameter(paramIdTriggerEdge)
+                ->setValueNotifyingHost(
+                    ap.getParameterRange(paramIdTriggerEdge).convertTo0to1((float)edgeIndex));
+            markEdited();
+        }
+        // Scroll-edit for Trigger Edge Combo
+        if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenBlockedByPopup))
+        {
+            const float wheel = ImGui::GetIO().MouseWheel;
+            if (wheel != 0.0f)
+            {
+                // wheel > 0.0f (scroll down) gives -1, wheel < 0.0f (scroll up) gives +1
+                const int delta = wheel > 0.0f ? -1 : 1;
+                int newIndex = juce::jlimit(0, 2, edgeIndex + delta);
+                if (newIndex != edgeIndex)
+                {
+                    *triggerEdgeParam = (float)newIndex;
+                    ap.getParameter(paramIdTriggerEdge)
+                        ->setValueNotifyingHost(
+                            ap.getParameterRange(paramIdTriggerEdge).convertTo0to1((float)newIndex));
+                    markEdited();
+                }
+            }
+        }
+        if (ImGui::IsItemHovered())
+            ImGui::SetTooltip("Trigger on rising edge, falling edge, or both");
+        
+        ImGui::PopItemWidth();
+    }
+
+    ImGui::Spacing();
+
     // --- 2. TIMELINE & EDITOR AREA ---
 
     const float  timelineHeight = 30.0f;
@@ -816,6 +996,18 @@ void AutomationLaneModuleProcessor::drawParametersInNode(
         ImVec2(editorStart.x, y05),
         ImVec2(editorStart.x + std::max(itemWidth, totalWidth), y05),
         IM_COL32(50, 50, 50, 255));
+
+    // Draw Trigger Threshold Line
+    if (triggerThresholdParam)
+    {
+        float threshold = *triggerThresholdParam;
+        float thresholdY = editorStart.y + editorHeight * (1.0f - threshold);
+        const ImU32 thresholdColor = IM_COL32(255, 150, 0, 200); // Orange/amber
+        drawList->AddLine(
+            ImVec2(editorStart.x, thresholdY),
+            ImVec2(editorStart.x + std::max(itemWidth, totalWidth), thresholdY),
+            thresholdColor, 2.0f);
+    }
 
     // Draw Vertical Grid Lines
     for (int b = startBeat; b <= endBeat; ++b)

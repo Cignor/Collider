@@ -791,6 +791,24 @@ void AutomatoModuleProcessor::drawParametersInNode(
             if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
                 ImGui::SetTooltip("Controlled by Tempo Clock");
         }
+        // Scroll wheel editing for Speed Division combo
+        if (!isGlobal && ImGui::IsItemHovered())
+        {
+            const float wheel = ImGui::GetIO().MouseWheel;
+            if (wheel != 0.0f)
+            {
+                const int maxIndex = 8; // 9 divisions: 0-8
+                const int newIndex = juce::jlimit(0, maxIndex, divIndex + (wheel > 0.0f ? -1 : 1));
+                if (newIndex != divIndex)
+                {
+                    *divisionParam = (float)newIndex;
+                    ap.getParameter(paramIdDivision)
+                        ->setValueNotifyingHost(
+                            ap.getParameterRange(paramIdDivision).convertTo0to1((float)newIndex));
+                    onModificationEnded();
+                }
+            }
+        }
         if (ImGui::IsItemHovered())
             ImGui::SetTooltip("Playback Speed Multiplier");
     }
@@ -805,6 +823,10 @@ void AutomatoModuleProcessor::drawParametersInNode(
                 ->setValueNotifyingHost(ap.getParameterRange(paramIdRate).convertTo0to1(rate));
             onModificationEnded();
         }
+        if (ImGui::IsItemDeactivatedAfterEdit())
+            onModificationEnded();
+        // Scroll wheel editing for Rate drag float
+        adjustParamOnWheel(ap.getParameter(paramIdRate), paramIdRate, rate);
         if (ImGui::IsItemHovered())
             ImGui::SetTooltip("Playback Rate in Hz");
     }

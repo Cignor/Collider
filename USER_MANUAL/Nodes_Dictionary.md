@@ -1980,13 +1980,14 @@ A transport-synchronized automation recorder that captures and plays back CV, Ga
 ### automation_lane
 **Drawable Automation Curve Lane**
 
-A drawable automation lane that allows you to draw and edit automation curves directly on an infinitely scrolling timeline. Features a fixed center playhead with the timeline scrolling underneath, similar to a traditional DAW automation lane. Ideal for creating complex, hand-drawn modulation curves with precise timing control.
+A drawable automation lane that allows you to draw and edit automation curves directly on an infinitely scrolling timeline. Features a fixed center playhead with the timeline scrolling underneath, similar to a traditional DAW automation lane. Ideal for creating complex, hand-drawn modulation curves with precise timing control. Includes a trigger output that fires when the automation curve crosses a user-defined threshold line.
 
 #### Outputs
 - `Value` (CV) - Main automation output (0-1 range)
 - `Inverted` (CV) - Inverted output (1-0 range)
 - `Bipolar` (CV) - Bipolar output (-1 to +1 range)
 - `Pitch` (CV) - Pitch CV output (0-10V range, V/Oct compatible)
+- `Trigger` (Gate) - Trigger output that fires when the automation curve crosses the threshold line
 
 #### Parameters
 - `Rate` (0.01-20 Hz) - Playback rate in free mode
@@ -1994,7 +1995,11 @@ A drawable automation lane that allows you to draw and edit automation curves di
 - `Division` (Choice) - Musical division when synced (1/32, 1/16, 1/8, 1/4, 1/2, 1 Bar, 2 Bars, 4 Bars, 8 Bars)
 - `Loop` (Bool) - Enable looping playback
 - `Record/Edit` (Choice) - Toggle between recording mode (auto-scroll) and edit mode (manual scroll)
+- `Duration Mode` (Choice) - User Choice, 1 Bar, 2 Bars, 4 Bars, 8 Bars, 16 Bars, 32 Bars (loop duration when sync is enabled)
+- `Custom Duration` (1-256 beats) - Custom loop duration (only active when Duration Mode is "User Choice")
 - `Zoom` (10-200 pixels/beat) - Timeline zoom level (UI only)
+- `Trigger Threshold` (0.0-1.0) - Threshold level for trigger output (shown as horizontal line on timeline)
+- `Trigger Edge` (Choice) - Trigger on Rising edge (below to above), Falling edge (above to below), or Both edges
 
 #### How to Use
 1. **Drawing Automation:**
@@ -2016,20 +2021,30 @@ A drawable automation lane that allows you to draw and edit automation curves di
    - Use `Inverted` for reverse modulation curves
    - Use `Bipolar` for modulation centered around zero
    - Use `Pitch` for V/Oct pitch control
+   - Use `Trigger` for event-based triggering when the curve crosses the threshold
 
-5. **Timeline Navigation:**
+5. **Trigger Output:**
+   - Adjust the `Trigger Threshold` slider to set the threshold line position (visible on the timeline)
+   - Select `Trigger Edge` mode: Rising (crosses upward), Falling (crosses downward), or Both (any crossing)
+   - The trigger fires a 1ms pulse when the automation curve crosses the threshold line
+   - Perfect for triggering events based on automation curve shape (e.g., trigger envelope when curve rises above 0.7)
+   - Connect to sequencer triggers, envelope gates, or any trigger input
+
+6. **Timeline Navigation:**
    - Scroll horizontally to navigate the timeline
    - Adjust zoom to see more or less detail
    - Grid lines show beat divisions for reference
    - Fixed center playhead makes it easy to see current position
 
-6. **Example Patches:**
+7. **Example Patches:**
    - **Filter Sweeps:** Draw filter cutoff automation and connect to VCF
    - **Volume Automation:** Use Value output to control VCA gain
    - **Pitch Sequences:** Draw melodic lines and use Pitch output to VCO
    - **Complex Modulation:** Combine with other modulators for layered automation
+   - **Trigger-Based Events:** Use Trigger output to fire envelopes or advance sequencers when automation crosses a threshold
+   - **Dynamic Gating:** Draw volume automation with trigger points to create rhythmic gating patterns
 
-7. **Tips:**
+8. **Tips:**
    - Draw smooth curves by dragging slowly
    - Use sync mode for tempo-locked automation
    - Enable loop for repeating patterns
@@ -2040,7 +2055,8 @@ A drawable automation lane that allows you to draw and edit automation curves di
 - Fixed center playhead (doesn't move, timeline scrolls underneath)
 - Infinite scrolling timeline (draw as long as needed)
 - Beat and bar grid lines for musical reference
-- Real-time curve visualization
+- Real-time curve visualization with bold, visible lines
+- Trigger threshold line displayed on the timeline
 - Sample-accurate playback
 
 **Technical Details:**

@@ -67,6 +67,8 @@ public:
         "durationMode"; // Duration mode: User Choice, 1 Bar, 4 Bars, etc.
     static constexpr auto paramIdCustomDuration =
         "customDuration"; // Custom duration in beats (for User Choice)
+    static constexpr auto paramIdTriggerThreshold = "triggerThreshold"; // Trigger threshold (0.0-1.0)
+    static constexpr auto paramIdTriggerEdge = "triggerEdge"; // Trigger edge mode (Rising/Falling/Both)
 
     // Output IDs
     enum
@@ -74,7 +76,8 @@ public:
         OUTPUT_VALUE = 0,
         OUTPUT_INVERTED,
         OUTPUT_BIPOLAR,
-        OUTPUT_PITCH
+        OUTPUT_PITCH,
+        OUTPUT_TRIGGER
     };
 
     AutomationLaneModuleProcessor();
@@ -114,6 +117,7 @@ public:
         helpers.drawAudioOutputPin("Inverted", OUTPUT_INVERTED);
         helpers.drawAudioOutputPin("Bipolar", OUTPUT_BIPOLAR);
         helpers.drawAudioOutputPin("Pitch", OUTPUT_PITCH);
+        helpers.drawAudioOutputPin("Trigger", OUTPUT_TRIGGER);
     }
 #endif
 
@@ -133,6 +137,11 @@ public:
     TransportState   m_currentTransport;
     TransportCommand lastTransportCommand{TransportCommand::Stop};
 
+    // --- Trigger Detection State ---
+    float previousValue{-1.0f}; // Previous automation value for edge detection (-1 = uninitialized)
+    bool lastValueAboveThreshold{false}; // Previous threshold state
+    int triggerPulseRemaining{0}; // Counter for trigger pulse duration
+
     // --- Parameters ---
     std::atomic<float>* rateParam{nullptr};
     std::atomic<float>* modeParam{nullptr};
@@ -140,6 +149,8 @@ public:
     std::atomic<float>* divisionParam{nullptr};
     std::atomic<float>* durationModeParam{nullptr};
     std::atomic<float>* customDurationParam{nullptr};
+    std::atomic<float>* triggerThresholdParam{nullptr};
+    std::atomic<float>* triggerEdgeParam{nullptr};
 
     // --- Internal Helpers ---
     float  getSampleAt(double beat);
@@ -155,6 +166,9 @@ public:
     // Thread-safe state access
     void                 updateState(AutomationState::Ptr newState);
     AutomationState::Ptr getState() const;
+
+    // --- Trigger Detection Helper ---
+    bool lineSegmentCrossesThreshold(float prevValue, float currValue, float threshold, int edgeMode) const;
 
 private:
     juce::AudioProcessorValueTreeState apvts;
