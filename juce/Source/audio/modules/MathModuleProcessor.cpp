@@ -23,20 +23,23 @@ MathModuleProcessor::MathModuleProcessor()
 juce::AudioProcessorValueTreeState::ParameterLayout MathModuleProcessor::createParameterLayout()
 {
     std::vector<std::unique_ptr<juce::RangedAudioParameter>> p;
-    // Enhanced operation list with 17 mathematical functions
+    // Enhanced operation list with 30 mathematical functions
     p.push_back (std::make_unique<juce::AudioParameterChoice> ("operation", "Operation", 
         juce::StringArray { 
             "Add", "Subtract", "Multiply", "Divide",
             "Min", "Max", "Power", "Sqrt(A)",
             "Sin(A)", "Cos(A)", "Tan(A)",
             "Abs(A)", "Modulo", "Fract(A)", "Int(A)",
-            "A > B", "A < B"
+            "A > B", "A < B",
+            "Log(A)", "Log10(A)", "Exp(A)", "Exp2(A)",
+            "Limit(A, B)", "A == B", "A != B", "A >= B", "A <= B",
+            "Round(A)", "Sign(A)", "Atan(A)", "Atan2(A, B)"
         }, 0));
     // New Value A slider default
     p.push_back (std::make_unique<juce::AudioParameterFloat> ("valueA", "Value A", juce::NormalisableRange<float> (-100.0f, 100.0f), 0.0f));
     // Expanded Value B range from -100 to 100 for more creative possibilities
     p.push_back (std::make_unique<juce::AudioParameterFloat> ("valueB", "Value B", juce::NormalisableRange<float> (-100.0f, 100.0f), 0.0f));
-    // Operation modulation CV input (0-1 maps to 0-16 operation indices)
+    // Operation modulation CV input (0-1 maps to 0-29 operation indices - 30 operations total)
     p.push_back (std::make_unique<juce::AudioParameterFloat> ("operation_mod", "Operation Mod", juce::NormalisableRange<float> (0.0f, 1.0f), 0.0f));
     return { p.begin(), p.end() };
 }
@@ -115,10 +118,10 @@ void MathModuleProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::
         int operation = baseOperation;
         if (operationModPtr != nullptr)
         {
-            // Map CV (0-1) to operation index (0-16) - 17 operations total
-            // Evenly distribute: CV 0.0 -> op 0, CV 1.0 -> op 16
+            // Map CV (0-1) to operation index (0-29) - 30 operations total
+            // Evenly distribute: CV 0.0 -> op 0, CV 1.0 -> op 29
             float modCV = juce::jlimit(0.0f, 1.0f, operationModPtr[i]);
-            operation = static_cast<int>(juce::jlimit(0.0f, 16.0f, modCV * 16.0f));
+            operation = static_cast<int>(juce::jlimit(0.0f, 29.0f, modCV * 29.0f));
         }
         
 #if defined(PRESET_CREATOR_UI)
@@ -127,7 +130,7 @@ void MathModuleProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::
             currentOperationForViz = operation;
 #endif
 
-        // Enhanced mathematical operations with 17 different functions
+        // Enhanced mathematical operations with 30 different functions
         float result = 0.0f;
         switch (operation)
         {
@@ -148,6 +151,19 @@ void MathModuleProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::
             case 14: result = std::trunc(valA); break; // Int(A) - only on A
             case 15: result = (valA > valB) ? 1.0f : 0.0f; break; // A > B
             case 16: result = (valA < valB) ? 1.0f : 0.0f; break; // A < B
+            case 17: result = (valA > 1e-9f) ? std::log(valA) : -20.0f; break; // Log(A) - only on A, safe for <= 0
+            case 18: result = (valA > 1e-9f) ? std::log10(valA) : -20.0f; break; // Log10(A) - only on A, safe for <= 0
+            case 19: result = std::exp(juce::jlimit(-10.0f, 10.0f, valA)); break; // Exp(A) - only on A, clamped to prevent overflow
+            case 20: result = std::exp2(juce::jlimit(-10.0f, 10.0f, valA)); break; // Exp2(A) - only on A, clamped to prevent overflow
+            case 21: result = juce::jlimit(-std::abs(valB), std::abs(valB), valA); break; // Limit(A, B) - clamps A to [-|B|, |B|]
+            case 22: result = (std::abs(valA - valB) < 1e-6f) ? 1.0f : 0.0f; break; // A == B
+            case 23: result = (std::abs(valA - valB) >= 1e-6f) ? 1.0f : 0.0f; break; // A != B
+            case 24: result = (valA >= valB) ? 1.0f : 0.0f; break; // A >= B
+            case 25: result = (valA <= valB) ? 1.0f : 0.0f; break; // A <= B
+            case 26: result = std::round(valA); break; // Round(A) - only on A
+            case 27: result = (valA > 1e-9f) ? 1.0f : ((valA < -1e-9f) ? -1.0f : 0.0f); break; // Sign(A) - only on A
+            case 28: result = std::atan(valA) / juce::MathConstants<float>::pi; break; // Atan(A) - only on A, normalized to [-1, 1]
+            case 29: result = std::atan2(valA, valB) / juce::MathConstants<float>::pi; break; // Atan2(A, B) - normalized to [-1, 1]
         }
         dst[i] = result;
         
@@ -240,7 +256,10 @@ void MathModuleProcessor::drawParametersInNode (float itemWidth, const std::func
         "Min\0Max\0Power\0Sqrt(A)\0"
         "Sin(A)\0Cos(A)\0Tan(A)\0"
         "Abs(A)\0Modulo\0Fract(A)\0Int(A)\0"
-        "A > B\0A < B\0\0"))
+        "A > B\0A < B\0"
+        "Log(A)\0Log10(A)\0Exp(A)\0Exp2(A)\0"
+        "Limit(A, B)\0A == B\0A != B\0A >= B\0A <= B\0"
+        "Round(A)\0Sign(A)\0Atan(A)\0Atan2(A, B)\0\0"))
         if (!isOperationModulated) 
             if (auto* p = dynamic_cast<juce::AudioParameterChoice*>(ap.getParameter("operation"))) 
                 *p = op;
@@ -250,7 +269,7 @@ void MathModuleProcessor::drawParametersInNode (float itemWidth, const std::func
     if (!isOperationModulated && ImGui::IsItemHovered()) {
         const float wheel = ImGui::GetIO().MouseWheel;
         if (wheel != 0.0f) {
-            const int maxIndex = 16; // 17 operations: 0-16
+            const int maxIndex = 29; // 30 operations: 0-29
             const int newIndex = juce::jlimit(0, maxIndex, op + (wheel > 0.0f ? -1 : 1));
             if (newIndex != op) {
                 if (auto* p = dynamic_cast<juce::AudioParameterChoice*>(ap.getParameter("operation"))) {
@@ -340,8 +359,9 @@ void MathModuleProcessor::drawParametersInNode (float itemWidth, const std::func
         
         // Determine operation type: single-input vs dual-input
         int currentOp = vizData.currentOperation.load();
-        // Single-input operations: 7 (Sqrt), 8 (Sin), 9 (Cos), 10 (Tan), 11 (Abs), 13 (Fract), 14 (Int)
-        bool isSingleInputOp = (currentOp >= 7 && currentOp <= 11) || (currentOp >= 13 && currentOp <= 14);
+        // Single-input operations: 7-11 (Sqrt, Sin, Cos, Tan, Abs), 13-14 (Fract, Int), 17-20 (Log, Log10, Exp, Exp2), 26-28 (Round, Sign, Atan)
+        bool isSingleInputOp = (currentOp >= 7 && currentOp <= 11) || (currentOp >= 13 && currentOp <= 14) || 
+                               (currentOp >= 17 && currentOp <= 20) || (currentOp >= 26 && currentOp <= 28);
         
         // Draw waveforms
         const float halfHeight = graphSize.y * 0.5f;
@@ -397,10 +417,13 @@ void MathModuleProcessor::drawParametersInNode (float itemWidth, const std::func
         const char* opNames[] = {
             "Add", "Subtract", "Multiply", "Divide", "Min", "Max", "Power",
             "Sqrt(A)", "Sin(A)", "Cos(A)", "Tan(A)", "Abs(A)", "Modulo",
-            "Fract(A)", "Int(A)", "A > B", "A < B"
+            "Fract(A)", "Int(A)", "A > B", "A < B",
+            "Log(A)", "Log10(A)", "Exp(A)", "Exp2(A)",
+            "Limit(A, B)", "A == B", "A != B", "A >= B", "A <= B",
+            "Round(A)", "Sign(A)", "Atan(A)", "Atan2(A, B)"
         };
         // currentOp already declared above for operation type detection
-        if (currentOp >= 0 && currentOp < 17)
+        if (currentOp >= 0 && currentOp < 30)
         {
             ImGui::SetCursorPos(ImVec2(4, 4));
             ImGui::TextColored(ImVec4(1.0f, 1.0f, 0.6f, 1.0f), "%s", opNames[currentOp]);
@@ -518,6 +541,19 @@ void MathModuleProcessor::drawParametersInNode (float itemWidth, const std::func
                 case 14: result = std::trunc(valA); break; // Int(A)
                 case 15: result = (valA > valB) ? 1.0f : 0.0f; break; // A > B
                 case 16: result = (valA < valB) ? 1.0f : 0.0f; break; // A < B
+                case 17: result = (valA > 1e-9f) ? std::log(valA) : -20.0f; break; // Log(A)
+                case 18: result = (valA > 1e-9f) ? std::log10(valA) : -20.0f; break; // Log10(A)
+                case 19: result = std::exp(juce::jlimit(-10.0f, 10.0f, valA)); break; // Exp(A)
+                case 20: result = std::exp2(juce::jlimit(-10.0f, 10.0f, valA)); break; // Exp2(A)
+                case 21: result = juce::jlimit(-std::abs(valB), std::abs(valB), valA); break; // Limit(A, B)
+                case 22: result = (std::abs(valA - valB) < 1e-6f) ? 1.0f : 0.0f; break; // A == B
+                case 23: result = (std::abs(valA - valB) >= 1e-6f) ? 1.0f : 0.0f; break; // A != B
+                case 24: result = (valA >= valB) ? 1.0f : 0.0f; break; // A >= B
+                case 25: result = (valA <= valB) ? 1.0f : 0.0f; break; // A <= B
+                case 26: result = std::round(valA); break; // Round(A)
+                case 27: result = (valA > 1e-9f) ? 1.0f : ((valA < -1e-9f) ? -1.0f : 0.0f); break; // Sign(A)
+                case 28: result = std::atan(valA) / juce::MathConstants<float>::pi; break; // Atan(A)
+                case 29: result = std::atan2(valA, valB) / juce::MathConstants<float>::pi; break; // Atan2(A, B)
             }
             
             // Clamp result to reasonable range for visualization
