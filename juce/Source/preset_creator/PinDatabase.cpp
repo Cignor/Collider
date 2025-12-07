@@ -56,9 +56,10 @@ void populateModuleDescriptions()
     descriptions["lfo"]                 = "A Low-Frequency Oscillator for modulation.";
     descriptions["adsr"]                = "An Attack-Decay-Sustain-Release envelope generator.";
     descriptions["random"]              = "A random value generator with internal sample & hold.";
-    descriptions["s_and_h"]             = "A classic Sample and Hold module.";
+    descriptions["s_and_h"]             = "Professional Sample & Hold module with edge detection, threshold control, slew limiting, and multiple modes. Features real-time visualization and CV modulation.";
     descriptions["function_generator"]  = "A complex, drawable envelope/LFO generator.";
     descriptions["automation_lane"]     = "Draw automation curves on an infinitely scrolling timeline with fixed center playhead. Create complex hand-drawn modulation with precise timing control.";
+    descriptions["automato"]            = "Record user gestures on a 2D grid and replay them with transport sync. Features Record/Edit modes, 7 CV outputs, and time-based sample storage.";
     descriptions["shaping_oscillator"]  = "An oscillator with a built-in waveshaper.";
     // Utilities & Logic
     descriptions["vca"]                 = "A Voltage-Controlled Amplifier to control signal level.";
@@ -605,6 +606,21 @@ db["random"] = ModulePinInfo(
         {}
     );
 
+    db["automato"] = ModulePinInfo(
+        NodeWidth::Big,
+        { AudioPin("X Mod", 0, PinDataType::CV), AudioPin("Y Mod", 1, PinDataType::CV) },
+        {
+            AudioPin("X", 0, PinDataType::CV),
+            AudioPin("Y", 1, PinDataType::CV),
+            AudioPin("Combined", 2, PinDataType::CV),
+            AudioPin("Value", 3, PinDataType::CV),
+            AudioPin("Inverted", 4, PinDataType::CV),
+            AudioPin("Bipolar", 5, PinDataType::CV),
+            AudioPin("Pitch", 6, PinDataType::CV)
+        },
+        {}
+    );
+
     ModulePinInfo multiSequencerPins(
         NodeWidth::ExtraWide,
         { // Inputs: Mod In L, Mod In R, Rate Mod, Gate Mod, Steps Mod, Gate Thr Mod, plus per-step mods and triggers
@@ -841,21 +857,26 @@ db["random"] = ModulePinInfo(
     // Add lowercase alias for Attenuverter
     // Add Sample & Hold module
     db["s_and_h"] = ModulePinInfo(
-        NodeWidth::Small,
+        NodeWidth::Medium,
         { 
-            AudioPin("Signal In L", 0, PinDataType::Audio),
-            AudioPin("Signal In R", 1, PinDataType::Audio),
-            AudioPin("Gate In L", 2, PinDataType::Gate),
-            AudioPin("Gate In R", 3, PinDataType::Gate),
-            AudioPin("Threshold Mod", 4, PinDataType::CV),
-            AudioPin("Edge Mod", 5, PinDataType::CV),
-            AudioPin("Slew Mod", 6, PinDataType::CV)
+            AudioPin("In L", 0, PinDataType::Audio),
+            AudioPin("In R", 1, PinDataType::Audio),
+            AudioPin("Trigger In", 2, PinDataType::Gate),
+            AudioPin("Threshold Mod", 3, PinDataType::CV),
+            AudioPin("Edge Mod", 4, PinDataType::CV),
+            AudioPin("Slew Mod", 5, PinDataType::CV)
         },
         { 
             AudioPin("Out L", 0, PinDataType::Audio),
-            AudioPin("Out R", 1, PinDataType::Audio)
+            AudioPin("Out R", 1, PinDataType::Audio),
+            AudioPin("Smoothed Out", 2, PinDataType::Audio),
+            AudioPin("Trigger Out", 3, PinDataType::Gate)
         },
-        {}
+        {
+            ModPin("Threshold", "threshold_mod", PinDataType::CV),
+            ModPin("Edge", "edge_mod", PinDataType::CV),
+            ModPin("Slew", "slew_mod", PinDataType::CV)
+        }
     );
     
     db["map_range"] = ModulePinInfo(
@@ -922,10 +943,9 @@ db["random"] = ModulePinInfo(
 
     db["math"] = ModulePinInfo(
         NodeWidth::Small,
-        { AudioPin("In A", 0, PinDataType::CV), AudioPin("In B", 1, PinDataType::CV) },
-        { AudioPin("Add", 0, PinDataType::CV), AudioPin("Subtract", 1, PinDataType::CV),
-          AudioPin("Multiply", 2, PinDataType::CV), AudioPin("Divide", 3, PinDataType::CV) },
-        {}
+        { AudioPin("In A", 0, PinDataType::CV), AudioPin("In B", 1, PinDataType::CV), AudioPin("Op Mod", 2, PinDataType::CV) },
+        { AudioPin("Out", 0, PinDataType::CV) },
+        { ModPin("Operation", "operation_mod", PinDataType::CV) }
     );
 
     db["sequential_switch"] = ModulePinInfo(

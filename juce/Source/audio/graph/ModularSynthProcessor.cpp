@@ -67,6 +67,7 @@
 #include "../modules/DriveModuleProcessor.h"
 #include "../modules/BitCrusherModuleProcessor.h"
 #include "../modules/PanVolModuleProcessor.h"
+#include "../modules/AutomatoModuleProcessor.h"
 #include "../modules/SnapshotSequencerModuleProcessor.h"
 #include "../modules/MIDICVModuleProcessor.h"
 #include "../modules/MIDIFadersModuleProcessor.h"
@@ -1002,6 +1003,7 @@ static std::map<juce::String, Creator>& getModuleFactory()
         reg("drive", [] { return std::make_unique<DriveModuleProcessor>(); });
         reg("bit_crusher", [] { return std::make_unique<BitCrusherModuleProcessor>(); });
         reg("panvol", [] { return std::make_unique<PanVolModuleProcessor>(); });
+        reg("automato", [] { return std::make_unique<AutomatoModuleProcessor>(); });
         reg("comment", [] { return std::make_unique<CommentModuleProcessor>(); });
         reg("reroute", [] { return std::make_unique<RerouteModuleProcessor>(); });
         reg("snapshot_sequencer",

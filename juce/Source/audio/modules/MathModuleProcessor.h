@@ -31,6 +31,7 @@ public:
         {
             case 0: return "In A";
             case 1: return "In B";
+            case 2: return "Op Mod";
             default: return juce::String("In ") + juce::String(channel + 1);
         }
     }
@@ -55,6 +56,7 @@ private:
     std::atomic<float>* valueAParam { nullptr };
     std::atomic<float>* valueBParam { nullptr };
     std::atomic<float>* operationParam { nullptr };
+    std::atomic<float>* operationModParam { nullptr };
 
     std::atomic<float> lastValue { 0.0f };
     std::atomic<float> lastValueA { 0.0f };

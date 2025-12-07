@@ -5,6 +5,48 @@
 
 ---
 
+## Node Sizes and Layout
+
+Nodes in Collider have standardized width categories to ensure consistent layout and prevent overlapping in the node editor. The "Beautify Layout" function uses these sizes to arrange nodes optimally.
+
+### Node Width Categories
+
+Nodes are categorized into five width categories:
+
+- **Small** (240px): Basic modules with minimal UI elements
+  - Examples: VCO, VCA, LFO, ADSR, VCF, Mixer, Comparator, Logic, Math
+  
+- **Medium** (360px): Modules with moderate UI complexity
+  - Examples: Delay, Reverb, Chorus, Phaser, Compressor, Scope, Frequency Graph
+  
+- **Big** (480px): Complex modules with extensive controls
+  - Examples: PolyVCO, Sample Loader, Function Generator, Granulator, TTS Performer, Automation Lane
+  
+- **ExtraWide** (840px): Timeline/grid-based modules requiring wide display
+  - Examples: Sequencer, Multi Sequencer, MIDI Player, Tempo Clock, Timeline
+  
+- **Exception**: Custom-sized modules that define their own dimensions
+  - Examples: Spatial Granulator (16:9 canvas), Video modules (webcam_loader, video_file_loader), Computer Vision modules (pose_estimator, hand_tracker, face_tracker), Physics, Animation
+
+### Size Determination
+
+The node editor determines node sizes using the following priority:
+
+1. **Rendered Dimensions**: If a node has been rendered, `ImNodes::GetNodeDimensions()` provides the actual rendered size
+2. **PinDatabase Lookup**: For unrendered nodes, the system looks up the module type in `PinDatabase` and uses the `defaultWidth` category
+3. **Fallback**: If neither is available, uses the theme's default node width
+
+### Exception Nodes
+
+Exception-sized nodes (like video modules and computer vision nodes) have custom dimensions defined by the module itself. These are typically much larger than standard nodes to accommodate video previews, canvas interfaces, or complex visualizations.
+
+The "Beautify Layout" function handles exception nodes by:
+- Using a wider default (1.5x theme default) when dimensions aren't available
+- Respecting actual rendered dimensions when available
+- Ensuring proper spacing to prevent overlap
+
+---
+
 ## Table of Contents
 
 ### Quick Reference Index
@@ -71,6 +113,7 @@
 - [tempo_clock](#tempo_clock) - Global Clock Generator
 - [timeline](#timeline) - Automation Recorder and Playback
 - [automation_lane](#automation_lane) - Drawable Automation Curve Lane
+- [automato](#automato) - Gesture Recorder and Playback
 
 #### 6. MIDI NODES
 - [midi_cv](#midi_cv) - MIDI to CV Converter
@@ -1417,29 +1460,70 @@ Smooths abrupt changes in signals using independent rise and fall times.
 ### math
 **Mathematical Operations**
 
-Performs mathematical operations on two input signals.
+Performs mathematical operations on two input signals with 17 different operation modes. Supports CV modulation of the operation selection and scroll-edit functionality.
 
 #### Inputs
 - `In A` (CV) - First operand
 - `In B` (CV) - Second operand
+- `Op Mod` (CV) - Operation selection modulation (0-1 maps to 17 operations)
 
 #### Outputs
-- `Add` (CV) - A + B
-- `Subtract` (CV) - A - B
-- `Multiply` (CV) - A × B
-- `Divide` (CV) - A ÷ B
+- `Out` (CV) - Result of the selected operation
 
 #### Parameters
 - `Value A` (-100 to 100) - Default value for A (used if not patched)
 - `Value B` (-100 to 100) - Default value for B (used if not patched)
-- `Operation` (Choice) - Add, Subtract, Multiply, Divide, Min, Max, Power, Sqrt(A), Sin(A), Cos(A), Tan(A), Abs(A), Modulo, Fract(A), Int(A), A>B, A<B
+- `Operation` (Choice) - Mathematical operation to perform:
+  - **Arithmetic:** Add, Subtract, Multiply, Divide
+  - **Comparison:** Min, Max, A>B, A<B
+  - **Power & Roots:** Power, Sqrt(A)
+  - **Trigonometric:** Sin(A), Cos(A), Tan(A)
+  - **Other:** Abs(A), Modulo, Fract(A), Int(A)
+
+#### CV Modulation
+- **Operation Mod (`Op Mod`):** Connect a CV source (0-1 range) to modulate the operation selection in real-time
+  - CV 0.0 → Operation 0 (Add)
+  - CV 1.0 → Operation 16 (A<B)
+  - Evenly distributed across all 17 operations
+  - When CV is connected, the operation dropdown is disabled and shows "(mod)" indicator
+
+#### Scroll-Edit Support
+- **Operation Dropdown:** Hover over the operation dropdown and use the mouse wheel to cycle through operations
+  - Scroll up: Previous operation
+  - Scroll down: Next operation
+  - Only works when operation is not being modulated via CV
+  - Provides quick, intuitive operation selection
 
 #### How to Use
-1. Connect CV sources or use internal values
-2. Choose operation
-3. Use outputs for complex CV processing
-4. Create custom modulation shapes by combining operations
-5. Use comparison operations (A>B, A<B) for logic
+1. **Basic Operation:**
+   - Connect CV sources to `In A` and `In B`, or use internal `Value A` and `Value B` sliders
+   - Select the desired operation from the dropdown
+   - The result appears at the `Out` output
+
+2. **CV Modulation:**
+   - Connect a CV source to `Op Mod` to dynamically change operations
+   - Use LFOs, sequencers, or envelopes to create evolving mathematical transformations
+   - CV range 0-1 maps evenly to all 17 operations
+
+3. **Scroll-Edit:**
+   - Hover over the operation dropdown
+   - Use mouse wheel to quickly cycle through operations
+   - Perfect for live performance and rapid experimentation
+
+4. **Creative Applications:**
+   - Use comparison operations (A>B, A<B) for logic gates and conditional routing
+   - Combine trigonometric functions (Sin, Cos, Tan) with oscillators for complex waveforms
+   - Use Modulo for creating repeating patterns and wraparound effects
+   - Fract(A) extracts fractional parts for smooth, continuous modulation
+   - Int(A) quantizes to integers for stepped sequences
+
+5. **Operation Examples:**
+   - **Add/Subtract:** Combine or offset CV signals
+   - **Multiply:** Amplitude modulation, scaling
+   - **Power:** Exponential curves, distortion shaping
+   - **Min/Max:** Limiting, gating, signal selection
+   - **Trigonometric:** Waveform generation, phase modulation
+   - **Modulo:** Creating repeating cycles, wraparound effects
 
 ---
 
@@ -1965,6 +2049,82 @@ A drawable automation lane that allows you to draw and edit automation curves di
 - Sample-accurate interpolation during playback
 - Transport-synchronized when in Sync mode
 - XML persistence via `getExtraStateTree()` / `setExtraStateTree()`
+
+---
+
+### automato
+**Gesture Recorder and Playback**
+
+A compact module that records user gestures on a 2D grid and replays them with transport synchronization. Features Record/Edit mode toggle, 7 CV outputs, and time-based sample storage. Perfect for capturing expressive movements and creating evolving modulation patterns.
+
+#### Outputs
+- `X` (CV) - X coordinate output (0-1 range)
+- `Y` (CV) - Y coordinate output (0-1 range)
+- `Combined` (CV) - Combined X&Y output (0-1 range)
+- `Value` (CV) - Combined value output (0-1 range)
+- `Inverted` (CV) - Inverted output (1-0 range)
+- `Bipolar` (CV) - Bipolar output (-1 to +1 range)
+- `Pitch` (CV) - Pitch CV output (0-10V range, V/Oct compatible)
+
+#### Parameters
+- `Record/Edit` (Choice) - Toggle between recording mode and edit mode
+- `Sync` (Bool) - Sync to global transport
+- `Division` (Choice) - Musical division when synced (1/32, 1/16, 1/8, 1/4, 1/2, 1 Bar, 2 Bars, 4 Bars, 8 Bars)
+- `Loop` (Bool) - Enable looping playback
+- `Rate` (0.01-20 Hz) - Playback rate in free mode (when sync is off)
+
+#### How to Use
+1. **Recording Gestures:**
+   - Click the "REC" button to enter recording mode
+   - Click and drag on the 2D grid to record your gesture
+   - The module captures X, Y coordinates over time as you move the mouse
+   - Recording continues until you click "REC" again or switch to Edit mode
+   - Gestures are stored with time-based samples for accurate playback
+
+2. **Playback Modes:**
+   - **Sync Mode:** Sync to global transport with musical divisions
+   - **Free Mode:** Independent playback speed controlled by Rate parameter
+   - Enable Loop to repeat the recorded gesture continuously
+
+3. **Record vs Edit Mode:**
+   - **Record Mode:** Click and drag on the grid to record new gestures
+   - **Edit Mode:** View and edit existing recorded gestures (editing features may be expanded in future updates)
+
+4. **Multiple Output Formats:**
+   - Use `X` and `Y` for independent coordinate control
+   - Use `Combined` for averaged X&Y values
+   - Use `Value` for standard 0-1 modulation
+   - Use `Inverted` for reverse modulation curves
+   - Use `Bipolar` for modulation centered around zero
+   - Use `Pitch` for V/Oct pitch control
+
+5. **Example Patches:**
+   - **2D Filter Control:** Connect `X` → VCF Cutoff, `Y` → VCF Resonance
+   - **Pan/Volume Automation:** Connect `X` → Pan Mod, `Y` → Volume Mod
+   - **Dual Oscillator Control:** Connect `X` → VCO 1 Frequency, `Y` → VCO 2 Frequency
+   - **Complex Modulation:** Use different outputs to control multiple parameters simultaneously
+
+6. **Tips:**
+   - Record smooth gestures by dragging slowly and steadily
+   - Use sync mode for tempo-locked playback
+   - Enable loop for repeating gesture patterns
+   - Combine with other modulators for layered automation
+   - Perfect for capturing expressive, hand-drawn modulation curves
+
+**Visual Features:**
+- 2D grid interface (similar to PanVol module)
+- Recorded gesture path visualization
+- Playhead indicator showing current playback position
+- Simple Record/Edit button toggle
+
+**Technical Details:**
+- Time-based sample storage (X, Y pairs)
+- Chunk-based storage for efficient handling of long recordings
+- Thread-safe data access between audio and UI threads
+- Sample-accurate interpolation during playback
+- Transport-synchronized when in Sync mode
+- XML persistence via `getExtraStateTree()` / `setExtraStateTree()`
+- Supports unlimited recording duration
 
 ---
 

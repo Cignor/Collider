@@ -54,6 +54,8 @@ inline float getWidthForCategory(NodeWidth width)
 {
     switch (width)
     {
+    case NodeWidth::Small:
+        return 240.0f;
     case NodeWidth::Medium:
         return 360.0f;
     case NodeWidth::Big:
@@ -62,9 +64,8 @@ inline float getWidthForCategory(NodeWidth width)
         return 840.0f;
     case NodeWidth::Exception:
         return 0.0f; // Signals that module provides custom size
-    case NodeWidth::Small:
     default:
-        return 360.0f;
+        return 240.0f; // Default to Small
     }
 }
 

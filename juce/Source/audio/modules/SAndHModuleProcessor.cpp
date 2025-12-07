@@ -1,708 +1,804 @@
 #include "SAndHModuleProcessor.h"
+#include <juce_core/juce_core.h>
 
-SAndHModuleProcessor::SAndHModuleProcessor()
-    : ModuleProcessor (BusesProperties()
-                        .withInput ("Inputs", juce::AudioChannelSet::discreteChannels(7), true) // 0-1=signal, 2-3=gate, 4=threshold mod, 5=edge mod, 6=slew mod
-                        .withOutput("Output", juce::AudioChannelSet::stereo(), true)),
-      apvts (*this, nullptr, "SAndHParams", createParameterLayout())
-{
-    thresholdParam = apvts.getRawParameterValue ("threshold");
-    hysteresisParam = apvts.getRawParameterValue ("hysteresis");
-    slewMsParam = apvts.getRawParameterValue ("slewMs");
-    edgeParam = dynamic_cast<juce::AudioParameterChoice*>(apvts.getParameter ("edge"));
-    thresholdModParam = apvts.getRawParameterValue ("threshold_mod");
-    slewMsModParam = apvts.getRawParameterValue ("slewMs_mod");
-    edgeModParam = apvts.getRawParameterValue ("edge_mod");
-    
-    // Initialize output value tracking for tooltips
-    lastOutputValues.push_back(std::make_unique<std::atomic<float>>(0.0f)); // For Out L
-    lastOutputValues.push_back(std::make_unique<std::atomic<float>>(0.0f)); // For Out R
-}
-
-bool SAndHModuleProcessor::isBusesLayoutSupported(const BusesLayout& layouts) const
-{
-    // We require exactly 1 input bus and 1 output bus
-    if (layouts.inputBuses.size() != 1 || layouts.outputBuses.size() != 1)
-        return false;
-
-    // Input MUST be exactly 7 discrete channels (Signal L/R + Gate L/R + 3 CV mods)
-    // This strict check prevents the host from aliasing channels, which would cause
-    // all modulation inputs to read the same value (critical fix for CV routing)
-    if (layouts.inputBuses[0] != juce::AudioChannelSet::discreteChannels(7))
-        return false;
-
-    // Output MUST be Stereo
-    if (layouts.outputBuses[0] != juce::AudioChannelSet::stereo())
-        return false;
-
-    return true;
-}
+#if defined(PRESET_CREATOR_UI)
+#include "../../preset_creator/theme/ThemeManager.h"
+#include <imgui.h>
+#endif
 
 juce::AudioProcessorValueTreeState::ParameterLayout SAndHModuleProcessor::createParameterLayout()
 {
     std::vector<std::unique_ptr<juce::RangedAudioParameter>> params;
-    params.push_back (std::make_unique<juce::AudioParameterFloat> ("threshold", "Threshold", juce::NormalisableRange<float> (0.0f, 1.0f), 0.5f));
-    params.push_back (std::make_unique<juce::AudioParameterFloat> ("hysteresis", "Hysteresis", juce::NormalisableRange<float> (0.0f, 0.1f, 0.001f), 0.01f));
-    params.push_back (std::make_unique<juce::AudioParameterChoice> ("edge", "Edge", juce::StringArray { "Rising", "Falling", "Both" }, 0));
-    params.push_back (std::make_unique<juce::AudioParameterFloat> ("slewMs", "Slew (ms)", juce::NormalisableRange<float> (0.0f, 2000.0f, 0.01f, 0.35f), 0.0f));
     
-    // Add modulation parameters
-    params.push_back (std::make_unique<juce::AudioParameterFloat> ("threshold_mod", "Threshold Mod", 0.0f, 1.0f, 0.0f));
-    params.push_back (std::make_unique<juce::AudioParameterFloat> ("slewMs_mod", "Slew Mod", 0.0f, 1.0f, 0.0f));
-    params.push_back (std::make_unique<juce::AudioParameterFloat> ("edge_mod", "Edge Mod", 0.0f, 1.0f, 0.0f));
+    // Threshold: 0.0 to 1.0 (for trigger detection)
+    params.push_back(std::make_unique<juce::AudioParameterFloat>(
+        paramIdThreshold, "Threshold",
+        juce::NormalisableRange<float>(0.0f, 1.0f, 0.001f),
+        0.5f));
+    
+    // Edge: Rising, Falling, Both
+    params.push_back(std::make_unique<juce::AudioParameterChoice>(
+        paramIdEdge, "Edge",
+        juce::StringArray{ "Rising", "Falling", "Both" },
+        0));
+    
+    // Slew: 0.0 to 1.0 (smoothing amount)
+    params.push_back(std::make_unique<juce::AudioParameterFloat>(
+        paramIdSlew, "Slew",
+        juce::NormalisableRange<float>(0.0f, 1.0f, 0.001f, 0.5f),
+        0.0f));
+    
+    // Mode: Classic S&H, Track & Hold
+    params.push_back(std::make_unique<juce::AudioParameterChoice>(
+        paramIdMode, "Mode",
+        juce::StringArray{ "Sample & Hold", "Track & Hold" },
+        0));
+    
+    // Modulation parameters
+    params.push_back(std::make_unique<juce::AudioParameterFloat>(
+        paramIdThresholdMod, "Threshold Mod",
+        0.0f, 1.0f, 0.0f));
+    params.push_back(std::make_unique<juce::AudioParameterFloat>(
+        paramIdEdgeMod, "Edge Mod",
+        0.0f, 1.0f, 0.0f));
+    params.push_back(std::make_unique<juce::AudioParameterFloat>(
+        paramIdSlewMod, "Slew Mod",
+        0.0f, 1.0f, 0.0f));
+    
     return { params.begin(), params.end() };
 }
 
-void SAndHModuleProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
+SAndHModuleProcessor::SAndHModuleProcessor()
+    : ModuleProcessor(BusesProperties()
+                        .withInput("Inputs", juce::AudioChannelSet::discreteChannels(6), true) // ch0-1: Audio, ch2: Trigger, ch3-5: CV mods
+                        .withOutput("Outputs", juce::AudioChannelSet::discreteChannels(4), true)), // ch0-1: Audio, ch2: Smoothed, ch3: Trigger
+      apvts(*this, nullptr, "SAndHParams", createParameterLayout())
 {
-    juce::ignoreUnused (samplesPerBlock);
-    sr = sampleRate;
-    lastGateL = lastGateR = 0.0f;
-    heldL = heldR = 0.0f;
-    outL = outR = 0.0f;
-    lastGateLForNorm = lastGateRForNorm = 0.0f;
+    thresholdParam = apvts.getRawParameterValue(paramIdThreshold);
+    edgeParam = dynamic_cast<juce::AudioParameterChoice*>(apvts.getParameter(paramIdEdge));
+    slewParam = apvts.getRawParameterValue(paramIdSlew);
+    modeParam = dynamic_cast<juce::AudioParameterChoice*>(apvts.getParameter(paramIdMode));
+    
+    // Initialize output value tracking
+    lastOutputValues.push_back(std::make_unique<std::atomic<float>>(0.0f));
+    lastOutputValues.push_back(std::make_unique<std::atomic<float>>(0.0f));
+    lastOutputValues.push_back(std::make_unique<std::atomic<float>>(0.0f));
+}
+
+void SAndHModuleProcessor::prepareToPlay(double sampleRate, int samplesPerBlock)
+{
+    currentSampleRate = sampleRate;
+    heldValue = 0.0f;
+    smoothedValue = 0.0f;
+    lastTriggerValue = 0.0f;
+    wasTriggerHigh = false;
+    
+    // Initialize slew smoother
+    slewSmoother.reset(sampleRate, 0.01);
+    slewSmoother.setCurrentAndTargetValue(0.0f);
+    lastSlewTimeSec = 0.01f;
+    
+    // Set initial edge type
+    if (edgeParam)
+        currentEdgeType = static_cast<EdgeType>(edgeParam->getIndex());
 
 #if defined(PRESET_CREATOR_UI)
-    captureBuffer.setSize(4, samplesPerBlock);
-    captureBuffer.clear();
-    for (auto* arr : { &vizData.signalL, &vizData.signalR, &vizData.gateL, &vizData.gateR, &vizData.heldWaveL, &vizData.heldWaveR })
-        for (auto& v : *arr) v.store(0.0f);
-    for (auto* arr : { &vizData.gateMarkersL, &vizData.gateMarkersR })
-        for (auto& v : *arr) v.store(0);
-    vizData.latchAgeMsL.store(0.0f);
-    vizData.latchAgeMsR.store(0.0f);
-    vizData.liveThreshold.store(0.5f);
+    vizInputBuffer.setSize(1, samplesPerBlock);
+    vizOutputBuffer.setSize(1, samplesPerBlock);
+    vizTriggerBuffer.setSize(1, samplesPerBlock);
+    vizInputBuffer.clear();
+    vizOutputBuffer.clear();
+    vizTriggerBuffer.clear();
 #endif
 }
 
-void SAndHModuleProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midi)
+void SAndHModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midi)
 {
-    juce::ignoreUnused (midi);
-    // Single input bus with 4 channels: 0-1 signal, 2-3 gate
-    auto in  = getBusBuffer (buffer, true, 0);
-    auto out = getBusBuffer (buffer, false, 0);
-
+    juce::ignoreUnused(midi);
+    
+    // CRITICAL: Get input bus BEFORE any output operations (buffer aliasing safety)
+    // Follow BitCrusher pattern: single bus with discreteChannels
+    auto inBus = getBusBuffer(buffer, true, 0);
+    auto outBus = getBusBuffer(buffer, false, 0);
+    
     const int numSamples = buffer.getNumSamples();
     
-    // --- CORRECTED POINTER LOGIC ---
-    const float* sigL = in.getReadPointer(0);
-    // If input is mono, sigR should be the same as sigL.
-    const float* sigR = in.getNumChannels() > 1 ? in.getReadPointer(1) : sigL;
+    // Get base parameter values
+    float baseThreshold = thresholdParam ? thresholdParam->load() : 0.5f;
+    float baseSlew = slewParam ? slewParam->load() : 0.0f;
+    const int mode = modeParam ? modeParam->getIndex() : 0;
     
-    // CRITICAL FIX: Gate inputs should be nullptr when not connected, not fallback to signal!
-    // When gate is nullptr, we treat it as always low (no edges detected)
-    const float* gateL = in.getNumChannels() > 2 ? in.getReadPointer(2) : nullptr;
-    const float* gateR = in.getNumChannels() > 3 ? in.getReadPointer(3) : nullptr;
-    // --- END OF CORRECTION ---
-    float* outLw = out.getWritePointer (0);
-    float* outRw = out.getNumChannels() > 1 ? out.getWritePointer (1) : out.getWritePointer (0);
-
-    // Get modulation CV inputs from the single unified input bus
-    const bool isThresholdMod = isParamInputConnected("threshold_mod");
-    const bool isEdgeMod = isParamInputConnected("edge_mod");
-    const bool isSlewMod = isParamInputConnected("slewMs_mod");
-
-    const float* thresholdCV = isThresholdMod && in.getNumChannels() > 4 ? in.getReadPointer(4) : nullptr;
-    const float* edgeCV = isEdgeMod && in.getNumChannels() > 5 ? in.getReadPointer(5) : nullptr;
-    const float* slewCV = isSlewMod && in.getNumChannels() > 6 ? in.getReadPointer(6) : nullptr;
-
-    // Get base parameter values ONCE
-    const float baseThreshold = thresholdParam != nullptr ? thresholdParam->load() : 0.5f;
-    const float baseHysteresis = hysteresisParam != nullptr ? hysteresisParam->load() : 0.01f;
-    const float baseSlewMs = slewMsParam != nullptr ? slewMsParam->load() : 0.0f;
-    const int baseEdge = edgeParam != nullptr ? edgeParam->getIndex() : 0;
-
-#if defined(DEBUG_SANDH_VERBOSE)
-    // DEBUG LOGGING: Log gate connection status and initial values (throttled)
-    static int debugBlockCounter = 0;
-    const bool shouldLogBlock = ((debugBlockCounter++ % 200) == 0); // Every 200 blocks (~4.5s at 44.1kHz)
-    
-    if (shouldLogBlock)
+    // DEBUG: Log bus status
+    static int blockCounter = 0;
+    static bool firstBlock = true;
+    if (firstBlock || blockCounter % 100 == 0) // Log first block and every 100 blocks
     {
-        juce::String gateStatusL = gateL != nullptr ? "CONNECTED" : "NOT CONNECTED";
-        juce::String gateStatusR = gateR != nullptr ? "CONNECTED" : "NOT CONNECTED";
-        float gateRawL = gateL != nullptr ? gateL[0] : 0.0f;
-        float gateRawR = gateR != nullptr ? gateR[0] : 0.0f;
-        float sigRawL = sigL != nullptr ? sigL[0] : 0.0f;
-        float sigRawR = sigR != nullptr ? sigR[0] : 0.0f;
-        float outRawL = outLw != nullptr ? outLw[0] : 0.0f;
-        float outRawR = outRw != nullptr ? outRw[0] : 0.0f;
-        
-        juce::Logger::writeToLog("[S&H] ===== BLOCK " + juce::String(debugBlockCounter) + " =====");
-        juce::Logger::writeToLog("[S&H] Gate L: " + gateStatusL + " (raw=" + juce::String(gateRawL, 4) + ")" +
-                                 " | Gate R: " + gateStatusR + " (raw=" + juce::String(gateRawR, 4) + ")");
-        juce::Logger::writeToLog("[S&H] Sig L=" + juce::String(sigRawL, 4) + " R=" + juce::String(sigRawR, 4) +
-                                 " | Out L=" + juce::String(outRawL, 4) + " R=" + juce::String(outRawR, 4) +
-                                 " | Held L=" + juce::String(heldL, 4) + " R=" + juce::String(heldR, 4));
-        juce::Logger::writeToLog("[S&H] Threshold=" + juce::String(baseThreshold, 3) +
-                                 " | Edge=" + juce::String(baseEdge) + " (0=rise,1=fall,2=both)" +
-                                 " | Slew=" + juce::String(baseSlewMs, 2) + "ms");
+        juce::Logger::writeToLog("[S&H] Block #" + juce::String(blockCounter) + 
+            " | inChannels=" + juce::String(inBus.getNumChannels()) + 
+            " | outChannels=" + juce::String(outBus.getNumChannels()) +
+            " | samples=" + juce::String(numSamples) +
+            " | mode=" + juce::String(mode) +
+            " | threshold=" + juce::String(baseThreshold, 3));
+        firstBlock = false;
     }
-#else
-    const bool shouldLogBlock = false;
-#endif
-
-    // OPTIMIZATION: Cache parameter values when not modulated (calculate once per block)
-    // Only recalculate per-sample if modulation is connected
-    const float thr = baseThreshold;  // Use base value if not modulated
-    const float slewMs = baseSlewMs;  // Use base value if not modulated
-    const int edge = baseEdge;         // Use base value if not modulated
+    blockCounter++;
     
-    // Variables to store final modulated values for UI telemetry
+    // ✅ CRITICAL FIX: Read CV inputs BEFORE any output operations (like BitCrusher)
+    // Check for modulation
+    const bool isThresholdModulated = isParamInputConnected(paramIdThresholdMod);
+    const bool isEdgeModulated = isParamInputConnected(paramIdEdgeMod);
+    const bool isSlewModulated = isParamInputConnected(paramIdSlewMod);
+    
+    // Read input pointers from single bus (ch0-1: Audio, ch2: Trigger, ch3-5: CV mods)
+    // Follow BitCrusher pattern: read from discrete channels on same bus
+    const float* signalL = inBus.getNumChannels() > 0 ? inBus.getReadPointer(0) : nullptr;
+    const float* signalR = inBus.getNumChannels() > 1 ? inBus.getReadPointer(1) : nullptr;
+    const float* trigger = inBus.getNumChannels() > 2 ? inBus.getReadPointer(2) : nullptr;
+    const float* thresholdMod = (isThresholdModulated && inBus.getNumChannels() > 3) ? inBus.getReadPointer(3) : nullptr;
+    const float* edgeMod = (isEdgeModulated && inBus.getNumChannels() > 4) ? inBus.getReadPointer(4) : nullptr;
+    const float* slewMod = (isSlewModulated && inBus.getNumChannels() > 5) ? inBus.getReadPointer(5) : nullptr;
+    
+    // DEBUG: Log raw input sample values (first few samples)
+    if (blockCounter % 100 == 0 && numSamples > 0)
+    {
+        juce::String inputSamples = "[S&H] Raw input samples: ";
+        for (int i = 0; i < juce::jmin(5, numSamples); ++i)
+        {
+            if (signalL) inputSamples += "L[" + juce::String(i) + "]=" + juce::String(signalL[i], 4) + " ";
+            if (signalR) inputSamples += "R[" + juce::String(i) + "]=" + juce::String(signalR[i], 4) + " ";
+        }
+        juce::Logger::writeToLog(inputSamples);
+    }
+    
+    // ✅ CRITICAL: Copy input to output BEFORE getting write pointers (like BitCrusher)
+    // This prevents buffer aliasing issues - input might be in the same buffer as output
+    if (inBus.getNumChannels() > 0 && outBus.getNumChannels() > 0)
+    {
+        // Copy audio input to output (ch0-1) - preserve input data before any clearing
+        const int channelsToCopy = juce::jmin(inBus.getNumChannels(), 2, outBus.getNumChannels());
+        for (int ch = 0; ch < channelsToCopy; ++ch)
+        {
+            outBus.copyFrom(ch, 0, inBus, ch, 0, numSamples);
+        }
+    }
+    else
+    {
+        // No input - clear outputs
+        outBus.clear();
+    }
+    
+    // Get output pointers AFTER copying (safe now)
+    float* sampledL = outBus.getNumChannels() > 0 ? outBus.getWritePointer(0) : nullptr;
+    float* sampledR = outBus.getNumChannels() > 1 ? outBus.getWritePointer(1) : nullptr;
+    float* smoothed = outBus.getNumChannels() > 2 ? outBus.getWritePointer(2) : nullptr;
+    float* trigOut = outBus.getNumChannels() > 3 ? outBus.getWritePointer(3) : nullptr;
+    
+    // Safety check - require at least left output and smoothed output
+    if (!sampledL || !smoothed || !trigOut)
+    {
+        // Critical outputs missing, bail out
+        if (blockCounter % 100 == 0)
+        {
+            juce::Logger::writeToLog("[S&H] ERROR: Missing output pointers! sampledL=" + 
+                juce::String(sampledL != nullptr ? "OK" : "NULL") + 
+                " smoothed=" + juce::String(smoothed != nullptr ? "OK" : "NULL") + 
+                " trigOut=" + juce::String(trigOut != nullptr ? "OK" : "NULL"));
+        }
+        return;
+    }
+    
+    // Use left channel as primary signal (or mono sum if stereo)
+    // Always create mono signal buffer - if no input, it will be zeros (which is fine)
+    juce::AudioBuffer<float> monoSignal(1, numSamples);
+    if (inBus.getNumChannels() > 0)
+    {
+        if (inBus.getNumChannels() > 1 && signalR)
+        {
+            // Stereo: sum to mono (average)
+            monoSignal.copyFrom(0, 0, inBus, 0, 0, numSamples);
+            monoSignal.addFrom(0, 0, inBus, 1, 0, numSamples, 0.5f);
+        }
+        else
+        {
+            // Mono: copy left channel
+            monoSignal.copyFrom(0, 0, inBus, 0, 0, numSamples);
+        }
+        
+        // Check input levels AFTER creating mono signal (for accurate RMS)
+        if (blockCounter % 100 == 0 && numSamples > 0)
+        {
+            float inLRMS = 0.0f, inRRMS = 0.0f, monoRMS = 0.0f;
+            if (signalL)
+            {
+                for (int i = 0; i < numSamples; ++i)
+                    inLRMS += signalL[i] * signalL[i];
+                inLRMS = std::sqrt(inLRMS / numSamples);
+            }
+            if (signalR)
+            {
+                for (int i = 0; i < numSamples; ++i)
+                    inRRMS += signalR[i] * signalR[i];
+                inRRMS = std::sqrt(inRRMS / numSamples);
+            }
+            const float* sig = monoSignal.getReadPointer(0);
+            if (sig)
+            {
+                for (int i = 0; i < numSamples; ++i)
+                    monoRMS += sig[i] * sig[i];
+                monoRMS = std::sqrt(monoRMS / numSamples);
+            }
+            juce::Logger::writeToLog("[S&H] Input: L_RMS=" + juce::String(inLRMS, 4) + 
+                " R_RMS=" + juce::String(inRRMS, 4) + 
+                " Mono_RMS=" + juce::String(monoRMS, 4));
+        }
+    }
+    else
+    {
+        // No input channels - clear buffer (will hold 0.0)
+        monoSignal.clear();
+        if (blockCounter % 100 == 0)
+            juce::Logger::writeToLog("[S&H] WARNING: No input channels!");
+    }
+    const float* signal = monoSignal.getReadPointer(0);
+    
+    // Log trigger status
+    if (blockCounter % 100 == 0 && numSamples > 0)
+    {
+        float triggerRMS = 0.0f;
+        if (trigger)
+        {
+            for (int i = 0; i < numSamples; ++i)
+                triggerRMS += trigger[i] * trigger[i];
+            triggerRMS = std::sqrt(triggerRMS / numSamples);
+        }
+        juce::Logger::writeToLog("[S&H] Trigger: RMS=" + juce::String(triggerRMS, 4) + 
+            " | ptr=" + juce::String(trigger != nullptr ? "OK" : "NULL") +
+            " | threshold=" + juce::String(baseThreshold, 3) +
+            " | mode=" + juce::String(mode == 0 ? "S&H" : "T&H"));
+    }
+    
+    // Update edge type (can be modulated) - compute once per block
+    EdgeType edgeType = currentEdgeType;
     float finalThreshold = baseThreshold;
-    float finalSlewMs = baseSlewMs;
-    int finalEdge = baseEdge;
+    float finalSlew = baseSlew;
+    
+    if (edgeParam)
+    {
+        if (isEdgeModulated && edgeMod)
+        {
+            // Map CV (0-1) to edge type (0-2) - use first sample for display
+            const float edgeCV = juce::jlimit(0.0f, 1.0f, (edgeMod[0] + 1.0f) * 0.5f);
+            const int edgeIndex = juce::jlimit(0, 2, static_cast<int>(edgeCV * 3.0f));
+            edgeType = static_cast<EdgeType>(edgeIndex);
+        }
+        else
+        {
+            edgeType = static_cast<EdgeType>(edgeParam->getIndex());
+        }
+    }
+    currentEdgeType = edgeType;
+    
+    // Get first sample's modulated values for telemetry (if modulated)
+    if (isThresholdModulated && thresholdMod && numSamples > 0)
+    {
+        finalThreshold = juce::jlimit(0.0f, 1.0f, (thresholdMod[0] + 1.0f) * 0.5f);
+    }
+    if (isSlewModulated && slewMod && numSamples > 0)
+    {
+        finalSlew = juce::jlimit(0.0f, 1.0f, (slewMod[0] + 1.0f) * 0.5f);
+    }
+    
+    // Store live modulated values for UI display (Modulation Trinity) - before processing loop
+    setLiveParamValue("threshold_live", finalThreshold);
+    setLiveParamValue("edge_live", static_cast<float>(edgeType));
+    setLiveParamValue("slew_live", finalSlew);
 
+#if defined(PRESET_CREATOR_UI)
+    // Capture input for visualization (use mono signal)
+    if (monoSignal.getNumChannels() > 0)
+    {
+        vizInputBuffer.copyFrom(0, 0, monoSignal, 0, 0, numSamples);
+    }
+    if (inBus.getNumChannels() > 2)
+    {
+        vizTriggerBuffer.copyFrom(0, 0, inBus, 2, 0, numSamples);
+    }
+#endif
+    
     for (int i = 0; i < numSamples; ++i)
     {
-        // PER-SAMPLE: Calculate effective parameters FOR THIS SAMPLE (only if modulated)
-        float currentThr = thr;
-        if (isThresholdMod && thresholdCV != nullptr) {
-            const float cv = juce::jlimit(0.0f, 1.0f, thresholdCV[i]);
-            const float thresholdRange = 0.6f;
-            const float offset = (cv - 0.5f) * thresholdRange;
-            currentThr = juce::jlimit(0.0f, 1.0f, baseThreshold + offset);
+        // Get modulated threshold
+        float threshold = baseThreshold;
+        if (isThresholdModulated && thresholdMod)
+        {
+            threshold = juce::jlimit(0.0f, 1.0f, (thresholdMod[i] + 1.0f) * 0.5f);
         }
         
-        float currentSlewMs = slewMs;
-        if (isSlewMod && slewCV != nullptr) {
-            const float cv = juce::jlimit(0.0f, 1.0f, slewCV[i]);
-            // ADDITIVE MODULATION FIX: Add CV offset to base slew time
-            const float slewRange = 500.0f; // CV can modulate slew by +/- 500ms
-            const float slewOffset = (cv - 0.5f) * slewRange; // Center around 0
-            currentSlewMs = baseSlewMs + slewOffset;
-            currentSlewMs = juce::jlimit(0.0f, 2000.0f, currentSlewMs);
+        // Get modulated slew
+        float slew = baseSlew;
+        if (isSlewModulated && slewMod)
+        {
+            slew = juce::jlimit(0.0f, 1.0f, (slewMod[i] + 1.0f) * 0.5f);
         }
         
-        int currentEdge = edge;
-        if (isEdgeMod && edgeCV != nullptr) {
-            const float cv = juce::jlimit(0.0f, 1.0f, edgeCV[i]);
-            // ADDITIVE MODULATION FIX: Add CV offset to base edge setting
-            const int edgeOffset = static_cast<int>((cv - 0.5f) * 3.0f); // Range [-1, +1]
-            currentEdge = (baseEdge + edgeOffset + 3) % 3; // Wrap around (0,1,2)
-        }
-
-        // Store final values for telemetry (use last sample's values)
-        finalThreshold = currentThr;
-        finalSlewMs = currentSlewMs;
-        finalEdge = currentEdge;
+        // Update slew smoother time constant only if it changed
+        const float maxSlewTime = 1000.0f; // 1 second max
+        const float slewTimeMs = slew * maxSlewTime;
+        const float slewTimeSec = slewTimeMs / 1000.0f;
+        const float clampedSlewTimeSec = juce::jmax(0.001f, slewTimeSec);
         
-        // Apply slew limiting: allow instant transitions when slew = 0, otherwise use minimum to prevent clicks
-        float slewCoeff = 1.0f;  // Default to instant (no slew)
-        if (currentSlewMs > 0.001f) {  // Only apply slew if > 0.001ms
-            const float effectiveSlewMs = std::max(currentSlewMs, 0.1f);  // Minimum 0.1ms for non-zero slew
-            slewCoeff = (float) (1.0 - std::exp(-1.0 / (0.001 * effectiveSlewMs * sr)));
+        // Only reset smoother if slew time changed (avoids pops from constant resets)
+        if (std::abs(clampedSlewTimeSec - lastSlewTimeSec) > 0.0001f)
+        {
+            slewSmoother.reset(currentSampleRate, clampedSlewTimeSec);
+            lastSlewTimeSec = clampedSlewTimeSec;
         }
         
-        // CRITICAL FIX: Handle nullptr gates (not connected) and normalize gate values
-        // Gates can be unipolar (0-1) or bipolar (-1 to 1), normalize to 0-1 for comparison
-        // Improved detection: use threshold to distinguish bipolar vs unipolar
-        auto normalizeGate = [this](float gate, bool isLeft) -> float {
-            float& lastGate = isLeft ? lastGateLForNorm : lastGateRForNorm;
-            // If signal goes below -0.5, assume bipolar and normalize
-            bool isBipolar = (gate < -0.5f) || (lastGate < -0.5f);
-            lastGate = gate;
+        // Update target value (but don't reset the smoother state)
+        slewSmoother.setTargetValue(heldValue);
+        
+        // Process trigger signal
+        bool shouldSample = false;
+        bool triggerPulse = false;
+        
+        if (trigger)
+        {
+            const float triggerValue = trigger[i];
+            const bool isTriggerHigh = triggerValue > threshold;
             
-            if (isBipolar) {
-                // Bipolar signal: normalize from [-1, 1] to [0, 1]
-                return juce::jlimit(0.0f, 1.0f, (gate + 1.0f) * 0.5f);
+            // Edge detection
+            if (edgeType == EdgeType::Rising)
+            {
+                if (isTriggerHigh && !wasTriggerHigh)
+                {
+                    shouldSample = true;
+                    triggerPulse = true;
+                }
             }
-            // Unipolar signal: assume [0, 1], just clamp
-            return juce::jlimit(0.0f, 1.0f, gate);
-        };
-        
-        const float gL = gateL != nullptr ? normalizeGate(gateL[i], true) : 0.0f;  // Not connected = always low
-        const float gR = gateR != nullptr ? normalizeGate(gateR[i], false) : 0.0f;  // Not connected = always low
-        
-        // Apply hysteresis to prevent multiple triggers on noisy signals
-        const float hyst = baseHysteresis;
-        const float upperThr = currentThr + hyst;
-        const float lowerThr = currentThr - hyst;
-        
-        // Edge detection with hysteresis: rising edge crosses upper threshold, falling edge crosses lower threshold
-        const bool riseL = (gL > upperThr && lastGateL <= lowerThr);
-        const bool fallL = (gL < lowerThr && lastGateL >= upperThr);
-        const bool riseR = (gR > upperThr && lastGateR <= lowerThr);
-        const bool fallR = (gR < lowerThr && lastGateR >= upperThr);
-
-        const bool doL = (currentEdge == 0 && riseL) || (currentEdge == 1 && fallL) || (currentEdge == 2 && (riseL || fallL));
-        const bool doR = (currentEdge == 0 && riseR) || (currentEdge == 1 && fallR) || (currentEdge == 2 && (riseR || fallR));
-
-#if defined(DEBUG_SANDH_VERBOSE)
-        // DEBUG: Log edge detection and latch events immediately
-        if (riseL || fallL || riseR || fallR)
-        {
-            juce::String edgeTypeL = riseL ? "RISE" : (fallL ? "FALL" : "NONE");
-            juce::String edgeTypeR = riseR ? "RISE" : (fallR ? "FALL" : "NONE");
-            juce::Logger::writeToLog("[S&H] EDGE DETECTED | Sample " + juce::String(i) + 
-                                     " | L: " + edgeTypeL + " (gL=" + juce::String(gL, 4) + 
-                                     " thr=" + juce::String(thr, 4) + " last=" + juce::String(lastGateL, 4) + ")" +
-                                     " | R: " + edgeTypeR + " (gR=" + juce::String(gR, 4) + 
-                                     " thr=" + juce::String(thr, 4) + " last=" + juce::String(lastGateR, 4) + ")" +
-                                     " | EdgeMode=" + juce::String(edge) + " (0=rise,1=fall,2=both)");
+            else if (edgeType == EdgeType::Falling)
+            {
+                if (!isTriggerHigh && wasTriggerHigh)
+                {
+                    shouldSample = true;
+                    triggerPulse = true;
+                }
+            }
+            else if (edgeType == EdgeType::Both)
+            {
+                if (isTriggerHigh != wasTriggerHigh)
+                {
+                    shouldSample = true;
+                    triggerPulse = true;
+                }
+            }
+            
+            wasTriggerHigh = isTriggerHigh;
+            lastTriggerValue = triggerValue;
         }
-#endif
-
-        if (doL)
+        else
         {
-            heldL = sigL[i];
-#if defined(PRESET_CREATOR_UI)
-            vizData.lastLatchValueL.store(heldL);
-            vizData.latchAgeMsL.store(0.0f);
-#endif
-#if defined(DEBUG_SANDH_VERBOSE)
-            // DEBUG: Log latch event
-            juce::Logger::writeToLog("[S&H] LATCH L | Sample " + juce::String(i) + 
-                                     " | Sampled value=" + juce::String(heldL, 4) + 
-                                     " from signal=" + juce::String(sigL[i], 4));
-#endif
+            // No trigger input - use signal itself as trigger (self-triggering)
+            const float signalValue = signal[i];
+            const bool isSignalHigh = signalValue > threshold;
+            
+            if (edgeType == EdgeType::Rising)
+            {
+                if (isSignalHigh && !wasTriggerHigh)
+                {
+                    shouldSample = true;
+                    triggerPulse = true;
+                }
+            }
+            else if (edgeType == EdgeType::Falling)
+            {
+                if (!isSignalHigh && wasTriggerHigh)
+                {
+                    shouldSample = true;
+                    triggerPulse = true;
+                }
+            }
+            else if (edgeType == EdgeType::Both)
+            {
+                if (isSignalHigh != wasTriggerHigh)
+                {
+                    shouldSample = true;
+                    triggerPulse = true;
+                }
+            }
+            
+            wasTriggerHigh = isSignalHigh;
         }
-        if (doR)
+        
+        // Sample & Hold or Track & Hold logic
+        if (mode == 0) // Sample & Hold
         {
-            heldR = sigR[i];
-#if defined(PRESET_CREATOR_UI)
-            vizData.lastLatchValueR.store(heldR);
-            vizData.latchAgeMsR.store(0.0f);
-#endif
-#if defined(DEBUG_SANDH_VERBOSE)
-            // DEBUG: Log latch event
-            juce::Logger::writeToLog("[S&H] LATCH R | Sample " + juce::String(i) + 
-                                     " | Sampled value=" + juce::String(heldR, 4) + 
-                                     " from signal=" + juce::String(sigR[i], 4));
-#endif
+            if (shouldSample)
+            {
+                heldValue = signal[i];
+                // Update target for smoother (but don't reset - let it smooth naturally)
+                slewSmoother.setTargetValue(heldValue);
+                // If slew is 0, jump immediately; otherwise let it smooth
+                if (slew < 0.001f)
+                {
+                    slewSmoother.setCurrentAndTargetValue(heldValue);
+                }
+                // DEBUG: Log sampling events
+                if (blockCounter % 100 == 0 && i < 10)
+                {
+                    juce::Logger::writeToLog("[S&H] SAMPLED at i=" + juce::String(i) + 
+                        " | signal[i]=" + juce::String(signal[i], 4) + 
+                        " | heldValue=" + juce::String(heldValue, 4));
+                }
+            }
         }
-        lastGateL = gL; lastGateR = gR;
-        // Slew limiting toward target
-        outL = outL + slewCoeff * (heldL - outL);
-        outR = outR + slewCoeff * (heldR - outR);
-        outLw[i] = outL;
-        outRw[i] = outR;
+        else // Track & Hold (mode == 1)
+        {
+            if (trigger && trigger[i] > threshold)
+            {
+                // Track mode: follow input while trigger is high
+                heldValue = signal[i];
+                slewSmoother.setTargetValue(heldValue);
+                // If slew is 0, jump immediately; otherwise let it smooth
+                if (slew < 0.001f)
+                {
+                    slewSmoother.setCurrentAndTargetValue(heldValue);
+                }
+            }
+            // When trigger goes low, hold the last value
+        }
+        
+        // Apply slew limiting to smoothed output
+        smoothedValue = slewSmoother.getNextValue();
+        
+        // Outputs - stereo sampled output
+        sampledL[i] = heldValue;
+        if (sampledR) sampledR[i] = heldValue; // Copy to right channel
+        smoothed[i] = smoothedValue;
+        trigOut[i] = triggerPulse ? 1.0f : 0.0f;
     }
     
-    // Store live modulated values for UI display (use last sample values)
-    setLiveParamValue("threshold_live", finalThreshold);
-    setLiveParamValue("edge_live", static_cast<float>(finalEdge));
-    setLiveParamValue("slewMs_live", finalSlewMs);
-
-    // Update output values for tooltips
-    if (lastOutputValues.size() >= 2)
+    // DEBUG: Log output levels every 100 blocks
+    if (blockCounter % 100 == 0 && numSamples > 0)
     {
-        if (lastOutputValues[0]) lastOutputValues[0]->store(outLw[numSamples - 1]);
-        if (lastOutputValues[1]) lastOutputValues[1]->store(outRw[numSamples - 1]);
+        float outRMS = 0.0f;
+        for (int i = 0; i < numSamples; ++i)
+            outRMS += sampledL[i] * sampledL[i];
+        outRMS = std::sqrt(outRMS / numSamples);
+        juce::Logger::writeToLog("[S&H] Output RMS=" + juce::String(outRMS, 4) + 
+            " | heldValue=" + juce::String(heldValue, 4) + 
+            " | smoothedValue=" + juce::String(smoothedValue, 4));
     }
+    
+    // Store last output values for tooltips
+    if (!lastOutputValues.empty() && lastOutputValues[0] && sampledL)
+        lastOutputValues[0]->store(sampledL[numSamples - 1]);
+    if (lastOutputValues.size() > 1 && lastOutputValues[1] && smoothed)
+        lastOutputValues[1]->store(smoothed[numSamples - 1]);
+    if (lastOutputValues.size() > 2 && lastOutputValues[2] && trigOut)
+        lastOutputValues[2]->store(trigOut[numSamples - 1]);
 
 #if defined(PRESET_CREATOR_UI)
-    const int captureChannels = juce::jmin(4, in.getNumChannels());
-    if (captureBuffer.getNumSamples() < numSamples)
-        captureBuffer.setSize(4, numSamples, false, false, true);
-    captureBuffer.clear();
-    for (int ch = 0; ch < captureChannels; ++ch)
-        captureBuffer.copyFrom(ch, 0, in, ch, 0, numSamples);
-
-    auto downsampleTo = [&](const float* src, std::array<std::atomic<float>, VizData::waveformPoints>& dest)
+    // Capture output for visualization (use left channel)
+    if (outBus.getNumChannels() > 0)
     {
-        if (!src)
-        {
-            for (auto& v : dest) v.store(0.0f);
-            return;
-        }
+        vizOutputBuffer.copyFrom(0, 0, outBus, 0, 0, numSamples);
+    }
+    
+    // Down-sample and store waveforms
+    auto captureWaveform = [&](const juce::AudioBuffer<float>& source, int channel, std::array<std::atomic<float>, VizData::waveformPoints>& dest)
+    {
+        const int samples = juce::jmin(source.getNumSamples(), numSamples);
+        if (samples <= 0 || channel >= source.getNumChannels()) return;
+        const int stride = juce::jmax(1, samples / VizData::waveformPoints);
         for (int i = 0; i < VizData::waveformPoints; ++i)
         {
-            const float t = (float)i / (float)(VizData::waveformPoints - 1);
-            const int idx = juce::jlimit(0, numSamples - 1, (int)std::round(t * (float)(numSamples - 1)));
-            dest[(size_t)i].store(src[idx]);
+            const int idx = juce::jmin(samples - 1, i * stride);
+            float value = source.getSample(channel, idx);
+            dest[i].store(juce::jlimit(-1.0f, 1.0f, value));
         }
     };
-
-    downsampleTo(sigL, vizData.signalL);
-    downsampleTo(sigR, vizData.signalR);
-    downsampleTo(gateL, vizData.gateL);
-    downsampleTo(gateR, vizData.gateR);
-    downsampleTo(outLw, vizData.heldWaveL);
-    downsampleTo(outRw, vizData.heldWaveR);
-
-    auto writeMarkers = [&](const float* gate, float threshold, std::array<std::atomic<uint8_t>, VizData::waveformPoints>& dest)
+    
+    captureWaveform(vizInputBuffer, 0, vizData.inputWaveform);
+    captureWaveform(vizOutputBuffer, 0, vizData.outputWaveform);
+    
+    // Capture smoothed output (for visualization)
+    if (outBus.getNumChannels() > 2)
     {
-        for (int i = 0; i < VizData::waveformPoints; ++i)
-            dest[(size_t)i].store(0);
-        if (!gate) return;
-        // Normalize gate values same as in main processing loop
-        auto normalizeGate = [](float g) -> float {
-            if (g < 0.0f) return (g + 1.0f) * 0.5f;
-            return juce::jlimit(0.0f, 1.0f, g);
-        };
-        float last = normalizeGate(gate[0]);
-        for (int n = 1; n < numSamples; ++n)
-        {
-            const float gNorm = normalizeGate(gate[n]);
-            const bool rise = gNorm > threshold && last <= threshold;
-            const bool fall = gNorm < threshold && last >= threshold;
-            if (rise || fall)
-            {
-                const int dsIdx = juce::jlimit(0, VizData::waveformPoints - 1, (int)std::round((float)n / (float)(numSamples - 1) * (VizData::waveformPoints - 1)));
-                uint8_t code = dest[(size_t)dsIdx].load();
-                if (rise) code |= 1;
-                if (fall) code |= 2;
-                dest[(size_t)dsIdx].store(code);
-            }
-            last = gNorm;
-        }
-    };
-
-    writeMarkers(gateL, finalThreshold, vizData.gateMarkersL);
-    writeMarkers(gateR, finalThreshold, vizData.gateMarkersR);
-
-    const float blockMs = (float)numSamples / (float)juce::jmax(1.0, sr) * 1000.0f;
-    vizData.latchAgeMsL.store(vizData.latchAgeMsL.load() + blockMs);
-    vizData.latchAgeMsR.store(vizData.latchAgeMsR.load() + blockMs);
-    vizData.liveThreshold.store(finalThreshold);
-    vizData.liveSlewMs.store(finalSlewMs);
-    vizData.liveEdgeMode.store(finalEdge);
-    auto computeAbsPeak = [&](const float* data)
-    {
-        if (!data) return 0.0f;
-        float peak = 0.0f;
-        for (int i = 0; i < numSamples; ++i)
-            peak = juce::jmax(peak, std::abs(data[i]));
-        return peak;
-    };
-    vizData.gatePeakL.store(computeAbsPeak(gateL));
-    vizData.gatePeakR.store(computeAbsPeak(gateR));
+        juce::AudioBuffer<float> smoothedVizBuffer(1, numSamples);
+        smoothedVizBuffer.copyFrom(0, 0, outBus, 2, 0, numSamples);
+        captureWaveform(smoothedVizBuffer, 0, vizData.smoothedWaveform);
+    }
+    
+    // Capture trigger markers
+    captureWaveform(vizTriggerBuffer, 0, vizData.triggerMarkers);
+    
+    // Store current parameter values for UI
+    vizData.currentThreshold.store(baseThreshold);
+    vizData.currentEdge.store(edgeParam ? edgeParam->getIndex() : 0);
+    vizData.currentSlew.store(baseSlew);
+    vizData.currentMode.store(mode);
+    vizData.sampleCount.store(static_cast<int>(heldValue * 1000.0f)); // For display
 #endif
 }
 
 #if defined(PRESET_CREATOR_UI)
+static void HelpMarker(const char* desc)
+{
+    ImGui::SameLine();
+    ImGui::TextDisabled("(?)");
+    if (ImGui::BeginItemTooltip())
+    {
+        ImGui::PushTextWrapPos(ImGui::GetFontSize() * 35.0f);
+        ImGui::TextUnformatted(desc);
+        ImGui::PopTextWrapPos();
+        ImGui::EndTooltip();
+    }
+}
+
 void SAndHModuleProcessor::drawParametersInNode(float itemWidth, const std::function<bool(const juce::String& paramId)>& isParamModulated, const std::function<void()>& onModificationEnded)
 {
-    auto& ap = getAPVTS();
     const auto& theme = ThemeManager::getInstance().getCurrentTheme();
-
-    float threshold = thresholdParam != nullptr ? thresholdParam->load() : 0.5f;
-    float slew = slewMsParam != nullptr ? slewMsParam->load() : 0.0f;
-    int edge = edgeParam != nullptr ? edgeParam->getIndex() : 0;
-
-    std::array<float, VizData::waveformPoints> signalL {};
-    std::array<float, VizData::waveformPoints> signalR {};
-    std::array<float, VizData::waveformPoints> gateL {};
-    std::array<float, VizData::waveformPoints> gateR {};
-    std::array<float, VizData::waveformPoints> heldWaveL {};
-    std::array<float, VizData::waveformPoints> heldWaveR {};
-    std::array<uint8_t, VizData::waveformPoints> markersL {};
-    std::array<uint8_t, VizData::waveformPoints> markersR {};
-    for (int i = 0; i < VizData::waveformPoints; ++i)
-    {
-        signalL[(size_t)i] = vizData.signalL[(size_t)i].load();
-        signalR[(size_t)i] = vizData.signalR[(size_t)i].load();
-        gateL[(size_t)i] = vizData.gateL[(size_t)i].load();
-        gateR[(size_t)i] = vizData.gateR[(size_t)i].load();
-        heldWaveL[(size_t)i] = vizData.heldWaveL[(size_t)i].load();
-        heldWaveR[(size_t)i] = vizData.heldWaveR[(size_t)i].load();
-        markersL[(size_t)i] = vizData.gateMarkersL[(size_t)i].load();
-        markersR[(size_t)i] = vizData.gateMarkersR[(size_t)i].load();
-    }
-
-    const float liveThreshold = vizData.liveThreshold.load();
-    const float liveThresholdBip = juce::jmap(liveThreshold, 0.0f, 1.0f, -1.0f, 1.0f);
-    const float liveSlewMs = vizData.liveSlewMs.load();
-    const int liveEdge = vizData.liveEdgeMode.load();
-    const float latchValueL = vizData.lastLatchValueL.load();
-    const float latchValueR = vizData.lastLatchValueR.load();
-    const float latchAgeL = vizData.latchAgeMsL.load();
-    const float latchAgeR = vizData.latchAgeMsR.load();
-    const float gatePeakL = vizData.gatePeakL.load();
-    const float gatePeakR = vizData.gatePeakR.load();
-
-    const auto& freqColors = theme.modules.frequency_graph;
-    auto resolveColor = [](ImU32 value, ImU32 fallback) { return value != 0 ? value : fallback; };
-    const ImU32 bgColor = resolveColor(freqColors.background, IM_COL32(18, 20, 24, 255));
-    const ImU32 gridColor = resolveColor(freqColors.grid, IM_COL32(50, 55, 65, 255));
-    const ImU32 signalColor = resolveColor(freqColors.live_line, IM_COL32(130, 210, 255, 255));
-    const ImU32 heldColor = ImGui::ColorConvertFloat4ToU32(theme.modulation.timbre);
-    const ImU32 gateColor = resolveColor(freqColors.peak_line, IM_COL32(255, 180, 120, 220));
-    const ImU32 thresholdColor = resolveColor(freqColors.threshold, IM_COL32(200, 255, 140, 150));
-    const ImU32 risingColor = ImGui::ColorConvertFloat4ToU32(theme.modulation.frequency);
-    const ImU32 fallingColor = ImGui::ColorConvertFloat4ToU32(theme.modulation.amplitude);
-
+    auto& ap = getAPVTS();
     ImGui::PushID(this);
     ImGui::PushItemWidth(itemWidth);
-
-    const ImGuiWindowFlags childFlags = ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse;
-
-    if (ImGui::BeginChild("SandHScope", ImVec2(itemWidth, 170.0f), false, childFlags))
+    
+    // Load waveform data from atomics
+    float inputWave[VizData::waveformPoints];
+    float outputWave[VizData::waveformPoints];
+    float smoothedWave[VizData::waveformPoints];
+    float triggerMarkers[VizData::waveformPoints];
+    for (int i = 0; i < VizData::waveformPoints; ++i)
     {
-        auto* drawList = ImGui::GetWindowDrawList();
+        inputWave[i] = vizData.inputWaveform[i].load();
+        outputWave[i] = vizData.outputWaveform[i].load();
+        smoothedWave[i] = vizData.smoothedWaveform[i].load();
+        triggerMarkers[i] = vizData.triggerMarkers[i].load();
+    }
+    const float currentThreshold = vizData.currentThreshold.load();
+    const int currentEdge = vizData.currentEdge.load();
+    const float currentSlew = vizData.currentSlew.load();
+    const int currentMode = vizData.currentMode.load();
+    
+    // Visualization section
+    ImGui::Spacing();
+    ThemeText("Sample & Hold Visualizer", theme.text.section_header);
+    ImGui::Spacing();
+    
+    const float waveHeight = 180.0f;
+    const ImVec2 graphSize(itemWidth, waveHeight);
+    const ImGuiWindowFlags childFlags = ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse;
+    if (ImGui::BeginChild("SAndHViz", graphSize, false, childFlags))
+    {
+        ImDrawList* drawList = ImGui::GetWindowDrawList();
         const ImVec2 p0 = ImGui::GetWindowPos();
-        const ImVec2 childSize = ImGui::GetWindowSize();
-        const ImVec2 p1 { p0.x + childSize.x, p0.y + childSize.y };
+        const ImVec2 p1 = ImVec2(p0.x + graphSize.x, p0.y + graphSize.y);
+        
+        // Background
+        const ImU32 bgColor = ThemeManager::getInstance().getCanvasBackground();
         drawList->AddRectFilled(p0, p1, bgColor, 4.0f);
+        
+        // Clip to graph area
         drawList->PushClipRect(p0, p1, true);
-
-        const float paddingX = 8.0f;
-        auto xForIndex = [&](int idx)
+        
+        const ImU32 inputColor = ImGui::ColorConvertFloat4ToU32(theme.modulation.frequency);
+        const ImU32 outputColor = ImGui::ColorConvertFloat4ToU32(theme.modulation.timbre);
+        const ImU32 smoothedColor = ImGui::ColorConvertFloat4ToU32(theme.modulation.amplitude);
+        const ImU32 triggerColor = IM_COL32(255, 100, 100, 255);
+        const ImU32 thresholdColor = IM_COL32(255, 255, 0, 128);
+        
+        // Draw center line
+        const float midY = p0.y + graphSize.y * 0.5f;
+        drawList->AddLine(ImVec2(p0.x, midY), ImVec2(p1.x, midY), ImGui::ColorConvertFloat4ToU32(ImVec4(0.5f, 0.5f, 0.5f, 0.3f)), 1.0f);
+        
+        // Draw threshold line
+        const float thresholdY = p0.y + graphSize.y * (1.0f - currentThreshold);
+        drawList->AddLine(ImVec2(p0.x, thresholdY), ImVec2(p1.x, thresholdY), thresholdColor, 1.0f);
+        
+        const float scaleY = graphSize.y * 0.4f;
+        const float stepX = graphSize.x / (float)(VizData::waveformPoints - 1);
+        
+        auto drawWave = [&](float* data, ImU32 color, float thickness)
         {
-            return juce::jmap((float)idx, 0.0f, (float)(VizData::waveformPoints - 1), p0.x + paddingX, p1.x - paddingX);
-        };
-        auto yForValue = [&](float sample)
-        {
-            const float clamped = juce::jlimit(-1.2f, 1.2f, sample);
-            return juce::jmap(clamped, 1.2f, -1.2f, p0.y + 12.0f, p1.y - 12.0f);
-        };
-        drawList->AddLine(ImVec2(p0.x, yForValue(0.0f)), ImVec2(p1.x, yForValue(0.0f)), gridColor, 1.0f);
-
-        auto drawWave = [&](const std::array<float, VizData::waveformPoints>& data, ImU32 color, float thickness)
-        {
-            float prevX = xForIndex(0);
-            float prevY = yForValue(data[0]);
-            for (int i = 1; i < VizData::waveformPoints; ++i)
-            {
-                const float x = xForIndex(i);
-                const float y = yForValue(data[(size_t)i]);
-                drawList->AddLine(ImVec2(prevX, prevY), ImVec2(x, y), color, thickness);
-                prevX = x;
-                prevY = y;
-            }
-        };
-
-        drawWave(signalL, signalColor, 1.5f);
-        drawWave(signalR, ImGui::ColorConvertFloat4ToU32(theme.modulation.timbre), 1.2f);
-        drawWave(heldWaveL, heldColor, 2.0f);
-        drawWave(gateL, gateColor, 1.0f);
-
-        const float thrY = yForValue(liveThresholdBip);
-        drawList->AddLine(ImVec2(p0.x + 4.0f, thrY), ImVec2(p1.x - 4.0f, thrY), thresholdColor, 1.3f);
-        drawList->AddText(ImVec2(p1.x - 70.0f, thrY - ImGui::GetTextLineHeight()), thresholdColor, "Threshold");
-
-        auto drawMarkers = [&](const std::array<uint8_t, VizData::waveformPoints>& markers, bool topRow)
-        {
+            float px = p0.x;
+            float py = midY;
             for (int i = 0; i < VizData::waveformPoints; ++i)
             {
-                const uint8_t code = markers[(size_t)i];
-                if (code == 0) continue;
-                const float x = xForIndex(i);
-                const float baseY = topRow ? (p0.y + 16.0f) : (p1.y - 16.0f);
-                if (code & 1)
-                {
-                    drawList->AddTriangleFilled(ImVec2(x, baseY - 6.0f),
-                                                ImVec2(x - 4.0f, baseY + 4.0f),
-                                                ImVec2(x + 4.0f, baseY + 4.0f),
-                                                risingColor);
-                }
-                if (code & 2)
-                {
-                    drawList->AddTriangleFilled(ImVec2(x, baseY + 6.0f),
-                                                ImVec2(x - 4.0f, baseY - 4.0f),
-                                                ImVec2(x + 4.0f, baseY - 4.0f),
-                                                fallingColor);
-                }
+                const float x = p0.x + i * stepX;
+                const float y = midY - juce::jlimit(-1.0f, 1.0f, data[i]) * scaleY;
+                const float clampedY = juce::jlimit(p0.y, p1.y, y);
+                if (i > 0)
+                    drawList->AddLine(ImVec2(px, py), ImVec2(x, clampedY), color, thickness);
+                px = x;
+                py = clampedY;
             }
         };
-
-        drawMarkers(markersL, true);
-        drawMarkers(markersR, false);
-
-        drawList->PopClipRect();
-        drawList->AddText(ImVec2(p0.x + 8.0f, p0.y + 6.0f), IM_COL32(220, 220, 230, 255), "Signal / Gate Monitor");
-
-        ImGui::SetCursorPos(ImVec2(0.0f, 0.0f));
-        ImGui::InvisibleButton("ScopeDragBlocker", childSize, ImGuiButtonFlags_MouseButtonLeft | ImGuiButtonFlags_MouseButtonRight);
-        ImGui::SetCursorPos(ImVec2(0.0f, 0.0f));
-    }
-    ImGui::EndChild();
-
-    ImGui::Spacing();
-
-    if (ImGui::BeginChild("SandHMeters", ImVec2(itemWidth, 90.0f), false, childFlags))
-    {
-        auto* drawList = ImGui::GetWindowDrawList();
-        const ImVec2 p0 = ImGui::GetWindowPos();
-        const ImVec2 childSize = ImGui::GetWindowSize();
-        const ImVec2 p1 { p0.x + childSize.x, p0.y + childSize.y };
-        drawList->AddRectFilled(p0, p1, bgColor, 4.0f);
-
-        auto drawMeter = [&](float xStart, float peak, const char* label)
+        
+        // Draw waveforms
+        drawWave(inputWave, inputColor, 1.5f);
+        drawWave(outputWave, outputColor, 2.0f);
+        drawWave(smoothedWave, smoothedColor, 1.5f);
+        
+        // Draw trigger markers
+        for (int i = 0; i < VizData::waveformPoints; ++i)
         {
-            const float meterWidth = (childSize.x - 80.0f) * 0.5f;
-            const float meterHeight = 60.0f;
-            const ImVec2 base { xStart, p0.y + 20.0f };
-            const ImVec2 rectMax { base.x + meterWidth, base.y + meterHeight };
-            drawList->AddRectFilled(base, rectMax, IM_COL32(30, 32, 38, 255), 3.0f);
-            const float fill = juce::jlimit(0.0f, 1.0f, peak);
-            const float filledHeight = meterHeight * fill;
-            drawList->AddRectFilled(ImVec2(base.x + 2.0f, rectMax.y - filledHeight),
-                                    ImVec2(rectMax.x - 2.0f, rectMax.y - 2.0f),
-                                    ImGui::ColorConvertFloat4ToU32(theme.modulation.frequency), 3.0f);
-            const float thrNorm = juce::jlimit(0.0f, 1.0f, liveThreshold);
-            const float thrY = rectMax.y - meterHeight * thrNorm;
-            drawList->AddLine(ImVec2(base.x + 2.0f, thrY), ImVec2(rectMax.x - 2.0f, thrY), thresholdColor, 1.2f);
-            drawList->AddText(ImVec2(base.x, p0.y + 4.0f), IM_COL32(200, 200, 210, 255), label);
-        };
-
-        drawMeter(p0.x + 12.0f, gatePeakL, "Gate L");
-        drawMeter(p0.x + childSize.x * 0.5f + 8.0f, gatePeakR, "Gate R");
-
-        const char* edgeLabels[] = { "Rising", "Falling", "Both" };
-        drawList->AddText(ImVec2(p1.x - 120.0f, p0.y + 8.0f), IM_COL32(180, 180, 190, 255), "Edge Mode");
-        drawList->AddText(ImVec2(p1.x - 120.0f, p0.y + 28.0f), IM_COL32(230, 230, 240, 255), edgeLabels[juce::jlimit(0, 2, liveEdge)]);
-
-        ImGui::SetCursorPos(ImVec2(0.0f, 0.0f));
-        ImGui::InvisibleButton("MetersDragBlocker", childSize, ImGuiButtonFlags_MouseButtonLeft | ImGuiButtonFlags_MouseButtonRight);
-        ImGui::SetCursorPos(ImVec2(0.0f, 0.0f));
-    }
-    ImGui::EndChild();
-
-    ImGui::Spacing();
-
-    if (ImGui::BeginChild("SandHTimeline", ImVec2(itemWidth, 110.0f), false, childFlags))
-    {
-        auto* drawList = ImGui::GetWindowDrawList();
-        const ImVec2 p0 = ImGui::GetWindowPos();
-        const ImVec2 childSize = ImGui::GetWindowSize();
-        const ImVec2 p1 { p0.x + childSize.x, p0.y + childSize.y };
-        drawList->AddRectFilled(p0, p1, bgColor, 4.0f);
-        drawList->PushClipRect(p0, p1, true);
-
-        auto xForIndex = [&](int idx)
-        {
-            return juce::jmap((float)idx, 0.0f, (float)(VizData::waveformPoints - 1), p0.x + 6.0f, p1.x - 6.0f);
-        };
-        auto yForValue = [&](float v)
-        {
-            const float clamped = juce::jlimit(-1.2f, 1.2f, v);
-            return juce::jmap(clamped, 1.2f, -1.2f, p0.y + 16.0f, p1.y - 16.0f);
-        };
-
-        auto drawLine = [&](const std::array<float, VizData::waveformPoints>& data, ImU32 color)
-        {
-            float prevX = xForIndex(0);
-            float prevY = yForValue(data[0]);
-            for (int i = 1; i < VizData::waveformPoints; ++i)
+            if (triggerMarkers[i] > 0.5f)
             {
-                const float x = xForIndex(i);
-                const float y = yForValue(data[(size_t)i]);
-                drawList->AddLine(ImVec2(prevX, prevY), ImVec2(x, y), color, 1.6f);
-                prevX = x;
-                prevY = y;
+                const float x = p0.x + i * stepX;
+                drawList->AddLine(ImVec2(x, p0.y), ImVec2(x, p1.y), triggerColor, 2.0f);
             }
-        };
-
-        drawLine(heldWaveL, heldColor);
-        drawLine(heldWaveR, ImGui::ColorConvertFloat4ToU32(theme.modulation.frequency));
+        }
+        
         drawList->PopClipRect();
-
-        drawList->AddText(ImVec2(p0.x + 8.0f, p0.y + 6.0f), IM_COL32(210, 210, 220, 255), "Held output timeline");
-        ImGui::SetCursorPos(ImVec2(8.0f, 60.0f));
-        ImGui::Text("Last L latch: %.3f (%.1f ms ago)", latchValueL, latchAgeL);
-        ImGui::Text("Last R latch: %.3f (%.1f ms ago)", latchValueR, latchAgeR);
-
-        ImGui::SetCursorPos(ImVec2(0.0f, 0.0f));
-        ImGui::InvisibleButton("TimelineDragBlocker", childSize, ImGuiButtonFlags_MouseButtonLeft | ImGuiButtonFlags_MouseButtonRight);
-        ImGui::SetCursorPos(ImVec2(0.0f, 0.0f));
+        
+        // Info overlay
+        const char* modeNames[] = { "Sample & Hold", "Track & Hold" };
+        const char* edgeNames[] = { "Rising", "Falling", "Both" };
+        ImGui::SetCursorPos(ImVec2(4, waveHeight - 20));
+        ImGui::TextColored(ImVec4(1.0f, 1.0f, 1.0f, 0.9f), "%s | %s | Slew: %.1f%%", 
+                          modeNames[currentMode], edgeNames[currentEdge], currentSlew * 100.0f);
+        
+        // Invisible drag blocker
+        ImGui::SetCursorPos(ImVec2(0, 0));
+        ImGui::InvisibleButton("##sAndHVizDrag", graphSize);
     }
     ImGui::EndChild();
-
+    
     ImGui::Spacing();
-    ThemeText("HELD VALUES", theme.modulation.frequency);
-    const float labelWidth = ImGui::CalcTextSize("R:").x;
-    const float valueWidth = ImGui::CalcTextSize("-0.000").x;
-    const float spacing = ImGui::GetStyle().ItemSpacing.x;
-    const float barWidth = itemWidth - labelWidth - valueWidth - spacing * 2.0f;
-    ImGui::Text("L:");
-    ImGui::SameLine();
-    ImGui::ProgressBar((latchValueL + 1.0f) * 0.5f, ImVec2(barWidth, 0), "");
-    ImGui::SameLine();
-    ImGui::Text("%.3f", latchValueL);
-
-    ImGui::Text("R:");
-    ImGui::SameLine();
-    ImGui::ProgressBar((latchValueR + 1.0f) * 0.5f, ImVec2(barWidth, 0), "");
-    ImGui::SameLine();
-    ImGui::Text("%.3f", latchValueR);
-
-    auto computeRms = [](const std::array<float, VizData::waveformPoints>& data)
+    ThemeText("Parameters", theme.text.section_header);
+    ImGui::Spacing();
+    
+    // Threshold slider
+    float threshold = thresholdParam ? thresholdParam->load() : 0.5f;
+    bool isThresholdModulated = isParamModulated(paramIdThresholdMod);
+    if (isThresholdModulated)
     {
-        double sum = 0.0;
-        for (float v : data) sum += v * v;
-        return (float)std::sqrt(sum / (double)data.size());
-    };
-    ImGui::Text("Input RMS  L: %.3f  R: %.3f", computeRms(signalL), computeRms(signalR));
-
-    ImGui::Spacing();
-    ThemeText("SAMPLE SETTINGS", theme.modulation.frequency);
-    ImGui::Spacing();
-
-    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(4.0f, 3.0f));
-    ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 1.0f);
-    ImGui::PushStyleVar(ImGuiStyleVar_GrabMinSize, 10.0f);
-
-    const bool threshMod = isParamModulated("threshold_mod");
-    float thresholdDisplay = threshMod ? getLiveParamValueFor("threshold_mod", "threshold_live", threshold) : threshold;
-    if (threshMod) ImGui::BeginDisabled();
-    if (ImGui::SliderFloat("Threshold", &thresholdDisplay, 0.0f, 1.0f, "%.3f"))
-        if (!threshMod)
-            if (auto* p = dynamic_cast<juce::AudioParameterFloat*>(ap.getParameter("threshold")))
-                *p = thresholdDisplay;
-    if (!threshMod) adjustParamOnWheel(ap.getParameter("threshold"), "threshold", thresholdDisplay);
-    if (ImGui::IsItemDeactivatedAfterEdit()) { onModificationEnded(); }
-    if (threshMod) { ImGui::EndDisabled(); ImGui::SameLine(); ImGui::TextUnformatted("(mod)"); }
-    ImGui::SameLine();
-    ImGui::Text("= %.3f", juce::jmap(thresholdDisplay, 0.0f, 1.0f, -1.0f, 1.0f));
-
-    const bool edgeMod = isParamModulated("edge_mod");
-    int edgeDisplay = edge;
-    if (edgeMod)
-    {
-        edgeDisplay = static_cast<int>(getLiveParamValueFor("edge_mod", "edge_live", (float)edge));
+        threshold = getLiveParamValueFor(paramIdThresholdMod, "threshold_live", threshold);
         ImGui::BeginDisabled();
     }
-    const char* edgeItems = "Rising\0Falling\0Both\0\0";
-    if (ImGui::Combo("Edge", &edgeDisplay, edgeItems))
-        if (!edgeMod)
-            if (auto* p = dynamic_cast<juce::AudioParameterChoice*>(ap.getParameter("edge")))
-                *p = edgeDisplay;
-    if (!edgeMod && ImGui::IsItemHovered())
+    ImGui::PushStyleColor(ImGuiCol_FrameBg, ImVec4(1.0f, 1.0f, 0.0f, 0.3f));
+    if (ImGui::SliderFloat("Threshold", &threshold, 0.0f, 1.0f, "%.3f"))
+    {
+        if (!isThresholdModulated && thresholdParam)
+            *thresholdParam = threshold;
+    }
+    ImGui::PopStyleColor();
+    if (ImGui::IsItemDeactivatedAfterEdit() && !isThresholdModulated) onModificationEnded();
+    if (!isThresholdModulated) adjustParamOnWheel(ap.getParameter(paramIdThreshold), paramIdThreshold, threshold);
+    if (isThresholdModulated) { ImGui::EndDisabled(); ImGui::SameLine(); ImGui::TextUnformatted("(mod)"); }
+    HelpMarker("Trigger detection threshold. When trigger signal crosses this level, sampling occurs.");
+    
+    // Edge selection
+    int edge = edgeParam ? edgeParam->getIndex() : 0;
+    bool isEdgeModulated = isParamModulated(paramIdEdgeMod);
+    if (isEdgeModulated)
+    {
+        const float edgeCV = getLiveParamValueFor(paramIdEdgeMod, "edge_live", static_cast<float>(edge));
+        edge = juce::jlimit(0, 2, static_cast<int>(edgeCV));
+        ImGui::BeginDisabled();
+    }
+    const char* edges = "Rising\0Falling\0Both\0\0";
+    if (ImGui::Combo("Edge", &edge, edges))
+    {
+        if (!isEdgeModulated && edgeParam)
+            *edgeParam = edge;
+    }
+    if (ImGui::IsItemDeactivatedAfterEdit() && !isEdgeModulated) onModificationEnded();
+    // Scroll wheel editing for Edge combo
+    if (!isEdgeModulated && ImGui::IsItemHovered())
     {
         const float wheel = ImGui::GetIO().MouseWheel;
         if (wheel != 0.0f)
         {
-            const int newEdge = juce::jlimit(0, 2, edgeDisplay + (wheel > 0.0f ? -1 : 1));
-            if (newEdge != edgeDisplay)
+            const int newIndex = juce::jlimit(0, 2, edge + (wheel > 0.0f ? -1 : 1));
+            if (newIndex != edge && edgeParam)
             {
-                edgeDisplay = newEdge;
-                if (auto* p = dynamic_cast<juce::AudioParameterChoice*>(ap.getParameter("edge")))
-                    *p = edgeDisplay;
+                *edgeParam = newIndex;
                 onModificationEnded();
             }
         }
     }
-    if (ImGui::IsItemDeactivatedAfterEdit()) { onModificationEnded(); }
-    if (edgeMod) { ImGui::EndDisabled(); ImGui::SameLine(); ImGui::TextUnformatted("(mod)"); }
-
-    const bool slewMod = isParamModulated("slewMs_mod");
-    float slewDisplay = slewMod ? getLiveParamValueFor("slewMs_mod", "slewMs_live", slew) : slew;
-    if (slewMod) ImGui::BeginDisabled();
-    if (ImGui::SliderFloat("Slew", &slewDisplay, 0.0f, 2000.0f, "%.1f ms", ImGuiSliderFlags_Logarithmic))
-        if (!slewMod)
-            if (auto* p = dynamic_cast<juce::AudioParameterFloat*>(ap.getParameter("slewMs")))
-                *p = slewDisplay;
-    if (!slewMod) adjustParamOnWheel(ap.getParameter("slewMs"), "slewMs", slewDisplay);
-    if (ImGui::IsItemDeactivatedAfterEdit()) { onModificationEnded(); }
-    if (slewMod) { ImGui::EndDisabled(); ImGui::SameLine(); ImGui::TextUnformatted("(mod)"); }
-
-    ImGui::PopStyleVar(3);
+    if (isEdgeModulated) { ImGui::EndDisabled(); ImGui::SameLine(); ImGui::TextUnformatted("(mod)"); }
+    HelpMarker("Edge type for trigger detection:\nRising: Sample on rising edge\nFalling: Sample on falling edge\nBoth: Sample on both edges");
+    
+    // Slew slider
+    float slew = slewParam ? slewParam->load() : 0.0f;
+    bool isSlewModulated = isParamModulated(paramIdSlewMod);
+    if (isSlewModulated)
+    {
+        slew = getLiveParamValueFor(paramIdSlewMod, "slew_live", slew);
+        ImGui::BeginDisabled();
+    }
+    if (ImGui::SliderFloat("Slew", &slew, 0.0f, 1.0f, "%.3f"))
+    {
+        if (!isSlewModulated && slewParam)
+            *slewParam = slew;
+    }
+    if (ImGui::IsItemDeactivatedAfterEdit() && !isSlewModulated) onModificationEnded();
+    if (!isSlewModulated) adjustParamOnWheel(ap.getParameter(paramIdSlew), paramIdSlew, slew);
+    if (isSlewModulated) { ImGui::EndDisabled(); ImGui::SameLine(); ImGui::TextUnformatted("(mod)"); }
+    HelpMarker("Smoothing amount for transitions between sampled values. 0 = instant, 1 = smooth over 1 second.");
+    
+    // Mode selection
+    int mode = modeParam ? modeParam->getIndex() : 0;
+    const char* modes = "Sample & Hold\0Track & Hold\0\0";
+    if (ImGui::Combo("Mode", &mode, modes))
+    {
+        if (modeParam)
+            *modeParam = mode;
+    }
+    if (ImGui::IsItemDeactivatedAfterEdit()) onModificationEnded();
+    // Scroll wheel editing for Mode combo
+    if (ImGui::IsItemHovered())
+    {
+        const float wheel = ImGui::GetIO().MouseWheel;
+        if (wheel != 0.0f)
+        {
+            const int newIndex = juce::jlimit(0, 1, mode + (wheel > 0.0f ? -1 : 1));
+            if (newIndex != mode && modeParam)
+            {
+                *modeParam = newIndex;
+                onModificationEnded();
+            }
+        }
+    }
+    HelpMarker("Mode:\nSample & Hold: Sample input on trigger, hold until next trigger\nTrack & Hold: Track input while trigger is high, hold when trigger goes low");
+    
     ImGui::PopItemWidth();
     ImGui::PopID();
 }
-#endif
 
-// Parameter bus contract implementation
-bool SAndHModuleProcessor::getParamRouting(const juce::String& paramId, int& outBusIndex, int& outChannelIndexInBus) const
+void SAndHModuleProcessor::drawIoPins(const NodePinHelpers& helpers)
 {
-    outBusIndex = 0; // All modulation is on the single input bus
+    // All on single bus 0 with discrete channels (like BitCrusher)
+    helpers.drawParallelPins("In L", 0, "Out L", 0);
+    helpers.drawParallelPins("In R", 1, "Out R", 1);
+    helpers.drawParallelPins("Trigger In", 2, "Smoothed Out", 2);
     
-    if (paramId == "threshold_mod") { outChannelIndexInBus = 4; return true; }
-    if (paramId == "edge_mod") { outChannelIndexInBus = 5; return true; }
-    if (paramId == "slewMs_mod") { outChannelIndexInBus = 6; return true; }
-    return false;
+    // CV mods - use getParamRouting to get correct channel indices
+    int busIdx, chanInBus;
+    if (getParamRouting(paramIdThresholdMod, busIdx, chanInBus))
+        helpers.drawParallelPins("Threshold Mod", getChannelIndexInProcessBlockBuffer(true, busIdx, chanInBus), "Trigger Out", 3);
+    if (getParamRouting(paramIdEdgeMod, busIdx, chanInBus))
+        helpers.drawParallelPins("Edge Mod", getChannelIndexInProcessBlockBuffer(true, busIdx, chanInBus), nullptr, -1);
+    if (getParamRouting(paramIdSlewMod, busIdx, chanInBus))
+        helpers.drawParallelPins("Slew Mod", getChannelIndexInProcessBlockBuffer(true, busIdx, chanInBus), nullptr, -1);
 }
 
+juce::String SAndHModuleProcessor::getAudioInputLabel(int channel) const
+{
+    switch (channel)
+    {
+        case 0: return "In L";
+        case 1: return "In R";
+        case 2: return "Trigger In";
+        case 3: return "Threshold Mod";
+        case 4: return "Edge Mod";
+        case 5: return "Slew Mod";
+        default: return juce::String("In ") + juce::String(channel + 1);
+    }
+}
+
+juce::String SAndHModuleProcessor::getAudioOutputLabel(int channel) const
+{
+    switch (channel)
+    {
+        case 0: return "Out L";
+        case 1: return "Out R";
+        case 2: return "Smoothed Out";
+        case 3: return "Trigger Out";
+        default: return juce::String("Out ") + juce::String(channel + 1);
+    }
+}
+
+bool SAndHModuleProcessor::getParamRouting(const juce::String& paramId, int& outBusIndex, int& outChannelIndexInBus) const
+{
+    outBusIndex = 0; // All inputs are on bus 0 (like BitCrusher)
+    // ch0-1: Audio, ch2: Trigger, ch3-5: CV modulations
+    if (paramId == paramIdThresholdMod) { outChannelIndexInBus = 3; return true; }
+    if (paramId == paramIdEdgeMod) { outChannelIndexInBus = 4; return true; }
+    if (paramId == paramIdSlewMod) { outChannelIndexInBus = 5; return true; }
+    
+    return false;
+}
+#endif
 

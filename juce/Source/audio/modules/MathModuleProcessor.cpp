@@ -7,12 +7,14 @@ MathModuleProcessor::MathModuleProcessor()
     : ModuleProcessor (BusesProperties()
                         .withInput ("In A", juce::AudioChannelSet::mono(), true)
                         .withInput ("In B", juce::AudioChannelSet::mono(), true)
+                        .withInput ("CV Mod", juce::AudioChannelSet::mono(), true)
                         .withOutput("Out", juce::AudioChannelSet::mono(), true)),
       apvts (*this, nullptr, "MathParams", createParameterLayout())
 {
     valueAParam    = apvts.getRawParameterValue ("valueA");
     valueBParam    = apvts.getRawParameterValue ("valueB");
     operationParam = apvts.getRawParameterValue ("operation");
+    operationModParam = apvts.getRawParameterValue ("operation_mod");
     
     // ADD THIS:
     lastOutputValues.push_back(std::make_unique<std::atomic<float>>(0.0f));
@@ -34,6 +36,8 @@ juce::AudioProcessorValueTreeState::ParameterLayout MathModuleProcessor::createP
     p.push_back (std::make_unique<juce::AudioParameterFloat> ("valueA", "Value A", juce::NormalisableRange<float> (-100.0f, 100.0f), 0.0f));
     // Expanded Value B range from -100 to 100 for more creative possibilities
     p.push_back (std::make_unique<juce::AudioParameterFloat> ("valueB", "Value B", juce::NormalisableRange<float> (-100.0f, 100.0f), 0.0f));
+    // Operation modulation CV input (0-1 maps to 0-16 operation indices)
+    p.push_back (std::make_unique<juce::AudioParameterFloat> ("operation_mod", "Operation Mod", juce::NormalisableRange<float> (0.0f, 1.0f), 0.0f));
     return { p.begin(), p.end() };
 }
 
@@ -62,13 +66,25 @@ void MathModuleProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::
 
     // CORRECTED LOGIC:
     auto inB = getBusBuffer(buffer, true, 1);
+    auto cvModBus = getBusBuffer(buffer, true, 2);
+    
     // Use robust connection detection
     const bool inAConnected = isParamInputConnected("valueA");
     const bool inBConnected = isParamInputConnected("valueB");
+    const bool operationModConnected = isParamInputConnected("operation_mod");
 
     const float valueA = valueAParam != nullptr ? valueAParam->load() : 0.0f;
     const float valueB = valueBParam->load();
-    const int operation = static_cast<int>(operationParam->load());
+    
+    // Get base operation index
+    int baseOperation = static_cast<int>(operationParam->load());
+    
+    // Get CV pointer for per-sample modulation (if connected)
+    const float* operationModPtr = nullptr;
+    if (operationModConnected && cvModBus.getNumChannels() > 0)
+    {
+        operationModPtr = cvModBus.getReadPointer(0);
+    }
     
     const float* srcA = inA.getNumChannels() > 0 ? inA.getReadPointer (0) : nullptr;
     const float* srcB = inBConnected ? inB.getReadPointer (0) : nullptr;
@@ -87,12 +103,29 @@ void MathModuleProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::
     float rmsA = 0.0f;
     float rmsB = 0.0f;
     float rmsOut = 0.0f;
+    int currentOperationForViz = baseOperation; // Track operation for visualization
 #endif
     
     for (int i = 0; i < buffer.getNumSamples(); ++i)
     {
         float valA = inAConnected && srcA != nullptr ? srcA[i] : valueA;
         float valB = inBConnected ? srcB[i] : valueB;
+
+        // Calculate operation index with modulation (per-sample if CV connected)
+        int operation = baseOperation;
+        if (operationModPtr != nullptr)
+        {
+            // Map CV (0-1) to operation index (0-16) - 17 operations total
+            // Evenly distribute: CV 0.0 -> op 0, CV 1.0 -> op 16
+            float modCV = juce::jlimit(0.0f, 1.0f, operationModPtr[i]);
+            operation = static_cast<int>(juce::jlimit(0.0f, 16.0f, modCV * 16.0f));
+        }
+        
+#if defined(PRESET_CREATOR_UI)
+        // Track operation for visualization (use first sample's operation)
+        if (i == 0)
+            currentOperationForViz = operation;
+#endif
 
         // Enhanced mathematical operations with 17 different functions
         float result = 0.0f;
@@ -138,6 +171,10 @@ void MathModuleProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::
             setLiveParamValue("valueA_live", valA);
             setLiveParamValue("valueB_live", valB);
             setLiveParamValue("operation_live", static_cast<float>(operation));
+            if (operationModPtr != nullptr)
+            {
+                setLiveParamValue("operation_mod_live", operationModPtr[i]);
+            }
         }
     }
     
@@ -151,7 +188,7 @@ void MathModuleProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::
     vizData.inputARms.store(rmsA);
     vizData.inputBRms.store(rmsB);
     vizData.outputRms.store(rmsOut);
-    vizData.currentOperation.store(operation);
+    vizData.currentOperation.store(currentOperationForViz);
     
     // Down-sample waveforms
     const int stride = juce::jmax(1, numSamplesForRms / VizData::waveformPoints);
@@ -187,19 +224,51 @@ void MathModuleProcessor::drawParametersInNode (float itemWidth, const std::func
     ImGui::PushID(this);
     ImGui::PushItemWidth (itemWidth);
     
-    int op = 0; if (auto* p = dynamic_cast<juce::AudioParameterChoice*>(ap.getParameter("operation"))) op = p->getIndex();
-    float valA = valueAParam != nullptr ? valueAParam->load() : 0.0f;
-    float valB = valueBParam != nullptr ? valueBParam->load() : 0.0f;
+    // Operation combo box with CV modulation and scroll-edit support
+    bool isOperationModulated = isParamModulated("operation_mod");
+    int op = 0; 
+    if (auto* p = dynamic_cast<juce::AudioParameterChoice*>(ap.getParameter("operation"))) 
+        op = p->getIndex();
     
-    // Operation combo box (no modulation input, so no live feedback needed)
+    if (isOperationModulated) {
+        op = static_cast<int>(getLiveParamValueFor("operation_mod", "operation_live", static_cast<float>(op)));
+        ImGui::BeginDisabled();
+    }
+    
     if (ImGui::Combo ("Operation", &op, 
         "Add\0Subtract\0Multiply\0Divide\0"
         "Min\0Max\0Power\0Sqrt(A)\0"
         "Sin(A)\0Cos(A)\0Tan(A)\0"
         "Abs(A)\0Modulo\0Fract(A)\0Int(A)\0"
         "A > B\0A < B\0\0"))
-        if (auto* p = dynamic_cast<juce::AudioParameterChoice*>(ap.getParameter("operation"))) *p = op;
+        if (!isOperationModulated) 
+            if (auto* p = dynamic_cast<juce::AudioParameterChoice*>(ap.getParameter("operation"))) 
+                *p = op;
     if (ImGui::IsItemDeactivatedAfterEdit()) onModificationEnded();
+    
+    // Scroll wheel editing for Operation combo
+    if (!isOperationModulated && ImGui::IsItemHovered()) {
+        const float wheel = ImGui::GetIO().MouseWheel;
+        if (wheel != 0.0f) {
+            const int maxIndex = 16; // 17 operations: 0-16
+            const int newIndex = juce::jlimit(0, maxIndex, op + (wheel > 0.0f ? -1 : 1));
+            if (newIndex != op) {
+                if (auto* p = dynamic_cast<juce::AudioParameterChoice*>(ap.getParameter("operation"))) {
+                    *p = newIndex;
+                    onModificationEnded();
+                }
+            }
+        }
+    }
+    
+    if (isOperationModulated) { 
+        ImGui::EndDisabled(); 
+        ImGui::SameLine(); 
+        ImGui::TextUnformatted("(mod)"); 
+    }
+    
+    float valA = valueAParam != nullptr ? valueAParam->load() : 0.0f;
+    float valB = valueBParam != nullptr ? valueBParam->load() : 0.0f;
 
     // Value A slider with live modulation feedback
     bool isValueAModulated = isParamModulated("valueA");
@@ -355,6 +424,10 @@ void MathModuleProcessor::drawIoPins(const NodePinHelpers& helpers)
 {
     helpers.drawParallelPins("In A", 0, "Out", 0);
     helpers.drawParallelPins("In B", 1, nullptr, -1);
+    
+    int busIdx, chanInBus;
+    if (getParamRouting("operation_mod", busIdx, chanInBus))
+        helpers.drawParallelPins("Op Mod", getChannelIndexInProcessBlockBuffer(true, busIdx, chanInBus), nullptr, -1);
 }
 #endif
 
@@ -377,5 +450,6 @@ bool MathModuleProcessor::getParamRouting(const juce::String& paramId, int& outB
 {
     if (paramId == "valueA") { outBusIndex = 0; outChannelIndexInBus = 0; return true; }
     if (paramId == "valueB") { outBusIndex = 1; outChannelIndexInBus = 0; return true; }
+    if (paramId == "operation_mod") { outBusIndex = 2; outChannelIndexInBus = 0; return true; }
     return false;
 }

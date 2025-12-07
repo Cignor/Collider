@@ -29,6 +29,7 @@
 #include <optional>
 #include "theme/ThemeManager.h"
 #include "../audio/modules/ChordArpModuleProcessor.h"
+#include "PatchGenerator.h"
 
 namespace
 {
@@ -1094,6 +1095,23 @@ void ImGuiNodeEditorComponent::renderImGui()
     static int frameCounter = 0;
     frameCounter++;
 
+    // --- Apply PatchGenerator Positions ---
+    // If the PatchGenerator has created a new layout, apply it now.
+    auto generatedPositions = PatchGenerator::getNodePositions();
+    if (!generatedPositions.empty())
+    {
+        for (const auto& pair : generatedPositions)
+        {
+            // Store positions in pendingNodePositions, which will be applied during the next render
+            // This is safer than directly calling SetNodeGridSpacePos which might fail if nodes aren't ready
+            pendingNodePositions[(int)pair.first] = ImVec2(pair.second.x, pair.second.y);
+        }
+        PatchGenerator::clearNodePositions();
+        juce::Logger::writeToLog(
+            "[ImGuiNodeEditor] Applied " + juce::String(generatedPositions.size()) +
+            " generated node positions.");
+    }
+
     // ========================= THE DEFINITIVE FIX =========================
     //
     // Rebuild the audio graph at the START of the frame if a change is pending.
@@ -1338,6 +1356,96 @@ void ImGuiNodeEditorComponent::renderImGui()
                     juce::Logger::writeToLog("[Settings] Startup default preset cleared");
                 }
             }
+
+            ImGui::EndMenu();
+        }
+
+        if (ImGui::BeginMenu("Generate"))
+        {
+            if (ImGui::MenuItem("East Coast (Subtractive)"))
+                PatchGenerator::generate(synth, PatchArchetype::EastCoast);
+            if (ImGui::MenuItem("West Coast (Buchla)"))
+                PatchGenerator::generate(synth, PatchArchetype::WestCoast);
+            if (ImGui::MenuItem("Ambient Drone"))
+                PatchGenerator::generate(synth, PatchArchetype::AmbientDrone);
+            if (ImGui::MenuItem("Techno Bass"))
+                PatchGenerator::generate(synth, PatchArchetype::TechnoBass);
+            if (ImGui::MenuItem("Glitch Machine"))
+                PatchGenerator::generate(synth, PatchArchetype::Glitch);
+            if (ImGui::MenuItem("Ethereal Pad"))
+                PatchGenerator::generate(synth, PatchArchetype::Ethereal);
+            ImGui::Separator();
+            if (ImGui::BeginMenu("Leads"))
+            {
+                if (ImGui::MenuItem("Acid Lead"))
+                    PatchGenerator::generate(synth, PatchArchetype::AcidLead);
+                if (ImGui::MenuItem("Bright Lead"))
+                    PatchGenerator::generate(synth, PatchArchetype::BrightLead);
+                ImGui::EndMenu();
+            }
+            if (ImGui::BeginMenu("Bass"))
+            {
+                if (ImGui::MenuItem("Deep Bass"))
+                    PatchGenerator::generate(synth, PatchArchetype::DeepBass);
+                if (ImGui::MenuItem("Wobble Bass"))
+                    PatchGenerator::generate(synth, PatchArchetype::WobbleBass);
+                ImGui::EndMenu();
+            }
+            if (ImGui::BeginMenu("Pads & Textures"))
+            {
+                if (ImGui::MenuItem("Warm Pad"))
+                    PatchGenerator::generate(synth, PatchArchetype::WarmPad);
+                if (ImGui::MenuItem("Reverb Wash"))
+                    PatchGenerator::generate(synth, PatchArchetype::ReverbWash);
+                ImGui::EndMenu();
+            }
+            if (ImGui::BeginMenu("Rhythmic"))
+            {
+                if (ImGui::MenuItem("Arpeggio"))
+                    PatchGenerator::generate(synth, PatchArchetype::Arpeggio);
+                if (ImGui::MenuItem("Percussion"))
+                    PatchGenerator::generate(synth, PatchArchetype::Percussion);
+                if (ImGui::MenuItem("Stutter"))
+                    PatchGenerator::generate(synth, PatchArchetype::Stutter);
+                ImGui::EndMenu();
+            }
+            if (ImGui::BeginMenu("Effects"))
+            {
+                if (ImGui::MenuItem("Delay Loop"))
+                    PatchGenerator::generate(synth, PatchArchetype::DelayLoop);
+                if (ImGui::MenuItem("Distorted"))
+                    PatchGenerator::generate(synth, PatchArchetype::Distorted);
+                if (ImGui::MenuItem("Noise Sweep"))
+                    PatchGenerator::generate(synth, PatchArchetype::NoiseSweep);
+                ImGui::EndMenu();
+            }
+            if (ImGui::BeginMenu("Advanced"))
+            {
+                if (ImGui::MenuItem("FM Synthesis"))
+                    PatchGenerator::generate(synth, PatchArchetype::FM);
+                if (ImGui::MenuItem("Granular"))
+                    PatchGenerator::generate(synth, PatchArchetype::Granular);
+                if (ImGui::MenuItem("Harmonic"))
+                    PatchGenerator::generate(synth, PatchArchetype::Harmonic);
+                if (ImGui::MenuItem("Complex"))
+                    PatchGenerator::generate(synth, PatchArchetype::Complex);
+                ImGui::EndMenu();
+            }
+            if (ImGui::BeginMenu("Other"))
+            {
+                if (ImGui::MenuItem("Pluck"))
+                    PatchGenerator::generate(synth, PatchArchetype::Pluck);
+                if (ImGui::MenuItem("Chord Progression"))
+                    PatchGenerator::generate(synth, PatchArchetype::ChordProg);
+                if (ImGui::MenuItem("Minimal"))
+                    PatchGenerator::generate(synth, PatchArchetype::Minimal);
+                if (ImGui::MenuItem("Experimental"))
+                    PatchGenerator::generate(synth, PatchArchetype::Experimental);
+                ImGui::EndMenu();
+            }
+            ImGui::Separator();
+            if (ImGui::MenuItem("Surprise Me (Random)"))
+                PatchGenerator::generate(synth, PatchArchetype::Random);
 
             ImGui::EndMenu();
         }
@@ -3223,6 +3331,7 @@ void ImGuiNodeEditorComponent::renderImGui()
             addModuleButton("Chord Arp", "chord_arp");
             addModuleButton("Timeline", "timeline");
             addModuleButton("Automation Lane", "automation_lane");
+            addModuleButton("Automato", "automato");
         }
 
         // ═══════════════════════════════════════════════════════════════════════════════
@@ -5431,6 +5540,21 @@ void ImGuiNodeEditorComponent::renderImGui()
                 insertNodeBetween("sequential_switch");
                 ImGui::CloseCurrentPopup();
             }
+            if (ImGui::MenuItem("Automato"))
+            {
+                insertNodeBetween("automato");
+                ImGui::CloseCurrentPopup();
+            }
+            if (ImGui::MenuItem("Automation Lane"))
+            {
+                insertNodeBetween("automation_lane");
+                ImGui::CloseCurrentPopup();
+            }
+            if (ImGui::MenuItem("Timeline"))
+            {
+                insertNodeBetween("timeline");
+                ImGui::CloseCurrentPopup();
+            }
 
             ImGui::EndPopup();
         }
@@ -7045,6 +7169,8 @@ void ImGuiNodeEditorComponent::renderImGui()
                         addAtMouse("timeline");
                     if (ImGui::MenuItem("Automation Lane"))
                         addAtMouse("automation_lane");
+                    if (ImGui::MenuItem("Automato"))
+                        addAtMouse("automato");
                     ImGui::EndMenu();
                 }
 
@@ -9053,8 +9179,7 @@ void ImGuiNodeEditorComponent::newCanvas()
 
     // Notify the user
     NotificationManager::post(
-        NotificationManager::Type::Info,
-        "New canvas created - ready to start fresh");
+        NotificationManager::Type::Info, "New canvas created - ready to start fresh");
 
     juce::Logger::writeToLog("[NewCanvas] Cleared synth state and started fresh canvas");
 }
@@ -9361,6 +9486,21 @@ void ImGuiNodeEditorComponent::handleBeautifyLayout()
             inDegree[conn.dstLogicalId]++;
         }
     }
+    
+    // Debug: Log all connections to identify cycles
+    juce::Logger::writeToLog("[Beautify] Graph connections:");
+    for (const auto& pair : adjacencyList)
+    {
+        if (!pair.second.empty())
+        {
+            juce::String connStr = "[Beautify] Node " + juce::String(pair.first) + " -> ";
+            for (juce::uint32 dst : pair.second)
+            {
+                connStr += juce::String(dst) + " ";
+            }
+            juce::Logger::writeToLog(connStr);
+        }
+    }
 
     for (const auto& mod : modules)
     {
@@ -9373,7 +9513,8 @@ void ImGuiNodeEditorComponent::handleBeautifyLayout()
     juce::Logger::writeToLog(
         "[Beautify] Found " + juce::String(sourceNodes.size()) + " source nodes");
 
-    // --- STEP 2: Assign Nodes to Columns (Topological Sort) ---
+    // --- STEP 2: Assign Nodes to Columns (Topological Sort with Cycle Handling) ---
+    juce::Logger::writeToLog("[Beautify] Starting topological sort...");
     std::map<juce::uint32, int>            nodeColumn;
     std::vector<std::vector<juce::uint32>> columns;
     int                                    maxColumn = 0;
@@ -9384,41 +9525,138 @@ void ImGuiNodeEditorComponent::handleBeautifyLayout()
         nodeColumn[nodeId] = 0;
     }
     columns.push_back(sourceNodes);
+    juce::Logger::writeToLog("[Beautify] Initialized source nodes in column 0");
 
     // Process each column and assign children to appropriate columns
+    // Use topological sort with cycle detection: track visited nodes to prevent infinite loops
     std::queue<juce::uint32> processQueue;
     for (juce::uint32 srcNode : sourceNodes)
         processQueue.push(srcNode);
 
+    const int MAX_COLUMNS = 50; // Maximum columns to prevent excessive spacing
+    std::map<juce::uint32, int> visitCount; // Track how many times each node is visited
+    const int MAX_VISITS = 3; // Allow a node to be visited up to 3 times (handles some cycles)
+    
     while (!processQueue.empty())
     {
         juce::uint32 u = processQueue.front();
         processQueue.pop();
+        
+        visitCount[u]++;
+        
+        // Safety check: if node visited too many times, cap its column and skip
+        if (visitCount[u] > MAX_VISITS)
+        {
+            // Cap the column assignment for this node if not already set
+            if (nodeColumn.count(u) == 0)
+            {
+                nodeColumn[u] = MAX_COLUMNS / 2; // Place in middle
+            }
+            juce::Logger::writeToLog("[Beautify] WARNING: Node " + juce::String(u) + 
+                                    " visited " + juce::String(visitCount[u]) + 
+                                    " times (cycle detected), capping column");
+            continue;
+        }
 
+        // Safety check: ensure adjacencyList has this node
+        if (adjacencyList.find(u) == adjacencyList.end())
+        {
+            continue;
+        }
+
+        // Get current column of node u (default to 0 if not set)
+        int uColumn = nodeColumn.count(u) > 0 ? nodeColumn[u] : 0;
+        
         for (juce::uint32 v : adjacencyList[u])
         {
             // The column for node 'v' is the maximum of its predecessors' columns + 1
-            int newColumn = nodeColumn[u] + 1;
+            int newColumn = uColumn + 1;
+            
+            // Cap the column to prevent excessive spacing
+            if (newColumn > MAX_COLUMNS)
+            {
+                newColumn = MAX_COLUMNS;
+            }
+            
+            // Only update if this gives a higher column (or if not set yet)
+            // This allows nodes to be placed in the rightmost column they need
             if (nodeColumn.count(v) == 0 || newColumn > nodeColumn[v])
             {
                 nodeColumn[v] = newColumn;
                 maxColumn = std::max(maxColumn, newColumn);
-                processQueue.push(v);
+                
+                // Only push to queue if we haven't visited it too many times
+                if (visitCount.count(v) == 0 || visitCount[v] < MAX_VISITS)
+                {
+                    processQueue.push(v);
+                }
             }
         }
     }
+    
+    // Handle unvisited nodes (disconnected or part of cycles that weren't reached)
+    for (const auto& mod : modules)
+    {
+        if (nodeColumn.count(mod.first) == 0)
+        {
+            // Assign to a reasonable column (middle)
+            nodeColumn[mod.first] = MAX_COLUMNS / 2;
+            juce::Logger::writeToLog("[Beautify] Unvisited node " + juce::String(mod.first) + 
+                                    " assigned to column " + juce::String(MAX_COLUMNS / 2));
+        }
+    }
+    
+    // Ensure output node is assigned (rightmost)
+    if (nodeColumn.count(0) == 0)
+    {
+        nodeColumn[0] = maxColumn + 1;
+        maxColumn++;
+    }
+    else
+    {
+        // Output should be rightmost
+        if (nodeColumn[0] <= maxColumn)
+        {
+            nodeColumn[0] = maxColumn + 1;
+            maxColumn++;
+        }
+    }
+    
+    // Cap maxColumn to MAX_COLUMNS
+    if (maxColumn > MAX_COLUMNS)
+    {
+        maxColumn = MAX_COLUMNS;
+        juce::Logger::writeToLog("[Beautify] Capped maxColumn to " + juce::String(MAX_COLUMNS));
+    }
+    
+    juce::Logger::writeToLog("[Beautify] Topological sort complete, maxColumn=" + juce::String(maxColumn));
 
     // Re-populate columns based on assignments
+    juce::Logger::writeToLog("[Beautify] Re-populating columns...");
+    if (maxColumn < 0)
+    {
+        juce::Logger::writeToLog("[Beautify] ERROR: maxColumn is negative, setting to 0");
+        maxColumn = 0;
+    }
     columns.assign(maxColumn + 1, {});
     for (const auto& pair : nodeColumn)
     {
-        columns[pair.second].push_back(pair.first);
+        if (pair.second >= 0 && pair.second < (int)columns.size())
+        {
+            columns[pair.second].push_back(pair.first);
+        }
+        else
+        {
+            juce::Logger::writeToLog("[Beautify] WARNING: Node " + juce::String(pair.first) + 
+                                    " has invalid column " + juce::String(pair.second));
+        }
     }
 
     juce::Logger::writeToLog(
         "[Beautify] Arranged nodes into " + juce::String(maxColumn + 1) + " columns");
 
     // --- STEP 3: Optimize Node Ordering Within Columns ---
+    juce::Logger::writeToLog("[Beautify] Optimizing node ordering within columns...");
     // Sort nodes in each column based on median position of their parents
     for (int c = 1; c <= maxColumn; ++c)
     {
@@ -9437,12 +9675,15 @@ void ImGuiNodeEditorComponent::handleBeautifyLayout()
                     {
                         // Find the vertical index of the parent node
                         int   parentColumn = nodeColumn[pair.first];
-                        auto& parentColVec = columns[parentColumn];
-                        auto  it = std::find(parentColVec.begin(), parentColVec.end(), pair.first);
-                        if (it != parentColVec.end())
+                        if (parentColumn >= 0 && parentColumn < (int)columns.size())
                         {
-                            parentPositions.push_back(
-                                (float)std::distance(parentColVec.begin(), it));
+                            auto& parentColVec = columns[parentColumn];
+                            auto  it = std::find(parentColVec.begin(), parentColVec.end(), pair.first);
+                            if (it != parentColVec.end())
+                            {
+                                parentPositions.push_back(
+                                    (float)std::distance(parentColVec.begin(), it));
+                            }
                         }
                     }
                 }
@@ -9464,8 +9705,10 @@ void ImGuiNodeEditorComponent::handleBeautifyLayout()
             return medianPositions[a] < medianPositions[b];
         });
     }
+    juce::Logger::writeToLog("[Beautify] Node ordering optimization complete");
 
     // --- STEP 4: Calculate Final Coordinates ---
+    juce::Logger::writeToLog("[Beautify] Calculating final coordinates...");
     // NOTE: We intentionally size columns based on the *actual* node widths so
     // that wide nodes (e.g. timeline / sampler / sequencer) do not overlap
     // adjacent columns.
@@ -9473,17 +9716,121 @@ void ImGuiNodeEditorComponent::handleBeautifyLayout()
     const float NODE_VERTICAL_PADDING = 50.0f;
 
     // Compute per-column maximum width based on the current node sizes
+    // Use fallback dimensions if GetNodeDimensions returns zero (node not yet rendered)
+    auto&       themeMgr = ThemeManager::getInstance();
+    const float DEFAULT_NODE_WIDTH = themeMgr.getNodeDefaultWidth();
+    const float DEFAULT_NODE_HEIGHT = 150.0f; // Standard height for most modules
+
+    // Cache node dimensions to avoid repeated lookups
+    std::map<juce::uint32, ImVec2> nodeDimensionCache;
+    
+    auto getCachedNodeDimensions = [&](juce::uint32 lid) -> ImVec2 {
+        auto it = nodeDimensionCache.find(lid);
+        if (it != nodeDimensionCache.end())
+        {
+            return it->second;
+        }
+        
+        ImVec2 nodeSize = ImVec2(0.0f, 0.0f);
+        
+        // Try to get actual rendered dimensions first
+        // Use a timeout/check to avoid blocking on function_generator
+        try
+        {
+            ImVec2 actualSize = ImNodes::GetNodeDimensions(lid);
+            if (actualSize.x > 0.0f && actualSize.y > 0.0f)
+            {
+                nodeSize = actualSize;
+                juce::Logger::writeToLog("[Beautify] Node " + juce::String(lid) + 
+                                        " dimensions from ImNodes: " + 
+                                        juce::String(actualSize.x, 1) + "x" + 
+                                        juce::String(actualSize.y, 1));
+            }
+        }
+        catch (...)
+        {
+            juce::Logger::writeToLog("[Beautify] Exception getting dimensions for node " + 
+                                    juce::String(lid) + ", using fallback");
+        }
+        
+        // Fallback: Use PinDatabase defaultWidth if dimensions are invalid
+        if (nodeSize.x <= 0.0f || nodeSize.y <= 0.0f)
+        {
+            float fallbackWidth = DEFAULT_NODE_WIDTH;
+            float fallbackHeight = DEFAULT_NODE_HEIGHT;
+            
+            // Try to get module type and look up in PinDatabase
+            try
+            {
+                if (synth != nullptr)
+                {
+                    juce::String moduleType = synth->getModuleTypeForLogical(lid);
+                    if (moduleType.isNotEmpty())
+                    {
+                        const auto& pinDb = getModulePinDatabase();
+                        auto pinIt = pinDb.find(moduleType.toLowerCase());
+                        if (pinIt != pinDb.end())
+                        {
+                            NodeWidth widthCategory = pinIt->second.defaultWidth;
+                            float categoryWidth = getWidthForCategory(widthCategory);
+                            
+                            // If category width is valid (not Exception), use it
+                            if (categoryWidth > 0.0f)
+                            {
+                                fallbackWidth = categoryWidth;
+                            }
+                            else if (widthCategory == NodeWidth::Exception)
+                            {
+                                // Exception nodes might have custom size, use wider default
+                                fallbackWidth = DEFAULT_NODE_WIDTH * 1.5f;
+                                juce::Logger::writeToLog("[Beautify] Node " + juce::String(lid) + 
+                                                        " (" + moduleType + ") is Exception size, using " + 
+                                                        juce::String(fallbackWidth, 1) + "px");
+                            }
+                            
+                            juce::Logger::writeToLog("[Beautify] Node " + juce::String(lid) + 
+                                                    " (" + moduleType + ") fallback width: " + 
+                                                    juce::String(fallbackWidth, 1) + "px");
+                        }
+                        else
+                        {
+                            juce::Logger::writeToLog("[Beautify] Node " + juce::String(lid) + 
+                                                    " (" + moduleType + ") not found in PinDatabase, using default");
+                        }
+                    }
+                    else if (lid == 0)
+                    {
+                        // Output node - use default width
+                        fallbackWidth = DEFAULT_NODE_WIDTH;
+                    }
+                }
+            }
+            catch (...)
+            {
+                juce::Logger::writeToLog("[Beautify] Exception getting module type for node " + 
+                                        juce::String(lid) + ", using default dimensions");
+            }
+            
+            nodeSize = ImVec2(fallbackWidth, fallbackHeight);
+        }
+        
+        nodeDimensionCache[lid] = nodeSize;
+        return nodeSize;
+    };
+
+    juce::Logger::writeToLog("[Beautify] Computing column widths...");
     std::vector<float> columnWidths(maxColumn + 1, 0.0f);
     for (int c = 0; c <= maxColumn; ++c)
     {
         float maxWidth = 0.0f;
         for (juce::uint32 lid : columns[c])
         {
-            ImVec2 nodeSize = ImNodes::GetNodeDimensions((int)lid);
+            ImVec2 nodeSize = getCachedNodeDimensions(lid);
             maxWidth = std::max(maxWidth, nodeSize.x);
         }
         columnWidths[c] = maxWidth;
     }
+    juce::Logger::writeToLog("[Beautify] Column widths computed");
 
     // Compute column X positions as cumulative sum of widths + padding
     std::vector<float> columnX(maxColumn + 1, 0.0f);
@@ -9491,7 +9838,9 @@ void ImGuiNodeEditorComponent::handleBeautifyLayout()
     for (int c = 0; c <= maxColumn; ++c)
     {
         columnX[c] = accumulatedX;
-        accumulatedX += columnWidths[c] + COLUMN_HORIZONTAL_PADDING;
+        // Use minimum width for empty columns to prevent layout issues
+        float colWidth = columnWidths[c] > 0.0f ? columnWidths[c] : DEFAULT_NODE_WIDTH;
+        accumulatedX += colWidth + COLUMN_HORIZONTAL_PADDING;
     }
 
     // Find the tallest column to center shorter ones
@@ -9501,7 +9850,7 @@ void ImGuiNodeEditorComponent::handleBeautifyLayout()
         float height = 0.0f;
         for (juce::uint32 lid : col)
         {
-            ImVec2 nodeSize = ImNodes::GetNodeDimensions((int)lid);
+            ImVec2 nodeSize = getCachedNodeDimensions(lid);
             height += nodeSize.y + NODE_VERTICAL_PADDING;
         }
         tallestColumnHeight = std::max(tallestColumnHeight, height);
@@ -9514,7 +9863,8 @@ void ImGuiNodeEditorComponent::handleBeautifyLayout()
         float columnHeight = 0.0f;
         for (juce::uint32 lid : columns[c])
         {
-            columnHeight += ImNodes::GetNodeDimensions((int)lid).y + NODE_VERTICAL_PADDING;
+            ImVec2 nodeSize = getCachedNodeDimensions(lid);
+            columnHeight += nodeSize.y + NODE_VERTICAL_PADDING;
         }
 
         // Start Y position (centered vertically)
@@ -9525,14 +9875,15 @@ void ImGuiNodeEditorComponent::handleBeautifyLayout()
             float x = columnX[c];
             pendingNodePositions[(int)lid] = ImVec2(x, currentY);
 
-            ImVec2 nodeSize = ImNodes::GetNodeDimensions((int)lid);
+            ImVec2 nodeSize = getCachedNodeDimensions(lid);
             currentY += nodeSize.y + NODE_VERTICAL_PADDING;
         }
     }
 
     // Position the output node to the right of all other modules, respecting its width
     float finalX = accumulatedX;
-    float outputNodeY = (tallestColumnHeight - ImNodes::GetNodeDimensions(0).y) / 2.0f;
+    ImVec2 outputNodeSize = getCachedNodeDimensions(0);
+    float outputNodeY = (tallestColumnHeight - outputNodeSize.y) / 2.0f;
     pendingNodePositions[0] = ImVec2(finalX, outputNodeY);
     juce::Logger::writeToLog("[Beautify] Applied position to Output Node");
 
@@ -11779,6 +12130,8 @@ void ImGuiNodeEditorComponent::drawInsertNodeOnLinkPopup()
             {"Chord Arp", "chord_arp"},
             // Sequencers
             {"Timeline", "timeline"},
+            {"Automation Lane", "automation_lane"},
+            {"Automato", "automato"},
             // Analysis (CV outputs)
             {"BPM Monitor", "bpm_monitor"}};
         const std::map<const char*, const char*> videoInsertable = {
@@ -13530,7 +13883,7 @@ ImGuiNodeEditorComponent::ModuleCategory ImGuiNodeEditorComponent::getModuleCate
 
     // --- 5. SEQUENCERS (Light Green) ---
     if (lower.contains("sequencer") || lower.contains("tempo_clock") || lower == "timeline" ||
-        lower == "chord_arp" || lower == "automation_lane")
+        lower == "chord_arp" || lower == "automation_lane" || lower == "automato")
         return ModuleCategory::Seq;
 
     // --- 6. MIDI (Vibrant Purple) ---
@@ -13711,6 +14064,7 @@ std::map<juce::String, std::pair<const char*, const char*>> ImGuiNodeEditorCompo
           "clock/gate outputs. Use External Takeover to drive the master transport."}},
         {"Function Generator", {"function_generator", "Custom function curves"}},
         {"Automation Lane", {"automation_lane", "Draw automation curves on scrolling timeline"}},
+        {"Automato", {"automato", "Record and replay 2D gestures with transport sync"}},
         {"Shaping Oscillator", {"shaping_oscillator", "Oscillator with waveshaping"}},
 
         // Utilities

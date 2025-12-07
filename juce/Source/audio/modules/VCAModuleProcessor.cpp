@@ -25,7 +25,7 @@ juce::AudioProcessorValueTreeState::ParameterLayout VCAModuleProcessor::createPa
     
     params.push_back(std::make_unique<juce::AudioParameterFloat>(
         "gain", "Gain",
-        juce::NormalisableRange<float>(-60.0f, 6.0f, 0.1f), 0.0f));
+        juce::NormalisableRange<float>(-60.0f, 6.0f, 0.1f), 6.0f)); // Default to +6dB max output
 
     params.push_back(std::make_unique<juce::AudioParameterBool>(
         "relativeGainMod", "Relative Gain Mod", true));

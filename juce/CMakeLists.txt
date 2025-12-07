@@ -862,6 +862,8 @@ target_sources(ColliderApp PRIVATE
     Source/audio/modules/AnimationModuleProcessor.cpp
     Source/audio/modules/AutomationLaneModuleProcessor.h
     Source/audio/modules/AutomationLaneModuleProcessor.cpp
+    Source/audio/modules/AutomatoModuleProcessor.h
+    Source/audio/modules/AutomatoModuleProcessor.cpp
     Source/video/VideoFrameManager.h
     Source/video/CameraEnumerator.h
     Source/audio/modules/WebcamLoaderModule.h
@@ -1040,6 +1042,8 @@ target_sources(PresetCreatorApp PRIVATE
     Source/preset_creator/ShortcutManager.cpp
     Source/preset_creator/ImGuiNodeEditorComponent.h
     Source/preset_creator/ImGuiNodeEditorComponent.cpp
+    Source/preset_creator/PatchGenerator.h
+    Source/preset_creator/PatchGenerator.cpp
     Source/preset_creator/PresetCreatorComponent.h
     Source/preset_creator/PresetCreatorComponent.cpp
     Source/preset_creator/ControllerPresetManager.h
@@ -1275,6 +1279,8 @@ target_sources(PresetCreatorApp PRIVATE
     Source/audio/modules/AnimationModuleProcessor.cpp
     Source/audio/modules/AutomationLaneModuleProcessor.h
     Source/audio/modules/AutomationLaneModuleProcessor.cpp
+    Source/audio/modules/AutomatoModuleProcessor.h
+    Source/audio/modules/AutomatoModuleProcessor.cpp
     Source/video/VideoFrameManager.h
     Source/video/CameraEnumerator.h
     Source/audio/modules/WebcamLoaderModule.h
