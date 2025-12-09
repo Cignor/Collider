@@ -700,26 +700,43 @@ void MovementDetectorModule::processBlock(juce::AudioBuffer<float>& buffer, juce
     auto cvOutBus = getBusBuffer(buffer, false, 0);
     if (cvOutBus.getNumChannels() < 8) return;
     
-    // Output detection channels (0-3)
-    cvOutBus.setSample(0, 0, lastResultForAudio.avgMotionX);
-    cvOutBus.setSample(1, 0, lastResultForAudio.avgMotionY);
-    cvOutBus.setSample(2, 0, lastResultForAudio.motionAmount);
+    // Output detection channels (0-3) - fill entire buffer with same value
+    const int numSamples = cvOutBus.getNumSamples();
+    
+    // Channel 0: Motion X
+    for (int s = 0; s < numSamples; ++s)
+    {
+        cvOutBus.setSample(0, s, lastResultForAudio.avgMotionX);
+    }
+    
+    // Channel 1: Motion Y
+    for (int s = 0; s < numSamples; ++s)
+    {
+        cvOutBus.setSample(1, s, lastResultForAudio.avgMotionY);
+    }
+    
+    // Channel 2: Motion Amount
+    for (int s = 0; s < numSamples; ++s)
+    {
+        cvOutBus.setSample(2, s, lastResultForAudio.motionAmount);
+    }
 
-    // Handle trigger
+    // Handle trigger (Channel 3)
     if (lastResultForAudio.motionTrigger)
     {
         triggerSamplesRemaining = (int)(getSampleRate() * 0.01);
         lastResultForAudio.motionTrigger = false; // Clear to avoid repeating
     }
 
+    const float gateValue = (triggerSamplesRemaining > 0) ? 1.0f : 0.0f;
     if (triggerSamplesRemaining > 0)
     {
-        cvOutBus.setSample(3, 0, 1.0f);
         triggerSamplesRemaining--;
     }
-    else
+    
+    for (int s = 0; s < numSamples; ++s)
     {
-        cvOutBus.setSample(3, 0, 0.0f);
+        cvOutBus.setSample(3, s, gateValue);
     }
     
     // Output zone gates (channels 4-7)
@@ -771,12 +788,6 @@ void MovementDetectorModule::processBlock(juce::AudioBuffer<float>& buffer, juce
                                  ", Green=" + juce::String(lastResultForAudio.zoneHits[1] ? 1.0f : 0.0f, 1) + 
                                  ", Blue=" + juce::String(lastResultForAudio.zoneHits[2] ? 1.0f : 0.0f, 1) + 
                                  ", Yellow=" + juce::String(lastResultForAudio.zoneHits[3] ? 1.0f : 0.0f, 1));
-    }
-    
-    // Fill rest of buffer (for channels 0-3 only, channels 4-7 are already filled above)
-    for (int channel = 0; channel < juce::jmin(4, cvOutBus.getNumChannels()); ++channel)
-    {
-        cvOutBus.copyFrom(channel, 1, cvOutBus, channel, 0, cvOutBus.getNumSamples() - 1);
     }
     
     // Passthrough Video ID on bus 1

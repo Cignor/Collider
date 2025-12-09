@@ -670,6 +670,7 @@ public:
         juce::uint32 logicalId,
         bool         isInput,
         PinDataType  targetType);
+    bool                  isInputConnected(juce::uint32 destLogicalId, int destChannel) const;
 
     // --- Recorder Output Shortcut ---
     void handleRecordOutput();

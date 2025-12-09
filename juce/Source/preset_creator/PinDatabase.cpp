@@ -229,6 +229,29 @@ void populatePinDatabase()
         { AudioPin("Out L", 0, PinDataType::Audio), AudioPin("Out R", 1, PinDataType::Audio) },
         {}
     );
+    db["cv_mixer"] = ModulePinInfo(
+        NodeWidth::Medium,
+        { 
+            AudioPin("In A", 0, PinDataType::CV), 
+            AudioPin("In B", 1, PinDataType::CV), 
+            AudioPin("In C", 2, PinDataType::CV), 
+            AudioPin("In D", 3, PinDataType::CV),
+            AudioPin("Crossfade Mod", 4, PinDataType::CV),
+            AudioPin("Level A Mod", 5, PinDataType::CV),
+            AudioPin("Level C Mod", 6, PinDataType::CV),
+            AudioPin("Level D Mod", 7, PinDataType::CV)
+        },
+        { 
+            AudioPin("Mix Out", 0, PinDataType::CV), 
+            AudioPin("Inv Out", 1, PinDataType::CV) 
+        },
+        {
+            ModPin("Crossfade", "crossfade", PinDataType::CV),
+            ModPin("Level A", "levelA", PinDataType::CV),
+            ModPin("Level C", "levelC", PinDataType::CV),
+            ModPin("Level D", "levelD", PinDataType::CV)
+        }
+    );
     db["reroute"] = ModulePinInfo(
         NodeWidth::Small,
         { AudioPin("In", 0, PinDataType::Audio) },

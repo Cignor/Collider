@@ -13605,6 +13605,28 @@ std::vector<AudioPin> ImGuiNodeEditorComponent::getPinsOfType(
     return matchingPins;
 }
 
+bool ImGuiNodeEditorComponent::isInputConnected(juce::uint32 destLogicalId, int destChannel) const
+{
+    if (synth == nullptr)
+        return false;
+
+    // Get all current connections
+    const auto connections = synth->getConnectionsInfo();
+
+    // Check if any connection targets this input
+    for (const auto& conn : connections)
+    {
+        // Check if this connection targets our destination input
+        // dstIsOutput == false means it's an input (not the main output node)
+        if (!conn.dstIsOutput && conn.dstLogicalId == destLogicalId && conn.dstChan == destChannel)
+        {
+            return true; // This input is already connected
+        }
+    }
+
+    return false; // Input is available
+}
+
 void ImGuiNodeEditorComponent::handleNodeChaining()
 {
     if (synth == nullptr)
@@ -13804,32 +13826,59 @@ void ImGuiNodeEditorComponent::handleColorCodedChaining(PinDataType targetType)
             continue;
         }
 
-        // Connect them one-to-one until we run out of available pins on either side.
-        int connectionsToMake = std::min((int)sourcePins.size(), (int)destPins.size());
-
-        for (int j = 0; j < connectionsToMake; ++j)
+        // Connect source pins to destination pins, skipping already-connected inputs.
+        // For each source pin, find the next available destination input.
+        for (size_t srcIdx = 0; srcIdx < sourcePins.size(); ++srcIdx)
         {
-            totalConnectionAttempts++;
-            bool connectResult = synth->connect(
-                sourceNodeId, sourcePins[j].channel, destNodeId, destPins[j].channel);
-            if (connectResult)
+            // Find the next available destination input pin
+            bool connected = false;
+            for (size_t dstIdx = 0; dstIdx < destPins.size(); ++dstIdx)
             {
-                totalConnectionsMade++;
-                juce::Logger::writeToLog(
-                    "[Color Chaining] Connected " + getTypeForLogical(sourceLid) + " -> " +
-                    getTypeForLogical(destLid));
-
-                // Check if the destination is a recorder and update its filename
-                if (auto* destModule = synth->getModuleForLogical(destLid))
+                // Check if this destination input is already connected
+                if (isInputConnected(destLid, destPins[dstIdx].channel))
                 {
-                    if (auto* recorder = dynamic_cast<RecordModuleProcessor*>(destModule))
+                    juce::Logger::writeToLog(
+                        "[Color Chaining] Skipping already-connected input: " +
+                        getTypeForLogical(destLid) + " channel " +
+                        juce::String(destPins[dstIdx].channel));
+                    continue; // Try next destination pin
+                }
+
+                // Attempt connection to this available input
+                totalConnectionAttempts++;
+                bool connectResult = synth->connect(
+                    sourceNodeId, sourcePins[srcIdx].channel, destNodeId, destPins[dstIdx].channel);
+                
+                if (connectResult)
+                {
+                    totalConnectionsMade++;
+                    connected = true;
+                    juce::Logger::writeToLog(
+                        "[Color Chaining] Connected " + getTypeForLogical(sourceLid) + ":" +
+                        juce::String(sourcePins[srcIdx].channel) + " -> " +
+                        getTypeForLogical(destLid) + ":" + juce::String(destPins[dstIdx].channel));
+
+                    // Check if the destination is a recorder and update its filename
+                    if (auto* destModule = synth->getModuleForLogical(destLid))
                     {
-                        if (auto* sourceModule = synth->getModuleForLogical(sourceLid))
+                        if (auto* recorder = dynamic_cast<RecordModuleProcessor*>(destModule))
                         {
-                            recorder->updateSuggestedFilename(sourceModule->getName());
+                            if (auto* sourceModule = synth->getModuleForLogical(sourceLid))
+                            {
+                                recorder->updateSuggestedFilename(sourceModule->getName());
+                            }
                         }
                     }
+                    break; // Successfully connected, move to next source pin
                 }
+            }
+
+            if (!connected)
+            {
+                juce::Logger::writeToLog(
+                    "[Color Chaining] No available input for " + getTypeForLogical(sourceLid) +
+                    ":" + juce::String(sourcePins[srcIdx].channel) + " -> " +
+                    getTypeForLogical(destLid) + " (all inputs connected or incompatible)");
             }
         }
     }
