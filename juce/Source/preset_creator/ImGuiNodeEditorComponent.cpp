@@ -124,6 +124,7 @@ bool ImGuiNodeEditorComponent::s_globalGpuEnabled = true;
 #include "../audio/modules/StrokeSequencerModuleProcessor.h"
 #include "../audio/modules/AnimationModuleProcessor.h"
 #include "../audio/modules/TempoClockModuleProcessor.h"
+#ifndef AUDIO_ONLY_BUILD
 #include "../audio/modules/WebcamLoaderModule.h"
 #include "../audio/modules/VideoFileLoaderModule.h"
 #include "../audio/modules/MovementDetectorModule.h"
@@ -136,6 +137,7 @@ bool ImGuiNodeEditorComponent::s_globalGpuEnabled = true;
 #include "../audio/modules/VideoFXModule.h"
 #include "../audio/modules/VideoDrawImpactModuleProcessor.h"
 #include "../audio/modules/CropVideoModule.h"
+#endif
 #include "../audio/modules/MapRangeModuleProcessor.h"
 #include "../audio/modules/LagProcessorModuleProcessor.h"
 #include "../audio/modules/DeCrackleModuleProcessor.h"
@@ -1103,7 +1105,8 @@ void ImGuiNodeEditorComponent::renderImGui()
         for (const auto& pair : generatedPositions)
         {
             // Store positions in pendingNodePositions, which will be applied during the next render
-            // This is safer than directly calling SetNodeGridSpacePos which might fail if nodes aren't ready
+            // This is safer than directly calling SetNodeGridSpacePos which might fail if nodes
+            // aren't ready
             pendingNodePositions[(int)pair.first] = ImVec2(pair.second.x, pair.second.y);
         }
         PatchGenerator::clearNodePositions();
@@ -1716,6 +1719,7 @@ void ImGuiNodeEditorComponent::renderImGui()
                     ImGui::EndMenu();
                 }
             }
+#ifndef AUDIO_ONLY_BUILD
             catch (const cv::Exception& e)
             {
                 juce::Logger::writeToLog(
@@ -1724,6 +1728,7 @@ void ImGuiNodeEditorComponent::renderImGui()
                     ImVec4(1.0f, 0.0f, 0.0f, 1.0f), "Error: Settings menu failed to load");
                 ImGui::TextDisabled("Check log file for details");
             }
+#endif
             catch (const std::exception& e)
             {
                 juce::Logger::writeToLog(
@@ -1800,6 +1805,7 @@ void ImGuiNodeEditorComponent::renderImGui()
                 ImGui::TextDisabled("Rebuild with CUDA support to enable");
 #endif
             }
+#ifndef AUDIO_ONLY_BUILD
             catch (const cv::Exception& e)
             {
                 juce::Logger::writeToLog("[Video GPU] OpenCV exception: " + juce::String(e.what()));
@@ -1807,6 +1813,7 @@ void ImGuiNodeEditorComponent::renderImGui()
                     ImVec4(1.0f, 0.0f, 0.0f, 1.0f), "Error: Video GPU menu failed to load");
                 ImGui::TextDisabled("Check log file for details");
             }
+#endif
             catch (const std::exception& e)
             {
                 juce::Logger::writeToLog("[Video GPU] Exception: " + juce::String(e.what()));
@@ -3855,6 +3862,7 @@ void ImGuiNodeEditorComponent::renderImGui()
             {
                 if (auto* mp = synth->getModuleForLogical(lid))
                 {
+#ifndef AUDIO_ONLY_BUILD
                     // Debug logging for ObjectDetectorModule (only once per second to reduce
                     // flooding)
                     if (auto* objDet = dynamic_cast<ObjectDetectorModule*>(mp))
@@ -3874,6 +3882,7 @@ void ImGuiNodeEditorComponent::renderImGui()
                             lastLoggedPtr.store((juce::pointer_sized_int)objDet);
                         }
                     }
+#endif
                     ImGui::PushID((int)lid);
 #if JUCE_DEBUG
                     ImGuiStackBalanceChecker parameterStackGuard;
@@ -4415,6 +4424,7 @@ void ImGuiNodeEditorComponent::renderImGui()
                             }
                         }
                     }
+#ifndef AUDIO_ONLY_BUILD
                     // --- SPECIAL RENDERING FOR OPENCV MODULES (WITH VIDEO FEED) ---
                     else if (auto* webcamModule = dynamic_cast<WebcamLoaderModule*>(mp))
                     {
@@ -4737,6 +4747,7 @@ void ImGuiNodeEditorComponent::renderImGui()
                         cropVideoModule->drawParametersInNode(
                             nodeContentWidth, isParamModulated, onModificationEnded);
                     }
+#endif
                     else
                     {
                         mp->drawParametersInNode(
@@ -9486,7 +9497,7 @@ void ImGuiNodeEditorComponent::handleBeautifyLayout()
             inDegree[conn.dstLogicalId]++;
         }
     }
-    
+
     // Debug: Log all connections to identify cycles
     juce::Logger::writeToLog("[Beautify] Graph connections:");
     for (const auto& pair : adjacencyList)
@@ -9533,17 +9544,17 @@ void ImGuiNodeEditorComponent::handleBeautifyLayout()
     for (juce::uint32 srcNode : sourceNodes)
         processQueue.push(srcNode);
 
-    const int MAX_COLUMNS = 50; // Maximum columns to prevent excessive spacing
-    std::map<juce::uint32, int> visitCount; // Track how many times each node is visited
+    const int                   MAX_COLUMNS = 50; // Maximum columns to prevent excessive spacing
+    std::map<juce::uint32, int> visitCount;       // Track how many times each node is visited
     const int MAX_VISITS = 3; // Allow a node to be visited up to 3 times (handles some cycles)
-    
+
     while (!processQueue.empty())
     {
         juce::uint32 u = processQueue.front();
         processQueue.pop();
-        
+
         visitCount[u]++;
-        
+
         // Safety check: if node visited too many times, cap its column and skip
         if (visitCount[u] > MAX_VISITS)
         {
@@ -9552,9 +9563,9 @@ void ImGuiNodeEditorComponent::handleBeautifyLayout()
             {
                 nodeColumn[u] = MAX_COLUMNS / 2; // Place in middle
             }
-            juce::Logger::writeToLog("[Beautify] WARNING: Node " + juce::String(u) + 
-                                    " visited " + juce::String(visitCount[u]) + 
-                                    " times (cycle detected), capping column");
+            juce::Logger::writeToLog(
+                "[Beautify] WARNING: Node " + juce::String(u) + " visited " +
+                juce::String(visitCount[u]) + " times (cycle detected), capping column");
             continue;
         }
 
@@ -9566,25 +9577,25 @@ void ImGuiNodeEditorComponent::handleBeautifyLayout()
 
         // Get current column of node u (default to 0 if not set)
         int uColumn = nodeColumn.count(u) > 0 ? nodeColumn[u] : 0;
-        
+
         for (juce::uint32 v : adjacencyList[u])
         {
             // The column for node 'v' is the maximum of its predecessors' columns + 1
             int newColumn = uColumn + 1;
-            
+
             // Cap the column to prevent excessive spacing
             if (newColumn > MAX_COLUMNS)
             {
                 newColumn = MAX_COLUMNS;
             }
-            
+
             // Only update if this gives a higher column (or if not set yet)
             // This allows nodes to be placed in the rightmost column they need
             if (nodeColumn.count(v) == 0 || newColumn > nodeColumn[v])
             {
                 nodeColumn[v] = newColumn;
                 maxColumn = std::max(maxColumn, newColumn);
-                
+
                 // Only push to queue if we haven't visited it too many times
                 if (visitCount.count(v) == 0 || visitCount[v] < MAX_VISITS)
                 {
@@ -9593,7 +9604,7 @@ void ImGuiNodeEditorComponent::handleBeautifyLayout()
             }
         }
     }
-    
+
     // Handle unvisited nodes (disconnected or part of cycles that weren't reached)
     for (const auto& mod : modules)
     {
@@ -9601,11 +9612,12 @@ void ImGuiNodeEditorComponent::handleBeautifyLayout()
         {
             // Assign to a reasonable column (middle)
             nodeColumn[mod.first] = MAX_COLUMNS / 2;
-            juce::Logger::writeToLog("[Beautify] Unvisited node " + juce::String(mod.first) + 
-                                    " assigned to column " + juce::String(MAX_COLUMNS / 2));
+            juce::Logger::writeToLog(
+                "[Beautify] Unvisited node " + juce::String(mod.first) + " assigned to column " +
+                juce::String(MAX_COLUMNS / 2));
         }
     }
-    
+
     // Ensure output node is assigned (rightmost)
     if (nodeColumn.count(0) == 0)
     {
@@ -9621,15 +9633,16 @@ void ImGuiNodeEditorComponent::handleBeautifyLayout()
             maxColumn++;
         }
     }
-    
+
     // Cap maxColumn to MAX_COLUMNS
     if (maxColumn > MAX_COLUMNS)
     {
         maxColumn = MAX_COLUMNS;
         juce::Logger::writeToLog("[Beautify] Capped maxColumn to " + juce::String(MAX_COLUMNS));
     }
-    
-    juce::Logger::writeToLog("[Beautify] Topological sort complete, maxColumn=" + juce::String(maxColumn));
+
+    juce::Logger::writeToLog(
+        "[Beautify] Topological sort complete, maxColumn=" + juce::String(maxColumn));
 
     // Re-populate columns based on assignments
     juce::Logger::writeToLog("[Beautify] Re-populating columns...");
@@ -9647,8 +9660,9 @@ void ImGuiNodeEditorComponent::handleBeautifyLayout()
         }
         else
         {
-            juce::Logger::writeToLog("[Beautify] WARNING: Node " + juce::String(pair.first) + 
-                                    " has invalid column " + juce::String(pair.second));
+            juce::Logger::writeToLog(
+                "[Beautify] WARNING: Node " + juce::String(pair.first) + " has invalid column " +
+                juce::String(pair.second));
         }
     }
 
@@ -9674,11 +9688,12 @@ void ImGuiNodeEditorComponent::handleBeautifyLayout()
                     if (dest == nodeId)
                     {
                         // Find the vertical index of the parent node
-                        int   parentColumn = nodeColumn[pair.first];
+                        int parentColumn = nodeColumn[pair.first];
                         if (parentColumn >= 0 && parentColumn < (int)columns.size())
                         {
                             auto& parentColVec = columns[parentColumn];
-                            auto  it = std::find(parentColVec.begin(), parentColVec.end(), pair.first);
+                            auto  it =
+                                std::find(parentColVec.begin(), parentColVec.end(), pair.first);
                             if (it != parentColVec.end())
                             {
                                 parentPositions.push_back(
@@ -9723,16 +9738,16 @@ void ImGuiNodeEditorComponent::handleBeautifyLayout()
 
     // Cache node dimensions to avoid repeated lookups
     std::map<juce::uint32, ImVec2> nodeDimensionCache;
-    
+
     auto getCachedNodeDimensions = [&](juce::uint32 lid) -> ImVec2 {
         auto it = nodeDimensionCache.find(lid);
         if (it != nodeDimensionCache.end())
         {
             return it->second;
         }
-        
+
         ImVec2 nodeSize = ImVec2(0.0f, 0.0f);
-        
+
         // Try to get actual rendered dimensions first
         // Use a timeout/check to avoid blocking on function_generator
         try
@@ -9741,24 +9756,24 @@ void ImGuiNodeEditorComponent::handleBeautifyLayout()
             if (actualSize.x > 0.0f && actualSize.y > 0.0f)
             {
                 nodeSize = actualSize;
-                juce::Logger::writeToLog("[Beautify] Node " + juce::String(lid) + 
-                                        " dimensions from ImNodes: " + 
-                                        juce::String(actualSize.x, 1) + "x" + 
-                                        juce::String(actualSize.y, 1));
+                juce::Logger::writeToLog(
+                    "[Beautify] Node " + juce::String(lid) + " dimensions from ImNodes: " +
+                    juce::String(actualSize.x, 1) + "x" + juce::String(actualSize.y, 1));
             }
         }
         catch (...)
         {
-            juce::Logger::writeToLog("[Beautify] Exception getting dimensions for node " + 
-                                    juce::String(lid) + ", using fallback");
+            juce::Logger::writeToLog(
+                "[Beautify] Exception getting dimensions for node " + juce::String(lid) +
+                ", using fallback");
         }
-        
+
         // Fallback: Use PinDatabase defaultWidth if dimensions are invalid
         if (nodeSize.x <= 0.0f || nodeSize.y <= 0.0f)
         {
             float fallbackWidth = DEFAULT_NODE_WIDTH;
             float fallbackHeight = DEFAULT_NODE_HEIGHT;
-            
+
             // Try to get module type and look up in PinDatabase
             try
             {
@@ -9768,12 +9783,12 @@ void ImGuiNodeEditorComponent::handleBeautifyLayout()
                     if (moduleType.isNotEmpty())
                     {
                         const auto& pinDb = getModulePinDatabase();
-                        auto pinIt = pinDb.find(moduleType.toLowerCase());
+                        auto        pinIt = pinDb.find(moduleType.toLowerCase());
                         if (pinIt != pinDb.end())
                         {
                             NodeWidth widthCategory = pinIt->second.defaultWidth;
-                            float categoryWidth = getWidthForCategory(widthCategory);
-                            
+                            float     categoryWidth = getWidthForCategory(widthCategory);
+
                             // If category width is valid (not Exception), use it
                             if (categoryWidth > 0.0f)
                             {
@@ -9783,19 +9798,21 @@ void ImGuiNodeEditorComponent::handleBeautifyLayout()
                             {
                                 // Exception nodes might have custom size, use wider default
                                 fallbackWidth = DEFAULT_NODE_WIDTH * 1.5f;
-                                juce::Logger::writeToLog("[Beautify] Node " + juce::String(lid) + 
-                                                        " (" + moduleType + ") is Exception size, using " + 
-                                                        juce::String(fallbackWidth, 1) + "px");
+                                juce::Logger::writeToLog(
+                                    "[Beautify] Node " + juce::String(lid) + " (" + moduleType +
+                                    ") is Exception size, using " + juce::String(fallbackWidth, 1) +
+                                    "px");
                             }
-                            
-                            juce::Logger::writeToLog("[Beautify] Node " + juce::String(lid) + 
-                                                    " (" + moduleType + ") fallback width: " + 
-                                                    juce::String(fallbackWidth, 1) + "px");
+
+                            juce::Logger::writeToLog(
+                                "[Beautify] Node " + juce::String(lid) + " (" + moduleType +
+                                ") fallback width: " + juce::String(fallbackWidth, 1) + "px");
                         }
                         else
                         {
-                            juce::Logger::writeToLog("[Beautify] Node " + juce::String(lid) + 
-                                                    " (" + moduleType + ") not found in PinDatabase, using default");
+                            juce::Logger::writeToLog(
+                                "[Beautify] Node " + juce::String(lid) + " (" + moduleType +
+                                ") not found in PinDatabase, using default");
                         }
                     }
                     else if (lid == 0)
@@ -9807,13 +9824,14 @@ void ImGuiNodeEditorComponent::handleBeautifyLayout()
             }
             catch (...)
             {
-                juce::Logger::writeToLog("[Beautify] Exception getting module type for node " + 
-                                        juce::String(lid) + ", using default dimensions");
+                juce::Logger::writeToLog(
+                    "[Beautify] Exception getting module type for node " + juce::String(lid) +
+                    ", using default dimensions");
             }
-            
+
             nodeSize = ImVec2(fallbackWidth, fallbackHeight);
         }
-        
+
         nodeDimensionCache[lid] = nodeSize;
         return nodeSize;
     };
@@ -9881,9 +9899,9 @@ void ImGuiNodeEditorComponent::handleBeautifyLayout()
     }
 
     // Position the output node to the right of all other modules, respecting its width
-    float finalX = accumulatedX;
+    float  finalX = accumulatedX;
     ImVec2 outputNodeSize = getCachedNodeDimensions(0);
-    float outputNodeY = (tallestColumnHeight - outputNodeSize.y) / 2.0f;
+    float  outputNodeY = (tallestColumnHeight - outputNodeSize.y) / 2.0f;
     pendingNodePositions[0] = ImVec2(finalX, outputNodeY);
     juce::Logger::writeToLog("[Beautify] Applied position to Output Node");
 
@@ -11255,6 +11273,7 @@ void ImGuiNodeEditorComponent::renderMetaModuleEditor(MetaModuleEditorSession& s
 
     ImNodes::SetCurrentContext(editorContext);
 }
+#ifndef AUDIO_ONLY_BUILD
 void ImGuiNodeEditorComponent::handleColorTrackerAutoConnectPolyVCO(
     ColorTrackerModule* colorTracker,
     juce::uint32        colorTrackerLid)
@@ -11331,7 +11350,9 @@ void ImGuiNodeEditorComponent::handleColorTrackerAutoConnectPolyVCO(
     juce::Logger::writeToLog(
         "[ColorTracker Auto-Connect] Connected " + juce::String(numColors) + " colors to PolyVCO.");
 }
+#endif
 
+#ifndef AUDIO_ONLY_BUILD
 void ImGuiNodeEditorComponent::handleColorTrackerAutoConnectSamplers(
     ColorTrackerModule* colorTracker,
     juce::uint32        colorTrackerLid)
@@ -11395,6 +11416,7 @@ void ImGuiNodeEditorComponent::handleColorTrackerAutoConnectSamplers(
         "[ColorTracker Auto-Connect] Connected " + juce::String(numColors) +
         " colors to Sample Loaders.");
 }
+#endif
 
 void ImGuiNodeEditorComponent::handleChordArpAutoConnectPolyVCO(
     ChordArpModuleProcessor* chordArp,
@@ -11791,6 +11813,7 @@ void ImGuiNodeEditorComponent::handleAutoConnectionRequests()
         }
 
         // --- Check ColorTracker Flags ---
+#ifndef AUDIO_ONLY_BUILD
         if (auto* colorTracker = dynamic_cast<ColorTrackerModule*>(module))
         {
             if (colorTracker->autoConnectPolyVCOTriggered.exchange(false))
@@ -11806,6 +11829,7 @@ void ImGuiNodeEditorComponent::handleAutoConnectionRequests()
                 return;
             }
         }
+#endif
 
         // --- Check ChordArp Flags ---
         if (auto* chordArp = dynamic_cast<ChordArpModuleProcessor*>(module))
@@ -13848,7 +13872,7 @@ void ImGuiNodeEditorComponent::handleColorCodedChaining(PinDataType targetType)
                 totalConnectionAttempts++;
                 bool connectResult = synth->connect(
                     sourceNodeId, sourcePins[srcIdx].channel, destNodeId, destPins[dstIdx].channel);
-                
+
                 if (connectResult)
                 {
                     totalConnectionsMade++;
@@ -14029,6 +14053,7 @@ std::map<juce::String, std::pair<const char*, const char*>> ImGuiNodeEditorCompo
         {"Physics", {"physics", "2D physics simulation for audio modulation"}},
         {"Animation", {"animation", "Skeletal animation system with glTF file support"}},
 
+#ifndef AUDIO_ONLY_BUILD
         // OpenCV (Computer Vision)
         {"Webcam Loader",
          {"webcam_loader",
@@ -14078,6 +14103,7 @@ std::map<juce::String, std::pair<const char*, const char*>> ImGuiNodeEditorCompo
          {"semantic_segmentmentation",
           "Uses deep learning to segment video into semantic regions and outputs detected areas as "
           "CV"}},
+#endif
 
         // Effects
         {"VCF", {"vcf", "Voltage Controlled Filter"}},
@@ -14992,9 +15018,11 @@ void ImGuiNodeEditorComponent::populateDragInsertSuggestions()
     addInputModule(PinDataType::Raw, "map_range");
     addInputModule(PinDataType::Raw, "scope");
 
+#ifndef AUDIO_ONLY_BUILD
     addInputModule(PinDataType::Video, "video_fx");
     addInputModule(PinDataType::Video, "video_draw_impact");
     addInputModule(PinDataType::Video, "crop_video");
+#endif
 
     // Seed curated sources for fast access when connecting INTO inputs (needs outputs).
     addOutputModule(PinDataType::Audio, "vco");
@@ -15013,15 +15041,17 @@ void ImGuiNodeEditorComponent::populateDragInsertSuggestions()
 
     addOutputModule(PinDataType::Raw, "value");
 
+#ifndef AUDIO_ONLY_BUILD
     addOutputModule(PinDataType::Video, "webcam_loader");
     addOutputModule(PinDataType::Video, "video_file_loader");
+#endif
 
-    for (auto type :
-         {PinDataType::Audio,
-          PinDataType::CV,
-          PinDataType::Gate,
-          PinDataType::Raw,
-          PinDataType::Video})
+    std::vector<PinDataType> types = {
+        PinDataType::Audio, PinDataType::CV, PinDataType::Gate, PinDataType::Raw};
+#ifndef AUDIO_ONLY_BUILD
+    types.push_back(PinDataType::Video);
+#endif
+    for (auto type : types)
     {
         addInputModule(type, "reroute");
         addOutputModule(type, "reroute");

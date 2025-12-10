@@ -1,0 +1,12 @@
+# CMake generation dependency list for this directory.
+C:/Program Files/CMake/share/cmake-4.1/Modules/BasicConfigVersion-ExactVersion.cmake.in
+C:/Program Files/CMake/share/cmake-4.1/Modules/CMakeDependentOption.cmake
+C:/Program Files/CMake/share/cmake-4.1/Modules/CMakePackageConfigHelpers.cmake
+C:/Program Files/CMake/share/cmake-4.1/Modules/WriteBasicConfigVersionFile.cmake
+H:/0000_CODE/01_collider_pyo/juce/build-audio-only/CMakeFiles/cmake.verify_globs
+H:/0000_CODE/01_collider_pyo/juce/build-audio-only/_deps/juce-src/CMakeLists.txt
+H:/0000_CODE/01_collider_pyo/juce/build-audio-only/_deps/juce-src/extras/Build/CMake/JUCECheckAtomic.cmake
+H:/0000_CODE/01_collider_pyo/juce/build-audio-only/_deps/juce-src/extras/Build/CMake/JUCEConfig.cmake.in
+H:/0000_CODE/01_collider_pyo/juce/build-audio-only/_deps/juce-src/extras/Build/CMake/JUCEHelperTargets.cmake
+H:/0000_CODE/01_collider_pyo/juce/build-audio-only/_deps/juce-src/extras/Build/CMake/JUCEModuleSupport.cmake
+H:/0000_CODE/01_collider_pyo/juce/build-audio-only/_deps/juce-src/extras/Build/CMake/JUCEUtils.cmake

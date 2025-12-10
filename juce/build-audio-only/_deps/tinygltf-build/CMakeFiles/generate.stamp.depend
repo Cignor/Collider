@@ -1,0 +1,7 @@
+# CMake generation dependency list for this directory.
+C:/Program Files/CMake/share/cmake-4.1/Modules/CMakePackageConfigHelpers.cmake
+C:/Program Files/CMake/share/cmake-4.1/Modules/GNUInstallDirs.cmake
+C:/Program Files/CMake/share/cmake-4.1/Modules/WriteBasicConfigVersionFile.cmake
+H:/0000_CODE/01_collider_pyo/juce/build-audio-only/CMakeFiles/cmake.verify_globs
+H:/0000_CODE/01_collider_pyo/juce/build-audio-only/_deps/tinygltf-src/CMakeLists.txt
+H:/0000_CODE/01_collider_pyo/juce/build-audio-only/_deps/tinygltf-src/cmake/TinyGLTFConfig.cmake.in

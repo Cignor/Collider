@@ -1,0 +1,10 @@
+^H:\0000_CODE\01_COLLIDER_PYO\JUCE\BUILD-AUDIO-ONLY\_DEPS\RUBBERBAND_FC-SUBBUILD\CMAKEFILES\59DEBF8D3D8643E41EF1033B89AE481B\GENERATE.STAMP.RULE
+setlocal
+"C:\Program Files\CMake\bin\cmake.exe" -SH:/0000_CODE/01_collider_pyo/juce/build-audio-only/_deps/rubberband_fc-subbuild -BH:/0000_CODE/01_collider_pyo/juce/build-audio-only/_deps/rubberband_fc-subbuild --check-stamp-list CMakeFiles/generate.stamp.list --vs-solution-file H:/0000_CODE/01_collider_pyo/juce/build-audio-only/_deps/rubberband_fc-subbuild/rubberband_fc-populate.sln
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal & call :cmErrorLevel %errorlevel% & goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd

@@ -1,5 +1,6 @@
 #pragma once
 #include <juce_core/juce_core.h>
+#include <juce_graphics/juce_graphics.h>
 #include <map>
 #include "../audio/graph/ModularSynthProcessor.h"
 #include "PinDatabase.h"
@@ -15,7 +16,7 @@ enum class PatchArchetype
     AcidLead,     // 303-style lead
     Pluck,        // Plucked string
     WarmPad,      // Warm pad sound
-    DeepBass,      // Deep bass
+    DeepBass,     // Deep bass
     BrightLead,   // Bright lead synth
     Arpeggio,     // Arpeggiated sequence
     Percussion,   // Drum-like sounds
@@ -58,11 +59,17 @@ private:
         const juce::String&    type,
         float                  x,
         float                  y);
-    
+
     // Pin/Parameter Query Helpers
-    static int findPinIndex(const juce::String& moduleType, const juce::String& pinName, bool isOutput);
-    static bool paramExists(ModularSynthProcessor* synth, juce::uint32 moduleId, const juce::String& paramId);
-    
+    static int findPinIndex(
+        const juce::String& moduleType,
+        const juce::String& pinName,
+        bool                isOutput);
+    static bool paramExists(
+        ModularSynthProcessor* synth,
+        juce::uint32           moduleId,
+        const juce::String&    paramId);
+
     // Safe Connection/Parameter Setting (with validation and logging)
     static bool safeConnect(
         ModularSynthProcessor* synth,
@@ -81,7 +88,7 @@ private:
         juce::uint32           moduleId,
         const juce::String&    paramId,
         float                  value);
-    
+
     // Legacy functions (kept for compatibility, but should use safe versions)
     static void connect(
         ModularSynthProcessor* synth,

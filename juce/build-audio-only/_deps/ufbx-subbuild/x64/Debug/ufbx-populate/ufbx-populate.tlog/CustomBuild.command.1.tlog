@@ -1,0 +1,150 @@
+^H:\0000_CODE\01_COLLIDER_PYO\JUCE\BUILD-AUDIO-ONLY\_DEPS\UFBX-SUBBUILD\CMAKEFILES\4BEBE9752989C58E5BCE3D444455E093\UFBX-POPULATE-MKDIR.RULE
+setlocal
+"C:\Program Files\CMake\bin\cmake.exe" -Dcfgdir=/Debug -P H:/0000_CODE/01_collider_pyo/juce/build-audio-only/_deps/ufbx-subbuild/ufbx-populate-prefix/tmp/ufbx-populate-mkdirs.cmake
+if %errorlevel% neq 0 goto :cmEnd
+"C:\Program Files\CMake\bin\cmake.exe" -E touch H:/0000_CODE/01_collider_pyo/juce/build-audio-only/_deps/ufbx-subbuild/ufbx-populate-prefix/src/ufbx-populate-stamp/Debug/ufbx-populate-mkdir
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal & call :cmErrorLevel %errorlevel% & goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd
+^H:\0000_CODE\01_COLLIDER_PYO\JUCE\BUILD-AUDIO-ONLY\_DEPS\UFBX-SUBBUILD\CMAKEFILES\4BEBE9752989C58E5BCE3D444455E093\UFBX-POPULATE-DOWNLOAD.RULE
+setlocal
+cd H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps
+if %errorlevel% neq 0 goto :cmEnd
+H:
+if %errorlevel% neq 0 goto :cmEnd
+"C:\Program Files\CMake\bin\cmake.exe" -DCMAKE_MESSAGE_LOG_LEVEL=VERBOSE -P H:/0000_CODE/01_collider_pyo/juce/build-audio-only/_deps/ufbx-subbuild/ufbx-populate-prefix/tmp/ufbx-populate-gitclone.cmake
+if %errorlevel% neq 0 goto :cmEnd
+"C:\Program Files\CMake\bin\cmake.exe" -E touch H:/0000_CODE/01_collider_pyo/juce/build-audio-only/_deps/ufbx-subbuild/ufbx-populate-prefix/src/ufbx-populate-stamp/Debug/ufbx-populate-download
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal & call :cmErrorLevel %errorlevel% & goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd
+^H:\0000_CODE\01_COLLIDER_PYO\JUCE\BUILD-AUDIO-ONLY\_DEPS\UFBX-SUBBUILD\CMAKEFILES\4BEBE9752989C58E5BCE3D444455E093\UFBX-POPULATE-UPDATE.RULE
+setlocal
+cd H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\ufbx-src
+if %errorlevel% neq 0 goto :cmEnd
+H:
+if %errorlevel% neq 0 goto :cmEnd
+"C:\Program Files\CMake\bin\cmake.exe" -Dcan_fetch=YES -DCMAKE_MESSAGE_LOG_LEVEL=VERBOSE -P H:/0000_CODE/01_collider_pyo/juce/build-audio-only/_deps/ufbx-subbuild/ufbx-populate-prefix/tmp/ufbx-populate-gitupdate.cmake
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal & call :cmErrorLevel %errorlevel% & goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd
+^H:\0000_CODE\01_COLLIDER_PYO\JUCE\BUILD-AUDIO-ONLY\_DEPS\UFBX-SUBBUILD\CMAKEFILES\4BEBE9752989C58E5BCE3D444455E093\UFBX-POPULATE-PATCH.RULE
+setlocal
+"C:\Program Files\CMake\bin\cmake.exe" -E echo_append
+if %errorlevel% neq 0 goto :cmEnd
+"C:\Program Files\CMake\bin\cmake.exe" -E touch H:/0000_CODE/01_collider_pyo/juce/build-audio-only/_deps/ufbx-subbuild/ufbx-populate-prefix/src/ufbx-populate-stamp/Debug/ufbx-populate-patch
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal & call :cmErrorLevel %errorlevel% & goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd
+^H:\0000_CODE\01_COLLIDER_PYO\JUCE\BUILD-AUDIO-ONLY\_DEPS\UFBX-SUBBUILD\CMAKEFILES\4BEBE9752989C58E5BCE3D444455E093\UFBX-POPULATE-CONFIGURE.RULE
+setlocal
+cd H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\ufbx-build
+if %errorlevel% neq 0 goto :cmEnd
+H:
+if %errorlevel% neq 0 goto :cmEnd
+"C:\Program Files\CMake\bin\cmake.exe" -E echo_append
+if %errorlevel% neq 0 goto :cmEnd
+"C:\Program Files\CMake\bin\cmake.exe" -E touch H:/0000_CODE/01_collider_pyo/juce/build-audio-only/_deps/ufbx-subbuild/ufbx-populate-prefix/src/ufbx-populate-stamp/Debug/ufbx-populate-configure
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal & call :cmErrorLevel %errorlevel% & goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd
+^H:\0000_CODE\01_COLLIDER_PYO\JUCE\BUILD-AUDIO-ONLY\_DEPS\UFBX-SUBBUILD\CMAKEFILES\4BEBE9752989C58E5BCE3D444455E093\UFBX-POPULATE-BUILD.RULE
+setlocal
+cd H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\ufbx-build
+if %errorlevel% neq 0 goto :cmEnd
+H:
+if %errorlevel% neq 0 goto :cmEnd
+"C:\Program Files\CMake\bin\cmake.exe" -E echo_append
+if %errorlevel% neq 0 goto :cmEnd
+"C:\Program Files\CMake\bin\cmake.exe" -E touch H:/0000_CODE/01_collider_pyo/juce/build-audio-only/_deps/ufbx-subbuild/ufbx-populate-prefix/src/ufbx-populate-stamp/Debug/ufbx-populate-build
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal & call :cmErrorLevel %errorlevel% & goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd
+^H:\0000_CODE\01_COLLIDER_PYO\JUCE\BUILD-AUDIO-ONLY\_DEPS\UFBX-SUBBUILD\CMAKEFILES\4BEBE9752989C58E5BCE3D444455E093\UFBX-POPULATE-INSTALL.RULE
+setlocal
+cd H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\ufbx-build
+if %errorlevel% neq 0 goto :cmEnd
+H:
+if %errorlevel% neq 0 goto :cmEnd
+"C:\Program Files\CMake\bin\cmake.exe" -E echo_append
+if %errorlevel% neq 0 goto :cmEnd
+"C:\Program Files\CMake\bin\cmake.exe" -E touch H:/0000_CODE/01_collider_pyo/juce/build-audio-only/_deps/ufbx-subbuild/ufbx-populate-prefix/src/ufbx-populate-stamp/Debug/ufbx-populate-install
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal & call :cmErrorLevel %errorlevel% & goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd
+^H:\0000_CODE\01_COLLIDER_PYO\JUCE\BUILD-AUDIO-ONLY\_DEPS\UFBX-SUBBUILD\CMAKEFILES\4BEBE9752989C58E5BCE3D444455E093\UFBX-POPULATE-TEST.RULE
+setlocal
+cd H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\ufbx-build
+if %errorlevel% neq 0 goto :cmEnd
+H:
+if %errorlevel% neq 0 goto :cmEnd
+"C:\Program Files\CMake\bin\cmake.exe" -E echo_append
+if %errorlevel% neq 0 goto :cmEnd
+"C:\Program Files\CMake\bin\cmake.exe" -E touch H:/0000_CODE/01_collider_pyo/juce/build-audio-only/_deps/ufbx-subbuild/ufbx-populate-prefix/src/ufbx-populate-stamp/Debug/ufbx-populate-test
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal & call :cmErrorLevel %errorlevel% & goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd
+^H:\0000_CODE\01_COLLIDER_PYO\JUCE\BUILD-AUDIO-ONLY\_DEPS\UFBX-SUBBUILD\CMAKEFILES\DED978F7E8872C93ACB80AF7AD7A8C68\UFBX-POPULATE-COMPLETE.RULE
+setlocal
+"C:\Program Files\CMake\bin\cmake.exe" -E make_directory H:/0000_CODE/01_collider_pyo/juce/build-audio-only/_deps/ufbx-subbuild/CMakeFiles/Debug
+if %errorlevel% neq 0 goto :cmEnd
+"C:\Program Files\CMake\bin\cmake.exe" -E touch H:/0000_CODE/01_collider_pyo/juce/build-audio-only/_deps/ufbx-subbuild/CMakeFiles/Debug/ufbx-populate-complete
+if %errorlevel% neq 0 goto :cmEnd
+"C:\Program Files\CMake\bin\cmake.exe" -E touch H:/0000_CODE/01_collider_pyo/juce/build-audio-only/_deps/ufbx-subbuild/ufbx-populate-prefix/src/ufbx-populate-stamp/Debug/ufbx-populate-done
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal & call :cmErrorLevel %errorlevel% & goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd
+^H:\0000_CODE\01_COLLIDER_PYO\JUCE\BUILD-AUDIO-ONLY\_DEPS\UFBX-SUBBUILD\CMAKEFILES\BC2A78B1ED78EF126BA25EEE96CC6591\UFBX-POPULATE.RULE
+setlocal
+:cmEnd
+endlocal & call :cmErrorLevel %errorlevel% & goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd
+^H:\0000_CODE\01_COLLIDER_PYO\JUCE\BUILD-AUDIO-ONLY\_DEPS\UFBX-SUBBUILD\CMAKELISTS.TXT
+setlocal
+"C:\Program Files\CMake\bin\cmake.exe" -SH:/0000_CODE/01_collider_pyo/juce/build-audio-only/_deps/ufbx-subbuild -BH:/0000_CODE/01_collider_pyo/juce/build-audio-only/_deps/ufbx-subbuild --check-stamp-file H:/0000_CODE/01_collider_pyo/juce/build-audio-only/_deps/ufbx-subbuild/CMakeFiles/generate.stamp
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal & call :cmErrorLevel %errorlevel% & goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd

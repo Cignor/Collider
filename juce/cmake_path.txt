@@ -1,0 +1,4 @@
+C:\Program Files\CMake\bin\cmake.exe
+cmake version 4.1.1
+
+CMake suite maintained and supported by Kitware (kitware.com/cmake).

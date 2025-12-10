@@ -80,6 +80,7 @@
 #include "../modules/PhysicsModuleProcessor.h"
 #include "../modules/StrokeSequencerModuleProcessor.h"
 #include "../modules/AnimationModuleProcessor.h"
+#ifndef AUDIO_ONLY_BUILD
 #include "../modules/WebcamLoaderModule.h"
 #include "../modules/VideoFileLoaderModule.h"
 #include "../modules/VideoFXModule.h"
@@ -92,6 +93,7 @@
 #include "../modules/ColorTrackerModule.h"
 #include "../modules/ContourDetectorModule.h"
 #include "../modules/CropVideoModule.h"
+#endif
 #include "../modules/InletModuleProcessor.h"
 #include "../modules/OutletModuleProcessor.h"
 #include "../modules/MetaModuleProcessor.h"
@@ -330,6 +332,7 @@ void ModularSynthProcessor::processBlock(
                 // SAFETY NET
                 if (modulePtr != nullptr)
                 {
+#ifndef AUDIO_ONLY_BUILD
                     // CRITICAL: Check if this is ObjectDetectorModule and if it's being destroyed
                     if (auto* objDet = dynamic_cast<ObjectDetectorModule*>(modulePtr.get()))
                     {
@@ -351,6 +354,7 @@ void ModularSynthProcessor::processBlock(
                             continue; // Skip this module - it's being destroyed
                         }
                     }
+#endif
                     modulePtr->setTimingInfo(m_transportState);
                 }
                 else
@@ -449,6 +453,7 @@ void ModularSynthProcessor::processBlock(
             silentCtr = 0;
         }
     }
+#ifndef AUDIO_ONLY_BUILD
     catch (const std::exception& e)
     {
         juce::Logger::writeToLog(
@@ -462,6 +467,16 @@ void ModularSynthProcessor::processBlock(
         buffer.clear();
         return;
     }
+#else
+    catch (...)
+    {
+        // In audio-only build, we still want to catch unexpected exceptions to prevent crashes,
+        // but we don't have the specific logging for OpenCV/etc.
+        // Or we can just re-throw or ignore if we are confident.
+        // For safety, let's just clear buffer.
+        buffer.clear();
+    }
+#endif
 }
 
 void ModularSynthProcessor::getStateInformation(juce::MemoryBlock& destData)
@@ -971,7 +986,8 @@ static std::map<juce::String, Creator>& getModuleFactory()
         reg("waveshaper", [] { return std::make_unique<WaveshaperModuleProcessor>(); });
         reg("8bandshaper", [] { return std::make_unique<MultiBandShaperModuleProcessor>(); });
         reg("granulator", [] { return std::make_unique<GranulatorModuleProcessor>(); });
-        reg("spatial_granulator", [] { return std::make_unique<SpatialGranulatorModuleProcessor>(); });
+        reg("spatial_granulator",
+            [] { return std::make_unique<SpatialGranulatorModuleProcessor>(); });
         reg("harmonic_shaper", [] { return std::make_unique<HarmonicShaperModuleProcessor>(); });
         reg("debug", [] { return std::make_unique<DebugModuleProcessor>(); });
         reg("input_debug", [] { return std::make_unique<InputDebugModuleProcessor>(); });
@@ -1019,6 +1035,7 @@ static std::map<juce::String, Creator>& getModuleFactory()
         reg("physics", [] { return std::make_unique<PhysicsModuleProcessor>(); });
         reg("animation", [] { return std::make_unique<AnimationModuleProcessor>(); });
         reg("bpm_monitor", [] { return std::make_unique<BPMMonitorModuleProcessor>(); });
+#ifndef AUDIO_ONLY_BUILD
         reg("webcam_loader", [] { return std::make_unique<WebcamLoaderModule>(); });
         reg("video_file_loader", [] { return std::make_unique<VideoFileLoaderModule>(); });
         reg("video_fx", [] { return std::make_unique<VideoFXModule>(); });
@@ -1031,6 +1048,7 @@ static std::map<juce::String, Creator>& getModuleFactory()
         reg("color_tracker", [] { return std::make_unique<ColorTrackerModule>(); });
         reg("contour_detector", [] { return std::make_unique<ContourDetectorModule>(); });
         reg("crop_video", [] { return std::make_unique<CropVideoModule>(); });
+#endif
         reg("stroke_sequencer", [] { return std::make_unique<StrokeSequencerModuleProcessor>(); });
         reg("chord_arp", [] { return std::make_unique<ChordArpModuleProcessor>(); });
 
@@ -1340,8 +1358,10 @@ void ModularSynthProcessor::commitChanges()
                     std::shared_ptr<ModuleProcessor>(proc, [nodePtr](ModuleProcessor*) {});
                 newProcessors->push_back(processor);
                 juce::String moduleType = "unknown";
+#ifndef AUDIO_ONLY_BUILD
                 if (auto* objDet = dynamic_cast<ObjectDetectorModule*>(proc))
                     moduleType = "ObjectDetector";
+#endif
                 juce::Logger::writeToLog(
                     "[PATCH_SWITCH][commitChanges] Adding module L-ID " + juce::String(pair.first) +
                     " type=" + moduleType + " (ptr: 0x" + juce::String::toHexString((int64_t)proc) +
@@ -1402,6 +1422,7 @@ void ModularSynthProcessor::clearAll()
                         juce::String::toHexString((juce::pointer_sized_int)modulePtr));
 
                     // Check if it's ObjectDetectorModule
+#ifndef AUDIO_ONLY_BUILD
                     if (auto* objDet = dynamic_cast<ObjectDetectorModule*>(modulePtr))
                     {
                         juce::Logger::writeToLog(
@@ -1409,6 +1430,7 @@ void ModularSynthProcessor::clearAll()
                             "isBeingDestroyed()=" +
                             juce::String(objDet->isBeingDestroyed() ? "YES" : "NO"));
                     }
+#endif
                 }
             }
 

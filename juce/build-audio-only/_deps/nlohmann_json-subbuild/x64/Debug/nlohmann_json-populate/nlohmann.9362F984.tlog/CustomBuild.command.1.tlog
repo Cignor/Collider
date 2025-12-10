@@ -1,0 +1,150 @@
+^H:\0000_CODE\01_COLLIDER_PYO\JUCE\BUILD-AUDIO-ONLY\_DEPS\NLOHMANN_JSON-SUBBUILD\CMAKEFILES\0CFA6491F50F836BCDA1F340A83E8861\NLOHMANN_JSON-POPULATE-MKDIR.RULE
+setlocal
+"C:\Program Files\CMake\bin\cmake.exe" -Dcfgdir=/Debug -P H:/0000_CODE/01_collider_pyo/juce/build-audio-only/_deps/nlohmann_json-subbuild/nlohmann_json-populate-prefix/tmp/nlohmann_json-populate-mkdirs.cmake
+if %errorlevel% neq 0 goto :cmEnd
+"C:\Program Files\CMake\bin\cmake.exe" -E touch H:/0000_CODE/01_collider_pyo/juce/build-audio-only/_deps/nlohmann_json-subbuild/nlohmann_json-populate-prefix/src/nlohmann_json-populate-stamp/Debug/nlohmann_json-populate-mkdir
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal & call :cmErrorLevel %errorlevel% & goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd
+^H:\0000_CODE\01_COLLIDER_PYO\JUCE\BUILD-AUDIO-ONLY\_DEPS\NLOHMANN_JSON-SUBBUILD\CMAKEFILES\0CFA6491F50F836BCDA1F340A83E8861\NLOHMANN_JSON-POPULATE-DOWNLOAD.RULE
+setlocal
+cd H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps
+if %errorlevel% neq 0 goto :cmEnd
+H:
+if %errorlevel% neq 0 goto :cmEnd
+"C:\Program Files\CMake\bin\cmake.exe" -DCMAKE_MESSAGE_LOG_LEVEL=VERBOSE -P H:/0000_CODE/01_collider_pyo/juce/build-audio-only/_deps/nlohmann_json-subbuild/nlohmann_json-populate-prefix/tmp/nlohmann_json-populate-gitclone.cmake
+if %errorlevel% neq 0 goto :cmEnd
+"C:\Program Files\CMake\bin\cmake.exe" -E touch H:/0000_CODE/01_collider_pyo/juce/build-audio-only/_deps/nlohmann_json-subbuild/nlohmann_json-populate-prefix/src/nlohmann_json-populate-stamp/Debug/nlohmann_json-populate-download
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal & call :cmErrorLevel %errorlevel% & goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd
+^H:\0000_CODE\01_COLLIDER_PYO\JUCE\BUILD-AUDIO-ONLY\_DEPS\NLOHMANN_JSON-SUBBUILD\CMAKEFILES\0CFA6491F50F836BCDA1F340A83E8861\NLOHMANN_JSON-POPULATE-UPDATE.RULE
+setlocal
+cd H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\nlohmann_json-src
+if %errorlevel% neq 0 goto :cmEnd
+H:
+if %errorlevel% neq 0 goto :cmEnd
+"C:\Program Files\CMake\bin\cmake.exe" -Dcan_fetch=YES -DCMAKE_MESSAGE_LOG_LEVEL=VERBOSE -P H:/0000_CODE/01_collider_pyo/juce/build-audio-only/_deps/nlohmann_json-subbuild/nlohmann_json-populate-prefix/tmp/nlohmann_json-populate-gitupdate.cmake
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal & call :cmErrorLevel %errorlevel% & goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd
+^H:\0000_CODE\01_COLLIDER_PYO\JUCE\BUILD-AUDIO-ONLY\_DEPS\NLOHMANN_JSON-SUBBUILD\CMAKEFILES\0CFA6491F50F836BCDA1F340A83E8861\NLOHMANN_JSON-POPULATE-PATCH.RULE
+setlocal
+"C:\Program Files\CMake\bin\cmake.exe" -E echo_append
+if %errorlevel% neq 0 goto :cmEnd
+"C:\Program Files\CMake\bin\cmake.exe" -E touch H:/0000_CODE/01_collider_pyo/juce/build-audio-only/_deps/nlohmann_json-subbuild/nlohmann_json-populate-prefix/src/nlohmann_json-populate-stamp/Debug/nlohmann_json-populate-patch
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal & call :cmErrorLevel %errorlevel% & goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd
+^H:\0000_CODE\01_COLLIDER_PYO\JUCE\BUILD-AUDIO-ONLY\_DEPS\NLOHMANN_JSON-SUBBUILD\CMAKEFILES\0CFA6491F50F836BCDA1F340A83E8861\NLOHMANN_JSON-POPULATE-CONFIGURE.RULE
+setlocal
+cd H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\nlohmann_json-build
+if %errorlevel% neq 0 goto :cmEnd
+H:
+if %errorlevel% neq 0 goto :cmEnd
+"C:\Program Files\CMake\bin\cmake.exe" -E echo_append
+if %errorlevel% neq 0 goto :cmEnd
+"C:\Program Files\CMake\bin\cmake.exe" -E touch H:/0000_CODE/01_collider_pyo/juce/build-audio-only/_deps/nlohmann_json-subbuild/nlohmann_json-populate-prefix/src/nlohmann_json-populate-stamp/Debug/nlohmann_json-populate-configure
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal & call :cmErrorLevel %errorlevel% & goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd
+^H:\0000_CODE\01_COLLIDER_PYO\JUCE\BUILD-AUDIO-ONLY\_DEPS\NLOHMANN_JSON-SUBBUILD\CMAKEFILES\0CFA6491F50F836BCDA1F340A83E8861\NLOHMANN_JSON-POPULATE-BUILD.RULE
+setlocal
+cd H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\nlohmann_json-build
+if %errorlevel% neq 0 goto :cmEnd
+H:
+if %errorlevel% neq 0 goto :cmEnd
+"C:\Program Files\CMake\bin\cmake.exe" -E echo_append
+if %errorlevel% neq 0 goto :cmEnd
+"C:\Program Files\CMake\bin\cmake.exe" -E touch H:/0000_CODE/01_collider_pyo/juce/build-audio-only/_deps/nlohmann_json-subbuild/nlohmann_json-populate-prefix/src/nlohmann_json-populate-stamp/Debug/nlohmann_json-populate-build
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal & call :cmErrorLevel %errorlevel% & goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd
+^H:\0000_CODE\01_COLLIDER_PYO\JUCE\BUILD-AUDIO-ONLY\_DEPS\NLOHMANN_JSON-SUBBUILD\CMAKEFILES\0CFA6491F50F836BCDA1F340A83E8861\NLOHMANN_JSON-POPULATE-INSTALL.RULE
+setlocal
+cd H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\nlohmann_json-build
+if %errorlevel% neq 0 goto :cmEnd
+H:
+if %errorlevel% neq 0 goto :cmEnd
+"C:\Program Files\CMake\bin\cmake.exe" -E echo_append
+if %errorlevel% neq 0 goto :cmEnd
+"C:\Program Files\CMake\bin\cmake.exe" -E touch H:/0000_CODE/01_collider_pyo/juce/build-audio-only/_deps/nlohmann_json-subbuild/nlohmann_json-populate-prefix/src/nlohmann_json-populate-stamp/Debug/nlohmann_json-populate-install
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal & call :cmErrorLevel %errorlevel% & goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd
+^H:\0000_CODE\01_COLLIDER_PYO\JUCE\BUILD-AUDIO-ONLY\_DEPS\NLOHMANN_JSON-SUBBUILD\CMAKEFILES\0CFA6491F50F836BCDA1F340A83E8861\NLOHMANN_JSON-POPULATE-TEST.RULE
+setlocal
+cd H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\nlohmann_json-build
+if %errorlevel% neq 0 goto :cmEnd
+H:
+if %errorlevel% neq 0 goto :cmEnd
+"C:\Program Files\CMake\bin\cmake.exe" -E echo_append
+if %errorlevel% neq 0 goto :cmEnd
+"C:\Program Files\CMake\bin\cmake.exe" -E touch H:/0000_CODE/01_collider_pyo/juce/build-audio-only/_deps/nlohmann_json-subbuild/nlohmann_json-populate-prefix/src/nlohmann_json-populate-stamp/Debug/nlohmann_json-populate-test
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal & call :cmErrorLevel %errorlevel% & goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd
+^H:\0000_CODE\01_COLLIDER_PYO\JUCE\BUILD-AUDIO-ONLY\_DEPS\NLOHMANN_JSON-SUBBUILD\CMAKEFILES\D20A0DD7C7DAD394C299F7420AF5DE26\NLOHMANN_JSON-POPULATE-COMPLETE.RULE
+setlocal
+"C:\Program Files\CMake\bin\cmake.exe" -E make_directory H:/0000_CODE/01_collider_pyo/juce/build-audio-only/_deps/nlohmann_json-subbuild/CMakeFiles/Debug
+if %errorlevel% neq 0 goto :cmEnd
+"C:\Program Files\CMake\bin\cmake.exe" -E touch H:/0000_CODE/01_collider_pyo/juce/build-audio-only/_deps/nlohmann_json-subbuild/CMakeFiles/Debug/nlohmann_json-populate-complete
+if %errorlevel% neq 0 goto :cmEnd
+"C:\Program Files\CMake\bin\cmake.exe" -E touch H:/0000_CODE/01_collider_pyo/juce/build-audio-only/_deps/nlohmann_json-subbuild/nlohmann_json-populate-prefix/src/nlohmann_json-populate-stamp/Debug/nlohmann_json-populate-done
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal & call :cmErrorLevel %errorlevel% & goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd
+^H:\0000_CODE\01_COLLIDER_PYO\JUCE\BUILD-AUDIO-ONLY\_DEPS\NLOHMANN_JSON-SUBBUILD\CMAKEFILES\ECCD5764E391A5A606CA7623EC709B61\NLOHMANN_JSON-POPULATE.RULE
+setlocal
+:cmEnd
+endlocal & call :cmErrorLevel %errorlevel% & goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd
+^H:\0000_CODE\01_COLLIDER_PYO\JUCE\BUILD-AUDIO-ONLY\_DEPS\NLOHMANN_JSON-SUBBUILD\CMAKELISTS.TXT
+setlocal
+"C:\Program Files\CMake\bin\cmake.exe" -SH:/0000_CODE/01_collider_pyo/juce/build-audio-only/_deps/nlohmann_json-subbuild -BH:/0000_CODE/01_collider_pyo/juce/build-audio-only/_deps/nlohmann_json-subbuild --check-stamp-file H:/0000_CODE/01_collider_pyo/juce/build-audio-only/_deps/nlohmann_json-subbuild/CMakeFiles/generate.stamp
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal & call :cmErrorLevel %errorlevel% & goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd

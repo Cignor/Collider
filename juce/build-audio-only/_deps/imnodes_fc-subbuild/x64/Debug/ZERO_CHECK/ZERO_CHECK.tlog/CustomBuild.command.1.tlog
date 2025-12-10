@@ -1,0 +1,10 @@
+^H:\0000_CODE\01_COLLIDER_PYO\JUCE\BUILD-AUDIO-ONLY\_DEPS\IMNODES_FC-SUBBUILD\CMAKEFILES\327A7FF19DC03B5711B09A14D52ADC7E\GENERATE.STAMP.RULE
+setlocal
+"C:\Program Files\CMake\bin\cmake.exe" -SH:/0000_CODE/01_collider_pyo/juce/build-audio-only/_deps/imnodes_fc-subbuild -BH:/0000_CODE/01_collider_pyo/juce/build-audio-only/_deps/imnodes_fc-subbuild --check-stamp-list CMakeFiles/generate.stamp.list --vs-solution-file H:/0000_CODE/01_collider_pyo/juce/build-audio-only/_deps/imnodes_fc-subbuild/imnodes_fc-populate.sln
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal & call :cmErrorLevel %errorlevel% & goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd

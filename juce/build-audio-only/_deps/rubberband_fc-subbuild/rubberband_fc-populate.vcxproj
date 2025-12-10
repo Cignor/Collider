@@ -1,0 +1,303 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project DefaultTargets="Build" ToolsVersion="17.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup>
+    <PreferredToolArchitecture>x64</PreferredToolArchitecture>
+  </PropertyGroup>
+  <ItemGroup Label="ProjectConfigurations">
+    <ProjectConfiguration Include="Debug|x64">
+      <Configuration>Debug</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+  </ItemGroup>
+  <PropertyGroup Label="Globals">
+    <ProjectGuid>{BCD1F99E-7299-377F-91F4-2354A0C9157E}</ProjectGuid>
+    <Keyword>Win32Proj</Keyword>
+    <WindowsTargetPlatformVersion>10.0.26100.0</WindowsTargetPlatformVersion>
+    <Platform>x64</Platform>
+    <ProjectName>rubberband_fc-populate</ProjectName>
+    <VCProjectUpgraderObjectName>NoUpgrade</VCProjectUpgraderObjectName>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">
+    <ConfigurationType>Utility</ConfigurationType>
+    <CharacterSet>MultiByte</CharacterSet>
+    <PlatformToolset>v143</PlatformToolset>
+    <UseDebugLibraries>true</UseDebugLibraries>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
+  <ImportGroup Label="ExtensionSettings">
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <PropertyGroup Label="UserMacros" />
+  <PropertyGroup>
+    <_ProjectFileVersion>10.0.20506.1</_ProjectFileVersion>
+    <IntDir Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">$(Platform)\$(Configuration)\$(ProjectName)\</IntDir>
+  </PropertyGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <Midl>
+      <AdditionalIncludeDirectories>%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <OutputDirectory>$(ProjectDir)/$(IntDir)</OutputDirectory>
+      <HeaderFileName>%(Filename).h</HeaderFileName>
+      <TypeLibraryName>%(Filename).tlb</TypeLibraryName>
+      <InterfaceIdentifierFileName>%(Filename)_i.c</InterfaceIdentifierFileName>
+      <ProxyFileName>%(Filename)_p.c</ProxyFileName>
+    </Midl>
+  </ItemDefinitionGroup>
+  <ItemGroup>
+    <CustomBuild Include="H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\rubberband_fc-subbuild\CMakeFiles\28d5acfa9bdafe41d0a6dfc9161c48d2\rubberband_fc-populate-mkdir.rule">
+      <BuildInParallel Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</BuildInParallel>
+      <Message Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Creating directories for 'rubberband_fc-populate'</Message>
+      <Command Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">setlocal
+"C:\Program Files\CMake\bin\cmake.exe" -Dcfgdir=/Debug -P H:/0000_CODE/01_collider_pyo/juce/build-audio-only/_deps/rubberband_fc-subbuild/rubberband_fc-populate-prefix/tmp/rubberband_fc-populate-mkdirs.cmake
+if %errorlevel% neq 0 goto :cmEnd
+"C:\Program Files\CMake\bin\cmake.exe" -E touch H:/0000_CODE/01_collider_pyo/juce/build-audio-only/_deps/rubberband_fc-subbuild/rubberband_fc-populate-prefix/src/rubberband_fc-populate-stamp/Debug/rubberband_fc-populate-mkdir
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal &amp; call :cmErrorLevel %errorlevel% &amp; goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd</Command>
+      <AdditionalInputs Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">%(AdditionalInputs)</AdditionalInputs>
+      <Outputs Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\rubberband_fc-subbuild\rubberband_fc-populate-prefix\src\rubberband_fc-populate-stamp\Debug\rubberband_fc-populate-mkdir</Outputs>
+      <LinkObjects Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">false</LinkObjects>
+    </CustomBuild>
+  </ItemGroup>
+  <ItemGroup>
+    <CustomBuild Include="H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\rubberband_fc-subbuild\CMakeFiles\28d5acfa9bdafe41d0a6dfc9161c48d2\rubberband_fc-populate-download.rule">
+      <Message Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Performing download step (git clone) for 'rubberband_fc-populate'</Message>
+      <Command Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">setlocal
+cd H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps
+if %errorlevel% neq 0 goto :cmEnd
+H:
+if %errorlevel% neq 0 goto :cmEnd
+"C:\Program Files\CMake\bin\cmake.exe" -DCMAKE_MESSAGE_LOG_LEVEL=VERBOSE -P H:/0000_CODE/01_collider_pyo/juce/build-audio-only/_deps/rubberband_fc-subbuild/rubberband_fc-populate-prefix/tmp/rubberband_fc-populate-gitclone.cmake
+if %errorlevel% neq 0 goto :cmEnd
+"C:\Program Files\CMake\bin\cmake.exe" -E touch H:/0000_CODE/01_collider_pyo/juce/build-audio-only/_deps/rubberband_fc-subbuild/rubberband_fc-populate-prefix/src/rubberband_fc-populate-stamp/Debug/rubberband_fc-populate-download
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal &amp; call :cmErrorLevel %errorlevel% &amp; goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd</Command>
+      <AdditionalInputs Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\rubberband_fc-subbuild\rubberband_fc-populate-prefix\src\rubberband_fc-populate-stamp\rubberband_fc-populate-gitinfo.txt;H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\rubberband_fc-subbuild\rubberband_fc-populate-prefix\src\rubberband_fc-populate-stamp\Debug\rubberband_fc-populate-mkdir;%(AdditionalInputs)</AdditionalInputs>
+      <Outputs Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\rubberband_fc-subbuild\rubberband_fc-populate-prefix\src\rubberband_fc-populate-stamp\Debug\rubberband_fc-populate-download</Outputs>
+      <LinkObjects Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">false</LinkObjects>
+    </CustomBuild>
+  </ItemGroup>
+  <ItemGroup>
+    <CustomBuild Include="H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\rubberband_fc-subbuild\CMakeFiles\28d5acfa9bdafe41d0a6dfc9161c48d2\rubberband_fc-populate-update.rule">
+      <Message Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Performing update step for 'rubberband_fc-populate'</Message>
+      <Command Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">setlocal
+cd H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\rubberband_fc-src
+if %errorlevel% neq 0 goto :cmEnd
+H:
+if %errorlevel% neq 0 goto :cmEnd
+"C:\Program Files\CMake\bin\cmake.exe" -Dcan_fetch=YES -DCMAKE_MESSAGE_LOG_LEVEL=VERBOSE -P H:/0000_CODE/01_collider_pyo/juce/build-audio-only/_deps/rubberband_fc-subbuild/rubberband_fc-populate-prefix/tmp/rubberband_fc-populate-gitupdate.cmake
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal &amp; call :cmErrorLevel %errorlevel% &amp; goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd</Command>
+      <AdditionalInputs Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\rubberband_fc-subbuild\rubberband_fc-populate-prefix\tmp\rubberband_fc-populate-gitupdate.cmake;H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\rubberband_fc-subbuild\rubberband_fc-populate-prefix\src\rubberband_fc-populate-stamp\rubberband_fc-populate-update-info.txt;H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\rubberband_fc-subbuild\rubberband_fc-populate-prefix\src\rubberband_fc-populate-stamp\Debug\rubberband_fc-populate-download;%(AdditionalInputs)</AdditionalInputs>
+      <Outputs Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\rubberband_fc-subbuild\rubberband_fc-populate-prefix\src\rubberband_fc-populate-stamp\Debug\rubberband_fc-populate-update</Outputs>
+      <LinkObjects Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">false</LinkObjects>
+      <VerifyInputsAndOutputsExist Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">false</VerifyInputsAndOutputsExist>
+    </CustomBuild>
+  </ItemGroup>
+  <ItemGroup>
+    <CustomBuild Include="H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\rubberband_fc-subbuild\CMakeFiles\28d5acfa9bdafe41d0a6dfc9161c48d2\rubberband_fc-populate-patch.rule">
+      <Message Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">No patch step for 'rubberband_fc-populate'</Message>
+      <Command Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">setlocal
+"C:\Program Files\CMake\bin\cmake.exe" -E echo_append
+if %errorlevel% neq 0 goto :cmEnd
+"C:\Program Files\CMake\bin\cmake.exe" -E touch H:/0000_CODE/01_collider_pyo/juce/build-audio-only/_deps/rubberband_fc-subbuild/rubberband_fc-populate-prefix/src/rubberband_fc-populate-stamp/Debug/rubberband_fc-populate-patch
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal &amp; call :cmErrorLevel %errorlevel% &amp; goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd</Command>
+      <AdditionalInputs Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\rubberband_fc-subbuild\rubberband_fc-populate-prefix\src\rubberband_fc-populate-stamp\rubberband_fc-populate-patch-info.txt;H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\rubberband_fc-subbuild\rubberband_fc-populate-prefix\src\rubberband_fc-populate-stamp\Debug\rubberband_fc-populate-update;%(AdditionalInputs)</AdditionalInputs>
+      <Outputs Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\rubberband_fc-subbuild\rubberband_fc-populate-prefix\src\rubberband_fc-populate-stamp\Debug\rubberband_fc-populate-patch</Outputs>
+      <LinkObjects Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">false</LinkObjects>
+      <VerifyInputsAndOutputsExist Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">false</VerifyInputsAndOutputsExist>
+    </CustomBuild>
+  </ItemGroup>
+  <ItemGroup>
+    <CustomBuild Include="H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\rubberband_fc-subbuild\CMakeFiles\28d5acfa9bdafe41d0a6dfc9161c48d2\rubberband_fc-populate-configure.rule">
+      <BuildInParallel Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</BuildInParallel>
+      <Message Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">No configure step for 'rubberband_fc-populate'</Message>
+      <Command Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">setlocal
+cd H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\rubberband_fc-build
+if %errorlevel% neq 0 goto :cmEnd
+H:
+if %errorlevel% neq 0 goto :cmEnd
+"C:\Program Files\CMake\bin\cmake.exe" -E echo_append
+if %errorlevel% neq 0 goto :cmEnd
+"C:\Program Files\CMake\bin\cmake.exe" -E touch H:/0000_CODE/01_collider_pyo/juce/build-audio-only/_deps/rubberband_fc-subbuild/rubberband_fc-populate-prefix/src/rubberband_fc-populate-stamp/Debug/rubberband_fc-populate-configure
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal &amp; call :cmErrorLevel %errorlevel% &amp; goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd</Command>
+      <AdditionalInputs Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\rubberband_fc-subbuild\rubberband_fc-populate-prefix\tmp\rubberband_fc-populate-cfgcmd.txt;H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\rubberband_fc-subbuild\rubberband_fc-populate-prefix\src\rubberband_fc-populate-stamp\Debug\rubberband_fc-populate-patch;%(AdditionalInputs)</AdditionalInputs>
+      <Outputs Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\rubberband_fc-subbuild\rubberband_fc-populate-prefix\src\rubberband_fc-populate-stamp\Debug\rubberband_fc-populate-configure</Outputs>
+      <LinkObjects Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">false</LinkObjects>
+    </CustomBuild>
+  </ItemGroup>
+  <ItemGroup>
+    <CustomBuild Include="H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\rubberband_fc-subbuild\CMakeFiles\28d5acfa9bdafe41d0a6dfc9161c48d2\rubberband_fc-populate-build.rule">
+      <BuildInParallel Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</BuildInParallel>
+      <Message Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">No build step for 'rubberband_fc-populate'</Message>
+      <Command Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">setlocal
+cd H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\rubberband_fc-build
+if %errorlevel% neq 0 goto :cmEnd
+H:
+if %errorlevel% neq 0 goto :cmEnd
+"C:\Program Files\CMake\bin\cmake.exe" -E echo_append
+if %errorlevel% neq 0 goto :cmEnd
+"C:\Program Files\CMake\bin\cmake.exe" -E touch H:/0000_CODE/01_collider_pyo/juce/build-audio-only/_deps/rubberband_fc-subbuild/rubberband_fc-populate-prefix/src/rubberband_fc-populate-stamp/Debug/rubberband_fc-populate-build
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal &amp; call :cmErrorLevel %errorlevel% &amp; goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd</Command>
+      <AdditionalInputs Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\rubberband_fc-subbuild\rubberband_fc-populate-prefix\src\rubberband_fc-populate-stamp\Debug\rubberband_fc-populate-configure;%(AdditionalInputs)</AdditionalInputs>
+      <Outputs Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\rubberband_fc-subbuild\rubberband_fc-populate-prefix\src\rubberband_fc-populate-stamp\Debug\rubberband_fc-populate-build</Outputs>
+      <LinkObjects Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">false</LinkObjects>
+    </CustomBuild>
+  </ItemGroup>
+  <ItemGroup>
+    <CustomBuild Include="H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\rubberband_fc-subbuild\CMakeFiles\28d5acfa9bdafe41d0a6dfc9161c48d2\rubberband_fc-populate-install.rule">
+      <BuildInParallel Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</BuildInParallel>
+      <Message Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">No install step for 'rubberband_fc-populate'</Message>
+      <Command Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">setlocal
+cd H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\rubberband_fc-build
+if %errorlevel% neq 0 goto :cmEnd
+H:
+if %errorlevel% neq 0 goto :cmEnd
+"C:\Program Files\CMake\bin\cmake.exe" -E echo_append
+if %errorlevel% neq 0 goto :cmEnd
+"C:\Program Files\CMake\bin\cmake.exe" -E touch H:/0000_CODE/01_collider_pyo/juce/build-audio-only/_deps/rubberband_fc-subbuild/rubberband_fc-populate-prefix/src/rubberband_fc-populate-stamp/Debug/rubberband_fc-populate-install
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal &amp; call :cmErrorLevel %errorlevel% &amp; goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd</Command>
+      <AdditionalInputs Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\rubberband_fc-subbuild\rubberband_fc-populate-prefix\src\rubberband_fc-populate-stamp\Debug\rubberband_fc-populate-build;%(AdditionalInputs)</AdditionalInputs>
+      <Outputs Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\rubberband_fc-subbuild\rubberband_fc-populate-prefix\src\rubberband_fc-populate-stamp\Debug\rubberband_fc-populate-install</Outputs>
+      <LinkObjects Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">false</LinkObjects>
+    </CustomBuild>
+  </ItemGroup>
+  <ItemGroup>
+    <CustomBuild Include="H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\rubberband_fc-subbuild\CMakeFiles\28d5acfa9bdafe41d0a6dfc9161c48d2\rubberband_fc-populate-test.rule">
+      <BuildInParallel Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</BuildInParallel>
+      <Message Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">No test step for 'rubberband_fc-populate'</Message>
+      <Command Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">setlocal
+cd H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\rubberband_fc-build
+if %errorlevel% neq 0 goto :cmEnd
+H:
+if %errorlevel% neq 0 goto :cmEnd
+"C:\Program Files\CMake\bin\cmake.exe" -E echo_append
+if %errorlevel% neq 0 goto :cmEnd
+"C:\Program Files\CMake\bin\cmake.exe" -E touch H:/0000_CODE/01_collider_pyo/juce/build-audio-only/_deps/rubberband_fc-subbuild/rubberband_fc-populate-prefix/src/rubberband_fc-populate-stamp/Debug/rubberband_fc-populate-test
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal &amp; call :cmErrorLevel %errorlevel% &amp; goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd</Command>
+      <AdditionalInputs Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\rubberband_fc-subbuild\rubberband_fc-populate-prefix\src\rubberband_fc-populate-stamp\Debug\rubberband_fc-populate-install;%(AdditionalInputs)</AdditionalInputs>
+      <Outputs Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\rubberband_fc-subbuild\rubberband_fc-populate-prefix\src\rubberband_fc-populate-stamp\Debug\rubberband_fc-populate-test</Outputs>
+      <LinkObjects Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">false</LinkObjects>
+    </CustomBuild>
+  </ItemGroup>
+  <ItemGroup>
+    <CustomBuild Include="H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\rubberband_fc-subbuild\CMakeFiles\2c2332d1996a35b11ebf564662eccbae\rubberband_fc-populate-complete.rule">
+      <BuildInParallel Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</BuildInParallel>
+      <Message Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Completed 'rubberband_fc-populate'</Message>
+      <Command Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">setlocal
+"C:\Program Files\CMake\bin\cmake.exe" -E make_directory H:/0000_CODE/01_collider_pyo/juce/build-audio-only/_deps/rubberband_fc-subbuild/CMakeFiles/Debug
+if %errorlevel% neq 0 goto :cmEnd
+"C:\Program Files\CMake\bin\cmake.exe" -E touch H:/0000_CODE/01_collider_pyo/juce/build-audio-only/_deps/rubberband_fc-subbuild/CMakeFiles/Debug/rubberband_fc-populate-complete
+if %errorlevel% neq 0 goto :cmEnd
+"C:\Program Files\CMake\bin\cmake.exe" -E touch H:/0000_CODE/01_collider_pyo/juce/build-audio-only/_deps/rubberband_fc-subbuild/rubberband_fc-populate-prefix/src/rubberband_fc-populate-stamp/Debug/rubberband_fc-populate-done
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal &amp; call :cmErrorLevel %errorlevel% &amp; goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd</Command>
+      <AdditionalInputs Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\rubberband_fc-subbuild\rubberband_fc-populate-prefix\src\rubberband_fc-populate-stamp\Debug\rubberband_fc-populate-install;H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\rubberband_fc-subbuild\rubberband_fc-populate-prefix\src\rubberband_fc-populate-stamp\Debug\rubberband_fc-populate-mkdir;H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\rubberband_fc-subbuild\rubberband_fc-populate-prefix\src\rubberband_fc-populate-stamp\Debug\rubberband_fc-populate-download;H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\rubberband_fc-subbuild\rubberband_fc-populate-prefix\src\rubberband_fc-populate-stamp\Debug\rubberband_fc-populate-update;H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\rubberband_fc-subbuild\rubberband_fc-populate-prefix\src\rubberband_fc-populate-stamp\Debug\rubberband_fc-populate-patch;H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\rubberband_fc-subbuild\rubberband_fc-populate-prefix\src\rubberband_fc-populate-stamp\Debug\rubberband_fc-populate-configure;H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\rubberband_fc-subbuild\rubberband_fc-populate-prefix\src\rubberband_fc-populate-stamp\Debug\rubberband_fc-populate-build;H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\rubberband_fc-subbuild\rubberband_fc-populate-prefix\src\rubberband_fc-populate-stamp\Debug\rubberband_fc-populate-test;%(AdditionalInputs)</AdditionalInputs>
+      <Outputs Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\rubberband_fc-subbuild\CMakeFiles\Debug\rubberband_fc-populate-complete</Outputs>
+      <LinkObjects Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">false</LinkObjects>
+      <VerifyInputsAndOutputsExist Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">false</VerifyInputsAndOutputsExist>
+    </CustomBuild>
+  </ItemGroup>
+  <ItemGroup>
+    <CustomBuild Include="H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\rubberband_fc-subbuild\CMakeFiles\59debf8d3d8643e41ef1033b89ae481b\rubberband_fc-populate.rule">
+      <BuildInParallel Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</BuildInParallel>
+      <Message Condition="'$(Configuration)|$(Platform)'=='Debug|x64'"></Message>
+      <Command Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">setlocal
+:cmEnd
+endlocal &amp; call :cmErrorLevel %errorlevel% &amp; goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd</Command>
+      <AdditionalInputs Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\rubberband_fc-subbuild\CMakeFiles\Debug\rubberband_fc-populate-complete;%(AdditionalInputs)</AdditionalInputs>
+      <Outputs Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\rubberband_fc-subbuild\CMakeFiles\rubberband_fc-populate</Outputs>
+      <LinkObjects Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">false</LinkObjects>
+      <VerifyInputsAndOutputsExist Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">false</VerifyInputsAndOutputsExist>
+    </CustomBuild>
+  </ItemGroup>
+  <ItemGroup>
+    <CustomBuild Include="H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\rubberband_fc-subbuild\CMakeLists.txt">
+      <UseUtf8Encoding>Always</UseUtf8Encoding>
+      <Message Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Building Custom Rule H:/0000_CODE/01_collider_pyo/juce/build-audio-only/_deps/rubberband_fc-subbuild/CMakeLists.txt</Message>
+      <Command Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">setlocal
+"C:\Program Files\CMake\bin\cmake.exe" -SH:/0000_CODE/01_collider_pyo/juce/build-audio-only/_deps/rubberband_fc-subbuild -BH:/0000_CODE/01_collider_pyo/juce/build-audio-only/_deps/rubberband_fc-subbuild --check-stamp-file H:/0000_CODE/01_collider_pyo/juce/build-audio-only/_deps/rubberband_fc-subbuild/CMakeFiles/generate.stamp
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal &amp; call :cmErrorLevel %errorlevel% &amp; goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd</Command>
+      <AdditionalInputs Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">C:\Program Files\CMake\share\cmake-4.1\Modules\CMakeDetermineSystem.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\CMakeGenericSystem.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\CMakeInitializeConfigs.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\CMakeSystem.cmake.in;C:\Program Files\CMake\share\cmake-4.1\Modules\CMakeSystemSpecificInformation.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\CMakeSystemSpecificInitialize.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\ExternalProject.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\ExternalProject\PatchInfo.txt.in;C:\Program Files\CMake\share\cmake-4.1\Modules\ExternalProject\RepositoryInfo.txt.in;C:\Program Files\CMake\share\cmake-4.1\Modules\ExternalProject\UpdateInfo.txt.in;C:\Program Files\CMake\share\cmake-4.1\Modules\ExternalProject\cfgcmd.txt.in;C:\Program Files\CMake\share\cmake-4.1\Modules\ExternalProject\gitclone.cmake.in;C:\Program Files\CMake\share\cmake-4.1\Modules\ExternalProject\gitupdate.cmake.in;C:\Program Files\CMake\share\cmake-4.1\Modules\ExternalProject\mkdirs.cmake.in;C:\Program Files\CMake\share\cmake-4.1\Modules\ExternalProject\shared_internal_commands.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Platform\Windows-Initialize.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Platform\Windows.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Platform\WindowsPaths.cmake;H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\rubberband_fc-subbuild\CMakeFiles\4.1.1\CMakeSystem.cmake;H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\rubberband_fc-subbuild\rubberband_fc-populate-prefix\tmp\rubberband_fc-populate-mkdirs.cmake;%(AdditionalInputs)</AdditionalInputs>
+      <Outputs Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\rubberband_fc-subbuild\CMakeFiles\generate.stamp</Outputs>
+      <LinkObjects Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">false</LinkObjects>
+    </CustomBuild>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\rubberband_fc-subbuild\CMakeFiles\rubberband_fc-populate">
+    </None>
+  </ItemGroup>
+  <ItemGroup />
+  <ItemGroup>
+    <ProjectReference Include="H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\rubberband_fc-subbuild\ZERO_CHECK.vcxproj">
+      <Project>{41508D94-DE68-31D9-B65F-BA77367D68C8}</Project>
+      <Name>ZERO_CHECK</Name>
+      <ReferenceOutputAssembly>false</ReferenceOutputAssembly>
+      <CopyToOutputDirectory>Never</CopyToOutputDirectory>
+    </ProjectReference>
+  </ItemGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+  <ImportGroup Label="ExtensionTargets">
+  </ImportGroup>
+</Project>

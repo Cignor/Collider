@@ -187,9 +187,20 @@ target_include_directories(ufbx_static PUBLIC ${ufbx_SOURCE_DIR})
 # ==============================================================================
 # CUDA & cuDNN Configuration (MUST be done before OpenCV)
 # ==============================================================================
-# Find the CUDA Toolkit. This will use the default installation path or environment
-# variables. This is essential for OpenCV's configuration to detect CUDA correctly.
-find_package(CUDAToolkit REQUIRED)
+option(ENABLE_CUDA "Enable CUDA support" ON)
+
+if(ENABLE_CUDA)
+    # Find the CUDA Toolkit. This will use the default installation path or environment
+    # variables. This is essential for OpenCV's configuration to detect CUDA correctly.
+    find_package(CUDAToolkit QUIET)
+    
+    if(NOT CUDAToolkit_FOUND)
+        message(WARNING "CUDA Toolkit not found. Disabling CUDA support.")
+        set(ENABLE_CUDA OFF)
+    endif()
+endif()
+
+if(ENABLE_CUDA)
 
 # Find CUDA runtime library for direct linking if CUDAToolkit::cudart target is not available
 if(MSVC)
@@ -238,20 +249,29 @@ elseif(EXISTS "C:/Program Files/NVIDIA/CUDNN/v9.14/include/cudnn.h")
     message(STATUS "Found standalone cuDNN at C:/Program Files/NVIDIA/CUDNN/v9.14/")
 endif()
 
-# Configure OpenCV based on cuDNN availability
-if(CUDNN_FOUND)
-    set(WITH_CUDNN ON CACHE BOOL "" FORCE)
-    set(OPENCV_DNN_CUDA ON CACHE BOOL "" FORCE)
+    # Configure OpenCV based on cuDNN availability
+    if(CUDNN_FOUND)
+        set(WITH_CUDNN ON CACHE BOOL "" FORCE)
+        set(OPENCV_DNN_CUDA ON CACHE BOOL "" FORCE)
+    else()
+        message(WARNING "cuDNN not found. OpenCV will build without cuDNN support.")
+        message(WARNING "Disabling OPENCV_DNN_CUDA since cuDNN is required for CUDA DNN backend.")
+        set(WITH_CUDNN OFF CACHE BOOL "" FORCE)
+        set(OPENCV_DNN_CUDA OFF CACHE BOOL "" FORCE)
+    endif()
 else()
-    message(WARNING "cuDNN not found. OpenCV will build without cuDNN support.")
-    message(WARNING "Disabling OPENCV_DNN_CUDA since cuDNN is required for CUDA DNN backend.")
-    set(WITH_CUDNN OFF CACHE BOOL "" FORCE)
-    set(OPENCV_DNN_CUDA OFF CACHE BOOL "" FORCE)
+    # CUDA Disabled
+    set(CUDNN_FOUND FALSE)
+    set(WITH_CUDNN OFF)
+    set(OPENCV_DNN_CUDA OFF)
 endif()
 
 # ==============================================================================
 # OpenCV (Computer Vision Library - with CUDA Support)
 # ==============================================================================
+option(ENABLE_OPENCV "Enable OpenCV support" ON)
+
+if(ENABLE_OPENCV)
 # NEW ISOLATION STRATEGY:
 # 1. Try to find pre-built OpenCV (from standalone builder)
 # 2. Fall back to building from source if not found
@@ -464,12 +484,17 @@ else()
     message(STATUS "Using source-built OpenCV: opencv_world target")
 endif()
 
+else()
+    message(STATUS "OpenCV disabled by user (ENABLE_OPENCV=OFF).")
+    set(OPENCV_LINK_LIBS "")
+endif()
+
 # ==============================================================================
 # Define CUDA Support Preprocessor Macro for Application Code
 # ==============================================================================
 # This allows C++ code to check #if WITH_CUDA_SUPPORT at compile time
 # Only define if both CUDA and cuDNN are available (required for full DNN CUDA support)
-if(WITH_CUDA AND CUDNN_FOUND)
+if(ENABLE_CUDA AND WITH_CUDA AND CUDNN_FOUND)
     message(STATUS "✓ Enabling WITH_CUDA_SUPPORT preprocessor definition")
     message(STATUS "  - CUDA Version: ${CUDAToolkit_VERSION}")
     message(STATUS "  - cuDNN Found: ${CUDNN_INCLUDE_DIR}")
@@ -1343,7 +1368,7 @@ add_custom_command(
             "$<TARGET_FILE_DIR:PresetCreatorApp>/icons"
     COMMAND ${CMAKE_COMMAND} -E copy_if_different
             "${CMAKE_SOURCE_DIR}/../icons/splash clean.png"
-            "$<TARGET_FILE_DIR:PresetCreatorApp>/icons/splash clean.png"
+            "$<TARGET_FILE_DIR:PresetCreatorApp>/icons/splash.png"
     COMMENT "Copying splash screen image to executable directory"
 )
 
@@ -1643,3 +1668,396 @@ if(WIN32)
         COMMENT "Copying theme presets to ColliderApp/themes"
     )
 endif()
+
+# ==============================================================================
+# Pikon Raditsz Audio App Target (No-OpenCV / No-CUDA)
+# ==============================================================================
+
+juce_add_gui_app(PikonRaditszAudioApp
+    PRODUCT_NAME "Pikon Raditsz Audio"
+    VERSION "0.1.0"
+    COMPANY_NAME "Collider"
+    ICON_BIG "${CMAKE_SOURCE_DIR}/../icons/pikon_raditsz_icon-audio.png"
+    ICON_SMALL "${CMAKE_SOURCE_DIR}/../icons/pikon_raditsz_icon-audio.png"
+)
+
+target_sources(PikonRaditszAudioApp PRIVATE
+    # Core Application Sources (Same as PresetCreatorApp)
+    Source/preset_creator/PresetCreatorMain.cpp
+    Source/preset_creator/PresetCreatorApplication.h
+    Source/preset_creator/PinDatabase.h
+    Source/preset_creator/PinDatabase.cpp
+    Source/preset_creator/NotificationManager.h
+    Source/preset_creator/NotificationManager.cpp
+    Source/preset_creator/PresetValidator.h
+    Source/preset_creator/PresetValidator.cpp
+    Source/preset_creator/PresetAutoHealer.h
+    Source/preset_creator/PresetAutoHealer.cpp
+    Source/preset_creator/SavePresetJob.h
+    Source/preset_creator/SavePresetJob.cpp
+    Source/preset_creator/ShortcutManager.h
+    Source/preset_creator/ShortcutManager.cpp
+    Source/preset_creator/ImGuiNodeEditorComponent.h
+    Source/preset_creator/ImGuiNodeEditorComponent.cpp
+    Source/preset_creator/PatchGenerator.h
+    Source/preset_creator/PatchGenerator.cpp
+    Source/preset_creator/PresetCreatorComponent.h
+    Source/preset_creator/PresetCreatorComponent.cpp
+    Source/preset_creator/ControllerPresetManager.h
+    Source/preset_creator/ControllerPresetManager.cpp
+    Source/preset_creator/VstManager.h
+    Source/preset_creator/VstManager.cpp
+    Source/preset_creator/SplashScreenComponent.h
+    Source/preset_creator/SplashScreenComponent.cpp
+    
+    # Version and utilities
+    Source/utils/VersionInfo.h
+    
+    # Auto-updater system
+    Source/updater/UpdaterTypes.h
+    Source/updater/UpdaterTypes.cpp
+    Source/updater/HashVerifier.h
+    Source/updater/HashVerifier.cpp
+    Source/updater/VersionManager.h
+    Source/updater/VersionManager.cpp
+    Source/updater/UpdateChecker.h
+    Source/updater/UpdateChecker.cpp
+    Source/updater/FileDownloader.h
+    Source/updater/FileDownloader.cpp
+    Source/updater/UpdateApplier.h
+    Source/updater/UpdateApplier.cpp
+    Source/updater/UpdateManager.h
+    Source/updater/UpdateManager.cpp
+    Source/updater/ui/UpdateAvailableDialog.h
+    Source/updater/ui/UpdateAvailableDialog.cpp
+    Source/updater/ui/DownloadProgressDialog.h
+    Source/updater/ui/DownloadProgressDialog.cpp
+    Source/updater/ui/UpdateDownloadDialog.h
+    Source/updater/ui/UpdateDownloadDialog.cpp
+    
+    # Theme system
+    Source/preset_creator/theme/Theme.h
+    Source/preset_creator/theme/ThemeManager.h
+    Source/preset_creator/theme/ThemeManager.cpp
+    Source/preset_creator/theme/ThemeEditorComponent.h
+    Source/preset_creator/theme/ThemeEditorComponent.cpp
+    Source/preset_creator/HelpManagerComponent.h
+    Source/preset_creator/HelpManagerComponent.cpp
+    Source/preset_creator/VoiceDownloadDialog.h
+    Source/preset_creator/VoiceDownloadDialog.cpp
+
+    # ImGui Sources
+    ${imgui_fc_SOURCE_DIR}/imgui.cpp
+    ${imgui_fc_SOURCE_DIR}/imgui_draw.cpp
+    ${imgui_fc_SOURCE_DIR}/imgui_tables.cpp
+    ${imgui_fc_SOURCE_DIR}/imgui_widgets.cpp
+    ${imgui_fc_SOURCE_DIR}/backends/imgui_impl_opengl2.cpp
+    ${imnodes_fc_SOURCE_DIR}/imnodes.cpp
+
+    # Audio Engine Modules (EXCLUDING Video/CV)
+    Source/audio/MidiDeviceManager.h
+    Source/audio/MidiDeviceManager.cpp
+    Source/audio/graph/ModularSynthProcessor.h
+    Source/audio/graph/ModularSynthProcessor.cpp
+    Source/audio/modules/ModuleProcessor.h
+    Source/audio/modules/ModuleProcessor.cpp
+    Source/audio/modules/AudioInputModuleProcessor.h
+    Source/audio/modules/AudioInputModuleProcessor.cpp
+    Source/audio/modules/VCOModuleProcessor.h
+    Source/audio/modules/VCOModuleProcessor.cpp
+    Source/audio/modules/VCFModuleProcessor.h
+    Source/audio/modules/VCFModuleProcessor.cpp
+    Source/audio/modules/VCAModuleProcessor.h
+    Source/audio/modules/VCAModuleProcessor.cpp
+    Source/audio/modules/NoiseModuleProcessor.h
+    Source/audio/modules/NoiseModuleProcessor.cpp
+    Source/audio/modules/LFOModuleProcessor.h
+    Source/audio/modules/LFOModuleProcessor.cpp
+    Source/audio/modules/ADSRModuleProcessor.h
+    Source/audio/modules/ADSRModuleProcessor.cpp
+    Source/audio/modules/MixerModuleProcessor.h
+    Source/audio/modules/MixerModuleProcessor.cpp
+    Source/audio/modules/CVMixerModuleProcessor.h
+    Source/audio/modules/CVMixerModuleProcessor.cpp
+    Source/audio/modules/DelayModuleProcessor.h
+    Source/audio/modules/DelayModuleProcessor.cpp
+    Source/audio/modules/ReverbModuleProcessor.h
+    Source/audio/modules/ReverbModuleProcessor.cpp
+    Source/audio/modules/SAndHModuleProcessor.h
+    Source/audio/modules/SAndHModuleProcessor.cpp
+    Source/audio/modules/AttenuverterModuleProcessor.h
+    Source/audio/modules/AttenuverterModuleProcessor.cpp
+    Source/audio/modules/ScopeModuleProcessor.h
+    Source/audio/modules/ScopeModuleProcessor.cpp
+    Source/audio/modules/StepSequencerModuleProcessor.h
+    Source/audio/modules/StepSequencerModuleProcessor.cpp
+    Source/audio/modules/MathModuleProcessor.h
+    Source/audio/modules/MathModuleProcessor.cpp
+    Source/audio/modules/MapRangeModuleProcessor.h
+    Source/audio/modules/MapRangeModuleProcessor.cpp
+    Source/audio/modules/ComparatorModuleProcessor.h
+    Source/audio/modules/ComparatorModuleProcessor.cpp
+    Source/audio/modules/RandomModuleProcessor.h
+    Source/audio/modules/RandomModuleProcessor.cpp
+    Source/audio/modules/RateModuleProcessor.h
+    Source/audio/modules/RateModuleProcessor.cpp
+    Source/audio/modules/QuantizerModuleProcessor.h
+    Source/audio/modules/QuantizerModuleProcessor.cpp
+    Source/audio/modules/SequentialSwitchModuleProcessor.h
+    Source/audio/modules/SequentialSwitchModuleProcessor.cpp
+    Source/audio/modules/LogicModuleProcessor.h
+    Source/audio/modules/LogicModuleProcessor.cpp
+    Source/audio/modules/ClockDividerModuleProcessor.h
+    Source/audio/modules/ClockDividerModuleProcessor.cpp
+    Source/audio/modules/WaveshaperModuleProcessor.h
+    Source/audio/modules/WaveshaperModuleProcessor.cpp
+    Source/audio/modules/MultiBandShaperModuleProcessor.h
+    Source/audio/modules/MultiBandShaperModuleProcessor.cpp
+    Source/audio/modules/GranulatorModuleProcessor.h
+    Source/audio/modules/GranulatorModuleProcessor.cpp
+    Source/audio/modules/SpatialGranulatorModuleProcessor.h
+    Source/audio/modules/SpatialGranulatorModuleProcessor.cpp
+    Source/audio/modules/HarmonicShaperModuleProcessor.h
+    Source/audio/modules/HarmonicShaperModuleProcessor.cpp
+    Source/audio/modules/ValueModuleProcessor.h
+    Source/audio/modules/ValueModuleProcessor.cpp
+    Source/audio/modules/DebugModuleProcessor.h
+    Source/audio/modules/DebugModuleProcessor.cpp
+    Source/audio/modules/CommentModuleProcessor.h
+    Source/audio/modules/CommentModuleProcessor.cpp
+    Source/audio/modules/InputDebugModuleProcessor.h
+    Source/audio/modules/InputDebugModuleProcessor.cpp
+    Source/audio/modules/TimePitchModuleProcessor.h
+    Source/audio/modules/TimePitchModuleProcessor.cpp
+    Source/audio/modules/MIDIPlayerModuleProcessor.h
+    Source/audio/modules/MIDIPlayerModuleProcessor.cpp
+    Source/audio/modules/TrackMixerModuleProcessor.h
+    Source/audio/modules/TrackMixerModuleProcessor.cpp
+    Source/audio/modules/PolyVCOModuleProcessor.h
+    Source/audio/modules/PolyVCOModuleProcessor.cpp
+    Source/audio/modules/RerouteModuleProcessor.h
+    Source/audio/modules/RerouteModuleProcessor.cpp
+    Source/audio/modules/TTSPerformerModuleProcessor.h
+    Source/audio/modules/TTSPerformerModuleProcessor.cpp
+    Source/audio/modules/TimingData.h
+    Source/audio/modules/SampleLoaderModuleProcessor.h
+    Source/audio/modules/SampleLoaderModuleProcessor.cpp
+    Source/audio/modules/SampleSfxModuleProcessor.h
+    Source/audio/modules/SampleSfxModuleProcessor.cpp
+    Source/audio/modules/FunctionGeneratorModuleProcessor.h
+    Source/audio/modules/FunctionGeneratorModuleProcessor.cpp
+    Source/audio/modules/BestPracticeNodeProcessor.h
+    Source/audio/modules/BestPracticeNodeProcessor.cpp
+    Source/audio/modules/TimelineModuleProcessor.h
+    Source/audio/modules/TimelineModuleProcessor.cpp
+    Source/audio/modules/ShapingOscillatorModuleProcessor.h
+    Source/audio/modules/ShapingOscillatorModuleProcessor.cpp
+    Source/audio/voices/SampleVoiceProcessor.h
+    Source/audio/voices/SampleVoiceProcessor.cpp
+    Source/audio/voices/VoiceDownloadHelper.h
+    Source/audio/voices/VoiceDownloadHelper.cpp
+    Source/audio/voices/VoiceDownloadThread.h
+    Source/audio/voices/VoiceDownloadThread.cpp
+    Source/audio/graph/VoiceProcessor.h
+    Source/audio/graph/VoiceProcessor.cpp
+    Source/audio/assets/SampleBank.h
+    Source/audio/assets/SampleBank.cpp
+    Source/utils/RtLogger.h
+    Source/utils/RtLogger.cpp
+    Source/audio/modules/VocalTractFilterModuleProcessor.h
+    Source/audio/modules/VocalTractFilterModuleProcessor.cpp
+    Source/audio/modules/VstHostModuleProcessor.h
+    Source/audio/modules/VstHostModuleProcessor.cpp
+    Source/audio/modules/MultiSequencerModuleProcessor.h
+    Source/audio/modules/MultiSequencerModuleProcessor.cpp
+    Source/audio/modules/ChordArpModuleProcessor.h
+    Source/audio/modules/ChordArpModuleProcessor.cpp
+    Source/audio/modules/LagProcessorModuleProcessor.h
+    Source/audio/modules/LagProcessorModuleProcessor.cpp
+    Source/audio/modules/DeCrackleModuleProcessor.h
+    Source/audio/modules/DeCrackleModuleProcessor.cpp
+    Source/audio/modules/GraphicEQModuleProcessor.h
+    Source/audio/modules/GraphicEQModuleProcessor.cpp
+    Source/audio/modules/FrequencyGraphModuleProcessor.h
+    Source/audio/modules/FrequencyGraphModuleProcessor.cpp
+    Source/audio/modules/ChorusModuleProcessor.h
+    Source/audio/modules/ChorusModuleProcessor.cpp
+    Source/audio/modules/PhaserModuleProcessor.h
+    Source/audio/modules/PhaserModuleProcessor.cpp
+    Source/audio/modules/CompressorModuleProcessor.h
+    Source/audio/modules/CompressorModuleProcessor.cpp
+    Source/audio/modules/RecordModuleProcessor.h
+    Source/audio/modules/RecordModuleProcessor.cpp
+    Source/audio/modules/LimiterModuleProcessor.h
+    Source/audio/modules/LimiterModuleProcessor.cpp
+    Source/audio/modules/GateModuleProcessor.h
+    Source/audio/modules/GateModuleProcessor.cpp
+    Source/audio/modules/DriveModuleProcessor.h
+    Source/audio/modules/DriveModuleProcessor.cpp
+    Source/audio/modules/BitCrusherModuleProcessor.h
+    Source/audio/modules/BitCrusherModuleProcessor.cpp
+    Source/audio/modules/PanVolModuleProcessor.h
+    Source/audio/modules/PanVolModuleProcessor.cpp
+    Source/audio/modules/InletModuleProcessor.h
+    Source/audio/modules/InletModuleProcessor.cpp
+    Source/audio/modules/OutletModuleProcessor.h
+    Source/audio/modules/OutletModuleProcessor.cpp
+    Source/audio/modules/MetaModuleProcessor.h
+    Source/audio/modules/MetaModuleProcessor.cpp
+    Source/audio/modules/SnapshotSequencerModuleProcessor.h
+    Source/audio/modules/SnapshotSequencerModuleProcessor.cpp
+    Source/audio/modules/MIDICVModuleProcessor.h
+    Source/audio/modules/MIDICVModuleProcessor.cpp
+    Source/audio/modules/MIDIFadersModuleProcessor.h
+    Source/audio/modules/MIDIFadersModuleProcessor.cpp
+    Source/audio/modules/MIDIKnobsModuleProcessor.h
+    Source/audio/modules/MIDIKnobsModuleProcessor.cpp
+    Source/audio/modules/MIDIButtonsModuleProcessor.h
+    Source/audio/modules/MIDIButtonsModuleProcessor.cpp
+    Source/audio/modules/MIDIJogWheelModuleProcessor.h
+    Source/audio/modules/MIDIJogWheelModuleProcessor.cpp
+    Source/audio/modules/MIDIPadModuleProcessor.h
+    Source/audio/modules/MIDIPadModuleProcessor.cpp
+    Source/audio/modules/MidiLoggerModuleProcessor.h
+    Source/audio/modules/MidiLoggerModuleProcessor.cpp
+    Source/audio/modules/TempoClockModuleProcessor.h
+    Source/audio/modules/TempoClockModuleProcessor.cpp
+    Source/audio/modules/PhysicsModuleProcessor.h
+    Source/audio/modules/PhysicsModuleProcessor.cpp
+    Source/audio/modules/StrokeSequencerModuleProcessor.h
+    Source/audio/modules/StrokeSequencerModuleProcessor.cpp
+    Source/audio/modules/TapTempo.h
+    Source/audio/modules/TapTempo.cpp
+    Source/audio/modules/BPMMonitorModuleProcessor.h
+    Source/audio/modules/BPMMonitorModuleProcessor.cpp
+    Source/audio/modules/AnimationModuleProcessor.h
+    Source/audio/modules/AnimationModuleProcessor.cpp
+    Source/audio/modules/AutomationLaneModuleProcessor.h
+    Source/audio/modules/AutomationLaneModuleProcessor.cpp
+    Source/audio/modules/AutomatoModuleProcessor.h
+    Source/audio/modules/AutomatoModuleProcessor.cpp
+    
+    # Animation Sources (Keep these as they are not OpenCV dependent)
+    Source/animation/AnimationData.h
+    Source/animation/RawAnimationData.h
+    Source/animation/RawAnimationData.cpp
+    Source/animation/AnimationBinder.h
+    Source/animation/AnimationBinder.cpp
+    Source/animation/Animator.h
+    Source/animation/Animator.cpp
+    Source/animation/AnimationFileLoader.h
+    Source/animation/AnimationFileLoader.cpp
+    Source/animation/GltfLoader.h
+    Source/animation/GltfLoader.cpp
+    Source/animation/FbxLoader.h
+    Source/animation/FbxLoader.cpp
+    Source/animation/AnimationRenderer.h
+    Source/animation/AnimationRenderer.cpp
+)
+
+# Copy splash screen image to executable directory
+add_custom_command(
+    TARGET PikonRaditszAudioApp POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E make_directory
+            "$<TARGET_FILE_DIR:PikonRaditszAudioApp>/icons"
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            "${CMAKE_SOURCE_DIR}/../icons/splash clean.png"
+            "$<TARGET_FILE_DIR:PikonRaditszAudioApp>/icons/splash clean.png"
+    COMMENT "Copying splash screen image to executable directory"
+)
+
+# Include Directories (EXCLUDING OpenCV)
+target_include_directories(PikonRaditszAudioApp PRIVATE
+    ${imgui_fc_SOURCE_DIR}
+    ${imgui_fc_SOURCE_DIR}/backends
+    ${imnodes_fc_SOURCE_DIR}
+    ${imgui_juce_fc_SOURCE_DIR}
+    ${PIPER_DIR}
+    ${ONNXRUNTIME_DIR}/include
+    ${CMAKE_SOURCE_DIR}/../vendor/openvino_toolkit_windows_2025.3.0.19807.44526285f24_x86_64/samples/cpp/thirdparty/nlohmann_json/single_include
+    ${CMAKE_SOURCE_DIR}/../soundtouch/include
+    ${CMAKE_SOURCE_DIR}/../soundtouch/source/SoundTouch
+    ${ufbx_SOURCE_DIR}
+    # NO FFMPEG
+    # NO OPENCV
+    $<$<BOOL:${USE_RUBBERBAND}>:${RUBBERBAND_INCLUDE_DIR}>
+    # ASIO SDK headers (Windows only, conditional)
+    $<$<BOOL:${ASIO_SDK_FOUND}>:${ASIO_SDK_DIR}/common>
+    $<$<BOOL:${ASIO_SDK_FOUND}>:${ASIO_SDK_DIR}/host>
+)
+
+# Compile Definitions
+target_compile_definitions(PikonRaditszAudioApp PRIVATE
+    JUCE_APPLICATION_NAME_STRING="$<TARGET_PROPERTY:PikonRaditszAudioApp,PRODUCT_NAME>"
+    JUCE_APPLICATION_VERSION_STRING="$<TARGET_PROPERTY:PikonRaditszAudioApp,VERSION>"
+    JUCE_WEB_BROWSER=0 JUCE_USE_CURL=0
+    JUCE_PLUGINHOST_VST3=1
+    IMGUI_IMPL_JUCE_BEZEL=0
+    IMGUI_ENABLE_VIEWPORTS
+    IMGUI_DEFINE_MATH_OPERATORS
+    IMNODES_NAMESPACE=ImNodes
+    IMNODES_STATIC_DEFINE
+    PRESET_CREATOR_UI=1
+    AUDIO_ONLY_BUILD=1  # CRITICAL: Disables Video/CV code paths
+    $<$<BOOL:${USE_RUBBERBAND}>:USE_RUBBERBAND=1>
+    $<$<NOT:$<BOOL:${USE_RUBBERBAND}>>:USE_RUBBERBAND=0>
+    # NO WITH_CUDA_SUPPORT
+    # Enable ASIO if SDK is found
+    $<$<BOOL:${ASIO_SDK_FOUND}>:JUCE_ASIO=1>
+)
+
+# Link Libraries (EXCLUDING OpenCV and FFmpeg)
+target_link_libraries(PikonRaditszAudioApp PRIVATE
+    juce::juce_gui_extra
+    juce::juce_opengl
+    juce::juce_audio_devices
+    juce::juce_audio_processors
+    juce::juce_audio_utils
+    juce::juce_audio_formats
+    juce::juce_dsp
+    juce::juce_cryptography
+    imgui_impl_juce
+    soundtouch
+    box2d
+    glm::glm
+    tinygltf
+    ufbx_static
+    # NO OPENCV
+    $<$<BOOL:${USE_RUBBERBAND}>:${RUBBERBAND_TARGET}>
+    # NO FFMPEG
+    # Piper TTS libraries (pre-built)
+    ${ONNXRUNTIME_DIR}/lib/onnxruntime.lib
+)
+
+# Link Windows libraries for native camera enumeration (DirectShow) - Still needed for audio device enumeration? No, but maybe for other things.
+# Actually, ole32 is needed for COM. strmiids might be needed for some audio stuff too?
+if(WIN32)
+    target_link_libraries(PikonRaditszAudioApp PRIVATE ole32 strmiids)
+endif()
+
+if(MSVC)
+    target_compile_options(PikonRaditszAudioApp PRIVATE "$<$<CONFIG:Debug>:/Z7>")
+endif()
+
+# Add compile definition to signal zoom mode for app code if enabled
+if(PRESET_CREATOR_IMNODES_ZOOM)
+    target_compile_definitions(PikonRaditszAudioApp PRIVATE IMNODES_ZOOM_ENABLED=1)
+endif()
+
+# Copy Assets for PikonRaditszAudioApp
+    # Redirect output to PresetCreatorApp artifacts directory to share assets
+    set_target_properties(PikonRaditszAudioApp PROPERTIES
+        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/PresetCreatorApp_artefacts/$<CONFIG>"
+    )
+
+    # Copy audio-only splash screen
+    add_custom_command(
+        TARGET PikonRaditszAudioApp POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E make_directory
+                "$<TARGET_FILE_DIR:PikonRaditszAudioApp>/icons"
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                "${CMAKE_SOURCE_DIR}/../icons/splash clean-audio.png"
+                "$<TARGET_FILE_DIR:PikonRaditszAudioApp>/icons/splash-audio.png"
+        COMMENT "Copying audio-only splash screen to icons/splash-audio.png"
+    )
+

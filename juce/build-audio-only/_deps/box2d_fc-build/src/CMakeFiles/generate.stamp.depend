@@ -1,0 +1,6 @@
+# CMake generation dependency list for this directory.
+C:/Program Files/CMake/share/cmake-4.1/Modules/BasicConfigVersion-SameMajorVersion.cmake.in
+C:/Program Files/CMake/share/cmake-4.1/Modules/CMakePackageConfigHelpers.cmake
+C:/Program Files/CMake/share/cmake-4.1/Modules/WriteBasicConfigVersionFile.cmake
+H:/0000_CODE/01_collider_pyo/juce/build-audio-only/CMakeFiles/cmake.verify_globs
+H:/0000_CODE/01_collider_pyo/juce/build-audio-only/_deps/box2d_fc-src/src/CMakeLists.txt

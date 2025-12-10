@@ -1,0 +1,10 @@
+^H:\0000_CODE\01_COLLIDER_PYO\JUCE\BUILD-AUDIO-ONLY\_DEPS\BOX2D_FC-SUBBUILD\CMAKELISTS.TXT
+setlocal
+"C:\Program Files\CMake\bin\cmake.exe" -SH:/0000_CODE/01_collider_pyo/juce/build-audio-only/_deps/box2d_fc-subbuild -BH:/0000_CODE/01_collider_pyo/juce/build-audio-only/_deps/box2d_fc-subbuild --check-stamp-file H:/0000_CODE/01_collider_pyo/juce/build-audio-only/_deps/box2d_fc-subbuild/CMakeFiles/generate.stamp
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal & call :cmErrorLevel %errorlevel% & goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd

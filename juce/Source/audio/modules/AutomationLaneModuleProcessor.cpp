@@ -1,4 +1,6 @@
 #include "AutomationLaneModuleProcessor.h"
+#include <juce_core/juce_core.h>
+#include <juce_audio_processors/juce_audio_processors.h>
 #include <cmath>
 #include <algorithm>
 
@@ -144,7 +146,7 @@ void AutomationLaneModuleProcessor::processBlock(
     // Clear trigger output channel first
     if (numChannels > OUTPUT_TRIGGER)
         buffer.clear(OUTPUT_TRIGGER, 0, numSamples);
-    
+
     // Get output pointers only if channels exist
     auto* outValue = (numChannels > OUTPUT_VALUE) ? buffer.getWritePointer(OUTPUT_VALUE) : nullptr;
     auto* outInverted =
@@ -152,7 +154,8 @@ void AutomationLaneModuleProcessor::processBlock(
     auto* outBipolar =
         (numChannels > OUTPUT_BIPOLAR) ? buffer.getWritePointer(OUTPUT_BIPOLAR) : nullptr;
     auto* outPitch = (numChannels > OUTPUT_PITCH) ? buffer.getWritePointer(OUTPUT_PITCH) : nullptr;
-    auto* outTrigger = (numChannels > OUTPUT_TRIGGER) ? buffer.getWritePointer(OUTPUT_TRIGGER) : nullptr;
+    auto* outTrigger =
+        (numChannels > OUTPUT_TRIGGER) ? buffer.getWritePointer(OUTPUT_TRIGGER) : nullptr;
 
     // Atomic load of the state
     AutomationState::Ptr state = activeState.load();
@@ -276,8 +279,9 @@ void AutomationLaneModuleProcessor::processBlock(
                 else
                 {
                     // Check for threshold crossing
-                    bool crossingDetected = lineSegmentCrossesThreshold(previousValue, value, triggerThreshold, triggerEdgeMode);
-                    
+                    bool crossingDetected = lineSegmentCrossesThreshold(
+                        previousValue, value, triggerThreshold, triggerEdgeMode);
+
                     if (crossingDetected)
                     {
                         triggerPulseRemaining = (int)(sampleRate * 0.001); // 1ms pulse
@@ -285,7 +289,7 @@ void AutomationLaneModuleProcessor::processBlock(
 
                     // Output trigger signal
                     outTrigger[i] = (triggerPulseRemaining > 0) ? 1.0f : 0.0f;
-                    
+
                     if (triggerPulseRemaining > 0)
                         --triggerPulseRemaining;
 
@@ -298,7 +302,7 @@ void AutomationLaneModuleProcessor::processBlock(
             {
                 // Clear trigger output when not playing or on wrap
                 outTrigger[i] = 0.0f;
-                
+
                 // Reset state on wrap or when transport stops
                 if (justWrapped)
                 {
@@ -507,7 +511,8 @@ double AutomationLaneModuleProcessor::getTargetDuration() const
 
     // Get the index from AudioParameterChoice - use getIndex() for correct value
     int durationModeIndex = 0;
-    if (auto* choiceParam = dynamic_cast<juce::AudioParameterChoice*>(apvts.getParameter(paramIdDurationMode)))
+    if (auto* choiceParam =
+            dynamic_cast<juce::AudioParameterChoice*>(apvts.getParameter(paramIdDurationMode)))
     {
         durationModeIndex = choiceParam->getIndex();
     }
@@ -526,7 +531,7 @@ double AutomationLaneModuleProcessor::getTargetDuration() const
     case 1:
         return 4.0; // 1 Bar = 4 beats
     case 2:
-        return 8.0; // 2 Bars = 8 beats  
+        return 8.0; // 2 Bars = 8 beats
     case 3:
         return 16.0; // 4 Bars = 16 beats
     case 4:
@@ -540,14 +545,18 @@ double AutomationLaneModuleProcessor::getTargetDuration() const
     }
 }
 
-bool AutomationLaneModuleProcessor::lineSegmentCrossesThreshold(float prevValue, float currValue, float threshold, int edgeMode) const
+bool AutomationLaneModuleProcessor::lineSegmentCrossesThreshold(
+    float prevValue,
+    float currValue,
+    float threshold,
+    int   edgeMode) const
 {
     // Check if line segment from (prevValue) to (currValue) crosses threshold
     // Edge mode: 0=Rising, 1=Falling, 2=Both
-    
+
     const float d1 = prevValue - threshold;
     const float d2 = currValue - threshold;
-    
+
     // Check if values are on opposite sides of threshold (crossing detected)
     if (d1 * d2 < 0.0f) // Opposite signs = crossing
     {
@@ -558,7 +567,7 @@ bool AutomationLaneModuleProcessor::lineSegmentCrossesThreshold(float prevValue,
         else // Both: crossing in either direction
             return true;
     }
-    
+
     return false;
 }
 
@@ -731,7 +740,7 @@ void AutomationLaneModuleProcessor::drawParametersInNode(
             {
                 // wheel > 0.0f (scroll down) gives -1, wheel < 0.0f (scroll up) gives +1
                 const int delta = wheel > 0.0f ? -1 : 1;
-                int newIndex = juce::jlimit(0, 8, divIndex + delta);
+                int       newIndex = juce::jlimit(0, 8, divIndex + delta);
                 if (newIndex != divIndex)
                 {
                     *divisionParam = (float)newIndex;
@@ -790,7 +799,7 @@ void AutomationLaneModuleProcessor::drawParametersInNode(
         {
             // wheel > 0.0f (scroll down) gives -1, wheel < 0.0f (scroll up) gives +1
             const int delta = wheel > 0.0f ? -1 : 1;
-            int newIndex = juce::jlimit(0, 6, durIndex + delta);
+            int       newIndex = juce::jlimit(0, 6, durIndex + delta);
             if (newIndex != durIndex)
             {
                 *durationModeParam = (float)newIndex;
@@ -849,7 +858,8 @@ void AutomationLaneModuleProcessor::drawParametersInNode(
             markEdited();
         }
         // Scroll-edit for Custom Duration DragFloat
-        adjustParamOnWheel(ap.getParameter(paramIdCustomDuration), paramIdCustomDuration, customDur);
+        adjustParamOnWheel(
+            ap.getParameter(paramIdCustomDuration), paramIdCustomDuration, customDur);
         if (ImGui::IsItemHovered())
             ImGui::SetTooltip("Custom Duration in Beats");
     }
@@ -866,7 +876,7 @@ void AutomationLaneModuleProcessor::drawParametersInNode(
     else
     {
         ImGui::PushItemWidth(itemWidth - 100);
-        
+
         // Trigger Threshold Slider
         float trigThresh = *triggerThresholdParam;
         if (ImGui::SliderFloat("Trigger Threshold", &trigThresh, 0.0f, 1.0f, "%.2f"))
@@ -878,15 +888,16 @@ void AutomationLaneModuleProcessor::drawParametersInNode(
             markEdited();
         }
         // Scroll-edit for Trigger Threshold Slider
-        adjustParamOnWheel(ap.getParameter(paramIdTriggerThreshold), paramIdTriggerThreshold, trigThresh);
+        adjustParamOnWheel(
+            ap.getParameter(paramIdTriggerThreshold), paramIdTriggerThreshold, trigThresh);
         if (ImGui::IsItemHovered())
             ImGui::SetTooltip("Threshold level for trigger output");
-        
+
         ImGui::SameLine();
-        
+
         // Edge Selection Combo
         ImGui::SetNextItemWidth(80);
-        int edgeIndex = (int)*triggerEdgeParam;
+        int         edgeIndex = (int)*triggerEdgeParam;
         const char* edges[] = {"Rising", "Falling", "Both"};
         if (ImGui::Combo("##edge", &edgeIndex, edges, 3))
         {
@@ -904,20 +915,20 @@ void AutomationLaneModuleProcessor::drawParametersInNode(
             {
                 // wheel > 0.0f (scroll down) gives -1, wheel < 0.0f (scroll up) gives +1
                 const int delta = wheel > 0.0f ? -1 : 1;
-                int newIndex = juce::jlimit(0, 2, edgeIndex + delta);
+                int       newIndex = juce::jlimit(0, 2, edgeIndex + delta);
                 if (newIndex != edgeIndex)
                 {
                     *triggerEdgeParam = (float)newIndex;
                     ap.getParameter(paramIdTriggerEdge)
-                        ->setValueNotifyingHost(
-                            ap.getParameterRange(paramIdTriggerEdge).convertTo0to1((float)newIndex));
+                        ->setValueNotifyingHost(ap.getParameterRange(paramIdTriggerEdge)
+                                                    .convertTo0to1((float)newIndex));
                     markEdited();
                 }
             }
         }
         if (ImGui::IsItemHovered())
             ImGui::SetTooltip("Trigger on rising edge, falling edge, or both");
-        
+
         ImGui::PopItemWidth();
     }
 
@@ -1000,13 +1011,14 @@ void AutomationLaneModuleProcessor::drawParametersInNode(
     // Draw Trigger Threshold Line
     if (triggerThresholdParam)
     {
-        float threshold = *triggerThresholdParam;
-        float thresholdY = editorStart.y + editorHeight * (1.0f - threshold);
+        float       threshold = *triggerThresholdParam;
+        float       thresholdY = editorStart.y + editorHeight * (1.0f - threshold);
         const ImU32 thresholdColor = IM_COL32(255, 150, 0, 200); // Orange/amber
         drawList->AddLine(
             ImVec2(editorStart.x, thresholdY),
             ImVec2(editorStart.x + std::max(itemWidth, totalWidth), thresholdY),
-            thresholdColor, 2.0f);
+            thresholdColor,
+            2.0f);
     }
 
     // Draw Vertical Grid Lines
@@ -1109,50 +1121,52 @@ void AutomationLaneModuleProcessor::drawParametersInNode(
         // Use InvisibleButton to capture mouse events without visual interference
         // This prevents the click from falling through to the node editor background
         ImGui::SetCursorPos(ImVec2(0, timelineHeight)); // Position relative to child window
-        ImGui::InvisibleButton("##CanvasInteraction", ImVec2(std::max(itemWidth, totalWidth), editorHeight));
+        ImGui::InvisibleButton(
+            "##CanvasInteraction", ImVec2(std::max(itemWidth, totalWidth), editorHeight));
 
         // --- START NEW TOOLTIP CODE ---
         if (ImGui::IsItemHovered())
         {
             ImVec2 mousePos = ImGui::GetMousePos();
-            float relX = mousePos.x - editorStart.x;
-            float relY = mousePos.y - editorStart.y;
-            
+            float  relX = mousePos.x - editorStart.x;
+            float  relY = mousePos.y - editorStart.y;
+
             // Calculate Data
             double beat = relX / pixelsPerBeat;
-            float val = 1.0f - (relY / editorHeight);
-            val = juce::jlimit(0.0f, 1.0f, val); 
-            
+            float  val = 1.0f - (relY / editorHeight);
+            val = juce::jlimit(0.0f, 1.0f, val);
+
             // 1. Draw Crosshair (Visual Feedback)
             // Vertical Line (Time)
             drawList->AddLine(
-                ImVec2(mousePos.x, editorStart.y), 
-                ImVec2(mousePos.x, editorStart.y + editorHeight), 
+                ImVec2(mousePos.x, editorStart.y),
+                ImVec2(mousePos.x, editorStart.y + editorHeight),
                 IM_COL32(255, 255, 255, 50));
-            
+
             // Horizontal Line (Value)
             drawList->AddLine(
-                ImVec2(editorStart.x, mousePos.y), 
-                ImVec2(editorStart.x + std::max(itemWidth, totalWidth), mousePos.y), 
+                ImVec2(editorStart.x, mousePos.y),
+                ImVec2(editorStart.x + std::max(itemWidth, totalWidth), mousePos.y),
                 IM_COL32(255, 255, 255, 50));
 
             // 2. Rich Tooltip (Data Display)
             ImGui::BeginTooltip();
             // Header: Time Info
             ImGui::TextColored(ImVec4(1.0f, 0.8f, 0.2f, 1.0f), "Time: %.2f Beats", beat);
-            
+
             // Calculate Bar.Beat format (assuming 4/4 for display)
-            int bar = (int)(beat / 4.0) + 1;
+            int    bar = (int)(beat / 4.0) + 1;
             double beatInBar = std::fmod(beat, 4.0) + 1.0;
             ImGui::TextDisabled("Position: %d.%02d", bar, (int)(beatInBar * 100)); // e.g. 1.50
-            
+
             ImGui::Separator();
-            
+
             // Value Info
             ImGui::Text("Value (0-1):   %.3f", val);
             ImGui::Text("Bipolar (-1/1): %.3f", (val * 2.0f) - 1.0f);
-            ImGui::TextColored(ImVec4(0.4f, 0.8f, 1.0f, 1.0f), "CV Output:      %.2f V", val * 10.0f);
-            
+            ImGui::TextColored(
+                ImVec4(0.4f, 0.8f, 1.0f, 1.0f), "CV Output:      %.2f V", val * 10.0f);
+
             ImGui::EndTooltip();
         }
         // --- END NEW TOOLTIP CODE ---
@@ -1160,7 +1174,7 @@ void AutomationLaneModuleProcessor::drawParametersInNode(
         // Capture interaction with interpolation for smooth drawing
         // Check mouse state every frame to ensure smooth drawing even with fast mouse movement
         bool isMouseDown = ImGui::IsItemActive() && ImGui::IsMouseDown(0);
-        
+
         if (isMouseDown)
         {
             ImVec2 mousePos = ImGui::GetMousePos();
@@ -1173,21 +1187,23 @@ void AutomationLaneModuleProcessor::drawParametersInNode(
 
             // Check if this is the start of a new drag (lastMousePosInCanvas is invalid)
             bool isNewDrag = (lastMousePosInCanvas.x < 0.0f || lastMousePosInCanvas.y < 0.0f);
-            
+
             // Also check if mouse has moved significantly (to avoid redundant updates)
             bool mouseMoved = isNewDrag;
             if (!isNewDrag)
             {
                 float dx = mousePos.x - lastMousePosInCanvas.x;
                 float dy = mousePos.y - lastMousePosInCanvas.y;
-                mouseMoved = (std::abs(dx) > 0.5f || std::abs(dy) > 0.5f); // Threshold to avoid micro-movements
+                mouseMoved =
+                    (std::abs(dx) > 0.5f ||
+                     std::abs(dy) > 0.5f); // Threshold to avoid micro-movements
             }
-            
+
             if (isNewDrag)
             {
                 // First point: just draw at current position with larger radius
                 lastMousePosInCanvas = mousePos;
-                
+
                 ensureChunkExistsAt(currentBeat);
                 state = activeState.load();
                 auto chunk = state->findChunkAt(currentBeat);
@@ -1206,32 +1222,32 @@ void AutomationLaneModuleProcessor::drawParametersInNode(
                 // Interpolate between last position and current position
                 float lastRelX = lastMousePosInCanvas.x - editorStart.x;
                 float lastRelY = lastMousePosInCanvas.y - editorStart.y;
-                
+
                 double lastBeat = lastRelX / pixelsPerBeat;
                 float  lastVal = 1.0f - (lastRelY / editorHeight);
                 lastVal = juce::jlimit(0.0f, 1.0f, lastVal);
-                
+
                 // Ensure we have chunks for both start and end points
                 ensureChunkExistsAt(lastBeat);
                 ensureChunkExistsAt(currentBeat);
                 state = activeState.load();
-                
+
                 // Find chunks and sample indices for both positions
                 auto lastChunk = state->findChunkAt(lastBeat);
                 auto currentChunk = state->findChunkAt(currentBeat);
-                
+
                 if (lastChunk && currentChunk)
                 {
                     // Calculate sample indices
                     double lastBeatInChunk = lastBeat - lastChunk->startBeat;
                     double currentBeatInChunk = currentBeat - currentChunk->startBeat;
-                    
+
                     int lastSampleIdx = (int)(lastBeatInChunk * lastChunk->samplesPerBeat);
                     int currentSampleIdx = (int)(currentBeatInChunk * currentChunk->samplesPerBeat);
-                    
+
                     // Handle same chunk vs different chunks
                     int radius = 5; // Radius for smooth drawing
-                    
+
                     if (lastChunk == currentChunk)
                     {
                         // Same chunk: fill all samples between the two indices with radius
@@ -1239,20 +1255,20 @@ void AutomationLaneModuleProcessor::drawParametersInNode(
                         int endIdx = juce::jmax(lastSampleIdx, currentSampleIdx) + radius;
                         startIdx = juce::jmax(0, startIdx);
                         endIdx = juce::jmin((int)lastChunk->samples.size() - 1, endIdx);
-                        
+
                         float startVal = (lastSampleIdx < currentSampleIdx) ? lastVal : currentVal;
                         float endVal = (lastSampleIdx < currentSampleIdx) ? currentVal : lastVal;
-                        
+
                         // Fill every sample in the range with interpolation
-                        // modifyChunkSamplesThreadSafe already handles interpolation between startVal and endVal
-                        modifyChunkSamplesThreadSafe(
-                            lastChunk, startIdx, endIdx, startVal, endVal);
+                        // modifyChunkSamplesThreadSafe already handles interpolation between
+                        // startVal and endVal
+                        modifyChunkSamplesThreadSafe(lastChunk, startIdx, endIdx, startVal, endVal);
                     }
                     else
                     {
                         // Different chunks: fill from last position to end of last chunk,
                         // then from start of current chunk to current position
-                        
+
                         // Fill to end of last chunk (with radius at start)
                         int lastChunkEndIdx = (int)lastChunk->samples.size() - 1;
                         int lastStartIdx = juce::jmax(0, lastSampleIdx - radius);
@@ -1262,10 +1278,11 @@ void AutomationLaneModuleProcessor::drawParametersInNode(
                             modifyChunkSamplesThreadSafe(
                                 lastChunk, lastStartIdx, lastEndIdx, lastVal, lastVal);
                         }
-                        
+
                         // Fill from start of current chunk to current position (with radius at end)
                         int currentStartIdx = juce::jmax(0, currentSampleIdx - radius);
-                        int currentEndIdx = juce::jmin((int)currentChunk->samples.size() - 1, currentSampleIdx + radius);
+                        int currentEndIdx = juce::jmin(
+                            (int)currentChunk->samples.size() - 1, currentSampleIdx + radius);
                         if (currentStartIdx <= currentEndIdx)
                         {
                             modifyChunkSamplesThreadSafe(
@@ -1280,9 +1297,13 @@ void AutomationLaneModuleProcessor::drawParametersInNode(
                     int    sampleIdx = (int)(beatInChunk * currentChunk->samplesPerBeat);
                     int    radius = 5;
                     modifyChunkSamplesThreadSafe(
-                        currentChunk, sampleIdx - radius, sampleIdx + radius, currentVal, currentVal);
+                        currentChunk,
+                        sampleIdx - radius,
+                        sampleIdx + radius,
+                        currentVal,
+                        currentVal);
                 }
-                
+
                 markEdited();
                 // Update last position immediately after processing
                 lastMousePosInCanvas = mousePos;
@@ -1299,4 +1320,3 @@ void AutomationLaneModuleProcessor::drawParametersInNode(
 }
 
 #endif
-

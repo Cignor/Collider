@@ -1,0 +1,150 @@
+^H:\0000_CODE\01_COLLIDER_PYO\JUCE\BUILD-AUDIO-ONLY\_DEPS\GLM-SUBBUILD\CMAKEFILES\C1DFBEB7F97FB6276920B6C91960C729\GLM-POPULATE-MKDIR.RULE
+setlocal
+"C:\Program Files\CMake\bin\cmake.exe" -Dcfgdir=/Debug -P H:/0000_CODE/01_collider_pyo/juce/build-audio-only/_deps/glm-subbuild/glm-populate-prefix/tmp/glm-populate-mkdirs.cmake
+if %errorlevel% neq 0 goto :cmEnd
+"C:\Program Files\CMake\bin\cmake.exe" -E touch H:/0000_CODE/01_collider_pyo/juce/build-audio-only/_deps/glm-subbuild/glm-populate-prefix/src/glm-populate-stamp/Debug/glm-populate-mkdir
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal & call :cmErrorLevel %errorlevel% & goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd
+^H:\0000_CODE\01_COLLIDER_PYO\JUCE\BUILD-AUDIO-ONLY\_DEPS\GLM-SUBBUILD\CMAKEFILES\C1DFBEB7F97FB6276920B6C91960C729\GLM-POPULATE-DOWNLOAD.RULE
+setlocal
+cd H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps
+if %errorlevel% neq 0 goto :cmEnd
+H:
+if %errorlevel% neq 0 goto :cmEnd
+"C:\Program Files\CMake\bin\cmake.exe" -DCMAKE_MESSAGE_LOG_LEVEL=VERBOSE -P H:/0000_CODE/01_collider_pyo/juce/build-audio-only/_deps/glm-subbuild/glm-populate-prefix/tmp/glm-populate-gitclone.cmake
+if %errorlevel% neq 0 goto :cmEnd
+"C:\Program Files\CMake\bin\cmake.exe" -E touch H:/0000_CODE/01_collider_pyo/juce/build-audio-only/_deps/glm-subbuild/glm-populate-prefix/src/glm-populate-stamp/Debug/glm-populate-download
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal & call :cmErrorLevel %errorlevel% & goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd
+^H:\0000_CODE\01_COLLIDER_PYO\JUCE\BUILD-AUDIO-ONLY\_DEPS\GLM-SUBBUILD\CMAKEFILES\C1DFBEB7F97FB6276920B6C91960C729\GLM-POPULATE-UPDATE.RULE
+setlocal
+cd H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\glm-src
+if %errorlevel% neq 0 goto :cmEnd
+H:
+if %errorlevel% neq 0 goto :cmEnd
+"C:\Program Files\CMake\bin\cmake.exe" -Dcan_fetch=YES -DCMAKE_MESSAGE_LOG_LEVEL=VERBOSE -P H:/0000_CODE/01_collider_pyo/juce/build-audio-only/_deps/glm-subbuild/glm-populate-prefix/tmp/glm-populate-gitupdate.cmake
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal & call :cmErrorLevel %errorlevel% & goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd
+^H:\0000_CODE\01_COLLIDER_PYO\JUCE\BUILD-AUDIO-ONLY\_DEPS\GLM-SUBBUILD\CMAKEFILES\C1DFBEB7F97FB6276920B6C91960C729\GLM-POPULATE-PATCH.RULE
+setlocal
+"C:\Program Files\CMake\bin\cmake.exe" -E echo_append
+if %errorlevel% neq 0 goto :cmEnd
+"C:\Program Files\CMake\bin\cmake.exe" -E touch H:/0000_CODE/01_collider_pyo/juce/build-audio-only/_deps/glm-subbuild/glm-populate-prefix/src/glm-populate-stamp/Debug/glm-populate-patch
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal & call :cmErrorLevel %errorlevel% & goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd
+^H:\0000_CODE\01_COLLIDER_PYO\JUCE\BUILD-AUDIO-ONLY\_DEPS\GLM-SUBBUILD\CMAKEFILES\C1DFBEB7F97FB6276920B6C91960C729\GLM-POPULATE-CONFIGURE.RULE
+setlocal
+cd H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\glm-build
+if %errorlevel% neq 0 goto :cmEnd
+H:
+if %errorlevel% neq 0 goto :cmEnd
+"C:\Program Files\CMake\bin\cmake.exe" -E echo_append
+if %errorlevel% neq 0 goto :cmEnd
+"C:\Program Files\CMake\bin\cmake.exe" -E touch H:/0000_CODE/01_collider_pyo/juce/build-audio-only/_deps/glm-subbuild/glm-populate-prefix/src/glm-populate-stamp/Debug/glm-populate-configure
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal & call :cmErrorLevel %errorlevel% & goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd
+^H:\0000_CODE\01_COLLIDER_PYO\JUCE\BUILD-AUDIO-ONLY\_DEPS\GLM-SUBBUILD\CMAKEFILES\C1DFBEB7F97FB6276920B6C91960C729\GLM-POPULATE-BUILD.RULE
+setlocal
+cd H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\glm-build
+if %errorlevel% neq 0 goto :cmEnd
+H:
+if %errorlevel% neq 0 goto :cmEnd
+"C:\Program Files\CMake\bin\cmake.exe" -E echo_append
+if %errorlevel% neq 0 goto :cmEnd
+"C:\Program Files\CMake\bin\cmake.exe" -E touch H:/0000_CODE/01_collider_pyo/juce/build-audio-only/_deps/glm-subbuild/glm-populate-prefix/src/glm-populate-stamp/Debug/glm-populate-build
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal & call :cmErrorLevel %errorlevel% & goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd
+^H:\0000_CODE\01_COLLIDER_PYO\JUCE\BUILD-AUDIO-ONLY\_DEPS\GLM-SUBBUILD\CMAKEFILES\C1DFBEB7F97FB6276920B6C91960C729\GLM-POPULATE-INSTALL.RULE
+setlocal
+cd H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\glm-build
+if %errorlevel% neq 0 goto :cmEnd
+H:
+if %errorlevel% neq 0 goto :cmEnd
+"C:\Program Files\CMake\bin\cmake.exe" -E echo_append
+if %errorlevel% neq 0 goto :cmEnd
+"C:\Program Files\CMake\bin\cmake.exe" -E touch H:/0000_CODE/01_collider_pyo/juce/build-audio-only/_deps/glm-subbuild/glm-populate-prefix/src/glm-populate-stamp/Debug/glm-populate-install
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal & call :cmErrorLevel %errorlevel% & goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd
+^H:\0000_CODE\01_COLLIDER_PYO\JUCE\BUILD-AUDIO-ONLY\_DEPS\GLM-SUBBUILD\CMAKEFILES\C1DFBEB7F97FB6276920B6C91960C729\GLM-POPULATE-TEST.RULE
+setlocal
+cd H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\glm-build
+if %errorlevel% neq 0 goto :cmEnd
+H:
+if %errorlevel% neq 0 goto :cmEnd
+"C:\Program Files\CMake\bin\cmake.exe" -E echo_append
+if %errorlevel% neq 0 goto :cmEnd
+"C:\Program Files\CMake\bin\cmake.exe" -E touch H:/0000_CODE/01_collider_pyo/juce/build-audio-only/_deps/glm-subbuild/glm-populate-prefix/src/glm-populate-stamp/Debug/glm-populate-test
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal & call :cmErrorLevel %errorlevel% & goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd
+^H:\0000_CODE\01_COLLIDER_PYO\JUCE\BUILD-AUDIO-ONLY\_DEPS\GLM-SUBBUILD\CMAKEFILES\045523FA0022A79F3850ABE98F949E35\GLM-POPULATE-COMPLETE.RULE
+setlocal
+"C:\Program Files\CMake\bin\cmake.exe" -E make_directory H:/0000_CODE/01_collider_pyo/juce/build-audio-only/_deps/glm-subbuild/CMakeFiles/Debug
+if %errorlevel% neq 0 goto :cmEnd
+"C:\Program Files\CMake\bin\cmake.exe" -E touch H:/0000_CODE/01_collider_pyo/juce/build-audio-only/_deps/glm-subbuild/CMakeFiles/Debug/glm-populate-complete
+if %errorlevel% neq 0 goto :cmEnd
+"C:\Program Files\CMake\bin\cmake.exe" -E touch H:/0000_CODE/01_collider_pyo/juce/build-audio-only/_deps/glm-subbuild/glm-populate-prefix/src/glm-populate-stamp/Debug/glm-populate-done
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal & call :cmErrorLevel %errorlevel% & goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd
+^H:\0000_CODE\01_COLLIDER_PYO\JUCE\BUILD-AUDIO-ONLY\_DEPS\GLM-SUBBUILD\CMAKEFILES\742D6B944E4A11EB96D80C8819A04FC7\GLM-POPULATE.RULE
+setlocal
+:cmEnd
+endlocal & call :cmErrorLevel %errorlevel% & goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd
+^H:\0000_CODE\01_COLLIDER_PYO\JUCE\BUILD-AUDIO-ONLY\_DEPS\GLM-SUBBUILD\CMAKELISTS.TXT
+setlocal
+"C:\Program Files\CMake\bin\cmake.exe" -SH:/0000_CODE/01_collider_pyo/juce/build-audio-only/_deps/glm-subbuild -BH:/0000_CODE/01_collider_pyo/juce/build-audio-only/_deps/glm-subbuild --check-stamp-file H:/0000_CODE/01_collider_pyo/juce/build-audio-only/_deps/glm-subbuild/CMakeFiles/generate.stamp
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal & call :cmErrorLevel %errorlevel% & goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd

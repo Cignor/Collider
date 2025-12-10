@@ -1,0 +1,1130 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project DefaultTargets="Build" ToolsVersion="17.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup>
+    <PreferredToolArchitecture>x64</PreferredToolArchitecture>
+  </PropertyGroup>
+  <ItemGroup Label="ProjectConfigurations">
+    <ProjectConfiguration Include="Debug|x64">
+      <Configuration>Debug</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|x64">
+      <Configuration>Release</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="MinSizeRel|x64">
+      <Configuration>MinSizeRel</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="RelWithDebInfo|x64">
+      <Configuration>RelWithDebInfo</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+  </ItemGroup>
+  <PropertyGroup Label="Globals">
+    <ProjectGuid>{FB7BD66D-F81E-3282-A985-9F6C4470079C}</ProjectGuid>
+    <Keyword>Win32Proj</Keyword>
+    <WindowsTargetPlatformVersion>10.0.26100.0</WindowsTargetPlatformVersion>
+    <Platform>x64</Platform>
+    <ProjectName>ColliderApp</ProjectName>
+    <VCProjectUpgraderObjectName>NoUpgrade</VCProjectUpgraderObjectName>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">
+    <ConfigurationType>Application</ConfigurationType>
+    <CharacterSet>MultiByte</CharacterSet>
+    <PlatformToolset>v143</PlatformToolset>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="Configuration">
+    <ConfigurationType>Application</ConfigurationType>
+    <CharacterSet>MultiByte</CharacterSet>
+    <PlatformToolset>v143</PlatformToolset>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='MinSizeRel|x64'" Label="Configuration">
+    <ConfigurationType>Application</ConfigurationType>
+    <CharacterSet>MultiByte</CharacterSet>
+    <PlatformToolset>v143</PlatformToolset>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='RelWithDebInfo|x64'" Label="Configuration">
+    <ConfigurationType>Application</ConfigurationType>
+    <CharacterSet>MultiByte</CharacterSet>
+    <PlatformToolset>v143</PlatformToolset>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
+  <ImportGroup Label="ExtensionSettings">
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <PropertyGroup Label="UserMacros" />
+  <PropertyGroup>
+    <_ProjectFileVersion>10.0.20506.1</_ProjectFileVersion>
+    <OutDir Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">H:\0000_CODE\01_collider_pyo\juce\build-audio-only\ColliderApp_artefacts\Debug\</OutDir>
+    <IntDir Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">ColliderApp.dir\Debug\</IntDir>
+    <TargetName Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Collider Audio Engine</TargetName>
+    <TargetExt Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">.exe</TargetExt>
+    <LinkIncremental Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</LinkIncremental>
+    <GenerateManifest Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</GenerateManifest>
+    <OutDir Condition="'$(Configuration)|$(Platform)'=='Release|x64'">H:\0000_CODE\01_collider_pyo\juce\build-audio-only\ColliderApp_artefacts\Release\</OutDir>
+    <IntDir Condition="'$(Configuration)|$(Platform)'=='Release|x64'">ColliderApp.dir\Release\</IntDir>
+    <TargetName Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Collider Audio Engine</TargetName>
+    <TargetExt Condition="'$(Configuration)|$(Platform)'=='Release|x64'">.exe</TargetExt>
+    <LinkIncremental Condition="'$(Configuration)|$(Platform)'=='Release|x64'">false</LinkIncremental>
+    <GenerateManifest Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</GenerateManifest>
+    <OutDir Condition="'$(Configuration)|$(Platform)'=='MinSizeRel|x64'">H:\0000_CODE\01_collider_pyo\juce\build-audio-only\ColliderApp_artefacts\MinSizeRel\</OutDir>
+    <IntDir Condition="'$(Configuration)|$(Platform)'=='MinSizeRel|x64'">ColliderApp.dir\MinSizeRel\</IntDir>
+    <TargetName Condition="'$(Configuration)|$(Platform)'=='MinSizeRel|x64'">Collider Audio Engine</TargetName>
+    <TargetExt Condition="'$(Configuration)|$(Platform)'=='MinSizeRel|x64'">.exe</TargetExt>
+    <LinkIncremental Condition="'$(Configuration)|$(Platform)'=='MinSizeRel|x64'">false</LinkIncremental>
+    <GenerateManifest Condition="'$(Configuration)|$(Platform)'=='MinSizeRel|x64'">true</GenerateManifest>
+    <OutDir Condition="'$(Configuration)|$(Platform)'=='RelWithDebInfo|x64'">H:\0000_CODE\01_collider_pyo\juce\build-audio-only\ColliderApp_artefacts\RelWithDebInfo\</OutDir>
+    <IntDir Condition="'$(Configuration)|$(Platform)'=='RelWithDebInfo|x64'">ColliderApp.dir\RelWithDebInfo\</IntDir>
+    <TargetName Condition="'$(Configuration)|$(Platform)'=='RelWithDebInfo|x64'">Collider Audio Engine</TargetName>
+    <TargetExt Condition="'$(Configuration)|$(Platform)'=='RelWithDebInfo|x64'">.exe</TargetExt>
+    <LinkIncremental Condition="'$(Configuration)|$(Platform)'=='RelWithDebInfo|x64'">true</LinkIncremental>
+    <GenerateManifest Condition="'$(Configuration)|$(Platform)'=='RelWithDebInfo|x64'">true</GenerateManifest>
+  </PropertyGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <ClCompile>
+      <AdditionalIncludeDirectories>H:\0000_CODE\01_collider_pyo\juce\build-audio-only\ColliderApp_artefacts\JuceLibraryCode;H:\0000_CODE\01_collider_pyo\juce\..\vendor\piper\piper;H:\0000_CODE\01_collider_pyo\juce\..\vendor\onnxruntime\include;H:\0000_CODE\01_collider_pyo\juce\..\vendor\openvino_toolkit_windows_2025.3.0.19807.44526285f24_x86_64\samples\cpp\thirdparty\nlohmann_json\single_include;H:\0000_CODE\01_collider_pyo\juce\..\soundtouch\include;H:\0000_CODE\01_collider_pyo\juce\..\soundtouch\source\SoundTouch;H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\ufbx-src;H:\0000_CODE\01_collider_pyo\juce\..\vendor\ffmpeg\include;\include;\modules\core\include;\modules\imgproc\include;\modules\imgcodecs\include;\modules\videoio\include;\modules\highgui\include;\modules\video\include;\modules\objdetect\include;\modules\features2d\include;\modules\calib3d\include;\modules\dnn\include;\modules\world;H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\rubberband_fc-src;H:\0000_CODE\01_collider_pyo\juce\..\vendor\ASIOSDK\common;H:\0000_CODE\01_collider_pyo\juce\..\vendor\ASIOSDK\host;H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\juce-src\modules;H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\juce-src\modules\juce_audio_processors\format_types\VST3_SDK;H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\juce-src\modules\juce_audio_processors\format_types\LV2_SDK;H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\juce-src\modules\juce_audio_processors\format_types\LV2_SDK\lv2;H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\juce-src\modules\juce_audio_processors\format_types\LV2_SDK\serd;H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\juce-src\modules\juce_audio_processors\format_types\LV2_SDK\sord;H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\juce-src\modules\juce_audio_processors\format_types\LV2_SDK\sord\src;H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\juce-src\modules\juce_audio_processors\format_types\LV2_SDK\sratom;H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\juce-src\modules\juce_audio_processors\format_types\LV2_SDK\lilv;H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\juce-src\modules\juce_audio_processors\format_types\LV2_SDK\lilv\src;H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\box2d_fc-src\src\..\include;H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\glm-src;H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\tinygltf-src;H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\rubberband_fc-src\single;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalOptions>%(AdditionalOptions) /bigobj</AdditionalOptions>
+      <AssemblerListingLocation>$(IntDir)</AssemblerListingLocation>
+      <BasicRuntimeChecks>EnableFastChecks</BasicRuntimeChecks>
+      <DebugInformationFormat>OldStyle</DebugInformationFormat>
+      <ExceptionHandling>Sync</ExceptionHandling>
+      <ForceConformanceInForLoopScope></ForceConformanceInForLoopScope>
+      <InlineFunctionExpansion>Disabled</InlineFunctionExpansion>
+      <LanguageStandard>stdcpp20</LanguageStandard>
+      <MinimalRebuild></MinimalRebuild>
+      <Optimization>Disabled</Optimization>
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+      <RemoveUnreferencedCodeData></RemoveUnreferencedCodeData>
+      <RuntimeLibrary>MultiThreadedDebugDLL</RuntimeLibrary>
+      <SupportJustMyCode></SupportJustMyCode>
+      <TreatWChar_tAsBuiltInType></TreatWChar_tAsBuiltInType>
+      <UseFullPaths>false</UseFullPaths>
+      <PreprocessorDefinitions>%(PreprocessorDefinitions);WIN32;_WINDOWS;JUCE_STANDALONE_APPLICATION=1;JUCE_APPLICATION_NAME_STRING="";JUCE_APPLICATION_VERSION_STRING="";JUCE_WEB_BROWSER=0;JUCE_USE_CURL=0;JUCE_PLUGINHOST_VST3=1;USE_RUBBERBAND=1;JUCE_ASIO=1;JUCE_MODULE_AVAILABLE_juce_gui_extra=1;JUCE_MODULE_AVAILABLE_juce_gui_basics=1;JUCE_MODULE_AVAILABLE_juce_graphics=1;JUCE_MODULE_AVAILABLE_juce_events=1;JUCE_GLOBAL_MODULE_SETTINGS_INCLUDED=1;DEBUG=1;_DEBUG=1;JUCE_MODULE_AVAILABLE_juce_core=1;JUCE_MODULE_AVAILABLE_juce_data_structures=1;JUCE_MODULE_AVAILABLE_juce_opengl=1;JUCE_MODULE_AVAILABLE_juce_audio_processors=1;JUCE_MODULE_AVAILABLE_juce_audio_basics=1;JUCE_MODULE_AVAILABLE_juce_audio_utils=1;JUCE_MODULE_AVAILABLE_juce_audio_formats=1;JUCE_MODULE_AVAILABLE_juce_audio_devices=1;JUCE_MODULE_AVAILABLE_juce_dsp=1;JUCE_MODULE_AVAILABLE_juce_osc=1;NOMINMAX;_USE_MATH_DEFINES;RUBBERBAND_USE_R3=1;RUBBERBAND_BUILD_FFT=KISSFFT;RUBBERBAND_BUILD_RESAMPLER=NONE;CMAKE_INTDIR="Debug"</PreprocessorDefinitions>
+      <ObjectFileName>$(IntDir)</ObjectFileName>
+      <ScanSourceForModuleDependencies>false</ScanSourceForModuleDependencies>
+    </ClCompile>
+    <ResourceCompile>
+      <PreprocessorDefinitions>%(PreprocessorDefinitions);WIN32;_DEBUG;_WINDOWS;JUCE_STANDALONE_APPLICATION=1;JUCE_APPLICATION_NAME_STRING=\"\";JUCE_APPLICATION_VERSION_STRING=\"\";JUCE_WEB_BROWSER=0;JUCE_USE_CURL=0;JUCE_PLUGINHOST_VST3=1;USE_RUBBERBAND=1;JUCE_ASIO=1;JUCE_MODULE_AVAILABLE_juce_gui_extra=1;JUCE_MODULE_AVAILABLE_juce_gui_basics=1;JUCE_MODULE_AVAILABLE_juce_graphics=1;JUCE_MODULE_AVAILABLE_juce_events=1;JUCE_GLOBAL_MODULE_SETTINGS_INCLUDED=1;DEBUG=1;_DEBUG=1;JUCE_MODULE_AVAILABLE_juce_core=1;JUCE_MODULE_AVAILABLE_juce_data_structures=1;JUCE_MODULE_AVAILABLE_juce_opengl=1;JUCE_MODULE_AVAILABLE_juce_audio_processors=1;JUCE_MODULE_AVAILABLE_juce_audio_basics=1;JUCE_MODULE_AVAILABLE_juce_audio_utils=1;JUCE_MODULE_AVAILABLE_juce_audio_formats=1;JUCE_MODULE_AVAILABLE_juce_audio_devices=1;JUCE_MODULE_AVAILABLE_juce_dsp=1;JUCE_MODULE_AVAILABLE_juce_osc=1;NOMINMAX;_USE_MATH_DEFINES;RUBBERBAND_USE_R3=1;RUBBERBAND_BUILD_FFT=KISSFFT;RUBBERBAND_BUILD_RESAMPLER=NONE;CMAKE_INTDIR=\"Debug\"</PreprocessorDefinitions>
+      <AdditionalIncludeDirectories>H:\0000_CODE\01_collider_pyo\juce\build-audio-only\ColliderApp_artefacts\JuceLibraryCode;H:\0000_CODE\01_collider_pyo\juce\..\vendor\piper\piper;H:\0000_CODE\01_collider_pyo\juce\..\vendor\onnxruntime\include;H:\0000_CODE\01_collider_pyo\juce\..\vendor\openvino_toolkit_windows_2025.3.0.19807.44526285f24_x86_64\samples\cpp\thirdparty\nlohmann_json\single_include;H:\0000_CODE\01_collider_pyo\juce\..\soundtouch\include;H:\0000_CODE\01_collider_pyo\juce\..\soundtouch\source\SoundTouch;H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\ufbx-src;H:\0000_CODE\01_collider_pyo\juce\..\vendor\ffmpeg\include;\include;\modules\core\include;\modules\imgproc\include;\modules\imgcodecs\include;\modules\videoio\include;\modules\highgui\include;\modules\video\include;\modules\objdetect\include;\modules\features2d\include;\modules\calib3d\include;\modules\dnn\include;\modules\world;H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\rubberband_fc-src;H:\0000_CODE\01_collider_pyo\juce\..\vendor\ASIOSDK\common;H:\0000_CODE\01_collider_pyo\juce\..\vendor\ASIOSDK\host;H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\juce-src\modules;H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\juce-src\modules\juce_audio_processors\format_types\VST3_SDK;H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\juce-src\modules\juce_audio_processors\format_types\LV2_SDK;H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\juce-src\modules\juce_audio_processors\format_types\LV2_SDK\lv2;H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\juce-src\modules\juce_audio_processors\format_types\LV2_SDK\serd;H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\juce-src\modules\juce_audio_processors\format_types\LV2_SDK\sord;H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\juce-src\modules\juce_audio_processors\format_types\LV2_SDK\sord\src;H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\juce-src\modules\juce_audio_processors\format_types\LV2_SDK\sratom;H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\juce-src\modules\juce_audio_processors\format_types\LV2_SDK\lilv;H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\juce-src\modules\juce_audio_processors\format_types\LV2_SDK\lilv\src;H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\box2d_fc-src\src\..\include;H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\glm-src;H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\tinygltf-src;H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\rubberband_fc-src\single;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ResourceCompile>
+    <Midl>
+      <AdditionalIncludeDirectories>H:\0000_CODE\01_collider_pyo\juce\build-audio-only\ColliderApp_artefacts\JuceLibraryCode;H:\0000_CODE\01_collider_pyo\juce\..\vendor\piper\piper;H:\0000_CODE\01_collider_pyo\juce\..\vendor\onnxruntime\include;H:\0000_CODE\01_collider_pyo\juce\..\vendor\openvino_toolkit_windows_2025.3.0.19807.44526285f24_x86_64\samples\cpp\thirdparty\nlohmann_json\single_include;H:\0000_CODE\01_collider_pyo\juce\..\soundtouch\include;H:\0000_CODE\01_collider_pyo\juce\..\soundtouch\source\SoundTouch;H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\ufbx-src;H:\0000_CODE\01_collider_pyo\juce\..\vendor\ffmpeg\include;\include;\modules\core\include;\modules\imgproc\include;\modules\imgcodecs\include;\modules\videoio\include;\modules\highgui\include;\modules\video\include;\modules\objdetect\include;\modules\features2d\include;\modules\calib3d\include;\modules\dnn\include;\modules\world;H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\rubberband_fc-src;H:\0000_CODE\01_collider_pyo\juce\..\vendor\ASIOSDK\common;H:\0000_CODE\01_collider_pyo\juce\..\vendor\ASIOSDK\host;H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\juce-src\modules;H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\juce-src\modules\juce_audio_processors\format_types\VST3_SDK;H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\juce-src\modules\juce_audio_processors\format_types\LV2_SDK;H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\juce-src\modules\juce_audio_processors\format_types\LV2_SDK\lv2;H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\juce-src\modules\juce_audio_processors\format_types\LV2_SDK\serd;H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\juce-src\modules\juce_audio_processors\format_types\LV2_SDK\sord;H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\juce-src\modules\juce_audio_processors\format_types\LV2_SDK\sord\src;H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\juce-src\modules\juce_audio_processors\format_types\LV2_SDK\sratom;H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\juce-src\modules\juce_audio_processors\format_types\LV2_SDK\lilv;H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\juce-src\modules\juce_audio_processors\format_types\LV2_SDK\lilv\src;H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\box2d_fc-src\src\..\include;H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\glm-src;H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\tinygltf-src;H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\rubberband_fc-src\single;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <OutputDirectory>$(ProjectDir)/$(IntDir)</OutputDirectory>
+      <HeaderFileName>%(Filename).h</HeaderFileName>
+      <TypeLibraryName>%(Filename).tlb</TypeLibraryName>
+      <InterfaceIdentifierFileName>%(Filename)_i.c</InterfaceIdentifierFileName>
+      <ProxyFileName>%(Filename)_p.c</ProxyFileName>
+    </Midl>
+    <PostBuildEvent>
+      <Message>	Copying avcodec-62.dll to ColliderApp	Copying avdevice-62.dll to ColliderApp	Copying avfilter-11.dll to ColliderApp	Copying avformat-62.dll to ColliderApp	Copying avutil-60.dll to ColliderApp	Copying swresample-6.dll to ColliderApp	Copying swscale-9.dll to ColliderApp	Copying espeak-ng-data to ColliderApp output directory	Copying OpenCV data to ColliderApp output directory	Copying theme presets to ColliderApp/themes</Message>
+      <Command>setlocal
+"C:\Program Files\CMake\bin\cmake.exe" -E copy_if_different H:/0000_CODE/01_collider_pyo/juce/../vendor/piper/piper/piper.exe H:/0000_CODE/01_collider_pyo/juce/build-audio-only/ColliderApp_artefacts/Debug
+if %errorlevel% neq 0 goto :cmEnd
+"C:\Program Files\CMake\bin\cmake.exe" -E copy_if_different H:/0000_CODE/01_collider_pyo/juce/../vendor/piper/piper/piper_phonemize.dll H:/0000_CODE/01_collider_pyo/juce/build-audio-only/ColliderApp_artefacts/Debug
+if %errorlevel% neq 0 goto :cmEnd
+"C:\Program Files\CMake\bin\cmake.exe" -E copy_if_different H:/0000_CODE/01_collider_pyo/juce/../vendor/piper/piper/espeak-ng.dll H:/0000_CODE/01_collider_pyo/juce/build-audio-only/ColliderApp_artefacts/Debug
+if %errorlevel% neq 0 goto :cmEnd
+"C:\Program Files\CMake\bin\cmake.exe" -E copy_if_different H:/0000_CODE/01_collider_pyo/juce/../vendor/onnxruntime/lib/onnxruntime.dll H:/0000_CODE/01_collider_pyo/juce/build-audio-only/ColliderApp_artefacts/Debug
+if %errorlevel% neq 0 goto :cmEnd
+"C:\Program Files\CMake\bin\cmake.exe" -E copy_if_different H:/0000_CODE/01_collider_pyo/juce/../vendor/onnxruntime/lib/onnxruntime_providers_shared.dll H:/0000_CODE/01_collider_pyo/juce/build-audio-only/ColliderApp_artefacts/Debug
+if %errorlevel% neq 0 goto :cmEnd
+"C:\Program Files\CMake\bin\cmake.exe" -E copy_if_different H:/0000_CODE/01_collider_pyo/juce/build-audio-only/bin/opencv_videoio_ffmpeg4130_64.dll H:/0000_CODE/01_collider_pyo/juce/build-audio-only/ColliderApp_artefacts/Debug || "C:/Program Files/CMake/bin/cmake.exe" -E echo "Note: OpenCV FFmpeg DLL not found (optional video codec)"
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal &amp; call :cmErrorLevel %errorlevel% &amp; goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd
+setlocal
+"C:\Program Files\CMake\bin\cmake.exe" -E copy_if_different H:/0000_CODE/01_collider_pyo/juce/../vendor/ffmpeg/bin/avcodec-62.dll H:/0000_CODE/01_collider_pyo/juce/build-audio-only/ColliderApp_artefacts/Debug
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal &amp; call :cmErrorLevel %errorlevel% &amp; goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd
+setlocal
+"C:\Program Files\CMake\bin\cmake.exe" -E copy_if_different H:/0000_CODE/01_collider_pyo/juce/../vendor/ffmpeg/bin/avdevice-62.dll H:/0000_CODE/01_collider_pyo/juce/build-audio-only/ColliderApp_artefacts/Debug
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal &amp; call :cmErrorLevel %errorlevel% &amp; goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd
+setlocal
+"C:\Program Files\CMake\bin\cmake.exe" -E copy_if_different H:/0000_CODE/01_collider_pyo/juce/../vendor/ffmpeg/bin/avfilter-11.dll H:/0000_CODE/01_collider_pyo/juce/build-audio-only/ColliderApp_artefacts/Debug
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal &amp; call :cmErrorLevel %errorlevel% &amp; goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd
+setlocal
+"C:\Program Files\CMake\bin\cmake.exe" -E copy_if_different H:/0000_CODE/01_collider_pyo/juce/../vendor/ffmpeg/bin/avformat-62.dll H:/0000_CODE/01_collider_pyo/juce/build-audio-only/ColliderApp_artefacts/Debug
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal &amp; call :cmErrorLevel %errorlevel% &amp; goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd
+setlocal
+"C:\Program Files\CMake\bin\cmake.exe" -E copy_if_different H:/0000_CODE/01_collider_pyo/juce/../vendor/ffmpeg/bin/avutil-60.dll H:/0000_CODE/01_collider_pyo/juce/build-audio-only/ColliderApp_artefacts/Debug
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal &amp; call :cmErrorLevel %errorlevel% &amp; goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd
+setlocal
+"C:\Program Files\CMake\bin\cmake.exe" -E copy_if_different H:/0000_CODE/01_collider_pyo/juce/../vendor/ffmpeg/bin/swresample-6.dll H:/0000_CODE/01_collider_pyo/juce/build-audio-only/ColliderApp_artefacts/Debug
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal &amp; call :cmErrorLevel %errorlevel% &amp; goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd
+setlocal
+"C:\Program Files\CMake\bin\cmake.exe" -E copy_if_different H:/0000_CODE/01_collider_pyo/juce/../vendor/ffmpeg/bin/swscale-9.dll H:/0000_CODE/01_collider_pyo/juce/build-audio-only/ColliderApp_artefacts/Debug
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal &amp; call :cmErrorLevel %errorlevel% &amp; goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd
+setlocal
+"C:\Program Files\CMake\bin\cmake.exe" -E copy_directory H:/0000_CODE/01_collider_pyo/juce/../vendor/piper/piper/espeak-ng-data H:/0000_CODE/01_collider_pyo/juce/build-audio-only/ColliderApp_artefacts/Debug/espeak-ng-data
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal &amp; call :cmErrorLevel %errorlevel% &amp; goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd
+setlocal
+"C:\Program Files\CMake\bin\cmake.exe" -E copy_if_different /data/haarcascades/haarcascade_frontalface_default.xml H:/0000_CODE/01_collider_pyo/juce/build-audio-only/ColliderApp_artefacts/Debug
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal &amp; call :cmErrorLevel %errorlevel% &amp; goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd
+setlocal
+"C:\Program Files\CMake\bin\cmake.exe" -E make_directory H:/0000_CODE/01_collider_pyo/juce/build-audio-only/ColliderApp_artefacts/Debug/themes
+if %errorlevel% neq 0 goto :cmEnd
+"C:\Program Files\CMake\bin\cmake.exe" -E copy_directory H:/0000_CODE/01_collider_pyo/juce/Source/preset_creator/theme/presets H:/0000_CODE/01_collider_pyo/juce/build-audio-only/ColliderApp_artefacts/Debug/themes
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal &amp; call :cmErrorLevel %errorlevel% &amp; goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd</Command>
+    </PostBuildEvent>
+    <Link>
+      <AdditionalDependencies>Debug\soundtouch.lib;_deps\box2d_fc-build\bin\Debug\box2d.lib;_deps\glm-build\glm\Debug\glm.lib;_deps\tinygltf-build\Debug\tinygltf.lib;Debug\ufbx_static.lib;Debug\rubberband_single.lib;H:\0000_CODE\01_collider_pyo\vendor\ffmpeg\lib\avformat.lib;H:\0000_CODE\01_collider_pyo\vendor\ffmpeg\lib\avcodec.lib;H:\0000_CODE\01_collider_pyo\vendor\ffmpeg\lib\avutil.lib;H:\0000_CODE\01_collider_pyo\vendor\ffmpeg\lib\swresample.lib;H:\0000_CODE\01_collider_pyo\vendor\ffmpeg\lib\swscale.lib;H:\0000_CODE\01_collider_pyo\juce\..\vendor\onnxruntime\lib\onnxruntime.lib;ole32.lib;strmiids.lib;kernel32.lib;user32.lib;gdi32.lib;winspool.lib;shell32.lib;ole32.lib;oleaut32.lib;uuid.lib;comdlg32.lib;advapi32.lib</AdditionalDependencies>
+      <AdditionalLibraryDirectories>H:/0000_CODE/01_collider_pyo/juce/build-audio-only/_deps/juce-src/modules/juce_gui_extra/libs/VisualStudio2022/x64/MDd;H:/0000_CODE/01_collider_pyo/juce/build-audio-only/_deps/juce-src/modules/juce_gui_extra/libs/VisualStudio2022/x64/MDd/$(Configuration);H:/0000_CODE/01_collider_pyo/juce/build-audio-only/_deps/juce-src/modules/juce_gui_basics/libs/VisualStudio2022/x64/MDd;H:/0000_CODE/01_collider_pyo/juce/build-audio-only/_deps/juce-src/modules/juce_gui_basics/libs/VisualStudio2022/x64/MDd/$(Configuration);H:/0000_CODE/01_collider_pyo/juce/build-audio-only/_deps/juce-src/modules/juce_graphics/libs/VisualStudio2022/x64/MDd;H:/0000_CODE/01_collider_pyo/juce/build-audio-only/_deps/juce-src/modules/juce_graphics/libs/VisualStudio2022/x64/MDd/$(Configuration);H:/0000_CODE/01_collider_pyo/juce/build-audio-only/_deps/juce-src/modules/juce_events/libs/VisualStudio2022/x64/MDd;H:/0000_CODE/01_collider_pyo/juce/build-audio-only/_deps/juce-src/modules/juce_events/libs/VisualStudio2022/x64/MDd/$(Configuration);H:/0000_CODE/01_collider_pyo/juce/build-audio-only/_deps/juce-src/modules/juce_core/libs/VisualStudio2022/x64/MDd;H:/0000_CODE/01_collider_pyo/juce/build-audio-only/_deps/juce-src/modules/juce_core/libs/VisualStudio2022/x64/MDd/$(Configuration);H:/0000_CODE/01_collider_pyo/juce/build-audio-only/_deps/juce-src/modules/juce_data_structures/libs/VisualStudio2022/x64/MDd;H:/0000_CODE/01_collider_pyo/juce/build-audio-only/_deps/juce-src/modules/juce_data_structures/libs/VisualStudio2022/x64/MDd/$(Configuration);H:/0000_CODE/01_collider_pyo/juce/build-audio-only/_deps/juce-src/modules/juce_opengl/libs/VisualStudio2022/x64/MDd;H:/0000_CODE/01_collider_pyo/juce/build-audio-only/_deps/juce-src/modules/juce_opengl/libs/VisualStudio2022/x64/MDd/$(Configuration);H:/0000_CODE/01_collider_pyo/juce/build-audio-only/_deps/juce-src/modules/juce_audio_processors/libs/VisualStudio2022/x64/MDd;H:/0000_CODE/01_collider_pyo/juce/build-audio-only/_deps/juce-src/modules/juce_audio_processors/libs/VisualStudio2022/x64/MDd/$(Configuration);H:/0000_CODE/01_collider_pyo/juce/build-audio-only/_deps/juce-src/modules/juce_audio_basics/libs/VisualStudio2022/x64/MDd;H:/0000_CODE/01_collider_pyo/juce/build-audio-only/_deps/juce-src/modules/juce_audio_basics/libs/VisualStudio2022/x64/MDd/$(Configuration);H:/0000_CODE/01_collider_pyo/juce/build-audio-only/_deps/juce-src/modules/juce_audio_utils/libs/VisualStudio2022/x64/MDd;H:/0000_CODE/01_collider_pyo/juce/build-audio-only/_deps/juce-src/modules/juce_audio_utils/libs/VisualStudio2022/x64/MDd/$(Configuration);H:/0000_CODE/01_collider_pyo/juce/build-audio-only/_deps/juce-src/modules/juce_audio_formats/libs/VisualStudio2022/x64/MDd;H:/0000_CODE/01_collider_pyo/juce/build-audio-only/_deps/juce-src/modules/juce_audio_formats/libs/VisualStudio2022/x64/MDd/$(Configuration);H:/0000_CODE/01_collider_pyo/juce/build-audio-only/_deps/juce-src/modules/juce_audio_devices/libs/VisualStudio2022/x64/MDd;H:/0000_CODE/01_collider_pyo/juce/build-audio-only/_deps/juce-src/modules/juce_audio_devices/libs/VisualStudio2022/x64/MDd/$(Configuration);H:/0000_CODE/01_collider_pyo/juce/build-audio-only/_deps/juce-src/modules/juce_dsp/libs/VisualStudio2022/x64/MDd;H:/0000_CODE/01_collider_pyo/juce/build-audio-only/_deps/juce-src/modules/juce_dsp/libs/VisualStudio2022/x64/MDd/$(Configuration);H:/0000_CODE/01_collider_pyo/juce/build-audio-only/_deps/juce-src/modules/juce_osc/libs/VisualStudio2022/x64/MDd;H:/0000_CODE/01_collider_pyo/juce/build-audio-only/_deps/juce-src/modules/juce_osc/libs/VisualStudio2022/x64/MDd/$(Configuration);%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalOptions>%(AdditionalOptions) /machine:x64</AdditionalOptions>
+      <DataExecutionPrevention></DataExecutionPrevention>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <IgnoreSpecificDefaultLibraries>%(IgnoreSpecificDefaultLibraries)</IgnoreSpecificDefaultLibraries>
+      <ImageHasSafeExceptionHandlers></ImageHasSafeExceptionHandlers>
+      <ImportLibrary>H:/0000_CODE/01_collider_pyo/juce/build-audio-only/ColliderApp_artefacts/Debug/Collider Audio Engine.lib</ImportLibrary>
+      <LinkErrorReporting></LinkErrorReporting>
+      <ProgramDataBaseFile>H:/0000_CODE/01_collider_pyo/juce/build-audio-only/ColliderApp_artefacts/Debug/Collider Audio Engine.pdb</ProgramDataBaseFile>
+      <RandomizedBaseAddress></RandomizedBaseAddress>
+      <SubSystem>Windows</SubSystem>
+    </Link>
+    <ProjectReference>
+      <LinkLibraryDependencies>false</LinkLibraryDependencies>
+    </ProjectReference>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <ClCompile>
+      <AdditionalIncludeDirectories>H:\0000_CODE\01_collider_pyo\juce\build-audio-only\ColliderApp_artefacts\JuceLibraryCode;H:\0000_CODE\01_collider_pyo\juce\..\vendor\piper\piper;H:\0000_CODE\01_collider_pyo\juce\..\vendor\onnxruntime\include;H:\0000_CODE\01_collider_pyo\juce\..\vendor\openvino_toolkit_windows_2025.3.0.19807.44526285f24_x86_64\samples\cpp\thirdparty\nlohmann_json\single_include;H:\0000_CODE\01_collider_pyo\juce\..\soundtouch\include;H:\0000_CODE\01_collider_pyo\juce\..\soundtouch\source\SoundTouch;H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\ufbx-src;H:\0000_CODE\01_collider_pyo\juce\..\vendor\ffmpeg\include;\include;\modules\core\include;\modules\imgproc\include;\modules\imgcodecs\include;\modules\videoio\include;\modules\highgui\include;\modules\video\include;\modules\objdetect\include;\modules\features2d\include;\modules\calib3d\include;\modules\dnn\include;\modules\world;H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\rubberband_fc-src;H:\0000_CODE\01_collider_pyo\juce\..\vendor\ASIOSDK\common;H:\0000_CODE\01_collider_pyo\juce\..\vendor\ASIOSDK\host;H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\juce-src\modules;H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\juce-src\modules\juce_audio_processors\format_types\VST3_SDK;H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\juce-src\modules\juce_audio_processors\format_types\LV2_SDK;H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\juce-src\modules\juce_audio_processors\format_types\LV2_SDK\lv2;H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\juce-src\modules\juce_audio_processors\format_types\LV2_SDK\serd;H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\juce-src\modules\juce_audio_processors\format_types\LV2_SDK\sord;H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\juce-src\modules\juce_audio_processors\format_types\LV2_SDK\sord\src;H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\juce-src\modules\juce_audio_processors\format_types\LV2_SDK\sratom;H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\juce-src\modules\juce_audio_processors\format_types\LV2_SDK\lilv;H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\juce-src\modules\juce_audio_processors\format_types\LV2_SDK\lilv\src;H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\box2d_fc-src\src\..\include;H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\glm-src;H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\tinygltf-src;H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\rubberband_fc-src\single;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalOptions>%(AdditionalOptions) /bigobj</AdditionalOptions>
+      <AssemblerListingLocation>$(IntDir)</AssemblerListingLocation>
+      <BasicRuntimeChecks>Default</BasicRuntimeChecks>
+      <ExceptionHandling>Sync</ExceptionHandling>
+      <ForceConformanceInForLoopScope></ForceConformanceInForLoopScope>
+      <InlineFunctionExpansion>AnySuitable</InlineFunctionExpansion>
+      <LanguageStandard>stdcpp20</LanguageStandard>
+      <MinimalRebuild></MinimalRebuild>
+      <Optimization>MaxSpeed</Optimization>
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+      <RemoveUnreferencedCodeData></RemoveUnreferencedCodeData>
+      <RuntimeLibrary>MultiThreadedDLL</RuntimeLibrary>
+      <SupportJustMyCode></SupportJustMyCode>
+      <TreatWChar_tAsBuiltInType></TreatWChar_tAsBuiltInType>
+      <UseFullPaths>false</UseFullPaths>
+      <PreprocessorDefinitions>%(PreprocessorDefinitions);WIN32;_WINDOWS;NDEBUG;JUCE_STANDALONE_APPLICATION=1;JUCE_APPLICATION_NAME_STRING="";JUCE_APPLICATION_VERSION_STRING="";JUCE_WEB_BROWSER=0;JUCE_USE_CURL=0;JUCE_PLUGINHOST_VST3=1;USE_RUBBERBAND=1;JUCE_ASIO=1;JUCE_MODULE_AVAILABLE_juce_gui_extra=1;JUCE_MODULE_AVAILABLE_juce_gui_basics=1;JUCE_MODULE_AVAILABLE_juce_graphics=1;JUCE_MODULE_AVAILABLE_juce_events=1;JUCE_GLOBAL_MODULE_SETTINGS_INCLUDED=1;NDEBUG=1;_NDEBUG=1;JUCE_MODULE_AVAILABLE_juce_core=1;JUCE_MODULE_AVAILABLE_juce_data_structures=1;JUCE_MODULE_AVAILABLE_juce_opengl=1;JUCE_MODULE_AVAILABLE_juce_audio_processors=1;JUCE_MODULE_AVAILABLE_juce_audio_basics=1;JUCE_MODULE_AVAILABLE_juce_audio_utils=1;JUCE_MODULE_AVAILABLE_juce_audio_formats=1;JUCE_MODULE_AVAILABLE_juce_audio_devices=1;JUCE_MODULE_AVAILABLE_juce_dsp=1;JUCE_MODULE_AVAILABLE_juce_osc=1;NOMINMAX;_USE_MATH_DEFINES;RUBBERBAND_USE_R3=1;RUBBERBAND_BUILD_FFT=KISSFFT;RUBBERBAND_BUILD_RESAMPLER=NONE;CMAKE_INTDIR="Release"</PreprocessorDefinitions>
+      <ObjectFileName>$(IntDir)</ObjectFileName>
+      <DebugInformationFormat>
+      </DebugInformationFormat>
+      <ScanSourceForModuleDependencies>false</ScanSourceForModuleDependencies>
+    </ClCompile>
+    <ResourceCompile>
+      <PreprocessorDefinitions>%(PreprocessorDefinitions);WIN32;_WINDOWS;NDEBUG;JUCE_STANDALONE_APPLICATION=1;JUCE_APPLICATION_NAME_STRING=\"\";JUCE_APPLICATION_VERSION_STRING=\"\";JUCE_WEB_BROWSER=0;JUCE_USE_CURL=0;JUCE_PLUGINHOST_VST3=1;USE_RUBBERBAND=1;JUCE_ASIO=1;JUCE_MODULE_AVAILABLE_juce_gui_extra=1;JUCE_MODULE_AVAILABLE_juce_gui_basics=1;JUCE_MODULE_AVAILABLE_juce_graphics=1;JUCE_MODULE_AVAILABLE_juce_events=1;JUCE_GLOBAL_MODULE_SETTINGS_INCLUDED=1;NDEBUG=1;_NDEBUG=1;JUCE_MODULE_AVAILABLE_juce_core=1;JUCE_MODULE_AVAILABLE_juce_data_structures=1;JUCE_MODULE_AVAILABLE_juce_opengl=1;JUCE_MODULE_AVAILABLE_juce_audio_processors=1;JUCE_MODULE_AVAILABLE_juce_audio_basics=1;JUCE_MODULE_AVAILABLE_juce_audio_utils=1;JUCE_MODULE_AVAILABLE_juce_audio_formats=1;JUCE_MODULE_AVAILABLE_juce_audio_devices=1;JUCE_MODULE_AVAILABLE_juce_dsp=1;JUCE_MODULE_AVAILABLE_juce_osc=1;NOMINMAX;_USE_MATH_DEFINES;RUBBERBAND_USE_R3=1;RUBBERBAND_BUILD_FFT=KISSFFT;RUBBERBAND_BUILD_RESAMPLER=NONE;CMAKE_INTDIR=\"Release\"</PreprocessorDefinitions>
+      <AdditionalIncludeDirectories>H:\0000_CODE\01_collider_pyo\juce\build-audio-only\ColliderApp_artefacts\JuceLibraryCode;H:\0000_CODE\01_collider_pyo\juce\..\vendor\piper\piper;H:\0000_CODE\01_collider_pyo\juce\..\vendor\onnxruntime\include;H:\0000_CODE\01_collider_pyo\juce\..\vendor\openvino_toolkit_windows_2025.3.0.19807.44526285f24_x86_64\samples\cpp\thirdparty\nlohmann_json\single_include;H:\0000_CODE\01_collider_pyo\juce\..\soundtouch\include;H:\0000_CODE\01_collider_pyo\juce\..\soundtouch\source\SoundTouch;H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\ufbx-src;H:\0000_CODE\01_collider_pyo\juce\..\vendor\ffmpeg\include;\include;\modules\core\include;\modules\imgproc\include;\modules\imgcodecs\include;\modules\videoio\include;\modules\highgui\include;\modules\video\include;\modules\objdetect\include;\modules\features2d\include;\modules\calib3d\include;\modules\dnn\include;\modules\world;H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\rubberband_fc-src;H:\0000_CODE\01_collider_pyo\juce\..\vendor\ASIOSDK\common;H:\0000_CODE\01_collider_pyo\juce\..\vendor\ASIOSDK\host;H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\juce-src\modules;H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\juce-src\modules\juce_audio_processors\format_types\VST3_SDK;H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\juce-src\modules\juce_audio_processors\format_types\LV2_SDK;H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\juce-src\modules\juce_audio_processors\format_types\LV2_SDK\lv2;H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\juce-src\modules\juce_audio_processors\format_types\LV2_SDK\serd;H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\juce-src\modules\juce_audio_processors\format_types\LV2_SDK\sord;H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\juce-src\modules\juce_audio_processors\format_types\LV2_SDK\sord\src;H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\juce-src\modules\juce_audio_processors\format_types\LV2_SDK\sratom;H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\juce-src\modules\juce_audio_processors\format_types\LV2_SDK\lilv;H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\juce-src\modules\juce_audio_processors\format_types\LV2_SDK\lilv\src;H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\box2d_fc-src\src\..\include;H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\glm-src;H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\tinygltf-src;H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\rubberband_fc-src\single;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ResourceCompile>
+    <Midl>
+      <AdditionalIncludeDirectories>H:\0000_CODE\01_collider_pyo\juce\build-audio-only\ColliderApp_artefacts\JuceLibraryCode;H:\0000_CODE\01_collider_pyo\juce\..\vendor\piper\piper;H:\0000_CODE\01_collider_pyo\juce\..\vendor\onnxruntime\include;H:\0000_CODE\01_collider_pyo\juce\..\vendor\openvino_toolkit_windows_2025.3.0.19807.44526285f24_x86_64\samples\cpp\thirdparty\nlohmann_json\single_include;H:\0000_CODE\01_collider_pyo\juce\..\soundtouch\include;H:\0000_CODE\01_collider_pyo\juce\..\soundtouch\source\SoundTouch;H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\ufbx-src;H:\0000_CODE\01_collider_pyo\juce\..\vendor\ffmpeg\include;\include;\modules\core\include;\modules\imgproc\include;\modules\imgcodecs\include;\modules\videoio\include;\modules\highgui\include;\modules\video\include;\modules\objdetect\include;\modules\features2d\include;\modules\calib3d\include;\modules\dnn\include;\modules\world;H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\rubberband_fc-src;H:\0000_CODE\01_collider_pyo\juce\..\vendor\ASIOSDK\common;H:\0000_CODE\01_collider_pyo\juce\..\vendor\ASIOSDK\host;H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\juce-src\modules;H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\juce-src\modules\juce_audio_processors\format_types\VST3_SDK;H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\juce-src\modules\juce_audio_processors\format_types\LV2_SDK;H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\juce-src\modules\juce_audio_processors\format_types\LV2_SDK\lv2;H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\juce-src\modules\juce_audio_processors\format_types\LV2_SDK\serd;H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\juce-src\modules\juce_audio_processors\format_types\LV2_SDK\sord;H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\juce-src\modules\juce_audio_processors\format_types\LV2_SDK\sord\src;H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\juce-src\modules\juce_audio_processors\format_types\LV2_SDK\sratom;H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\juce-src\modules\juce_audio_processors\format_types\LV2_SDK\lilv;H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\juce-src\modules\juce_audio_processors\format_types\LV2_SDK\lilv\src;H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\box2d_fc-src\src\..\include;H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\glm-src;H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\tinygltf-src;H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\rubberband_fc-src\single;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <OutputDirectory>$(ProjectDir)/$(IntDir)</OutputDirectory>
+      <HeaderFileName>%(Filename).h</HeaderFileName>
+      <TypeLibraryName>%(Filename).tlb</TypeLibraryName>
+      <InterfaceIdentifierFileName>%(Filename)_i.c</InterfaceIdentifierFileName>
+      <ProxyFileName>%(Filename)_p.c</ProxyFileName>
+    </Midl>
+    <PostBuildEvent>
+      <Message>	Copying avcodec-62.dll to ColliderApp	Copying avdevice-62.dll to ColliderApp	Copying avfilter-11.dll to ColliderApp	Copying avformat-62.dll to ColliderApp	Copying avutil-60.dll to ColliderApp	Copying swresample-6.dll to ColliderApp	Copying swscale-9.dll to ColliderApp	Copying espeak-ng-data to ColliderApp output directory	Copying OpenCV data to ColliderApp output directory	Copying theme presets to ColliderApp/themes</Message>
+      <Command>setlocal
+"C:\Program Files\CMake\bin\cmake.exe" -E copy_if_different H:/0000_CODE/01_collider_pyo/juce/../vendor/piper/piper/piper.exe H:/0000_CODE/01_collider_pyo/juce/build-audio-only/ColliderApp_artefacts/Release
+if %errorlevel% neq 0 goto :cmEnd
+"C:\Program Files\CMake\bin\cmake.exe" -E copy_if_different H:/0000_CODE/01_collider_pyo/juce/../vendor/piper/piper/piper_phonemize.dll H:/0000_CODE/01_collider_pyo/juce/build-audio-only/ColliderApp_artefacts/Release
+if %errorlevel% neq 0 goto :cmEnd
+"C:\Program Files\CMake\bin\cmake.exe" -E copy_if_different H:/0000_CODE/01_collider_pyo/juce/../vendor/piper/piper/espeak-ng.dll H:/0000_CODE/01_collider_pyo/juce/build-audio-only/ColliderApp_artefacts/Release
+if %errorlevel% neq 0 goto :cmEnd
+"C:\Program Files\CMake\bin\cmake.exe" -E copy_if_different H:/0000_CODE/01_collider_pyo/juce/../vendor/onnxruntime/lib/onnxruntime.dll H:/0000_CODE/01_collider_pyo/juce/build-audio-only/ColliderApp_artefacts/Release
+if %errorlevel% neq 0 goto :cmEnd
+"C:\Program Files\CMake\bin\cmake.exe" -E copy_if_different H:/0000_CODE/01_collider_pyo/juce/../vendor/onnxruntime/lib/onnxruntime_providers_shared.dll H:/0000_CODE/01_collider_pyo/juce/build-audio-only/ColliderApp_artefacts/Release
+if %errorlevel% neq 0 goto :cmEnd
+"C:\Program Files\CMake\bin\cmake.exe" -E copy_if_different H:/0000_CODE/01_collider_pyo/juce/build-audio-only/bin/opencv_videoio_ffmpeg4130_64.dll H:/0000_CODE/01_collider_pyo/juce/build-audio-only/ColliderApp_artefacts/Release || "C:/Program Files/CMake/bin/cmake.exe" -E echo "Note: OpenCV FFmpeg DLL not found (optional video codec)"
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal &amp; call :cmErrorLevel %errorlevel% &amp; goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd
+setlocal
+"C:\Program Files\CMake\bin\cmake.exe" -E copy_if_different H:/0000_CODE/01_collider_pyo/juce/../vendor/ffmpeg/bin/avcodec-62.dll H:/0000_CODE/01_collider_pyo/juce/build-audio-only/ColliderApp_artefacts/Release
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal &amp; call :cmErrorLevel %errorlevel% &amp; goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd
+setlocal
+"C:\Program Files\CMake\bin\cmake.exe" -E copy_if_different H:/0000_CODE/01_collider_pyo/juce/../vendor/ffmpeg/bin/avdevice-62.dll H:/0000_CODE/01_collider_pyo/juce/build-audio-only/ColliderApp_artefacts/Release
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal &amp; call :cmErrorLevel %errorlevel% &amp; goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd
+setlocal
+"C:\Program Files\CMake\bin\cmake.exe" -E copy_if_different H:/0000_CODE/01_collider_pyo/juce/../vendor/ffmpeg/bin/avfilter-11.dll H:/0000_CODE/01_collider_pyo/juce/build-audio-only/ColliderApp_artefacts/Release
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal &amp; call :cmErrorLevel %errorlevel% &amp; goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd
+setlocal
+"C:\Program Files\CMake\bin\cmake.exe" -E copy_if_different H:/0000_CODE/01_collider_pyo/juce/../vendor/ffmpeg/bin/avformat-62.dll H:/0000_CODE/01_collider_pyo/juce/build-audio-only/ColliderApp_artefacts/Release
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal &amp; call :cmErrorLevel %errorlevel% &amp; goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd
+setlocal
+"C:\Program Files\CMake\bin\cmake.exe" -E copy_if_different H:/0000_CODE/01_collider_pyo/juce/../vendor/ffmpeg/bin/avutil-60.dll H:/0000_CODE/01_collider_pyo/juce/build-audio-only/ColliderApp_artefacts/Release
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal &amp; call :cmErrorLevel %errorlevel% &amp; goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd
+setlocal
+"C:\Program Files\CMake\bin\cmake.exe" -E copy_if_different H:/0000_CODE/01_collider_pyo/juce/../vendor/ffmpeg/bin/swresample-6.dll H:/0000_CODE/01_collider_pyo/juce/build-audio-only/ColliderApp_artefacts/Release
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal &amp; call :cmErrorLevel %errorlevel% &amp; goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd
+setlocal
+"C:\Program Files\CMake\bin\cmake.exe" -E copy_if_different H:/0000_CODE/01_collider_pyo/juce/../vendor/ffmpeg/bin/swscale-9.dll H:/0000_CODE/01_collider_pyo/juce/build-audio-only/ColliderApp_artefacts/Release
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal &amp; call :cmErrorLevel %errorlevel% &amp; goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd
+setlocal
+"C:\Program Files\CMake\bin\cmake.exe" -E copy_directory H:/0000_CODE/01_collider_pyo/juce/../vendor/piper/piper/espeak-ng-data H:/0000_CODE/01_collider_pyo/juce/build-audio-only/ColliderApp_artefacts/Release/espeak-ng-data
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal &amp; call :cmErrorLevel %errorlevel% &amp; goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd
+setlocal
+"C:\Program Files\CMake\bin\cmake.exe" -E copy_if_different /data/haarcascades/haarcascade_frontalface_default.xml H:/0000_CODE/01_collider_pyo/juce/build-audio-only/ColliderApp_artefacts/Release
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal &amp; call :cmErrorLevel %errorlevel% &amp; goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd
+setlocal
+"C:\Program Files\CMake\bin\cmake.exe" -E make_directory H:/0000_CODE/01_collider_pyo/juce/build-audio-only/ColliderApp_artefacts/Release/themes
+if %errorlevel% neq 0 goto :cmEnd
+"C:\Program Files\CMake\bin\cmake.exe" -E copy_directory H:/0000_CODE/01_collider_pyo/juce/Source/preset_creator/theme/presets H:/0000_CODE/01_collider_pyo/juce/build-audio-only/ColliderApp_artefacts/Release/themes
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal &amp; call :cmErrorLevel %errorlevel% &amp; goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd</Command>
+    </PostBuildEvent>
+    <Link>
+      <AdditionalDependencies>Release\soundtouch.lib;_deps\box2d_fc-build\bin\Release\box2d.lib;_deps\glm-build\glm\Release\glm.lib;_deps\tinygltf-build\Release\tinygltf.lib;Release\ufbx_static.lib;Release\rubberband_single.lib;H:\0000_CODE\01_collider_pyo\vendor\ffmpeg\lib\avformat.lib;H:\0000_CODE\01_collider_pyo\vendor\ffmpeg\lib\avcodec.lib;H:\0000_CODE\01_collider_pyo\vendor\ffmpeg\lib\avutil.lib;H:\0000_CODE\01_collider_pyo\vendor\ffmpeg\lib\swresample.lib;H:\0000_CODE\01_collider_pyo\vendor\ffmpeg\lib\swscale.lib;H:\0000_CODE\01_collider_pyo\juce\..\vendor\onnxruntime\lib\onnxruntime.lib;ole32.lib;strmiids.lib;kernel32.lib;user32.lib;gdi32.lib;winspool.lib;shell32.lib;ole32.lib;oleaut32.lib;uuid.lib;comdlg32.lib;advapi32.lib</AdditionalDependencies>
+      <AdditionalLibraryDirectories>H:/0000_CODE/01_collider_pyo/juce/build-audio-only/_deps/juce-src/modules/juce_gui_extra/libs/VisualStudio2022/x64/MDd;H:/0000_CODE/01_collider_pyo/juce/build-audio-only/_deps/juce-src/modules/juce_gui_extra/libs/VisualStudio2022/x64/MDd/$(Configuration);H:/0000_CODE/01_collider_pyo/juce/build-audio-only/_deps/juce-src/modules/juce_gui_basics/libs/VisualStudio2022/x64/MDd;H:/0000_CODE/01_collider_pyo/juce/build-audio-only/_deps/juce-src/modules/juce_gui_basics/libs/VisualStudio2022/x64/MDd/$(Configuration);H:/0000_CODE/01_collider_pyo/juce/build-audio-only/_deps/juce-src/modules/juce_graphics/libs/VisualStudio2022/x64/MDd;H:/0000_CODE/01_collider_pyo/juce/build-audio-only/_deps/juce-src/modules/juce_graphics/libs/VisualStudio2022/x64/MDd/$(Configuration);H:/0000_CODE/01_collider_pyo/juce/build-audio-only/_deps/juce-src/modules/juce_events/libs/VisualStudio2022/x64/MDd;H:/0000_CODE/01_collider_pyo/juce/build-audio-only/_deps/juce-src/modules/juce_events/libs/VisualStudio2022/x64/MDd/$(Configuration);H:/0000_CODE/01_collider_pyo/juce/build-audio-only/_deps/juce-src/modules/juce_core/libs/VisualStudio2022/x64/MDd;H:/0000_CODE/01_collider_pyo/juce/build-audio-only/_deps/juce-src/modules/juce_core/libs/VisualStudio2022/x64/MDd/$(Configuration);H:/0000_CODE/01_collider_pyo/juce/build-audio-only/_deps/juce-src/modules/juce_data_structures/libs/VisualStudio2022/x64/MDd;H:/0000_CODE/01_collider_pyo/juce/build-audio-only/_deps/juce-src/modules/juce_data_structures/libs/VisualStudio2022/x64/MDd/$(Configuration);H:/0000_CODE/01_collider_pyo/juce/build-audio-only/_deps/juce-src/modules/juce_opengl/libs/VisualStudio2022/x64/MDd;H:/0000_CODE/01_collider_pyo/juce/build-audio-only/_deps/juce-src/modules/juce_opengl/libs/VisualStudio2022/x64/MDd/$(Configuration);H:/0000_CODE/01_collider_pyo/juce/build-audio-only/_deps/juce-src/modules/juce_audio_processors/libs/VisualStudio2022/x64/MDd;H:/0000_CODE/01_collider_pyo/juce/build-audio-only/_deps/juce-src/modules/juce_audio_processors/libs/VisualStudio2022/x64/MDd/$(Configuration);H:/0000_CODE/01_collider_pyo/juce/build-audio-only/_deps/juce-src/modules/juce_audio_basics/libs/VisualStudio2022/x64/MDd;H:/0000_CODE/01_collider_pyo/juce/build-audio-only/_deps/juce-src/modules/juce_audio_basics/libs/VisualStudio2022/x64/MDd/$(Configuration);H:/0000_CODE/01_collider_pyo/juce/build-audio-only/_deps/juce-src/modules/juce_audio_utils/libs/VisualStudio2022/x64/MDd;H:/0000_CODE/01_collider_pyo/juce/build-audio-only/_deps/juce-src/modules/juce_audio_utils/libs/VisualStudio2022/x64/MDd/$(Configuration);H:/0000_CODE/01_collider_pyo/juce/build-audio-only/_deps/juce-src/modules/juce_audio_formats/libs/VisualStudio2022/x64/MDd;H:/0000_CODE/01_collider_pyo/juce/build-audio-only/_deps/juce-src/modules/juce_audio_formats/libs/VisualStudio2022/x64/MDd/$(Configuration);H:/0000_CODE/01_collider_pyo/juce/build-audio-only/_deps/juce-src/modules/juce_audio_devices/libs/VisualStudio2022/x64/MDd;H:/0000_CODE/01_collider_pyo/juce/build-audio-only/_deps/juce-src/modules/juce_audio_devices/libs/VisualStudio2022/x64/MDd/$(Configuration);H:/0000_CODE/01_collider_pyo/juce/build-audio-only/_deps/juce-src/modules/juce_dsp/libs/VisualStudio2022/x64/MDd;H:/0000_CODE/01_collider_pyo/juce/build-audio-only/_deps/juce-src/modules/juce_dsp/libs/VisualStudio2022/x64/MDd/$(Configuration);H:/0000_CODE/01_collider_pyo/juce/build-audio-only/_deps/juce-src/modules/juce_osc/libs/VisualStudio2022/x64/MDd;H:/0000_CODE/01_collider_pyo/juce/build-audio-only/_deps/juce-src/modules/juce_osc/libs/VisualStudio2022/x64/MDd/$(Configuration);%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalOptions>%(AdditionalOptions) /machine:x64</AdditionalOptions>
+      <DataExecutionPrevention></DataExecutionPrevention>
+      <GenerateDebugInformation>false</GenerateDebugInformation>
+      <IgnoreSpecificDefaultLibraries>%(IgnoreSpecificDefaultLibraries)</IgnoreSpecificDefaultLibraries>
+      <ImageHasSafeExceptionHandlers></ImageHasSafeExceptionHandlers>
+      <ImportLibrary>H:/0000_CODE/01_collider_pyo/juce/build-audio-only/ColliderApp_artefacts/Release/Collider Audio Engine.lib</ImportLibrary>
+      <LinkErrorReporting></LinkErrorReporting>
+      <ProgramDataBaseFile>H:/0000_CODE/01_collider_pyo/juce/build-audio-only/ColliderApp_artefacts/Release/Collider Audio Engine.pdb</ProgramDataBaseFile>
+      <RandomizedBaseAddress></RandomizedBaseAddress>
+      <SubSystem>Windows</SubSystem>
+    </Link>
+    <ProjectReference>
+      <LinkLibraryDependencies>false</LinkLibraryDependencies>
+    </ProjectReference>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='MinSizeRel|x64'">
+    <ClCompile>
+      <AdditionalIncludeDirectories>H:\0000_CODE\01_collider_pyo\juce\build-audio-only\ColliderApp_artefacts\JuceLibraryCode;H:\0000_CODE\01_collider_pyo\juce\..\vendor\piper\piper;H:\0000_CODE\01_collider_pyo\juce\..\vendor\onnxruntime\include;H:\0000_CODE\01_collider_pyo\juce\..\vendor\openvino_toolkit_windows_2025.3.0.19807.44526285f24_x86_64\samples\cpp\thirdparty\nlohmann_json\single_include;H:\0000_CODE\01_collider_pyo\juce\..\soundtouch\include;H:\0000_CODE\01_collider_pyo\juce\..\soundtouch\source\SoundTouch;H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\ufbx-src;H:\0000_CODE\01_collider_pyo\juce\..\vendor\ffmpeg\include;\include;\modules\core\include;\modules\imgproc\include;\modules\imgcodecs\include;\modules\videoio\include;\modules\highgui\include;\modules\video\include;\modules\objdetect\include;\modules\features2d\include;\modules\calib3d\include;\modules\dnn\include;\modules\world;H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\rubberband_fc-src;H:\0000_CODE\01_collider_pyo\juce\..\vendor\ASIOSDK\common;H:\0000_CODE\01_collider_pyo\juce\..\vendor\ASIOSDK\host;H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\juce-src\modules;H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\juce-src\modules\juce_audio_processors\format_types\VST3_SDK;H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\juce-src\modules\juce_audio_processors\format_types\LV2_SDK;H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\juce-src\modules\juce_audio_processors\format_types\LV2_SDK\lv2;H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\juce-src\modules\juce_audio_processors\format_types\LV2_SDK\serd;H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\juce-src\modules\juce_audio_processors\format_types\LV2_SDK\sord;H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\juce-src\modules\juce_audio_processors\format_types\LV2_SDK\sord\src;H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\juce-src\modules\juce_audio_processors\format_types\LV2_SDK\sratom;H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\juce-src\modules\juce_audio_processors\format_types\LV2_SDK\lilv;H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\juce-src\modules\juce_audio_processors\format_types\LV2_SDK\lilv\src;H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\box2d_fc-src\src\..\include;H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\glm-src;H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\tinygltf-src;H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\rubberband_fc-src\single;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalOptions>%(AdditionalOptions) /bigobj</AdditionalOptions>
+      <AssemblerListingLocation>$(IntDir)</AssemblerListingLocation>
+      <BasicRuntimeChecks>Default</BasicRuntimeChecks>
+      <ExceptionHandling>Sync</ExceptionHandling>
+      <ForceConformanceInForLoopScope></ForceConformanceInForLoopScope>
+      <InlineFunctionExpansion>OnlyExplicitInline</InlineFunctionExpansion>
+      <LanguageStandard>stdcpp20</LanguageStandard>
+      <MinimalRebuild></MinimalRebuild>
+      <Optimization>MinSpace</Optimization>
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+      <RemoveUnreferencedCodeData></RemoveUnreferencedCodeData>
+      <RuntimeLibrary>MultiThreadedDLL</RuntimeLibrary>
+      <SupportJustMyCode></SupportJustMyCode>
+      <TreatWChar_tAsBuiltInType></TreatWChar_tAsBuiltInType>
+      <UseFullPaths>false</UseFullPaths>
+      <PreprocessorDefinitions>%(PreprocessorDefinitions);WIN32;_WINDOWS;NDEBUG;JUCE_STANDALONE_APPLICATION=1;JUCE_APPLICATION_NAME_STRING="";JUCE_APPLICATION_VERSION_STRING="";JUCE_WEB_BROWSER=0;JUCE_USE_CURL=0;JUCE_PLUGINHOST_VST3=1;USE_RUBBERBAND=1;JUCE_ASIO=1;JUCE_MODULE_AVAILABLE_juce_gui_extra=1;JUCE_MODULE_AVAILABLE_juce_gui_basics=1;JUCE_MODULE_AVAILABLE_juce_graphics=1;JUCE_MODULE_AVAILABLE_juce_events=1;JUCE_GLOBAL_MODULE_SETTINGS_INCLUDED=1;NDEBUG=1;_NDEBUG=1;JUCE_MODULE_AVAILABLE_juce_core=1;JUCE_MODULE_AVAILABLE_juce_data_structures=1;JUCE_MODULE_AVAILABLE_juce_opengl=1;JUCE_MODULE_AVAILABLE_juce_audio_processors=1;JUCE_MODULE_AVAILABLE_juce_audio_basics=1;JUCE_MODULE_AVAILABLE_juce_audio_utils=1;JUCE_MODULE_AVAILABLE_juce_audio_formats=1;JUCE_MODULE_AVAILABLE_juce_audio_devices=1;JUCE_MODULE_AVAILABLE_juce_dsp=1;JUCE_MODULE_AVAILABLE_juce_osc=1;NOMINMAX;_USE_MATH_DEFINES;RUBBERBAND_USE_R3=1;RUBBERBAND_BUILD_FFT=KISSFFT;RUBBERBAND_BUILD_RESAMPLER=NONE;CMAKE_INTDIR="MinSizeRel"</PreprocessorDefinitions>
+      <ObjectFileName>$(IntDir)</ObjectFileName>
+      <DebugInformationFormat>
+      </DebugInformationFormat>
+      <ScanSourceForModuleDependencies>false</ScanSourceForModuleDependencies>
+    </ClCompile>
+    <ResourceCompile>
+      <PreprocessorDefinitions>%(PreprocessorDefinitions);WIN32;_WINDOWS;NDEBUG;JUCE_STANDALONE_APPLICATION=1;JUCE_APPLICATION_NAME_STRING=\"\";JUCE_APPLICATION_VERSION_STRING=\"\";JUCE_WEB_BROWSER=0;JUCE_USE_CURL=0;JUCE_PLUGINHOST_VST3=1;USE_RUBBERBAND=1;JUCE_ASIO=1;JUCE_MODULE_AVAILABLE_juce_gui_extra=1;JUCE_MODULE_AVAILABLE_juce_gui_basics=1;JUCE_MODULE_AVAILABLE_juce_graphics=1;JUCE_MODULE_AVAILABLE_juce_events=1;JUCE_GLOBAL_MODULE_SETTINGS_INCLUDED=1;NDEBUG=1;_NDEBUG=1;JUCE_MODULE_AVAILABLE_juce_core=1;JUCE_MODULE_AVAILABLE_juce_data_structures=1;JUCE_MODULE_AVAILABLE_juce_opengl=1;JUCE_MODULE_AVAILABLE_juce_audio_processors=1;JUCE_MODULE_AVAILABLE_juce_audio_basics=1;JUCE_MODULE_AVAILABLE_juce_audio_utils=1;JUCE_MODULE_AVAILABLE_juce_audio_formats=1;JUCE_MODULE_AVAILABLE_juce_audio_devices=1;JUCE_MODULE_AVAILABLE_juce_dsp=1;JUCE_MODULE_AVAILABLE_juce_osc=1;NOMINMAX;_USE_MATH_DEFINES;RUBBERBAND_USE_R3=1;RUBBERBAND_BUILD_FFT=KISSFFT;RUBBERBAND_BUILD_RESAMPLER=NONE;CMAKE_INTDIR=\"MinSizeRel\"</PreprocessorDefinitions>
+      <AdditionalIncludeDirectories>H:\0000_CODE\01_collider_pyo\juce\build-audio-only\ColliderApp_artefacts\JuceLibraryCode;H:\0000_CODE\01_collider_pyo\juce\..\vendor\piper\piper;H:\0000_CODE\01_collider_pyo\juce\..\vendor\onnxruntime\include;H:\0000_CODE\01_collider_pyo\juce\..\vendor\openvino_toolkit_windows_2025.3.0.19807.44526285f24_x86_64\samples\cpp\thirdparty\nlohmann_json\single_include;H:\0000_CODE\01_collider_pyo\juce\..\soundtouch\include;H:\0000_CODE\01_collider_pyo\juce\..\soundtouch\source\SoundTouch;H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\ufbx-src;H:\0000_CODE\01_collider_pyo\juce\..\vendor\ffmpeg\include;\include;\modules\core\include;\modules\imgproc\include;\modules\imgcodecs\include;\modules\videoio\include;\modules\highgui\include;\modules\video\include;\modules\objdetect\include;\modules\features2d\include;\modules\calib3d\include;\modules\dnn\include;\modules\world;H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\rubberband_fc-src;H:\0000_CODE\01_collider_pyo\juce\..\vendor\ASIOSDK\common;H:\0000_CODE\01_collider_pyo\juce\..\vendor\ASIOSDK\host;H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\juce-src\modules;H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\juce-src\modules\juce_audio_processors\format_types\VST3_SDK;H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\juce-src\modules\juce_audio_processors\format_types\LV2_SDK;H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\juce-src\modules\juce_audio_processors\format_types\LV2_SDK\lv2;H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\juce-src\modules\juce_audio_processors\format_types\LV2_SDK\serd;H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\juce-src\modules\juce_audio_processors\format_types\LV2_SDK\sord;H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\juce-src\modules\juce_audio_processors\format_types\LV2_SDK\sord\src;H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\juce-src\modules\juce_audio_processors\format_types\LV2_SDK\sratom;H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\juce-src\modules\juce_audio_processors\format_types\LV2_SDK\lilv;H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\juce-src\modules\juce_audio_processors\format_types\LV2_SDK\lilv\src;H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\box2d_fc-src\src\..\include;H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\glm-src;H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\tinygltf-src;H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\rubberband_fc-src\single;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ResourceCompile>
+    <Midl>
+      <AdditionalIncludeDirectories>H:\0000_CODE\01_collider_pyo\juce\build-audio-only\ColliderApp_artefacts\JuceLibraryCode;H:\0000_CODE\01_collider_pyo\juce\..\vendor\piper\piper;H:\0000_CODE\01_collider_pyo\juce\..\vendor\onnxruntime\include;H:\0000_CODE\01_collider_pyo\juce\..\vendor\openvino_toolkit_windows_2025.3.0.19807.44526285f24_x86_64\samples\cpp\thirdparty\nlohmann_json\single_include;H:\0000_CODE\01_collider_pyo\juce\..\soundtouch\include;H:\0000_CODE\01_collider_pyo\juce\..\soundtouch\source\SoundTouch;H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\ufbx-src;H:\0000_CODE\01_collider_pyo\juce\..\vendor\ffmpeg\include;\include;\modules\core\include;\modules\imgproc\include;\modules\imgcodecs\include;\modules\videoio\include;\modules\highgui\include;\modules\video\include;\modules\objdetect\include;\modules\features2d\include;\modules\calib3d\include;\modules\dnn\include;\modules\world;H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\rubberband_fc-src;H:\0000_CODE\01_collider_pyo\juce\..\vendor\ASIOSDK\common;H:\0000_CODE\01_collider_pyo\juce\..\vendor\ASIOSDK\host;H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\juce-src\modules;H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\juce-src\modules\juce_audio_processors\format_types\VST3_SDK;H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\juce-src\modules\juce_audio_processors\format_types\LV2_SDK;H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\juce-src\modules\juce_audio_processors\format_types\LV2_SDK\lv2;H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\juce-src\modules\juce_audio_processors\format_types\LV2_SDK\serd;H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\juce-src\modules\juce_audio_processors\format_types\LV2_SDK\sord;H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\juce-src\modules\juce_audio_processors\format_types\LV2_SDK\sord\src;H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\juce-src\modules\juce_audio_processors\format_types\LV2_SDK\sratom;H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\juce-src\modules\juce_audio_processors\format_types\LV2_SDK\lilv;H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\juce-src\modules\juce_audio_processors\format_types\LV2_SDK\lilv\src;H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\box2d_fc-src\src\..\include;H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\glm-src;H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\tinygltf-src;H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\rubberband_fc-src\single;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <OutputDirectory>$(ProjectDir)/$(IntDir)</OutputDirectory>
+      <HeaderFileName>%(Filename).h</HeaderFileName>
+      <TypeLibraryName>%(Filename).tlb</TypeLibraryName>
+      <InterfaceIdentifierFileName>%(Filename)_i.c</InterfaceIdentifierFileName>
+      <ProxyFileName>%(Filename)_p.c</ProxyFileName>
+    </Midl>
+    <PostBuildEvent>
+      <Message>	Copying avcodec-62.dll to ColliderApp	Copying avdevice-62.dll to ColliderApp	Copying avfilter-11.dll to ColliderApp	Copying avformat-62.dll to ColliderApp	Copying avutil-60.dll to ColliderApp	Copying swresample-6.dll to ColliderApp	Copying swscale-9.dll to ColliderApp	Copying espeak-ng-data to ColliderApp output directory	Copying OpenCV data to ColliderApp output directory	Copying theme presets to ColliderApp/themes</Message>
+      <Command>setlocal
+"C:\Program Files\CMake\bin\cmake.exe" -E copy_if_different H:/0000_CODE/01_collider_pyo/juce/../vendor/piper/piper/piper.exe H:/0000_CODE/01_collider_pyo/juce/build-audio-only/ColliderApp_artefacts/MinSizeRel
+if %errorlevel% neq 0 goto :cmEnd
+"C:\Program Files\CMake\bin\cmake.exe" -E copy_if_different H:/0000_CODE/01_collider_pyo/juce/../vendor/piper/piper/piper_phonemize.dll H:/0000_CODE/01_collider_pyo/juce/build-audio-only/ColliderApp_artefacts/MinSizeRel
+if %errorlevel% neq 0 goto :cmEnd
+"C:\Program Files\CMake\bin\cmake.exe" -E copy_if_different H:/0000_CODE/01_collider_pyo/juce/../vendor/piper/piper/espeak-ng.dll H:/0000_CODE/01_collider_pyo/juce/build-audio-only/ColliderApp_artefacts/MinSizeRel
+if %errorlevel% neq 0 goto :cmEnd
+"C:\Program Files\CMake\bin\cmake.exe" -E copy_if_different H:/0000_CODE/01_collider_pyo/juce/../vendor/onnxruntime/lib/onnxruntime.dll H:/0000_CODE/01_collider_pyo/juce/build-audio-only/ColliderApp_artefacts/MinSizeRel
+if %errorlevel% neq 0 goto :cmEnd
+"C:\Program Files\CMake\bin\cmake.exe" -E copy_if_different H:/0000_CODE/01_collider_pyo/juce/../vendor/onnxruntime/lib/onnxruntime_providers_shared.dll H:/0000_CODE/01_collider_pyo/juce/build-audio-only/ColliderApp_artefacts/MinSizeRel
+if %errorlevel% neq 0 goto :cmEnd
+"C:\Program Files\CMake\bin\cmake.exe" -E copy_if_different H:/0000_CODE/01_collider_pyo/juce/build-audio-only/bin/opencv_videoio_ffmpeg4130_64.dll H:/0000_CODE/01_collider_pyo/juce/build-audio-only/ColliderApp_artefacts/MinSizeRel || "C:/Program Files/CMake/bin/cmake.exe" -E echo "Note: OpenCV FFmpeg DLL not found (optional video codec)"
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal &amp; call :cmErrorLevel %errorlevel% &amp; goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd
+setlocal
+"C:\Program Files\CMake\bin\cmake.exe" -E copy_if_different H:/0000_CODE/01_collider_pyo/juce/../vendor/ffmpeg/bin/avcodec-62.dll H:/0000_CODE/01_collider_pyo/juce/build-audio-only/ColliderApp_artefacts/MinSizeRel
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal &amp; call :cmErrorLevel %errorlevel% &amp; goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd
+setlocal
+"C:\Program Files\CMake\bin\cmake.exe" -E copy_if_different H:/0000_CODE/01_collider_pyo/juce/../vendor/ffmpeg/bin/avdevice-62.dll H:/0000_CODE/01_collider_pyo/juce/build-audio-only/ColliderApp_artefacts/MinSizeRel
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal &amp; call :cmErrorLevel %errorlevel% &amp; goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd
+setlocal
+"C:\Program Files\CMake\bin\cmake.exe" -E copy_if_different H:/0000_CODE/01_collider_pyo/juce/../vendor/ffmpeg/bin/avfilter-11.dll H:/0000_CODE/01_collider_pyo/juce/build-audio-only/ColliderApp_artefacts/MinSizeRel
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal &amp; call :cmErrorLevel %errorlevel% &amp; goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd
+setlocal
+"C:\Program Files\CMake\bin\cmake.exe" -E copy_if_different H:/0000_CODE/01_collider_pyo/juce/../vendor/ffmpeg/bin/avformat-62.dll H:/0000_CODE/01_collider_pyo/juce/build-audio-only/ColliderApp_artefacts/MinSizeRel
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal &amp; call :cmErrorLevel %errorlevel% &amp; goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd
+setlocal
+"C:\Program Files\CMake\bin\cmake.exe" -E copy_if_different H:/0000_CODE/01_collider_pyo/juce/../vendor/ffmpeg/bin/avutil-60.dll H:/0000_CODE/01_collider_pyo/juce/build-audio-only/ColliderApp_artefacts/MinSizeRel
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal &amp; call :cmErrorLevel %errorlevel% &amp; goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd
+setlocal
+"C:\Program Files\CMake\bin\cmake.exe" -E copy_if_different H:/0000_CODE/01_collider_pyo/juce/../vendor/ffmpeg/bin/swresample-6.dll H:/0000_CODE/01_collider_pyo/juce/build-audio-only/ColliderApp_artefacts/MinSizeRel
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal &amp; call :cmErrorLevel %errorlevel% &amp; goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd
+setlocal
+"C:\Program Files\CMake\bin\cmake.exe" -E copy_if_different H:/0000_CODE/01_collider_pyo/juce/../vendor/ffmpeg/bin/swscale-9.dll H:/0000_CODE/01_collider_pyo/juce/build-audio-only/ColliderApp_artefacts/MinSizeRel
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal &amp; call :cmErrorLevel %errorlevel% &amp; goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd
+setlocal
+"C:\Program Files\CMake\bin\cmake.exe" -E copy_directory H:/0000_CODE/01_collider_pyo/juce/../vendor/piper/piper/espeak-ng-data H:/0000_CODE/01_collider_pyo/juce/build-audio-only/ColliderApp_artefacts/MinSizeRel/espeak-ng-data
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal &amp; call :cmErrorLevel %errorlevel% &amp; goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd
+setlocal
+"C:\Program Files\CMake\bin\cmake.exe" -E copy_if_different /data/haarcascades/haarcascade_frontalface_default.xml H:/0000_CODE/01_collider_pyo/juce/build-audio-only/ColliderApp_artefacts/MinSizeRel
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal &amp; call :cmErrorLevel %errorlevel% &amp; goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd
+setlocal
+"C:\Program Files\CMake\bin\cmake.exe" -E make_directory H:/0000_CODE/01_collider_pyo/juce/build-audio-only/ColliderApp_artefacts/MinSizeRel/themes
+if %errorlevel% neq 0 goto :cmEnd
+"C:\Program Files\CMake\bin\cmake.exe" -E copy_directory H:/0000_CODE/01_collider_pyo/juce/Source/preset_creator/theme/presets H:/0000_CODE/01_collider_pyo/juce/build-audio-only/ColliderApp_artefacts/MinSizeRel/themes
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal &amp; call :cmErrorLevel %errorlevel% &amp; goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd</Command>
+    </PostBuildEvent>
+    <Link>
+      <AdditionalDependencies>MinSizeRel\soundtouch.lib;_deps\box2d_fc-build\bin\MinSizeRel\box2d.lib;_deps\glm-build\glm\MinSizeRel\glm.lib;_deps\tinygltf-build\MinSizeRel\tinygltf.lib;MinSizeRel\ufbx_static.lib;MinSizeRel\rubberband_single.lib;H:\0000_CODE\01_collider_pyo\vendor\ffmpeg\lib\avformat.lib;H:\0000_CODE\01_collider_pyo\vendor\ffmpeg\lib\avcodec.lib;H:\0000_CODE\01_collider_pyo\vendor\ffmpeg\lib\avutil.lib;H:\0000_CODE\01_collider_pyo\vendor\ffmpeg\lib\swresample.lib;H:\0000_CODE\01_collider_pyo\vendor\ffmpeg\lib\swscale.lib;H:\0000_CODE\01_collider_pyo\juce\..\vendor\onnxruntime\lib\onnxruntime.lib;ole32.lib;strmiids.lib;kernel32.lib;user32.lib;gdi32.lib;winspool.lib;shell32.lib;ole32.lib;oleaut32.lib;uuid.lib;comdlg32.lib;advapi32.lib</AdditionalDependencies>
+      <AdditionalLibraryDirectories>H:/0000_CODE/01_collider_pyo/juce/build-audio-only/_deps/juce-src/modules/juce_gui_extra/libs/VisualStudio2022/x64/MDd;H:/0000_CODE/01_collider_pyo/juce/build-audio-only/_deps/juce-src/modules/juce_gui_extra/libs/VisualStudio2022/x64/MDd/$(Configuration);H:/0000_CODE/01_collider_pyo/juce/build-audio-only/_deps/juce-src/modules/juce_gui_basics/libs/VisualStudio2022/x64/MDd;H:/0000_CODE/01_collider_pyo/juce/build-audio-only/_deps/juce-src/modules/juce_gui_basics/libs/VisualStudio2022/x64/MDd/$(Configuration);H:/0000_CODE/01_collider_pyo/juce/build-audio-only/_deps/juce-src/modules/juce_graphics/libs/VisualStudio2022/x64/MDd;H:/0000_CODE/01_collider_pyo/juce/build-audio-only/_deps/juce-src/modules/juce_graphics/libs/VisualStudio2022/x64/MDd/$(Configuration);H:/0000_CODE/01_collider_pyo/juce/build-audio-only/_deps/juce-src/modules/juce_events/libs/VisualStudio2022/x64/MDd;H:/0000_CODE/01_collider_pyo/juce/build-audio-only/_deps/juce-src/modules/juce_events/libs/VisualStudio2022/x64/MDd/$(Configuration);H:/0000_CODE/01_collider_pyo/juce/build-audio-only/_deps/juce-src/modules/juce_core/libs/VisualStudio2022/x64/MDd;H:/0000_CODE/01_collider_pyo/juce/build-audio-only/_deps/juce-src/modules/juce_core/libs/VisualStudio2022/x64/MDd/$(Configuration);H:/0000_CODE/01_collider_pyo/juce/build-audio-only/_deps/juce-src/modules/juce_data_structures/libs/VisualStudio2022/x64/MDd;H:/0000_CODE/01_collider_pyo/juce/build-audio-only/_deps/juce-src/modules/juce_data_structures/libs/VisualStudio2022/x64/MDd/$(Configuration);H:/0000_CODE/01_collider_pyo/juce/build-audio-only/_deps/juce-src/modules/juce_opengl/libs/VisualStudio2022/x64/MDd;H:/0000_CODE/01_collider_pyo/juce/build-audio-only/_deps/juce-src/modules/juce_opengl/libs/VisualStudio2022/x64/MDd/$(Configuration);H:/0000_CODE/01_collider_pyo/juce/build-audio-only/_deps/juce-src/modules/juce_audio_processors/libs/VisualStudio2022/x64/MDd;H:/0000_CODE/01_collider_pyo/juce/build-audio-only/_deps/juce-src/modules/juce_audio_processors/libs/VisualStudio2022/x64/MDd/$(Configuration);H:/0000_CODE/01_collider_pyo/juce/build-audio-only/_deps/juce-src/modules/juce_audio_basics/libs/VisualStudio2022/x64/MDd;H:/0000_CODE/01_collider_pyo/juce/build-audio-only/_deps/juce-src/modules/juce_audio_basics/libs/VisualStudio2022/x64/MDd/$(Configuration);H:/0000_CODE/01_collider_pyo/juce/build-audio-only/_deps/juce-src/modules/juce_audio_utils/libs/VisualStudio2022/x64/MDd;H:/0000_CODE/01_collider_pyo/juce/build-audio-only/_deps/juce-src/modules/juce_audio_utils/libs/VisualStudio2022/x64/MDd/$(Configuration);H:/0000_CODE/01_collider_pyo/juce/build-audio-only/_deps/juce-src/modules/juce_audio_formats/libs/VisualStudio2022/x64/MDd;H:/0000_CODE/01_collider_pyo/juce/build-audio-only/_deps/juce-src/modules/juce_audio_formats/libs/VisualStudio2022/x64/MDd/$(Configuration);H:/0000_CODE/01_collider_pyo/juce/build-audio-only/_deps/juce-src/modules/juce_audio_devices/libs/VisualStudio2022/x64/MDd;H:/0000_CODE/01_collider_pyo/juce/build-audio-only/_deps/juce-src/modules/juce_audio_devices/libs/VisualStudio2022/x64/MDd/$(Configuration);H:/0000_CODE/01_collider_pyo/juce/build-audio-only/_deps/juce-src/modules/juce_dsp/libs/VisualStudio2022/x64/MDd;H:/0000_CODE/01_collider_pyo/juce/build-audio-only/_deps/juce-src/modules/juce_dsp/libs/VisualStudio2022/x64/MDd/$(Configuration);H:/0000_CODE/01_collider_pyo/juce/build-audio-only/_deps/juce-src/modules/juce_osc/libs/VisualStudio2022/x64/MDd;H:/0000_CODE/01_collider_pyo/juce/build-audio-only/_deps/juce-src/modules/juce_osc/libs/VisualStudio2022/x64/MDd/$(Configuration);%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalOptions>%(AdditionalOptions) /machine:x64</AdditionalOptions>
+      <DataExecutionPrevention></DataExecutionPrevention>
+      <GenerateDebugInformation>false</GenerateDebugInformation>
+      <IgnoreSpecificDefaultLibraries>%(IgnoreSpecificDefaultLibraries)</IgnoreSpecificDefaultLibraries>
+      <ImageHasSafeExceptionHandlers></ImageHasSafeExceptionHandlers>
+      <ImportLibrary>H:/0000_CODE/01_collider_pyo/juce/build-audio-only/ColliderApp_artefacts/MinSizeRel/Collider Audio Engine.lib</ImportLibrary>
+      <LinkErrorReporting></LinkErrorReporting>
+      <ProgramDataBaseFile>H:/0000_CODE/01_collider_pyo/juce/build-audio-only/ColliderApp_artefacts/MinSizeRel/Collider Audio Engine.pdb</ProgramDataBaseFile>
+      <RandomizedBaseAddress></RandomizedBaseAddress>
+      <SubSystem>Windows</SubSystem>
+    </Link>
+    <ProjectReference>
+      <LinkLibraryDependencies>false</LinkLibraryDependencies>
+    </ProjectReference>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='RelWithDebInfo|x64'">
+    <ClCompile>
+      <AdditionalIncludeDirectories>H:\0000_CODE\01_collider_pyo\juce\build-audio-only\ColliderApp_artefacts\JuceLibraryCode;H:\0000_CODE\01_collider_pyo\juce\..\vendor\piper\piper;H:\0000_CODE\01_collider_pyo\juce\..\vendor\onnxruntime\include;H:\0000_CODE\01_collider_pyo\juce\..\vendor\openvino_toolkit_windows_2025.3.0.19807.44526285f24_x86_64\samples\cpp\thirdparty\nlohmann_json\single_include;H:\0000_CODE\01_collider_pyo\juce\..\soundtouch\include;H:\0000_CODE\01_collider_pyo\juce\..\soundtouch\source\SoundTouch;H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\ufbx-src;H:\0000_CODE\01_collider_pyo\juce\..\vendor\ffmpeg\include;\include;\modules\core\include;\modules\imgproc\include;\modules\imgcodecs\include;\modules\videoio\include;\modules\highgui\include;\modules\video\include;\modules\objdetect\include;\modules\features2d\include;\modules\calib3d\include;\modules\dnn\include;\modules\world;H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\rubberband_fc-src;H:\0000_CODE\01_collider_pyo\juce\..\vendor\ASIOSDK\common;H:\0000_CODE\01_collider_pyo\juce\..\vendor\ASIOSDK\host;H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\juce-src\modules;H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\juce-src\modules\juce_audio_processors\format_types\VST3_SDK;H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\juce-src\modules\juce_audio_processors\format_types\LV2_SDK;H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\juce-src\modules\juce_audio_processors\format_types\LV2_SDK\lv2;H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\juce-src\modules\juce_audio_processors\format_types\LV2_SDK\serd;H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\juce-src\modules\juce_audio_processors\format_types\LV2_SDK\sord;H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\juce-src\modules\juce_audio_processors\format_types\LV2_SDK\sord\src;H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\juce-src\modules\juce_audio_processors\format_types\LV2_SDK\sratom;H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\juce-src\modules\juce_audio_processors\format_types\LV2_SDK\lilv;H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\juce-src\modules\juce_audio_processors\format_types\LV2_SDK\lilv\src;H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\box2d_fc-src\src\..\include;H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\glm-src;H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\tinygltf-src;H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\rubberband_fc-src\single;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalOptions>%(AdditionalOptions) /bigobj</AdditionalOptions>
+      <AssemblerListingLocation>$(IntDir)</AssemblerListingLocation>
+      <BasicRuntimeChecks>Default</BasicRuntimeChecks>
+      <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
+      <ExceptionHandling>Sync</ExceptionHandling>
+      <ForceConformanceInForLoopScope></ForceConformanceInForLoopScope>
+      <InlineFunctionExpansion>OnlyExplicitInline</InlineFunctionExpansion>
+      <LanguageStandard>stdcpp20</LanguageStandard>
+      <MinimalRebuild></MinimalRebuild>
+      <Optimization>MaxSpeed</Optimization>
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+      <RemoveUnreferencedCodeData></RemoveUnreferencedCodeData>
+      <RuntimeLibrary>MultiThreadedDLL</RuntimeLibrary>
+      <SupportJustMyCode></SupportJustMyCode>
+      <TreatWChar_tAsBuiltInType></TreatWChar_tAsBuiltInType>
+      <UseFullPaths>false</UseFullPaths>
+      <PreprocessorDefinitions>%(PreprocessorDefinitions);WIN32;_WINDOWS;NDEBUG;JUCE_STANDALONE_APPLICATION=1;JUCE_APPLICATION_NAME_STRING="";JUCE_APPLICATION_VERSION_STRING="";JUCE_WEB_BROWSER=0;JUCE_USE_CURL=0;JUCE_PLUGINHOST_VST3=1;USE_RUBBERBAND=1;JUCE_ASIO=1;JUCE_MODULE_AVAILABLE_juce_gui_extra=1;JUCE_MODULE_AVAILABLE_juce_gui_basics=1;JUCE_MODULE_AVAILABLE_juce_graphics=1;JUCE_MODULE_AVAILABLE_juce_events=1;JUCE_GLOBAL_MODULE_SETTINGS_INCLUDED=1;NDEBUG=1;_NDEBUG=1;JUCE_MODULE_AVAILABLE_juce_core=1;JUCE_MODULE_AVAILABLE_juce_data_structures=1;JUCE_MODULE_AVAILABLE_juce_opengl=1;JUCE_MODULE_AVAILABLE_juce_audio_processors=1;JUCE_MODULE_AVAILABLE_juce_audio_basics=1;JUCE_MODULE_AVAILABLE_juce_audio_utils=1;JUCE_MODULE_AVAILABLE_juce_audio_formats=1;JUCE_MODULE_AVAILABLE_juce_audio_devices=1;JUCE_MODULE_AVAILABLE_juce_dsp=1;JUCE_MODULE_AVAILABLE_juce_osc=1;NOMINMAX;_USE_MATH_DEFINES;RUBBERBAND_USE_R3=1;RUBBERBAND_BUILD_FFT=KISSFFT;RUBBERBAND_BUILD_RESAMPLER=NONE;CMAKE_INTDIR="RelWithDebInfo"</PreprocessorDefinitions>
+      <ObjectFileName>$(IntDir)</ObjectFileName>
+      <ScanSourceForModuleDependencies>false</ScanSourceForModuleDependencies>
+    </ClCompile>
+    <ResourceCompile>
+      <PreprocessorDefinitions>%(PreprocessorDefinitions);WIN32;_WINDOWS;NDEBUG;JUCE_STANDALONE_APPLICATION=1;JUCE_APPLICATION_NAME_STRING=\"\";JUCE_APPLICATION_VERSION_STRING=\"\";JUCE_WEB_BROWSER=0;JUCE_USE_CURL=0;JUCE_PLUGINHOST_VST3=1;USE_RUBBERBAND=1;JUCE_ASIO=1;JUCE_MODULE_AVAILABLE_juce_gui_extra=1;JUCE_MODULE_AVAILABLE_juce_gui_basics=1;JUCE_MODULE_AVAILABLE_juce_graphics=1;JUCE_MODULE_AVAILABLE_juce_events=1;JUCE_GLOBAL_MODULE_SETTINGS_INCLUDED=1;NDEBUG=1;_NDEBUG=1;JUCE_MODULE_AVAILABLE_juce_core=1;JUCE_MODULE_AVAILABLE_juce_data_structures=1;JUCE_MODULE_AVAILABLE_juce_opengl=1;JUCE_MODULE_AVAILABLE_juce_audio_processors=1;JUCE_MODULE_AVAILABLE_juce_audio_basics=1;JUCE_MODULE_AVAILABLE_juce_audio_utils=1;JUCE_MODULE_AVAILABLE_juce_audio_formats=1;JUCE_MODULE_AVAILABLE_juce_audio_devices=1;JUCE_MODULE_AVAILABLE_juce_dsp=1;JUCE_MODULE_AVAILABLE_juce_osc=1;NOMINMAX;_USE_MATH_DEFINES;RUBBERBAND_USE_R3=1;RUBBERBAND_BUILD_FFT=KISSFFT;RUBBERBAND_BUILD_RESAMPLER=NONE;CMAKE_INTDIR=\"RelWithDebInfo\"</PreprocessorDefinitions>
+      <AdditionalIncludeDirectories>H:\0000_CODE\01_collider_pyo\juce\build-audio-only\ColliderApp_artefacts\JuceLibraryCode;H:\0000_CODE\01_collider_pyo\juce\..\vendor\piper\piper;H:\0000_CODE\01_collider_pyo\juce\..\vendor\onnxruntime\include;H:\0000_CODE\01_collider_pyo\juce\..\vendor\openvino_toolkit_windows_2025.3.0.19807.44526285f24_x86_64\samples\cpp\thirdparty\nlohmann_json\single_include;H:\0000_CODE\01_collider_pyo\juce\..\soundtouch\include;H:\0000_CODE\01_collider_pyo\juce\..\soundtouch\source\SoundTouch;H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\ufbx-src;H:\0000_CODE\01_collider_pyo\juce\..\vendor\ffmpeg\include;\include;\modules\core\include;\modules\imgproc\include;\modules\imgcodecs\include;\modules\videoio\include;\modules\highgui\include;\modules\video\include;\modules\objdetect\include;\modules\features2d\include;\modules\calib3d\include;\modules\dnn\include;\modules\world;H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\rubberband_fc-src;H:\0000_CODE\01_collider_pyo\juce\..\vendor\ASIOSDK\common;H:\0000_CODE\01_collider_pyo\juce\..\vendor\ASIOSDK\host;H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\juce-src\modules;H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\juce-src\modules\juce_audio_processors\format_types\VST3_SDK;H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\juce-src\modules\juce_audio_processors\format_types\LV2_SDK;H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\juce-src\modules\juce_audio_processors\format_types\LV2_SDK\lv2;H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\juce-src\modules\juce_audio_processors\format_types\LV2_SDK\serd;H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\juce-src\modules\juce_audio_processors\format_types\LV2_SDK\sord;H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\juce-src\modules\juce_audio_processors\format_types\LV2_SDK\sord\src;H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\juce-src\modules\juce_audio_processors\format_types\LV2_SDK\sratom;H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\juce-src\modules\juce_audio_processors\format_types\LV2_SDK\lilv;H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\juce-src\modules\juce_audio_processors\format_types\LV2_SDK\lilv\src;H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\box2d_fc-src\src\..\include;H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\glm-src;H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\tinygltf-src;H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\rubberband_fc-src\single;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ResourceCompile>
+    <Midl>
+      <AdditionalIncludeDirectories>H:\0000_CODE\01_collider_pyo\juce\build-audio-only\ColliderApp_artefacts\JuceLibraryCode;H:\0000_CODE\01_collider_pyo\juce\..\vendor\piper\piper;H:\0000_CODE\01_collider_pyo\juce\..\vendor\onnxruntime\include;H:\0000_CODE\01_collider_pyo\juce\..\vendor\openvino_toolkit_windows_2025.3.0.19807.44526285f24_x86_64\samples\cpp\thirdparty\nlohmann_json\single_include;H:\0000_CODE\01_collider_pyo\juce\..\soundtouch\include;H:\0000_CODE\01_collider_pyo\juce\..\soundtouch\source\SoundTouch;H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\ufbx-src;H:\0000_CODE\01_collider_pyo\juce\..\vendor\ffmpeg\include;\include;\modules\core\include;\modules\imgproc\include;\modules\imgcodecs\include;\modules\videoio\include;\modules\highgui\include;\modules\video\include;\modules\objdetect\include;\modules\features2d\include;\modules\calib3d\include;\modules\dnn\include;\modules\world;H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\rubberband_fc-src;H:\0000_CODE\01_collider_pyo\juce\..\vendor\ASIOSDK\common;H:\0000_CODE\01_collider_pyo\juce\..\vendor\ASIOSDK\host;H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\juce-src\modules;H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\juce-src\modules\juce_audio_processors\format_types\VST3_SDK;H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\juce-src\modules\juce_audio_processors\format_types\LV2_SDK;H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\juce-src\modules\juce_audio_processors\format_types\LV2_SDK\lv2;H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\juce-src\modules\juce_audio_processors\format_types\LV2_SDK\serd;H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\juce-src\modules\juce_audio_processors\format_types\LV2_SDK\sord;H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\juce-src\modules\juce_audio_processors\format_types\LV2_SDK\sord\src;H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\juce-src\modules\juce_audio_processors\format_types\LV2_SDK\sratom;H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\juce-src\modules\juce_audio_processors\format_types\LV2_SDK\lilv;H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\juce-src\modules\juce_audio_processors\format_types\LV2_SDK\lilv\src;H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\box2d_fc-src\src\..\include;H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\glm-src;H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\tinygltf-src;H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\rubberband_fc-src\single;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <OutputDirectory>$(ProjectDir)/$(IntDir)</OutputDirectory>
+      <HeaderFileName>%(Filename).h</HeaderFileName>
+      <TypeLibraryName>%(Filename).tlb</TypeLibraryName>
+      <InterfaceIdentifierFileName>%(Filename)_i.c</InterfaceIdentifierFileName>
+      <ProxyFileName>%(Filename)_p.c</ProxyFileName>
+    </Midl>
+    <PostBuildEvent>
+      <Message>	Copying avcodec-62.dll to ColliderApp	Copying avdevice-62.dll to ColliderApp	Copying avfilter-11.dll to ColliderApp	Copying avformat-62.dll to ColliderApp	Copying avutil-60.dll to ColliderApp	Copying swresample-6.dll to ColliderApp	Copying swscale-9.dll to ColliderApp	Copying espeak-ng-data to ColliderApp output directory	Copying OpenCV data to ColliderApp output directory	Copying theme presets to ColliderApp/themes</Message>
+      <Command>setlocal
+"C:\Program Files\CMake\bin\cmake.exe" -E copy_if_different H:/0000_CODE/01_collider_pyo/juce/../vendor/piper/piper/piper.exe H:/0000_CODE/01_collider_pyo/juce/build-audio-only/ColliderApp_artefacts/RelWithDebInfo
+if %errorlevel% neq 0 goto :cmEnd
+"C:\Program Files\CMake\bin\cmake.exe" -E copy_if_different H:/0000_CODE/01_collider_pyo/juce/../vendor/piper/piper/piper_phonemize.dll H:/0000_CODE/01_collider_pyo/juce/build-audio-only/ColliderApp_artefacts/RelWithDebInfo
+if %errorlevel% neq 0 goto :cmEnd
+"C:\Program Files\CMake\bin\cmake.exe" -E copy_if_different H:/0000_CODE/01_collider_pyo/juce/../vendor/piper/piper/espeak-ng.dll H:/0000_CODE/01_collider_pyo/juce/build-audio-only/ColliderApp_artefacts/RelWithDebInfo
+if %errorlevel% neq 0 goto :cmEnd
+"C:\Program Files\CMake\bin\cmake.exe" -E copy_if_different H:/0000_CODE/01_collider_pyo/juce/../vendor/onnxruntime/lib/onnxruntime.dll H:/0000_CODE/01_collider_pyo/juce/build-audio-only/ColliderApp_artefacts/RelWithDebInfo
+if %errorlevel% neq 0 goto :cmEnd
+"C:\Program Files\CMake\bin\cmake.exe" -E copy_if_different H:/0000_CODE/01_collider_pyo/juce/../vendor/onnxruntime/lib/onnxruntime_providers_shared.dll H:/0000_CODE/01_collider_pyo/juce/build-audio-only/ColliderApp_artefacts/RelWithDebInfo
+if %errorlevel% neq 0 goto :cmEnd
+"C:\Program Files\CMake\bin\cmake.exe" -E copy_if_different H:/0000_CODE/01_collider_pyo/juce/build-audio-only/bin/opencv_videoio_ffmpeg4130_64.dll H:/0000_CODE/01_collider_pyo/juce/build-audio-only/ColliderApp_artefacts/RelWithDebInfo || "C:/Program Files/CMake/bin/cmake.exe" -E echo "Note: OpenCV FFmpeg DLL not found (optional video codec)"
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal &amp; call :cmErrorLevel %errorlevel% &amp; goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd
+setlocal
+"C:\Program Files\CMake\bin\cmake.exe" -E copy_if_different H:/0000_CODE/01_collider_pyo/juce/../vendor/ffmpeg/bin/avcodec-62.dll H:/0000_CODE/01_collider_pyo/juce/build-audio-only/ColliderApp_artefacts/RelWithDebInfo
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal &amp; call :cmErrorLevel %errorlevel% &amp; goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd
+setlocal
+"C:\Program Files\CMake\bin\cmake.exe" -E copy_if_different H:/0000_CODE/01_collider_pyo/juce/../vendor/ffmpeg/bin/avdevice-62.dll H:/0000_CODE/01_collider_pyo/juce/build-audio-only/ColliderApp_artefacts/RelWithDebInfo
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal &amp; call :cmErrorLevel %errorlevel% &amp; goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd
+setlocal
+"C:\Program Files\CMake\bin\cmake.exe" -E copy_if_different H:/0000_CODE/01_collider_pyo/juce/../vendor/ffmpeg/bin/avfilter-11.dll H:/0000_CODE/01_collider_pyo/juce/build-audio-only/ColliderApp_artefacts/RelWithDebInfo
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal &amp; call :cmErrorLevel %errorlevel% &amp; goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd
+setlocal
+"C:\Program Files\CMake\bin\cmake.exe" -E copy_if_different H:/0000_CODE/01_collider_pyo/juce/../vendor/ffmpeg/bin/avformat-62.dll H:/0000_CODE/01_collider_pyo/juce/build-audio-only/ColliderApp_artefacts/RelWithDebInfo
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal &amp; call :cmErrorLevel %errorlevel% &amp; goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd
+setlocal
+"C:\Program Files\CMake\bin\cmake.exe" -E copy_if_different H:/0000_CODE/01_collider_pyo/juce/../vendor/ffmpeg/bin/avutil-60.dll H:/0000_CODE/01_collider_pyo/juce/build-audio-only/ColliderApp_artefacts/RelWithDebInfo
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal &amp; call :cmErrorLevel %errorlevel% &amp; goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd
+setlocal
+"C:\Program Files\CMake\bin\cmake.exe" -E copy_if_different H:/0000_CODE/01_collider_pyo/juce/../vendor/ffmpeg/bin/swresample-6.dll H:/0000_CODE/01_collider_pyo/juce/build-audio-only/ColliderApp_artefacts/RelWithDebInfo
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal &amp; call :cmErrorLevel %errorlevel% &amp; goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd
+setlocal
+"C:\Program Files\CMake\bin\cmake.exe" -E copy_if_different H:/0000_CODE/01_collider_pyo/juce/../vendor/ffmpeg/bin/swscale-9.dll H:/0000_CODE/01_collider_pyo/juce/build-audio-only/ColliderApp_artefacts/RelWithDebInfo
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal &amp; call :cmErrorLevel %errorlevel% &amp; goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd
+setlocal
+"C:\Program Files\CMake\bin\cmake.exe" -E copy_directory H:/0000_CODE/01_collider_pyo/juce/../vendor/piper/piper/espeak-ng-data H:/0000_CODE/01_collider_pyo/juce/build-audio-only/ColliderApp_artefacts/RelWithDebInfo/espeak-ng-data
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal &amp; call :cmErrorLevel %errorlevel% &amp; goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd
+setlocal
+"C:\Program Files\CMake\bin\cmake.exe" -E copy_if_different /data/haarcascades/haarcascade_frontalface_default.xml H:/0000_CODE/01_collider_pyo/juce/build-audio-only/ColliderApp_artefacts/RelWithDebInfo
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal &amp; call :cmErrorLevel %errorlevel% &amp; goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd
+setlocal
+"C:\Program Files\CMake\bin\cmake.exe" -E make_directory H:/0000_CODE/01_collider_pyo/juce/build-audio-only/ColliderApp_artefacts/RelWithDebInfo/themes
+if %errorlevel% neq 0 goto :cmEnd
+"C:\Program Files\CMake\bin\cmake.exe" -E copy_directory H:/0000_CODE/01_collider_pyo/juce/Source/preset_creator/theme/presets H:/0000_CODE/01_collider_pyo/juce/build-audio-only/ColliderApp_artefacts/RelWithDebInfo/themes
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal &amp; call :cmErrorLevel %errorlevel% &amp; goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd</Command>
+    </PostBuildEvent>
+    <Link>
+      <AdditionalDependencies>RelWithDebInfo\soundtouch.lib;_deps\box2d_fc-build\bin\RelWithDebInfo\box2d.lib;_deps\glm-build\glm\RelWithDebInfo\glm.lib;_deps\tinygltf-build\RelWithDebInfo\tinygltf.lib;RelWithDebInfo\ufbx_static.lib;RelWithDebInfo\rubberband_single.lib;H:\0000_CODE\01_collider_pyo\vendor\ffmpeg\lib\avformat.lib;H:\0000_CODE\01_collider_pyo\vendor\ffmpeg\lib\avcodec.lib;H:\0000_CODE\01_collider_pyo\vendor\ffmpeg\lib\avutil.lib;H:\0000_CODE\01_collider_pyo\vendor\ffmpeg\lib\swresample.lib;H:\0000_CODE\01_collider_pyo\vendor\ffmpeg\lib\swscale.lib;H:\0000_CODE\01_collider_pyo\juce\..\vendor\onnxruntime\lib\onnxruntime.lib;ole32.lib;strmiids.lib;kernel32.lib;user32.lib;gdi32.lib;winspool.lib;shell32.lib;ole32.lib;oleaut32.lib;uuid.lib;comdlg32.lib;advapi32.lib</AdditionalDependencies>
+      <AdditionalLibraryDirectories>H:/0000_CODE/01_collider_pyo/juce/build-audio-only/_deps/juce-src/modules/juce_gui_extra/libs/VisualStudio2022/x64/MDd;H:/0000_CODE/01_collider_pyo/juce/build-audio-only/_deps/juce-src/modules/juce_gui_extra/libs/VisualStudio2022/x64/MDd/$(Configuration);H:/0000_CODE/01_collider_pyo/juce/build-audio-only/_deps/juce-src/modules/juce_gui_basics/libs/VisualStudio2022/x64/MDd;H:/0000_CODE/01_collider_pyo/juce/build-audio-only/_deps/juce-src/modules/juce_gui_basics/libs/VisualStudio2022/x64/MDd/$(Configuration);H:/0000_CODE/01_collider_pyo/juce/build-audio-only/_deps/juce-src/modules/juce_graphics/libs/VisualStudio2022/x64/MDd;H:/0000_CODE/01_collider_pyo/juce/build-audio-only/_deps/juce-src/modules/juce_graphics/libs/VisualStudio2022/x64/MDd/$(Configuration);H:/0000_CODE/01_collider_pyo/juce/build-audio-only/_deps/juce-src/modules/juce_events/libs/VisualStudio2022/x64/MDd;H:/0000_CODE/01_collider_pyo/juce/build-audio-only/_deps/juce-src/modules/juce_events/libs/VisualStudio2022/x64/MDd/$(Configuration);H:/0000_CODE/01_collider_pyo/juce/build-audio-only/_deps/juce-src/modules/juce_core/libs/VisualStudio2022/x64/MDd;H:/0000_CODE/01_collider_pyo/juce/build-audio-only/_deps/juce-src/modules/juce_core/libs/VisualStudio2022/x64/MDd/$(Configuration);H:/0000_CODE/01_collider_pyo/juce/build-audio-only/_deps/juce-src/modules/juce_data_structures/libs/VisualStudio2022/x64/MDd;H:/0000_CODE/01_collider_pyo/juce/build-audio-only/_deps/juce-src/modules/juce_data_structures/libs/VisualStudio2022/x64/MDd/$(Configuration);H:/0000_CODE/01_collider_pyo/juce/build-audio-only/_deps/juce-src/modules/juce_opengl/libs/VisualStudio2022/x64/MDd;H:/0000_CODE/01_collider_pyo/juce/build-audio-only/_deps/juce-src/modules/juce_opengl/libs/VisualStudio2022/x64/MDd/$(Configuration);H:/0000_CODE/01_collider_pyo/juce/build-audio-only/_deps/juce-src/modules/juce_audio_processors/libs/VisualStudio2022/x64/MDd;H:/0000_CODE/01_collider_pyo/juce/build-audio-only/_deps/juce-src/modules/juce_audio_processors/libs/VisualStudio2022/x64/MDd/$(Configuration);H:/0000_CODE/01_collider_pyo/juce/build-audio-only/_deps/juce-src/modules/juce_audio_basics/libs/VisualStudio2022/x64/MDd;H:/0000_CODE/01_collider_pyo/juce/build-audio-only/_deps/juce-src/modules/juce_audio_basics/libs/VisualStudio2022/x64/MDd/$(Configuration);H:/0000_CODE/01_collider_pyo/juce/build-audio-only/_deps/juce-src/modules/juce_audio_utils/libs/VisualStudio2022/x64/MDd;H:/0000_CODE/01_collider_pyo/juce/build-audio-only/_deps/juce-src/modules/juce_audio_utils/libs/VisualStudio2022/x64/MDd/$(Configuration);H:/0000_CODE/01_collider_pyo/juce/build-audio-only/_deps/juce-src/modules/juce_audio_formats/libs/VisualStudio2022/x64/MDd;H:/0000_CODE/01_collider_pyo/juce/build-audio-only/_deps/juce-src/modules/juce_audio_formats/libs/VisualStudio2022/x64/MDd/$(Configuration);H:/0000_CODE/01_collider_pyo/juce/build-audio-only/_deps/juce-src/modules/juce_audio_devices/libs/VisualStudio2022/x64/MDd;H:/0000_CODE/01_collider_pyo/juce/build-audio-only/_deps/juce-src/modules/juce_audio_devices/libs/VisualStudio2022/x64/MDd/$(Configuration);H:/0000_CODE/01_collider_pyo/juce/build-audio-only/_deps/juce-src/modules/juce_dsp/libs/VisualStudio2022/x64/MDd;H:/0000_CODE/01_collider_pyo/juce/build-audio-only/_deps/juce-src/modules/juce_dsp/libs/VisualStudio2022/x64/MDd/$(Configuration);H:/0000_CODE/01_collider_pyo/juce/build-audio-only/_deps/juce-src/modules/juce_osc/libs/VisualStudio2022/x64/MDd;H:/0000_CODE/01_collider_pyo/juce/build-audio-only/_deps/juce-src/modules/juce_osc/libs/VisualStudio2022/x64/MDd/$(Configuration);%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalOptions>%(AdditionalOptions) /machine:x64</AdditionalOptions>
+      <DataExecutionPrevention></DataExecutionPrevention>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <IgnoreSpecificDefaultLibraries>%(IgnoreSpecificDefaultLibraries)</IgnoreSpecificDefaultLibraries>
+      <ImageHasSafeExceptionHandlers></ImageHasSafeExceptionHandlers>
+      <ImportLibrary>H:/0000_CODE/01_collider_pyo/juce/build-audio-only/ColliderApp_artefacts/RelWithDebInfo/Collider Audio Engine.lib</ImportLibrary>
+      <LinkErrorReporting></LinkErrorReporting>
+      <ProgramDataBaseFile>H:/0000_CODE/01_collider_pyo/juce/build-audio-only/ColliderApp_artefacts/RelWithDebInfo/Collider Audio Engine.pdb</ProgramDataBaseFile>
+      <RandomizedBaseAddress></RandomizedBaseAddress>
+      <SubSystem>Windows</SubSystem>
+    </Link>
+    <ProjectReference>
+      <LinkLibraryDependencies>false</LinkLibraryDependencies>
+    </ProjectReference>
+  </ItemDefinitionGroup>
+  <ItemGroup>
+    <CustomBuild Include="H:\0000_CODE\01_collider_pyo\juce\CMakeLists.txt">
+      <UseUtf8Encoding>Always</UseUtf8Encoding>
+      <Message Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Building Custom Rule H:/0000_CODE/01_collider_pyo/juce/CMakeLists.txt</Message>
+      <Command Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">setlocal
+"C:\Program Files\CMake\bin\cmake.exe" -SH:/0000_CODE/01_collider_pyo/juce -BH:/0000_CODE/01_collider_pyo/juce/build-audio-only --check-stamp-file H:/0000_CODE/01_collider_pyo/juce/build-audio-only/CMakeFiles/generate.stamp
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal &amp; call :cmErrorLevel %errorlevel% &amp; goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd</Command>
+      <AdditionalInputs Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">C:\Program Files\CMake\share\cmake-4.1\Modules\CMakeCCompiler.cmake.in;C:\Program Files\CMake\share\cmake-4.1\Modules\CMakeCCompilerABI.c;C:\Program Files\CMake\share\cmake-4.1\Modules\CMakeCInformation.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\CMakeCXXCompiler.cmake.in;C:\Program Files\CMake\share\cmake-4.1\Modules\CMakeCXXCompilerABI.cpp;C:\Program Files\CMake\share\cmake-4.1\Modules\CMakeCXXInformation.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\CMakeCommonLanguageInclude.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\CMakeCompilerIdDetection.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\CMakeDetermineCCompiler.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\CMakeDetermineCXXCompiler.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\CMakeDetermineCompiler.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\CMakeDetermineCompilerABI.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\CMakeDetermineCompilerId.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\CMakeDetermineCompilerSupport.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\CMakeDetermineRCCompiler.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\CMakeDetermineSystem.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\CMakeFindBinUtils.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\CMakeGenericSystem.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\CMakeInitializeConfigs.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\CMakeLanguageInformation.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\CMakeParseImplicitIncludeInfo.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\CMakeParseImplicitLinkInfo.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\CMakeParseLibraryArchitecture.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\CMakeRCCompiler.cmake.in;C:\Program Files\CMake\share\cmake-4.1\Modules\CMakeRCInformation.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\CMakeSystem.cmake.in;C:\Program Files\CMake\share\cmake-4.1\Modules\CMakeSystemSpecificInformation.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\CMakeSystemSpecificInitialize.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\CMakeTestCCompiler.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\CMakeTestCXXCompiler.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\CMakeTestCompilerCommon.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\CMakeTestRCCompiler.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Compiler\ADSP-DetermineCompiler.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Compiler\ARMCC-DetermineCompiler.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Compiler\ARMClang-DetermineCompiler.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Compiler\AppleClang-DetermineCompiler.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Compiler\Borland-DetermineCompiler.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Compiler\Bruce-C-DetermineCompiler.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Compiler\CMakeCommonCompilerMacros.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Compiler\Clang-DetermineCompiler.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Compiler\Clang-DetermineCompilerInternal.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Compiler\Compaq-C-DetermineCompiler.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Compiler\Compaq-CXX-DetermineCompiler.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Compiler\Cray-DetermineCompiler.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Compiler\CrayClang-DetermineCompiler.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Compiler\Diab-DetermineCompiler.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Compiler\Embarcadero-DetermineCompiler.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Compiler\Fujitsu-DetermineCompiler.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Compiler\FujitsuClang-DetermineCompiler.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Compiler\GHS-DetermineCompiler.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Compiler\GNU-C-DetermineCompiler.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Compiler\GNU-CXX-DetermineCompiler.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Compiler\HP-C-DetermineCompiler.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Compiler\HP-CXX-DetermineCompiler.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Compiler\IAR-DetermineCompiler.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Compiler\IBMCPP-C-DetermineVersionInternal.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Compiler\IBMCPP-CXX-DetermineVersionInternal.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Compiler\IBMClang-C-DetermineCompiler.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Compiler\IBMClang-CXX-DetermineCompiler.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Compiler\Intel-DetermineCompiler.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Compiler\IntelLLVM-DetermineCompiler.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Compiler\LCC-C-DetermineCompiler.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Compiler\LCC-CXX-DetermineCompiler.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Compiler\MSVC-C.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Compiler\MSVC-CXX.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Compiler\MSVC-DetermineCompiler.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Compiler\MSVC.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Compiler\NVHPC-DetermineCompiler.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Compiler\NVIDIA-DetermineCompiler.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Compiler\OpenWatcom-DetermineCompiler.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Compiler\OrangeC-DetermineCompiler.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Compiler\PGI-DetermineCompiler.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Compiler\PathScale-DetermineCompiler.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Compiler\Renesas-DetermineCompiler.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Compiler\SCO-DetermineCompiler.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Compiler\SDCC-C-DetermineCompiler.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Compiler\SunPro-C-DetermineCompiler.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Compiler\SunPro-CXX-DetermineCompiler.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Compiler\TI-DetermineCompiler.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Compiler\TIClang-DetermineCompiler.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Compiler\Tasking-DetermineCompiler.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Compiler\TinyCC-C-DetermineCompiler.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Compiler\VisualAge-C-DetermineCompiler.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Compiler\VisualAge-CXX-DetermineCompiler.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Compiler\Watcom-DetermineCompiler.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Compiler\XL-C-DetermineCompiler.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Compiler\XL-CXX-DetermineCompiler.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Compiler\XLClang-C-DetermineCompiler.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Compiler\XLClang-CXX-DetermineCompiler.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Compiler\zOS-C-DetermineCompiler.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Compiler\zOS-CXX-DetermineCompiler.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\CompilerId\VS-10.vcxproj.in;C:\Program Files\CMake\share\cmake-4.1\Modules\ExternalProject\shared_internal_commands.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\FetchContent.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\FetchContent\CMakeLists.cmake.in;C:\Program Files\CMake\share\cmake-4.1\Modules\FindGit.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\FindPackageHandleStandardArgs.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\FindPackageMessage.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Internal\CMakeCLinkerInformation.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Internal\CMakeCXXLinkerInformation.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Internal\CMakeCommonLinkerInformation.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Internal\CMakeDetermineLinkerId.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Internal\CMakeInspectCLinker.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Internal\CMakeInspectCXXLinker.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Internal\FeatureTesting.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Linker\MSVC-C.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Linker\MSVC-CXX.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Linker\MSVC.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Platform\Linker\Windows-MSVC-C.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Platform\Linker\Windows-MSVC-CXX.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Platform\Linker\Windows-MSVC.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Platform\Windows-Determine-CXX.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Platform\Windows-Initialize.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Platform\Windows-MSVC-C.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Platform\Windows-MSVC-CXX.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Platform\Windows-MSVC.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Platform\Windows.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Platform\WindowsPaths.cmake;H:\0000_CODE\01_collider_pyo\juce\build-audio-only\CMakeFiles\4.1.1\CMakeCCompiler.cmake;H:\0000_CODE\01_collider_pyo\juce\build-audio-only\CMakeFiles\4.1.1\CMakeCXXCompiler.cmake;H:\0000_CODE\01_collider_pyo\juce\build-audio-only\CMakeFiles\4.1.1\CMakeRCCompiler.cmake;H:\0000_CODE\01_collider_pyo\juce\build-audio-only\CMakeFiles\4.1.1\CMakeSystem.cmake;H:\0000_CODE\01_collider_pyo\juce\build-audio-only\CMakeFiles\cmake.verify_globs;%(AdditionalInputs)</AdditionalInputs>
+      <Outputs Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">H:\0000_CODE\01_collider_pyo\juce\build-audio-only\CMakeFiles\generate.stamp</Outputs>
+      <LinkObjects Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">false</LinkObjects>
+      <Message Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Building Custom Rule H:/0000_CODE/01_collider_pyo/juce/CMakeLists.txt</Message>
+      <Command Condition="'$(Configuration)|$(Platform)'=='Release|x64'">setlocal
+"C:\Program Files\CMake\bin\cmake.exe" -SH:/0000_CODE/01_collider_pyo/juce -BH:/0000_CODE/01_collider_pyo/juce/build-audio-only --check-stamp-file H:/0000_CODE/01_collider_pyo/juce/build-audio-only/CMakeFiles/generate.stamp
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal &amp; call :cmErrorLevel %errorlevel% &amp; goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd</Command>
+      <AdditionalInputs Condition="'$(Configuration)|$(Platform)'=='Release|x64'">C:\Program Files\CMake\share\cmake-4.1\Modules\CMakeCCompiler.cmake.in;C:\Program Files\CMake\share\cmake-4.1\Modules\CMakeCCompilerABI.c;C:\Program Files\CMake\share\cmake-4.1\Modules\CMakeCInformation.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\CMakeCXXCompiler.cmake.in;C:\Program Files\CMake\share\cmake-4.1\Modules\CMakeCXXCompilerABI.cpp;C:\Program Files\CMake\share\cmake-4.1\Modules\CMakeCXXInformation.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\CMakeCommonLanguageInclude.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\CMakeCompilerIdDetection.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\CMakeDetermineCCompiler.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\CMakeDetermineCXXCompiler.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\CMakeDetermineCompiler.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\CMakeDetermineCompilerABI.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\CMakeDetermineCompilerId.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\CMakeDetermineCompilerSupport.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\CMakeDetermineRCCompiler.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\CMakeDetermineSystem.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\CMakeFindBinUtils.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\CMakeGenericSystem.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\CMakeInitializeConfigs.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\CMakeLanguageInformation.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\CMakeParseImplicitIncludeInfo.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\CMakeParseImplicitLinkInfo.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\CMakeParseLibraryArchitecture.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\CMakeRCCompiler.cmake.in;C:\Program Files\CMake\share\cmake-4.1\Modules\CMakeRCInformation.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\CMakeSystem.cmake.in;C:\Program Files\CMake\share\cmake-4.1\Modules\CMakeSystemSpecificInformation.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\CMakeSystemSpecificInitialize.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\CMakeTestCCompiler.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\CMakeTestCXXCompiler.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\CMakeTestCompilerCommon.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\CMakeTestRCCompiler.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Compiler\ADSP-DetermineCompiler.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Compiler\ARMCC-DetermineCompiler.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Compiler\ARMClang-DetermineCompiler.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Compiler\AppleClang-DetermineCompiler.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Compiler\Borland-DetermineCompiler.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Compiler\Bruce-C-DetermineCompiler.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Compiler\CMakeCommonCompilerMacros.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Compiler\Clang-DetermineCompiler.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Compiler\Clang-DetermineCompilerInternal.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Compiler\Compaq-C-DetermineCompiler.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Compiler\Compaq-CXX-DetermineCompiler.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Compiler\Cray-DetermineCompiler.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Compiler\CrayClang-DetermineCompiler.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Compiler\Diab-DetermineCompiler.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Compiler\Embarcadero-DetermineCompiler.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Compiler\Fujitsu-DetermineCompiler.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Compiler\FujitsuClang-DetermineCompiler.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Compiler\GHS-DetermineCompiler.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Compiler\GNU-C-DetermineCompiler.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Compiler\GNU-CXX-DetermineCompiler.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Compiler\HP-C-DetermineCompiler.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Compiler\HP-CXX-DetermineCompiler.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Compiler\IAR-DetermineCompiler.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Compiler\IBMCPP-C-DetermineVersionInternal.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Compiler\IBMCPP-CXX-DetermineVersionInternal.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Compiler\IBMClang-C-DetermineCompiler.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Compiler\IBMClang-CXX-DetermineCompiler.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Compiler\Intel-DetermineCompiler.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Compiler\IntelLLVM-DetermineCompiler.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Compiler\LCC-C-DetermineCompiler.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Compiler\LCC-CXX-DetermineCompiler.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Compiler\MSVC-C.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Compiler\MSVC-CXX.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Compiler\MSVC-DetermineCompiler.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Compiler\MSVC.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Compiler\NVHPC-DetermineCompiler.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Compiler\NVIDIA-DetermineCompiler.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Compiler\OpenWatcom-DetermineCompiler.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Compiler\OrangeC-DetermineCompiler.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Compiler\PGI-DetermineCompiler.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Compiler\PathScale-DetermineCompiler.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Compiler\Renesas-DetermineCompiler.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Compiler\SCO-DetermineCompiler.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Compiler\SDCC-C-DetermineCompiler.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Compiler\SunPro-C-DetermineCompiler.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Compiler\SunPro-CXX-DetermineCompiler.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Compiler\TI-DetermineCompiler.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Compiler\TIClang-DetermineCompiler.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Compiler\Tasking-DetermineCompiler.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Compiler\TinyCC-C-DetermineCompiler.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Compiler\VisualAge-C-DetermineCompiler.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Compiler\VisualAge-CXX-DetermineCompiler.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Compiler\Watcom-DetermineCompiler.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Compiler\XL-C-DetermineCompiler.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Compiler\XL-CXX-DetermineCompiler.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Compiler\XLClang-C-DetermineCompiler.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Compiler\XLClang-CXX-DetermineCompiler.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Compiler\zOS-C-DetermineCompiler.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Compiler\zOS-CXX-DetermineCompiler.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\CompilerId\VS-10.vcxproj.in;C:\Program Files\CMake\share\cmake-4.1\Modules\ExternalProject\shared_internal_commands.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\FetchContent.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\FetchContent\CMakeLists.cmake.in;C:\Program Files\CMake\share\cmake-4.1\Modules\FindGit.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\FindPackageHandleStandardArgs.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\FindPackageMessage.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Internal\CMakeCLinkerInformation.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Internal\CMakeCXXLinkerInformation.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Internal\CMakeCommonLinkerInformation.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Internal\CMakeDetermineLinkerId.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Internal\CMakeInspectCLinker.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Internal\CMakeInspectCXXLinker.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Internal\FeatureTesting.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Linker\MSVC-C.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Linker\MSVC-CXX.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Linker\MSVC.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Platform\Linker\Windows-MSVC-C.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Platform\Linker\Windows-MSVC-CXX.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Platform\Linker\Windows-MSVC.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Platform\Windows-Determine-CXX.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Platform\Windows-Initialize.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Platform\Windows-MSVC-C.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Platform\Windows-MSVC-CXX.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Platform\Windows-MSVC.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Platform\Windows.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Platform\WindowsPaths.cmake;H:\0000_CODE\01_collider_pyo\juce\build-audio-only\CMakeFiles\4.1.1\CMakeCCompiler.cmake;H:\0000_CODE\01_collider_pyo\juce\build-audio-only\CMakeFiles\4.1.1\CMakeCXXCompiler.cmake;H:\0000_CODE\01_collider_pyo\juce\build-audio-only\CMakeFiles\4.1.1\CMakeRCCompiler.cmake;H:\0000_CODE\01_collider_pyo\juce\build-audio-only\CMakeFiles\4.1.1\CMakeSystem.cmake;H:\0000_CODE\01_collider_pyo\juce\build-audio-only\CMakeFiles\cmake.verify_globs;%(AdditionalInputs)</AdditionalInputs>
+      <Outputs Condition="'$(Configuration)|$(Platform)'=='Release|x64'">H:\0000_CODE\01_collider_pyo\juce\build-audio-only\CMakeFiles\generate.stamp</Outputs>
+      <LinkObjects Condition="'$(Configuration)|$(Platform)'=='Release|x64'">false</LinkObjects>
+      <Message Condition="'$(Configuration)|$(Platform)'=='MinSizeRel|x64'">Building Custom Rule H:/0000_CODE/01_collider_pyo/juce/CMakeLists.txt</Message>
+      <Command Condition="'$(Configuration)|$(Platform)'=='MinSizeRel|x64'">setlocal
+"C:\Program Files\CMake\bin\cmake.exe" -SH:/0000_CODE/01_collider_pyo/juce -BH:/0000_CODE/01_collider_pyo/juce/build-audio-only --check-stamp-file H:/0000_CODE/01_collider_pyo/juce/build-audio-only/CMakeFiles/generate.stamp
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal &amp; call :cmErrorLevel %errorlevel% &amp; goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd</Command>
+      <AdditionalInputs Condition="'$(Configuration)|$(Platform)'=='MinSizeRel|x64'">C:\Program Files\CMake\share\cmake-4.1\Modules\CMakeCCompiler.cmake.in;C:\Program Files\CMake\share\cmake-4.1\Modules\CMakeCCompilerABI.c;C:\Program Files\CMake\share\cmake-4.1\Modules\CMakeCInformation.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\CMakeCXXCompiler.cmake.in;C:\Program Files\CMake\share\cmake-4.1\Modules\CMakeCXXCompilerABI.cpp;C:\Program Files\CMake\share\cmake-4.1\Modules\CMakeCXXInformation.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\CMakeCommonLanguageInclude.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\CMakeCompilerIdDetection.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\CMakeDetermineCCompiler.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\CMakeDetermineCXXCompiler.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\CMakeDetermineCompiler.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\CMakeDetermineCompilerABI.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\CMakeDetermineCompilerId.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\CMakeDetermineCompilerSupport.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\CMakeDetermineRCCompiler.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\CMakeDetermineSystem.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\CMakeFindBinUtils.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\CMakeGenericSystem.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\CMakeInitializeConfigs.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\CMakeLanguageInformation.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\CMakeParseImplicitIncludeInfo.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\CMakeParseImplicitLinkInfo.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\CMakeParseLibraryArchitecture.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\CMakeRCCompiler.cmake.in;C:\Program Files\CMake\share\cmake-4.1\Modules\CMakeRCInformation.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\CMakeSystem.cmake.in;C:\Program Files\CMake\share\cmake-4.1\Modules\CMakeSystemSpecificInformation.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\CMakeSystemSpecificInitialize.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\CMakeTestCCompiler.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\CMakeTestCXXCompiler.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\CMakeTestCompilerCommon.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\CMakeTestRCCompiler.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Compiler\ADSP-DetermineCompiler.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Compiler\ARMCC-DetermineCompiler.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Compiler\ARMClang-DetermineCompiler.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Compiler\AppleClang-DetermineCompiler.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Compiler\Borland-DetermineCompiler.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Compiler\Bruce-C-DetermineCompiler.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Compiler\CMakeCommonCompilerMacros.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Compiler\Clang-DetermineCompiler.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Compiler\Clang-DetermineCompilerInternal.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Compiler\Compaq-C-DetermineCompiler.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Compiler\Compaq-CXX-DetermineCompiler.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Compiler\Cray-DetermineCompiler.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Compiler\CrayClang-DetermineCompiler.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Compiler\Diab-DetermineCompiler.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Compiler\Embarcadero-DetermineCompiler.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Compiler\Fujitsu-DetermineCompiler.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Compiler\FujitsuClang-DetermineCompiler.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Compiler\GHS-DetermineCompiler.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Compiler\GNU-C-DetermineCompiler.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Compiler\GNU-CXX-DetermineCompiler.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Compiler\HP-C-DetermineCompiler.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Compiler\HP-CXX-DetermineCompiler.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Compiler\IAR-DetermineCompiler.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Compiler\IBMCPP-C-DetermineVersionInternal.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Compiler\IBMCPP-CXX-DetermineVersionInternal.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Compiler\IBMClang-C-DetermineCompiler.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Compiler\IBMClang-CXX-DetermineCompiler.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Compiler\Intel-DetermineCompiler.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Compiler\IntelLLVM-DetermineCompiler.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Compiler\LCC-C-DetermineCompiler.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Compiler\LCC-CXX-DetermineCompiler.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Compiler\MSVC-C.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Compiler\MSVC-CXX.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Compiler\MSVC-DetermineCompiler.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Compiler\MSVC.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Compiler\NVHPC-DetermineCompiler.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Compiler\NVIDIA-DetermineCompiler.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Compiler\OpenWatcom-DetermineCompiler.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Compiler\OrangeC-DetermineCompiler.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Compiler\PGI-DetermineCompiler.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Compiler\PathScale-DetermineCompiler.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Compiler\Renesas-DetermineCompiler.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Compiler\SCO-DetermineCompiler.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Compiler\SDCC-C-DetermineCompiler.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Compiler\SunPro-C-DetermineCompiler.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Compiler\SunPro-CXX-DetermineCompiler.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Compiler\TI-DetermineCompiler.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Compiler\TIClang-DetermineCompiler.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Compiler\Tasking-DetermineCompiler.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Compiler\TinyCC-C-DetermineCompiler.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Compiler\VisualAge-C-DetermineCompiler.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Compiler\VisualAge-CXX-DetermineCompiler.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Compiler\Watcom-DetermineCompiler.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Compiler\XL-C-DetermineCompiler.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Compiler\XL-CXX-DetermineCompiler.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Compiler\XLClang-C-DetermineCompiler.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Compiler\XLClang-CXX-DetermineCompiler.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Compiler\zOS-C-DetermineCompiler.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Compiler\zOS-CXX-DetermineCompiler.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\CompilerId\VS-10.vcxproj.in;C:\Program Files\CMake\share\cmake-4.1\Modules\ExternalProject\shared_internal_commands.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\FetchContent.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\FetchContent\CMakeLists.cmake.in;C:\Program Files\CMake\share\cmake-4.1\Modules\FindGit.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\FindPackageHandleStandardArgs.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\FindPackageMessage.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Internal\CMakeCLinkerInformation.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Internal\CMakeCXXLinkerInformation.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Internal\CMakeCommonLinkerInformation.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Internal\CMakeDetermineLinkerId.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Internal\CMakeInspectCLinker.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Internal\CMakeInspectCXXLinker.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Internal\FeatureTesting.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Linker\MSVC-C.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Linker\MSVC-CXX.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Linker\MSVC.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Platform\Linker\Windows-MSVC-C.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Platform\Linker\Windows-MSVC-CXX.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Platform\Linker\Windows-MSVC.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Platform\Windows-Determine-CXX.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Platform\Windows-Initialize.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Platform\Windows-MSVC-C.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Platform\Windows-MSVC-CXX.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Platform\Windows-MSVC.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Platform\Windows.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Platform\WindowsPaths.cmake;H:\0000_CODE\01_collider_pyo\juce\build-audio-only\CMakeFiles\4.1.1\CMakeCCompiler.cmake;H:\0000_CODE\01_collider_pyo\juce\build-audio-only\CMakeFiles\4.1.1\CMakeCXXCompiler.cmake;H:\0000_CODE\01_collider_pyo\juce\build-audio-only\CMakeFiles\4.1.1\CMakeRCCompiler.cmake;H:\0000_CODE\01_collider_pyo\juce\build-audio-only\CMakeFiles\4.1.1\CMakeSystem.cmake;H:\0000_CODE\01_collider_pyo\juce\build-audio-only\CMakeFiles\cmake.verify_globs;%(AdditionalInputs)</AdditionalInputs>
+      <Outputs Condition="'$(Configuration)|$(Platform)'=='MinSizeRel|x64'">H:\0000_CODE\01_collider_pyo\juce\build-audio-only\CMakeFiles\generate.stamp</Outputs>
+      <LinkObjects Condition="'$(Configuration)|$(Platform)'=='MinSizeRel|x64'">false</LinkObjects>
+      <Message Condition="'$(Configuration)|$(Platform)'=='RelWithDebInfo|x64'">Building Custom Rule H:/0000_CODE/01_collider_pyo/juce/CMakeLists.txt</Message>
+      <Command Condition="'$(Configuration)|$(Platform)'=='RelWithDebInfo|x64'">setlocal
+"C:\Program Files\CMake\bin\cmake.exe" -SH:/0000_CODE/01_collider_pyo/juce -BH:/0000_CODE/01_collider_pyo/juce/build-audio-only --check-stamp-file H:/0000_CODE/01_collider_pyo/juce/build-audio-only/CMakeFiles/generate.stamp
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal &amp; call :cmErrorLevel %errorlevel% &amp; goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd</Command>
+      <AdditionalInputs Condition="'$(Configuration)|$(Platform)'=='RelWithDebInfo|x64'">C:\Program Files\CMake\share\cmake-4.1\Modules\CMakeCCompiler.cmake.in;C:\Program Files\CMake\share\cmake-4.1\Modules\CMakeCCompilerABI.c;C:\Program Files\CMake\share\cmake-4.1\Modules\CMakeCInformation.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\CMakeCXXCompiler.cmake.in;C:\Program Files\CMake\share\cmake-4.1\Modules\CMakeCXXCompilerABI.cpp;C:\Program Files\CMake\share\cmake-4.1\Modules\CMakeCXXInformation.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\CMakeCommonLanguageInclude.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\CMakeCompilerIdDetection.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\CMakeDetermineCCompiler.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\CMakeDetermineCXXCompiler.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\CMakeDetermineCompiler.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\CMakeDetermineCompilerABI.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\CMakeDetermineCompilerId.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\CMakeDetermineCompilerSupport.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\CMakeDetermineRCCompiler.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\CMakeDetermineSystem.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\CMakeFindBinUtils.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\CMakeGenericSystem.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\CMakeInitializeConfigs.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\CMakeLanguageInformation.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\CMakeParseImplicitIncludeInfo.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\CMakeParseImplicitLinkInfo.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\CMakeParseLibraryArchitecture.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\CMakeRCCompiler.cmake.in;C:\Program Files\CMake\share\cmake-4.1\Modules\CMakeRCInformation.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\CMakeSystem.cmake.in;C:\Program Files\CMake\share\cmake-4.1\Modules\CMakeSystemSpecificInformation.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\CMakeSystemSpecificInitialize.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\CMakeTestCCompiler.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\CMakeTestCXXCompiler.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\CMakeTestCompilerCommon.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\CMakeTestRCCompiler.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Compiler\ADSP-DetermineCompiler.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Compiler\ARMCC-DetermineCompiler.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Compiler\ARMClang-DetermineCompiler.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Compiler\AppleClang-DetermineCompiler.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Compiler\Borland-DetermineCompiler.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Compiler\Bruce-C-DetermineCompiler.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Compiler\CMakeCommonCompilerMacros.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Compiler\Clang-DetermineCompiler.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Compiler\Clang-DetermineCompilerInternal.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Compiler\Compaq-C-DetermineCompiler.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Compiler\Compaq-CXX-DetermineCompiler.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Compiler\Cray-DetermineCompiler.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Compiler\CrayClang-DetermineCompiler.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Compiler\Diab-DetermineCompiler.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Compiler\Embarcadero-DetermineCompiler.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Compiler\Fujitsu-DetermineCompiler.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Compiler\FujitsuClang-DetermineCompiler.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Compiler\GHS-DetermineCompiler.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Compiler\GNU-C-DetermineCompiler.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Compiler\GNU-CXX-DetermineCompiler.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Compiler\HP-C-DetermineCompiler.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Compiler\HP-CXX-DetermineCompiler.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Compiler\IAR-DetermineCompiler.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Compiler\IBMCPP-C-DetermineVersionInternal.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Compiler\IBMCPP-CXX-DetermineVersionInternal.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Compiler\IBMClang-C-DetermineCompiler.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Compiler\IBMClang-CXX-DetermineCompiler.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Compiler\Intel-DetermineCompiler.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Compiler\IntelLLVM-DetermineCompiler.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Compiler\LCC-C-DetermineCompiler.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Compiler\LCC-CXX-DetermineCompiler.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Compiler\MSVC-C.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Compiler\MSVC-CXX.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Compiler\MSVC-DetermineCompiler.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Compiler\MSVC.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Compiler\NVHPC-DetermineCompiler.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Compiler\NVIDIA-DetermineCompiler.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Compiler\OpenWatcom-DetermineCompiler.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Compiler\OrangeC-DetermineCompiler.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Compiler\PGI-DetermineCompiler.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Compiler\PathScale-DetermineCompiler.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Compiler\Renesas-DetermineCompiler.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Compiler\SCO-DetermineCompiler.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Compiler\SDCC-C-DetermineCompiler.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Compiler\SunPro-C-DetermineCompiler.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Compiler\SunPro-CXX-DetermineCompiler.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Compiler\TI-DetermineCompiler.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Compiler\TIClang-DetermineCompiler.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Compiler\Tasking-DetermineCompiler.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Compiler\TinyCC-C-DetermineCompiler.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Compiler\VisualAge-C-DetermineCompiler.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Compiler\VisualAge-CXX-DetermineCompiler.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Compiler\Watcom-DetermineCompiler.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Compiler\XL-C-DetermineCompiler.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Compiler\XL-CXX-DetermineCompiler.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Compiler\XLClang-C-DetermineCompiler.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Compiler\XLClang-CXX-DetermineCompiler.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Compiler\zOS-C-DetermineCompiler.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Compiler\zOS-CXX-DetermineCompiler.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\CompilerId\VS-10.vcxproj.in;C:\Program Files\CMake\share\cmake-4.1\Modules\ExternalProject\shared_internal_commands.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\FetchContent.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\FetchContent\CMakeLists.cmake.in;C:\Program Files\CMake\share\cmake-4.1\Modules\FindGit.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\FindPackageHandleStandardArgs.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\FindPackageMessage.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Internal\CMakeCLinkerInformation.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Internal\CMakeCXXLinkerInformation.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Internal\CMakeCommonLinkerInformation.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Internal\CMakeDetermineLinkerId.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Internal\CMakeInspectCLinker.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Internal\CMakeInspectCXXLinker.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Internal\FeatureTesting.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Linker\MSVC-C.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Linker\MSVC-CXX.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Linker\MSVC.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Platform\Linker\Windows-MSVC-C.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Platform\Linker\Windows-MSVC-CXX.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Platform\Linker\Windows-MSVC.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Platform\Windows-Determine-CXX.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Platform\Windows-Initialize.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Platform\Windows-MSVC-C.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Platform\Windows-MSVC-CXX.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Platform\Windows-MSVC.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Platform\Windows.cmake;C:\Program Files\CMake\share\cmake-4.1\Modules\Platform\WindowsPaths.cmake;H:\0000_CODE\01_collider_pyo\juce\build-audio-only\CMakeFiles\4.1.1\CMakeCCompiler.cmake;H:\0000_CODE\01_collider_pyo\juce\build-audio-only\CMakeFiles\4.1.1\CMakeCXXCompiler.cmake;H:\0000_CODE\01_collider_pyo\juce\build-audio-only\CMakeFiles\4.1.1\CMakeRCCompiler.cmake;H:\0000_CODE\01_collider_pyo\juce\build-audio-only\CMakeFiles\4.1.1\CMakeSystem.cmake;H:\0000_CODE\01_collider_pyo\juce\build-audio-only\CMakeFiles\cmake.verify_globs;%(AdditionalInputs)</AdditionalInputs>
+      <Outputs Condition="'$(Configuration)|$(Platform)'=='RelWithDebInfo|x64'">H:\0000_CODE\01_collider_pyo\juce\build-audio-only\CMakeFiles\generate.stamp</Outputs>
+      <LinkObjects Condition="'$(Configuration)|$(Platform)'=='RelWithDebInfo|x64'">false</LinkObjects>
+    </CustomBuild>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="H:\0000_CODE\01_collider_pyo\juce\Source\main.cpp" />
+    <ClCompile Include="H:\0000_CODE\01_collider_pyo\juce\Source\app\MainApplication.cpp" />
+    <ClInclude Include="H:\0000_CODE\01_collider_pyo\juce\Source\app\MainApplication.h" />
+    <ClCompile Include="H:\0000_CODE\01_collider_pyo\juce\Source\ui\MainComponent.cpp" />
+    <ClInclude Include="H:\0000_CODE\01_collider_pyo\juce\Source\ui\MainComponent.h" />
+    <ClCompile Include="H:\0000_CODE\01_collider_pyo\juce\Source\ui\TestHarnessComponent.cpp" />
+    <ClInclude Include="H:\0000_CODE\01_collider_pyo\juce\Source\ui\TestHarnessComponent.h" />
+    <ClCompile Include="H:\0000_CODE\01_collider_pyo\juce\Source\ui\VisualiserComponent.cpp" />
+    <ClInclude Include="H:\0000_CODE\01_collider_pyo\juce\Source\ui\VisualiserComponent.h" />
+    <ClInclude Include="H:\0000_CODE\01_collider_pyo\juce\Source\ui\DebugInfo.h" />
+    <ClInclude Include="H:\0000_CODE\01_collider_pyo\juce\Source\audio\AudioEngine.h" />
+    <ClCompile Include="H:\0000_CODE\01_collider_pyo\juce\Source\audio\AudioEngine.cpp" />
+    <ClInclude Include="H:\0000_CODE\01_collider_pyo\juce\Source\audio\MidiDeviceManager.h" />
+    <ClCompile Include="H:\0000_CODE\01_collider_pyo\juce\Source\audio\MidiDeviceManager.cpp" />
+    <ClInclude Include="H:\0000_CODE\01_collider_pyo\juce\Source\audio\voices\SampleVoiceProcessor.h" />
+    <ClCompile Include="H:\0000_CODE\01_collider_pyo\juce\Source\audio\voices\SampleVoiceProcessor.cpp" />
+    <ClInclude Include="H:\0000_CODE\01_collider_pyo\juce\Source\audio\voices\SynthVoiceProcessor.h" />
+    <ClCompile Include="H:\0000_CODE\01_collider_pyo\juce\Source\audio\voices\SynthVoiceProcessor.cpp" />
+    <ClInclude Include="H:\0000_CODE\01_collider_pyo\juce\Source\audio\voices\NoiseVoiceProcessor.h" />
+    <ClCompile Include="H:\0000_CODE\01_collider_pyo\juce\Source\audio\voices\NoiseVoiceProcessor.cpp" />
+    <ClInclude Include="H:\0000_CODE\01_collider_pyo\juce\Source\audio\voices\ModularVoice.h" />
+    <ClInclude Include="H:\0000_CODE\01_collider_pyo\juce\Source\audio\graph\VoiceProcessor.h" />
+    <ClCompile Include="H:\0000_CODE\01_collider_pyo\juce\Source\audio\graph\VoiceProcessor.cpp" />
+    <ClInclude Include="H:\0000_CODE\01_collider_pyo\juce\Source\audio\graph\ModularSynthProcessor.h" />
+    <ClCompile Include="H:\0000_CODE\01_collider_pyo\juce\Source\audio\graph\ModularSynthProcessor.cpp" />
+    <ClInclude Include="H:\0000_CODE\01_collider_pyo\juce\Source\audio\fx\FXChain.h" />
+    <ClInclude Include="H:\0000_CODE\01_collider_pyo\juce\Source\audio\fx\GainProcessor.h" />
+    <ClCompile Include="H:\0000_CODE\01_collider_pyo\juce\Source\audio\fx\GainProcessor.cpp" />
+    <ClInclude Include="H:\0000_CODE\01_collider_pyo\juce\Source\audio\assets\SampleBank.h" />
+    <ClCompile Include="H:\0000_CODE\01_collider_pyo\juce\Source\audio\assets\SampleBank.cpp" />
+    <ClInclude Include="H:\0000_CODE\01_collider_pyo\juce\Source\audio\modules\ModuleProcessor.h" />
+    <ClCompile Include="H:\0000_CODE\01_collider_pyo\juce\Source\audio\modules\ModuleProcessor.cpp" />
+    <ClInclude Include="H:\0000_CODE\01_collider_pyo\juce\Source\audio\modules\AudioInputModuleProcessor.h" />
+    <ClCompile Include="H:\0000_CODE\01_collider_pyo\juce\Source\audio\modules\AudioInputModuleProcessor.cpp" />
+    <ClInclude Include="H:\0000_CODE\01_collider_pyo\juce\Source\audio\modules\VCOModuleProcessor.h" />
+    <ClCompile Include="H:\0000_CODE\01_collider_pyo\juce\Source\audio\modules\VCOModuleProcessor.cpp" />
+    <ClInclude Include="H:\0000_CODE\01_collider_pyo\juce\Source\audio\modules\VCFModuleProcessor.h" />
+    <ClCompile Include="H:\0000_CODE\01_collider_pyo\juce\Source\audio\modules\VCFModuleProcessor.cpp" />
+    <ClInclude Include="H:\0000_CODE\01_collider_pyo\juce\Source\audio\modules\VCAModuleProcessor.h" />
+    <ClCompile Include="H:\0000_CODE\01_collider_pyo\juce\Source\audio\modules\VCAModuleProcessor.cpp" />
+    <ClInclude Include="H:\0000_CODE\01_collider_pyo\juce\Source\audio\modules\NoiseModuleProcessor.h" />
+    <ClCompile Include="H:\0000_CODE\01_collider_pyo\juce\Source\audio\modules\NoiseModuleProcessor.cpp" />
+    <ClInclude Include="H:\0000_CODE\01_collider_pyo\juce\Source\audio\modules\LFOModuleProcessor.h" />
+    <ClCompile Include="H:\0000_CODE\01_collider_pyo\juce\Source\audio\modules\LFOModuleProcessor.cpp" />
+    <ClInclude Include="H:\0000_CODE\01_collider_pyo\juce\Source\audio\modules\ADSRModuleProcessor.h" />
+    <ClCompile Include="H:\0000_CODE\01_collider_pyo\juce\Source\audio\modules\ADSRModuleProcessor.cpp" />
+    <ClInclude Include="H:\0000_CODE\01_collider_pyo\juce\Source\audio\modules\MixerModuleProcessor.h" />
+    <ClCompile Include="H:\0000_CODE\01_collider_pyo\juce\Source\audio\modules\MixerModuleProcessor.cpp" />
+    <ClInclude Include="H:\0000_CODE\01_collider_pyo\juce\Source\audio\modules\CVMixerModuleProcessor.h" />
+    <ClCompile Include="H:\0000_CODE\01_collider_pyo\juce\Source\audio\modules\CVMixerModuleProcessor.cpp" />
+    <ClInclude Include="H:\0000_CODE\01_collider_pyo\juce\Source\audio\modules\DelayModuleProcessor.h" />
+    <ClCompile Include="H:\0000_CODE\01_collider_pyo\juce\Source\audio\modules\DelayModuleProcessor.cpp" />
+    <ClInclude Include="H:\0000_CODE\01_collider_pyo\juce\Source\audio\modules\ReverbModuleProcessor.h" />
+    <ClCompile Include="H:\0000_CODE\01_collider_pyo\juce\Source\audio\modules\ReverbModuleProcessor.cpp" />
+    <ClInclude Include="H:\0000_CODE\01_collider_pyo\juce\Source\audio\modules\SAndHModuleProcessor.h" />
+    <ClCompile Include="H:\0000_CODE\01_collider_pyo\juce\Source\audio\modules\SAndHModuleProcessor.cpp" />
+    <ClInclude Include="H:\0000_CODE\01_collider_pyo\juce\Source\audio\modules\AttenuverterModuleProcessor.h" />
+    <ClCompile Include="H:\0000_CODE\01_collider_pyo\juce\Source\audio\modules\AttenuverterModuleProcessor.cpp" />
+    <ClInclude Include="H:\0000_CODE\01_collider_pyo\juce\Source\audio\modules\ScopeModuleProcessor.h" />
+    <ClCompile Include="H:\0000_CODE\01_collider_pyo\juce\Source\audio\modules\ScopeModuleProcessor.cpp" />
+    <ClInclude Include="H:\0000_CODE\01_collider_pyo\juce\Source\audio\modules\StepSequencerModuleProcessor.h" />
+    <ClCompile Include="H:\0000_CODE\01_collider_pyo\juce\Source\audio\modules\StepSequencerModuleProcessor.cpp" />
+    <ClInclude Include="H:\0000_CODE\01_collider_pyo\juce\Source\audio\modules\MultiSequencerModuleProcessor.h" />
+    <ClCompile Include="H:\0000_CODE\01_collider_pyo\juce\Source\audio\modules\MultiSequencerModuleProcessor.cpp" />
+    <ClInclude Include="H:\0000_CODE\01_collider_pyo\juce\Source\audio\modules\ChordArpModuleProcessor.h" />
+    <ClCompile Include="H:\0000_CODE\01_collider_pyo\juce\Source\audio\modules\ChordArpModuleProcessor.cpp" />
+    <ClInclude Include="H:\0000_CODE\01_collider_pyo\juce\Source\audio\modules\LagProcessorModuleProcessor.h" />
+    <ClCompile Include="H:\0000_CODE\01_collider_pyo\juce\Source\audio\modules\LagProcessorModuleProcessor.cpp" />
+    <ClInclude Include="H:\0000_CODE\01_collider_pyo\juce\Source\audio\modules\DeCrackleModuleProcessor.h" />
+    <ClCompile Include="H:\0000_CODE\01_collider_pyo\juce\Source\audio\modules\DeCrackleModuleProcessor.cpp" />
+    <ClInclude Include="H:\0000_CODE\01_collider_pyo\juce\Source\audio\modules\GraphicEQModuleProcessor.h" />
+    <ClCompile Include="H:\0000_CODE\01_collider_pyo\juce\Source\audio\modules\GraphicEQModuleProcessor.cpp" />
+    <ClInclude Include="H:\0000_CODE\01_collider_pyo\juce\Source\audio\modules\FrequencyGraphModuleProcessor.h" />
+    <ClCompile Include="H:\0000_CODE\01_collider_pyo\juce\Source\audio\modules\FrequencyGraphModuleProcessor.cpp" />
+    <ClInclude Include="H:\0000_CODE\01_collider_pyo\juce\Source\audio\modules\ChorusModuleProcessor.h" />
+    <ClCompile Include="H:\0000_CODE\01_collider_pyo\juce\Source\audio\modules\ChorusModuleProcessor.cpp" />
+    <ClInclude Include="H:\0000_CODE\01_collider_pyo\juce\Source\audio\modules\PhaserModuleProcessor.h" />
+    <ClCompile Include="H:\0000_CODE\01_collider_pyo\juce\Source\audio\modules\PhaserModuleProcessor.cpp" />
+    <ClInclude Include="H:\0000_CODE\01_collider_pyo\juce\Source\audio\modules\CompressorModuleProcessor.h" />
+    <ClCompile Include="H:\0000_CODE\01_collider_pyo\juce\Source\audio\modules\CompressorModuleProcessor.cpp" />
+    <ClInclude Include="H:\0000_CODE\01_collider_pyo\juce\Source\audio\modules\RecordModuleProcessor.h" />
+    <ClCompile Include="H:\0000_CODE\01_collider_pyo\juce\Source\audio\modules\RecordModuleProcessor.cpp" />
+    <ClInclude Include="H:\0000_CODE\01_collider_pyo\juce\Source\audio\modules\CommentModuleProcessor.h" />
+    <ClCompile Include="H:\0000_CODE\01_collider_pyo\juce\Source\audio\modules\CommentModuleProcessor.cpp" />
+    <ClInclude Include="H:\0000_CODE\01_collider_pyo\juce\Source\audio\modules\LimiterModuleProcessor.h" />
+    <ClCompile Include="H:\0000_CODE\01_collider_pyo\juce\Source\audio\modules\LimiterModuleProcessor.cpp" />
+    <ClInclude Include="H:\0000_CODE\01_collider_pyo\juce\Source\audio\modules\GateModuleProcessor.h" />
+    <ClCompile Include="H:\0000_CODE\01_collider_pyo\juce\Source\audio\modules\GateModuleProcessor.cpp" />
+    <ClInclude Include="H:\0000_CODE\01_collider_pyo\juce\Source\audio\modules\DriveModuleProcessor.h" />
+    <ClCompile Include="H:\0000_CODE\01_collider_pyo\juce\Source\audio\modules\DriveModuleProcessor.cpp" />
+    <ClInclude Include="H:\0000_CODE\01_collider_pyo\juce\Source\audio\modules\BitCrusherModuleProcessor.h" />
+    <ClCompile Include="H:\0000_CODE\01_collider_pyo\juce\Source\audio\modules\BitCrusherModuleProcessor.cpp" />
+    <ClInclude Include="H:\0000_CODE\01_collider_pyo\juce\Source\audio\modules\PanVolModuleProcessor.h" />
+    <ClCompile Include="H:\0000_CODE\01_collider_pyo\juce\Source\audio\modules\PanVolModuleProcessor.cpp" />
+    <ClInclude Include="H:\0000_CODE\01_collider_pyo\juce\Source\audio\modules\MathModuleProcessor.h" />
+    <ClCompile Include="H:\0000_CODE\01_collider_pyo\juce\Source\audio\modules\MathModuleProcessor.cpp" />
+    <ClInclude Include="H:\0000_CODE\01_collider_pyo\juce\Source\audio\modules\MapRangeModuleProcessor.h" />
+    <ClCompile Include="H:\0000_CODE\01_collider_pyo\juce\Source\audio\modules\MapRangeModuleProcessor.cpp" />
+    <ClInclude Include="H:\0000_CODE\01_collider_pyo\juce\Source\audio\modules\ComparatorModuleProcessor.h" />
+    <ClCompile Include="H:\0000_CODE\01_collider_pyo\juce\Source\audio\modules\ComparatorModuleProcessor.cpp" />
+    <ClInclude Include="H:\0000_CODE\01_collider_pyo\juce\Source\audio\modules\RandomModuleProcessor.h" />
+    <ClCompile Include="H:\0000_CODE\01_collider_pyo\juce\Source\audio\modules\RandomModuleProcessor.cpp" />
+    <ClInclude Include="H:\0000_CODE\01_collider_pyo\juce\Source\audio\modules\RateModuleProcessor.h" />
+    <ClCompile Include="H:\0000_CODE\01_collider_pyo\juce\Source\audio\modules\RateModuleProcessor.cpp" />
+    <ClInclude Include="H:\0000_CODE\01_collider_pyo\juce\Source\audio\modules\QuantizerModuleProcessor.h" />
+    <ClCompile Include="H:\0000_CODE\01_collider_pyo\juce\Source\audio\modules\QuantizerModuleProcessor.cpp" />
+    <ClInclude Include="H:\0000_CODE\01_collider_pyo\juce\Source\audio\modules\SequentialSwitchModuleProcessor.h" />
+    <ClCompile Include="H:\0000_CODE\01_collider_pyo\juce\Source\audio\modules\SequentialSwitchModuleProcessor.cpp" />
+    <ClInclude Include="H:\0000_CODE\01_collider_pyo\juce\Source\audio\modules\LogicModuleProcessor.h" />
+    <ClCompile Include="H:\0000_CODE\01_collider_pyo\juce\Source\audio\modules\LogicModuleProcessor.cpp" />
+    <ClInclude Include="H:\0000_CODE\01_collider_pyo\juce\Source\audio\modules\ClockDividerModuleProcessor.h" />
+    <ClCompile Include="H:\0000_CODE\01_collider_pyo\juce\Source\audio\modules\ClockDividerModuleProcessor.cpp" />
+    <ClInclude Include="H:\0000_CODE\01_collider_pyo\juce\Source\audio\modules\WaveshaperModuleProcessor.h" />
+    <ClCompile Include="H:\0000_CODE\01_collider_pyo\juce\Source\audio\modules\WaveshaperModuleProcessor.cpp" />
+    <ClInclude Include="H:\0000_CODE\01_collider_pyo\juce\Source\audio\modules\MultiBandShaperModuleProcessor.h" />
+    <ClCompile Include="H:\0000_CODE\01_collider_pyo\juce\Source\audio\modules\MultiBandShaperModuleProcessor.cpp" />
+    <ClInclude Include="H:\0000_CODE\01_collider_pyo\juce\Source\audio\modules\GranulatorModuleProcessor.h" />
+    <ClCompile Include="H:\0000_CODE\01_collider_pyo\juce\Source\audio\modules\GranulatorModuleProcessor.cpp" />
+    <ClInclude Include="H:\0000_CODE\01_collider_pyo\juce\Source\audio\modules\SpatialGranulatorModuleProcessor.h" />
+    <ClCompile Include="H:\0000_CODE\01_collider_pyo\juce\Source\audio\modules\SpatialGranulatorModuleProcessor.cpp" />
+    <ClInclude Include="H:\0000_CODE\01_collider_pyo\juce\Source\audio\modules\HarmonicShaperModuleProcessor.h" />
+    <ClCompile Include="H:\0000_CODE\01_collider_pyo\juce\Source\audio\modules\HarmonicShaperModuleProcessor.cpp" />
+    <ClInclude Include="H:\0000_CODE\01_collider_pyo\juce\Source\audio\modules\ValueModuleProcessor.h" />
+    <ClCompile Include="H:\0000_CODE\01_collider_pyo\juce\Source\audio\modules\ValueModuleProcessor.cpp" />
+    <ClInclude Include="H:\0000_CODE\01_collider_pyo\juce\Source\audio\modules\TimePitchModuleProcessor.h" />
+    <ClCompile Include="H:\0000_CODE\01_collider_pyo\juce\Source\audio\modules\TimePitchModuleProcessor.cpp" />
+    <ClInclude Include="H:\0000_CODE\01_collider_pyo\juce\Source\audio\modules\MIDIPlayerModuleProcessor.h" />
+    <ClCompile Include="H:\0000_CODE\01_collider_pyo\juce\Source\audio\modules\MIDIPlayerModuleProcessor.cpp" />
+    <ClInclude Include="H:\0000_CODE\01_collider_pyo\juce\Source\audio\modules\TrackMixerModuleProcessor.h" />
+    <ClCompile Include="H:\0000_CODE\01_collider_pyo\juce\Source\audio\modules\TrackMixerModuleProcessor.cpp" />
+    <ClInclude Include="H:\0000_CODE\01_collider_pyo\juce\Source\audio\modules\PolyVCOModuleProcessor.h" />
+    <ClCompile Include="H:\0000_CODE\01_collider_pyo\juce\Source\audio\modules\PolyVCOModuleProcessor.cpp" />
+    <ClInclude Include="H:\0000_CODE\01_collider_pyo\juce\Source\audio\modules\DebugModuleProcessor.h" />
+    <ClCompile Include="H:\0000_CODE\01_collider_pyo\juce\Source\audio\modules\DebugModuleProcessor.cpp" />
+    <ClInclude Include="H:\0000_CODE\01_collider_pyo\juce\Source\audio\modules\RerouteModuleProcessor.h" />
+    <ClCompile Include="H:\0000_CODE\01_collider_pyo\juce\Source\audio\modules\RerouteModuleProcessor.cpp" />
+    <ClInclude Include="H:\0000_CODE\01_collider_pyo\juce\Source\audio\modules\InputDebugModuleProcessor.h" />
+    <ClCompile Include="H:\0000_CODE\01_collider_pyo\juce\Source\audio\modules\InputDebugModuleProcessor.cpp" />
+    <ClInclude Include="H:\0000_CODE\01_collider_pyo\juce\Source\audio\modules\TTSPerformerModuleProcessor.h" />
+    <ClCompile Include="H:\0000_CODE\01_collider_pyo\juce\Source\audio\modules\TTSPerformerModuleProcessor.cpp" />
+    <ClInclude Include="H:\0000_CODE\01_collider_pyo\juce\Source\audio\modules\TimingData.h" />
+    <ClInclude Include="H:\0000_CODE\01_collider_pyo\juce\Source\audio\modules\SampleLoaderModuleProcessor.h" />
+    <ClCompile Include="H:\0000_CODE\01_collider_pyo\juce\Source\audio\modules\SampleLoaderModuleProcessor.cpp" />
+    <ClInclude Include="H:\0000_CODE\01_collider_pyo\juce\Source\audio\modules\SampleSfxModuleProcessor.h" />
+    <ClCompile Include="H:\0000_CODE\01_collider_pyo\juce\Source\audio\modules\SampleSfxModuleProcessor.cpp" />
+    <ClInclude Include="H:\0000_CODE\01_collider_pyo\juce\Source\audio\modules\FunctionGeneratorModuleProcessor.h" />
+    <ClCompile Include="H:\0000_CODE\01_collider_pyo\juce\Source\audio\modules\FunctionGeneratorModuleProcessor.cpp" />
+    <ClInclude Include="H:\0000_CODE\01_collider_pyo\juce\Source\audio\modules\BestPracticeNodeProcessor.h" />
+    <ClCompile Include="H:\0000_CODE\01_collider_pyo\juce\Source\audio\modules\BestPracticeNodeProcessor.cpp" />
+    <ClInclude Include="H:\0000_CODE\01_collider_pyo\juce\Source\audio\modules\TimelineModuleProcessor.h" />
+    <ClCompile Include="H:\0000_CODE\01_collider_pyo\juce\Source\audio\modules\TimelineModuleProcessor.cpp" />
+    <ClInclude Include="H:\0000_CODE\01_collider_pyo\juce\Source\audio\modules\VocalTractFilterModuleProcessor.h" />
+    <ClCompile Include="H:\0000_CODE\01_collider_pyo\juce\Source\audio\modules\VocalTractFilterModuleProcessor.cpp" />
+    <ClInclude Include="H:\0000_CODE\01_collider_pyo\juce\Source\audio\modules\VstHostModuleProcessor.h" />
+    <ClCompile Include="H:\0000_CODE\01_collider_pyo\juce\Source\audio\modules\VstHostModuleProcessor.cpp" />
+    <ClInclude Include="H:\0000_CODE\01_collider_pyo\juce\Source\audio\modules\ShapingOscillatorModuleProcessor.h" />
+    <ClCompile Include="H:\0000_CODE\01_collider_pyo\juce\Source\audio\modules\ShapingOscillatorModuleProcessor.cpp" />
+    <ClInclude Include="H:\0000_CODE\01_collider_pyo\juce\Source\audio\modules\InletModuleProcessor.h" />
+    <ClCompile Include="H:\0000_CODE\01_collider_pyo\juce\Source\audio\modules\InletModuleProcessor.cpp" />
+    <ClInclude Include="H:\0000_CODE\01_collider_pyo\juce\Source\audio\modules\OutletModuleProcessor.h" />
+    <ClCompile Include="H:\0000_CODE\01_collider_pyo\juce\Source\audio\modules\OutletModuleProcessor.cpp" />
+    <ClInclude Include="H:\0000_CODE\01_collider_pyo\juce\Source\audio\modules\MetaModuleProcessor.h" />
+    <ClCompile Include="H:\0000_CODE\01_collider_pyo\juce\Source\audio\modules\MetaModuleProcessor.cpp" />
+    <ClInclude Include="H:\0000_CODE\01_collider_pyo\juce\Source\audio\modules\SnapshotSequencerModuleProcessor.h" />
+    <ClCompile Include="H:\0000_CODE\01_collider_pyo\juce\Source\audio\modules\SnapshotSequencerModuleProcessor.cpp" />
+    <ClInclude Include="H:\0000_CODE\01_collider_pyo\juce\Source\audio\modules\MIDICVModuleProcessor.h" />
+    <ClCompile Include="H:\0000_CODE\01_collider_pyo\juce\Source\audio\modules\MIDICVModuleProcessor.cpp" />
+    <ClInclude Include="H:\0000_CODE\01_collider_pyo\juce\Source\audio\modules\MIDIFadersModuleProcessor.h" />
+    <ClCompile Include="H:\0000_CODE\01_collider_pyo\juce\Source\audio\modules\MIDIFadersModuleProcessor.cpp" />
+    <ClInclude Include="H:\0000_CODE\01_collider_pyo\juce\Source\audio\modules\MIDIKnobsModuleProcessor.h" />
+    <ClCompile Include="H:\0000_CODE\01_collider_pyo\juce\Source\audio\modules\MIDIKnobsModuleProcessor.cpp" />
+    <ClInclude Include="H:\0000_CODE\01_collider_pyo\juce\Source\audio\modules\MIDIButtonsModuleProcessor.h" />
+    <ClCompile Include="H:\0000_CODE\01_collider_pyo\juce\Source\audio\modules\MIDIButtonsModuleProcessor.cpp" />
+    <ClInclude Include="H:\0000_CODE\01_collider_pyo\juce\Source\audio\modules\MIDIJogWheelModuleProcessor.h" />
+    <ClCompile Include="H:\0000_CODE\01_collider_pyo\juce\Source\audio\modules\MIDIJogWheelModuleProcessor.cpp" />
+    <ClInclude Include="H:\0000_CODE\01_collider_pyo\juce\Source\audio\modules\MIDIPadModuleProcessor.h" />
+    <ClCompile Include="H:\0000_CODE\01_collider_pyo\juce\Source\audio\modules\MIDIPadModuleProcessor.cpp" />
+    <ClInclude Include="H:\0000_CODE\01_collider_pyo\juce\Source\audio\modules\MidiLoggerModuleProcessor.h" />
+    <ClCompile Include="H:\0000_CODE\01_collider_pyo\juce\Source\audio\modules\MidiLoggerModuleProcessor.cpp" />
+    <ClInclude Include="H:\0000_CODE\01_collider_pyo\juce\Source\audio\modules\TempoClockModuleProcessor.h" />
+    <ClCompile Include="H:\0000_CODE\01_collider_pyo\juce\Source\audio\modules\TempoClockModuleProcessor.cpp" />
+    <ClInclude Include="H:\0000_CODE\01_collider_pyo\juce\Source\audio\modules\PhysicsModuleProcessor.h" />
+    <ClCompile Include="H:\0000_CODE\01_collider_pyo\juce\Source\audio\modules\PhysicsModuleProcessor.cpp" />
+    <ClInclude Include="H:\0000_CODE\01_collider_pyo\juce\Source\audio\modules\StrokeSequencerModuleProcessor.h" />
+    <ClCompile Include="H:\0000_CODE\01_collider_pyo\juce\Source\audio\modules\StrokeSequencerModuleProcessor.cpp" />
+    <ClInclude Include="H:\0000_CODE\01_collider_pyo\juce\Source\audio\modules\TapTempo.h" />
+    <ClCompile Include="H:\0000_CODE\01_collider_pyo\juce\Source\audio\modules\TapTempo.cpp" />
+    <ClInclude Include="H:\0000_CODE\01_collider_pyo\juce\Source\audio\modules\BPMMonitorModuleProcessor.h" />
+    <ClCompile Include="H:\0000_CODE\01_collider_pyo\juce\Source\audio\modules\BPMMonitorModuleProcessor.cpp" />
+    <ClInclude Include="H:\0000_CODE\01_collider_pyo\juce\Source\audio\modules\AnimationModuleProcessor.h" />
+    <ClCompile Include="H:\0000_CODE\01_collider_pyo\juce\Source\audio\modules\AnimationModuleProcessor.cpp" />
+    <ClInclude Include="H:\0000_CODE\01_collider_pyo\juce\Source\audio\modules\AutomationLaneModuleProcessor.h" />
+    <ClCompile Include="H:\0000_CODE\01_collider_pyo\juce\Source\audio\modules\AutomationLaneModuleProcessor.cpp" />
+    <ClInclude Include="H:\0000_CODE\01_collider_pyo\juce\Source\audio\modules\AutomatoModuleProcessor.h" />
+    <ClCompile Include="H:\0000_CODE\01_collider_pyo\juce\Source\audio\modules\AutomatoModuleProcessor.cpp" />
+    <ClInclude Include="H:\0000_CODE\01_collider_pyo\juce\Source\video\VideoFrameManager.h" />
+    <ClInclude Include="H:\0000_CODE\01_collider_pyo\juce\Source\video\CameraEnumerator.h" />
+    <ClInclude Include="H:\0000_CODE\01_collider_pyo\juce\Source\audio\modules\WebcamLoaderModule.h" />
+    <ClCompile Include="H:\0000_CODE\01_collider_pyo\juce\Source\audio\modules\WebcamLoaderModule.cpp" />
+    <ClInclude Include="H:\0000_CODE\01_collider_pyo\juce\Source\audio\modules\VideoFileLoaderModule.h" />
+    <ClCompile Include="H:\0000_CODE\01_collider_pyo\juce\Source\audio\modules\VideoFileLoaderModule.cpp" />
+    <ClInclude Include="H:\0000_CODE\01_collider_pyo\juce\Source\audio\modules\FFmpegAudioReader.h" />
+    <ClCompile Include="H:\0000_CODE\01_collider_pyo\juce\Source\audio\modules\FFmpegAudioReader.cpp" />
+    <ClInclude Include="H:\0000_CODE\01_collider_pyo\juce\Source\audio\modules\TimeStretcherAudioSource.h" />
+    <ClCompile Include="H:\0000_CODE\01_collider_pyo\juce\Source\audio\modules\TimeStretcherAudioSource.cpp" />
+    <ClInclude Include="H:\0000_CODE\01_collider_pyo\juce\Source\audio\modules\VideoFXModule.h" />
+    <ClCompile Include="H:\0000_CODE\01_collider_pyo\juce\Source\audio\modules\VideoFXModule.cpp" />
+    <ClInclude Include="H:\0000_CODE\01_collider_pyo\juce\Source\audio\modules\VideoDrawImpactModuleProcessor.h" />
+    <ClCompile Include="H:\0000_CODE\01_collider_pyo\juce\Source\audio\modules\VideoDrawImpactModuleProcessor.cpp" />
+    <ClInclude Include="H:\0000_CODE\01_collider_pyo\juce\Source\audio\modules\MovementDetectorModule.h" />
+    <ClCompile Include="H:\0000_CODE\01_collider_pyo\juce\Source\audio\modules\MovementDetectorModule.cpp" />
+    <ClInclude Include="H:\0000_CODE\01_collider_pyo\juce\Source\audio\modules\HumanDetectorModule.h" />
+    <ClCompile Include="H:\0000_CODE\01_collider_pyo\juce\Source\audio\modules\HumanDetectorModule.cpp" />
+    <ClInclude Include="H:\0000_CODE\01_collider_pyo\juce\Source\audio\modules\PoseEstimatorModule.h" />
+    <ClCompile Include="H:\0000_CODE\01_collider_pyo\juce\Source\audio\modules\PoseEstimatorModule.cpp" />
+    <ClInclude Include="H:\0000_CODE\01_collider_pyo\juce\Source\audio\modules\HandTrackerModule.h" />
+    <ClCompile Include="H:\0000_CODE\01_collider_pyo\juce\Source\audio\modules\HandTrackerModule.cpp" />
+    <ClInclude Include="H:\0000_CODE\01_collider_pyo\juce\Source\audio\modules\FaceTrackerModule.h" />
+    <ClCompile Include="H:\0000_CODE\01_collider_pyo\juce\Source\audio\modules\FaceTrackerModule.cpp" />
+    <ClInclude Include="H:\0000_CODE\01_collider_pyo\juce\Source\audio\modules\ObjectDetectorModule.h" />
+    <ClCompile Include="H:\0000_CODE\01_collider_pyo\juce\Source\audio\modules\ObjectDetectorModule.cpp" />
+    <ClInclude Include="H:\0000_CODE\01_collider_pyo\juce\Source\audio\modules\ColorTrackerModule.h" />
+    <ClCompile Include="H:\0000_CODE\01_collider_pyo\juce\Source\audio\modules\ColorTrackerModule.cpp" />
+    <ClInclude Include="H:\0000_CODE\01_collider_pyo\juce\Source\audio\modules\ContourDetectorModule.h" />
+    <ClCompile Include="H:\0000_CODE\01_collider_pyo\juce\Source\audio\modules\ContourDetectorModule.cpp" />
+    <ClInclude Include="H:\0000_CODE\01_collider_pyo\juce\Source\audio\modules\CropVideoModule.h" />
+    <ClCompile Include="H:\0000_CODE\01_collider_pyo\juce\Source\audio\modules\CropVideoModule.cpp" />
+    <ClInclude Include="H:\0000_CODE\01_collider_pyo\juce\Source\animation\AnimationData.h" />
+    <ClInclude Include="H:\0000_CODE\01_collider_pyo\juce\Source\animation\RawAnimationData.h" />
+    <ClCompile Include="H:\0000_CODE\01_collider_pyo\juce\Source\animation\RawAnimationData.cpp" />
+    <ClInclude Include="H:\0000_CODE\01_collider_pyo\juce\Source\animation\AnimationBinder.h" />
+    <ClCompile Include="H:\0000_CODE\01_collider_pyo\juce\Source\animation\AnimationBinder.cpp" />
+    <ClInclude Include="H:\0000_CODE\01_collider_pyo\juce\Source\animation\Animator.h" />
+    <ClCompile Include="H:\0000_CODE\01_collider_pyo\juce\Source\animation\Animator.cpp" />
+    <ClInclude Include="H:\0000_CODE\01_collider_pyo\juce\Source\animation\AnimationFileLoader.h" />
+    <ClCompile Include="H:\0000_CODE\01_collider_pyo\juce\Source\animation\AnimationFileLoader.cpp" />
+    <ClInclude Include="H:\0000_CODE\01_collider_pyo\juce\Source\animation\GltfLoader.h" />
+    <ClCompile Include="H:\0000_CODE\01_collider_pyo\juce\Source\animation\GltfLoader.cpp" />
+    <ClInclude Include="H:\0000_CODE\01_collider_pyo\juce\Source\animation\FbxLoader.h" />
+    <ClCompile Include="H:\0000_CODE\01_collider_pyo\juce\Source\animation\FbxLoader.cpp" />
+    <ClInclude Include="H:\0000_CODE\01_collider_pyo\juce\Source\animation\AnimationRenderer.h" />
+    <ClCompile Include="H:\0000_CODE\01_collider_pyo\juce\Source\animation\AnimationRenderer.cpp" />
+    <ClCompile Include="H:\0000_CODE\01_collider_pyo\juce\Source\ipc\IpcServer.cpp" />
+    <ClInclude Include="H:\0000_CODE\01_collider_pyo\juce\Source\ipc\IpcServer.h" />
+    <ClInclude Include="H:\0000_CODE\01_collider_pyo\juce\Source\ipc\OscClient.h" />
+    <ClCompile Include="H:\0000_CODE\01_collider_pyo\juce\Source\ipc\CommandBus.cpp" />
+    <ClInclude Include="H:\0000_CODE\01_collider_pyo\juce\Source\ipc\CommandBus.h" />
+    <ClInclude Include="H:\0000_CODE\01_collider_pyo\juce\Source\audio\utils\VoiceDeletionUtils.h" />
+    <ClInclude Include="H:\0000_CODE\01_collider_pyo\juce\Source\audio\dsp\TimePitchProcessor.h" />
+    <ClInclude Include="H:\0000_CODE\01_collider_pyo\juce\Source\audio\voices\VoiceDownloadHelper.h" />
+    <ClCompile Include="H:\0000_CODE\01_collider_pyo\juce\Source\audio\voices\VoiceDownloadHelper.cpp" />
+    <ClInclude Include="H:\0000_CODE\01_collider_pyo\juce\Source\audio\voices\VoiceDownloadThread.h" />
+    <ClCompile Include="H:\0000_CODE\01_collider_pyo\juce\Source\audio\voices\VoiceDownloadThread.cpp" />
+    <ClInclude Include="H:\0000_CODE\01_collider_pyo\juce\Source\utils\RtLogger.h" />
+    <ClCompile Include="H:\0000_CODE\01_collider_pyo\juce\Source\utils\RtLogger.cpp" />
+    <ClCompile Include="H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\juce-src\modules\juce_gui_extra\juce_gui_extra.cpp" />
+    <ClCompile Include="H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\juce-src\modules\juce_gui_basics\juce_gui_basics.cpp" />
+    <ClCompile Include="H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\juce-src\modules\juce_graphics\juce_graphics.cpp" />
+    <ClCompile Include="H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\juce-src\modules\juce_events\juce_events.cpp" />
+    <ClCompile Include="H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\juce-src\modules\juce_core\juce_core.cpp" />
+    <ClCompile Include="H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\juce-src\modules\juce_data_structures\juce_data_structures.cpp" />
+    <ClCompile Include="H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\juce-src\modules\juce_opengl\juce_opengl.cpp" />
+    <ClCompile Include="H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\juce-src\modules\juce_audio_processors\juce_audio_processors.cpp" />
+    <ClCompile Include="H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\juce-src\modules\juce_audio_processors\juce_audio_processors_ara.cpp" />
+    <ClCompile Include="H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\juce-src\modules\juce_audio_processors\juce_audio_processors_lv2_libs.cpp" />
+    <ClCompile Include="H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\juce-src\modules\juce_audio_basics\juce_audio_basics.cpp" />
+    <ClCompile Include="H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\juce-src\modules\juce_audio_utils\juce_audio_utils.cpp" />
+    <ClCompile Include="H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\juce-src\modules\juce_audio_formats\juce_audio_formats.cpp" />
+    <ClCompile Include="H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\juce-src\modules\juce_audio_devices\juce_audio_devices.cpp" />
+    <ClCompile Include="H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\juce-src\modules\juce_dsp\juce_dsp.cpp" />
+    <ClCompile Include="H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\juce-src\modules\juce_osc\juce_osc.cpp" />
+    <Object Include="H:\0000_CODE\01_collider_pyo\juce\build-audio-only\ColliderApp_rc_lib.dir\$(Configuration)\ColliderApp_resources.res" />
+  </ItemGroup>
+  <ItemGroup />
+  <ItemGroup>
+    <ProjectReference Include="H:\0000_CODE\01_collider_pyo\juce\build-audio-only\ZERO_CHECK.vcxproj">
+      <Project>{B859C608-7421-3B2C-AEEB-C6D7268BC903}</Project>
+      <Name>ZERO_CHECK</Name>
+      <ReferenceOutputAssembly>false</ReferenceOutputAssembly>
+      <CopyToOutputDirectory>Never</CopyToOutputDirectory>
+    </ProjectReference>
+    <ProjectReference Include="H:\0000_CODE\01_collider_pyo\juce\build-audio-only\ColliderApp_rc_lib.vcxproj">
+      <Project>{F7DE3CCF-A898-30A1-9D30-89F8FF1ED7A0}</Project>
+      <Name>ColliderApp_rc_lib</Name>
+      <ReferenceOutputAssembly>false</ReferenceOutputAssembly>
+      <CopyToOutputDirectory>Never</CopyToOutputDirectory>
+    </ProjectReference>
+    <ProjectReference Include="H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\box2d_fc-build\src\box2d.vcxproj">
+      <Project>{A26D8904-F402-32B1-839A-55254C3D0AE7}</Project>
+      <Name>box2d</Name>
+    </ProjectReference>
+    <ProjectReference Include="H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\glm-build\glm\glm.vcxproj">
+      <Project>{B25A58D8-F779-356B-B3D0-410B17EB6AF8}</Project>
+      <Name>glm</Name>
+    </ProjectReference>
+    <ProjectReference Include="H:\0000_CODE\01_collider_pyo\juce\build-audio-only\rubberband_single.vcxproj">
+      <Project>{6CBBECAD-AEE8-3689-9324-627F54F4565F}</Project>
+      <Name>rubberband_single</Name>
+    </ProjectReference>
+    <ProjectReference Include="H:\0000_CODE\01_collider_pyo\juce\build-audio-only\soundtouch.vcxproj">
+      <Project>{172643F0-9DD5-3651-A747-70D87FF9E2D9}</Project>
+      <Name>soundtouch</Name>
+    </ProjectReference>
+    <ProjectReference Include="H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\tinygltf-build\tinygltf.vcxproj">
+      <Project>{776CABD6-CE8C-3022-BA96-46A2D51DC27A}</Project>
+      <Name>tinygltf</Name>
+    </ProjectReference>
+    <ProjectReference Include="H:\0000_CODE\01_collider_pyo\juce\build-audio-only\ufbx_static.vcxproj">
+      <Project>{1BFC911C-5C01-3790-A926-2C7A47A438C6}</Project>
+      <Name>ufbx_static</Name>
+    </ProjectReference>
+  </ItemGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+  <ImportGroup Label="ExtensionTargets">
+  </ImportGroup>
+</Project>

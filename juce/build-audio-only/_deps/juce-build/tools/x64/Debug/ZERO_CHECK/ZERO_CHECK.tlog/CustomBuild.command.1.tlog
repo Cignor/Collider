@@ -1,0 +1,10 @@
+^H:\0000_CODE\01_COLLIDER_PYO\JUCE\BUILD-AUDIO-ONLY\_DEPS\JUCE-BUILD\TOOLS\CMAKEFILES\F60915ABB79388D1F9CF9CAC1B69AD0C\GENERATE.STAMP.RULE
+setlocal
+"C:\Program Files\CMake\bin\cmake.exe" -SH:/0000_CODE/01_collider_pyo/juce/build-audio-only/_deps/juce-src -BH:/0000_CODE/01_collider_pyo/juce/build-audio-only/_deps/juce-build/tools --check-stamp-list CMakeFiles/generate.stamp.list --vs-solution-file H:/0000_CODE/01_collider_pyo/juce/build-audio-only/_deps/juce-build/tools/JUCE.sln
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal & call :cmErrorLevel %errorlevel% & goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd

@@ -1,0 +1,150 @@
+^H:\0000_CODE\01_COLLIDER_PYO\JUCE\BUILD-AUDIO-ONLY\_DEPS\TINYGLTF-SUBBUILD\CMAKEFILES\C2E7EB0795BC9A9E32E23BCD3881D965\TINYGLTF-POPULATE-MKDIR.RULE
+setlocal
+"C:\Program Files\CMake\bin\cmake.exe" -Dcfgdir=/Debug -P H:/0000_CODE/01_collider_pyo/juce/build-audio-only/_deps/tinygltf-subbuild/tinygltf-populate-prefix/tmp/tinygltf-populate-mkdirs.cmake
+if %errorlevel% neq 0 goto :cmEnd
+"C:\Program Files\CMake\bin\cmake.exe" -E touch H:/0000_CODE/01_collider_pyo/juce/build-audio-only/_deps/tinygltf-subbuild/tinygltf-populate-prefix/src/tinygltf-populate-stamp/Debug/tinygltf-populate-mkdir
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal & call :cmErrorLevel %errorlevel% & goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd
+^H:\0000_CODE\01_COLLIDER_PYO\JUCE\BUILD-AUDIO-ONLY\_DEPS\TINYGLTF-SUBBUILD\CMAKEFILES\C2E7EB0795BC9A9E32E23BCD3881D965\TINYGLTF-POPULATE-DOWNLOAD.RULE
+setlocal
+cd H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps
+if %errorlevel% neq 0 goto :cmEnd
+H:
+if %errorlevel% neq 0 goto :cmEnd
+"C:\Program Files\CMake\bin\cmake.exe" -DCMAKE_MESSAGE_LOG_LEVEL=VERBOSE -P H:/0000_CODE/01_collider_pyo/juce/build-audio-only/_deps/tinygltf-subbuild/tinygltf-populate-prefix/tmp/tinygltf-populate-gitclone.cmake
+if %errorlevel% neq 0 goto :cmEnd
+"C:\Program Files\CMake\bin\cmake.exe" -E touch H:/0000_CODE/01_collider_pyo/juce/build-audio-only/_deps/tinygltf-subbuild/tinygltf-populate-prefix/src/tinygltf-populate-stamp/Debug/tinygltf-populate-download
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal & call :cmErrorLevel %errorlevel% & goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd
+^H:\0000_CODE\01_COLLIDER_PYO\JUCE\BUILD-AUDIO-ONLY\_DEPS\TINYGLTF-SUBBUILD\CMAKEFILES\C2E7EB0795BC9A9E32E23BCD3881D965\TINYGLTF-POPULATE-UPDATE.RULE
+setlocal
+cd H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\tinygltf-src
+if %errorlevel% neq 0 goto :cmEnd
+H:
+if %errorlevel% neq 0 goto :cmEnd
+"C:\Program Files\CMake\bin\cmake.exe" -Dcan_fetch=YES -DCMAKE_MESSAGE_LOG_LEVEL=VERBOSE -P H:/0000_CODE/01_collider_pyo/juce/build-audio-only/_deps/tinygltf-subbuild/tinygltf-populate-prefix/tmp/tinygltf-populate-gitupdate.cmake
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal & call :cmErrorLevel %errorlevel% & goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd
+^H:\0000_CODE\01_COLLIDER_PYO\JUCE\BUILD-AUDIO-ONLY\_DEPS\TINYGLTF-SUBBUILD\CMAKEFILES\C2E7EB0795BC9A9E32E23BCD3881D965\TINYGLTF-POPULATE-PATCH.RULE
+setlocal
+"C:\Program Files\CMake\bin\cmake.exe" -E echo_append
+if %errorlevel% neq 0 goto :cmEnd
+"C:\Program Files\CMake\bin\cmake.exe" -E touch H:/0000_CODE/01_collider_pyo/juce/build-audio-only/_deps/tinygltf-subbuild/tinygltf-populate-prefix/src/tinygltf-populate-stamp/Debug/tinygltf-populate-patch
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal & call :cmErrorLevel %errorlevel% & goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd
+^H:\0000_CODE\01_COLLIDER_PYO\JUCE\BUILD-AUDIO-ONLY\_DEPS\TINYGLTF-SUBBUILD\CMAKEFILES\C2E7EB0795BC9A9E32E23BCD3881D965\TINYGLTF-POPULATE-CONFIGURE.RULE
+setlocal
+cd H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\tinygltf-build
+if %errorlevel% neq 0 goto :cmEnd
+H:
+if %errorlevel% neq 0 goto :cmEnd
+"C:\Program Files\CMake\bin\cmake.exe" -E echo_append
+if %errorlevel% neq 0 goto :cmEnd
+"C:\Program Files\CMake\bin\cmake.exe" -E touch H:/0000_CODE/01_collider_pyo/juce/build-audio-only/_deps/tinygltf-subbuild/tinygltf-populate-prefix/src/tinygltf-populate-stamp/Debug/tinygltf-populate-configure
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal & call :cmErrorLevel %errorlevel% & goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd
+^H:\0000_CODE\01_COLLIDER_PYO\JUCE\BUILD-AUDIO-ONLY\_DEPS\TINYGLTF-SUBBUILD\CMAKEFILES\C2E7EB0795BC9A9E32E23BCD3881D965\TINYGLTF-POPULATE-BUILD.RULE
+setlocal
+cd H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\tinygltf-build
+if %errorlevel% neq 0 goto :cmEnd
+H:
+if %errorlevel% neq 0 goto :cmEnd
+"C:\Program Files\CMake\bin\cmake.exe" -E echo_append
+if %errorlevel% neq 0 goto :cmEnd
+"C:\Program Files\CMake\bin\cmake.exe" -E touch H:/0000_CODE/01_collider_pyo/juce/build-audio-only/_deps/tinygltf-subbuild/tinygltf-populate-prefix/src/tinygltf-populate-stamp/Debug/tinygltf-populate-build
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal & call :cmErrorLevel %errorlevel% & goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd
+^H:\0000_CODE\01_COLLIDER_PYO\JUCE\BUILD-AUDIO-ONLY\_DEPS\TINYGLTF-SUBBUILD\CMAKEFILES\C2E7EB0795BC9A9E32E23BCD3881D965\TINYGLTF-POPULATE-INSTALL.RULE
+setlocal
+cd H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\tinygltf-build
+if %errorlevel% neq 0 goto :cmEnd
+H:
+if %errorlevel% neq 0 goto :cmEnd
+"C:\Program Files\CMake\bin\cmake.exe" -E echo_append
+if %errorlevel% neq 0 goto :cmEnd
+"C:\Program Files\CMake\bin\cmake.exe" -E touch H:/0000_CODE/01_collider_pyo/juce/build-audio-only/_deps/tinygltf-subbuild/tinygltf-populate-prefix/src/tinygltf-populate-stamp/Debug/tinygltf-populate-install
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal & call :cmErrorLevel %errorlevel% & goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd
+^H:\0000_CODE\01_COLLIDER_PYO\JUCE\BUILD-AUDIO-ONLY\_DEPS\TINYGLTF-SUBBUILD\CMAKEFILES\C2E7EB0795BC9A9E32E23BCD3881D965\TINYGLTF-POPULATE-TEST.RULE
+setlocal
+cd H:\0000_CODE\01_collider_pyo\juce\build-audio-only\_deps\tinygltf-build
+if %errorlevel% neq 0 goto :cmEnd
+H:
+if %errorlevel% neq 0 goto :cmEnd
+"C:\Program Files\CMake\bin\cmake.exe" -E echo_append
+if %errorlevel% neq 0 goto :cmEnd
+"C:\Program Files\CMake\bin\cmake.exe" -E touch H:/0000_CODE/01_collider_pyo/juce/build-audio-only/_deps/tinygltf-subbuild/tinygltf-populate-prefix/src/tinygltf-populate-stamp/Debug/tinygltf-populate-test
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal & call :cmErrorLevel %errorlevel% & goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd
+^H:\0000_CODE\01_COLLIDER_PYO\JUCE\BUILD-AUDIO-ONLY\_DEPS\TINYGLTF-SUBBUILD\CMAKEFILES\3006A9B4034E1AD586009932DBF03D94\TINYGLTF-POPULATE-COMPLETE.RULE
+setlocal
+"C:\Program Files\CMake\bin\cmake.exe" -E make_directory H:/0000_CODE/01_collider_pyo/juce/build-audio-only/_deps/tinygltf-subbuild/CMakeFiles/Debug
+if %errorlevel% neq 0 goto :cmEnd
+"C:\Program Files\CMake\bin\cmake.exe" -E touch H:/0000_CODE/01_collider_pyo/juce/build-audio-only/_deps/tinygltf-subbuild/CMakeFiles/Debug/tinygltf-populate-complete
+if %errorlevel% neq 0 goto :cmEnd
+"C:\Program Files\CMake\bin\cmake.exe" -E touch H:/0000_CODE/01_collider_pyo/juce/build-audio-only/_deps/tinygltf-subbuild/tinygltf-populate-prefix/src/tinygltf-populate-stamp/Debug/tinygltf-populate-done
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal & call :cmErrorLevel %errorlevel% & goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd
+^H:\0000_CODE\01_COLLIDER_PYO\JUCE\BUILD-AUDIO-ONLY\_DEPS\TINYGLTF-SUBBUILD\CMAKEFILES\A72635820E869C5B0FA1B6E835E06A84\TINYGLTF-POPULATE.RULE
+setlocal
+:cmEnd
+endlocal & call :cmErrorLevel %errorlevel% & goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd
+^H:\0000_CODE\01_COLLIDER_PYO\JUCE\BUILD-AUDIO-ONLY\_DEPS\TINYGLTF-SUBBUILD\CMAKELISTS.TXT
+setlocal
+"C:\Program Files\CMake\bin\cmake.exe" -SH:/0000_CODE/01_collider_pyo/juce/build-audio-only/_deps/tinygltf-subbuild -BH:/0000_CODE/01_collider_pyo/juce/build-audio-only/_deps/tinygltf-subbuild --check-stamp-file H:/0000_CODE/01_collider_pyo/juce/build-audio-only/_deps/tinygltf-subbuild/CMakeFiles/generate.stamp
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal & call :cmErrorLevel %errorlevel% & goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd

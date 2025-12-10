@@ -105,8 +105,14 @@ function Test-ShouldExclude {
     }
     
     # Check pattern exclusions
+    $fileName = [System.IO.Path]::GetFileName($RelativePath)
     foreach ($pattern in $ExcludePatterns) {
+        # Check against full relative path
         if ($RelativePath -like $pattern) {
+            return $true
+        }
+        # Check against just the filename (fixes issue where "dllname.dll" pattern fails on "path\dllname.dll")
+        if ($fileName -like $pattern) {
             return $true
         }
     }
@@ -201,6 +207,7 @@ Write-Host "Generating JSON..." -ForegroundColor Yellow
 
 $releaseDate = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
 
+# Initialize manifest structure
 $manifest = @{
     latestVersion  = $Version
     minimumVersion = "0.6.0" # Hardcoded for now, could be dynamic
@@ -211,16 +218,59 @@ $manifest = @{
         summary = "Version $Version release"
         url     = "$BaseUrl/../changelog.html#v$Version"
     }
-    variants       = @{
-        $Variant = @{
-            displayName = if ($Variant -eq "cuda") { "CUDA-Enabled (Full Features)" } else { "Standard (Lightweight)" }
-            files       = $fileManifest
+    variants       = @{}
+}
+
+# Check if output file exists to merge
+if (Test-Path $OutputFile) {
+    try {
+        Write-Host "Found existing manifest, merging..." -ForegroundColor Cyan
+        $existingJson = Get-Content $OutputFile -Raw -Encoding UTF8
+        $existingManifest = $existingJson | ConvertFrom-Json
+        
+        # Copy existing variants
+        if ($existingManifest.variants) {
+            $existingManifest.variants.PSObject.Properties | ForEach-Object {
+                $manifest.variants[$_.Name] = $_.Value
+            }
         }
+        
+        # Preserve other fields if needed (optional, but good practice)
+        # $manifest.changelog = $existingManifest.changelog 
+    }
+    catch {
+        Write-Host "Warning: Failed to parse existing manifest, creating new one." -ForegroundColor Yellow
     }
 }
 
+# Add/Update current variant
+$manifest.variants[$Variant] = @{
+    displayName = if ($Variant -eq "cuda") { "CUDA-Enabled (Full Features)" } 
+    elseif ($Variant -eq "audio") { "Audio Only (No CUDA/OpenCV)" }
+    else { "Standard" }
+    files       = $fileManifest
+}
+
 $json = $manifest | ConvertTo-Json -Depth 10
-$json | Set-Content -Path $OutputFile -Encoding UTF8
+
+# Retry loop for writing file (handles file locks)
+$maxRetries = 5
+$retryDelay = 1 # seconds
+
+for ($i = 0; $i -lt $maxRetries; $i++) {
+    try {
+        $json | Set-Content -Path $OutputFile -Encoding UTF8 -ErrorAction Stop
+        break # Success
+    }
+    catch {
+        if ($i -eq $maxRetries - 1) {
+            Write-Error "Failed to write manifest after $maxRetries attempts: $_"
+            exit 1
+        }
+        Write-Host "File locked, retrying in $retryDelay seconds... ($($i+1)/$maxRetries)" -ForegroundColor Yellow
+        Start-Sleep -Seconds $retryDelay
+    }
+}
 
 Write-Host "Manifest saved to: $OutputFile" -ForegroundColor Green
 Write-Host ""

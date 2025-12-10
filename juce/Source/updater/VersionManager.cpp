@@ -5,8 +5,13 @@ namespace Updater
 
 VersionManager::VersionManager()
     : currentVersion("0.85.0") // Default version
+#if AUDIO_ONLY_BUILD
+      ,
+      currentVariant("audio") // Audio-only variant
+#else
       ,
       currentVariant("cuda") // Default variant
+#endif
       ,
       versionInfoLoaded(false) // Lazy load flag
 {
@@ -115,20 +120,25 @@ bool VersionManager::loadVersionInfo()
     // If already loaded, skip
     if (versionInfoLoaded)
         return true;
-        
+
     auto versionFile = getVersionFile();
 
     if (!versionFile.existsAsFile())
     {
-        juce::Logger::writeToLog("VersionManager: installed_files.json doesn't exist yet: " + versionFile.getFullPathName());
-        juce::Logger::writeToLog("  This is normal for first run - file will be created when files are registered");
+        juce::Logger::writeToLog(
+            "VersionManager: installed_files.json doesn't exist yet: " +
+            versionFile.getFullPathName());
+        juce::Logger::writeToLog(
+            "  This is normal for first run - file will be created when files are registered");
         versionInfoLoaded = true; // Mark as loaded even if file doesn't exist
         return false;
     }
 
-    juce::Logger::writeToLog("VersionManager: Loading installed_files.json from: " + versionFile.getFullPathName());
+    juce::Logger::writeToLog(
+        "VersionManager: Loading installed_files.json from: " + versionFile.getFullPathName());
     juce::Logger::writeToLog("  File size: " + juce::String(versionFile.getSize()) + " bytes");
-    juce::Logger::writeToLog("  Modified: " + versionFile.getLastModificationTime().toString(true, true, true, true));
+    juce::Logger::writeToLog(
+        "  Modified: " + versionFile.getLastModificationTime().toString(true, true, true, true));
 
     auto jsonString = versionFile.loadFileAsString();
     auto json = juce::JSON::parse(jsonString);
@@ -136,7 +146,8 @@ bool VersionManager::loadVersionInfo()
     if (auto* obj = json.getDynamicObject())
     {
         currentVersion = obj->getProperty("appVersion").toString();
-        currentVariant = obj->getProperty("variant").toString();
+        // currentVariant = obj->getProperty("variant").toString(); // Do NOT overwrite variant from
+        // file - trust the build config!
 
         auto dateStr = obj->getProperty("lastUpdateCheck").toString();
         if (dateStr.isNotEmpty())
@@ -157,9 +168,10 @@ bool VersionManager::loadVersionInfo()
                     auto fileInfo = InstalledFileInfo::fromJson(prop.value);
                     installedFiles.set(prop.name.toString(), fileInfo);
                 }
-                
-                juce::Logger::writeToLog("  Loaded " + juce::String(installedFiles.size()) + " tracked files");
-                
+
+                juce::Logger::writeToLog(
+                    "  Loaded " + juce::String(installedFiles.size()) + " tracked files");
+
                 // Log EXE if present
                 auto exePath = juce::File::getSpecialLocation(juce::File::currentExecutableFile);
                 auto exeName = exePath.getFileName();
@@ -169,7 +181,9 @@ bool VersionManager::loadVersionInfo()
                     juce::Logger::writeToLog("  EXE tracked: " + exeName);
                     juce::Logger::writeToLog("    Recorded hash: " + exeInfo.sha256);
                     juce::Logger::writeToLog("    Recorded version: " + exeInfo.version);
-                    juce::Logger::writeToLog("    Installed date: " + exeInfo.installedDate.toString(true, true, true, true));
+                    juce::Logger::writeToLog(
+                        "    Installed date: " +
+                        exeInfo.installedDate.toString(true, true, true, true));
                 }
                 else
                 {

@@ -227,6 +227,7 @@ public:
         PolyVCOModuleProcessor* polyVco,
         juce::uint32            polyVcoLid);
 
+#ifndef AUDIO_ONLY_BUILD
     // Color Tracker auto-connect handlers
     void handleColorTrackerAutoConnectPolyVCO(
         ColorTrackerModule* colorTracker,
@@ -234,6 +235,7 @@ public:
     void handleColorTrackerAutoConnectSamplers(
         ColorTrackerModule* colorTracker,
         juce::uint32        colorTrackerLid);
+#endif
 
     // Chord Arp auto-connect handlers
     void handleChordArpAutoConnectPolyVCO(
@@ -670,7 +672,7 @@ public:
         juce::uint32 logicalId,
         bool         isInput,
         PinDataType  targetType);
-    bool                  isInputConnected(juce::uint32 destLogicalId, int destChannel) const;
+    bool isInputConnected(juce::uint32 destLogicalId, int destChannel) const;
 
     // --- Recorder Output Shortcut ---
     void handleRecordOutput();

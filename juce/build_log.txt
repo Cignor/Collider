@@ -1,0 +1,79 @@
+-- Building for: Visual Studio 17 2022
+-- Selecting Windows SDK version 10.0.26100.0 to target Windows 10.0.26200.
+-- The C compiler identification is MSVC 19.44.35219.0
+-- The CXX compiler identification is MSVC 19.44.35219.0
+-- Detecting C compiler ABI info
+-- Detecting C compiler ABI info - done
+-- Check for working C compiler: C:/VS/Studio2022/VC/Tools/MSVC/14.44.35207/bin/Hostx64/x64/cl.exe - skipped
+-- Detecting C compile features
+-- Detecting C compile features - done
+-- Detecting CXX compiler ABI info
+-- Detecting CXX compiler ABI info - done
+-- Check for working CXX compiler: C:/VS/Studio2022/VC/Tools/MSVC/14.44.35207/bin/Hostx64/x64/cl.exe - skipped
+-- Detecting CXX compile features
+-- Detecting CXX compile features - done
+-- ✓ sccache found, enabling compiler cache: C:/Users/PIMP-TOWERPRIMUS/AppData/Local/Microsoft/WinGet/Links/sccache.exe
+-- Configuring juceaide
+-- Building juceaide
+-- Exporting juceaide
+-- Using upstream imnodes (no zoom fork)
+CMake Warning (dev) at C:/Program Files/CMake/share/cmake-4.1/Modules/FetchContent.cmake:1953 (message):
+  Calling FetchContent_Populate(imnodes_fc) is deprecated, call
+  FetchContent_MakeAvailable(imnodes_fc) instead.  Policy CMP0169 can be set
+  to OLD to allow FetchContent_Populate(imnodes_fc) to be called directly for
+  now, but the ability to call it with declared details will be removed
+  completely in a future version.
+Call Stack (most recent call first):
+  CMakeLists.txt:118 (FetchContent_Populate)
+This warning is for project developers.  Use -Wno-dev to suppress it.
+
+CMake Deprecation Warning at build-audio-only/_deps/box2d_fc-src/CMakeLists.txt:1 (cmake_minimum_required):
+  Compatibility with CMake < 3.10 will be removed from a future version of
+  CMake.
+
+  Update the VERSION argument <min> value.  Or, use the <min>...<max> syntax
+  to tell CMake that the project requires at least <min> but has been updated
+  to work with policies introduced by <max> or earlier.
+
+
+CMake Deprecation Warning at build-audio-only/_deps/glm-src/CMakeLists.txt:1 (cmake_minimum_required):
+  Compatibility with CMake < 3.10 will be removed from a future version of
+  CMake.
+
+  Update the VERSION argument <min> value.  Or, use the <min>...<max> syntax
+  to tell CMake that the project requires at least <min> but has been updated
+  to work with policies introduced by <max> or earlier.
+
+
+CMake Deprecation Warning at build-audio-only/_deps/glm-src/CMakeLists.txt:2 (cmake_policy):
+  Compatibility with CMake < 3.10 will be removed from a future version of
+  CMake.
+
+  Update the VERSION argument <min> value.  Or, use the <min>...<max> syntax
+  to tell CMake that the project requires at least <min> but has been updated
+  to work with policies introduced by <max> or earlier.
+
+
+-- GLM: Version 1.0.1
+-- GLM: Build with C++ features auto detection
+-- Using the multi-header code from H:/0000_CODE/01_collider_pyo/juce/build-audio-only/_deps/nlohmann_json-src/include/
+CMake Deprecation Warning at build-audio-only/_deps/tinygltf-src/CMakeLists.txt:1 (cmake_minimum_required):
+  Compatibility with CMake < 3.10 will be removed from a future version of
+  CMake.
+
+  Update the VERSION argument <min> value.  Or, use the <min>...<max> syntax
+  to tell CMake that the project requires at least <min> but has been updated
+  to work with policies introduced by <max> or earlier.
+
+
+-- OpenCV disabled by user (ENABLE_OPENCV=OFF).
+-- CUDA support disabled - WITH_CUDA_SUPPORT not defined
+--   Reason: WITH_CUDA is OFF
+-- ✓ ASIO SDK found at H:/0000_CODE/01_collider_pyo/juce/../vendor/ASIOSDK
+--   - ASIO low-latency audio support will be enabled
+-- ✓ FFmpeg found at H:/0000_CODE/01_collider_pyo/juce/../vendor/ffmpeg
+--   - Include: H:/0000_CODE/01_collider_pyo/juce/../vendor/ffmpeg/include
+--   - Libraries: H:/0000_CODE/01_collider_pyo/vendor/ffmpeg/lib/avformat.lib;H:/0000_CODE/01_collider_pyo/vendor/ffmpeg/lib/avcodec.lib;H:/0000_CODE/01_collider_pyo/vendor/ffmpeg/lib/avutil.lib;H:/0000_CODE/01_collider_pyo/vendor/ffmpeg/lib/swresample.lib;H:/0000_CODE/01_collider_pyo/vendor/ffmpeg/lib/swscale.lib
+-- Configuring done (266.6s)
+-- Generating done (1.1s)
+-- Build files have been written to: H:/0000_CODE/01_collider_pyo/juce/build-audio-only

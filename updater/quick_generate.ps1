@@ -8,11 +8,12 @@ Write-Host ""
 Write-Host "Version will be auto-detected from VersionInfo.h" -ForegroundColor Yellow
 Write-Host ""
 
-# Your build directory
-$buildDir = "H:\0000_CODE\01_collider_pyo\juce\build-ninja-release\PresetCreatorApp_artefacts\Release"
+# Build directories
+$buildDirCuda = "H:\0000_CODE\01_collider_pyo\juce\build-ninja-release\PresetCreatorApp_artefacts\Release"
+$buildDirAudio = "H:\0000_CODE\01_collider_pyo\juce\build-ninja-release\PresetCreatorApp_artefacts\Release" # Audio app is now in same dir
 
-# Your variant
-$variant = "cuda"
+# Output file
+$outputFile = Join-Path $buildDirCuda "manifest.json"
 
 # Folders to exclude (your custom exclusions)
 $excludeFolders = @(
@@ -45,22 +46,50 @@ $excludePatterns = @(
 # Base URL for your OVH server
 $baseUrl = "https://pimpant.club/pikon-raditsz"
 
-# Output file - save to build directory (exe folder) instead of root
-$outputFile = Join-Path $buildDir "manifest.json"
-
 Write-Host "Configured exclusions:" -ForegroundColor Yellow
 Write-Host "  Folders: $($excludeFolders -join ', ')" -ForegroundColor Gray
 Write-Host "  Patterns: $($excludePatterns -join ', ')" -ForegroundColor Gray
 Write-Host ""
 
-# Call the main generate script with your settings
+# 1. Generate CUDA variant
+Write-Host "--- Generating CUDA Variant ---" -ForegroundColor Cyan
 & "$PSScriptRoot\generate_manifest.ps1" `
-    -BuildDir $buildDir `
-    -Variant $variant `
+    -BuildDir $buildDirCuda `
+    -Variant "cuda" `
     -BaseUrl $baseUrl `
     -OutputFile $outputFile `
     -ExcludeFolders $excludeFolders `
     -ExcludePatterns $excludePatterns
+
+Write-Host ""
+
+# 2. Generate Audio variant
+Write-Host "--- Generating Audio Variant ---" -ForegroundColor Cyan
+
+# Define exclusions specific to audio build (remove heavy CUDA/AI libs)
+$audioExclusions = $excludePatterns + @(
+    "cudart*.dll",
+    "cuda*.dll",
+    "cublas*.dll",
+    "cudnn*.dll",
+    "cufft*.dll",
+    "curand*.dll",
+    "cusolver*.dll",
+    "cusparse*.dll",
+    "npp*.dll",
+    "nv*.dll",
+    "opencv*.dll",
+    "onnxruntime*.dll"
+    # Keeping FFmpeg (av*.dll, sw*.dll) as requested
+)
+
+& "$PSScriptRoot\generate_manifest.ps1" `
+    -BuildDir $buildDirAudio `
+    -Variant "audio" `
+    -BaseUrl $baseUrl `
+    -OutputFile $outputFile `
+    -ExcludeFolders $excludeFolders `
+    -ExcludePatterns $audioExclusions
 
 Write-Host ""
 Write-Host "Quick generate complete!" -ForegroundColor Green
