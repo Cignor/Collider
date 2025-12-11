@@ -2,6 +2,8 @@
 
 #include "ModuleProcessor.h"
 #include <juce_audio_basics/juce_audio_basics.h>
+#include <juce_audio_devices/juce_audio_devices.h>
+#include <juce_audio_processors/juce_audio_processors.h>
 #include <map>
 
 // Forward declaration for the file chooser
@@ -71,6 +73,14 @@ public:
     std::vector<DynamicPinInfo> getDynamicOutputPins() const override;
 
     juce::AudioProcessorValueTreeState& getAPVTS() override { return apvts; }
+    
+    // MIDI Output
+    void setAudioDeviceManager(juce::AudioDeviceManager* adm) 
+    { 
+        audioDeviceManager = adm; 
+        updateMidiOutputDevice(); // Update device immediately when manager is set
+    }
+    std::vector<std::pair<juce::String, juce::String>> getAvailableMidiOutputDevices() const;
 
 #if defined(PRESET_CREATOR_UI)
     void drawParametersInNode(
@@ -140,12 +150,38 @@ private:
     float viewScrollX = 0.0f;
     float viewScrollY = 0.0f;
     float zoomX = 100.0f; // Pixels per beat
+    
+    // Note dragging state
+    struct DraggingNote
+    {
+        int trackIndex = -1;
+        int eventIndex = -1;
+        float initialMouseX = 0.0f;
+        int64_t initialStartTimeSamples = 0;
+        bool isDragging = false;
+    };
+    DraggingNote draggingNote;
 
     // Parameters for UI control
     juce::AudioParameterInt* loopLengthParam{nullptr};
 
     // A configurable default width for our custom UI
     float nodeWidth = 600.0f;
+    
+    // MIDI Output
+    std::unique_ptr<juce::MidiOutput> midiOutputDevice;
+    juce::String currentMidiOutputDeviceId;
+    juce::CriticalSection midiOutputLock;
+    juce::AudioParameterBool* enableMidiOutputParam { nullptr };
+    juce::AudioParameterChoice* midiOutputModeParam { nullptr };
+    juce::AudioParameterInt* midiOutputDeviceIndexParam { nullptr };  // Index into available devices
+    juce::AudioParameterInt* midiOutputChannelParam { nullptr };
+    juce::String storedMidiOutputDeviceId;  // Store device ID separately (not in APVTS)
+    juce::AudioDeviceManager* audioDeviceManager { nullptr };
+    
+    // MIDI Output methods
+    void updateMidiOutputDevice();
+    void sendMidiToOutput(const juce::MidiMessage& message);
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(MidiLoggerModuleProcessor)
 };

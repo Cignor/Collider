@@ -24,6 +24,12 @@ MIDIPlayerModuleProcessor::MIDIPlayerModuleProcessor()
     syncToHostParam = dynamic_cast<juce::AudioParameterBool*>(apvts.getParameter("syncToHost"));
     tempoMultiplierParam = dynamic_cast<juce::AudioParameterFloat*>(apvts.getParameter("tempoMultiplier"));
     
+    // MIDI Output: Get pointers to MIDI output parameters
+    enableMidiOutputParam = dynamic_cast<juce::AudioParameterBool*>(apvts.getParameter("enable_midi_output"));
+    midiOutputModeParam = dynamic_cast<juce::AudioParameterChoice*>(apvts.getParameter("midi_output_mode"));
+    midiOutputDeviceIndexParam = dynamic_cast<juce::AudioParameterInt*>(apvts.getParameter("midi_output_device_index"));
+    midiOutputChannelParam = dynamic_cast<juce::AudioParameterInt*>(apvts.getParameter("midi_output_channel"));
+    
     // Initialize output values
     lastOutputValues.resize(kTotalOutputs);
     for (auto& value : lastOutputValues)
@@ -60,6 +66,17 @@ juce::AudioProcessorValueTreeState::ParameterLayout MIDIPlayerModuleProcessor::c
     parameters.push_back(std::make_unique<juce::AudioParameterFloat>(
         VELOCITY_MOD_PARAM, "Velocity Mod", 0.0f, 1.0f, 0.5f));
     
+    // MIDI Output Parameters
+    parameters.push_back(std::make_unique<juce::AudioParameterBool>(
+        "enable_midi_output", "Enable MIDI Output", false));
+    parameters.push_back(std::make_unique<juce::AudioParameterChoice>(
+        "midi_output_mode", "MIDI Output Mode",
+        juce::StringArray("Use Global Default", "Custom Device"), 0));
+    parameters.push_back(std::make_unique<juce::AudioParameterInt>(
+        "midi_output_device_index", "MIDI Output Device Index", -1, 100, -1));  // -1 = none selected
+    parameters.push_back(std::make_unique<juce::AudioParameterInt>(
+        "midi_output_channel", "MIDI Output Channel", 0, 16, 0));
+    
     return { parameters.begin(), parameters.end() };
 }
 
@@ -70,7 +87,12 @@ void MIDIPlayerModuleProcessor::prepareToPlay(double sampleRate, int maximumExpe
 
 void MIDIPlayerModuleProcessor::releaseResources()
 {
-    // Nothing to release for MIDI Player
+    // Close MIDI output device
+    {
+        const juce::ScopedLock lock(midiOutputLock);
+        midiOutputDevice.reset();
+        currentMidiOutputDeviceId.clear();
+    }
 }
 
 void MIDIPlayerModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midiMessages)
@@ -310,6 +332,88 @@ void MIDIPlayerModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
             lastOutputValues[(size_t)kRawNumTracksChannelIndex]->store(rawNumTracksValue);
     }
     // --- END OF FIX ---
+    
+    // === MIDI OUTPUT GENERATION ===
+    if (enableMidiOutputParam != nullptr)
+    {
+        const float enableValue = enableMidiOutputParam->get();
+        if (enableValue >= 0.5f)
+        {
+        const double sampleRate = getSampleRate();
+        const double currentSample = currentPlaybackTime * sampleRate;
+        
+        const int channelOverride = midiOutputChannelParam ? 
+            midiOutputChannelParam->get() : 0;  // 0 = preserve original channels
+        
+        // Process each track
+        for (int trackIdx = 0; trackIdx < (int)notesByTrack.size(); ++trackIdx)
+        {
+            const auto& trackNotes = notesByTrack[trackIdx];
+            
+            // Determine MIDI channel for this track
+            int midiChannel = (channelOverride > 0) ? channelOverride : ((trackIdx % 16) + 1);
+            
+            // Check for note onsets and offsets in this buffer
+            for (const auto& note : trackNotes)
+            {
+                const double noteStartSample = note.startTime * sampleRate;
+                const double noteEndSample = note.endTime * sampleRate;
+                
+                // Note On: check if note starts within this buffer
+                if (currentSample <= noteStartSample && 
+                    noteStartSample < currentSample + numSamples)
+                {
+                    int noteNumber = note.noteNumber;
+                    
+                    // Apply pitch transpose if needed
+                    if (pitchParam && pitchParam->load() != 0.0f)
+                    {
+                        int transposeSemitones = (int)std::round(pitchParam->load());
+                        noteNumber = juce::jlimit(0, 127, noteNumber + transposeSemitones);
+                    }
+                    
+                    juce::MidiMessage noteOn = juce::MidiMessage::noteOn(
+                        midiChannel, noteNumber, (juce::uint8)note.velocity);
+                    
+                    // Add to graph MIDI buffer for routing to VSTi and other nodes
+                    const int sampleOffset = (int)(noteStartSample - currentSample);
+                    midiMessages.addEvent(noteOn, sampleOffset);
+                    
+                    // Also send to external MIDI output device
+                    sendMidiToOutput(noteOn);
+                }
+                
+                // Note Off: check if note ends within this buffer
+                if (currentSample <= noteEndSample && 
+                    noteEndSample < currentSample + numSamples)
+                {
+                    int noteNumber = note.noteNumber;
+                    
+                    // Apply pitch transpose if needed
+                    if (pitchParam && pitchParam->load() != 0.0f)
+                    {
+                        int transposeSemitones = (int)std::round(pitchParam->load());
+                        noteNumber = juce::jlimit(0, 127, noteNumber + transposeSemitones);
+                    }
+                    
+                    juce::MidiMessage noteOff = juce::MidiMessage::noteOff(midiChannel, noteNumber);
+                    
+                    // Add to graph MIDI buffer for routing to VSTi and other nodes
+                    const int sampleOffset = (int)(noteEndSample - currentSample);
+                    midiMessages.addEvent(noteOff, sampleOffset);
+                    
+                    // Also send to external MIDI output device
+                    sendMidiToOutput(noteOff);
+                }
+            }
+        }
+        }
+    }
+    
+    // Update MIDI output device if settings changed (check periodically)
+    static int updateCounter = 0;
+    if ((++updateCounter % 1000) == 0) // Check every 1000 blocks (~20 seconds at 48kHz)
+        updateMidiOutputDevice();
 }
 
 void MIDIPlayerModuleProcessor::updatePlaybackTime(double deltaTime)
@@ -1036,6 +1140,243 @@ void MIDIPlayerModuleProcessor::drawParametersInNode(float /*itemWidth*/, const 
     
     }
     
+    // === MIDI OUTPUT SECTION ===
+    ImGui::Separator();
+    ImGui::Text("MIDI Output:");
+    ImGui::SameLine();
+    HelpMarkerPlayer("Send MIDI messages to external devices or VSTi plugins");
+    
+    bool enableMIDI = false;
+    if (enableMidiOutputParam != nullptr)
+        enableMIDI = (enableMidiOutputParam->get() >= 0.5f);
+    if (ImGui::Checkbox("Enable##midi_out", &enableMIDI))
+    {
+        if (enableMidiOutputParam)
+        {
+            enableMidiOutputParam->setValueNotifyingHost(enableMIDI ? 1.0f : 0.0f);
+            updateMidiOutputDevice();
+            onModificationEnded();
+        }
+    }
+    
+    if (enableMIDI)
+    {
+        ImGui::Indent(20.0f);
+        
+        // Output mode dropdown - compact layout
+        bool isModeModulated = isParamModulated("midi_output_mode");
+        if (isModeModulated) ImGui::BeginDisabled();
+        
+        ImGui::Text("Mode:");
+        ImGui::SameLine();
+        ImGui::SetNextItemWidth(150.0f);  // Fixed width to prevent expansion
+        int outputMode = midiOutputModeParam ? midiOutputModeParam->getIndex() : 0;
+        const char* modeItems[] = { "Global Default", "Custom" };  // Shorter labels
+        
+        if (ImGui::Combo("##midi_out_mode", &outputMode, modeItems, 2))
+        {
+            if (!isModeModulated && midiOutputModeParam)
+            {
+                midiOutputModeParam->setValueNotifyingHost(
+                    apvts.getParameterRange("midi_output_mode").convertTo0to1((float)outputMode));
+                updateMidiOutputDevice();
+                onModificationEnded();
+            }
+        }
+        if (ImGui::IsItemDeactivatedAfterEdit() && !isModeModulated) onModificationEnded();
+        
+        // Scroll-edit for Mode combo
+        if (!isModeModulated && ImGui::IsItemHovered())
+        {
+            const float wheel = ImGui::GetIO().MouseWheel;
+            if (wheel != 0.0f)
+            {
+                const int maxIndex = 1; // 2 modes: 0-1
+                const int newIndex = juce::jlimit(0, maxIndex, outputMode + (wheel > 0.0f ? -1 : 1));
+                if (newIndex != outputMode && midiOutputModeParam)
+                {
+                    midiOutputModeParam->setValueNotifyingHost(
+                        apvts.getParameterRange("midi_output_mode").convertTo0to1((float)newIndex));
+                    updateMidiOutputDevice();
+                    onModificationEnded();
+                }
+            }
+        }
+        
+        if (ImGui::IsItemHovered())
+        {
+            ImGui::SetTooltip("Global Default: Uses device from Audio Settings\n"
+                            "Custom: Select specific device for this module");
+        }
+        
+        if (isModeModulated) ImGui::EndDisabled();
+        
+        // Custom device selector (only when mode is "Custom Device")
+        if (outputMode == 1)
+        {
+            auto devices = getAvailableMidiOutputDevices();
+            int currentIndex = midiOutputDeviceIndexParam ? midiOutputDeviceIndexParam->get() : -1;
+            
+            // Clamp index to valid range
+            if (currentIndex >= (int)devices.size())
+                currentIndex = -1;
+            
+            // Build combo list (keep strings alive)
+            std::vector<const char*> deviceNames;
+            std::vector<juce::String> deviceNamesStr;
+            deviceNamesStr.reserve(devices.size() + 1);
+            deviceNamesStr.push_back("<None>");
+            deviceNames.push_back(deviceNamesStr.back().toRawUTF8());
+            for (const auto& dev : devices)
+            {
+                deviceNamesStr.push_back(dev.first);
+                deviceNames.push_back(deviceNamesStr.back().toRawUTF8());
+            }
+            
+            bool isDeviceModulated = isParamModulated("midi_output_device_index");
+            if (isDeviceModulated) ImGui::BeginDisabled();
+            
+            ImGui::Text("Device:");
+            ImGui::SameLine();
+            ImGui::SetNextItemWidth(150.0f);  // Fixed width
+            int selectedIndex = currentIndex + 1;  // +1 because first item is "<None>"
+            if (ImGui::Combo("##midi_out_device", &selectedIndex, 
+                           deviceNames.data(), (int)deviceNames.size()))
+            {
+                if (!isDeviceModulated)
+                {
+                    int deviceIndex = selectedIndex - 1;  // -1 because first item is "<None>"
+                    if (deviceIndex >= 0 && deviceIndex < (int)devices.size())
+                    {
+                        storedMidiOutputDeviceId = devices[deviceIndex].second;
+                        if (midiOutputDeviceIndexParam)
+                        {
+                            midiOutputDeviceIndexParam->setValueNotifyingHost(
+                                apvts.getParameterRange("midi_output_device_index").convertTo0to1((float)deviceIndex));
+                            updateMidiOutputDevice();
+                            onModificationEnded();
+                        }
+                    }
+                    else if (selectedIndex == 0)  // "<None>"
+                    {
+                        storedMidiOutputDeviceId.clear();
+                        if (midiOutputDeviceIndexParam)
+                        {
+                            midiOutputDeviceIndexParam->setValueNotifyingHost(
+                                apvts.getParameterRange("midi_output_device_index").convertTo0to1(-1.0f));
+                            updateMidiOutputDevice();
+                            onModificationEnded();
+                        }
+                    }
+                }
+            }
+            if (ImGui::IsItemDeactivatedAfterEdit() && !isDeviceModulated) onModificationEnded();
+            
+            // Scroll-edit for Device combo
+            if (!isDeviceModulated && ImGui::IsItemHovered())
+            {
+                const float wheel = ImGui::GetIO().MouseWheel;
+                if (wheel != 0.0f)
+                {
+                    const int maxIndex = (int)deviceNames.size() - 1; // Max index in combo (including "<None>")
+                    int newSelectedIndex = juce::jlimit(0, maxIndex, selectedIndex + (wheel > 0.0f ? -1 : 1));
+                    if (newSelectedIndex != selectedIndex)
+                    {
+                        int deviceIndex = newSelectedIndex - 1;  // -1 because first item is "<None>"
+                        if (deviceIndex >= 0 && deviceIndex < (int)devices.size())
+                        {
+                            storedMidiOutputDeviceId = devices[deviceIndex].second;
+                            if (midiOutputDeviceIndexParam)
+                            {
+                                midiOutputDeviceIndexParam->setValueNotifyingHost(
+                                    apvts.getParameterRange("midi_output_device_index").convertTo0to1((float)deviceIndex));
+                                updateMidiOutputDevice();
+                                onModificationEnded();
+                            }
+                        }
+                        else if (newSelectedIndex == 0)  // "<None>"
+                        {
+                            storedMidiOutputDeviceId.clear();
+                            if (midiOutputDeviceIndexParam)
+                            {
+                                midiOutputDeviceIndexParam->setValueNotifyingHost(
+                                    apvts.getParameterRange("midi_output_device_index").convertTo0to1(-1.0f));
+                                updateMidiOutputDevice();
+                                onModificationEnded();
+                            }
+                        }
+                    }
+                }
+            }
+            
+            if (isDeviceModulated) ImGui::EndDisabled();
+        }
+        else
+        {
+            // Show global device name - compact
+            juce::String globalDeviceName = "<None>";
+            if (audioDeviceManager)
+            {
+                juce::String deviceId = audioDeviceManager->getDefaultMidiOutputIdentifier();
+                if (deviceId.isNotEmpty())
+                {
+                    auto devices = juce::MidiOutput::getAvailableDevices();
+                    for (const auto& dev : devices)
+                    {
+                        if (dev.identifier == deviceId)
+                        {
+                            globalDeviceName = dev.name;
+                            break;
+                        }
+                    }
+                }
+            }
+            ImGui::Text("Device:");
+            ImGui::SameLine();
+            ImGui::TextDisabled("%s", globalDeviceName.toRawUTF8());
+            if (ImGui::IsItemHovered())
+            {
+                ImGui::SetTooltip("Using device from Audio Settings\n"
+                                "Change in Settings → Audio Settings → MIDI Output");
+            }
+        }
+        
+        // Channel selector - compact
+        bool isChannelModulated = isParamModulated("midi_output_channel");
+        if (isChannelModulated) ImGui::BeginDisabled();
+        
+        ImGui::Text("Channel:");
+        ImGui::SameLine();
+        ImGui::SetNextItemWidth(80.0f);  // Narrower for channel
+        int channel = midiOutputChannelParam ? midiOutputChannelParam->get() : 0;
+        if (ImGui::SliderInt("##midi_out_ch", &channel, 0, 16))
+        {
+            if (!isChannelModulated && midiOutputChannelParam)
+            {
+                midiOutputChannelParam->setValueNotifyingHost(
+                    apvts.getParameterRange("midi_output_channel").convertTo0to1((float)channel));
+                onModificationEnded();
+            }
+        }
+        if (ImGui::IsItemDeactivatedAfterEdit() && !isChannelModulated) onModificationEnded();
+        
+        // Scroll-edit for Channel slider
+        if (!isChannelModulated)
+            adjustParamOnWheel(apvts.getParameter("midi_output_channel"), "midi_output_channel", (float)channel);
+        
+        if (ImGui::IsItemHovered())
+        {
+            juce::String tooltip = (channel == 0) ?
+                "Channel 0: Preserve track's original MIDI channel" :
+                juce::String("All tracks output on channel ") + juce::String(channel);
+            ImGui::SetTooltip("%s", tooltip.toRawUTF8());
+        }
+        
+        if (isChannelModulated) ImGui::EndDisabled();
+        
+        ImGui::Unindent(20.0f);
+    }
+    
         ImGui::Spacing();
         
     // --- 2. MAIN CONTENT AREA (PIANO ROLL) ---
@@ -1496,4 +1837,91 @@ bool MIDIPlayerModuleProcessor::getParamRouting(const juce::String& paramId, int
     if (paramId == "reset") { outBusIndex = 3; outChannelIndexInBus = 0; return true; }
     if (paramId == "loop") { outBusIndex = 4; outChannelIndexInBus = 0; return true; }
     return false;
+}
+
+// ==============================================================================
+// MIDI OUTPUT IMPLEMENTATION
+// ==============================================================================
+
+void MIDIPlayerModuleProcessor::updateMidiOutputDevice()
+{
+    const juce::ScopedLock lock(midiOutputLock);
+    
+    if (!enableMidiOutputParam || !enableMidiOutputParam->get())
+    {
+        // MIDI output disabled - close device
+        midiOutputDevice.reset();
+        currentMidiOutputDeviceId.clear();
+        return;
+    }
+    
+    juce::String targetDeviceId;
+    
+    // Determine which device to use
+    if (midiOutputModeParam && midiOutputModeParam->getCurrentChoiceName() == "Use Global Default")
+    {
+        // Use global default from AudioDeviceManager
+        if (audioDeviceManager)
+            targetDeviceId = audioDeviceManager->getDefaultMidiOutputIdentifier();
+    }
+    else
+    {
+        // Use custom device from stored ID (set by UI) or index
+        if (!storedMidiOutputDeviceId.isEmpty())
+        {
+            // First try stored ID (most reliable)
+            targetDeviceId = storedMidiOutputDeviceId;
+        }
+        else if (midiOutputDeviceIndexParam && midiOutputDeviceIndexParam->get() >= 0)
+        {
+            // Fall back to index if ID not stored
+            auto devices = getAvailableMidiOutputDevices();
+            int deviceIndex = midiOutputDeviceIndexParam->get();
+            if (deviceIndex < (int)devices.size())
+            {
+                targetDeviceId = devices[deviceIndex].second;
+                storedMidiOutputDeviceId = targetDeviceId;  // Cache the ID for next time
+            }
+        }
+    }
+    
+    // Only change if device changed
+    if (targetDeviceId == currentMidiOutputDeviceId && midiOutputDevice)
+        return;
+    
+    // Close current device
+    midiOutputDevice.reset();
+    currentMidiOutputDeviceId.clear();
+    
+    // Open new device
+    if (targetDeviceId.isNotEmpty())
+    {
+        midiOutputDevice = juce::MidiOutput::openDevice(targetDeviceId);
+        if (midiOutputDevice)
+        {
+            currentMidiOutputDeviceId = targetDeviceId;
+            juce::Logger::writeToLog("[MIDI Player] Opened MIDI output: " + targetDeviceId);
+        }
+        else
+        {
+            juce::Logger::writeToLog("[MIDI Player] Failed to open MIDI output: " + targetDeviceId);
+        }
+    }
+}
+
+void MIDIPlayerModuleProcessor::sendMidiToOutput(const juce::MidiMessage& message)
+{
+    const juce::ScopedLock lock(midiOutputLock);
+    if (midiOutputDevice)
+        midiOutputDevice->sendMessageNow(message);
+}
+
+std::vector<std::pair<juce::String, juce::String>> 
+MIDIPlayerModuleProcessor::getAvailableMidiOutputDevices() const
+{
+    std::vector<std::pair<juce::String, juce::String>> devices;
+    auto available = juce::MidiOutput::getAvailableDevices();
+    for (const auto& device : available)
+        devices.push_back({device.name, device.identifier});
+    return devices;
 }

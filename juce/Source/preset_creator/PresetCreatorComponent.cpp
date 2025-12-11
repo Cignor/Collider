@@ -49,7 +49,8 @@ PresetCreatorComponent::PresetCreatorComponent(
     // Set the managers immediately so the synth is ready for state restoration.
     synth->setPluginFormatManager(&pluginFormatManager);
     synth->setKnownPluginList(&knownPluginList);
-    juce::Logger::writeToLog("Plugin managers set on ModularSynthProcessor.");
+    synth->setAudioDeviceManager(&deviceManager);
+    juce::Logger::writeToLog("Plugin managers and device manager set on ModularSynthProcessor.");
     // --- END OF FIX ---
 
     // CRITICAL: Ensure transport starts in stopped state (synchronized with UI)

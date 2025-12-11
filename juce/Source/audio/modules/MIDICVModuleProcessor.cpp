@@ -21,7 +21,7 @@ juce::AudioProcessorValueTreeState::ParameterLayout MIDICVModuleProcessor::creat
 MIDICVModuleProcessor::MIDICVModuleProcessor()
     : ModuleProcessor(
         juce::AudioProcessor::BusesProperties()
-            .withOutput("Main", juce::AudioChannelSet::discreteChannels(6), true)
+            .withOutput("Main", juce::AudioChannelSet::discreteChannels(27), true)
             .withOutput("Mod", juce::AudioChannelSet::discreteChannels(64), true)
     ),
       apvts(*this, nullptr, "MIDICVParams", createParameterLayout())
@@ -30,18 +30,33 @@ MIDICVModuleProcessor::MIDICVModuleProcessor()
     deviceFilterParam = dynamic_cast<juce::AudioParameterChoice*>(apvts.getParameter("midiDevice"));
     midiChannelFilterParam = dynamic_cast<juce::AudioParameterInt*>(apvts.getParameter("midiChannel"));
     
-    // Initialize last output values for telemetry
-    lastOutputValues.resize(6);
+    // Initialize voices
+    for (auto& voice : voices)
+    {
+        voice = Voice();
+    }
+    
+    // Initialize last output values for telemetry (27 outputs: 24 voice + 3 global)
+    lastOutputValues.resize(27);
     for (auto& val : lastOutputValues)
         val = std::make_unique<std::atomic<float>>(0.0f);
 }
 
 void MIDICVModuleProcessor::prepareToPlay(double sampleRate, int samplesPerBlock)
 {
-    // Reset MIDI state
-    midiState = MIDIState();
+    // Reset all voices
+    const juce::ScopedLock lock(voiceLock);
+    for (auto& voice : voices)
+    {
+        voice = Voice();
+    }
+    currentSamplePosition = 0;
     
-    juce::Logger::writeToLog("[MIDI CV] Prepared to play at " + juce::String(sampleRate) + " Hz");
+    globalModWheel = 0.0f;
+    globalPitchBend = 0.0f;
+    globalAftertouch = 0.0f;
+    
+    juce::Logger::writeToLog("[MIDI CV] Prepared to play at " + juce::String(sampleRate) + " Hz with " + juce::String(NUM_VOICES) + " voices");
 }
 
 void MIDICVModuleProcessor::releaseResources()
@@ -50,15 +65,12 @@ void MIDICVModuleProcessor::releaseResources()
 
 void MIDICVModuleProcessor::handleDeviceSpecificMidi(const std::vector<MidiMessageWithDevice>& midiMessages)
 {
-    // DEBUG: Log when we receive MIDI
-    if (!midiMessages.empty())
-    {
-        juce::Logger::writeToLog("[MIDI CV] Received " + juce::String(midiMessages.size()) + " MIDI messages");
-    }
-    
     // Get user's filter settings
     int deviceFilter = deviceFilterParam ? deviceFilterParam->getIndex() : 0;
     int channelFilter = midiChannelFilterParam ? midiChannelFilterParam->get() : 0;
+    
+    // Get current sample position for voice stealing priority
+    int64_t samplePos = currentSamplePosition.load();
     
     for (const auto& msg : midiMessages)
     {
@@ -69,22 +81,26 @@ void MIDICVModuleProcessor::handleDeviceSpecificMidi(const std::vector<MidiMessa
         
         // CHANNEL FILTERING
         // 0 = "All Channels", 1-16 = specific channel
-        if (channelFilter != 0 && msg.message.getChannel() != channelFilter)
+        int midiChannel = msg.message.getChannel();
+        if (channelFilter != 0 && midiChannel != channelFilter)
             continue;
         
         // PROCESS FILTERED MESSAGE
-        // This message passed both filters - update module state
+        // This message passed both filters - process it
         if (msg.message.isNoteOn())
         {
-            midiState.currentNote = msg.message.getNoteNumber();
-            midiState.currentVelocity = msg.message.getVelocity();
-            midiState.gateHigh = true;
+            int midiNote = msg.message.getNoteNumber();
+            float velocity = msg.message.getVelocity() / 127.0f;
+            allocateVoice(midiNote, midiChannel, velocity, samplePos);
+            samplePos++;  // Increment for next potential note-on
         }
         else if (msg.message.isNoteOff())
         {
-            if (msg.message.getNoteNumber() == midiState.currentNote)
+            int midiNote = msg.message.getNoteNumber();
+            int voiceIndex = findVoiceForNote(midiNote);
+            if (voiceIndex >= 0)
             {
-                midiState.gateHigh = false;
+                releaseVoice(voiceIndex, midiNote);
             }
         }
         else if (msg.message.isController())
@@ -93,15 +109,17 @@ void MIDICVModuleProcessor::handleDeviceSpecificMidi(const std::vector<MidiMessa
             int ccVal = msg.message.getControllerValue();
             
             if (ccNum == 1) // Mod Wheel
-                midiState.modWheel = ccVal / 127.0f;
+            {
+                globalModWheel = ccVal / 127.0f;
+            }
         }
         else if (msg.message.isPitchWheel())
         {
-            midiState.pitchBend = (msg.message.getPitchWheelValue() - 8192) / 8192.0f;
+            globalPitchBend = (msg.message.getPitchWheelValue() - 8192) / 8192.0f;
         }
         else if (msg.message.isChannelPressure())
         {
-            midiState.aftertouch = msg.message.getChannelPressureValue() / 127.0f;
+            globalAftertouch = msg.message.getChannelPressureValue() / 127.0f;
         }
     }
 }
@@ -110,66 +128,79 @@ void MIDICVModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce:
 {
     juce::ignoreUnused(midiMessages); // MIDI already processed in handleDeviceSpecificMidi
     
-    if (buffer.getNumChannels() < 6)
+    if (buffer.getNumChannels() < 27)
     {
         buffer.clear();
         return;
     }
     
-    // Note: MIDI state is updated in handleDeviceSpecificMidi() which is called BEFORE processBlock
-    // This method just generates CV outputs from the current state
-    
-    // Generate CV outputs for the entire block
-    // Channel 0: Pitch CV (1V/octave)
-    // Channel 1: Gate (0 or 1)
-    // Channel 2: Velocity (0-1)
-    // Channel 3: Mod Wheel (0-1)
-    // Channel 4: Pitch Bend (-1 to +1)
-    // Channel 5: Aftertouch (0-1)
+    // Update sample position counter
+    currentSamplePosition += buffer.getNumSamples();
     
     const int numSamples = buffer.getNumSamples();
     
-    // Pitch CV
-    const float pitchCv = midiState.currentNote >= 0 ? midiNoteToCv(midiState.currentNote) : 0.0f;
-    buffer.getWritePointer(0)[0] = pitchCv;
-    for (int i = 1; i < numSamples; ++i)
-        buffer.getWritePointer(0)[i] = pitchCv;
-    
-    // Gate
-    const float gateValue = midiState.gateHigh ? 1.0f : 0.0f;
-    buffer.getWritePointer(1)[0] = gateValue;
-    for (int i = 1; i < numSamples; ++i)
-        buffer.getWritePointer(1)[i] = gateValue;
-    
-    // Velocity
-    buffer.getWritePointer(2)[0] = midiState.currentVelocity;
-    for (int i = 1; i < numSamples; ++i)
-        buffer.getWritePointer(2)[i] = midiState.currentVelocity;
-    
-    // Mod Wheel
-    buffer.getWritePointer(3)[0] = midiState.modWheel;
-    for (int i = 1; i < numSamples; ++i)
-        buffer.getWritePointer(3)[i] = midiState.modWheel;
-    
-    // Pitch Bend
-    buffer.getWritePointer(4)[0] = midiState.pitchBend;
-    for (int i = 1; i < numSamples; ++i)
-        buffer.getWritePointer(4)[i] = midiState.pitchBend;
-    
-    // Aftertouch
-    buffer.getWritePointer(5)[0] = midiState.aftertouch;
-    for (int i = 1; i < numSamples; ++i)
-        buffer.getWritePointer(5)[i] = midiState.aftertouch;
-    
-    // Update telemetry
-    if (lastOutputValues.size() >= 6)
+    // Get a snapshot of voice states (thread-safe copy)
+    std::array<Voice, NUM_VOICES> voiceSnapshot;
     {
-        lastOutputValues[0]->store(pitchCv);
-        lastOutputValues[1]->store(gateValue);
-        lastOutputValues[2]->store(midiState.currentVelocity);
-        lastOutputValues[3]->store(midiState.modWheel);
-        lastOutputValues[4]->store(midiState.pitchBend);
-        lastOutputValues[5]->store(midiState.aftertouch);
+        const juce::ScopedLock lock(voiceLock);
+        voiceSnapshot = voices;
+    }
+    
+    // Get global controller values
+    float modWheel = globalModWheel.load();
+    float pitchBend = globalPitchBend.load();
+    float aftertouch = globalAftertouch.load();
+    
+    // Generate per-voice CV outputs (24 channels: 8 voices × 3 outputs each)
+    for (int voice = 0; voice < NUM_VOICES; ++voice)
+    {
+        const int baseChannel = voice * 3;
+        
+        const bool voiceActive = voiceSnapshot[voice].active;
+        const float gate = voiceActive ? 1.0f : 0.0f;
+        const float pitchCV = voiceActive ? midiNoteToCv(voiceSnapshot[voice].midiNote) : 0.0f;
+        const float velocity = voiceActive ? voiceSnapshot[voice].velocity : 0.0f;
+        
+        // Gate (channel baseChannel)
+        float* gateBuffer = buffer.getWritePointer(baseChannel);
+        juce::FloatVectorOperations::fill(gateBuffer, gate, numSamples);
+        
+        // Pitch CV (channel baseChannel + 1)
+        float* pitchBuffer = buffer.getWritePointer(baseChannel + 1);
+        juce::FloatVectorOperations::fill(pitchBuffer, pitchCV, numSamples);
+        
+        // Velocity (channel baseChannel + 2)
+        float* velBuffer = buffer.getWritePointer(baseChannel + 2);
+        juce::FloatVectorOperations::fill(velBuffer, velocity, numSamples);
+        
+        // Update telemetry for this voice
+        if (lastOutputValues.size() > (size_t)(baseChannel + 2))
+        {
+            lastOutputValues[baseChannel]->store(gate);
+            lastOutputValues[baseChannel + 1]->store(pitchCV);
+            lastOutputValues[baseChannel + 2]->store(velocity);
+        }
+    }
+    
+    // Output global controllers (channels 24, 25, 26)
+    // Mod Wheel (channel 24)
+    float* modWheelBuffer = buffer.getWritePointer(24);
+    juce::FloatVectorOperations::fill(modWheelBuffer, modWheel, numSamples);
+    
+    // Pitch Bend (channel 25)
+    float* pitchBendBuffer = buffer.getWritePointer(25);
+    juce::FloatVectorOperations::fill(pitchBendBuffer, pitchBend, numSamples);
+    
+    // Aftertouch (channel 26)
+    float* aftertouchBuffer = buffer.getWritePointer(26);
+    juce::FloatVectorOperations::fill(aftertouchBuffer, aftertouch, numSamples);
+    
+    // Update telemetry for global controllers
+    if (lastOutputValues.size() > 26)
+    {
+        lastOutputValues[24]->store(modWheel);
+        lastOutputValues[25]->store(pitchBend);
+        lastOutputValues[26]->store(aftertouch);
     }
 }
 
@@ -178,6 +209,83 @@ float MIDICVModuleProcessor::midiNoteToCv(int noteNumber) const
     // 1V/octave standard: C4 (MIDI note 60) = 0V
     // Each semitone = 1/12 V
     return (noteNumber - 60) / 12.0f;
+}
+
+int MIDICVModuleProcessor::allocateVoice(int midiNote, int midiChannel, float velocity, int64_t currentSample)
+{
+    const juce::ScopedLock lock(voiceLock);
+    
+    // First, try to find an inactive voice
+    for (int i = 0; i < NUM_VOICES; ++i)
+    {
+        if (!voices[i].active)
+        {
+            voices[i].active = true;
+            voices[i].midiNote = midiNote;
+            voices[i].velocity = velocity;
+            voices[i].midiChannel = midiChannel;
+            voices[i].noteStartSample = currentSample;
+            return i;
+        }
+    }
+    
+    // All voices are active - steal the voice with the lowest MIDI note
+    int lowestNote = 128;
+    int voiceToSteal = -1;
+    
+    for (int i = 0; i < NUM_VOICES; ++i)
+    {
+        if (voices[i].active && voices[i].midiNote < lowestNote)
+        {
+            lowestNote = voices[i].midiNote;
+            voiceToSteal = i;
+        }
+    }
+    
+    if (voiceToSteal >= 0)
+    {
+        // Steal this voice for the new note
+        voices[voiceToSteal].active = true;
+        voices[voiceToSteal].midiNote = midiNote;
+        voices[voiceToSteal].velocity = velocity;
+        voices[voiceToSteal].midiChannel = midiChannel;
+        voices[voiceToSteal].noteStartSample = currentSample;
+        return voiceToSteal;
+    }
+    
+    // Fallback (shouldn't happen, but handle gracefully)
+    return 0;
+}
+
+void MIDICVModuleProcessor::releaseVoice(int voiceIndex, int midiNote)
+{
+    if (voiceIndex < 0 || voiceIndex >= NUM_VOICES)
+        return;
+    
+    const juce::ScopedLock lock(voiceLock);
+    
+    // Only release if this voice is playing the specified note
+    if (voices[voiceIndex].active && voices[voiceIndex].midiNote == midiNote)
+    {
+        voices[voiceIndex].active = false;
+        voices[voiceIndex].midiNote = -1;
+        voices[voiceIndex].velocity = 0.0f;
+    }
+}
+
+int MIDICVModuleProcessor::findVoiceForNote(int midiNote)
+{
+    const juce::ScopedLock lock(voiceLock);
+    
+    for (int i = 0; i < NUM_VOICES; ++i)
+    {
+        if (voices[i].active && voices[i].midiNote == midiNote)
+        {
+            return i;
+        }
+    }
+    
+    return -1;  // Note not found
 }
 
 #if defined(PRESET_CREATOR_UI)
@@ -242,77 +350,123 @@ void MIDICVModuleProcessor::drawParametersInNode(float itemWidth, const std::fun
     ImGui::Spacing();
     ImGui::Spacing();
     
-    // === MIDI INPUT STATUS ===
-    ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1.0f), "MIDI Input Status");
+    // === VOICE STATUS TABLE ===
+    ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1.0f), "Voice Status");
+    
+    // Get voice snapshot for display
+    std::array<Voice, NUM_VOICES> voiceSnapshot;
+    {
+        const juce::ScopedLock lock(voiceLock);
+        voiceSnapshot = voices;
+    }
+    
+    // Count active voices
+    int activeVoiceCount = 0;
+    for (const auto& voice : voiceSnapshot)
+    {
+        if (voice.active)
+            activeVoiceCount++;
+    }
+    
+    ImGui::Text("Active: %d / %d", activeVoiceCount, NUM_VOICES);
     ImGui::Spacing();
     
-    // Get current values from telemetry
-    float pitchCV = lastOutputValues.size() > 0 ? lastOutputValues[0]->load() : 0.0f;
-    float gateValue = lastOutputValues.size() > 1 ? lastOutputValues[1]->load() : 0.0f;
-    float velocity = lastOutputValues.size() > 2 ? lastOutputValues[2]->load() : 0.0f;
-    float modWheel = lastOutputValues.size() > 3 ? lastOutputValues[3]->load() : 0.0f;
-    float pitchBend = lastOutputValues.size() > 4 ? lastOutputValues[4]->load() : 0.0f;
-    float aftertouch = lastOutputValues.size() > 5 ? lastOutputValues[5]->load() : 0.0f;
+    // Voice status table
+    ImGuiTableFlags tableFlags = ImGuiTableFlags_SizingFixedFit |
+                                 ImGuiTableFlags_Borders |
+                                 ImGuiTableFlags_ScrollY;
     
-    // Convert pitch CV back to MIDI note for display
-    int midiNote = midiState.currentNote;
-    bool hasNote = (midiNote >= 0);
+    float rowHeight = ImGui::GetTextLineHeightWithSpacing() + 4;
+    float tableHeight = rowHeight * (NUM_VOICES + 1.5f);
     
-    // === NOTE DISPLAY ===
-    ImGui::Text("Note:");
-    ImGui::SameLine();
-    if (hasNote)
+    if (ImGui::BeginTable("##voices_table", 4, tableFlags, ImVec2(itemWidth, tableHeight)))
     {
-        // Note name conversion (C4 = 60)
-        static const char* noteNames[] = { "C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B" };
-        int octave = (midiNote / 12) - 1;
-        const char* noteName = noteNames[midiNote % 12];
+        ImGui::TableSetupColumn("Voice", ImGuiTableColumnFlags_WidthFixed, 50);
+        ImGui::TableSetupColumn("Note", ImGuiTableColumnFlags_WidthFixed, 80);
+        ImGui::TableSetupColumn("Vel", ImGuiTableColumnFlags_WidthFixed, 60);
+        ImGui::TableSetupColumn("Ch", ImGuiTableColumnFlags_WidthFixed, 40);
+        ImGui::TableSetupScrollFreeze(0, 1); // Freeze header row
+        ImGui::TableHeadersRow();
         
-        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.2f, 1.0f, 0.5f, 1.0f)); // Bright green
-        ImGui::Text("%s%d (#%d)", noteName, octave, midiNote);
-        ImGui::PopStyleColor();
+        static const char* noteNames[] = { "C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B" };
+        
+        for (int i = 0; i < NUM_VOICES; ++i)
+        {
+            ImGui::PushID(i);
+            ImGui::TableNextRow();
+            
+            // Voice number
+            ImGui::TableSetColumnIndex(0);
+            ImGui::Text("%d", i + 1);
+            
+            // Note
+            ImGui::TableSetColumnIndex(1);
+            if (voiceSnapshot[i].active && voiceSnapshot[i].midiNote >= 0)
+            {
+                int midiNote = voiceSnapshot[i].midiNote;
+                int octave = (midiNote / 12) - 1;
+                const char* noteName = noteNames[midiNote % 12];
+                
+                ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.2f, 1.0f, 0.5f, 1.0f)); // Bright green
+                ImGui::Text("%s%d", noteName, octave);
+                ImGui::PopStyleColor();
+            }
+            else
+            {
+                ImGui::TextDisabled("---");
+            }
+            
+            // Velocity
+            ImGui::TableSetColumnIndex(2);
+            if (voiceSnapshot[i].active)
+            {
+                ImGui::Text("%.2f", voiceSnapshot[i].velocity);
+            }
+            else
+            {
+                ImGui::TextDisabled("---");
+            }
+            
+            // MIDI Channel
+            ImGui::TableSetColumnIndex(3);
+            if (voiceSnapshot[i].active)
+            {
+                ImGui::Text("%d", voiceSnapshot[i].midiChannel);
+            }
+            else
+            {
+                ImGui::TextDisabled("---");
+            }
+            
+            ImGui::PopID();
+        }
+        ImGui::EndTable();
     }
-    else
-    {
-        ImGui::TextDisabled("---");
-    }
-    HelpMarker("Currently playing MIDI note.\nDisplays note name, octave, and MIDI number.");
-    
-    // === GATE INDICATOR ===
-    ImGui::Text("Gate:");
-    ImGui::SameLine();
-    if (gateValue > 0.5f)
-    {
-        // Animated gate indicator
-        float phase = (float)std::fmod(ImGui::GetTime() * 2.0, 1.0);
-        float brightness = 0.6f + 0.4f * std::sin(phase * 6.28318f);
-        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f * brightness, 0.3f * brightness, 0.3f * brightness, 1.0f));
-        ImGui::Text("ON");
-        ImGui::PopStyleColor();
-    }
-    else
-    {
-        ImGui::TextDisabled("OFF");
-    }
-    HelpMarker("Gate output status.\nHigh (ON) when note is held, Low (OFF) when released.");
     
     ImGui::Spacing();
     
-    // === LIVE VALUE DISPLAYS ===
-    ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1.0f), "Live Values");
+    // === QUICK CONNECT BUTTON ===
+    ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1.0f), "Quick Connect");
+    if (ImGui::Button("→ MidiLogger"))
+    {
+        connectionRequestType = 1; // Request connection to MidiLogger
+    }
+    if (ImGui::IsItemHovered())
+        ImGui::SetTooltip("Create MidiLogger and connect all 8 voices:\nV1-8 Gate → Gate 1-8\nV1-8 Pitch → Pitch 1-8\nV1-8 Vel → Velo 1-8");
+    
+    ImGui::Spacing();
     ImGui::Spacing();
     
-    // Calculate responsive progress bar width
+    // === GLOBAL CONTROLLERS ===
+    ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1.0f), "Global Controllers");
+    ImGui::Spacing();
+    
+    // Get global controller values from telemetry
+    float modWheel = lastOutputValues.size() > 24 ? lastOutputValues[24]->load() : 0.0f;
+    float pitchBend = lastOutputValues.size() > 25 ? lastOutputValues[25]->load() : 0.0f;
+    float aftertouch = lastOutputValues.size() > 26 ? lastOutputValues[26]->load() : 0.0f;
+    
     const float progressBarWidth = itemWidth * 0.6f;
-    const float labelWidth = itemWidth * 0.15f;
-    
-    // Velocity with progress bar
-    ImGui::Text("Vel");
-    ImGui::SameLine();
-    ImGui::PushStyleColor(ImGuiCol_PlotHistogram, ImColor::HSV(0.55f, 0.7f, velocity).Value);
-    ImGui::ProgressBar(velocity, ImVec2(progressBarWidth, 0), juce::String(velocity, 2).toRawUTF8());
-    ImGui::PopStyleColor();
-    HelpMarker("MIDI Note Velocity (0-1)");
     
     // Mod Wheel with progress bar
     ImGui::Text("Mod");
@@ -339,26 +493,36 @@ void MIDICVModuleProcessor::drawParametersInNode(float itemWidth, const std::fun
     ImGui::PopStyleColor();
     HelpMarker("Channel Aftertouch (0-1)");
     
-    ImGui::Spacing();
-    ImGui::Spacing();
-    
-    // === CV OUTPUT INFO ===
-    ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1.0f), "CV Output");
-    ImGui::Spacing();
-    
-    ImGui::Text("Pitch CV: %.3f V", pitchCV);
-    HelpMarker("1V/octave standard\nC4 (MIDI note 60) = 0V\nEach semitone = 0.0833V");
-    
     ImGui::PopItemWidth();
 }
 
 void MIDICVModuleProcessor::drawIoPins(const NodePinHelpers& helpers)
 {
-    helpers.drawAudioOutputPin("Pitch", 0);
-    helpers.drawAudioOutputPin("Gate", 1);
-    helpers.drawAudioOutputPin("Velocity", 2);
-    helpers.drawAudioOutputPin("Mod Wheel", 3);
-    helpers.drawAudioOutputPin("Pitch Bend", 4);
-    helpers.drawAudioOutputPin("Aftertouch", 5);
+    // Per-voice outputs (8 voices × 3 outputs each = 24 outputs)
+    for (int i = 0; i < NUM_VOICES; ++i)
+    {
+        const int baseChannel = i * 3;
+        
+        juce::String gateLabel = "V" + juce::String(i + 1) + " Gate";
+        juce::String pitchLabel = "V" + juce::String(i + 1) + " Pitch";
+        juce::String velLabel = "V" + juce::String(i + 1) + " Vel";
+        
+        helpers.drawAudioOutputPin(gateLabel.toRawUTF8(), baseChannel);
+        helpers.drawAudioOutputPin(pitchLabel.toRawUTF8(), baseChannel + 1);
+        helpers.drawAudioOutputPin(velLabel.toRawUTF8(), baseChannel + 2);
+        
+        // Add spacing between voice groups
+        if (i < NUM_VOICES - 1)
+        {
+            ImGui::Spacing();
+        }
+    }
+    
+    ImGui::Spacing();
+    
+    // Global controller outputs (3 outputs)
+    helpers.drawAudioOutputPin("Mod Wheel", 24);
+    helpers.drawAudioOutputPin("Pitch Bend", 25);
+    helpers.drawAudioOutputPin("Aftertouch", 26);
 }
 #endif

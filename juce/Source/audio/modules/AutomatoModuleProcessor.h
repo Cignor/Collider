@@ -102,12 +102,16 @@ public:
 
     // --- UI drawing functions ---
 #if defined(PRESET_CREATOR_UI)
-    ImVec2 getCustomNodeSize() const override { return ImVec2(280.0f, 0.0f); } // Increased for larger canvas
+    ImVec2 getCustomNodeSize() const override;
 
     void drawParametersInNode(
         float itemWidth,
         const std::function<bool(const juce::String&)>& isParamModulated,
         const std::function<void()>& onModificationEnded) override;
+    
+    // Resizable node dimensions
+    float nodeWidth = 280.0f;
+    float nodeHeight = 0.0f; // Auto-calculated, but can be set for resize
 
     void drawIoPins(const NodePinHelpers& helpers) override
     {
@@ -186,6 +190,7 @@ private:
     // UI State
     ImVec2 lastMousePosInGrid; // For smooth drawing interpolation
     bool isDrawing{false};
+    bool wasBeingResizedLastFrame{false}; // For undo snapshot timing
 #endif
 };
 

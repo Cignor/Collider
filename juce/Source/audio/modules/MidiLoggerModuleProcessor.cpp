@@ -13,6 +13,12 @@ MidiLoggerModuleProcessor::MidiLoggerModuleProcessor()
       apvts(*this, nullptr, "MidiLoggerParams", createParameterLayout())
 {
     loopLengthParam = dynamic_cast<juce::AudioParameterInt*>(apvts.getParameter("loopLength"));
+    
+    // MIDI Output: Get pointers to MIDI output parameters
+    enableMidiOutputParam = dynamic_cast<juce::AudioParameterBool*>(apvts.getParameter("enable_midi_output"));
+    midiOutputModeParam = dynamic_cast<juce::AudioParameterChoice*>(apvts.getParameter("midi_output_mode"));
+    midiOutputDeviceIndexParam = dynamic_cast<juce::AudioParameterInt*>(apvts.getParameter("midi_output_device_index"));
+    midiOutputChannelParam = dynamic_cast<juce::AudioParameterInt*>(apvts.getParameter("midi_output_channel"));
 
     // Pre-allocate tracks to ensure thread safety
     tracks.reserve(MaxTracks);
@@ -25,8 +31,11 @@ MidiLoggerModuleProcessor::MidiLoggerModuleProcessor()
         tracks.back()->color = juce::Colour::fromHSV(hue, 0.7f, 0.9f, 1.0f);
     }
 
-    // Activate the first track by default
-    tracks[0]->active = true;
+    // Activate the first 8 tracks by default to match MIDI CV's 8 voices
+    for (int i = 0; i < 8 && i < MaxTracks; ++i)
+    {
+        tracks[i]->active = true;
+    }
 }
 
 juce::AudioProcessorValueTreeState::ParameterLayout MidiLoggerModuleProcessor::
@@ -36,7 +45,18 @@ juce::AudioProcessorValueTreeState::ParameterLayout MidiLoggerModuleProcessor::
 
     // ADDITION FOR PHASE 3: Loop Length Control
     params.push_back(
-        std::make_unique<juce::AudioParameterInt>("loopLength", "Loop Length", 1, 64, 4));
+        std::make_unique<juce::AudioParameterInt>("loopLength", "Loop Length", 1, 2048, 4));
+    
+    // MIDI Output Parameters
+    params.push_back(std::make_unique<juce::AudioParameterBool>(
+        "enable_midi_output", "Enable MIDI Output", false));
+    params.push_back(std::make_unique<juce::AudioParameterChoice>(
+        "midi_output_mode", "MIDI Output Mode",
+        juce::StringArray("Use Global Default", "Custom Device"), 0));
+    params.push_back(std::make_unique<juce::AudioParameterInt>(
+        "midi_output_device_index", "MIDI Output Device Index", -1, 100, -1));  // -1 = none selected
+    params.push_back(std::make_unique<juce::AudioParameterInt>(
+        "midi_output_channel", "MIDI Output Channel", 0, 16, 0));
 
     return {params.begin(), params.end()};
 }
@@ -53,13 +73,21 @@ void MidiLoggerModuleProcessor::prepareToPlay(double sampleRate, int /*samplesPe
     playbackStates.assign(MaxTracks, {});
 }
 
-void MidiLoggerModuleProcessor::releaseResources() {}
+void MidiLoggerModuleProcessor::releaseResources()
+{
+    // Close MIDI output device
+    {
+        const juce::ScopedLock lock(midiOutputLock);
+        midiOutputDevice.reset();
+        currentMidiOutputDeviceId.clear();
+    }
+}
 
 // ==============================================================================
 // PHASE 2: UPDATED PROCESS BLOCK WITH PLAYBACK
 // ==============================================================================
 
-void MidiLoggerModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffer&)
+void MidiLoggerModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midiMessages)
 {
     // --- CRITICAL FIX: BPM SYNC ---
     if (auto* ph = getPlayHead())
@@ -168,6 +196,67 @@ void MidiLoggerModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
         for (int i = 0; i < outputBus.getNumChannels(); ++i)
             juce::FloatVectorOperations::clear(outputBus.getWritePointer(i), numSamples);
 
+        // === MIDI OUTPUT GENERATION ===
+        // Check if MIDI output is enabled and send MIDI messages during playback
+        if (enableMidiOutputParam != nullptr)
+        {
+            const float enableValue = enableMidiOutputParam->get();
+            if (enableValue >= 0.5f)
+            {
+                const int64_t currentSample = playheadPositionSamples.load();
+                const int channelOverride = midiOutputChannelParam ? 
+                    midiOutputChannelParam->get() : 0;  // 0 = preserve original channels
+                
+                // Process each track to detect note onsets/offsets
+                for (int trackIdx = 0; trackIdx < MaxTracks; ++trackIdx)
+                {
+                    if (!tracks[trackIdx]->active)
+                        continue;
+                    
+                    auto events = tracks[trackIdx]->getEventsCopy();
+                    
+                    // Determine MIDI channel for this track
+                    int midiChannel = (channelOverride > 0) ? channelOverride : ((trackIdx % 16) + 1);
+                    
+                    // Check for note onsets and offsets in this buffer
+                    for (const auto& ev : events)
+                    {
+                        const int64_t noteStart = ev.startTimeInSamples;
+                        const int64_t noteEnd = noteStart + ev.durationInSamples;
+                        
+                        // Note On: check if note starts within this buffer
+                        if (currentSample <= noteStart && 
+                            noteStart < currentSample + numSamples)
+                        {
+                            juce::MidiMessage noteOn = juce::MidiMessage::noteOn(
+                                midiChannel, ev.pitch, (juce::uint8)(ev.velocity * 127.0f));
+                            
+                            // Add to graph MIDI buffer for routing to VSTi and other nodes
+                            const int sampleOffset = (int)(noteStart - currentSample);
+                            midiMessages.addEvent(noteOn, sampleOffset);
+                            
+                            // Also send to external MIDI output device
+                            sendMidiToOutput(noteOn);
+                        }
+                        
+                        // Note Off: check if note ends within this buffer
+                        if (currentSample <= noteEnd && 
+                            noteEnd < currentSample + numSamples)
+                        {
+                            juce::MidiMessage noteOff = juce::MidiMessage::noteOff(midiChannel, ev.pitch);
+                            
+                            // Add to graph MIDI buffer for routing to VSTi and other nodes
+                            const int sampleOffset = (int)(noteEnd - currentSample);
+                            midiMessages.addEvent(noteOff, sampleOffset);
+                            
+                            // Also send to external MIDI output device
+                            sendMidiToOutput(noteOff);
+                        }
+                    }
+                }
+            }
+        }
+
         for (int sample = 0; sample < numSamples; ++sample)
         {
             // For each track, check if any events are active at this playhead position
@@ -241,6 +330,11 @@ void MidiLoggerModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
             // If Recording, we just keep incrementing playheadPositionSamples forever (until int64
             // overflow)
         }
+        
+        // Update MIDI output device if settings changed (check periodically)
+        static int updateCounter = 0;
+        if ((++updateCounter % 1000) == 0) // Check every 1000 blocks (~20 seconds at 48kHz)
+            updateMidiOutputDevice();
     }
     else // Stopped
     {
@@ -381,7 +475,7 @@ void MidiLoggerModuleProcessor::drawParametersInNode(
     {
         ImGui::PushItemWidth(100);
         int loopLen = loopLengthParam->get();
-        if (ImGui::SliderInt("##loop", &loopLen, 1, 64, "Loop: %d bars"))
+        if (ImGui::SliderInt("##loop", &loopLen, 1, 2048, "Loop: %d bars"))
         {
             *loopLengthParam = loopLen;
             onModificationEnded();
@@ -411,7 +505,9 @@ void MidiLoggerModuleProcessor::drawParametersInNode(
     if (samplesPerBeat > 0)
         currentPlayheadBars = (double)playheadPositionSamples.load() / samplesPerBeat / 4.0;
 
-    const double displayBars = std::max((double)loopLengthBars, currentPlayheadBars + 0.25);
+    // Allow infinite scrolling: ensure displayBars is at least loopLengthBars, but allow scrolling
+    // far beyond that (up to 10000 bars) for very long recordings
+    const double displayBars = std::max((double)loopLengthBars, std::max(currentPlayheadBars + 0.25, 10000.0));
     const float  totalWidth = (float)(displayBars * 4.0 * pixelsPerBeat);
 
     // --- 3. MAIN TABLE (Tracks + Timeline) ---
@@ -420,12 +516,15 @@ void MidiLoggerModuleProcessor::drawParametersInNode(
     // Column 1: Timeline (Scrollable)
     // Row 0: Timeline Ruler (Frozen)
 
+    // Enlarge scrollbar for better precision when scrubbing long timelines
+    ImGui::PushStyleVar(ImGuiStyleVar_ScrollbarSize, 20.0f);
+
     if (ImGui::BeginTable(
             "TrackTable",
             2,
             ImGuiTableFlags_ScrollX | ImGuiTableFlags_ScrollY | ImGuiTableFlags_BordersOuter |
                 ImGuiTableFlags_RowBg | ImGuiTableFlags_Resizable,
-            ImVec2(0, contentHeight)))
+            ImVec2(nodeWidth, contentHeight)))
     {
         // Setup columns
         ImGui::TableSetupScrollFreeze(1, 1); // Freeze 1st column (Headers) and 1st row (Ruler)
@@ -482,11 +581,22 @@ void MidiLoggerModuleProcessor::drawParametersInNode(
         }
 
         // CLICK-TO-SEEK (In Ruler)
-        // We allow seeking by clicking on the ruler
-        ImGui::Dummy(ImVec2(totalWidth, rulerHeight)); // Reserve space
-        if (ImGui::IsItemHovered() && ImGui::IsMouseClicked(ImGuiMouseButton_Left))
+        // Create invisible button for the ruler to capture clicks and prevent node dragging
+        // Use the existing rulerMin variable from line 541
+        ImVec2 savedRulerCursorPos = ImGui::GetCursorScreenPos();
+        ImGui::SetCursorScreenPos(rulerMin);
+        ImGui::InvisibleButton("ruler", ImVec2(totalWidth, rulerHeight), 
+            ImGuiButtonFlags_MouseButtonLeft);
+        const bool rulerHovered = ImGui::IsItemHovered();
+        const bool rulerActive = ImGui::IsItemActive();
+        ImGui::SetCursorScreenPos(savedRulerCursorPos);
+        
+        // Reserve space for ruler drawing
+        ImGui::Dummy(ImVec2(totalWidth, rulerHeight));
+        
+        if (rulerHovered && ImGui::IsMouseClicked(ImGuiMouseButton_Left) && !draggingNote.isDragging)
         {
-            ImVec2 itemMin = ImGui::GetItemRectMin();
+            ImVec2 itemMin = rulerMin;
             float  mouseX = ImGui::GetMousePos().x;
             float  relativeX = mouseX - itemMin.x; // This is already in scrolled space!
 
@@ -495,6 +605,18 @@ void MidiLoggerModuleProcessor::drawParametersInNode(
             newTimeSamples = juce::jlimit(0.0, maxSamples, newTimeSamples);
             playheadPositionSamples = (int64_t)newTimeSamples;
         }
+        
+        // Note: Invisible buttons automatically prevent node dragging by capturing mouse events
+
+        // Store track bounds for right-click erase functionality
+        struct TrackBounds
+        {
+            size_t trackIndex;
+            float cellMinX;
+            float cellMinY;
+            float rowHeight;
+        };
+        std::vector<TrackBounds> trackBounds;
 
         // --- TRACK ROWS ---
         for (size_t i = 0; i < tracks.size(); ++i)
@@ -526,6 +648,9 @@ void MidiLoggerModuleProcessor::drawParametersInNode(
             ImGui::TableSetColumnIndex(1);
             ImVec2 cellMin = ImGui::GetCursorScreenPos();
             float  rowHeight = ImGui::GetTextLineHeightWithSpacing() + 10.0f;
+            
+            // Store track bounds for right-click erase
+            trackBounds.push_back({i, cellMin.x, cellMin.y, rowHeight});
 
             // Grid Line
             drawList->AddLine(
@@ -534,7 +659,7 @@ void MidiLoggerModuleProcessor::drawParametersInNode(
                 IM_COL32(50, 50, 50, 255));
 
             // Notes
-            auto  events = tracks[i]->getEventsCopy();
+            auto events = tracks[i]->getEventsCopy();
             ImU32 noteColor = IM_COL32(
                 tracks[i]->color.getRed(),
                 tracks[i]->color.getGreen(),
@@ -544,8 +669,14 @@ void MidiLoggerModuleProcessor::drawParametersInNode(
             ImU32        noteBorderColor = IM_COL32(
                 brighterColor.getRed(), brighterColor.getGreen(), brighterColor.getBlue(), 255);
 
-            for (const auto& ev : events)
+            bool noteHovered = false;
+            bool noteActive = false;
+            int hoveredEventIndex = -1;
+            
+            // First pass: Draw notes
+            for (size_t evIdx = 0; evIdx < events.size(); ++evIdx)
             {
+                const auto& ev = events[evIdx];
                 const float noteStartX_px =
                     ((float)ev.startTimeInSamples / samplesPerBeat) * pixelsPerBeat;
                 const float noteEndX_px =
@@ -558,17 +689,28 @@ void MidiLoggerModuleProcessor::drawParametersInNode(
 
                 const float noteY_top = cellMin.y + 2.0f;
                 const float noteY_bottom = cellMin.y + rowHeight - 4.0f;
+                
+                // Highlight if dragging this note
+                ImU32 currentNoteColor = noteColor;
+                ImU32 currentBorderColor = noteBorderColor;
+                if (draggingNote.isDragging && 
+                    draggingNote.trackIndex == (int)i && 
+                    draggingNote.eventIndex == (int)evIdx)
+                {
+                    currentNoteColor = IM_COL32(255, 255, 100, 255); // Bright yellow when dragging
+                    currentBorderColor = IM_COL32(255, 255, 200, 255);
+                }
 
                 drawList->AddRectFilled(
                     ImVec2(cellMin.x + noteStartX_px, noteY_top),
                     ImVec2(cellMin.x + noteEndX_px, noteY_bottom),
-                    noteColor,
+                    currentNoteColor,
                     4.0f);
 
                 drawList->AddRect(
                     ImVec2(cellMin.x + noteStartX_px, noteY_top),
                     ImVec2(cellMin.x + noteEndX_px, noteY_bottom),
-                    noteBorderColor,
+                    currentBorderColor,
                     4.0f,
                     0,
                     1.5f);
@@ -581,6 +723,95 @@ void MidiLoggerModuleProcessor::drawParametersInNode(
                         ImVec2(cellMin.x + noteStartX_px + 2, noteY_top + 2),
                         IM_COL32(255, 255, 255, 200),
                         noteName.toRawUTF8());
+                }
+            }
+            
+            // Second pass: Create invisible buttons over notes for interaction
+            ImVec2 savedCursorPos = ImGui::GetCursorScreenPos();
+            for (size_t evIdx = 0; evIdx < events.size(); ++evIdx)
+            {
+                const auto& ev = events[evIdx];
+                const float noteStartX_px =
+                    ((float)ev.startTimeInSamples / samplesPerBeat) * pixelsPerBeat;
+                const float noteEndX_px =
+                    ((float)(ev.startTimeInSamples + ev.durationInSamples) / samplesPerBeat) *
+                    pixelsPerBeat;
+
+                // Culling
+                if (noteEndX_px < scrollX || noteStartX_px > scrollX + visibleWidth)
+                    continue;
+
+                const float noteY_top = cellMin.y + 2.0f;
+                const float noteY_bottom = cellMin.y + rowHeight - 4.0f;
+                const float noteWidth = noteEndX_px - noteStartX_px;
+                const float noteHeight = noteY_bottom - noteY_top;
+                
+                // Create invisible button over note to capture mouse events and prevent node dragging
+                ImGui::PushID((int)(i * 1000 + evIdx));
+                ImGui::SetCursorScreenPos(ImVec2(cellMin.x + noteStartX_px, noteY_top));
+                ImGui::InvisibleButton("note", ImVec2(noteWidth, noteHeight), 
+                    ImGuiButtonFlags_MouseButtonLeft);
+                const bool isHovered = ImGui::IsItemHovered();
+                const bool isActive = ImGui::IsItemActive();
+                ImGui::PopID();
+                
+                if (isHovered || isActive)
+                {
+                    noteHovered = true;
+                    noteActive = noteActive || isActive;
+                    hoveredEventIndex = (int)evIdx;
+                }
+            }
+            ImGui::SetCursorScreenPos(savedCursorPos);
+            
+            // Handle note dragging
+            if (noteHovered && hoveredEventIndex >= 0 && hoveredEventIndex < (int)events.size())
+            {
+                // Start dragging on click
+                if (ImGui::IsMouseClicked(ImGuiMouseButton_Left))
+                {
+                    draggingNote.trackIndex = (int)i;
+                    draggingNote.eventIndex = hoveredEventIndex;
+                    draggingNote.initialMouseX = ImGui::GetMousePos().x;
+                    draggingNote.initialStartTimeSamples = events[hoveredEventIndex].startTimeInSamples;
+                    draggingNote.isDragging = true;
+                }
+            }
+            
+            // Continue dragging if already dragging this note
+            if (draggingNote.isDragging && 
+                draggingNote.trackIndex == (int)i && 
+                draggingNote.eventIndex >= 0 && 
+                draggingNote.eventIndex < (int)events.size())
+            {
+                if (ImGui::IsMouseDragging(ImGuiMouseButton_Left))
+                {
+                    float currentMouseX = ImGui::GetMousePos().x;
+                    float deltaX = currentMouseX - draggingNote.initialMouseX;
+                    
+                    // Convert pixel delta to sample delta
+                    double deltaSamples = (deltaX / pixelsPerBeat) * samplesPerBeat;
+                    int64_t newStartTime = draggingNote.initialStartTimeSamples + (int64_t)deltaSamples;
+                    
+                    // Clamp to valid range
+                    const double maxSamples = displayBars * 4 * samplesPerBeat;
+                    newStartTime = juce::jlimit((int64_t)0, (int64_t)maxSamples, newStartTime);
+                    
+                    // Update the note's start time
+                    auto updatedEvents = tracks[i]->getEventsCopy();
+                    if (draggingNote.eventIndex < (int)updatedEvents.size())
+                    {
+                        updatedEvents[draggingNote.eventIndex].startTimeInSamples = newStartTime;
+                        tracks[i]->setEvents(updatedEvents);
+                    }
+                }
+                else if (ImGui::IsMouseReleased(ImGuiMouseButton_Left))
+                {
+                    // Finalize the drag
+                    draggingNote.isDragging = false;
+                    draggingNote.trackIndex = -1;
+                    draggingNote.eventIndex = -1;
+                    onModificationEnded(); // Notify that the preset has been modified
                 }
             }
 
@@ -598,11 +829,22 @@ void MidiLoggerModuleProcessor::drawParametersInNode(
                 }
             }
 
-            // Allow seeking by clicking in the track lane too
-            ImGui::Dummy(ImVec2(totalWidth, rowHeight));
-            if (ImGui::IsItemHovered() && ImGui::IsMouseClicked(ImGuiMouseButton_Left))
+            // Allow seeking by clicking in the track lane (but not on notes)
+            // Create invisible button for the entire track lane to capture clicks
+            // This must be AFTER the note buttons so notes take priority
+            ImGui::PushID((int)(i + 10000));
+            ImVec2 savedCursorPos2 = ImGui::GetCursorScreenPos();
+            ImGui::SetCursorScreenPos(cellMin);
+            ImGui::InvisibleButton("track_lane", ImVec2(totalWidth, rowHeight), 
+                ImGuiButtonFlags_MouseButtonLeft);
+            const bool laneHovered = ImGui::IsItemHovered();
+            const bool laneActive = ImGui::IsItemActive();
+            ImGui::PopID();
+            ImGui::SetCursorScreenPos(savedCursorPos2);
+            
+            if (laneHovered && ImGui::IsMouseClicked(ImGuiMouseButton_Left) && !noteHovered && !noteActive)
             {
-                ImVec2 itemMin = ImGui::GetItemRectMin();
+                ImVec2 itemMin = cellMin;
                 float  mouseX = ImGui::GetMousePos().x;
                 float  relativeX = mouseX - itemMin.x;
 
@@ -611,17 +853,326 @@ void MidiLoggerModuleProcessor::drawParametersInNode(
                 newTimeSamples = juce::jlimit(0.0, maxSamples, newTimeSamples);
                 playheadPositionSamples = (int64_t)newTimeSamples;
             }
+            
+            // Note: Invisible buttons automatically prevent node dragging by capturing mouse events
+            // Reserve space for the track lane
+            ImGui::Dummy(ImVec2(totalWidth, rowHeight));
 
             ImGui::PopID();
         }
+        
+        // --- RIGHT-CLICK DRAG ERASE ---
+        // Similar to VideoDrawImpactModuleProcessor's erase functionality
+        if (ImGui::IsMouseDown(ImGuiMouseButton_Right))
+        {
+            ImVec2 mousePos = ImGui::GetIO().MousePos;
+            bool   erasedAny = false;
+
+            // Find which track the mouse is over and erase notes that intersect
+            for (const auto& bounds : trackBounds)
+            {
+                if (mousePos.y >= bounds.cellMinY && mousePos.y <= bounds.cellMinY + bounds.rowHeight)
+                {
+                    // Mouse is over this track
+                    // Convert mouse X to sample time (accounting for table scroll)
+                    const float scrollXCurrent = ImGui::GetScrollX();
+                    float       relativeX = mousePos.x - bounds.cellMinX + scrollXCurrent;
+
+                    // Clamp relativeX to valid range
+                    relativeX = juce::jmax(0.0f, relativeX);
+
+                    // Convert pixel position to sample time
+                    double mouseTimeSamples = (relativeX / pixelsPerBeat) * samplesPerBeat;
+
+                    // Get tolerance for erasing (similar to VideoDrawImpactModuleProcessor)
+                    // Use a tolerance based on zoom level - about 10 pixels worth of time
+                    const double timeTolerance = (10.0 / pixelsPerBeat) * samplesPerBeat;
+
+                    // Get events for this track
+                    auto events = tracks[bounds.trackIndex]->getEventsCopy();
+                    std::vector<MidiEvent> filteredEvents;
+
+                    // Filter out notes that intersect with mouse position
+                    for (const auto& ev : events)
+                    {
+                        double noteStart = (double)ev.startTimeInSamples;
+                        double noteEnd = noteStart + (double)ev.durationInSamples;
+
+                        // Check if mouse time intersects with note (with tolerance)
+                        bool intersects = (mouseTimeSamples >= noteStart - timeTolerance) &&
+                                         (mouseTimeSamples <= noteEnd + timeTolerance);
+
+                        if (!intersects)
+                        {
+                            filteredEvents.push_back(ev);
+                        }
+                    }
+
+                    // Update track if any notes were removed
+                    if (filteredEvents.size() != events.size())
+                    {
+                        tracks[bounds.trackIndex]->setEvents(filteredEvents);
+                        erasedAny = true;
+                    }
+
+                    // Only process one track (the first one mouse is over)
+                    break;
+                }
+            }
+
+            // Visual cue: red circle at mouse position while erasing
+            if (erasedAny)
+                ImGui::GetWindowDrawList()->AddCircleFilled(mousePos, 6.0f, IM_COL32(255, 60, 60, 200));
+        }
+        else if (ImGui::IsMouseReleased(ImGuiMouseButton_Right))
+        {
+            // Notify modification ended when right mouse button is released
+            onModificationEnded();
+        }
+        
         ImGui::EndTable();
     }
+
+    ImGui::PopStyleVar(); // scrollbar size
 
     // --- DEBUG INFO ---
     ImGui::Text(
         "Playhead: %.2f beats | %d tracks",
         samplesPerBeat > 0 ? playheadPositionSamples / samplesPerBeat : 0.0,
         (int)tracks.size());
+
+    // === MIDI OUTPUT SECTION ===
+    ImGui::Separator();
+    ImGui::Text("MIDI Output:");
+    ImGui::SameLine();
+    ImGui::TextDisabled("(?)");
+    if (ImGui::IsItemHovered())
+        ImGui::SetTooltip("Send MIDI messages to external devices or VSTi plugins during playback");
+    
+    bool enableMIDI = false;
+    if (enableMidiOutputParam != nullptr)
+    {
+        const float enableValue = enableMidiOutputParam->get();
+        enableMIDI = (enableValue >= 0.5f);
+    }
+    if (ImGui::Checkbox("Enable##midi_out", &enableMIDI))
+    {
+        if (enableMidiOutputParam)
+        {
+            enableMidiOutputParam->setValueNotifyingHost(enableMIDI ? 1.0f : 0.0f);
+            updateMidiOutputDevice();
+            onModificationEnded();
+        }
+    }
+    
+    if (enableMIDI)
+    {
+        ImGui::Indent(20.0f);
+        
+        // Output mode dropdown - compact layout
+        ImGui::Text("Mode:");
+        ImGui::SameLine();
+        ImGui::SetNextItemWidth(150.0f);  // Fixed width to prevent expansion
+        int outputMode = midiOutputModeParam ? midiOutputModeParam->getIndex() : 0;
+        const char* modeItems[] = { "Global Default", "Custom" };  // Shorter labels
+        
+        if (ImGui::Combo("##midi_out_mode", &outputMode, modeItems, 2))
+        {
+            if (midiOutputModeParam)
+            {
+                midiOutputModeParam->setValueNotifyingHost(
+                    apvts.getParameterRange("midi_output_mode").convertTo0to1((float)outputMode));
+                updateMidiOutputDevice();
+                onModificationEnded();
+            }
+        }
+        
+        // Scroll-edit for Mode combo
+        if (ImGui::IsItemHovered())
+        {
+            const float wheel = ImGui::GetIO().MouseWheel;
+            if (wheel != 0.0f)
+            {
+                const int maxIndex = 1; // 2 modes: 0-1
+                const int newIndex = juce::jlimit(0, maxIndex, outputMode + (wheel > 0.0f ? -1 : 1));
+                if (newIndex != outputMode && midiOutputModeParam)
+                {
+                    midiOutputModeParam->setValueNotifyingHost(
+                        apvts.getParameterRange("midi_output_mode").convertTo0to1((float)newIndex));
+                    updateMidiOutputDevice();
+                    onModificationEnded();
+                }
+            }
+        }
+        
+        if (ImGui::IsItemHovered())
+        {
+            ImGui::SetTooltip("Global Default: Uses device from Audio Settings\n"
+                            "Custom: Select specific device for this module");
+        }
+        
+        // Custom device selector (only when mode is "Custom Device")
+        if (outputMode == 1)
+        {
+            auto devices = getAvailableMidiOutputDevices();
+            int currentIndex = midiOutputDeviceIndexParam ? midiOutputDeviceIndexParam->get() : -1;
+            
+            // Clamp index to valid range
+            if (currentIndex >= (int)devices.size())
+                currentIndex = -1;
+            
+            // Build combo list (keep strings alive)
+            std::vector<const char*> deviceNames;
+            std::vector<juce::String> deviceNamesStr;
+            deviceNamesStr.reserve(devices.size() + 1);
+            deviceNamesStr.push_back("<None>");
+            deviceNames.push_back(deviceNamesStr.back().toRawUTF8());
+            for (const auto& dev : devices)
+            {
+                deviceNamesStr.push_back(dev.first);
+                deviceNames.push_back(deviceNamesStr.back().toRawUTF8());
+            }
+            
+            ImGui::Text("Device:");
+            ImGui::SameLine();
+            ImGui::SetNextItemWidth(150.0f);  // Fixed width
+            int selectedIndex = currentIndex + 1;  // +1 because first item is "<None>"
+            if (ImGui::Combo("##midi_out_device", &selectedIndex, 
+                           deviceNames.data(), (int)deviceNames.size()))
+            {
+                int deviceIndex = selectedIndex - 1;  // -1 because first item is "<None>"
+                if (deviceIndex >= 0 && deviceIndex < (int)devices.size())
+                {
+                    storedMidiOutputDeviceId = devices[deviceIndex].second;
+                    if (midiOutputDeviceIndexParam)
+                    {
+                        midiOutputDeviceIndexParam->setValueNotifyingHost(
+                            apvts.getParameterRange("midi_output_device_index").convertTo0to1((float)deviceIndex));
+                        updateMidiOutputDevice();
+                        onModificationEnded();
+                    }
+                }
+                else if (selectedIndex == 0)  // "<None>"
+                {
+                    storedMidiOutputDeviceId.clear();
+                    if (midiOutputDeviceIndexParam)
+                    {
+                        midiOutputDeviceIndexParam->setValueNotifyingHost(
+                            apvts.getParameterRange("midi_output_device_index").convertTo0to1(-1.0f));
+                        updateMidiOutputDevice();
+                        onModificationEnded();
+                    }
+                }
+            }
+            
+            // Scroll-edit for Device combo
+            if (ImGui::IsItemHovered())
+            {
+                const float wheel = ImGui::GetIO().MouseWheel;
+                if (wheel != 0.0f)
+                {
+                    const int maxIndex = (int)deviceNames.size() - 1; // Max index in combo (including "<None>")
+                    int newSelectedIndex = juce::jlimit(0, maxIndex, selectedIndex + (wheel > 0.0f ? -1 : 1));
+                    if (newSelectedIndex != selectedIndex)
+                    {
+                        int deviceIndex = newSelectedIndex - 1;  // -1 because first item is "<None>"
+                        if (deviceIndex >= 0 && deviceIndex < (int)devices.size())
+                        {
+                            storedMidiOutputDeviceId = devices[deviceIndex].second;
+                            if (midiOutputDeviceIndexParam)
+                            {
+                                midiOutputDeviceIndexParam->setValueNotifyingHost(
+                                    apvts.getParameterRange("midi_output_device_index").convertTo0to1((float)deviceIndex));
+                                updateMidiOutputDevice();
+                                onModificationEnded();
+                            }
+                        }
+                        else if (newSelectedIndex == 0)  // "<None>"
+                        {
+                            storedMidiOutputDeviceId.clear();
+                            if (midiOutputDeviceIndexParam)
+                            {
+                                midiOutputDeviceIndexParam->setValueNotifyingHost(
+                                    apvts.getParameterRange("midi_output_device_index").convertTo0to1(-1.0f));
+                                updateMidiOutputDevice();
+                                onModificationEnded();
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        else
+        {
+            // Show global device name - compact
+            juce::String globalDeviceName = "<None>";
+            if (audioDeviceManager)
+            {
+                juce::String deviceId = audioDeviceManager->getDefaultMidiOutputIdentifier();
+                if (deviceId.isNotEmpty())
+                {
+                    auto devices = juce::MidiOutput::getAvailableDevices();
+                    for (const auto& dev : devices)
+                    {
+                        if (dev.identifier == deviceId)
+                        {
+                            globalDeviceName = dev.name;
+                            break;
+                        }
+                    }
+                }
+            }
+            ImGui::Text("Device:");
+            ImGui::SameLine();
+            ImGui::TextDisabled("%s", globalDeviceName.toRawUTF8());
+            if (ImGui::IsItemHovered())
+            {
+                ImGui::SetTooltip("Using device from Audio Settings\n"
+                                "Change in Settings → Audio Settings → MIDI Output");
+            }
+        }
+        
+        // Channel selector - compact
+        ImGui::Text("Channel:");
+        ImGui::SameLine();
+        ImGui::SetNextItemWidth(80.0f);  // Narrower for channel
+        int channel = midiOutputChannelParam ? midiOutputChannelParam->get() : 0;
+        if (ImGui::SliderInt("##midi_out_ch", &channel, 0, 16))
+        {
+            if (midiOutputChannelParam)
+            {
+                midiOutputChannelParam->setValueNotifyingHost(
+                    apvts.getParameterRange("midi_output_channel").convertTo0to1((float)channel));
+                onModificationEnded();
+            }
+        }
+        
+        // Scroll-edit for Channel slider
+        if (ImGui::IsItemHovered())
+        {
+            const float wheel = ImGui::GetIO().MouseWheel;
+            if (wheel != 0.0f)
+            {
+                int newChannel = juce::jlimit(0, 16, channel + (wheel > 0.0f ? -1 : 1));
+                if (newChannel != channel && midiOutputChannelParam)
+                {
+                    midiOutputChannelParam->setValueNotifyingHost(
+                        apvts.getParameterRange("midi_output_channel").convertTo0to1((float)newChannel));
+                    onModificationEnded();
+                }
+            }
+        }
+        
+        if (ImGui::IsItemHovered())
+        {
+            juce::String tooltip = (channel == 0) ?
+                "Channel 0: Each track outputs on its own channel (Track 1→Ch1, Track 2→Ch2, etc.)" :
+                juce::String("All tracks output on channel ") + juce::String(channel);
+            ImGui::SetTooltip("%s", tooltip.toRawUTF8());
+        }
+        
+        ImGui::Unindent(20.0f);
+    }
 
     ImGui::PopItemWidth(); // FIXED: Matches the PushItemWidth at start
     ImGui::PopID();
@@ -916,5 +1467,91 @@ void MidiLoggerModuleProcessor::exportToMidiFile()
             juce::Logger::writeToLog("[MIDI Logger] ERROR: Failed to open file for writing");
         }
     });
-    ImGui::PopID();
+}
+
+// ==============================================================================
+// MIDI OUTPUT IMPLEMENTATION
+// ==============================================================================
+
+void MidiLoggerModuleProcessor::updateMidiOutputDevice()
+{
+    const juce::ScopedLock lock(midiOutputLock);
+    
+    if (!enableMidiOutputParam || !enableMidiOutputParam->get())
+    {
+        // MIDI output disabled - close device
+        midiOutputDevice.reset();
+        currentMidiOutputDeviceId.clear();
+        return;
+    }
+    
+    juce::String targetDeviceId;
+    
+    // Determine which device to use
+    if (midiOutputModeParam && midiOutputModeParam->getCurrentChoiceName() == "Use Global Default")
+    {
+        // Use global default from AudioDeviceManager
+        if (audioDeviceManager)
+            targetDeviceId = audioDeviceManager->getDefaultMidiOutputIdentifier();
+    }
+    else
+    {
+        // Use custom device from stored ID (set by UI) or index
+        if (!storedMidiOutputDeviceId.isEmpty())
+        {
+            // First try stored ID (most reliable)
+            targetDeviceId = storedMidiOutputDeviceId;
+        }
+        else if (midiOutputDeviceIndexParam && midiOutputDeviceIndexParam->get() >= 0)
+        {
+            // Fall back to index if ID not stored
+            auto devices = getAvailableMidiOutputDevices();
+            int deviceIndex = midiOutputDeviceIndexParam->get();
+            if (deviceIndex < (int)devices.size())
+            {
+                targetDeviceId = devices[deviceIndex].second;
+                storedMidiOutputDeviceId = targetDeviceId;  // Cache the ID for next time
+            }
+        }
+    }
+    
+    // Only change if device changed
+    if (targetDeviceId == currentMidiOutputDeviceId && midiOutputDevice)
+        return;
+    
+    // Close current device
+    midiOutputDevice.reset();
+    currentMidiOutputDeviceId.clear();
+    
+    // Open new device
+    if (targetDeviceId.isNotEmpty())
+    {
+        midiOutputDevice = juce::MidiOutput::openDevice(targetDeviceId);
+        if (midiOutputDevice)
+        {
+            currentMidiOutputDeviceId = targetDeviceId;
+            juce::Logger::writeToLog("[MIDI Logger] Opened MIDI output: " + targetDeviceId);
+        }
+        else
+        {
+            juce::Logger::writeToLog("[MIDI Logger] Failed to open MIDI output: " + targetDeviceId);
+        }
+    }
+}
+
+void MidiLoggerModuleProcessor::sendMidiToOutput(const juce::MidiMessage& message)
+{
+    const juce::ScopedLock lock(midiOutputLock);
+    if (midiOutputDevice)
+        midiOutputDevice->sendMessageNow(message);
+}
+
+std::vector<std::pair<juce::String, juce::String>> 
+MidiLoggerModuleProcessor::getAvailableMidiOutputDevices() const
+{
+    std::vector<std::pair<juce::String, juce::String>> devices;
+    auto available = juce::MidiOutput::getAvailableDevices();
+    for (const auto& device : available)
+        devices.push_back({device.name, device.identifier});
+    return devices;
 }

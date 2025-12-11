@@ -21,6 +21,8 @@ public:
     const juce::String getName() const override;
     juce::AudioProcessorEditor* createEditor() override;
     bool hasEditor() const override;
+    bool acceptsMidi() const override { return hostedPlugin != nullptr && hostedPlugin->acceptsMidi(); }
+    bool producesMidi() const override { return hostedPlugin != nullptr && hostedPlugin->producesMidi(); }
     
     // ModuleProcessor Overrides
     juce::AudioProcessorValueTreeState& getAPVTS() override { return dummyApvts; }

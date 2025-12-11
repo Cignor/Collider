@@ -38,6 +38,9 @@ AutomatoModuleProcessor::AutomatoModuleProcessor()
 #if defined(PRESET_CREATOR_UI)
     // Initialize UI state
     lastMousePosInGrid = ImVec2(-1.0f, -1.0f);
+    // Initialize node dimensions (height will be auto-calculated, but allow resize)
+    if (nodeHeight <= 0.0f)
+        nodeHeight = 400.0f; // Default height for grid + controls
 #endif
 
     // Initialize output values for cable inspector
@@ -423,6 +426,10 @@ juce::ValueTree AutomatoModuleProcessor::getExtraStateTree() const
     vt.setProperty("division", divisionParam != nullptr ? divisionParam->load() : 5.0f, nullptr);
     vt.setProperty("loop", loopParam != nullptr ? loopParam->load() : 1.0f, nullptr);
     vt.setProperty("rate", rateParam != nullptr ? rateParam->load() : 1.0f, nullptr);
+    
+    // Save node dimensions
+    vt.setProperty("width", nodeWidth, nullptr);
+    vt.setProperty("height", nodeHeight, nullptr);
 
     return vt;
 }
@@ -492,6 +499,10 @@ void AutomatoModuleProcessor::setExtraStateTree(const juce::ValueTree& vt)
             *p = (float)vt.getProperty("loop", 1.0f);
         if (auto* p = dynamic_cast<juce::AudioParameterFloat*>(apvts.getParameter(paramIdRate)))
             *p = (float)vt.getProperty("rate", 1.0f);
+        
+        // Load node dimensions
+        nodeWidth = (float)vt.getProperty("width", 280.0);
+        nodeHeight = (float)vt.getProperty("height", 400.0); // Default height if not saved
     }
 }
 
@@ -705,6 +716,10 @@ void AutomatoModuleProcessor::stopRecording()
 }
 
 #if defined(PRESET_CREATOR_UI)
+ImVec2 AutomatoModuleProcessor::getCustomNodeSize() const
+{
+    return ImVec2(nodeWidth, nodeHeight);
+}
 void AutomatoModuleProcessor::drawParametersInNode(
     float itemWidth,
     const std::function<bool(const juce::String&)>& isParamModulated,
@@ -845,7 +860,11 @@ void AutomatoModuleProcessor::drawParametersInNode(
     ImGui::Spacing();
 
     // --- 2D Grid (Similar to PanVol) ---
-    const float gridSize = juce::jmin(itemWidth - 20.0f, 240.0f); // Increased from 120px to 240px
+    // Use nodeWidth for grid sizing (allow resize), with reasonable min/max bounds
+    const float minGridSize = 120.0f;
+    const float maxGridSize = 600.0f;
+    const float effectiveNodeWidth = juce::jmax(minGridSize, juce::jmin(maxGridSize, itemWidth));
+    const float gridSize = juce::jmin(effectiveNodeWidth - 20.0f, maxGridSize);
     const float gridPadding = (itemWidth - gridSize) * 0.5f;
 
     ImVec2 gridPos = ImGui::GetCursorScreenPos();
@@ -1109,6 +1128,43 @@ void AutomatoModuleProcessor::drawParametersInNode(
             startRecording();
         }
     }
+
+    // Resize handle in bottom-right corner (similar to CommentModuleProcessor)
+    // Position it relative to the grid's bottom-right corner
+    const ImVec2 resizeHandleSize(16.0f, 16.0f);
+    ImVec2 drawPos = gridMax; // Bottom-right of grid
+    drawPos.x -= resizeHandleSize.x; // Align to right edge
+    drawPos.y += 4.0f; // Small offset below grid
+
+    ImGui::SetCursorScreenPos(drawPos);
+    ImGui::InvisibleButton("##automato_resize", resizeHandleSize);
+    const bool isResizing = ImGui::IsItemActive() && ImGui::IsMouseDragging(ImGuiMouseButton_Left);
+
+    if (isResizing)
+    {
+        const ImVec2 delta = ImGui::GetMouseDragDelta(ImGuiMouseButton_Left);
+        // Clamp to reasonable bounds (matching CommentModule pattern)
+        nodeWidth = juce::jlimit(200.0f, 800.0f, nodeWidth + delta.x);
+        nodeHeight = juce::jlimit(200.0f, 800.0f, nodeHeight + delta.y);
+        ImGui::ResetMouseDragDelta(ImGuiMouseButton_Left);
+        wasBeingResizedLastFrame = true;
+    }
+    else if (wasBeingResizedLastFrame)
+    {
+        // Just finished resizing, trigger undo snapshot
+        wasBeingResizedLastFrame = false;
+        onModificationEnded();
+    }
+
+    // Draw resize handle indicator
+    ImGui::GetWindowDrawList()->AddTriangleFilled(
+        ImVec2(drawPos.x + 4.0f, drawPos.y + resizeHandleSize.y - 4.0f),
+        ImVec2(drawPos.x + resizeHandleSize.x - 4.0f, drawPos.y + resizeHandleSize.y - 4.0f),
+        ImVec2(drawPos.x + resizeHandleSize.x - 4.0f, drawPos.y + 4.0f),
+        ImGui::GetColorU32(ImGuiCol_ResizeGrip));
+
+    // Satisfy ImGui's boundary assertions (similar to CommentModuleProcessor)
+    ImGui::Dummy(ImVec2(1.0f, 1.0f));
 
     ImGui::PopItemWidth();
 }

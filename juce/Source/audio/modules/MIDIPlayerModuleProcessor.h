@@ -1,7 +1,8 @@
 #pragma once
 
-#include "ModuleProcessor.h"
+#include "ModuleProcessor.h"  // This already includes juce_audio_processors.h
 #include <juce_audio_basics/juce_audio_basics.h>
+#include <juce_audio_devices/juce_audio_devices.h>
 
 class MIDIPlayerModuleProcessor : public ModuleProcessor
 {
@@ -100,6 +101,14 @@ public:
     }
     int getNumTracks() const { return midiFile ? midiFile->getNumTracks() : 0; }
     int getTotalNoteCount() const;
+    
+    // MIDI Output
+    void setAudioDeviceManager(juce::AudioDeviceManager* adm) 
+    { 
+        audioDeviceManager = adm; 
+        updateMidiOutputDevice(); // Update device immediately when manager is set
+    }
+    std::vector<std::pair<juce::String, juce::String>> getAvailableMidiOutputDevices() const;
 
 private:
     // Protects cross-thread access to MIDI data structures
@@ -158,6 +167,17 @@ private:
     juce::AudioParameterFloat* tempoMultiplierParam { nullptr };
     double fileBpm = 120.0; // Stores tempo parsed from loaded .mid file
     
+    // MIDI Output
+    std::unique_ptr<juce::MidiOutput> midiOutputDevice;
+    juce::String currentMidiOutputDeviceId;
+    juce::CriticalSection midiOutputLock;
+    juce::AudioParameterBool* enableMidiOutputParam { nullptr };
+    juce::AudioParameterChoice* midiOutputModeParam { nullptr };
+    juce::AudioParameterInt* midiOutputDeviceIndexParam { nullptr };  // Index into available devices
+    juce::AudioParameterInt* midiOutputChannelParam { nullptr };
+    juce::String storedMidiOutputDeviceId;  // Store device ID separately (not in APVTS)
+    juce::AudioDeviceManager* audioDeviceManager { nullptr };
+    
     // CRITICAL: Custom transport state (replaces JUCE getPlayHead() for standalone app)
     TransportState m_currentTransport;
     
@@ -173,6 +193,8 @@ private:
     void updatePlaybackTime(double deltaTime);
     void generateCVOutputs();
     double noteNumberToCV(int noteNumber) const;
+    void updateMidiOutputDevice();
+    void sendMidiToOutput(const juce::MidiMessage& message);
     juce::ValueTree getExtraStateTree() const override
     {
         juce::ValueTree vt ("MIDIPlayerExtra");

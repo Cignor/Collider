@@ -116,6 +116,7 @@ bool ImGuiNodeEditorComponent::s_globalGpuEnabled = true;
 #include "../audio/modules/ValueModuleProcessor.h"
 #include "../audio/modules/SampleLoaderModuleProcessor.h"
 #include "../audio/modules/MIDIPlayerModuleProcessor.h"
+#include "../audio/modules/MIDICVModuleProcessor.h"
 #include "../audio/modules/PolyVCOModuleProcessor.h"
 #include "../audio/modules/TrackMixerModuleProcessor.h"
 #include "../audio/modules/MathModuleProcessor.h"
@@ -3349,16 +3350,17 @@ void ImGuiNodeEditorComponent::renderImGui()
         ImGui::PopStyleColor(4); // 3 background colors + 1 text color
         if (midiExpanded)
         {
+            ThemeText("Players / Editors:", theme.text.section_header);
             addModuleButton("MIDI CV", "midi_cv");
             addModuleButton("MIDI Player", "midi_player");
-            ImGui::Separator();
+            addModuleButton("MIDI Logger", "midi_logger");
+            ImGui::Spacing();
+            ThemeText("Controllers:", theme.text.section_header);
             addModuleButton("MIDI Faders", "midi_faders");
             addModuleButton("MIDI Knobs", "midi_knobs");
             addModuleButton("MIDI Buttons", "midi_buttons");
             addModuleButton("MIDI Jog Wheel", "midi_jog_wheel");
             addModuleButton("MIDI Pads", "midi_pads");
-            ImGui::Separator();
-            addModuleButton("MIDI Logger", "midi_logger");
         }
 
         // ═══════════════════════════════════════════════════════════════════════════════
@@ -6439,6 +6441,26 @@ void ImGuiNodeEditorComponent::renderImGui()
         }
     }
     // ================== END MIDI PLAYER QUICK CONNECT ==================
+    
+    // ================== MIDI CV QUICK CONNECT LOGIC ==================
+    // Poll all MIDI CV modules for connection requests
+    if (synth != nullptr)
+    {
+        for (const auto& modInfo : synth->getModulesInfo())
+        {
+            if (auto* midiCV = dynamic_cast<MIDICVModuleProcessor*>(
+                    synth->getModuleForLogical(modInfo.first)))
+            {
+                int requestType = midiCV->getAndClearConnectionRequest();
+                if (requestType > 0)
+                {
+                    handleMIDICVConnectionRequest(modInfo.first, midiCV, requestType);
+                    break; // Only handle one request per frame
+                }
+            }
+        }
+    }
+    // ================== END MIDI CV QUICK CONNECT ==================
     // ================== META MODULE EDITING LOGIC ==================
     // Check if any Meta Module has requested to be edited
     if (synth != nullptr && metaModuleToEditLid == 0) // Only check if not already editing one
@@ -7187,24 +7209,30 @@ void ImGuiNodeEditorComponent::renderImGui()
 
                 if (ImGui::BeginMenu("MIDI"))
                 {
-                    if (ImGui::MenuItem("MIDI CV"))
-                        addAtMouse("midi_cv");
-                    if (ImGui::MenuItem("MIDI Player"))
-                        addAtMouse("midi_player");
-                    ImGui::Separator();
-                    if (ImGui::MenuItem("MIDI Faders"))
-                        addAtMouse("midi_faders");
-                    if (ImGui::MenuItem("MIDI Knobs"))
-                        addAtMouse("midi_knobs");
-                    if (ImGui::MenuItem("MIDI Buttons"))
-                        addAtMouse("midi_buttons");
-                    if (ImGui::MenuItem("MIDI Jog Wheel"))
-                        addAtMouse("midi_jog_wheel");
-                    if (ImGui::MenuItem("MIDI Pads"))
-                        addAtMouse("midi_pads");
-                    ImGui::Separator();
-                    if (ImGui::MenuItem("MIDI Logger"))
-                        addAtMouse("midi_logger");
+                    if (ImGui::BeginMenu("Players / Editors"))
+                    {
+                        if (ImGui::MenuItem("MIDI CV"))
+                            addAtMouse("midi_cv");
+                        if (ImGui::MenuItem("MIDI Player"))
+                            addAtMouse("midi_player");
+                        if (ImGui::MenuItem("MIDI Logger"))
+                            addAtMouse("midi_logger");
+                        ImGui::EndMenu();
+                    }
+                    if (ImGui::BeginMenu("Controllers"))
+                    {
+                        if (ImGui::MenuItem("MIDI Faders"))
+                            addAtMouse("midi_faders");
+                        if (ImGui::MenuItem("MIDI Knobs"))
+                            addAtMouse("midi_knobs");
+                        if (ImGui::MenuItem("MIDI Buttons"))
+                            addAtMouse("midi_buttons");
+                        if (ImGui::MenuItem("MIDI Jog Wheel"))
+                            addAtMouse("midi_jog_wheel");
+                        if (ImGui::MenuItem("MIDI Pads"))
+                            addAtMouse("midi_pads");
+                        ImGui::EndMenu();
+                    }
                     ImGui::EndMenu();
                 }
 
@@ -11902,6 +11930,54 @@ void ImGuiNodeEditorComponent::handleAutoConnectionRequests()
         }
     }
 }
+
+void ImGuiNodeEditorComponent::handleMIDICVConnectionRequest(
+    juce::uint32 midiCVLid,
+    MIDICVModuleProcessor* midiCV,
+    int requestType)
+{
+    if (!synth || !midiCV)
+        return;
+    
+    juce::Logger::writeToLog(
+        "[MIDI CV Quick Connect] Request type: " + juce::String(requestType));
+    
+    if (requestType == 1) // MidiLogger
+    {
+        // Get MIDI CV position for positioning new node
+        ImVec2 midiCVPos = ImNodes::GetNodeEditorSpacePos(static_cast<int>(midiCVLid));
+        auto midiCVNodeId = synth->getNodeIdForLogical(midiCVLid);
+        
+        // 1. Create MidiLogger
+        auto midiLoggerNodeId = synth->addModule("midi_logger");
+        juce::uint32 midiLoggerLid = synth->getLogicalIdForNode(midiLoggerNodeId);
+        pendingNodeScreenPositions[(int)midiLoggerLid] = ImVec2(midiCVPos.x + 400.0f, midiCVPos.y);
+        juce::Logger::writeToLog(
+            "[MIDI CV Quick Connect] Created MidiLogger at LID " + juce::String((int)midiLoggerLid));
+        
+        // 2. Connect all 8 voices from MIDI CV to MidiLogger
+        // Each voice has 3 outputs: Gate (baseChannel), Pitch (baseChannel+1), Vel (baseChannel+2)
+        // MidiLogger expects: Gate (trackIdx*3+0), Pitch (trackIdx*3+1), Velo (trackIdx*3+2)
+        // Since MIDI CV outputs match MidiLogger input layout, we can connect directly
+        for (int voice = 0; voice < MIDICVModuleProcessor::NUM_VOICES; ++voice)
+        {
+            const int baseChannel = voice * 3;
+            
+            // Connect Gate, Pitch, and Vel for this voice
+            synth->connect(midiCVNodeId, baseChannel + 0, midiLoggerNodeId, baseChannel + 0); // Gate
+            synth->connect(midiCVNodeId, baseChannel + 1, midiLoggerNodeId, baseChannel + 1); // Pitch
+            synth->connect(midiCVNodeId, baseChannel + 2, midiLoggerNodeId, baseChannel + 2); // Vel
+        }
+        
+        juce::Logger::writeToLog(
+            "[MIDI CV Quick Connect] Connected " + juce::String(MIDICVModuleProcessor::NUM_VOICES) +
+            " voices: MIDI CV → MidiLogger");
+        
+        // Request graph rebuild to update connections
+        graphNeedsRebuild = true;
+    }
+}
+
 void ImGuiNodeEditorComponent::handleMIDIPlayerConnectionRequest(
     juce::uint32               midiPlayerLid,
     MIDIPlayerModuleProcessor* midiPlayer,

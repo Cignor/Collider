@@ -15,7 +15,7 @@ void populateModuleDescriptions()
     descriptions["sequencer"]           = "A classic 16-step CV and Gate sequencer.";
     descriptions["multi_sequencer"]     = "Advanced sequencer with parallel per-step outputs.";
     descriptions["midi_player"]         = "Plays MIDI files and outputs CV/Gate for each track.";
-    descriptions["midi_cv"]             = "Converts MIDI Note/CC messages to CV signals. (Monophonic)";
+    descriptions["midi_cv"]             = "Converts MIDI Note/CC messages to CV signals. 8-voice polyphonic with voice stealing. Compatible with MidiLogger for recording/export.";
     descriptions["midi_control_center"] = "A powerful MIDI learn interface to map any MIDI CC to CV/Gate outputs.";
     descriptions["midi_faders"]         = "1-16 MIDI-learnable faders with customizable output ranges.";
     descriptions["midi_knobs"]          = "1-16 MIDI-learnable knobs with customizable output ranges.";
@@ -1058,20 +1058,50 @@ db["random"] = ModulePinInfo(
         }
     );
 
+    // MIDI CV - Polyphonic 8-voice converter
     db["midi_cv"] = ModulePinInfo(
-        NodeWidth::Medium,
-        {}, // No inputs - receives MIDI messages
+        NodeWidth::Big,
+        {}, // No inputs - receives MIDI messages via handleDeviceSpecificMidi
         {
-            AudioPin("Pitch", 0, PinDataType::CV),
-            AudioPin("Gate", 1, PinDataType::Gate),
-            AudioPin("Velocity", 2, PinDataType::CV),
-            AudioPin("Mod Wheel", 3, PinDataType::CV),
-            AudioPin("Pitch Bend", 4, PinDataType::CV),
-            AudioPin("Aftertouch", 5, PinDataType::CV)
+            // Voice 1 outputs (channels 0-2)
+            AudioPin("V1 Gate", 0, PinDataType::Gate),
+            AudioPin("V1 Pitch", 1, PinDataType::CV),
+            AudioPin("V1 Vel", 2, PinDataType::CV),
+            // Voice 2 outputs (channels 3-5)
+            AudioPin("V2 Gate", 3, PinDataType::Gate),
+            AudioPin("V2 Pitch", 4, PinDataType::CV),
+            AudioPin("V2 Vel", 5, PinDataType::CV),
+            // Voice 3 outputs (channels 6-8)
+            AudioPin("V3 Gate", 6, PinDataType::Gate),
+            AudioPin("V3 Pitch", 7, PinDataType::CV),
+            AudioPin("V3 Vel", 8, PinDataType::CV),
+            // Voice 4 outputs (channels 9-11)
+            AudioPin("V4 Gate", 9, PinDataType::Gate),
+            AudioPin("V4 Pitch", 10, PinDataType::CV),
+            AudioPin("V4 Vel", 11, PinDataType::CV),
+            // Voice 5 outputs (channels 12-14)
+            AudioPin("V5 Gate", 12, PinDataType::Gate),
+            AudioPin("V5 Pitch", 13, PinDataType::CV),
+            AudioPin("V5 Vel", 14, PinDataType::CV),
+            // Voice 6 outputs (channels 15-17)
+            AudioPin("V6 Gate", 15, PinDataType::Gate),
+            AudioPin("V6 Pitch", 16, PinDataType::CV),
+            AudioPin("V6 Vel", 17, PinDataType::CV),
+            // Voice 7 outputs (channels 18-20)
+            AudioPin("V7 Gate", 18, PinDataType::Gate),
+            AudioPin("V7 Pitch", 19, PinDataType::CV),
+            AudioPin("V7 Vel", 20, PinDataType::CV),
+            // Voice 8 outputs (channels 21-23)
+            AudioPin("V8 Gate", 21, PinDataType::Gate),
+            AudioPin("V8 Pitch", 22, PinDataType::CV),
+            AudioPin("V8 Vel", 23, PinDataType::CV),
+            // Global controller outputs (channels 24-26)
+            AudioPin("Mod Wheel", 24, PinDataType::CV),
+            AudioPin("Pitch Bend", 25, PinDataType::CV),
+            AudioPin("Aftertouch", 26, PinDataType::CV)
         },
         {}
     );
-    // Alias to match registry type string ("MIDI CV")
 
     // MIDI Family - New Modules with Correct Pin Types
     {

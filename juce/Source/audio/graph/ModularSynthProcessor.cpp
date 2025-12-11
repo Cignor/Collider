@@ -822,6 +822,15 @@ void ModularSynthProcessor::setStateInformation(const void* data, int sizeInByte
                     if (auto* mp = dynamic_cast<ModuleProcessor*>(node->getProcessor()))
                     {
                         mp->getAPVTS().replaceState(params);
+                        // Ensure AudioDeviceManager is set for modules that need it (e.g., MIDI Player, MIDI Logger)
+                        if (auto* midiPlayer = dynamic_cast<MIDIPlayerModuleProcessor*>(mp))
+                        {
+                            midiPlayer->setAudioDeviceManager(audioDeviceManager);
+                        }
+                        if (auto* midiLogger = dynamic_cast<MidiLoggerModuleProcessor*>(mp))
+                        {
+                            midiLogger->setAudioDeviceManager(audioDeviceManager);
+                        }
                         juce::Logger::writeToLog("[STATE]   Restored parameters.");
                     }
                 }
@@ -1122,7 +1131,18 @@ ModularSynthProcessor::NodeID ModularSynthProcessor::addModule(
         auto node = internalGraph->addNode(
             std::move(processor), {}, juce::AudioProcessorGraph::UpdateKind::none);
         if (auto* mp = dynamic_cast<ModuleProcessor*>(node->getProcessor()))
+        {
             mp->setParent(this);
+            // Pass AudioDeviceManager to modules that need it (e.g., MIDI Player, MIDI Logger for MIDI output)
+            if (auto* midiPlayer = dynamic_cast<MIDIPlayerModuleProcessor*>(mp))
+            {
+                midiPlayer->setAudioDeviceManager(audioDeviceManager);
+            }
+            if (auto* midiLogger = dynamic_cast<MidiLoggerModuleProcessor*>(mp))
+            {
+                midiLogger->setAudioDeviceManager(audioDeviceManager);
+            }
+        }
         modules[(juce::uint32)node->nodeID.uid] = node;
         const juce::uint32 logicalId = nextLogicalId++;
         logicalIdToModule[logicalId] = LogicalModule{node->nodeID, moduleType};
@@ -1200,7 +1220,14 @@ ModularSynthProcessor::NodeID ModularSynthProcessor::addVstModule(
         internalGraph->addNode(std::move(wrapper), {}, juce::AudioProcessorGraph::UpdateKind::none);
 
     if (auto* mp = dynamic_cast<ModuleProcessor*>(node->getProcessor()))
+    {
         mp->setParent(this);
+        // Pass AudioDeviceManager to modules that need it (e.g., MIDI Player for MIDI output)
+        if (auto* midiPlayer = dynamic_cast<MIDIPlayerModuleProcessor*>(mp))
+        {
+            midiPlayer->setAudioDeviceManager(audioDeviceManager);
+        }
+    }
 
     modules[(juce::uint32)node->nodeID.uid] = node;
 
@@ -1327,6 +1354,40 @@ void ModularSynthProcessor::commitChanges()
     if (getSampleRate() > 0 && getBlockSize() > 0)
     {
         internalGraph->prepareToPlay(getSampleRate(), getBlockSize());
+    }
+
+    // ---------------------------------------------------------------------
+    // Ensure MIDI is broadcast to all modules that accept MIDI.
+    // Without explicit MIDI pins, we fan out the graph MIDI input to every
+    // module that can receive MIDI (e.g., VST hosts, MIDI-aware modules).
+    // This prevents a single VST from "stealing" the MIDI stream.
+    // ---------------------------------------------------------------------
+    if (midiInputNode != nullptr)
+    {
+        auto nodes = internalGraph->getNodes();
+        for (auto* node : nodes)
+        {
+            if (node == nullptr)
+                continue;
+
+            // Skip the MIDI input node itself and the graph audio IO nodes
+            if (node->nodeID == midiInputNode->nodeID || node->nodeID == audioInputNode->nodeID ||
+                node->nodeID == audioOutputNode->nodeID)
+                continue;
+
+            auto* proc = node->getProcessor();
+            if (proc != nullptr && proc->acceptsMidi())
+            {
+                const juce::AudioProcessorGraph::Connection midiConn{
+                    {midiInputNode->nodeID, juce::AudioProcessorGraph::midiChannelIndex},
+                    {node->nodeID, juce::AudioProcessorGraph::midiChannelIndex}};
+
+                if (!internalGraph->isConnected(midiConn))
+                {
+                    internalGraph->addConnection(midiConn, juce::AudioProcessorGraph::UpdateKind::none);
+                }
+            }
+        }
     }
 
     // Set logical IDs

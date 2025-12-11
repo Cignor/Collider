@@ -111,8 +111,8 @@ void LimiterModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce
     }
 
     // --- Get base parameter values and relative modes ---
-    const float baseThreshold = thresholdParam->load();
-    const float baseRelease = releaseParam->load();
+    const float baseThreshold = thresholdParam != nullptr ? thresholdParam->load() : 0.0f;
+    const float baseRelease = releaseParam != nullptr ? releaseParam->load() : 10.0f;
     const bool relativeThresholdMode = relativeThresholdModParam && relativeThresholdModParam->load() > 0.5f;
     const bool relativeReleaseMode = relativeReleaseModParam && relativeReleaseModParam->load() > 0.5f;
     
@@ -149,9 +149,15 @@ void LimiterModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce
     limiter.setRelease(finalRelease);
     
     // --- Process the Audio ---
+    // First, create a limited version for the wet signal
     juce::dsp::AudioBlock<float> block(outBus);
     juce::dsp::ProcessContextReplacing<float> context(block);
     limiter.process(context);
+    
+    // Store the limited (wet) signal
+    juce::AudioBuffer<float> wetBuffer(2, numSamples);
+    for (int ch = 0; ch < juce::jmin(2, outBus.getNumChannels()); ++ch)
+        wetBuffer.copyFrom(ch, 0, outBus, ch, 0, numSamples);
     
     // Apply dry/wet mix
     for (int i = 0; i < numSamples; ++i)
@@ -167,9 +173,25 @@ void LimiterModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce
         
         for (int ch = 0; ch < juce::jmin(2, outBus.getNumChannels()); ++ch)
         {
-            const float wetSample = outBus.getSample(ch, i);
+            const float wetSample = wetBuffer.getSample(ch, i);
             const float drySample = dryBuffer.getSample(ch, i);
             outBus.setSample(ch, i, dry * drySample + mix * wetSample);
+        }
+    }
+    
+    // SAFETY: Apply limiting to the final mixed output to ensure it never exceeds threshold
+    // This guarantees safety even when mix < 1.0 (dry signal mixed in)
+    juce::dsp::AudioBlock<float> finalBlock(outBus);
+    juce::dsp::ProcessContextReplacing<float> finalContext(finalBlock);
+    limiter.process(finalContext);
+    
+    // FINAL SAFETY: Hard clip at 0dB as absolute safety net (should never trigger if limiter works correctly)
+    for (int ch = 0; ch < outBus.getNumChannels(); ++ch)
+    {
+        auto* channelData = outBus.getWritePointer(ch);
+        for (int i = 0; i < numSamples; ++i)
+        {
+            channelData[i] = juce::jlimit(-1.0f, 1.0f, channelData[i]);
         }
     }
 

@@ -27,6 +27,7 @@ struct ImGuiContext;
 struct ImGuiIO;
 struct ImNodesContext;
 class MIDIPlayerModuleProcessor;
+class MIDICVModuleProcessor;
 class MultiSequencerModuleProcessor;
 class StrokeSequencerModuleProcessor;
 class AnimationModuleProcessor;
@@ -203,6 +204,11 @@ public:
         juce::uint32               midiPlayerLid,
         MIDIPlayerModuleProcessor* midiPlayer,
         int                        requestType);
+    
+    void handleMIDICVConnectionRequest(
+        juce::uint32 midiCVLid,
+        MIDICVModuleProcessor* midiCV,
+        int requestType);
 
     // StrokeSequencer specific handler
     void handleStrokeSeqBuildDrumKit(

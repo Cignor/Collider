@@ -1,6 +1,7 @@
 #pragma once
 
 #include <juce_audio_processors/juce_audio_processors.h>
+#include <juce_audio_devices/juce_audio_devices.h>
 #include <atomic>
 #include <vector>
 #include <memory>
@@ -185,6 +186,8 @@ public:
     // Plugin format manager for VST support (optional, set by application)
     void setPluginFormatManager(juce::AudioPluginFormatManager* manager) { pluginFormatManager = manager; }
     void setKnownPluginList(juce::KnownPluginList* list) { knownPluginList = list; }
+    // Audio device manager for MIDI output support (optional, set by application)
+    void setAudioDeviceManager(juce::AudioDeviceManager* manager) { audioDeviceManager = manager; }
     // Notification hook (set by UI to receive creation events without coupling)
     void setOnModuleCreated(std::function<void(const juce::String& prettyName)> cb) { onModuleCreated = std::move(cb); }
     
@@ -236,6 +239,7 @@ private:
     // Optional pointers for VST support
     juce::AudioPluginFormatManager* pluginFormatManager { nullptr };
     juce::KnownPluginList* knownPluginList { nullptr };
+    juce::AudioDeviceManager* audioDeviceManager { nullptr };
     
     // Probe scope for instant signal debugging (hidden from user, not saved in presets)
     Node::Ptr probeScopeNode;
