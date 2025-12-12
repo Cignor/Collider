@@ -10,6 +10,14 @@
 class RateModuleProcessor : public ModuleProcessor
 {
 public:
+    // Parameter ID constants
+    static constexpr auto paramIdBaseRate = "baseRate";
+    static constexpr auto paramIdMultiplier = "multiplier";
+    static constexpr auto paramIdRelativeMode = "relative_mode";
+    // Virtual modulation target IDs (no APVTS parameters required)
+    static constexpr auto paramIdBaseRateMod = "baseRate_mod";
+    static constexpr auto paramIdMultiplierMod = "multiplier_mod";
+
     RateModuleProcessor();
     ~RateModuleProcessor() override = default;
 
@@ -35,6 +43,8 @@ public:
         switch (channel)
         {
             case 0: return "Rate Mod";
+            case 1: return "Base Rate Mod";
+            case 2: return "Multiplier Mod";
             default: return juce::String("In ") + juce::String(channel + 1);
         }
     }
@@ -54,6 +64,7 @@ private:
     juce::AudioProcessorValueTreeState apvts;
     std::atomic<float>* baseRateParam { nullptr };
     std::atomic<float>* multiplierParam { nullptr };
+    std::atomic<float>* relativeModeParam { nullptr };
     
     std::atomic<float> lastOutputValue { 0.0f };
 

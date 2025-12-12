@@ -334,79 +334,94 @@ void MIDIPlayerModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
     // --- END OF FIX ---
     
     // === MIDI OUTPUT GENERATION ===
-    if (enableMidiOutputParam != nullptr)
+    // CRITICAL FIX: Always generate MIDI messages for VSTi routing, regardless of external MIDI output setting
+    // The enableMidiOutputParam only controls external device output, not graph routing
+    // Note: sampleRate is already declared at line 110, so we reuse it here
+    const double currentSample = currentPlaybackTime * sampleRate;  // sampleRate declared at line 110
+    
+    const int channelOverride = midiOutputChannelParam ? 
+        midiOutputChannelParam->get() : 0;  // 0 = preserve original channels
+    
+    const bool externalMidiEnabled = (enableMidiOutputParam != nullptr) && enableMidiOutputParam->get();
+    
+    // Debug logging (throttled to avoid spam)
+    static int midiDebugCounter = 0;
+    bool shouldLogMidi = ((midiDebugCounter++ % 1000) == 0);
+    
+    // Process each track
+    for (int trackIdx = 0; trackIdx < (int)notesByTrack.size(); ++trackIdx)
     {
-        const float enableValue = enableMidiOutputParam->get();
-        if (enableValue >= 0.5f)
-        {
-        const double sampleRate = getSampleRate();
-        const double currentSample = currentPlaybackTime * sampleRate;
+        const auto& trackNotes = notesByTrack[trackIdx];
         
-        const int channelOverride = midiOutputChannelParam ? 
-            midiOutputChannelParam->get() : 0;  // 0 = preserve original channels
+        // Determine MIDI channel for this track
+        int midiChannel = (channelOverride > 0) ? channelOverride : ((trackIdx % 16) + 1);
         
-        // Process each track
-        for (int trackIdx = 0; trackIdx < (int)notesByTrack.size(); ++trackIdx)
+        // Check for note onsets and offsets in this buffer
+        for (const auto& note : trackNotes)
         {
-            const auto& trackNotes = notesByTrack[trackIdx];
+            const double noteStartSample = note.startTime * sampleRate;
+            const double noteEndSample = note.endTime * sampleRate;
             
-            // Determine MIDI channel for this track
-            int midiChannel = (channelOverride > 0) ? channelOverride : ((trackIdx % 16) + 1);
-            
-            // Check for note onsets and offsets in this buffer
-            for (const auto& note : trackNotes)
+            // Note On: check if note starts within this buffer
+            if (currentSample <= noteStartSample && 
+                noteStartSample < currentSample + numSamples)
             {
-                const double noteStartSample = note.startTime * sampleRate;
-                const double noteEndSample = note.endTime * sampleRate;
+                int noteNumber = note.noteNumber;
                 
-                // Note On: check if note starts within this buffer
-                if (currentSample <= noteStartSample && 
-                    noteStartSample < currentSample + numSamples)
+                // Apply pitch transpose if needed
+                if (pitchParam && pitchParam->load() != 0.0f)
                 {
-                    int noteNumber = note.noteNumber;
-                    
-                    // Apply pitch transpose if needed
-                    if (pitchParam && pitchParam->load() != 0.0f)
-                    {
-                        int transposeSemitones = (int)std::round(pitchParam->load());
-                        noteNumber = juce::jlimit(0, 127, noteNumber + transposeSemitones);
-                    }
-                    
-                    juce::MidiMessage noteOn = juce::MidiMessage::noteOn(
-                        midiChannel, noteNumber, (juce::uint8)note.velocity);
-                    
-                    // Add to graph MIDI buffer for routing to VSTi and other nodes
-                    const int sampleOffset = (int)(noteStartSample - currentSample);
-                    midiMessages.addEvent(noteOn, sampleOffset);
-                    
-                    // Also send to external MIDI output device
-                    sendMidiToOutput(noteOn);
+                    int transposeSemitones = (int)std::round(pitchParam->load());
+                    noteNumber = juce::jlimit(0, 127, noteNumber + transposeSemitones);
                 }
                 
-                // Note Off: check if note ends within this buffer
-                if (currentSample <= noteEndSample && 
-                    noteEndSample < currentSample + numSamples)
+                juce::MidiMessage noteOn = juce::MidiMessage::noteOn(
+                    midiChannel, noteNumber, (juce::uint8)note.velocity);
+                
+                // ALWAYS add to graph MIDI buffer for routing to VSTi and other nodes
+                const int sampleOffset = (int)(noteStartSample - currentSample);
+                midiMessages.addEvent(noteOn, sampleOffset);
+                
+                if (shouldLogMidi)
                 {
-                    int noteNumber = note.noteNumber;
-                    
-                    // Apply pitch transpose if needed
-                    if (pitchParam && pitchParam->load() != 0.0f)
-                    {
-                        int transposeSemitones = (int)std::round(pitchParam->load());
-                        noteNumber = juce::jlimit(0, 127, noteNumber + transposeSemitones);
-                    }
-                    
-                    juce::MidiMessage noteOff = juce::MidiMessage::noteOff(midiChannel, noteNumber);
-                    
-                    // Add to graph MIDI buffer for routing to VSTi and other nodes
-                    const int sampleOffset = (int)(noteEndSample - currentSample);
-                    midiMessages.addEvent(noteOff, sampleOffset);
-                    
-                    // Also send to external MIDI output device
+                    juce::Logger::writeToLog("[MIDI Player] Generated NoteOn: Ch=" + juce::String(midiChannel) + 
+                                            " Note=" + juce::String(noteNumber) + 
+                                            " Vel=" + juce::String(note.velocity) +
+                                            " (VSTi routing: enabled, External: " + (externalMidiEnabled ? "enabled" : "disabled") + ")");
+                }
+                
+                // Only send to external MIDI output device if enabled
+                if (externalMidiEnabled)
+                {
+                    sendMidiToOutput(noteOn);
+                }
+            }
+            
+            // Note Off: check if note ends within this buffer
+            if (currentSample <= noteEndSample && 
+                noteEndSample < currentSample + numSamples)
+            {
+                int noteNumber = note.noteNumber;
+                
+                // Apply pitch transpose if needed
+                if (pitchParam && pitchParam->load() != 0.0f)
+                {
+                    int transposeSemitones = (int)std::round(pitchParam->load());
+                    noteNumber = juce::jlimit(0, 127, noteNumber + transposeSemitones);
+                }
+                
+                juce::MidiMessage noteOff = juce::MidiMessage::noteOff(midiChannel, noteNumber);
+                
+                // ALWAYS add to graph MIDI buffer for routing to VSTi and other nodes
+                const int sampleOffset = (int)(noteEndSample - currentSample);
+                midiMessages.addEvent(noteOff, sampleOffset);
+                
+                // Only send to external MIDI output device if enabled
+                if (externalMidiEnabled)
+                {
                     sendMidiToOutput(noteOff);
                 }
             }
-        }
         }
     }
     

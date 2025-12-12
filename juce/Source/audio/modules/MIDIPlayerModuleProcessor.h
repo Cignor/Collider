@@ -30,6 +30,9 @@ public:
 
     const juce::String getName() const override { return "midi_player"; }
     
+    // CRITICAL: Report that this module produces MIDI for VSTi routing
+    bool producesMidi() const override { return true; }
+    
     // Auto-connect trigger flags
     std::atomic<bool> autoConnectTriggered { false };
     std::atomic<bool> autoConnectVCOTriggered { false };

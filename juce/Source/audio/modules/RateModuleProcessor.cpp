@@ -6,7 +6,7 @@
 
 RateModuleProcessor::RateModuleProcessor()
     : ModuleProcessor(BusesProperties()
-                        .withInput("Inputs", juce::AudioChannelSet::discreteChannels(3), true) // 0: Rate Mod (audio), 1: Base Rate CV, 2: Multiplier CV
+                        .withInput("Rate Mod", juce::AudioChannelSet::mono(), true)
                         .withOutput("Out", juce::AudioChannelSet::mono(), true)),
       apvts(*this, nullptr, "RateParams", createParameterLayout())
 {
@@ -43,57 +43,15 @@ void RateModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::M
     auto in = getBusBuffer(buffer, true, 0);
     auto out = getBusBuffer(buffer, false, 0);
     
-    // CRITICAL: Copy input data before writing to prevent buffer aliasing
-    juce::AudioBuffer<float> inputCopy;
-    const int numSamples = buffer.getNumSamples();
-    if (in.getNumChannels() > 0)
-    {
-        inputCopy.setSize(1, numSamples, false, false, true);
-        inputCopy.copyFrom(0, 0, in, 0, 0, numSamples);
-    }
-    const float* src = inputCopy.getNumChannels() > 0 ? inputCopy.getReadPointer(0) : nullptr;
+    const float* src = in.getNumChannels() > 0 ? in.getReadPointer(0) : nullptr;
     float* dst = out.getWritePointer(0);
     
-    // Read CV modulation values (if connected)
-    float baseRateCV = 0.0f;
-    float multiplierCV = 0.0f;
-    
-    if (isParamInputConnected("baseRate") && in.getNumChannels() > 1)
-    {
-        const float* baseRateCVPtr = in.getReadPointer(1);
-        baseRateCV = baseRateCVPtr[0]; // Use first sample for CV
-    }
-    
-    if (isParamInputConnected("multiplier") && in.getNumChannels() > 2)
-    {
-        const float* multiplierCVPtr = in.getReadPointer(2);
-        multiplierCV = multiplierCVPtr[0]; // Use first sample for CV
-    }
-    
-    // Get base parameter values
-    float baseRate = baseRateParam->load();
-    float multiplier = multiplierParam->load();
-    
-    // Apply CV modulation if connected
-    if (isParamInputConnected("baseRate"))
-    {
-        // Map CV (0..1) to parameter range (0.1..20.0 Hz)
-        baseRate = juce::jmap(baseRateCV, 0.0f, 1.0f, 0.1f, 20.0f);
-    }
-    
-    if (isParamInputConnected("multiplier"))
-    {
-        // Map CV (0..1) to parameter range (0.1..10.0x)
-        multiplier = juce::jmap(multiplierCV, 0.0f, 1.0f, 0.1f, 10.0f);
-    }
+    const float baseRate = baseRateParam->load();
+    const float multiplier = multiplierParam->load();
     
     float sumOutput = 0.0f;
     
-    // Update live telemetry (once per block, not per sample)
-    setLiveParamValue("baseRate_live", baseRate);
-    setLiveParamValue("multiplier_live", multiplier);
-    
-    for (int i = 0; i < numSamples; ++i)
+    for (int i = 0; i < buffer.getNumSamples(); ++i)
     {
         float modulation = 0.0f;
         if (src != nullptr)
@@ -106,6 +64,12 @@ void RateModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::M
         float finalRate = baseRate * multiplier * (1.0f + modulation);
         finalRate = juce::jlimit(0.01f, 50.0f, finalRate); // Clamp to reasonable range
         
+        // Update telemetry for live UI feedback (throttled to every 64 samples)
+        if ((i & 0x3F) == 0) {
+            setLiveParamValue("baseRate_live", baseRate);
+            setLiveParamValue("multiplier_live", multiplier);
+        }
+        
         // Normalize the rate to 0.0..1.0 for modulation routing
         // Map 0.01..50.0 Hz -> 0.0..1.0
         const float normalizedRate = juce::jlimit (0.0f, 1.0f, (finalRate - 0.01f) / (50.0f - 0.01f));
@@ -113,24 +77,25 @@ void RateModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::M
         sumOutput += finalRate;
     }
     
-    lastOutputValue.store(sumOutput / (float) numSamples);
+    lastOutputValue.store(sumOutput / (float) buffer.getNumSamples());
     
     // Update output values for tooltips
     if (!lastOutputValues.empty() && lastOutputValues[0])
     {
-        lastOutputValues[0]->store(out.getSample(0, numSamples - 1));
+        lastOutputValues[0]->store(out.getSample(0, buffer.getNumSamples() - 1));
     }
 
 #if defined(PRESET_CREATOR_UI)
     // Capture waveforms for visualization
-    if (numSamples > 0)
+    const int nSamps = buffer.getNumSamples();
+    if (nSamps > 0)
     {
         vizInputBuffer.makeCopyOf(in);
         vizOutputBuffer.makeCopyOf(out);
         
         auto captureWaveform = [&](const juce::AudioBuffer<float>& source, std::array<std::atomic<float>, VizData::waveformPoints>& dest)
         {
-            const int samples = juce::jmin(source.getNumSamples(), numSamples);
+            const int samples = juce::jmin(source.getNumSamples(), nSamps);
             if (samples <= 0) return;
             const int stride = juce::jmax(1, samples / VizData::waveformPoints);
             for (int i = 0; i < VizData::waveformPoints; ++i)
@@ -149,7 +114,7 @@ void RateModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::M
         const float rateMax = 50.0f;
         for (int i = 0; i < VizData::waveformPoints; ++i)
         {
-            const int idx = juce::jmin(numSamples - 1, (i * numSamples) / VizData::waveformPoints);
+            const int idx = juce::jmin(nSamps - 1, (i * nSamps) / VizData::waveformPoints);
             float modulation = 0.0f;
             if (src != nullptr)
             {
@@ -162,11 +127,11 @@ void RateModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::M
             vizData.finalRateWaveform[i].store(juce::jlimit(0.0f, 1.0f, normalizedRate));
         }
         
-        // Update live parameter values (already set above, but store for viz)
+        // Update live parameter values
         vizData.currentBaseRate.store(baseRate);
         vizData.currentMultiplier.store(multiplier);
         // Calculate average final rate for display
-        float avgFinalRate = sumOutput / (float)numSamples;
+        float avgFinalRate = sumOutput / (float)nSamps;
         vizData.currentFinalRate.store(avgFinalRate);
     }
 #endif
@@ -339,9 +304,6 @@ float RateModuleProcessor::getLastOutputValue() const
 // Parameter bus contract implementation
 bool RateModuleProcessor::getParamRouting(const juce::String& paramId, int& outBusIndex, int& outChannelIndexInBus) const
 {
-    outBusIndex = 0; // All inputs are on the single input bus
-    
-    if (paramId == "baseRate") { outChannelIndexInBus = 1; return true; } // Channel 1: Base Rate CV
-    if (paramId == "multiplier") { outChannelIndexInBus = 2; return true; } // Channel 2: Multiplier CV
+    if (paramId == "baseRate") { outBusIndex = 1; outChannelIndexInBus = 0; return true; }
     return false;
 }

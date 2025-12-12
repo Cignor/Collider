@@ -65,6 +65,10 @@ public:
     // ModuleProcessor Overrides
     //==============================================================================
     const juce::String getName() const override { return "midi_logger"; }
+    
+    // CRITICAL: Report that this module produces MIDI for VSTi routing
+    bool producesMidi() const override { return true; }
+    
     void               prepareToPlay(double sampleRate, int samplesPerBlock) override;
     void               releaseResources() override;
     void processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midiMessages) override;
