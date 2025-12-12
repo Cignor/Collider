@@ -76,6 +76,8 @@
 #include "../modules/MIDIJogWheelModuleProcessor.h"
 #include "../modules/MIDIPadModuleProcessor.h"
 #include "../modules/MidiLoggerModuleProcessor.h"
+#include "../modules/OSCCVModuleProcessor.h"
+#include "../modules/CVOSCSenderModuleProcessor.h"
 #include "../modules/TempoClockModuleProcessor.h"
 #include "../modules/PhysicsModuleProcessor.h"
 #include "../modules/StrokeSequencerModuleProcessor.h"
@@ -269,6 +271,31 @@ ModularSynthProcessor::MidiActivityState ModularSynthProcessor::getMidiActivityS
     return currentActivity;
 }
 
+void ModularSynthProcessor::processOscWithSourceInfo(
+    const std::vector<OscDeviceManager::OscMessageWithSource>& messages)
+{
+    const juce::ScopedLock lock(oscActivityLock);
+    currentBlockOscMessages = messages;
+
+    // Update activity tracking (no verbose logging - too many messages)
+    currentOscActivity.deviceNames.clear();
+    currentOscActivity.lastAddresses.clear();
+    
+    for (const auto& msg : messages)
+    {
+        currentOscActivity.deviceNames[msg.deviceIndex] = msg.sourceName;
+        currentOscActivity.lastAddresses[msg.deviceIndex] = msg.message.getAddressPattern().toString();
+    }
+    
+    // Messages will be distributed to modules in processBlock()
+}
+
+ModularSynthProcessor::OscActivityState ModularSynthProcessor::getOscActivityState() const
+{
+    const juce::ScopedLock lock(oscActivityLock);
+    return currentOscActivity;
+}
+
 //==============================================================================
 // Audio Processing
 //==============================================================================
@@ -408,6 +435,38 @@ void ModularSynthProcessor::processBlock(
             // --- END OF THREAD-SAFE FIX ---
         }
         // === END MULTI-MIDI DISTRIBUTION ===
+        
+        // === OSC SUPPORT: Distribute OSC messages to modules ===
+        // This happens BEFORE voice management and graph processing
+        // Modules receive source info and can filter by source/address pattern
+        {
+            const juce::ScopedLock lock(oscActivityLock);
+            
+            auto currentProcessors = activeAudioProcessors.load();
+            if (currentProcessors && !currentBlockOscMessages.empty())
+            {
+                // Only log if there are modules to receive (avoid spam when no OSC CV modules exist)
+                static int logCounter = 0;
+                bool shouldLog = (logCounter++ % 1000 == 0) && currentProcessors->size() > 0;
+                
+                if (shouldLog)
+                {
+                    juce::Logger::writeToLog("[ModularSynth] processBlock: Distributing OSC messages to " + juce::String(currentProcessors->size()) + " modules");
+                }
+                
+                for (const auto& modulePtr : *currentProcessors)
+                {
+                    if (modulePtr != nullptr)
+                    {
+                        modulePtr->handleOscSignal(currentBlockOscMessages);
+                    }
+                }
+                
+                // Clear for next block
+                currentBlockOscMessages.clear();
+            }
+        }
+        // === END OSC DISTRIBUTION ===
 
         if (m_voiceManagerEnabled && !m_voices.empty())
         {
@@ -1040,6 +1099,8 @@ static std::map<juce::String, Creator>& getModuleFactory()
         reg("midi_jog_wheel", [] { return std::make_unique<MIDIJogWheelModuleProcessor>(); });
         reg("midi_pads", [] { return std::make_unique<MIDIPadModuleProcessor>(); });
         reg("midi_logger", [] { return std::make_unique<MidiLoggerModuleProcessor>(); });
+        reg("osc_cv", [] { return std::make_unique<OSCCVModuleProcessor>(); });
+        reg("cv_osc_sender", [] { return std::make_unique<CVOSCSenderModuleProcessor>(); });
         reg("tempo_clock", [] { return std::make_unique<TempoClockModuleProcessor>(); });
         reg("physics", [] { return std::make_unique<PhysicsModuleProcessor>(); });
         reg("animation", [] { return std::make_unique<AnimationModuleProcessor>(); });

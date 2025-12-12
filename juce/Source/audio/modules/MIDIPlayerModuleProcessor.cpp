@@ -1148,7 +1148,7 @@ void MIDIPlayerModuleProcessor::drawParametersInNode(float /*itemWidth*/, const 
     
     bool enableMIDI = false;
     if (enableMidiOutputParam != nullptr)
-        enableMIDI = (enableMidiOutputParam->get() >= 0.5f);
+        enableMIDI = enableMidiOutputParam->get();
     if (ImGui::Checkbox("Enable##midi_out", &enableMIDI))
     {
         if (enableMidiOutputParam)

@@ -706,6 +706,8 @@ target_sources(ColliderApp PRIVATE
     Source/audio/AudioEngine.cpp
     Source/audio/MidiDeviceManager.h
     Source/audio/MidiDeviceManager.cpp
+    Source/audio/OscDeviceManager.h
+    Source/audio/OscDeviceManager.cpp
     Source/audio/voices/SampleVoiceProcessor.h
     Source/audio/voices/SampleVoiceProcessor.cpp
     Source/audio/voices/SynthVoiceProcessor.h
@@ -861,6 +863,10 @@ target_sources(ColliderApp PRIVATE
     Source/audio/modules/SnapshotSequencerModuleProcessor.cpp
     Source/audio/modules/MIDICVModuleProcessor.h
     Source/audio/modules/MIDICVModuleProcessor.cpp
+        Source/audio/modules/OSCCVModuleProcessor.h
+        Source/audio/modules/OSCCVModuleProcessor.cpp
+        Source/audio/modules/CVOSCSenderModuleProcessor.h
+        Source/audio/modules/CVOSCSenderModuleProcessor.cpp
     Source/audio/modules/MIDIFadersModuleProcessor.h
     Source/audio/modules/MIDIFadersModuleProcessor.cpp
     Source/audio/modules/MIDIKnobsModuleProcessor.h
@@ -1125,6 +1131,8 @@ target_sources(PresetCreatorApp PRIVATE
     # Your other reused engine modules
     Source/audio/MidiDeviceManager.h
     Source/audio/MidiDeviceManager.cpp
+    Source/audio/OscDeviceManager.h
+    Source/audio/OscDeviceManager.cpp
     Source/audio/graph/ModularSynthProcessor.h
     Source/audio/graph/ModularSynthProcessor.cpp
     Source/audio/modules/ModuleProcessor.h
@@ -1278,6 +1286,10 @@ target_sources(PresetCreatorApp PRIVATE
     Source/audio/modules/SnapshotSequencerModuleProcessor.cpp
     Source/audio/modules/MIDICVModuleProcessor.h
     Source/audio/modules/MIDICVModuleProcessor.cpp
+        Source/audio/modules/OSCCVModuleProcessor.h
+        Source/audio/modules/OSCCVModuleProcessor.cpp
+        Source/audio/modules/CVOSCSenderModuleProcessor.h
+        Source/audio/modules/CVOSCSenderModuleProcessor.cpp
     Source/audio/modules/MIDIFadersModuleProcessor.h
     Source/audio/modules/MIDIFadersModuleProcessor.cpp
     Source/audio/modules/MIDIKnobsModuleProcessor.h
@@ -1440,6 +1452,7 @@ target_link_libraries(PresetCreatorApp PRIVATE
     juce::juce_audio_utils
     juce::juce_audio_formats
     juce::juce_dsp
+    juce::juce_osc
     juce::juce_cryptography
     imgui_impl_juce
     soundtouch
@@ -1757,6 +1770,8 @@ target_sources(PikonRaditszAudioApp PRIVATE
     # Audio Engine Modules (EXCLUDING Video/CV)
     Source/audio/MidiDeviceManager.h
     Source/audio/MidiDeviceManager.cpp
+    Source/audio/OscDeviceManager.h
+    Source/audio/OscDeviceManager.cpp
     Source/audio/graph/ModularSynthProcessor.h
     Source/audio/graph/ModularSynthProcessor.cpp
     Source/audio/modules/ModuleProcessor.h
@@ -1908,6 +1923,10 @@ target_sources(PikonRaditszAudioApp PRIVATE
     Source/audio/modules/SnapshotSequencerModuleProcessor.cpp
     Source/audio/modules/MIDICVModuleProcessor.h
     Source/audio/modules/MIDICVModuleProcessor.cpp
+        Source/audio/modules/OSCCVModuleProcessor.h
+        Source/audio/modules/OSCCVModuleProcessor.cpp
+        Source/audio/modules/CVOSCSenderModuleProcessor.h
+        Source/audio/modules/CVOSCSenderModuleProcessor.cpp
     Source/audio/modules/MIDIFadersModuleProcessor.h
     Source/audio/modules/MIDIFadersModuleProcessor.cpp
     Source/audio/modules/MIDIKnobsModuleProcessor.h
@@ -2015,6 +2034,7 @@ target_link_libraries(PikonRaditszAudioApp PRIVATE
     juce::juce_audio_utils
     juce::juce_audio_formats
     juce::juce_dsp
+    juce::juce_osc
     juce::juce_cryptography
     imgui_impl_juce
     soundtouch

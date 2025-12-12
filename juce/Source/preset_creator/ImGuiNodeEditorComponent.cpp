@@ -1514,6 +1514,12 @@ void ImGuiNodeEditorComponent::renderImGui()
                     showMidiDeviceManager = !showMidiDeviceManager;
                 }
 
+                // OSC Device Manager
+                if (ImGui::MenuItem("OSC Device Manager..."))
+                {
+                    showOscDeviceManager = !showOscDeviceManager;
+                }
+
                 if (ImGui::MenuItem("Help Manager..."))
                 {
                     m_helpManager.open();
@@ -2452,6 +2458,99 @@ void ImGuiNodeEditorComponent::renderImGui()
         }
         // === END OF MULTI-MIDI INDICATOR ===
 
+        // === OSC DEVICE ACTIVITY INDICATOR ===
+        ImGui::SameLine();
+        ImGui::Separator();
+        ImGui::SameLine();
+        
+        // Get OSC device manager from parent component
+        auto* presetCreator = dynamic_cast<PresetCreatorComponent*>(getParentComponent());
+        if (presetCreator && presetCreator->oscDeviceManager && synth != nullptr)
+        {
+            auto& oscMgr = *presetCreator->oscDeviceManager;
+            auto enabledDevices = oscMgr.getEnabledDevices();
+            auto oscActivityState = synth->getOscActivityState();
+            
+            // Check last message times from OscDeviceManager activity info
+            auto activitySnapshot = oscMgr.getActivitySnapshot();
+
+            if (enabledDevices.empty())
+            {
+                // No OSC devices enabled
+                ImGui::PushStyleColor(ImGuiCol_Text, theme.text.disabled);
+                ImGui::Text("OSC: No Devices");
+                ImGui::PopStyleColor();
+            }
+            else
+            {
+                ImGui::Text("OSC:");
+                ImGui::SameLine();
+
+                // Display each enabled OSC device
+                for (const auto& device : enabledDevices)
+                {
+                    ImGui::SameLine();
+
+                    // Check if device has recent activity
+                    bool hasRecentActivity = false;
+                    juce::String lastAddress;
+                    
+                    auto activityIt = activitySnapshot.find(device.deviceIndex);
+                    if (activityIt != activitySnapshot.end())
+                    {
+                        const auto& activity = activityIt->second;
+                        juce::uint64 now = juce::Time::getMillisecondCounter();
+                        juce::uint64 timeSinceMessage = now - activity.lastMessageTime;
+                        hasRecentActivity = (timeSinceMessage < 1000); // Active if message within 1 second
+                        lastAddress = activity.lastAddress;
+                    }
+
+                    // Abbreviated device name (max 12 chars)
+                    juce::String abbrevName = device.name;
+                    if (abbrevName.length() > 12)
+                        abbrevName = abbrevName.substring(0, 12) + "...";
+
+                    // Color: bright green if active, dim gray if inactive but enabled
+                    if (hasRecentActivity)
+                        ImGui::PushStyleColor(ImGuiCol_Text, theme.text.active);
+                    else
+                        ImGui::PushStyleColor(ImGuiCol_Text, theme.text.disabled);
+
+                    ImGui::Text("[%s]", abbrevName.toRawUTF8());
+                    ImGui::PopStyleColor();
+
+                    // Tooltip with full name, port, and last address received
+                    if (ImGui::IsItemHovered())
+                    {
+                        ImGui::BeginTooltip();
+                        ImGui::Text("%s", device.name.toRawUTF8());
+                        ImGui::Text("Port: %d", device.port);
+                        ImGui::Separator();
+
+                        if (hasRecentActivity && lastAddress.isNotEmpty())
+                        {
+                            ImGui::Text("Last Address:");
+                            ImGui::Text("%s", lastAddress.toRawUTF8());
+                        }
+                        else
+                        {
+                            ImGui::TextDisabled("Waiting for messages...");
+                            ImGui::Text("Send OSC to: localhost:%d", device.port);
+                        }
+
+                        ImGui::EndTooltip();
+                    }
+                }
+            }
+        }
+        else
+        {
+            ImGui::PushStyleColor(ImGuiCol_Text, theme.text.disabled);
+            ImGui::Text("OSC: ---");
+            ImGui::PopStyleColor();
+        }
+        // === END OF OSC INDICATOR ===
+
         // --- ZOOM DISPLAY (menu bar, right side) ---
 #if defined(IMNODES_ZOOM_ENABLED)
         if (ImNodes::GetCurrentContext())
@@ -3352,6 +3451,8 @@ void ImGuiNodeEditorComponent::renderImGui()
         {
             ThemeText("Players / Editors:", theme.text.section_header);
             addModuleButton("MIDI CV", "midi_cv");
+            addModuleButton("OSC CV", "osc_cv");
+            addModuleButton("CV -> OSC", "cv_osc_sender");
             addModuleButton("MIDI Player", "midi_player");
             addModuleButton("MIDI Logger", "midi_logger");
             ImGui::Spacing();
@@ -5528,6 +5629,16 @@ void ImGuiNodeEditorComponent::renderImGui()
             ImGui::Separator();
 
             // Modulation Path
+            if (ImGui::MenuItem("MIDI CV"))
+            {
+                insertNodeBetween("midi_cv");
+                ImGui::CloseCurrentPopup();
+            }
+            if (ImGui::MenuItem("OSC CV"))
+            {
+                insertNodeBetween("osc_cv");
+                ImGui::CloseCurrentPopup();
+            }
             if (ImGui::MenuItem("Attenuverter"))
             {
                 insertNodeBetween("attenuverter");
@@ -7213,6 +7324,10 @@ void ImGuiNodeEditorComponent::renderImGui()
                     {
                         if (ImGui::MenuItem("MIDI CV"))
                             addAtMouse("midi_cv");
+                        if (ImGui::MenuItem("OSC CV"))
+                            addAtMouse("osc_cv");
+                        if (ImGui::MenuItem("CV -> OSC"))
+                            addAtMouse("cv_osc_sender");
                         if (ImGui::MenuItem("MIDI Player"))
                             addAtMouse("midi_player");
                         if (ImGui::MenuItem("MIDI Logger"))
@@ -8086,6 +8201,180 @@ void ImGuiNodeEditorComponent::renderImGui()
             else
             {
                 ImGui::TextDisabled("MIDI Manager not available");
+            }
+        }
+        ImGui::End();
+    }
+
+    // === OSC DEVICE MANAGER WINDOW ===
+    if (showOscDeviceManager)
+    {
+        if (ImGui::Begin(
+                "OSC Device Manager", &showOscDeviceManager, ImGuiWindowFlags_AlwaysAutoResize))
+        {
+            ThemeText("OSC Input Devices", theme.text.section_header);
+            ImGui::Separator();
+
+            // Access OscDeviceManager from PresetCreatorComponent
+            auto* presetCreator = dynamic_cast<PresetCreatorComponent*>(getParentComponent());
+            if (presetCreator && presetCreator->oscDeviceManager)
+            {
+                auto&       oscMgr = *presetCreator->oscDeviceManager;
+                const auto& devices = oscMgr.getDevices();
+
+                if (devices.empty())
+                {
+                    ImGui::TextDisabled("No OSC devices configured");
+                    ImGui::Spacing();
+                    ImGui::TextDisabled("Click 'Add Device' to create a new OSC receiver");
+                }
+                else
+                {
+                    ImGui::Text("Configured %d device(s):", (int)devices.size());
+                    ImGui::Spacing();
+
+                    // Display each device
+                    for (const auto& device : devices)
+                    {
+                        ImGui::PushID(device.identifier.toRawUTF8());
+
+                        // Checkbox to enable/disable device
+                        bool enabled = device.enabled;
+                        if (ImGui::Checkbox("##enabled", &enabled))
+                        {
+                            if (enabled)
+                                oscMgr.enableDevice(device.identifier);
+                            else
+                                oscMgr.disableDevice(device.identifier);
+                        }
+
+                        ImGui::SameLine();
+
+                        // Device name
+                        ImGui::Text("%s", device.name.toRawUTF8());
+
+                        ImGui::SameLine();
+                        ImGui::PushStyleColor(ImGuiCol_Text, theme.text.disabled);
+                        ImGui::Text("(%s : %d)", "localhost", device.port);
+                        ImGui::PopStyleColor();
+
+                        // Activity indicator
+                        auto activity = oscMgr.getDeviceActivity(device.identifier);
+                        if (activity.lastMessageTime > 0)
+                        {
+                            ImGui::SameLine();
+                            float timeSinceMessage =
+                                (juce::Time::getMillisecondCounter() - activity.lastMessageTime) /
+                                1000.0f;
+                            if (timeSinceMessage < 1.0f)
+                            {
+                                ImGui::PushStyleColor(ImGuiCol_Text, theme.text.active);
+                                ImGui::Text("ACTIVE");
+                                ImGui::PopStyleColor();
+                                
+                                // Show last address received
+                                if (!activity.lastAddress.isEmpty())
+                                {
+                                    ImGui::SameLine();
+                                    ImGui::PushStyleColor(ImGuiCol_Text, theme.text.disabled);
+                                    ImGui::Text(": %s", activity.lastAddress.toRawUTF8());
+                                    ImGui::PopStyleColor();
+                                }
+                            }
+                            else
+                            {
+                                ImGui::PushStyleColor(ImGuiCol_Text, theme.text.disabled);
+                                ImGui::Text("idle");
+                                ImGui::PopStyleColor();
+                            }
+                        }
+
+                        // Remove button
+                        ImGui::SameLine();
+                        ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.6f, 0.2f, 0.2f, 1.0f));
+                        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.8f, 0.3f, 0.3f, 1.0f));
+                        if (ImGui::Button("Remove##remove"))
+                        {
+                            oscMgr.removeDevice(device.identifier);
+                        }
+                        ImGui::PopStyleColor(2);
+
+                        ImGui::PopID();
+                    }
+                }
+
+                ImGui::Spacing();
+                ImGui::Separator();
+                ImGui::Spacing();
+
+                // Add Device button (opens a simple dialog)
+                static bool showAddDeviceDialog = false;
+                static char deviceNameBuf[256] = "OSC Device";
+                static int devicePort = 57120;
+
+                if (ImGui::Button("Add Device..."))
+                {
+                    showAddDeviceDialog = true;
+                    juce::String("OSC Device").copyToUTF8(deviceNameBuf, 256);
+                    devicePort = 57120;
+                }
+
+                // Add Device Dialog
+                if (showAddDeviceDialog)
+                {
+                    ImGui::OpenPopup("Add OSC Device");
+                }
+
+                if (ImGui::BeginPopupModal("Add OSC Device", &showAddDeviceDialog, ImGuiWindowFlags_AlwaysAutoResize))
+                {
+                    ImGui::Text("Add New OSC Device");
+                    ImGui::Separator();
+                    ImGui::Spacing();
+
+                    ImGui::Text("Device Name:");
+                    ImGui::InputText("##name", deviceNameBuf, 256);
+                    
+                    ImGui::Spacing();
+                    ImGui::Text("Port:");
+                    ImGui::InputInt("##port", &devicePort, 1, 100);
+                    devicePort = juce::jlimit(1024, 65535, devicePort); // Valid port range
+
+                    ImGui::Spacing();
+                    ImGui::Separator();
+                    ImGui::Spacing();
+
+                    if (ImGui::Button("Add", ImVec2(120, 0)))
+                    {
+                        juce::String name(deviceNameBuf);
+                        if (name.isEmpty())
+                            name = "OSC Device";
+                        
+                        juce::String identifier = oscMgr.addDevice(name, devicePort);
+                        if (identifier.isNotEmpty())
+                        {
+                            // Auto-enable the new device
+                            oscMgr.enableDevice(identifier);
+                            showAddDeviceDialog = false;
+                        }
+                        else
+                        {
+                            // Port might be in use - show error (could be improved with a proper error dialog)
+                            juce::Logger::writeToLog("[OSC] Failed to add device - port " + juce::String(devicePort) + " may be in use");
+                        }
+                    }
+
+                    ImGui::SameLine();
+                    if (ImGui::Button("Cancel", ImVec2(120, 0)))
+                    {
+                        showAddDeviceDialog = false;
+                    }
+
+                    ImGui::EndPopup();
+                }
+            }
+            else
+            {
+                ImGui::TextDisabled("OSC Manager not available");
             }
         }
         ImGui::End();
@@ -12222,6 +12511,10 @@ void ImGuiNodeEditorComponent::drawInsertNodeOnLinkPopup()
             {"Logic", "logic"},
             {"Reroute", "reroute"},
             {"CV Mixer", "cv_mixer"},
+            {"MIDI CV", "midi_cv"},
+            {"OSC CV", "osc_cv"},
+            {"CV OSC", "cv_osc_sender"},
+            {"CV -> OSC", "cv_osc_sender"},
             {"PanVol", "panvol"},
             {"Sequential Switch", "sequential_switch"},
             // Modulators
@@ -14036,7 +14329,7 @@ ImGuiNodeEditorComponent::ModuleCategory ImGuiNodeEditorComponent::getModuleCate
         return ModuleCategory::Seq;
 
     // --- 6. MIDI (Vibrant Purple) ---
-    if (lower.contains("midi"))
+    if (lower.contains("midi") || lower.contains("osc"))
         return ModuleCategory::MIDI;
 
     // --- 7. ANALYSIS (Purple) ---
@@ -14108,6 +14401,9 @@ std::map<juce::String, std::pair<const char*, const char*>> ImGuiNodeEditorCompo
          {"chord_arp", "Harmony brain that generates chords and arpeggios from CV inputs"}},
         {"MIDI Player", {"midi_player", "Plays MIDI files"}},
         {"MIDI CV", {"midi_cv", "Converts MIDI Note/CC messages to CV signals. (Monophonic)"}},
+        {"OSC CV", {"osc_cv", "Converts OSC (Open Sound Control) messages to CV/Gate signals"}},
+        {"CV OSC", {"cv_osc_sender", "Converts CV/Audio/Gate signals to OSC messages. Send internal signals over the network with configurable addresses."}},
+        {"CV -> OSC", {"cv_osc_sender", "Converts CV/Audio/Gate signals to OSC messages. Send internal signals over the network with configurable addresses."}},
         {"MIDI Faders", {"midi_faders", "Up to 16 MIDI faders with CC learning"}},
         {"MIDI Knobs", {"midi_knobs", "Up to 16 MIDI knobs/rotary encoders with CC learning"}},
         {"MIDI Buttons", {"midi_buttons", "Up to 32 MIDI buttons with Gate/Toggle/Trigger modes"}},

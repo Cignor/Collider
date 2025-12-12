@@ -81,6 +81,10 @@ PresetCreatorComponent::PresetCreatorComponent(
     // --- MULTI-MIDI DEVICE SUPPORT ---
     // Initialize multi-device MIDI manager
     midiDeviceManager = std::make_unique<MidiDeviceManager>(deviceManager);
+    
+    // --- OSC SUPPORT ---
+    // Initialize OSC device manager
+    oscDeviceManager = std::make_unique<OscDeviceManager>();
     midiDeviceManager->scanDevices();
     midiDeviceManager->enableAllDevices(); // Enable all MIDI devices by default
     juce::Logger::writeToLog("[MIDI] Multi-device manager initialized");
@@ -695,6 +699,20 @@ void PresetCreatorComponent::timerCallback()
             synth->processMidiWithDeviceInfo(convertedMessages);
         }
     }
+    
+        // OSC SUPPORT: Transfer OSC messages from OscDeviceManager to ModularSynthProcessor
+        if (oscDeviceManager && synth)
+        {
+            std::vector<OscDeviceManager::OscMessageWithSource> oscMessages;
+            oscDeviceManager->swapMessageBuffer(oscMessages);
+            
+            if (!oscMessages.empty())
+            {
+                // Removed verbose logging - messages are being transferred successfully
+                // Pass directly to synth (type is already OscDeviceManager::OscMessageWithSource)
+                synth->processOscWithSourceInfo(oscMessages);
+            }
+        }
 
     // Check for MIDI activity from the synth
     if (synth != nullptr && synth->hasMidiActivity())

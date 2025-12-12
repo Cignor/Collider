@@ -16,6 +16,8 @@ void populateModuleDescriptions()
     descriptions["multi_sequencer"]     = "Advanced sequencer with parallel per-step outputs.";
     descriptions["midi_player"]         = "Plays MIDI files and outputs CV/Gate for each track.";
     descriptions["midi_cv"]             = "Converts MIDI Note/CC messages to CV signals. 8-voice polyphonic with voice stealing. Compatible with MidiLogger for recording/export.";
+    descriptions["osc_cv"]              = "Converts OSC (Open Sound Control) messages to CV/Gate signals. Supports address pattern matching and source filtering.";
+    descriptions["cv_osc_sender"]       = "Converts CV/Audio/Gate signals to OSC messages. Send internal signals over the network with configurable addresses.";
     descriptions["midi_control_center"] = "A powerful MIDI learn interface to map any MIDI CC to CV/Gate outputs.";
     descriptions["midi_faders"]         = "1-16 MIDI-learnable faders with customizable output ranges.";
     descriptions["midi_knobs"]          = "1-16 MIDI-learnable knobs with customizable output ranges.";
@@ -1056,6 +1058,22 @@ db["random"] = ModulePinInfo(
             ModPin("Range Mode", "rangeMode_mod", PinDataType::CV),
             ModPin("Voices",     "numVoices_mod", PinDataType::CV)
         }
+    );
+
+    // OSC CV - Dynamic OSC to CV converter (outputs are dynamic based on mapped addresses)
+    db["osc_cv"] = ModulePinInfo(
+        NodeWidth::Big, // Big width to accommodate monitor addresses section
+        {}, // No inputs - receives OSC messages via handleOscSignal
+        {}, // Outputs are dynamic - generated via getDynamicOutputPins()
+        {}
+    );
+    
+    // CV OSC Sender - Dynamic CV to OSC converter (inputs are dynamic based on mappings)
+    db["cv_osc_sender"] = ModulePinInfo(
+        NodeWidth::ExtraWide, // Extra wide for large input mappings list
+        {}, // Inputs are dynamic - generated via getDynamicInputPins()
+        {}, // No outputs - sends OSC messages
+        {}
     );
 
     // MIDI CV - Polyphonic 8-voice converter

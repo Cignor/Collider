@@ -7,6 +7,9 @@
 #include <unordered_map>
 #include <atomic>
 
+// OSC support - include full definition for nested type in virtual function signature
+#include "../OscDeviceManager.h"
+
 #if defined(PRESET_CREATOR_UI)
 #include <imgui.h>
 #include <cmath>
@@ -108,6 +111,11 @@ struct MidiMessageWithDevice {
     juce::String deviceName;
     int deviceIndex = -1;
 };
+
+// <<< OSC SUPPORT >>>
+// OSC message with source information (defined in OscDeviceManager.h)
+// Cannot use type alias here because OscDeviceManager is forward-declared
+// Files using this must include OscDeviceManager.h and use OscDeviceManager::OscMessageWithSource
 
 // <<< ALL PIN-RELATED DEFINITIONS ARE NOW CENTRALIZED HERE >>>
 
@@ -458,6 +466,32 @@ public:
     {
         juce::ignoreUnused(midiMessages);
         // Default: do nothing. MIDI-aware modules will override this method.
+    }
+    
+    /**
+        OSC signal processing (NETWORK-BASED CONTROL)
+        
+        This method is called by ModularSynthProcessor BEFORE the standard graph processing
+        begins. It provides OSC modules with network-originated OSC messages that include
+        source information (identifier, name, index).
+        
+        OSC modules should override this method to:
+        - Filter messages by source (e.g., only respond to a specific OSC device)
+        - Filter messages by OSC address pattern (e.g., "/cv/pitch", "/synth/note/on")
+        - Update internal state based on filtered OSC input
+        
+        The regular processBlock() can then use this updated state to generate CV outputs.
+        
+        @param oscMessages A vector of OSC messages with source information
+        
+        Default implementation: Does nothing (opt-in for OSC modules only)
+        
+        @see OscMessageWithSource
+    */
+    virtual void handleOscSignal(const std::vector<OscDeviceManager::OscMessageWithSource>& oscMessages)
+    {
+        juce::ignoreUnused(oscMessages);
+        // Default: do nothing. OSC-aware modules will override this method.
     }
 
 public:

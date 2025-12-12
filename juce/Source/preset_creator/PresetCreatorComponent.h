@@ -6,6 +6,7 @@
 #include <juce_audio_utils/juce_audio_utils.h>
 #include "../audio/graph/ModularSynthProcessor.h"
 #include "../audio/MidiDeviceManager.h"
+#include "../audio/OscDeviceManager.h"
 #include "../updater/UpdateManager.h"
 
 class PresetCreatorComponent : public juce::Component,
@@ -39,6 +40,9 @@ public:
 
     // Multi-MIDI device manager (public for access from ImGuiNodeEditorComponent)
     std::unique_ptr<MidiDeviceManager> midiDeviceManager;
+    
+    // OSC device manager (public for access from ImGuiNodeEditorComponent)
+    std::unique_ptr<OscDeviceManager> oscDeviceManager;
 
     // Auto-updater manager
     std::unique_ptr<Updater::UpdateManager> updateManager;

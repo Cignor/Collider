@@ -7,6 +7,7 @@
 #include <memory>
 #include "../modules/ModuleProcessor.h"
 #include "../modules/InputDebugModuleProcessor.h"
+#include "../OscDeviceManager.h"
 
 // Forward declaration
 class ScopeModuleProcessor;
@@ -143,6 +144,35 @@ public:
      */
     MidiActivityState getMidiActivityState() const;
     
+    /**
+     * @brief Process OSC messages with source information
+     * 
+     * This method receives OSC messages with source information and
+     * distributes them to all modules via handleOscSignal().
+     * Should be called from the message thread (timer callback in PresetCreatorComponent).
+     * 
+     * @param messages Vector of OSC messages with source information (OscDeviceManager::OscMessageWithSource)
+     */
+    void processOscWithSourceInfo(const std::vector<OscDeviceManager::OscMessageWithSource>& messages);
+    
+    /**
+     * @brief OSC activity state per device
+     */
+    struct OscActivityState {
+        std::map<int, juce::String> deviceNames;        // deviceIndex -> name
+        std::map<int, juce::String> lastAddresses;       // deviceIndex -> last OSC address received
+    };
+    
+    /**
+     * @brief Get snapshot of current OSC activity
+     * 
+     * Used by UI for visualization (top bar indicator).
+     * Thread-safe.
+     * 
+     * @return OscActivityState structure
+     */
+    OscActivityState getOscActivityState() const;
+    
     // === VOICE MANAGEMENT FOR POLYPHONY ===
     struct Voice {
         bool isActive = false;
@@ -214,6 +244,11 @@ private:
     std::vector<MidiMessageWithDevice> currentBlockMidiMessages;
     mutable juce::CriticalSection midiActivityLock;
     MidiActivityState currentActivity;
+    
+    // OSC support (mirrors MIDI pattern)
+    std::vector<OscDeviceManager::OscMessageWithSource> currentBlockOscMessages;
+    mutable juce::CriticalSection oscActivityLock;
+    OscActivityState currentOscActivity;
 
     // The APVTS that will expose proxy parameters to the host/AudioEngine
     juce::AudioProcessorValueTreeState apvts;

@@ -607,6 +607,7 @@ public:
     juce::String         logViewerContent;
     void                 refreshLogViewerContent();
     bool                 showMidiDeviceManager{false};
+    bool                 showOscDeviceManager{false};
     bool                 showAboutDialog{false};
     ThemeEditorComponent themeEditor{this};
     VoiceDownloadDialog  voiceDownloadDialog;
