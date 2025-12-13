@@ -32,15 +32,41 @@ void ComparatorModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
 
 #if defined(PRESET_CREATOR_UI)
 void ComparatorModuleProcessor::drawParametersInNode(float itemWidth,
-                                                    const std::function<bool(const juce::String& /*paramId*/)>&,
+                                                    const std::function<bool(const juce::String& paramId)>& isParamModulated,
                                                     const std::function<void()>& onModificationEnded)
 {
-    float t = thresholdParam->load();
+    auto& ap = getAPVTS();
+    
+    // Check if threshold is modulated
+    bool isThresholdModulated = isParamModulated("threshold");
+    
+    // Get current value (live if modulated, otherwise parameter value)
+    float threshold = isThresholdModulated ? 
+        (thresholdParam ? thresholdParam->load() : 0.5f) : // If modulated, use live value (for now just use param)
+        (thresholdParam ? thresholdParam->load() : 0.5f);
+    
     ImGui::PushItemWidth(itemWidth);
-    if (ImGui::SliderFloat("Threshold", &t, 0.0f, 1.0f))
-        *thresholdParam = t;
-    if (ImGui::IsItemDeactivatedAfterEdit())
+    
+    // Disable slider if modulated
+    if (isThresholdModulated) ImGui::BeginDisabled();
+    
+    if (ImGui::SliderFloat("Threshold", &threshold, 0.0f, 1.0f))
+    {
+        if (!isThresholdModulated)
+        {
+            if (auto* p = dynamic_cast<juce::AudioParameterFloat*>(ap.getParameter("threshold")))
+                *p = threshold;
+        }
+    }
+    
+    // Add scroll wheel support when not modulated
+    if (!isThresholdModulated) adjustParamOnWheel(ap.getParameter("threshold"), "threshold", threshold);
+    
+    if (ImGui::IsItemDeactivatedAfterEdit() && !isThresholdModulated)
         onModificationEnded();
+    
+    if (isThresholdModulated) ImGui::EndDisabled();
+    
     ImGui::PopItemWidth();
 }
 

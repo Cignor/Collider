@@ -10,6 +10,11 @@ void populateModuleDescriptions()
     // Sources
     descriptions["audio_input"]         = "Brings hardware audio into the patch.";
     descriptions["vco"]                 = "A standard Voltage-Controlled Oscillator.";
+    descriptions["stk_string"]           = "Physical modeling string synthesizer (guitar, violin, cello, sitar, banjo)";
+    descriptions["stk_wind"]             = "Physical modeling wind instruments (flute, clarinet, saxophone, brass)";
+    descriptions["stk_percussion"]       = "Modal synthesis percussion (marimba, cymbal, shakers, etc.)";
+    descriptions["stk_plucked"]          = "Karplus-Strong plucked string synthesis";
+    descriptions["essentia_onset_detector"] = "Detects note onsets (attacks) in audio, outputs gate triggers and velocity";
     descriptions["polyvco"]             = "A multi-voice oscillator bank for polyphony.";
     descriptions["noise"]               = "Generates white, pink, or brown noise.";
     descriptions["sequencer"]           = "A classic 16-step CV and Gate sequencer.";
@@ -116,17 +121,65 @@ void populatePinDatabase()
     if (!db.empty()) return; // Only run once
 
     // --- Sources ---
-    db["audio_input"] = ModulePinInfo(
-        NodeWidth::Small,
-        {},
-        { AudioPin("Out 1", 0, PinDataType::Audio), AudioPin("Out 2", 1, PinDataType::Audio),
-          AudioPin("Gate", 16, PinDataType::Gate), AudioPin("Trigger", 17, PinDataType::Gate), AudioPin("EOP", 18, PinDataType::Gate) },
-        {}
-    );
+    // Audio Input: Up to 16 audio outputs (dynamically shown based on channel count) + 3 CV outputs
+    {
+        ModulePinInfo audioInputPins(NodeWidth::Small, {}, {}, {});
+        // Add all 16 possible audio outputs
+        for (int i = 0; i < 16; ++i)
+            audioInputPins.audioOuts.emplace_back("Out " + juce::String(i + 1), i, PinDataType::Audio);
+        // Add CV outputs (Gate, Trigger, EOP) at channels 16, 17, 18
+        audioInputPins.audioOuts.emplace_back("Gate", 16, PinDataType::Gate);
+        audioInputPins.audioOuts.emplace_back("Trigger", 17, PinDataType::Gate);
+        audioInputPins.audioOuts.emplace_back("EOP", 18, PinDataType::Gate);
+        db["audio_input"] = audioInputPins;
+    }
     db["vco"] = ModulePinInfo(
         NodeWidth::Small,
         { AudioPin("Frequency", 0, PinDataType::CV), AudioPin("Waveform", 1, PinDataType::CV), AudioPin("Gate", 2, PinDataType::Gate) },
         { AudioPin("Out", 0, PinDataType::Audio) },
+        {}
+    );
+    db["stk_string"] = ModulePinInfo(
+        NodeWidth::Medium,
+        { AudioPin("Frequency", 0, PinDataType::CV), AudioPin("Pluck/Bow", 1, PinDataType::Gate), AudioPin("Velocity", 2, PinDataType::CV),
+          AudioPin("Damping", 3, PinDataType::CV), AudioPin("Pickup Pos", 4, PinDataType::CV) },
+        { AudioPin("Out", 0, PinDataType::Audio) },
+        {}
+    );
+    db["stk_wind"] = ModulePinInfo(
+        NodeWidth::Medium,
+        { AudioPin("Freq Mod", 0, PinDataType::CV), AudioPin("Gate", 1, PinDataType::Gate), AudioPin("Breath", 2, PinDataType::CV),
+          AudioPin("Vibrato", 3, PinDataType::CV), AudioPin("Vibrato Rate", 4, PinDataType::CV),
+          AudioPin("Reed Stiffness", 5, PinDataType::CV), AudioPin("Jet Delay", 6, PinDataType::CV),
+          AudioPin("Lip Tension", 7, PinDataType::CV) },
+        { AudioPin("Out", 0, PinDataType::Audio) },
+        {}
+    );
+    db["stk_percussion"] = ModulePinInfo(
+        NodeWidth::Medium,
+        { AudioPin("Freq Mod", 0, PinDataType::CV), AudioPin("Strike", 1, PinDataType::Gate), AudioPin("Velocity", 2, PinDataType::CV),
+          AudioPin("Stick Hardness", 3, PinDataType::CV), AudioPin("Strike Position", 4, PinDataType::CV),
+          AudioPin("Decay", 5, PinDataType::CV), AudioPin("Resonance", 6, PinDataType::CV) },
+        { AudioPin("Out", 0, PinDataType::Audio) },
+        {}
+    );
+    db["stk_plucked"] = ModulePinInfo(
+        NodeWidth::Medium,
+        { AudioPin("Freq Mod", 0, PinDataType::CV), AudioPin("Gate", 1, PinDataType::Gate), AudioPin("Damping", 2, PinDataType::CV),
+          AudioPin("Velocity", 3, PinDataType::CV) },
+        { AudioPin("Out", 0, PinDataType::Audio) },
+        {}
+    );
+    db["essentia_onset_detector"] = ModulePinInfo(
+        NodeWidth::Medium,
+        { AudioPin("Audio In", 0, PinDataType::Audio) },
+        { AudioPin("Onset", 0, PinDataType::Gate), AudioPin("Velocity", 1, PinDataType::CV), AudioPin("Confidence", 2, PinDataType::CV) },
+        {}
+    );
+    db["essentia_pitch_tracker"] = ModulePinInfo(
+        NodeWidth::Medium,
+        { AudioPin("Audio In", 0, PinDataType::Audio), AudioPin("Min Freq Mod", 1, PinDataType::CV), AudioPin("Max Freq Mod", 2, PinDataType::CV) },
+        { AudioPin("Pitch CV", 0, PinDataType::CV), AudioPin("Confidence", 1, PinDataType::CV) },
         {}
     );
     db["noise"] = ModulePinInfo(

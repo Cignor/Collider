@@ -65,6 +65,169 @@ target_include_directories(soundtouch PUBLIC
     ${CMAKE_SOURCE_DIR}/../soundtouch/source/SoundTouch
 )
 
+# ==============================================================================
+# STK (Synthesis Toolkit) - Physical Modeling Synthesis
+# ==============================================================================
+set(STK_SOURCE_DIR "${CMAKE_SOURCE_DIR}/../vendor/stk" CACHE PATH "Path to STK source")
+
+# Force recheck by unsetting STK_FOUND first (in case it was cached from a previous run)
+unset(STK_FOUND CACHE)
+
+# Check if STK header exists
+if(NOT EXISTS "${STK_SOURCE_DIR}/include/Stk.h")
+    message(WARNING "STK not found at ${STK_SOURCE_DIR}/include/Stk.h. STK modules will be disabled.")
+    set(STK_FOUND FALSE CACHE BOOL "STK library found")
+else()
+    message(STATUS "✓ STK found at ${STK_SOURCE_DIR}")
+    set(STK_FOUND TRUE CACHE BOOL "STK library found")
+    
+    # STK requires RAWWAVES path for some instruments
+    # Set to vendor/stk/rawwaves/ if it exists, or disable rawwaves-dependent instruments
+    set(STK_RAWWAVES_PATH "${STK_SOURCE_DIR}/rawwaves" CACHE PATH "Path to STK rawwaves")
+    
+    # Log STK paths that will be copied (BEFORE compilation)
+    message(STATUS "  STK Source Directory: ${STK_SOURCE_DIR}")
+    if(EXISTS "${STK_SOURCE_DIR}/rawwaves")
+        message(STATUS "  STK rawwaves Source: ${STK_SOURCE_DIR}/rawwaves (will be copied to output/rawwaves)")
+    else()
+        message(WARNING "  STK rawwaves not found at ${STK_SOURCE_DIR}/rawwaves")
+    endif()
+    
+    # Create STK library target
+    add_library(stk STATIC
+        # Core STK
+        ${STK_SOURCE_DIR}/src/Stk.cpp
+        # String Instruments
+        ${STK_SOURCE_DIR}/src/Plucked.cpp
+        ${STK_SOURCE_DIR}/src/Bowed.cpp
+        ${STK_SOURCE_DIR}/src/Sitar.cpp
+        ${STK_SOURCE_DIR}/src/Mandolin.cpp
+        # Wind Instruments
+        ${STK_SOURCE_DIR}/src/Flute.cpp
+        ${STK_SOURCE_DIR}/src/Clarinet.cpp
+        ${STK_SOURCE_DIR}/src/Saxofony.cpp
+        ${STK_SOURCE_DIR}/src/Brass.cpp
+        # Percussion Instruments
+        ${STK_SOURCE_DIR}/src/ModalBar.cpp
+        ${STK_SOURCE_DIR}/src/Modal.cpp
+        ${STK_SOURCE_DIR}/src/BandedWG.cpp
+        ${STK_SOURCE_DIR}/src/Shakers.cpp
+        # Utility classes required by instruments
+        ${STK_SOURCE_DIR}/src/DelayA.cpp
+        ${STK_SOURCE_DIR}/src/DelayL.cpp
+        ${STK_SOURCE_DIR}/src/OneZero.cpp
+        ${STK_SOURCE_DIR}/src/OnePole.cpp
+        ${STK_SOURCE_DIR}/src/Noise.cpp
+        ${STK_SOURCE_DIR}/src/BiQuad.cpp
+        ${STK_SOURCE_DIR}/src/SineWave.cpp
+        ${STK_SOURCE_DIR}/src/ADSR.cpp
+        ${STK_SOURCE_DIR}/src/Envelope.cpp
+        ${STK_SOURCE_DIR}/src/PoleZero.cpp
+        # File I/O classes required by ModalBar and other instruments
+        ${STK_SOURCE_DIR}/src/FileRead.cpp
+        ${STK_SOURCE_DIR}/src/FileLoop.cpp
+        ${STK_SOURCE_DIR}/src/FileWvIn.cpp
+    )
+    
+    target_include_directories(stk PUBLIC
+        ${STK_SOURCE_DIR}/include
+    )
+    
+    # STK may need platform-specific defines
+    if(WIN32)
+        target_compile_definitions(stk PRIVATE
+            __WINDOWS_DS__
+            WIN32
+            _USE_MATH_DEFINES  # Required for M_SQRT1_2, M_PI, etc. on Windows
+        )
+    endif()
+    
+    # Link against system audio libraries if needed
+    if(UNIX AND NOT APPLE)
+        target_link_libraries(stk PRIVATE asound)
+    endif()
+endif()
+
+# ==============================================================================
+# Essentia - Music Information Retrieval and Audio Analysis
+# ==============================================================================
+set(ESSENTIA_DIR "${CMAKE_SOURCE_DIR}/../vendor/essentia-2.1_beta5" CACHE PATH "Path to Essentia installation")
+
+if(NOT EXISTS "${ESSENTIA_DIR}/src/essentia/essentia.h")
+    message(WARNING "Essentia not found at ${ESSENTIA_DIR}. Essentia modules will be disabled.")
+    unset(ESSENTIA_FOUND CACHE)
+    set(ESSENTIA_FOUND FALSE CACHE BOOL "Essentia library found" FORCE)
+else()
+    message(STATUS "✓ Essentia found at ${ESSENTIA_DIR}")
+    unset(ESSENTIA_FOUND CACHE)
+    set(ESSENTIA_FOUND TRUE CACHE BOOL "Essentia library found" FORCE)
+    
+    # --------------------------------------------------------------------------
+    # Essentia Source Integration (using KissFFT)
+    # --------------------------------------------------------------------------
+    
+    # Gather Source Files
+    file(GLOB ESSENTIA_CORE_SRCS "${ESSENTIA_DIR}/src/essentia/*.cpp")
+    file(GLOB ESSENTIA_UTILS_SRCS "${ESSENTIA_DIR}/src/essentia/utils/*.cpp")
+    file(GLOB ESSENTIA_ALGO_STD_SRCS "${ESSENTIA_DIR}/src/algorithms/standard/*.cpp")
+    file(GLOB ESSENTIA_ALGO_RHYTHM_SRCS "${ESSENTIA_DIR}/src/algorithms/rhythm/*.cpp")
+    
+    # KissFFT Sources
+    set(KISS_FFT_DIR "${ESSENTIA_DIR}/src/3rdparty/kiss_fft130")
+    set(KISS_FFT_SRCS 
+        "${KISS_FFT_DIR}/kiss_fft.c"
+        "${KISS_FFT_DIR}/tools/kiss_fftr.c"
+    )
+    
+    # Filter out unwanted FFT implementations (FFTW, Accelerate)
+    list(FILTER ESSENTIA_ALGO_STD_SRCS EXCLUDE REGEX ".*fftw.*")
+    list(FILTER ESSENTIA_ALGO_STD_SRCS EXCLUDE REGEX ".*ffta.*") # Accelerate
+    list(FILTER ESSENTIA_ALGO_STD_SRCS EXCLUDE REGEX ".*ifftw.*")
+    list(FILTER ESSENTIA_ALGO_STD_SRCS EXCLUDE REGEX ".*iffta.*")
+    
+    # Filter out algorithms with external dependencies (libsamplerate)
+    list(FILTER ESSENTIA_ALGO_STD_SRCS EXCLUDE REGEX ".*resample.*")
+    
+    # Filter out test files if any
+    list(FILTER ESSENTIA_CORE_SRCS EXCLUDE REGEX ".*test.*")
+    
+    # Create Static Library
+    add_library(essentia_lib STATIC
+        ${ESSENTIA_CORE_SRCS}
+        ${ESSENTIA_UTILS_SRCS}
+        ${ESSENTIA_ALGO_STD_SRCS}
+        ${ESSENTIA_ALGO_RHYTHM_SRCS}
+        ${KISS_FFT_SRCS}
+    )
+    
+    target_include_directories(essentia_lib PUBLIC
+        "${ESSENTIA_DIR}/src"
+        "${KISS_FFT_DIR}"
+        "${KISS_FFT_DIR}/tools"
+    )
+    
+    # Defines for Essentia
+    target_compile_definitions(essentia_lib PUBLIC
+        __WINDOWS_DS__
+        WIN32
+        _USE_MATH_DEFINES
+        kiss_fft_scalar=float # Essentia uses float by default
+    )
+    
+    # Set ESSENTIA_LIBRARY variable for linking
+    set(ESSENTIA_LIBRARY essentia_lib)
+    
+    message(STATUS "  Essentia configured for source build (KissFFT backend)")
+    
+    # Log Copy Commands
+    if(EXISTS "${ESSENTIA_DIR}/models")
+        message(STATUS "  Essentia models Source: ${ESSENTIA_DIR}/models (will be copied to output/essentia/models)")
+    endif()
+    if(EXISTS "${ESSENTIA_DIR}/data")
+        message(STATUS "  Essentia data Source: ${ESSENTIA_DIR}/data (will be copied to output/essentia/data)")
+    endif()
+endif()
+
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
@@ -730,6 +893,22 @@ target_sources(ColliderApp PRIVATE
     Source/audio/modules/AudioInputModuleProcessor.cpp
     Source/audio/modules/VCOModuleProcessor.h
     Source/audio/modules/VCOModuleProcessor.cpp
+    Source/audio/modules/stk/StkWrapper.h
+    Source/audio/modules/stk/StkWrapper.cpp
+    Source/audio/modules/stk/StkStringModuleProcessor.h
+    Source/audio/modules/stk/StkStringModuleProcessor.cpp
+    Source/audio/modules/stk/StkWindModuleProcessor.h
+    Source/audio/modules/stk/StkWindModuleProcessor.cpp
+    Source/audio/modules/stk/StkPercussionModuleProcessor.h
+    Source/audio/modules/stk/StkPercussionModuleProcessor.cpp
+    Source/audio/modules/stk/StkPluckedModuleProcessor.h
+    Source/audio/modules/stk/StkPluckedModuleProcessor.cpp
+    Source/audio/modules/essentia/EssentiaWrapper.h
+    Source/audio/modules/essentia/EssentiaWrapper.cpp
+    Source/audio/modules/essentia/EssentiaOnsetDetectorModuleProcessor.h
+    Source/audio/modules/essentia/EssentiaOnsetDetectorModuleProcessor.cpp
+    Source/audio/modules/essentia/EssentiaPitchTrackerModuleProcessor.h
+    Source/audio/modules/essentia/EssentiaPitchTrackerModuleProcessor.cpp
     Source/audio/modules/VCFModuleProcessor.h
     Source/audio/modules/VCFModuleProcessor.cpp
     Source/audio/modules/VCAModuleProcessor.h
@@ -967,6 +1146,10 @@ target_compile_definitions(ColliderApp PRIVATE
     $<$<BOOL:${CUDA_SUPPORT_ENABLED}>:WITH_CUDA_SUPPORT=1>
     # Enable ASIO if SDK is found
     $<$<BOOL:${ASIO_SDK_FOUND}>:JUCE_ASIO=1>
+    # Enable STK if found
+    $<$<BOOL:${STK_FOUND}>:STK_FOUND=1>
+    # Enable Essentia if found
+    $<$<BOOL:${ESSENTIA_FOUND}>:ESSENTIA_FOUND=1>
 )
 
 target_link_libraries(ColliderApp PRIVATE
@@ -978,6 +1161,8 @@ target_link_libraries(ColliderApp PRIVATE
     juce::juce_dsp
     juce::juce_osc
     soundtouch
+    $<$<BOOL:${STK_FOUND}>:stk>
+    $<$<BOOL:${ESSENTIA_FOUND}>:${ESSENTIA_LIBRARY}>
     box2d
     glm::glm
     tinygltf
@@ -1013,6 +1198,8 @@ target_include_directories(ColliderApp PRIVATE
     ${CMAKE_SOURCE_DIR}/../vendor/openvino_toolkit_windows_2025.3.0.19807.44526285f24_x86_64/samples/cpp/thirdparty/nlohmann_json/single_include
     ${CMAKE_SOURCE_DIR}/../soundtouch/include
     ${CMAKE_SOURCE_DIR}/../soundtouch/source/SoundTouch
+    $<$<BOOL:${STK_FOUND}>:${STK_SOURCE_DIR}/include>
+    $<$<BOOL:${ESSENTIA_FOUND}>:${ESSENTIA_DIR}/src>
     ${ufbx_SOURCE_DIR}
     $<$<BOOL:${FFMPEG_FOUND}>:${FFMPEG_INCLUDE_DIR}>
     # OpenCV include directories - source and generated headers
@@ -1141,6 +1328,22 @@ target_sources(PresetCreatorApp PRIVATE
     Source/audio/modules/AudioInputModuleProcessor.cpp
     Source/audio/modules/VCOModuleProcessor.h
     Source/audio/modules/VCOModuleProcessor.cpp
+    Source/audio/modules/stk/StkWrapper.h
+    Source/audio/modules/stk/StkWrapper.cpp
+    Source/audio/modules/stk/StkStringModuleProcessor.h
+    Source/audio/modules/stk/StkStringModuleProcessor.cpp
+    Source/audio/modules/stk/StkWindModuleProcessor.h
+    Source/audio/modules/stk/StkWindModuleProcessor.cpp
+    Source/audio/modules/stk/StkPercussionModuleProcessor.h
+    Source/audio/modules/stk/StkPercussionModuleProcessor.cpp
+    Source/audio/modules/stk/StkPluckedModuleProcessor.h
+    Source/audio/modules/stk/StkPluckedModuleProcessor.cpp
+    Source/audio/modules/essentia/EssentiaWrapper.h
+    Source/audio/modules/essentia/EssentiaWrapper.cpp
+    Source/audio/modules/essentia/EssentiaOnsetDetectorModuleProcessor.h
+    Source/audio/modules/essentia/EssentiaOnsetDetectorModuleProcessor.cpp
+    Source/audio/modules/essentia/EssentiaPitchTrackerModuleProcessor.h
+    Source/audio/modules/essentia/EssentiaPitchTrackerModuleProcessor.cpp
     Source/audio/modules/VCFModuleProcessor.h
     Source/audio/modules/VCFModuleProcessor.cpp
     Source/audio/modules/VCAModuleProcessor.h
@@ -1423,6 +1626,9 @@ target_include_directories(PresetCreatorApp PRIVATE
     # ASIO SDK headers (Windows only, conditional)
     $<$<BOOL:${ASIO_SDK_FOUND}>:${ASIO_SDK_DIR}/common>
     $<$<BOOL:${ASIO_SDK_FOUND}>:${ASIO_SDK_DIR}/host>
+    # STK and Essentia headers
+    $<$<BOOL:${STK_FOUND}>:${STK_SOURCE_DIR}/include>
+    $<$<BOOL:${ESSENTIA_FOUND}>:${ESSENTIA_DIR}/src>
 )
 
 # This target also needs the compile definitions
@@ -1442,6 +1648,10 @@ target_compile_definitions(PresetCreatorApp PRIVATE
     $<$<BOOL:${CUDA_SUPPORT_ENABLED}>:WITH_CUDA_SUPPORT=1>
     # Enable ASIO if SDK is found
     $<$<BOOL:${ASIO_SDK_FOUND}>:JUCE_ASIO=1>
+    # Enable STK if found
+    $<$<BOOL:${STK_FOUND}>:STK_FOUND=1>
+    # Enable Essentia if found
+    $<$<BOOL:${ESSENTIA_FOUND}>:ESSENTIA_FOUND=1>
 )
 
 target_link_libraries(PresetCreatorApp PRIVATE
@@ -1456,6 +1666,8 @@ target_link_libraries(PresetCreatorApp PRIVATE
     juce::juce_cryptography
     imgui_impl_juce
     soundtouch
+    $<$<BOOL:${STK_FOUND}>:stk>
+    $<$<BOOL:${ESSENTIA_FOUND}>:${ESSENTIA_LIBRARY}>
     box2d
     glm::glm
     tinygltf
@@ -1600,6 +1812,92 @@ if(WIN32)
                 "$<TARGET_FILE_DIR:ColliderApp>/espeak-ng-data"
         COMMENT "Copying espeak-ng-data to ColliderApp output directory"
     )
+    
+    # ==============================================================================
+    # Copy STK runtime assets (following Piper pattern)
+    # ==============================================================================
+    if(STK_FOUND)
+        # Log STK source paths before copying
+        message(STATUS "STK Source Path: ${STK_SOURCE_DIR}")
+        message(STATUS "STK rawwaves Source: ${STK_SOURCE_DIR}/rawwaves")
+        
+        # Copy STK rawwaves directory (required for some STK instruments)
+        if(EXISTS "${STK_SOURCE_DIR}/rawwaves")
+            add_custom_command(
+                TARGET ColliderApp POST_BUILD
+                COMMAND ${CMAKE_COMMAND} -E echo "Copying STK rawwaves from: ${STK_SOURCE_DIR}/rawwaves"
+                COMMAND ${CMAKE_COMMAND} -E echo "Copying STK rawwaves to: $<TARGET_FILE_DIR:ColliderApp>/rawwaves"
+                COMMAND ${CMAKE_COMMAND} -E copy_directory
+                        "${STK_SOURCE_DIR}/rawwaves"
+                        "$<TARGET_FILE_DIR:ColliderApp>/rawwaves"
+                COMMENT "Copying STK rawwaves to ColliderApp output directory"
+            )
+            add_custom_command(
+                TARGET PresetCreatorApp POST_BUILD
+                COMMAND ${CMAKE_COMMAND} -E echo "Copying STK rawwaves from: ${STK_SOURCE_DIR}/rawwaves"
+                COMMAND ${CMAKE_COMMAND} -E echo "Copying STK rawwaves to: $<TARGET_FILE_DIR:PresetCreatorApp>/rawwaves"
+                COMMAND ${CMAKE_COMMAND} -E copy_directory
+                        "${STK_SOURCE_DIR}/rawwaves"
+                        "$<TARGET_FILE_DIR:PresetCreatorApp>/rawwaves"
+                COMMENT "Copying STK rawwaves to PresetCreatorApp output directory"
+            )
+        else()
+            message(WARNING "STK rawwaves directory not found at ${STK_SOURCE_DIR}/rawwaves")
+        endif()
+    endif()
+    
+    # ==============================================================================
+    # Copy Essentia runtime assets (following Piper pattern)
+    # ==============================================================================
+    if(ESSENTIA_FOUND)
+        # Log Essentia source paths before copying
+        message(STATUS "Essentia Source Path: ${ESSENTIA_DIR}")
+        
+        # Essentia may need models or data files at runtime
+        # Check for common Essentia runtime directories
+        if(EXISTS "${ESSENTIA_DIR}/models")
+            add_custom_command(
+                TARGET ColliderApp POST_BUILD
+                COMMAND ${CMAKE_COMMAND} -E echo "Copying Essentia models from: ${ESSENTIA_DIR}/models"
+                COMMAND ${CMAKE_COMMAND} -E echo "Copying Essentia models to: $<TARGET_FILE_DIR:ColliderApp>/essentia/models"
+                COMMAND ${CMAKE_COMMAND} -E copy_directory
+                        "${ESSENTIA_DIR}/models"
+                        "$<TARGET_FILE_DIR:ColliderApp>/essentia/models"
+                COMMENT "Copying Essentia models to ColliderApp output directory"
+            )
+            add_custom_command(
+                TARGET PresetCreatorApp POST_BUILD
+                COMMAND ${CMAKE_COMMAND} -E echo "Copying Essentia models from: ${ESSENTIA_DIR}/models"
+                COMMAND ${CMAKE_COMMAND} -E echo "Copying Essentia models to: $<TARGET_FILE_DIR:PresetCreatorApp>/essentia/models"
+                COMMAND ${CMAKE_COMMAND} -E copy_directory
+                        "${ESSENTIA_DIR}/models"
+                        "$<TARGET_FILE_DIR:PresetCreatorApp>/essentia/models"
+                COMMENT "Copying Essentia models to PresetCreatorApp output directory"
+            )
+        endif()
+        
+        # Copy Essentia data files if they exist
+        if(EXISTS "${ESSENTIA_DIR}/data")
+            add_custom_command(
+                TARGET ColliderApp POST_BUILD
+                COMMAND ${CMAKE_COMMAND} -E echo "Copying Essentia data from: ${ESSENTIA_DIR}/data"
+                COMMAND ${CMAKE_COMMAND} -E echo "Copying Essentia data to: $<TARGET_FILE_DIR:ColliderApp>/essentia/data"
+                COMMAND ${CMAKE_COMMAND} -E copy_directory
+                        "${ESSENTIA_DIR}/data"
+                        "$<TARGET_FILE_DIR:ColliderApp>/essentia/data"
+                COMMENT "Copying Essentia data to ColliderApp output directory"
+            )
+            add_custom_command(
+                TARGET PresetCreatorApp POST_BUILD
+                COMMAND ${CMAKE_COMMAND} -E echo "Copying Essentia data from: ${ESSENTIA_DIR}/data"
+                COMMAND ${CMAKE_COMMAND} -E echo "Copying Essentia data to: $<TARGET_FILE_DIR:PresetCreatorApp>/essentia/data"
+                COMMAND ${CMAKE_COMMAND} -E copy_directory
+                        "${ESSENTIA_DIR}/data"
+                        "$<TARGET_FILE_DIR:PresetCreatorApp>/essentia/data"
+                COMMENT "Copying Essentia data to PresetCreatorApp output directory"
+            )
+        endif()
+    endif()
     add_custom_command(
         TARGET ColliderApp POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E copy_if_different
@@ -1629,7 +1927,7 @@ if(WIN32)
         COMMAND ${CMAKE_COMMAND} -E copy_if_different
                 "$<IF:$<BOOL:${OPENCV_PREBUILT}>,${OPENCV_INSTALL_PREFIX}/bin/opencv_videoio_ffmpeg4130_64.dll,${CMAKE_BINARY_DIR}/bin/opencv_videoio_ffmpeg4130_64.dll>"
                 "$<TARGET_FILE_DIR:PresetCreatorApp>"
-        || ${CMAKE_COMMAND} -E echo "Note: OpenCV FFmpeg DLL not found (optional video codec)"
+        COMMAND ${CMAKE_COMMAND} -E echo "Note: OpenCV FFmpeg DLL copy attempted (optional video codec)"
         COMMAND ${CMAKE_COMMAND} -E copy_directory
                 "${PIPER_DIR}/espeak-ng-data"
                 "$<TARGET_FILE_DIR:PresetCreatorApp>/espeak-ng-data"
@@ -1780,6 +2078,22 @@ target_sources(PikonRaditszAudioApp PRIVATE
     Source/audio/modules/AudioInputModuleProcessor.cpp
     Source/audio/modules/VCOModuleProcessor.h
     Source/audio/modules/VCOModuleProcessor.cpp
+    Source/audio/modules/stk/StkWrapper.h
+    Source/audio/modules/stk/StkWrapper.cpp
+    Source/audio/modules/stk/StkStringModuleProcessor.h
+    Source/audio/modules/stk/StkStringModuleProcessor.cpp
+    Source/audio/modules/stk/StkWindModuleProcessor.h
+    Source/audio/modules/stk/StkWindModuleProcessor.cpp
+    Source/audio/modules/stk/StkPercussionModuleProcessor.h
+    Source/audio/modules/stk/StkPercussionModuleProcessor.cpp
+    Source/audio/modules/stk/StkPluckedModuleProcessor.h
+    Source/audio/modules/stk/StkPluckedModuleProcessor.cpp
+    Source/audio/modules/essentia/EssentiaWrapper.h
+    Source/audio/modules/essentia/EssentiaWrapper.cpp
+    Source/audio/modules/essentia/EssentiaOnsetDetectorModuleProcessor.h
+    Source/audio/modules/essentia/EssentiaOnsetDetectorModuleProcessor.cpp
+    Source/audio/modules/essentia/EssentiaPitchTrackerModuleProcessor.h
+    Source/audio/modules/essentia/EssentiaPitchTrackerModuleProcessor.cpp
     Source/audio/modules/VCFModuleProcessor.h
     Source/audio/modules/VCFModuleProcessor.cpp
     Source/audio/modules/VCAModuleProcessor.h
@@ -2003,6 +2317,9 @@ target_include_directories(PikonRaditszAudioApp PRIVATE
     # ASIO SDK headers (Windows only, conditional)
     $<$<BOOL:${ASIO_SDK_FOUND}>:${ASIO_SDK_DIR}/common>
     $<$<BOOL:${ASIO_SDK_FOUND}>:${ASIO_SDK_DIR}/host>
+    # STK and Essentia headers
+    $<$<BOOL:${STK_FOUND}>:${STK_SOURCE_DIR}/include>
+    $<$<BOOL:${ESSENTIA_FOUND}>:${ESSENTIA_DIR}/src>
 )
 
 # Compile Definitions
@@ -2023,6 +2340,10 @@ target_compile_definitions(PikonRaditszAudioApp PRIVATE
     # NO WITH_CUDA_SUPPORT
     # Enable ASIO if SDK is found
     $<$<BOOL:${ASIO_SDK_FOUND}>:JUCE_ASIO=1>
+    # Enable STK if found
+    $<$<BOOL:${STK_FOUND}>:STK_FOUND=1>
+    # Enable Essentia if found
+    $<$<BOOL:${ESSENTIA_FOUND}>:ESSENTIA_FOUND=1>
 )
 
 # Link Libraries (EXCLUDING OpenCV and FFmpeg)
@@ -2038,6 +2359,8 @@ target_link_libraries(PikonRaditszAudioApp PRIVATE
     juce::juce_cryptography
     imgui_impl_juce
     soundtouch
+    $<$<BOOL:${STK_FOUND}>:stk>
+    $<$<BOOL:${ESSENTIA_FOUND}>:${ESSENTIA_LIBRARY}>
     box2d
     glm::glm
     tinygltf
@@ -2080,4 +2403,54 @@ endif()
                 "$<TARGET_FILE_DIR:PikonRaditszAudioApp>/icons/splash-audio.png"
         COMMENT "Copying audio-only splash screen to icons/splash-audio.png"
     )
+    
+    # ==============================================================================
+    # Copy STK runtime assets for PikonRaditszAudioApp
+    # ==============================================================================
+    if(STK_FOUND)
+        # Copy STK rawwaves directory (required for some STK instruments)
+        if(EXISTS "${STK_SOURCE_DIR}/rawwaves")
+            add_custom_command(
+                TARGET PikonRaditszAudioApp POST_BUILD
+                COMMAND ${CMAKE_COMMAND} -E echo "Copying STK rawwaves from: ${STK_SOURCE_DIR}/rawwaves"
+                COMMAND ${CMAKE_COMMAND} -E echo "Copying STK rawwaves to: $<TARGET_FILE_DIR:PikonRaditszAudioApp>/rawwaves"
+                COMMAND ${CMAKE_COMMAND} -E copy_directory
+                        "${STK_SOURCE_DIR}/rawwaves"
+                        "$<TARGET_FILE_DIR:PikonRaditszAudioApp>/rawwaves"
+                COMMENT "Copying STK rawwaves to PikonRaditszAudioApp output directory"
+            )
+        endif()
+    endif()
+    
+    # ==============================================================================
+    # Copy Essentia runtime assets for PikonRaditszAudioApp
+    # ==============================================================================
+    if(ESSENTIA_FOUND)
+        # Essentia may need models or data files at runtime
+        # Check for common Essentia runtime directories
+        if(EXISTS "${ESSENTIA_DIR}/models")
+            add_custom_command(
+                TARGET PikonRaditszAudioApp POST_BUILD
+                COMMAND ${CMAKE_COMMAND} -E echo "Copying Essentia models from: ${ESSENTIA_DIR}/models"
+                COMMAND ${CMAKE_COMMAND} -E echo "Copying Essentia models to: $<TARGET_FILE_DIR:PikonRaditszAudioApp>/essentia/models"
+                COMMAND ${CMAKE_COMMAND} -E copy_directory
+                        "${ESSENTIA_DIR}/models"
+                        "$<TARGET_FILE_DIR:PikonRaditszAudioApp>/essentia/models"
+                COMMENT "Copying Essentia models to PikonRaditszAudioApp output directory"
+            )
+        endif()
+        
+        # Copy Essentia data files if they exist
+        if(EXISTS "${ESSENTIA_DIR}/data")
+            add_custom_command(
+                TARGET PikonRaditszAudioApp POST_BUILD
+                COMMAND ${CMAKE_COMMAND} -E echo "Copying Essentia data from: ${ESSENTIA_DIR}/data"
+                COMMAND ${CMAKE_COMMAND} -E echo "Copying Essentia data to: $<TARGET_FILE_DIR:PikonRaditszAudioApp>/essentia/data"
+                COMMAND ${CMAKE_COMMAND} -E copy_directory
+                        "${ESSENTIA_DIR}/data"
+                        "$<TARGET_FILE_DIR:PikonRaditszAudioApp>/essentia/data"
+                COMMENT "Copying Essentia data to PikonRaditszAudioApp output directory"
+            )
+        endif()
+    endif()
 

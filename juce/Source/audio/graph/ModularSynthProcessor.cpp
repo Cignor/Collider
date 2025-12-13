@@ -7,6 +7,12 @@
 #include "../modules/AudioInputModuleProcessor.h"
 #include "../modules/RecordModuleProcessor.h"
 #include "../modules/VCOModuleProcessor.h"
+#include "../modules/stk/StkStringModuleProcessor.h"
+#include "../modules/stk/StkWindModuleProcessor.h"
+#include "../modules/stk/StkPercussionModuleProcessor.h"
+#include "../modules/stk/StkPluckedModuleProcessor.h"
+#include "../modules/essentia/EssentiaOnsetDetectorModuleProcessor.h"
+#include "../modules/essentia/EssentiaPitchTrackerModuleProcessor.h"
 #include "../modules/VCFModuleProcessor.h"
 #include "../modules/VCAModuleProcessor.h"
 #include "../modules/NoiseModuleProcessor.h"
@@ -881,7 +887,7 @@ void ModularSynthProcessor::setStateInformation(const void* data, int sizeInByte
                     if (auto* mp = dynamic_cast<ModuleProcessor*>(node->getProcessor()))
                     {
                         mp->getAPVTS().replaceState(params);
-                        // Ensure AudioDeviceManager is set for modules that need it (e.g., MIDI Player, MIDI Logger)
+                        // Ensure AudioDeviceManager is set for modules that need it (e.g., MIDI Player, MIDI Logger, Audio Input)
                         if (auto* midiPlayer = dynamic_cast<MIDIPlayerModuleProcessor*>(mp))
                         {
                             midiPlayer->setAudioDeviceManager(audioDeviceManager);
@@ -889,6 +895,10 @@ void ModularSynthProcessor::setStateInformation(const void* data, int sizeInByte
                         if (auto* midiLogger = dynamic_cast<MidiLoggerModuleProcessor*>(mp))
                         {
                             midiLogger->setAudioDeviceManager(audioDeviceManager);
+                        }
+                        if (auto* audioInput = dynamic_cast<AudioInputModuleProcessor*>(mp))
+                        {
+                            audioInput->setAudioDeviceManager(audioDeviceManager);
                         }
                         juce::Logger::writeToLog("[STATE]   Restored parameters.");
                     }
@@ -1025,6 +1035,12 @@ static std::map<juce::String, Creator>& getModuleFactory()
         };
 
         reg("vco", [] { return std::make_unique<VCOModuleProcessor>(); });
+        reg("stk_string", [] { return std::make_unique<StkStringModuleProcessor>(); });
+        reg("stk_wind", [] { return std::make_unique<StkWindModuleProcessor>(); });
+        reg("stk_percussion", [] { return std::make_unique<StkPercussionModuleProcessor>(); });
+        reg("stk_plucked", [] { return std::make_unique<StkPluckedModuleProcessor>(); });
+        reg("essentia_onset_detector", [] { return std::make_unique<EssentiaOnsetDetectorModuleProcessor>(); });
+        reg("essentia_pitch_tracker", [] { return std::make_unique<EssentiaPitchTrackerModuleProcessor>(); });
         reg("audio_input", [] { return std::make_unique<AudioInputModuleProcessor>(); });
         reg("vcf", [] { return std::make_unique<VCFModuleProcessor>(); });
         reg("vca", [] { return std::make_unique<VCAModuleProcessor>(); });
@@ -1194,7 +1210,7 @@ ModularSynthProcessor::NodeID ModularSynthProcessor::addModule(
         if (auto* mp = dynamic_cast<ModuleProcessor*>(node->getProcessor()))
         {
             mp->setParent(this);
-            // Pass AudioDeviceManager to modules that need it (e.g., MIDI Player, MIDI Logger for MIDI output)
+            // Pass AudioDeviceManager to modules that need it (e.g., MIDI Player, MIDI Logger, Audio Input)
             if (auto* midiPlayer = dynamic_cast<MIDIPlayerModuleProcessor*>(mp))
             {
                 midiPlayer->setAudioDeviceManager(audioDeviceManager);
@@ -1202,6 +1218,10 @@ ModularSynthProcessor::NodeID ModularSynthProcessor::addModule(
             if (auto* midiLogger = dynamic_cast<MidiLoggerModuleProcessor*>(mp))
             {
                 midiLogger->setAudioDeviceManager(audioDeviceManager);
+            }
+            if (auto* audioInput = dynamic_cast<AudioInputModuleProcessor*>(mp))
+            {
+                audioInput->setAudioDeviceManager(audioDeviceManager);
             }
         }
         modules[(juce::uint32)node->nodeID.uid] = node;
@@ -1283,10 +1303,14 @@ ModularSynthProcessor::NodeID ModularSynthProcessor::addVstModule(
     if (auto* mp = dynamic_cast<ModuleProcessor*>(node->getProcessor()))
     {
         mp->setParent(this);
-        // Pass AudioDeviceManager to modules that need it (e.g., MIDI Player for MIDI output)
+        // Pass AudioDeviceManager to modules that need it (e.g., MIDI Player, Audio Input)
         if (auto* midiPlayer = dynamic_cast<MIDIPlayerModuleProcessor*>(mp))
         {
             midiPlayer->setAudioDeviceManager(audioDeviceManager);
+        }
+        if (auto* audioInput = dynamic_cast<AudioInputModuleProcessor*>(mp))
+        {
+            audioInput->setAudioDeviceManager(audioDeviceManager);
         }
     }
 

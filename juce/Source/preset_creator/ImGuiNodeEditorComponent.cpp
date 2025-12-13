@@ -2230,6 +2230,14 @@ void ImGuiNodeEditorComponent::renderImGui()
                 {
                     insertNodeAfterSelection("bpm_monitor");
                 }
+                if (ImGui::MenuItem("Onset Detector"))
+                {
+                    insertNodeAfterSelection("essentia_onset_detector");
+                }
+                if (ImGui::MenuItem("Pitch Tracker"))
+                {
+                    insertNodeAfterSelection("essentia_pitch_tracker");
+                }
                 ImGui::EndMenu();
             }
 
@@ -3343,6 +3351,10 @@ void ImGuiNodeEditorComponent::renderImGui()
         {
             addModuleButton("VCO", "vco");
             addModuleButton("Polyphonic VCO", "polyvco");
+            addModuleButton("STK String", "stk_string");
+            addModuleButton("STK Wind", "stk_wind");
+            addModuleButton("STK Percussion", "stk_percussion");
+            addModuleButton("STK Plucked", "stk_plucked");
             addModuleButton("Noise", "noise");
             addModuleButton("Audio Input", "audio_input");
             addModuleButton("Sample Loader", "sample_loader");
@@ -3475,6 +3487,8 @@ void ImGuiNodeEditorComponent::renderImGui()
             addModuleButton("Scope", "scope");
             addModuleButton("Debug", "debug");
             addModuleButton("Input Debug", "input_debug");
+            addModuleButton("Onset Detector", "essentia_onset_detector");
+            addModuleButton("Pitch Tracker", "essentia_pitch_tracker");
             addModuleButton("Frequency Graph", "frequency_graph");
             addModuleButton("BPM Monitor", "bpm_monitor");
         }
@@ -4228,105 +4242,173 @@ void ImGuiNodeEditorComponent::renderImGui()
                     {
                         auto& apvts = audioIn->getAPVTS();
 
-                        // --- Device Selectors ---
-                        juce::AudioDeviceManager::AudioDeviceSetup setup;
-                        deviceManager.getAudioDeviceSetup(setup);
-
-                        // Input Device
-                        juce::StringArray availableInputDevices;
-                        if (auto* deviceType = deviceManager.getAvailableDeviceTypes().getFirst())
+                        // --- Device Type Selection (ASIO, Windows Audio, etc.) ---
+                        const auto& deviceTypes = deviceManager.getAvailableDeviceTypes();
+                        
+                        // Get per-instance device type (not global)
+                        juce::String instanceDeviceType = audioIn->getSelectedDeviceType();
+                        juce::String globalDeviceType = deviceManager.getCurrentAudioDeviceType();
+                        
+                        // Use instance type if set, otherwise use global as default
+                        juce::String currentDeviceType = instanceDeviceType.isEmpty() ? globalDeviceType : instanceDeviceType;
+                        
+                        // Build device type list
+                        juce::StringArray deviceTypeNames;
+                        for (int i = 0; i < deviceTypes.size(); ++i)
                         {
-                            availableInputDevices = deviceType->getDeviceNames(true);
+                            if (auto* type = deviceTypes[i])
+                                deviceTypeNames.add(type->getTypeName());
                         }
-                        std::vector<const char*> inputDeviceItems;
-                        for (const auto& name : availableInputDevices)
-                            inputDeviceItems.push_back(name.toRawUTF8());
-                        int currentInputDeviceIndex =
-                            availableInputDevices.indexOf(setup.inputDeviceName);
-                        if (currentInputDeviceIndex < 0)
-                            currentInputDeviceIndex = 0;
+                        
+                        std::vector<const char*> deviceTypeItems;
+                        for (const auto& name : deviceTypeNames)
+                            deviceTypeItems.push_back(name.toRawUTF8());
+                        
+                        int currentDeviceTypeIndex = deviceTypeNames.indexOf(currentDeviceType);
+                        if (currentDeviceTypeIndex < 0)
+                            currentDeviceTypeIndex = 0;
 
                         ImGui::PushItemWidth(nodeContentWidth);
-                        if (ImGui::Combo(
-                                "Input Device",
-                                &currentInputDeviceIndex,
-                                inputDeviceItems.data(),
-                                (int)inputDeviceItems.size()))
+                        
+                        // Get the current global device type (user sets this in Audio Settings)
+                        juce::String currentGlobalDeviceType = deviceManager.getCurrentAudioDeviceType();
+                        if (currentGlobalDeviceType.isEmpty() && deviceTypes.size() > 0)
                         {
-                            if (currentInputDeviceIndex < availableInputDevices.size())
-                            {
-                                setup.inputDeviceName =
-                                    availableInputDevices[currentInputDeviceIndex];
-                                deviceManager.setAudioDeviceSetup(setup, true);
-                                onModificationEnded();
-                            }
+                            if (auto* firstType = deviceTypes[0])
+                                currentGlobalDeviceType = firstType->getTypeName();
                         }
-                        // Scroll-edit for Input Device combo
-                        if (!availableInputDevices.isEmpty() && ImGui::IsItemHovered())
+                        
+                        // CRITICAL: Check if we're using ASIO
+                        bool isASIO = (currentGlobalDeviceType == "ASIO");
+                        
+                        if (isASIO)
                         {
-                            const float wheel = ImGui::GetIO().MouseWheel;
-                            if (wheel != 0.0f)
+                            // ASIO: Cannot select separate device - uses global input
+                            ImGui::TextColored(ImVec4(1.0f, 0.8f, 0.0f, 1.0f), "ASIO Mode - Using Global Input");
+                            ImGui::TextWrapped("ASIO drivers don't allow multiple connections. This node uses the global audio input from Audio Settings.");
+                            
+                            if (auto* globalDevice = deviceManager.getCurrentAudioDevice())
                             {
-                                const int maxIndex = (int)availableInputDevices.size() - 1;
-                                int       newIndex = juce::jlimit(
-                                    0, maxIndex, currentInputDeviceIndex + (wheel > 0.0f ? -1 : 1));
-                                if (newIndex != currentInputDeviceIndex)
+                                ImGui::Text("Global Device: %s", globalDevice->getName().toRawUTF8());
+                                ImGui::Text("Sample Rate: %.0f Hz", globalDevice->getCurrentSampleRate());
+                                ImGui::Text("Buffer Size: %d samples", globalDevice->getCurrentBufferSizeSamples());
+                            }
+                            else
+                            {
+                                ImGui::TextColored(ImVec4(1.0f, 0.3f, 0.3f, 1.0f), "No global ASIO device open!");
+                                ImGui::TextWrapped("Please open an ASIO device in Audio Settings first.");
+                            }
+                            
+                            // Clear any stored device name to prevent conflicts
+                            if (!audioIn->getSelectedDeviceName().isEmpty())
+                            {
+                                audioIn->setSelectedDeviceName("");
+                            }
+                            
+                            // Still allow selecting which input channels to use from the global device
+                            // (This is handled by the channel mapping below)
+                        }
+                        else
+                        {
+                            // Windows Audio: Can select separate input devices
+                            // Find the device type object for the current global type
+                            juce::AudioIODeviceType* currentDeviceTypeObj = nullptr;
+                            for (int i = 0; i < deviceTypes.size(); ++i)
+                            {
+                                if (auto* type = deviceTypes[i])
                                 {
-                                    currentInputDeviceIndex = newIndex;
-                                    setup.inputDeviceName =
-                                        availableInputDevices[currentInputDeviceIndex];
-                                    deviceManager.setAudioDeviceSetup(setup, true);
+                                    if (type->getTypeName() == currentGlobalDeviceType)
+                                    {
+                                        currentDeviceTypeObj = type;
+                                        break;
+                                    }
+                                }
+                            }
+                            
+                            // If node has a stored device type, use that (for backward compatibility)
+                            // Otherwise use the global device type
+                            juce::String nodeDeviceType = audioIn->getSelectedDeviceType();
+                            if (nodeDeviceType.isEmpty())
+                            {
+                                nodeDeviceType = currentGlobalDeviceType;
+                                audioIn->setSelectedDeviceType(nodeDeviceType);
+                            }
+                            
+                            // If node's device type doesn't match global, update it to match global
+                            if (nodeDeviceType != currentGlobalDeviceType)
+                            {
+                                nodeDeviceType = currentGlobalDeviceType;
+                                audioIn->setSelectedDeviceType(nodeDeviceType);
+                                
+                                // Re-find device type object
+                                currentDeviceTypeObj = nullptr;
+                                for (int i = 0; i < deviceTypes.size(); ++i)
+                                {
+                                    if (auto* type = deviceTypes[i])
+                                    {
+                                        if (type->getTypeName() == nodeDeviceType)
+                                        {
+                                            currentDeviceTypeObj = type;
+                                            break;
+                                        }
+                                    }
+                                }
+                            }
+                            
+                            // Scan for devices in current type
+                            if (currentDeviceTypeObj)
+                                currentDeviceTypeObj->scanForDevices();
+
+                            // --- Input Device Selection (Windows Audio only) ---
+                            juce::StringArray availableInputDevices;
+                            if (currentDeviceTypeObj)
+                            {
+                                availableInputDevices = currentDeviceTypeObj->getDeviceNames(true);
+                            }
+                            std::vector<const char*> inputDeviceItems;
+                            for (const auto& name : availableInputDevices)
+                                inputDeviceItems.push_back(name.toRawUTF8());
+                            
+                            // Get the per-instance device name
+                            juce::String instanceDeviceName = audioIn->getSelectedDeviceName();
+                            
+                            int currentInputDeviceIndex = availableInputDevices.indexOf(instanceDeviceName);
+                            if (currentInputDeviceIndex < 0)
+                                currentInputDeviceIndex = 0;
+                            
+                            if (ImGui::Combo(
+                                    "Input Device",
+                                    &currentInputDeviceIndex,
+                                    inputDeviceItems.data(),
+                                    (int)inputDeviceItems.size()))
+                            {
+                                if (currentInputDeviceIndex < availableInputDevices.size())
+                                {
+                                    // Store per-instance device name and type
+                                    juce::String selectedDevice = availableInputDevices[currentInputDeviceIndex];
+                                    audioIn->setSelectedDeviceType(nodeDeviceType); // Use current global type
+                                    audioIn->setSelectedDeviceName(selectedDevice); // This will call updateDevice()
+                                    
                                     onModificationEnded();
                                 }
                             }
-                        }
-
-                        // Output Device
-                        juce::StringArray availableOutputDevices;
-                        if (auto* deviceType = deviceManager.getAvailableDeviceTypes().getFirst())
-                        {
-                            availableOutputDevices = deviceType->getDeviceNames(false);
-                        }
-                        std::vector<const char*> outputDeviceItems;
-                        for (const auto& name : availableOutputDevices)
-                            outputDeviceItems.push_back(name.toRawUTF8());
-                        int currentOutputDeviceIndex =
-                            availableOutputDevices.indexOf(setup.outputDeviceName);
-                        if (currentOutputDeviceIndex < 0)
-                            currentOutputDeviceIndex = 0;
-
-                        if (ImGui::Combo(
-                                "Output Device",
-                                &currentOutputDeviceIndex,
-                                outputDeviceItems.data(),
-                                (int)outputDeviceItems.size()))
-                        {
-                            if (currentOutputDeviceIndex < availableOutputDevices.size())
+                            // Scroll-edit for Input Device combo
+                            if (!availableInputDevices.isEmpty() && ImGui::IsItemHovered())
                             {
-                                setup.outputDeviceName =
-                                    availableOutputDevices[currentOutputDeviceIndex];
-                                deviceManager.setAudioDeviceSetup(setup, true);
-                                onModificationEnded();
-                            }
-                        }
-                        // Scroll-edit for Output Device combo
-                        if (!availableOutputDevices.isEmpty() && ImGui::IsItemHovered())
-                        {
-                            const float wheel = ImGui::GetIO().MouseWheel;
-                            if (wheel != 0.0f)
-                            {
-                                const int maxIndex = (int)availableOutputDevices.size() - 1;
-                                int       newIndex = juce::jlimit(
-                                    0,
-                                    maxIndex,
-                                    currentOutputDeviceIndex + (wheel > 0.0f ? -1 : 1));
-                                if (newIndex != currentOutputDeviceIndex)
+                                const float wheel = ImGui::GetIO().MouseWheel;
+                                if (wheel != 0.0f)
                                 {
-                                    currentOutputDeviceIndex = newIndex;
-                                    setup.outputDeviceName =
-                                        availableOutputDevices[currentOutputDeviceIndex];
-                                    deviceManager.setAudioDeviceSetup(setup, true);
-                                    onModificationEnded();
+                                    const int maxIndex = (int)availableInputDevices.size() - 1;
+                                    int       newIndex = juce::jlimit(
+                                        0, maxIndex, currentInputDeviceIndex + (wheel > 0.0f ? -1 : 1));
+                                    if (newIndex != currentInputDeviceIndex)
+                                    {
+                                        currentInputDeviceIndex = newIndex;
+                                        juce::String selectedDevice = availableInputDevices[newIndex];
+                                        audioIn->setSelectedDeviceType(nodeDeviceType);
+                                        audioIn->setSelectedDeviceName(selectedDevice);
+                                        onModificationEnded();
+                                    }
                                 }
                             }
                         }
@@ -7183,6 +7265,14 @@ void ImGuiNodeEditorComponent::renderImGui()
                 {
                     if (ImGui::MenuItem("VCO"))
                         addAtMouse("vco");
+                    if (ImGui::MenuItem("STK String"))
+                        addAtMouse("stk_string");
+                    if (ImGui::MenuItem("STK Wind"))
+                        addAtMouse("stk_wind");
+                    if (ImGui::MenuItem("STK Percussion"))
+                        addAtMouse("stk_percussion");
+                    if (ImGui::MenuItem("STK Plucked"))
+                        addAtMouse("stk_plucked");
                     if (ImGui::MenuItem("Polyphonic VCO"))
                         addAtMouse("polyvco");
                     if (ImGui::MenuItem("Noise"))
@@ -7357,6 +7447,10 @@ void ImGuiNodeEditorComponent::renderImGui()
                         addAtMouse("scope");
                     if (ImGui::MenuItem("Debug"))
                         addAtMouse("debug");
+                    if (ImGui::MenuItem("Onset Detector"))
+                        addAtMouse("essentia_onset_detector");
+                    if (ImGui::MenuItem("Pitch Tracker"))
+                        addAtMouse("essentia_pitch_tracker");
                     if (ImGui::MenuItem("Input Debug"))
                         addAtMouse("input_debug");
                     if (ImGui::MenuItem("Frequency Graph"))
@@ -14293,7 +14387,7 @@ ImGuiNodeEditorComponent::ModuleCategory ImGuiNodeEditorComponent::getModuleCate
     // === CATEGORY CLASSIFICATION (Following Dictionary Structure) ===
 
     // --- 1. SOURCES (Green) ---
-    if (lower.contains("vco") || lower.contains("polyvco") || lower.contains("noise") ||
+    if (lower.contains("vco") || lower.contains("polyvco") || lower.contains("stk_string") || lower.contains("stk") || lower.contains("noise") ||
         lower == "audio_input" || lower.contains("sample") || lower == "value")
         return ModuleCategory::Source;
 
@@ -14333,7 +14427,8 @@ ImGuiNodeEditorComponent::ModuleCategory ImGuiNodeEditorComponent::getModuleCate
         return ModuleCategory::MIDI;
 
     // --- 7. ANALYSIS (Purple) ---
-    if (lower.contains("scope") || lower.contains("debug") || lower.contains("frequency_graph"))
+    if (lower.contains("scope") || lower.contains("debug") || lower.contains("frequency_graph") ||
+        lower.contains("onset_detector") || lower.contains("essentia"))
         return ModuleCategory::Analysis;
 
     // --- 8. TTS (Peach/Coral) ---
@@ -14392,7 +14487,13 @@ std::map<juce::String, std::pair<const char*, const char*>> ImGuiNodeEditorCompo
         // Sources
         {"Audio Input", {"audio_input", "Records audio from your audio interface"}},
         {"VCO", {"vco", "Voltage Controlled Oscillator - generates waveforms"}},
+        {"STK String", {"stk_string", "Physical modeling string synthesizer (guitar, violin, cello, sitar, banjo)"}},
+        {"STK Wind", {"stk_wind", "Physical modeling wind instruments (flute, clarinet, saxophone, brass)"}},
+        {"STK Percussion", {"stk_percussion", "Modal synthesis percussion (marimba, cymbal, shakers, etc.)"}},
+        {"STK Plucked", {"stk_plucked", "Karplus-Strong plucked string synthesis"}},
         {"Polyphonic VCO", {"polyvco", "Polyphonic VCO with multiple voices"}},
+        {"Onset Detector", {"essentia_onset_detector", "Detects note onsets (attacks) in audio"}},
+        {"Pitch Tracker", {"essentia_pitch_tracker", "Detects pitch (fundamental frequency) in audio"}},
         {"Noise", {"noise", "White, pink, or brown noise generator"}},
         {"Sequencer", {"sequencer", "Step sequencer for creating patterns"}},
         {"Multi Sequencer", {"multi_sequencer", "Multi-track step sequencer"}},

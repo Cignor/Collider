@@ -1,8 +1,12 @@
 #pragma once
 #include "ModuleProcessor.h"
+#include <juce_audio_devices/juce_audio_devices.h>
+#include <juce_audio_utils/juce_audio_utils.h>
 #include <vector>
+#include <atomic>
 
-class AudioInputModuleProcessor : public ModuleProcessor
+class AudioInputModuleProcessor : public ModuleProcessor,
+                                   public juce::AudioIODeviceCallback
 {
 public:
     static constexpr int MAX_CHANNELS = 16;
@@ -13,13 +17,21 @@ public:
     static constexpr auto paramIdTriggerThreshold = "triggerThreshold";
 
     AudioInputModuleProcessor();
-    ~AudioInputModuleProcessor() override = default;
+    ~AudioInputModuleProcessor() override;
 
     const juce::String getName() const override { return "audio_input"; }
 
     void prepareToPlay(double sampleRate, int samplesPerBlock) override;
-    void releaseResources() override {}
+    void releaseResources() override;
     void processBlock(juce::AudioBuffer<float>&, juce::MidiBuffer&) override;
+    
+    // AudioIODeviceCallback implementation
+    void audioDeviceIOCallbackWithContext(const float* const* inputChannelData, int numInputChannels,
+                                           float* const* outputChannelData, int numOutputChannels,
+                                           int numSamples, const juce::AudioIODeviceCallbackContext& context) override;
+    void audioDeviceAboutToStart(juce::AudioIODevice* device) override;
+    void audioDeviceStopped() override;
+    void audioDeviceError(const juce::String& errorMessage) override;
     juce::AudioProcessorValueTreeState& getAPVTS() override { return apvts; }
 
     // Override labels for better pin naming
@@ -32,7 +44,14 @@ public:
     
     // Device name access for UI
     juce::String getSelectedDeviceName() const { return selectedDeviceName; }
-    void setSelectedDeviceName(const juce::String& name) { selectedDeviceName = name; }
+    void setSelectedDeviceName(const juce::String& name);
+    
+    // Device type access
+    juce::String getSelectedDeviceType() const { return selectedDeviceType; }
+    void setSelectedDeviceType(const juce::String& type) { selectedDeviceType = type; }
+    
+    // Set the AudioDeviceManager for device access
+    void setAudioDeviceManager(juce::AudioDeviceManager* adm) { deviceManager = adm; updateDevice(); }
 
     // Real-time level metering for UI (one per channel)
     std::vector<std::unique_ptr<std::atomic<float>>> channelLevels;
@@ -50,9 +69,29 @@ private:
     juce::AudioParameterInt* numChannelsParam { nullptr };
     std::vector<juce::AudioParameterInt*> channelMappingParams;
     juce::String selectedDeviceName;
+    juce::String selectedDeviceType;
     
     juce::AudioParameterFloat* gateThresholdParam { nullptr };
     juce::AudioParameterFloat* triggerThresholdParam { nullptr };
+    
+    // Per-device audio capture
+    juce::AudioDeviceManager* deviceManager { nullptr };
+    std::unique_ptr<juce::AudioIODevice> audioDevice;
+    juce::AudioSourcePlayer audioSourcePlayer;
+    
+    // Lock-free audio buffer transfer (ASIO-safe)
+    // Increased size to handle timing mismatches between ASIO callback and main graph
+    static constexpr int FIFO_SIZE = 8192;  // ~170ms at 48kHz, enough for any buffer size mismatch
+    juce::AbstractFifo audioFifo { FIFO_SIZE };
+    juce::AudioBuffer<float> fifoBuffer;
+    juce::AudioBuffer<float> readBuffer;
+    
+    // Track callback timing to detect if ASIO is running properly
+    std::atomic<juce::int64> lastCallbackTime { 0 };
+    std::atomic<int> callbackCount { 0 };
+    
+    void updateDevice();
+    void closeDevice();
 
     // State for signal analysis
     enum class PeakState { SILENT, PEAK };
